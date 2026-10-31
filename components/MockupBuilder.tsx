@@ -4189,7 +4189,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                             </select>
                           </div>
                           <div className="mk-qt-row"><span className="sw" style={{ background: q.color.hex }} /><InkSelect value={q.color} onChange={(v) => v && v.name !== "none" && setQ({ color: { name: v.name, hex: v.hex || "#111111" } })} /></div>
-                          <button type="button" className="mk-more" onClick={() => openDesigner(im)}>
+                          <button type="button" className="mk-dsg" onClick={() => openDesigner(im)}>
                             <b>Want to do more with this design?</b>
                             <span>Add art, more lines, outlines or a photo in the Design Lab →</span>
                           </button>

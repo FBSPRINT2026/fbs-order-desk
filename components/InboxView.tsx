@@ -1736,23 +1736,23 @@ function AfterSend({ a, onArchive, onClose }: { a: { it?: InboxItem; msg: string
     setAdded((x) => ({ ...x, [k]: r.ok ? "✓ On My Day" : r.error }));
   };
   return (
-    <div className="as-card" role="dialog" aria-label="After sending" onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)}>
-      <div className="as-t"><b>{a.msg}</b></div>
-      {items === null ? <div className="as-f faint">✦ Looking for anything you promised…</div>
-        : items.length > 0 && <div className="as-fl">
-          <span className="as-q">Want a reminder?</span>
-          {items.map((f, k) => <div key={k} className="as-f">
-            <span className={"as-k " + f.kind}>{f.kind === "event" ? "Event" : "To-do"}</span>
-            <span className="as-ft"><b>{f.title}</b>{(f.day || f.start) && <span className="faint"> · {day(f.day)}{f.start ? ` ${time(f.start)}` : ""}</span>}</span>
-            {added[k] ? <span className={"as-done" + (added[k].startsWith("✓") ? " ok" : "")}>{added[k]}</span> : <button type="button" className="btn sm" onClick={() => void add(k, f)}>Add</button>}
+    <div className="snt-card" role="dialog" aria-label="After sending" onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)}>
+      <div className="snt-t"><b>{a.msg}</b></div>
+      {items === null ? <div className="snt-f faint">✦ Looking for anything you promised…</div>
+        : items.length > 0 && <div className="snt-fl">
+          <span className="snt-q">Want a reminder?</span>
+          {items.map((f, k) => <div key={k} className="snt-f">
+            <span className={"snt-k " + f.kind}>{f.kind === "event" ? "Event" : "To-do"}</span>
+            <span className="snt-ft"><b>{f.title}</b>{(f.day || f.start) && <span className="faint"> · {day(f.day)}{f.start ? ` ${time(f.start)}` : ""}</span>}</span>
+            {added[k] ? <span className={"snt-done" + (added[k].startsWith("✓") ? " ok" : "")}>{added[k]}</span> : <button type="button" className="btn sm" onClick={() => void add(k, f)}>Add</button>}
           </div>)}
         </div>}
-      <div className="as-b">
+      <div className="snt-b">
         {a.it ? <>
-          <span className="as-q">This email:</span>
+          <span className="snt-q">This email:</span>
           <button type="button" className="btn sm ghost" onClick={() => { setStopped(true); onClose(); }}>Keep in Inbox</button>
-          <button type="button" className={"btn sm primary as-arch" + (stopped ? "" : " counting")} onClick={() => { if (fired.current) return; fired.current = true; setStopped(true); onArchive(); }} style={{ ["--as-left" as string]: `${(left / WAIT) * 100}%` }}>
-            <span className="as-arch-t">{stopped ? "Archive" : held ? "Archive (paused)" : `Archive in ${Math.ceil(left / 1000)}`}</span>
+          <button type="button" className={"btn sm primary snt-arch" + (stopped ? "" : " counting")} onClick={() => { if (fired.current) return; fired.current = true; setStopped(true); onArchive(); }} style={{ ["--as-left" as string]: `${(left / WAIT) * 100}%` }}>
+            <span className="snt-arch-t">{stopped ? "Archive" : held ? "Archive (paused)" : `Archive in ${Math.ceil(left / 1000)}`}</span>
           </button>
         </> : <button type="button" className="btn sm ghost" onClick={onClose}>Done</button>}
       </div>

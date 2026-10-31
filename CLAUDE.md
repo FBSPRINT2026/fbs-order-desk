@@ -47,6 +47,10 @@
   when it's wider than its box or a cell is narrower than a word in it (a side panel squeezing the page, a phone), the
   table becomes stacked rows with each column's name in front, and goes back when there's room. Don't build a
   table-only phone layout or a sideways scroll; put `data-nofit` only on a table that must never stack.
+- **Every feature's class names are its own** (Oct 31: the Assistant's to-do cards were squeezed and stacked because
+  the Inbox's after-send pop-up and the Artwork shelf also defined `.as-card` / `.as-t` in the global stylesheet). Give a
+  new feature its own prefix, grep `app/globals.css` for a name before using it, and run `node scripts/css-clashes.mjs`
+  after adding styles: it lists names two features both define.
 - **Nothing gets squished** (Nick, Oct 30 2026: "same thing here… keeps writing that way. Can we not do that moving
   forward?", a name wrapping one word per line under a line item, an account # box squeezed to a sliver). Before
   shipping any new piece of a page, look at it in the narrowest place it shows (the order page's side panels, a phone):

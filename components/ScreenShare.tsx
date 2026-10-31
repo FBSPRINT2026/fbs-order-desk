@@ -230,7 +230,7 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
         {hasMic && state !== "ended" && <button type="button" className={"btn sm" + (muted ? " primary" : "")} aria-pressed={muted} onClick={mute}>{muted ? "Unmute (you're muted)" : "Mute"}</button>}
         <button type="button" className="btn sm" onClick={() => void leave()}>{state === "ended" ? "Close" : "Leave"}</button>
       </div>
-      <div className="ss-stage">
+      <div className="shr-stage">
         <video ref={vid} autoPlay playsInline />
         {state !== "live" && <div className="ss-wait">{state === "ended" ? "This share has ended. You can close this window." : state === "away" ? `Waiting for ${who || "them"} to share again…` : link === "failed" ? (ice.current?.relay ? `Couldn't reach ${who || "their screen"}. Click Leave and join again.` : `Couldn't reach ${who || "their screen"}: your networks block a direct link, and the call relay isn't set up yet.`) : `Connecting to ${who || "their screen"}…`}</div>}
       </div>

@@ -46,10 +46,10 @@ export default function PointsDecision({ plan, items, srcs, money, onMoney }: { 
     if (r.ok) { onMoney(r.money); setErr(""); } else setErr(r.error);
   }
   return (
-    <div className="pd">
-      <div className="pd-h"><span>The same goods at each, paid by card</span><span className="faint">Only owners see this</span></div>
-      <div className="tbl-wrap"><table className="pd-t">
-        <thead><tr><th />{cols.map((c) => <th key={c.id} className={c === best ? "w" : ""}>{c.sup ? <span className={"pd-sup " + c.sup}>{c.sup === "ss" ? "S&S" : "SanMar"}</span> : null} {c.id === "plan" ? "This plan" : c.card ? "card" : "terms"}</th>)}</tr></thead>
+    <div className="ptd">
+      <div className="ptd-h"><span>The same goods at each, paid by card</span><span className="faint">Only owners see this</span></div>
+      <div className="tbl-wrap"><table className="ptd-t">
+        <thead><tr><th />{cols.map((c) => <th key={c.id} className={c === best ? "w" : ""}>{c.sup ? <span className={"ptd-sup " + c.sup}>{c.sup === "ss" ? "S&S" : "SanMar"}</span> : null} {c.id === "plan" ? "This plan" : c.card ? "card" : "terms"}</th>)}</tr></thead>
         <tbody>
           {cols.some((c) => c.each != null) && row("Price each", (c) => (c.each != null ? $(c.each) : "–"))}
           {row("Goods", (c) => $(c.goods) + (c.missing ? "*" : ""))}
@@ -58,13 +58,13 @@ export default function PointsDecision({ plan, items, srcs, money, onMoney }: { 
           {row("Points", (c) => v[c.id].pts.toLocaleString("en-US"))}
           {row("Point dollars", (c) => (v[c.id].ptd ? "−" + $(v[c.id].ptd) : $(0)), (c) => (v[c.id].ptd ? "good" : ""))}
           {row(`Tax you don't pay (${money.tax}%)`, (c) => (v[c.id].tax ? "−" + $(v[c.id].tax) : $(0)), (c) => (v[c.id].tax ? "good" : ""))}
-          <tr className="pd-real"><td>Real cost</td>{cols.map((c) => <td key={c.id} className={c === best ? "w" : ""}>{$(v[c.id].real)}</td>)}</tr>
+          <tr className="ptd-real"><td>Real cost</td>{cols.map((c) => <td key={c.id} className={c === best ? "w" : ""}>{$(v[c.id].real)}</td>)}</tr>
         </tbody>
       </table></div>
-      {best && next && <div className="pd-win">{best.label === "This plan" ? "This plan" : best.label.replace(" card", "")} by card: {$(v[next.id].real - v[best.id].real)} less than {next.label === "This plan" ? "this plan" : next.label.replace(" card", "")} by card</div>}
-      {cols.some((c) => c.missing) && <p className="faint pd-note">* Not every size is sold there, so that total leaves some out.</p>}
+      {best && next && <div className="ptd-win">{best.label === "This plan" ? "This plan" : best.label.replace(" card", "")} by card: {$(v[next.id].real - v[best.id].real)} less than {next.label === "This plan" ? "this plan" : next.label.replace(" card", "")} by card</div>}
+      {cols.some((c) => c.missing) && <p className="faint ptd-note">* Not every size is sold there, so that total leaves some out.</p>}
       {err && <p className="pv-err">{err}</p>}
-      <p className="faint pd-note">{edit ? <span className="pd-edit">
+      <p className="faint ptd-note">{edit ? <span className="ptd-edit">
         <label>Points a dollar <input type="number" step="0.5" min={0} defaultValue={money.ppd} onBlur={(e) => void save({ ppd: +e.target.value })} /></label>
         <label>¢ a point <input type="number" step="0.1" min={0} defaultValue={Math.round(money.pointValue * 1000) / 10} onBlur={(e) => void save({ pointValue: +e.target.value / 100 })} /></label>
         <label>Tax % <input type="number" step="1" min={0} defaultValue={money.tax} onBlur={(e) => void save({ tax: +e.target.value })} /></label>

@@ -36,7 +36,7 @@ export default function JobLabor({ orderId, archivedId, qty, total }: { orderId?
       <div className="panel-h"><h2>Labor</h2><span className="faint">{hm(mins)} logged</span></div>
       <div className="panel-b stack" style={{ gap: 8 }}>
         <div className="tj-steps">{[...byTask.entries()].map(([t, m]) => <span key={t} className="tmx-p">{t} <b>{hm(m)}</b></span>)}</div>
-        <div className="jl-k">
+        <div className="jlb-k">
           {qty ? <span>{(qty / (mins / 60)).toFixed(1)} <small>pcs / labor hr</small></span> : null}
           {cost != null && <span>{payMoney(cost)} <small>labor cost</small></span>}
           {cost != null && total && canMoney ? <span>{((cost / total) * 100).toFixed(0)}% <small>of the price</small></span> : null}

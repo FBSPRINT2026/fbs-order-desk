@@ -283,14 +283,14 @@ export default function ArtworkPage() {
                 </div>
                 <div className="as-logos">
                   {more.map((d) => { const n = used.get(d.id) || 0; return (
-                    <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"as-t" + (hot && hot.c === c.id ? (hot.ids.has(d.id) ? " hot" : " dim") : "") + (drag?.id === d.id ? " drag" : "")} title={`D-${d.number} ${d.name || ""}${bs.length ? " · drag onto a brand to file it there" : ""}`.trim()}
+                    <Link key={d.id} href={`/shop/artwork/${d.id}`} className={"as-tile" + (hot && hot.c === c.id ? (hot.ids.has(d.id) ? " hot" : " dim") : "") + (drag?.id === d.id ? " drag" : "")} title={`D-${d.number} ${d.name || ""}${bs.length ? " · drag onto a brand to file it there" : ""}`.trim()}
                       draggable={bs.length > 0} onDragStart={(e) => { if (!bs.length) return; e.dataTransfer.setData("text/plain", d.id); e.dataTransfer.effectAllowed = "move"; setDrag({ c: c.id, id: d.id }); }} onDragEnd={() => { setDrag(null); setOver(""); }}>
                       <span className="as-pic">{urls[d.id] || shown[d.id] ? <LogoFace d={d} urls={urls} shirt={logoShirts[d.id]} shown={shown[d.id] ? { ...shown[d.id], shirt: printed[d.id]?.shirt || shown[d.id].shirt } : null} printed={printed[d.id]} /> : <span className="as-ext">{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}{d.starred && <span className="as-star" title="Favorite">★</span>}</span>
                       <span className="as-lanes">{LANE_TAGS.map(([lane, short, label]) => { const st = laneState(d, lane); return <span key={lane} className={"as-ln" + (st.ready ? " has" : "")} title={`${label}: ${st.ready ? st.note : "no file yet"}`}>{short}</span>; })}</span>
                       <span className="as-lab"><span>D-{d.number}</span>{view === "used" && n > 0 && <b>{n}×</b>}</span>
                     </Link>
                   ); })}
-                  {xs.length > SHELF && <button type="button" className="as-t as-plus" onClick={() => setOpen((x) => { const n = new Set(x); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}>{open.has(c.id) ? "Fewer" : `+${xs.length - SHELF}`}</button>}
+                  {xs.length > SHELF && <button type="button" className="as-tile as-plus" onClick={() => setOpen((x) => { const n = new Set(x); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })}>{open.has(c.id) ? "Fewer" : `+${xs.length - SHELF}`}</button>}
                   {!xs.length && <span className="faint as-none">{brandPick[c.id] ? "No logos for this brand here." : view === "active" ? "No logos on open orders." : view === "favorites" ? "No favorites yet: star a logo on its page." : "No logos."}</span>}
                 </div>
               </div>

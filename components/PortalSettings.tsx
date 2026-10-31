@@ -113,7 +113,7 @@ function People({ customerId, preview, shopName }: { customerId: string; preview
         <div className="field"><label htmlFor="pp-title">Title (optional)</label><input id="pp-title" type="text" placeholder="e.g. Buyer" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} /></div>
       </div>
       {ask && (
-        <div className="ps-ask" role="alert">
+        <div className="ppl-ask" role="alert">
           <span>{edit.you ? <>Change <b>your</b> sign-in email to <b>{edit.email.trim()}</b>? You&apos;ll sign in with it from now on.</> : <>Change {edit.name || "their"} sign-in email to <b>{edit.email.trim()}</b>? They&apos;ll sign in with it from now on.</>}</span>
           <button type="button" className="btn sm primary" disabled={busy} onClick={() => save(true)}>Yes, change it</button>
           <button type="button" className="btn sm ghost" onClick={() => { setEdit({ ...edit, email: edit.was }); setAsk(false); }}>Keep {edit.was}</button>
@@ -141,7 +141,7 @@ function People({ customerId, preview, shopName }: { customerId: string; preview
                   <td><b>{p.name || "—"}</b>{p.main && <span className="ps-tag">Main</span>}{p.you && <span className="ps-tag you">You</span>}{p.title && <div className="sub">{p.title}</div>}</td>
                   <td data-notranslate>{p.email}</td>
                   <td className="nw">{p.phone}</td>
-                  <td className="ps-acts">
+                  <td className="ppl-acts">
                     <button type="button" className="btn sm ghost" disabled={preview || !!edit} onClick={() => { setEdit({ ...p, was: p.email }); setAsk(false); }}>Edit</button>
                     {!p.main && <button type="button" className={"btn sm ghost" + (armed === p.id ? " danger armed" : "")} disabled={preview || !!edit} onClick={() => remove(p)}>{armed === p.id ? "Remove them?" : "Remove"}</button>}
                   </td>

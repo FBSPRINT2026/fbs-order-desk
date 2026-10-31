@@ -65,7 +65,7 @@ export default function CustomerPreferredGoods({ customerId }: { customerId: str
         <div><b>Preferred goods</b><span className="faint"> · the blanks they order, best first. Only used when an email doesn&apos;t name the style, and you&apos;re always asked first.</span></div>
         <button type="button" className="btn sm" onClick={() => add()}>+ Add a blank</button>
       </div>
-      {!list.length ? <p className="faint pg-none">None yet. Add the tee, hoodie or hat they usually order (&quot;Tees&quot;: Next Level 6210 first, Bella+Canvas 3001CVC second).</p> : (
+      {!list.length ? <p className="faint pfg-none">None yet. Add the tee, hoodie or hat they usually order (&quot;Tees&quot;: Next Level 6210 first, Bella+Canvas 3001CVC second).</p> : (
         <div className="tbl-wrap"><table className="tbl pg-tbl">
           <thead><tr><th>For</th><th>Choice</th><th>Blank (model number)</th><th>Their usual colors</th><th>Notes</th><th aria-label="Move or remove" /></tr></thead>
           <tbody>{kinds.flatMap((k) => list.filter((x) => x.kind.trim().toLowerCase() === k)).map((x) => {
@@ -88,7 +88,7 @@ export default function CustomerPreferredGoods({ customerId }: { customerId: str
           })}</tbody>
         </table></div>
       )}
-      {list.length > 0 && <div className="pg-foot">{kinds.filter(Boolean).map((k) => <button key={k} type="button" className="linkbtn" onClick={() => add(list.find((x) => x.kind.trim().toLowerCase() === k)?.kind || k)}>+ Another choice for {list.find((x) => x.kind.trim().toLowerCase() === k)?.kind || k}</button>)}{state && <span className="faint">{state}</span>}</div>}
+      {list.length > 0 && <div className="pfg-foot">{kinds.filter(Boolean).map((k) => <button key={k} type="button" className="linkbtn" onClick={() => add(list.find((x) => x.kind.trim().toLowerCase() === k)?.kind || k)}>+ Another choice for {list.find((x) => x.kind.trim().toLowerCase() === k)?.kind || k}</button>)}{state && <span className="faint">{state}</span>}</div>}
     </section>
   );
 }

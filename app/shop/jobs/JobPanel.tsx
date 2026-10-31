@@ -39,27 +39,27 @@ type Row = { at: string; what: string; detail: string; who: string; tone: string
 export default function JobPanel({ it, step, after, onClose, onLead, onUndo }: { it: JobItem; step: Step; after: (m: string) => void; onClose: () => void; onLead: () => void; onUndo: () => void }) {
   const [d, setD] = useState<JobDetail | null>(null), [rows, setRows] = useState<Row[]>([]), [err, setErr] = useState("");
   useEffect(() => { if (!it.orderId) return; let live = true; void jobPanel(it.orderId).then((r) => { if (!live) return; if (r.ok) { setD(r.detail); setRows(r.rows); } else setErr(r.error); }); return () => { live = false; }; }, [it.orderId]);
-  const close = <button type="button" className="jp-x" aria-label="Close" onClick={onClose}>{I(IC.x)}</button>;
+  const close = <button type="button" className="jcp-x" aria-label="Close" onClick={onClose}>{I(IC.x)}</button>;
 
   // a lead or art with no order: what we know, and the buttons
   if (!it.orderId) return (
-    <div className="jp">
-      <div className="jp-h"><div><h3>{it.title}</h3><div className="sub">{[it.customer, it.type === "lead" ? it.sub : "Mockups made, no order yet"].filter(Boolean).join(" · ")}</div></div>{close}</div>
-      <div className="jp-sec">
+    <div className="jcp">
+      <div className="jcp-h"><div><h3>{it.title}</h3><div className="sub">{[it.customer, it.type === "lead" ? it.sub : "Mockups made, no order yet"].filter(Boolean).join(" · ")}</div></div>{close}</div>
+      <div className="jcp-sec">
         {it.type === "lead" ? <>
-          <p className="jp-txt">{it.leadText?.replace(it.title, "").trim() || "An order the AI found."}</p>
-          {it.tracks.length > 0 && <p className="jp-note">The AI has questions to answer before it can make the order.</p>}
-          <div className="jp-acts"><button type="button" className="btn primary" onClick={onLead}>Make a job</button>
+          <p className="jcp-txt">{it.leadText?.replace(it.title, "").trim() || "An order the AI found."}</p>
+          {it.tracks.length > 0 && <p className="jcp-note">The AI has questions to answer before it can make the order.</p>}
+          <div className="jcp-acts"><button type="button" className="btn primary" onClick={onLead}>Make a job</button>
             <button type="button" className="btn" onClick={() => void notAJob(it.suggestionId!).then((r) => { after(r.ok ? "Taken off the leads." : r.error); onClose(); })}>Not a job</button></div>
         </> : <>
-          <p className="jp-txt">{it.mockupIds?.length || 0} mockup{it.mockupIds?.length === 1 ? "" : "s"} made for {it.customer}. Make the order from the customer&apos;s page when the details come in.</p>
-          <div className="jp-acts">{it.customerId && <Link className="btn primary" href={`/shop/customers/${it.customerId}`}>Open the customer</Link>}</div>
+          <p className="jcp-txt">{it.mockupIds?.length || 0} mockup{it.mockupIds?.length === 1 ? "" : "s"} made for {it.customer}. Make the order from the customer&apos;s page when the details come in.</p>
+          <div className="jcp-acts">{it.customerId && <Link className="btn primary" href={`/shop/customers/${it.customerId}`}>Open the customer</Link>}</div>
         </>}
       </div>
     </div>
   );
-  if (err) return <div className="jp"><div className="jp-h"><div><h3>#{it.number}</h3></div>{close}</div><div className="jp-sec pv-err">{err}</div></div>;
-  if (!d) return <div className="jp"><div className="jp-h"><div><h3>#{it.number} · {it.title}</h3><div className="sub">{it.customer}</div></div>{close}</div><div className="jp-sec faint">Loading…</div></div>;
+  if (err) return <div className="jcp"><div className="jcp-h"><div><h3>#{it.number}</h3></div>{close}</div><div className="jcp-sec pv-err">{err}</div></div>;
+  if (!d) return <div className="jcp"><div className="jcp-h"><div><h3>#{it.number} · {it.title}</h3><div className="sub">{it.customer}</div></div>{close}</div><div className="jcp-sec faint">Loading…</div></div>;
   return <Detail d={d} rows={rows} it={it} step={step} after={after} close={close} onUndo={onUndo} />;
 }
 
@@ -76,38 +76,38 @@ function Detail({ d, rows, it, step, after, close, onUndo }: { d: JobDetail; row
     : it.steps.includes("sent") ? [`Waiting on ${who}`, "var(--warn)"] : it.steps.includes("requests") ? ["New request", "var(--fbs-violet)"] : it.steps.includes("mockups") || it.steps.includes("numbers") ? ["In the works", "var(--warn)"] : it.steps.includes("sewouts") ? ["Sew-out", "var(--ink-2)"]
     : [ST[d.status]?.label || d.status, "var(--ok)"];
   return (
-    <div className="jp">
-      <div className="jp-h">
+    <div className="jcp">
+      <div className="jcp-h">
         <div><h3>#{d.number} · {d.title}</h3><div className="sub">{[d.customer, d.contact, d.depts.map((x) => DEPT_TAG[x]).join(" "), d.qty ? `${d.qty} pcs` : "", d.due ? `Due ${day(d.due)}` : ""].filter(Boolean).join(" · ")}</div></div>
-        <div className="jp-hr"><span className="pill" style={{ ["--sc" as string]: status[1] }}><span className="pill-t">{status[0]}</span></span>{close}</div>
+        <div className="jcp-hr"><span className="pill" style={{ ["--sc" as string]: status[1] }}><span className="pill-t">{status[0]}</span></span>{close}</div>
       </div>
       {p && <Hero p={p} d={d} />}
-      {d.pieces.length > 1 && <div className="jp-seg" role="tablist" aria-label="Pieces">
+      {d.pieces.length > 1 && <div className="jcp-seg" role="tablist" aria-label="Pieces">
         {d.pieces.map((x, i) => { const w = WORD[x.state]; return (
-          <button key={i} type="button" role="tab" aria-selected={i === sel} className={"jp-sg" + (i === sel ? " on" : "")} onClick={() => setSel(i)}>
-            <span className="jp-sg-i">{I(x.k === "art" ? IC.shirt : x.k === "sewout" ? IC.needle : IC.receipt, 17)}</span>
+          <button key={i} type="button" role="tab" aria-selected={i === sel} className={"jcp-sg" + (i === sel ? " on" : "")} onClick={() => setSel(i)}>
+            <span className="jcp-sg-i">{I(x.k === "art" ? IC.shirt : x.k === "sewout" ? IC.needle : IC.receipt, 17)}</span>
             <span><b>{x.k === "art" ? "Mockup" : x.k === "sewout" ? `Sew-out · ${x.where.split(",")[0]}` : `Quote ${money(x.total)}`}</b><small><i style={{ background: w[1] }} />{x.k === "quote" && x.state === "sent" && d.pieces.some((y) => y.k !== "quote" && y.state === "sent") ? "After the proof" : w[0]}</small></span>
           </button>); })}
       </div>}
       {p && <Now p={p} d={d} who={who} after={after} anyOut={anyOut} />}
-      {d.said && <div className="jp-sec">
-        <div className="jp-lb">{first(d.said.who) || "The customer"} said · {day(d.said.at)} · {d.said.on}</div>
-        <div className="jp-q">“{d.said.text}”</div>
-        {d.said.after && <div className="jp-note">{d.said.after}</div>}
+      {d.said && <div className="jcp-sec">
+        <div className="jcp-lb">{first(d.said.who) || "The customer"} said · {day(d.said.at)} · {d.said.on}</div>
+        <div className="jcp-q">“{d.said.text}”</div>
+        {d.said.after && <div className="jcp-note">{d.said.after}</div>}
       </div>}
-      <div className="jp-sec">
-        <div className="jp-lb">Messages</div>
+      <div className="jcp-sec">
+        <div className="jcp-lb">Messages</div>
         {d.msgs.length ? d.msgs.map((m, i) => (
-          <div key={i} className="jp-msg"><span className={"jp-av" + (m.us ? " us" : "")}>{m.us ? "FBS" : (first(m.who)[0] || "?").toUpperCase()}</span>
-            <div><b>{m.us ? (m.who ? `${m.who[0].toUpperCase()}${m.who.slice(1)}` : "We") : m.who}</b> <span className="faint">· {day(m.at)}</span><div className="jp-mt">{m.text}</div></div></div>
+          <div key={i} className="jcp-msg"><span className={"jcp-av" + (m.us ? " us" : "")}>{m.us ? "FBS" : (first(m.who)[0] || "?").toUpperCase()}</span>
+            <div><b>{m.us ? (m.who ? `${m.who[0].toUpperCase()}${m.who.slice(1)}` : "We") : m.who}</b> <span className="faint">· {day(m.at)}</span><div className="jcp-mt">{m.text}</div></div></div>
         )) : <div className="faint" style={{ fontSize: 12.5 }}>Nothing sent or written yet.</div>}
-        <div className="jp-acts"><Link className="btn sm" href={`/shop/orders/${d.id}?tab=msg`}>Write a message</Link></div>
+        <div className="jcp-acts"><Link className="btn sm" href={`/shop/orders/${d.id}?tab=msg`}>Write a message</Link></div>
       </div>
-      <div className="jp-sec">
-        <div className="jp-lb">History</div>
-        {rows.length ? <ol className="jp-tl">{[...rows].map((r, i) => (
-          <li key={i}><span className={"jp-tl-i " + (r.tone || (/sent|reminder/i.test(r.what) ? "send" : /opened/i.test(r.what) ? "see" : ""))}>{I(r.tone === "ok" ? IC.check : r.tone === "bad" ? IC.pencil : /sent|reminder/i.test(r.what) ? IC.send : /opened/i.test(r.what) ? IC.eye : IC.dot, 13)}</span>
-            <span className="jp-tl-t">{r.what}{r.who && !/opened/i.test(r.what) ? ` · ${first(r.who.split("@")[0])}` : ""}{r.detail && /opened/i.test(r.what) ? ` · ${r.detail}` : ""}</span><span className="jp-tl-d">{day(r.at)}</span></li>
+      <div className="jcp-sec">
+        <div className="jcp-lb">History</div>
+        {rows.length ? <ol className="jcp-tl">{[...rows].map((r, i) => (
+          <li key={i}><span className={"jcp-tl-i " + (r.tone || (/sent|reminder/i.test(r.what) ? "send" : /opened/i.test(r.what) ? "see" : ""))}>{I(r.tone === "ok" ? IC.check : r.tone === "bad" ? IC.pencil : /sent|reminder/i.test(r.what) ? IC.send : /opened/i.test(r.what) ? IC.eye : IC.dot, 13)}</span>
+            <span className="jcp-tl-t">{r.what}{r.who && !/opened/i.test(r.what) ? ` · ${first(r.who.split("@")[0])}` : ""}{r.detail && /opened/i.test(r.what) ? ` · ${r.detail}` : ""}</span><span className="jcp-tl-d">{day(r.at)}</span></li>
         ))}</ol> : <div className="faint" style={{ fontSize: 12.5 }}>Nothing yet.</div>}
       </div>
       <Foot d={d} after={after} onUndo={onUndo} />
@@ -125,14 +125,14 @@ function Hero({ p, d }: { p: JobPiece; d: JobDetail }) {
   const pics = p.k === "art" ? cur?.pics || [] : p.k === "sewout" && p.pic ? [p.pic] : [];
   const pdf = p.k === "art" ? (cur?.key === opts[0]?.key ? p.pdf : pics[i] || "") : p.pdf;
   return (
-    <div className="jp-hero">
-      {opts.length > 1 && <div className="jp-ver" role="group" aria-label="Versions">{[...opts].reverse().map((o) => <button key={o.key} type="button" className={o.key === cur?.key ? "on" : ""} aria-pressed={o.key === cur?.key} onClick={() => { setVer(o.key); setI(0); }}>{o.label}{o.key === "next" ? " · not sent" : ""}</button>)}</div>}
-      {pdf && <a className="jp-pdf" href={pdf} target="_blank" rel="noreferrer">{I(IC.ext, 13)} {cur?.key === opts[0]?.key || p.k !== "art" ? "Open PDF" : "Open picture"}</a>}
+    <div className="jcp-hero">
+      {opts.length > 1 && <div className="jcp-ver" role="group" aria-label="Versions">{[...opts].reverse().map((o) => <button key={o.key} type="button" className={o.key === cur?.key ? "on" : ""} aria-pressed={o.key === cur?.key} onClick={() => { setVer(o.key); setI(0); }}>{o.label}{o.key === "next" ? " · not sent" : ""}</button>)}</div>}
+      {pdf && <a className="jcp-pdf" href={pdf} target="_blank" rel="noreferrer">{I(IC.ext, 13)} {cur?.key === opts[0]?.key || p.k !== "art" ? "Open PDF" : "Open picture"}</a>}
       {pics.length ? <img src={pics[Math.min(i, pics.length - 1)]} alt={p.k === "art" ? `Mockup ${cur?.label || ""}` : "Sew-out photo"} />
-        : p.k === "quote" ? <div className="jp-quote"><b>{money(p.total)}</b><span>{p.qty ? `${p.qty} pieces · ` : ""}{p.state === "needed" ? "not priced yet" : p.state === "done" ? `approved${p.decidedName ? ` by ${p.decidedName}` : ""}` : "quote"}</span></div>
-        : <div className="jp-empty">{I(p.k === "sewout" ? IC.needle : IC.shirt, 40)}<span>{p.k === "sewout" ? `${p.dz || "No sew-out photo yet"} · ${p.where}` : "No mockup yet"}</span></div>}
-      {pics.length > 1 && <div className="jp-nav"><button type="button" aria-label="Previous picture" onClick={() => setI((x) => (x - 1 + pics.length) % pics.length)}>{I(IC.left)}</button><span>{i + 1} / {pics.length}</span><button type="button" aria-label="Next picture" onClick={() => setI((x) => (x + 1) % pics.length)}>{I(IC.right)}</button></div>}
-      {d.declinedAt && <div className="jp-decl">Declined {day(d.declinedAt)}{d.declinedWhy ? `: ${d.declinedWhy}` : ""}</div>}
+        : p.k === "quote" ? <div className="jcp-quote"><b>{money(p.total)}</b><span>{p.qty ? `${p.qty} pieces · ` : ""}{p.state === "needed" ? "not priced yet" : p.state === "done" ? `approved${p.decidedName ? ` by ${p.decidedName}` : ""}` : "quote"}</span></div>
+        : <div className="jcp-empty">{I(p.k === "sewout" ? IC.needle : IC.shirt, 40)}<span>{p.k === "sewout" ? `${p.dz || "No sew-out photo yet"} · ${p.where}` : "No mockup yet"}</span></div>}
+      {pics.length > 1 && <div className="jcp-nav"><button type="button" aria-label="Previous picture" onClick={() => setI((x) => (x - 1 + pics.length) % pics.length)}>{I(IC.left)}</button><span>{i + 1} / {pics.length}</span><button type="button" aria-label="Next picture" onClick={() => setI((x) => (x + 1) % pics.length)}>{I(IC.right)}</button></div>}
+      {d.declinedAt && <div className="jcp-decl">Declined {day(d.declinedAt)}{d.declinedWhy ? `: ${d.declinedWhy}` : ""}</div>}
     </div>
   );
 }
@@ -160,9 +160,9 @@ function Now({ p, d, who, after, anyOut }: { p: JobPiece; d: JobDetail; who: str
   else if ((p.state === "needed" || p.state === "changes") && p.k === "sewout") main = <Link className="btn primary" href={digitizingHref(d.id, p.imprintId)}>{p.state === "changes" ? "Make the changes" : p.dz === "The file is in: sew it out" ? "Take the sew-out" : "Open in Digitizing"}</Link>;
   else if ((p.state === "needed" || p.state === "changes") && p.k === "quote") main = <Link className="btn primary" href={`/shop/orders/${d.id}`}>{p.state === "changes" ? "Fix the quote" : p.qty ? "Price it" : "Add sizes"}</Link>;
   return (
-    <div className="jp-sec">
-      <div className="jp-facts">{facts.map(([k, val, sub, tone]) => <div key={k} className={"jp-f " + tone}><span>{k}</span><b>{val}</b>{sub && <small>{sub}</small>}</div>)}</div>
-      <div className="jp-acts">
+    <div className="jcp-sec">
+      <div className="jcp-facts">{facts.map(([k, val, sub, tone]) => <div key={k} className={"jcp-f " + tone}><span>{k}</span><b>{val}</b>{sub && <small>{sub}</small>}</div>)}</div>
+      <div className="jcp-acts">
         {main}
         {anyOut && <SendProofTool target={{ kind: "order", orderId: d.id }} mode="copy" onDone={after} />}
         {d.link && <a className="btn sm" href={d.link} target="_blank" rel="noreferrer">{I(IC.eye, 14)} What they see</a>}
@@ -175,7 +175,7 @@ function Foot({ d, after, onUndo }: { d: JobDetail; after: (m: string) => void; 
   const [asking, setAsking] = useState(false), [why, setWhy] = useState(""), [busy, setBusy] = useState(false);
   const art = d.pieces.some((p) => p.k === "art");
   return (
-    <div className="jp-sec jp-foot">
+    <div className="jcp-sec jcp-foot">
       <Link className="btn sm" href={`/shop/orders/${d.id}`}>Open job</Link>
       {art && d.mockGroup && <Link className="btn sm" href={mockupHref(d.id, d.mockGroup)}>Mockup Creator</Link>}
       {d.declinedAt ? <button type="button" className="btn sm" onClick={onUndo}>Put it back</button>
@@ -206,18 +206,18 @@ export function StartHere({ items, loading, mine, go }: { items: JobItem[]; load
   ];
   const rowsOn = rowsAll.filter((r) => r.n > 0);
   return (
-    <div className="jp jp-start">
-      <div className="jp-h"><div><h3>Let&apos;s get these approved</h3><div className="sub">{mine ? "Your accounts" : "Everyone's jobs"} · where to start</div></div></div>
-      <div className="jp-sec">
-        {loading ? <div className="faint">Loading…</div> : !rowsOn.length ? <div className="jp-txt">All caught up. Nothing is waiting on you.</div>
+    <div className="jcp jcp-start">
+      <div className="jcp-h"><div><h3>Let&apos;s get these approved</h3><div className="sub">{mine ? "Your accounts" : "Everyone's jobs"} · where to start</div></div></div>
+      <div className="jcp-sec">
+        {loading ? <div className="faint">Loading…</div> : !rowsOn.length ? <div className="jcp-txt">All caught up. Nothing is waiting on you.</div>
           : rowsOn.map((r) => (
-            <button key={r.t} type="button" className="jp-go" style={{ ["--c" as string]: r.c }} onClick={r.act}>
-              <span className="jp-go-i">{I(r.icon, 18)}</span>
-              <span className="jp-go-t"><b>{r.t}</b>{r.sub && <small>{r.sub}</small>}</span>
-              {r.cta && <span className="jp-go-c">{r.cta}</span>}
+            <button key={r.t} type="button" className="jcp-go" style={{ ["--c" as string]: r.c }} onClick={r.act}>
+              <span className="jcp-go-i">{I(r.icon, 18)}</span>
+              <span className="jcp-go-t"><b>{r.t}</b>{r.sub && <small>{r.sub}</small>}</span>
+              {r.cta && <span className="jcp-go-c">{r.cta}</span>}
             </button>))}
       </div>
-      <div className="jp-sec jp-note">Click a job on the left to see everything about it here.</div>
+      <div className="jcp-sec jcp-note">Click a job on the left to see everything about it here.</div>
     </div>
   );
 }

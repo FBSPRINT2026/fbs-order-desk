@@ -240,7 +240,7 @@ export default function PressSetupCard({ presses, setPresses, press, onPickPress
             draggable={!down && x !== ""} onDragStart={(e) => { setDrag({ head: h }); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(h)); }} onDragEnd={() => { setDrag(null); setDropHead(null); }}
             onDragOver={(e) => { if (drag && !down) { e.preventDefault(); if (dropHead !== h) setDropHead(h); } }} onDrop={(e) => { e.preventDefault(); if (!down) dropOnHead(h); }}>
             <span className="ps-hn">{h + 1}</span>
-            {p ? <i className="ps-sw" style={{ background: p.hex }} /> : <i className={"ps-st k-" + kind} aria-hidden />}
+            {p ? <i className="ps-sw" style={{ background: p.hex }} /> : <i className={"ps-hd k-" + kind} aria-hidden />}
             <span className="ps-hl" title={label}>{label}{p?.kind === "underbase" && <small> · underbase</small>}{p && !onMesh && p.mesh ? <small> · {p.mesh}</small> : null}{rounds > 1 && (p ? <small className={"ps-rtag" + (roundOf(h) > 1 || againOf(p.key).length ? " on" : "")}>{againOf(p.key).length ? `rounds ${[roundOf(h), ...againOf(p.key)].join(" & ")}` : `round ${roundOf(h)}`}</small> : x === "flash" ? <small className="ps-rtag">every round</small> : null)}</span>
             <span className="ps-hm">{p && (onMesh
               ? <input className="ps-mesh" value={p.mesh || ""} inputMode="numeric" placeholder="mesh" aria-label={`${p.name} mesh`} onChange={(e) => { const n = +e.target.value.replace(/[^0-9]/g, ""); onMesh(p.key, n > 0 ? n : undefined); }} />
