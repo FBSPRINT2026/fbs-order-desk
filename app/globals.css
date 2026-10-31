@@ -16932,10 +16932,12 @@ body:has(.dla-bg.dock.wide:not(.og-hidden)){padding-right:min(var(--dock-w,540px
 .dla-bg.dock > .dla:hover::after{background:var(--ink-3)}
 body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:none!important}
 /* the Mockup Creator's Name & number builder (components/NameNumberBuilder.tsx, Oct 31) */
-.mk-modal.nnb{max-width:460px;gap:12px}
+.mk-modal.nnb{max-width:540px;gap:12px}
+.nnb .field label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.nnb .field :is(select,input){height:36px;padding:0 10px;border-radius:6px;border:1px solid var(--line);font:14px var(--body);color:var(--ink)}
 .nnb-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nnb-lead{margin:-6px 0 0;font-size:12.5px}
-.nnb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;align-items:start}
+.nnb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:start}
 .nnb-grid .field,.nnb-list.field{margin:0}
 .nnb-lh{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .nnb-up{cursor:pointer}

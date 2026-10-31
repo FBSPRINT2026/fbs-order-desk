@@ -24,7 +24,7 @@ const inkName = (h?: string) => (h ? INKS.find(([, x]) => x.toLowerCase() === h.
 const asText = (rows: RosterSpec["rows"]) => rows.map((r) => [r.name, r.number, r.size].filter(Boolean).join(", ")).join("\n");
 
 export default function NameNumberBuilder({ spots, start, pieces, bg, onPlace, onClose }: {
-  /** the spots on the side being worked on (the first big one is picked) */ spots: string[];
+  /** the spots to pick from, back first (Full Back is picked unless the print already has a spot) */ spots: string[];
   /** the print's names & numbers when it has them (to change them) */ start?: RosterSpec | null;
   /** the pieces on the order (to check the list against) */ pieces?: number;
   /** the garment's color, behind the preview */ bg?: string;
@@ -32,7 +32,7 @@ export default function NameNumberBuilder({ spots, start, pieces, bg, onPlace, o
   onClose: () => void;
 }) {
   const [look, setLook] = useState(() => ({ ...ROSTER_DEFAULT, ...(start || {}) }));
-  const [where, setWhere] = useState(() => start?.location || spots.find((z) => /^full/i.test(z)) || spots[0] || "Full Back");
+  const [where, setWhere] = useState(() => start?.location || spots.find((z) => /^full back/i.test(z)) || spots[0] || "Full Back");
   const [text, setText] = useState(() => asText(start?.rows || []));
   const [more, setMore] = useSticky<boolean>("mk.names.more", false);
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState("");

@@ -4164,7 +4164,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             </div>
           )}
           {nnb && (() => { const im = imprints.find((x) => x.id === nnb.imId); return (
-            <NameNumberBuilder spots={locsFor(curTab)} start={im?.roster || null} pieces={pieceCount || undefined} bg={shirtHex(lines[active])}
+            <NameNumberBuilder spots={[...locsFor("back"), ...locsFor("front"), ...locsFor("sleeve")]} start={im?.roster || null} pieces={pieceCount || undefined} bg={shirtHex(lines[active])}
               onPlace={(out, spec) => placeRoster(out, spec, im?.id || "")} onClose={() => setNnb(null)} />
           ); })()}
           {pop && (() => {
