@@ -228,6 +228,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [lines, setLines] = useState<Line[]>([{ id: uid(), style: "", brand: "", color: "", garment: "" }]);
   const [imprints, setImprints] = useState<Imprint[]>([]);
   const [groupName, setGroupName] = useState("");
+  /** a logo mockup with no order: the colors it goes on, as typed ("Black, Forest Green"), one square each */
+  const [logoCols, setLogoCols] = useState("");
+  // a saved logo mockup opened again: its colors fill the field
+  useEffect(() => { if (logoOnly && !orderId && !logoCols && lines.some((l) => l.color)) setLogoCols(lines.map((l) => l.color).filter(Boolean).join(", ")); }, [lines]); // eslint-disable-line react-hooks/exhaustive-deps
   // brand standards: the account's own colors and any groups (a wholesaler's clients); the group whose name is in the
   // order or print group ("43090 ALL MY SONS DALLAS - POLO" → All My Sons) comes first and is the one new logos snap to
   const brand: Brand = useMemo(() => {
@@ -3500,7 +3504,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setTimeout(() => location.assign(next ? `/shop/artwork/mockup?order=${o.id}&group=${next.id}&auto=1${fromEmail ? `&email=${fromEmail}` : ""}` : `/shop/orders/${o.id}${fromEmail ? `?email=${fromEmail}` : ""}`), 900);
     }, 1800);
   }, [auto, order, ready, saving, garDrawing, drawPending, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
-  const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : logoOnly ? "Add a color for the logo to sit on (type it under Colors it goes on and press Enter)." : "Pick at least one garment to put the art on."
+  const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : logoOnly ? "Type the colors it goes on (Black, Forest Green…)." : "Pick at least one garment to put the art on."
   // unsaved changes (Oct 27, Nick: "we're exiting a lot of times without saving… if you make changes and you go back to
   // an order, a pop-up that says are you sure you want to discard changes"). What's on screen at the first click or key
   // press is the starting point (the art, inks and circle finding all load by themselves before that); a save resets it.
@@ -3637,31 +3641,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             {/* a logo mockup with no order and no garment (Oct 30, Nick: "you have to be able to create… a logo mock-up, not a
                 full mock-up… without it being linked to an order"): just the colors the logo sits on */}
             {logoOnly ? (
-              <div className="mk-f mk-gar"><span className="mk-gar-h"><span>Colors it goes on</span></span>
-                <div className="mk-gar-row">
-                  <div className="mk-gar-colors">
-                    {lines.map((l, i) => (l.color ? (
-                      <span key={l.id} className={"mk-gc" + (i === active ? " on" : "")}>
-                        <button type="button" className="mk-gc-pick" onClick={() => setActive(i)} title={`Show ${l.color}`}><span className="mk-gc-dot" style={{ background: shirtHex(l) }} />{l.color}</button>
-                        <button type="button" className="mk-gc-x" aria-label={`Remove ${l.color}`} onClick={() => { setLines((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : [{ ...ls[0], color: "", hex: undefined }])); setActive((a) => (a >= i && a > 0 ? a - 1 : a)); }}>✕</button>
-                      </span>
-                    ) : null))}
-                    <input className="mk-logo-col" type="text" list="mk-logo-cols" aria-label="Add a color the logo goes on" placeholder={lines.some((l) => l.color) ? "+ Another color" : "Type a color, e.g. Forest Green"}
-                      onKeyDown={(e) => {
-                        if (e.key !== "Enter") return;
-                        e.preventDefault();
-                        const c = (e.currentTarget.value || "").trim();
-                        if (!c || lines.some((l) => l.color.toLowerCase() === c.toLowerCase())) return;
-                        e.currentTarget.value = "";
-                        const blank = lines.findIndex((l) => !l.color && !l.style.trim());
-                        if (blank >= 0) { setLines((ls) => ls.map((x, j) => (j === blank ? { ...x, color: c, hex: guessHex(c) } : x))); setActive(blank); }
-                        else { setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: c, garment: "", hex: guessHex(c) }]); setActive(lines.length); }
-                      }} />
-                    <datalist id="mk-logo-cols">{["White", "Black", "Navy", "Forest Green", "Charcoal", "Sport Grey", "Red", "Royal", "Maroon", "Gold", "Orange", "Purple", "Military Green", "Natural"].map((c) => <option key={c} value={c} />)}</datalist>
-                  </div>
-                </div>
-                <small className="mk-style-n">No garment: the logo at its size on a square of each color. Press Enter to add a color; click its square to pick the exact shade.</small>
-              </div>
+              <label className="mk-f mk-logo-f"><span>Colors it goes on</span>
+                <input type="text" aria-label="Colors the logo goes on" placeholder="e.g. Black, Forest Green" value={logoCols}
+                  onChange={(e) => {
+                    const t = e.target.value;
+                    setLogoCols(t);
+                    const cols = t.split(",").map((c) => c.trim()).filter(Boolean);
+                    setLines((ls) => (cols.length ? cols.map((c, k) => ({ ...(ls[k] || { id: uid(), style: "", brand: "", garment: "" }), color: c, hex: ls[k]?.color === c ? ls[k].hex : guessHex(c) })) : [{ ...ls[0], color: "", hex: undefined }]));
+                    setActive((a) => Math.min(a, Math.max(0, cols.length - 1)));
+                  }} />
+              </label>
             ) : (() => {
               const keyOf = (l: Line) => (l.style.trim() ? `${l.style.trim().toLowerCase()}|${(l.brand || "").toLowerCase()}` : `new:${l.id}`);
               const groups: { key: string; idx: number[] }[] = [];
