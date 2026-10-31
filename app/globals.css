@@ -16906,3 +16906,15 @@ html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
 @media (max-width:760px){ html body .ord .imp-mock{grid-template-columns:repeat(2,minmax(0,1fr))} }
 .mk-when .mk-no{color:var(--accent);font-weight:700;margin-right:6px}
 .ca-card .ca-m{color:var(--accent);font-size:14px;font-weight:700}
+/* The order page as its window narrows (Oct 31, Nick: "when you go to half screen mode… things start to bumble…"), one
+   step at a time, by the room the order itself has (not the window): first a print's close-ups stack (Group A over
+   Group B, the change mark between them), then the right panel goes under the order; the text squeezes only after that */
+.ord{container:ord / inline-size}
+@container ord (max-width:1240px){
+  .pr-tiles{flex-direction:column;align-items:center;gap:2px}
+  .pr-tiles .pr-tw .pr-cc{order:-1;margin:-2px 0 2px}
+}
+@container ord (max-width:1000px){
+  .ord .ed-grid{grid-template-columns:minmax(0,1fr)}
+  .ord .ed-aside{position:static}
+}

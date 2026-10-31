@@ -130,7 +130,17 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     window.addEventListener("fbs:dock", on);
     return () => window.removeEventListener("fbs:dock", on);
   }, []);
-  const mini = miniSet || docked;
+  // a narrow window (half the screen): the menu folds to icons by itself so the page keeps its room (Oct 31, Nick: "when
+  // you go to half screen mode… auto collapse the left toolbar"); the arrow still opens it for as long as the window stays
+  // narrow, and it's back to the setting it had when the window is wide again
+  const [narrow, setNarrow] = useState(false), [narrowOpen, setNarrowOpen] = useState(false);
+  useEffect(() => {
+    const on = () => { const n = window.innerWidth < 1400; setNarrow(n); if (!n) setNarrowOpen(false); };
+    on();
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  const mini = miniSet || docked || (narrow && !narrowOpen);
   const [tip, setTip] = useState<{ text: string; top: number; left: number } | null>(null);
   const [todo, setTodo] = useState({ all: 0, urgent: 0 });
   const [hello, setHello] = useState("Hello");
@@ -327,7 +337,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       }}
       onMouseLeave={() => setTip(null)}>
       {/* the menu's right edge is the switch: click it to open the full menu or fold it to icons */}
-      <button type="button" className="side-edge" onClick={() => { if (docked) setDocked(false); else setMini(!miniSet); setTip(null); }}
+      <button type="button" className="side-edge" onClick={() => { if (docked) setDocked(false); else if (narrow) { if (mini) { setNarrowOpen(true); setMini(false); } else setNarrowOpen(false); } else setMini(!miniSet); setTip(null); }}
         title={mini ? "Show the full menu" : "Fold the menu to icons"} aria-label={mini ? "Show the full menu" : "Fold the menu to icons"} aria-expanded={!mini}>
         <span className="side-edge-k" aria-hidden><svg viewBox="0 0 24 24">{mini ? <path d="M9 6l6 6-6 6" /> : <path d="M15 6l-6 6 6 6" />}</svg></span>
       </button>
