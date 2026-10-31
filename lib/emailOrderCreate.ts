@@ -1,6 +1,7 @@
 import { resolvePending } from "@/lib/manifest";
 import { mockupArtStamp } from "@/lib/mockupFresh";
 import "server-only";
+import { addressBlock } from "@/lib/addressBlock";
 import { applyConfirmedSpecs } from "@/lib/designSpecs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { proposalToGroups } from "@/lib/ai/normalize";
@@ -239,7 +240,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     nickname: (flag + (d.nickname || "").replace(/^🚩\s*/u, "")).slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
     ...(d.firm && d.due_date ? { firm: true } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
-    delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: (d.ship_to || "").slice(0, 500),
+    delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: addressBlock(d.ship_to || "").slice(0, 500),
     // a customer who ships on their own carrier account (customers.ship_on): the order ships on it, $0 shipping, the same
     // as picking it on the order page (Oct 30, #40284: Nine18 on "Nine18 FEDEX")
     ...(d.delivery === "ship" && cust?.ship_on ? { ship_method: await ownAccountMethod(String(cust.ship_on)) } : {}),
