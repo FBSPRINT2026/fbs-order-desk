@@ -16896,3 +16896,5 @@ html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
 .lgx-thb i{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);flex:none}
 .lgx-thb:hover span{text-decoration:underline;color:var(--accent)}
 .lgx-sw .lgx-thr span{color:inherit}
+.lgx-sws{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:14px}
+.lgx-sw .lgx-chip{width:100%}

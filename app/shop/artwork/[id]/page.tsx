@@ -296,10 +296,10 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
                 return (
                   <div key={c.name} className={"lgx-sw" + (on ? " on" : "")}>
                     <span className="lgx-chip" style={{ background: c.hex }} />
-                    <b title={c.name}>{fitLabel(c.name, 13)}</b>
-                    <span title={c.pms || c.name} data-notranslate>{fitLabel(c.pms || c.name)}</span>
-                    {can ? <button type="button" className={"lgx-thr" + (c.thread ? "" : " none")} aria-expanded={on} title={c.thread ? `${c.thread}: the thread we sew ${c.name} in. Click to change it` : `Set the thread we sew ${c.name} in`} onClick={() => setThrAt(on ? null : { kind: "color", i })}><span data-notranslate>{c.thread ? fitLabel(c.thread, 17) : "+ Thread"}</span></button>
-                      : <span className="lgx-thr lk" title={`${c.thread}: locked with the master logo`} data-notranslate>{fitLabel(c.thread || "", 17)}</span>}
+                    <b title={c.name}>{fitLabel(c.name, 22)}</b>
+                    <span title={c.pms || c.name} data-notranslate>{fitLabel(c.pms || c.name, 24)}</span>
+                    {can ? <button type="button" className={"lgx-thr" + (c.thread ? "" : " none")} aria-expanded={on} title={c.thread ? `${c.thread}: the thread we sew ${c.name} in. Click to change it` : `Set the thread we sew ${c.name} in`} onClick={() => setThrAt(on ? null : { kind: "color", i })}><span data-notranslate>{c.thread ? fitLabel(c.thread, 26) : "+ Thread"}</span></button>
+                      : <span className="lgx-thr lk" title={`${c.thread}: locked with the master logo`} data-notranslate>{fitLabel(c.thread || "", 26)}</span>}
                   </div>
                 );
               })}</div>
