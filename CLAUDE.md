@@ -42,6 +42,11 @@
   numbers, dates and statuses stay on one line), cells tighten on narrower screens (`table.tbl` has no min-width), and a
   column that's only sometimes needed is hidden behind a small button that adds it back (the Payroll Center's
   "+ Add bonus"), or two values share a cell on two lines. Never fix a too-wide table with a scroll bar.
+- **Tables are fitted for you** (Nick, Oct 30 2026: "we've literally talked about this like 25 times… why can't you just
+  write a rule so this doesn't happen again?"). `components/TableFit.tsx`, mounted for every page, measures every table:
+  when it's wider than its box or a cell is narrower than a word in it (a side panel squeezing the page, a phone), the
+  table becomes stacked rows with each column's name in front, and goes back when there's room. Don't build a
+  table-only phone layout or a sideways scroll; put `data-nofit` only on a table that must never stack.
 - **Nothing gets squished** (Nick, Oct 30 2026: "same thing here… keeps writing that way. Can we not do that moving
   forward?", a name wrapping one word per line under a line item, an account # box squeezed to a sliver). Before
   shipping any new piece of a page, look at it in the narrowest place it shows (the order page's side panels, a phone):

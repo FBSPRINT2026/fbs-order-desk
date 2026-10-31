@@ -16596,4 +16596,16 @@ input.prs-mk-col:hover,input.prs-mk-col:focus{border-color:var(--line);backgroun
 .mk-logo-col{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);min-width:200px;flex:1 1 200px;max-width:280px}
 /* a mockup their program uses: kept, marked instead of the Archive button (Oct 30) */
 .dc-kept{position:absolute;top:6px;left:6px;z-index:2;display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent);font:700 11px var(--body);white-space:nowrap}
-.rs-back{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);color:var(--ink);background:var(--surface)}
+.rs .rs-back,.rs-back{width:auto;flex:0 0 auto;min-width:160px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);color:var(--ink);background:var(--surface)}
+/* TableFit (components/TableFit.tsx, Oct 30): a table that doesn't fit its box is shown as stacked rows, each cell on
+   its own line with its column's name in front; never squished a word per line, never a sideways scroll bar */
+main table.tbl-stack, .main table.tbl-stack, [role=dialog] table.tbl-stack, .ap table.tbl-stack{display:block;width:100%!important;min-width:0!important;table-layout:auto}
+table.tbl-stack > thead{display:none!important}
+table.tbl-stack > tbody{display:block}
+table.tbl-stack > tbody > tr{display:block;padding:10px 12px;border-bottom:1px solid var(--line-2)}
+table.tbl-stack > tbody > tr > td, table.tbl-stack > tbody > tr > th{display:block;width:auto!important;max-width:none!important;min-width:0!important;border:0!important;padding:2px 0!important;text-align:left!important;white-space:normal}
+table.tbl-stack > tbody > tr > td:empty{display:none}
+table.tbl-stack > tbody > tr > td[data-label]:not([data-label=""]){position:relative;padding-left:7.5em!important;min-height:1.4em}
+table.tbl-stack > tbody > tr > td[data-label]:not([data-label=""])::before{content:attr(data-label);position:absolute;left:0;top:4px;width:7em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+table.tbl-stack > tbody > tr > td[colspan]{font-weight:700;padding-top:6px!important}
+.tbl-wrap:has(> table.tbl-stack){overflow-x:hidden}
