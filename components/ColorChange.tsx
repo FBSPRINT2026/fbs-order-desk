@@ -13,13 +13,21 @@ import { InkSelect, ThreadSelect } from "@/components/InkSelect";
  * one ink or thread changed to another), each garment color a row with a tick under its version. Saved as the print's
  * Imprint.inkBy (garment color → the ink it changes); the group's lines are then grouped by version.
  */
-type Ver = { from: string; to: string };
+/** a version of a print: one ink changed to another, or (a colorway change, `cw`) the print's colorway → another colorway */
+export type Ver = { from: string; to: string; cw?: boolean };
 const ck = (c: string) => (c || "").trim().toLowerCase();
 const swatch = (name: string) => threadByName(name)?.hex || colorHex(name) || (/white/i.test(name) ? "#FFFFFF" : /black/i.test(name) ? "#111111" : "#9aa1ab");
 
-/** the versions on a print now: A as it is, then each different change (from → to) its inkBy has */
+/**
+ * the versions on a print now: A as it is, then each different change its inkBy has. A colorway change (Imprint.colorwayBy)
+ * is a version per colorway, named by it ("Maroon / Off White"), however many of its inks change.
+ */
 export function versionsOf(im: Imprint): Ver[] {
   const out: Ver[] = [];
+  if (im.colorwayBy && Object.keys(im.colorwayBy).length) {
+    for (const name of Object.values(im.colorwayBy)) if (!out.some((x) => ck(x.to) === ck(name))) out.push({ from: im.colorway || "as printed", to: name, cw: true });
+    return out;
+  }
   for (const m of Object.values(im.inkBy || {})) {
     const ent = Object.entries(m || {}).filter(([a, b]) => b && ck(a) !== ck(b));
     if (!ent.length) continue;
@@ -30,7 +38,11 @@ export function versionsOf(im: Imprint): Ver[] {
 }
 /** which version (0 = as printed, 1… = a change) a garment color gets on this print */
 export function versionOfColor(im: Imprint, color: string, vers = versionsOf(im)): number {
-  const m = Object.entries(im.inkBy || {}).find(([k]) => ck(k) === ck(color))?.[1];
+  if (vers.some((v) => v.cw)) {
+    const name = Object.entries(im.colorwayBy || {}).find(([k]) => ck(k) === ck(color))?.[1];
+    return name ? vers.findIndex((v) => ck(v.to) === ck(name)) + 1 : 0;
+  }
+  const m =Object.entries(im.inkBy || {}).find(([k]) => ck(k) === ck(color))?.[1];
   if (!m) return 0;
   const ent = Object.entries(m).filter(([a, b]) => b && ck(a) !== ck(b));
   if (!ent.length) return 0;

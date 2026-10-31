@@ -16,6 +16,7 @@ import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, fitLocation, METHODS, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
+import { cwLetter } from "@/lib/brands";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
 import { attachMockupToRequest, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
@@ -316,6 +317,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [mockBg, setMockBg] = useState("");
   // a color change: the art painted in another ink on one garment color (`${imprint id}|${color key}`)
   const [paintedBy, setPaintedBy] = useState<Record<string, string>>({});
+  /** a colorway change's picture came in: paint the garments it's on again */
+  const [cwTick, setCwTick] = useState(0);
   // embroidered prints drawn stitched on the mockup (off shows the flat logo)
   const [stitchOn, setStitchOn] = useSticky<boolean>("mockup.stitchLook", true);
   const stitchRun = useRef(0);
@@ -928,10 +931,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const by: Record<string, string> = {};
     for (const im of imprints) {
       const pt = paints[im.id];
+      // a colorway change (Imprint.colorwayBy): those garments show the other colorway's own picture, as it is
+      const dz = designs.find((x) => x.id === im.design_id);
+      for (const [ck, name] of Object.entries(im.colorwayBy || {})) {
+        if (!dz || !hasColorwayArt(urls, dz.id, { colorway: name })) continue;
+        const key = `${dz.id}:cw:${name}`, hit = imgCache.current.get(key);
+        if (hit) by[`${im.id}|${colorKey(ck)}`] = hit.src;
+        else void cwImg(key, printArtUrl(urls, dz.id, { colorway: name })).then(() => setCwTick((t) => t + 1)).catch(() => null);
+      }
       if (!pt || !im.inkBy) continue;
       const img = imgCache.current.get(pt.cw || pt.design + (pt.off ? ":clean" : ""));
       if (!img) continue;
       for (const [ck, swap] of Object.entries(im.inkBy)) {
+        if (by[`${im.id}|${colorKey(ck)}`]) continue;
         const ch = Object.entries(swap || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase());
         if (!ch.length) continue;
         const targets: Record<string, string> = {};
@@ -942,7 +954,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const to = ch.find(([a]) => a.trim().toLowerCase() === (v.name || "").trim().toLowerCase())?.[1];
           targets[src] = (to && colorHex(to)) || v.hex;
         });
-        by[`${im.id}|${ck}`] = recolorTrim(img, pt.sources.map((x) => x.hex), targets).url;
+        by[`${im.id}|${colorKey(ck)}`] = recolorTrim(img, pt.sources.map((x) => x.hex), targets).url;
       }
     }
     setPaintedBy(by);
@@ -956,7 +968,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (run === stitchRun.current) setPainted((p) => (p[t.id] === t.flat ? { ...p, [t.id]: u } : p));
       }).catch(() => null);
     }
-  }, [paints, imprints, hover, stitchOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [paints, imprints, hover, stitchOn, cwTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // picture files (JPG, PNG…): warn once per logo that they don't print as crisp as vector art
   const [rasterOk, setRasterOk] = useState<Record<string, boolean>>({});
@@ -1091,7 +1103,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       return np;
     });
   }
-  const artUrl = (im: Imprint, on?: Line) => { const k = on && im.inkBy ? paintedBy[`${im.id}|${colorKey(on.color)}`] : ""; if (k) return k; const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (hasColorwayArt(urls, d.id, im) && printArtUrl(urls, d.id, im)) || (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
+  const artUrl = (im: Imprint, on?: Line) => { const k = on && (im.inkBy || im.colorwayBy) ? paintedBy[`${im.id}|${colorKey(on.color)}`] : ""; if (k) return k; const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (hasColorwayArt(urls, d.id, im) && printArtUrl(urls, d.id, im)) || (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
 
   // ---- a garment not in the catalog: their own photos (Oct 24, Nick) ----
   /** "Need help picking garments?": our most popular garments to pick from (Oct 24, Nick) */
@@ -2837,7 +2849,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             x.fillStyle = colorHex(v.ink.split(",")[0].trim()) || "#cccccc"; x.fillRect(cx0, y + T + 4 * PX, T, 0.16 * IN); x.strokeStyle = "rgba(0,0,0,.2)"; x.strokeRect(cx0, y + T + 4 * PX, T, 0.16 * IN);
             const tx = cx0 + T + 12 * PX, tw = colW - T - 24 * PX;
             let ty = y + 11 * PT;
-            x.fillStyle = C.ink; x.font = body(700, 11); x.fillText(fit(x, `${v.letter} · ${v.letter === "A" ? "As printed" : changeWord(im.method)}`, tw), tx, ty);
+            x.fillStyle = C.ink; x.font = body(700, 11); { const dv = designs.find((z) => z.id === im.design_id), L = v.colorway && dv ? cwLetter(dv, { name: v.colorway }) : ""; x.fillText(fit(x, v.colorway ? `Colorway ${L ? `${L} · ` : ""}${v.colorway}` : `${v.letter} · ${v.letter === "A" ? "As printed" : changeWord(im.method)}`, tw), tx, ty); }
             ty += 4 * PX + 10 * PT; x.fillStyle = C.ink2; x.font = body(400, 10); x.fillText(fit(x, `on ${v.colors.join(", ")}${v.styles ? ` · ${v.styles}` : ""}`, tw), tx, ty);
             ty += 8 * PX + 11 * PT; x.fillStyle = colorHex(v.ink.split(",")[0].trim()) || "#cccccc"; x.fillRect(tx, ty - 12 * PX, 14 * PX, 14 * PX); x.strokeStyle = "rgba(0,0,0,.25)"; x.strokeRect(tx, ty - 12 * PX, 14 * PX, 14 * PX);
             x.fillStyle = C.ink; x.font = body(700, 11); x.fillText(fit(x, v.ink, tw - 22 * PX), tx + 22 * PX, ty);

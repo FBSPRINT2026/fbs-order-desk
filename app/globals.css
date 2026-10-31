@@ -16861,3 +16861,20 @@ html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
 .lgx-save.on{color:var(--accent)}
 .lgx-save input:checked + i{background:var(--accent)}
 .mk-brandlogo .mk-big{background:var(--mkbg,var(--swatch-light))}
+
+/* Colorway change (components/ColorwayChange.tsx, Oct 31): one column per colorway of the logo, its picture, letter, name */
+.cwc-tbl th.cwc-h{vertical-align:bottom;text-transform:none;letter-spacing:0}
+.cwc-col{display:inline-flex;flex-direction:column;align-items:center;gap:3px}
+.cwc-pic{width:64px;height:48px;border-radius:6px;border:1px solid var(--line);background:var(--surface-2);display:grid;place-items:center;overflow:hidden}
+.cwc-pic.dk{background:var(--ink-2)}
+.cwc-pic img{width:100%;height:100%;object-fit:contain;padding:3px;box-sizing:border-box}
+.cwc-col b{font-size:13px;color:var(--ink)}
+.cwc-n{font-size:12px;font-weight:600;color:var(--ink-3);white-space:normal;max-width:96px;text-align:center;line-height:1.25}
+.cwc-g{display:flex;flex-direction:column;gap:1px;white-space:normal}
+.cwc-g .faint{font-size:12px}
+/* a section close-up's picture with its background swatch in the corner (Oct 31) */
+.pr-lw{position:relative;display:inline-block;line-height:0}
+.mbg.sm{top:4px;right:4px}
+.mbg.sm .mbg-btn{width:22px;height:22px}
+.mbg.sm .mbg-btn span{width:12px;height:12px}
+.mbg.sm .mbg-pop{right:auto;left:0;top:28px;line-height:1.3;z-index:5}

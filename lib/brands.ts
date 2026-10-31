@@ -93,6 +93,69 @@ export function sewThreads(f: SewFile | null | undefined, side: "light" | "dark"
   if (f.ws?.threads?.length) return needleThreads(f.ws, "").map((t) => t.label);
   return f.threads?.[side] || [];
 }
+/** a sew file's threads in the order they sew (its worksheet's color sequence), else as listed */
+function seqThreads(f: SewFile | null | undefined): string[] {
+  if (!f) return [];
+  const ws = f.ws as { sequence?: { needle: number }[] } | undefined;
+  if (!ws?.sequence?.length || !f.ws?.threads?.length) return sewThreads(f);
+  const nt = needleThreads(f.ws, "");
+  return ws.sequence.map((st) => nt.find((t) => t.needle === st.needle)?.label || "").filter(Boolean);
+}
+/**
+ * How a print's inks (or threads) become another colorway's: each ink of the colorway it is → the ink in the same place
+ * in the other one (Oct 31, Nick: "same logo, but with a color change"). Embroidery pairs the two sew files' threads stop
+ * by stop (MEI's E2 Black, Carmine → E1 Cream, Carmine); a screen print pairs the colorways' inks in order. A colorway
+ * with fewer inks puts its last one on the rest (Maroon / Black → All White: both white).
+ */
+export function colorwayInkMap(d: Pick<Design, "specs">, im: Pick<Imprint, "inks" | "method">, from: Colorway, to: Colorway): Record<string, string> {
+  const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const digits = (x: string) => (x.match(/\d{3,4}/) || [""])[0];
+  const same = (a: string, b: string) => norm(a) === norm(b) || (!!digits(a) && digits(a) === digits(b));
+  const emb = im.method === "embroidery";
+  const a = emb ? seqThreads(colorwaySew(d, from)) : from.inks, b = emb ? seqThreads(colorwaySew(d, to)) : to.inks;
+  const A = a.length ? a : from.inks, B = b.length ? b : to.inks;
+  const out: Record<string, string> = {};
+  const inks = (im.inks || "").split(/\s*,\s*/).filter(Boolean);
+  inks.forEach((ink, k) => {
+    const i = A.findIndex((x) => same(x, ink));
+    const at = i >= 0 ? i : k;
+    const t = B[Math.min(at, B.length - 1)];
+    if (t) out[ink] = t;
+  });
+  return out;
+}
+/**
+ * A colorway change on a print (Oct 31, Nick: "CT106678 gets colorway B, and then the charcoal gets colorway A…
+ * just like color change or location change"): by garment color, the colorway it sews or prints in. It's a color change
+ * underneath (Imprint.inkBy: the colorway's inks on those garments), so everything that already follows a color change
+ * (the grouped lines, the tiles, the Mockup Creator, the work order, the ink change count) follows it; colorwayBy keeps
+ * which colorway each one is, for its letter, name, picture and sew file. Colors on the print's own colorway are left off.
+ */
+export function applyColorwayChange(im: Imprint, d: Pick<Design, "specs">, byColor: Record<string, string>): Imprint {
+  const x: Imprint = { ...im };
+  const base = printColorway(im, d);
+  const cws = colorwaysOf(d);
+  const ck = (c: string) => c.trim().toLowerCase();
+  const was = Object.keys(im.colorwayBy || {}).map(ck);
+  const inkBy: Record<string, Record<string, string>> = Object.fromEntries(Object.entries(im.inkBy || {}).filter(([c]) => !was.includes(ck(c))));
+  const by: Record<string, string> = {};
+  for (const [c, name] of Object.entries(byColor)) {
+    const cw = cws.find((y) => cwKey(y.name) === cwKey(name));
+    if (!cw || !base || cwKey(cw.name) === cwKey(base.name)) continue;
+    by[ck(c)] = cw.name;
+    inkBy[ck(c)] = colorwayInkMap(d, im, base, cw);
+  }
+  if (Object.keys(by).length) x.colorwayBy = by; else delete x.colorwayBy;
+  if (Object.keys(inkBy).length) x.inkBy = inkBy; else delete x.inkBy;
+  return x;
+}
+/** the colorway a garment color gets on a print: its colorway change, else the print's own */
+export function colorwayOnColor(im: Pick<Imprint, "colorway" | "colorwayBy" | "inks" | "emb">, d: Pick<Design, "specs"> | null | undefined, color: string): Colorway | null {
+  if (!d) return null;
+  const name = Object.entries(im.colorwayBy || {}).find(([c]) => c.trim().toLowerCase() === (color || "").trim().toLowerCase())?.[1];
+  if (name) { const cw = colorwaysOf(d).find((y) => cwKey(y.name) === cwKey(name)); if (cw) return cw; }
+  return printColorway(im, d);
+}
 /** colorway names compared loosely ("Maroon / Off White" = "maroon/off-white") */
 const cwKey = (s?: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 /** inks compared loosely, in any order ("PMS 492 C, Black" = "black, pantone 492c") */
@@ -156,7 +219,20 @@ export function applyColorway(im: Imprint, d: Pick<Design, "specs">, cw: Colorwa
     x.inks = cw.inks.join(", ");
     x.colors = Math.max(1, cw.inks.length);
   }
+  // a colorway change on it stays: each garment color keeps its colorway, worked out again from the new one (one that is
+  // now the print's own drops off)
+  if (im.colorwayBy && Object.keys(im.colorwayBy).length) { delete x.colorwayBy; return applyColorwayChange(x, d, im.colorwayBy); }
   return x;
+}
+/** a print as it runs on one garment color: the colorway it gets there (a colorway change) as that colorway, with its own
+ *  inks or threads, sew file and picture; else the print as it is. For the work order's press sheets and close-ups */
+export function printOnColor(im: Imprint, d: Pick<Design, "specs"> | null | undefined, color: string): Imprint {
+  const name = Object.entries(im.colorwayBy || {}).find(([c]) => c.trim().toLowerCase() === (color || "").trim().toLowerCase())?.[1];
+  const cw = name && d ? colorwaysOf(d).find((y) => cwKey(y.name) === cwKey(name)) : null;
+  if (!cw || !d) return im;
+  const base: Imprint = { ...im };
+  delete base.colorwayBy; delete base.inkBy;
+  return applyColorway(base, d, cw);
 }
 /** the sew file for a print: the one linked to the colorway the brand's rule picks for these goods (same kind of goods),
  *  else the best fit by kind and size (pickSewFile) */

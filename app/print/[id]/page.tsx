@@ -66,10 +66,11 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const dPaths = Object.values(designs).filter((d) => d.preview_path);
   // a print switched to a colorway: that colorway's own picture (lib/designs.ts printArtUrl's "<id>:cw:<name>")
   const cwKey = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const cwPics = [...new Map(groups.flatMap((g) => g.imprints).filter((d) => d.colorway && d.design_id && designs[d.design_id]).map((d) => {
-    const cw = (((designs[d.design_id!].specs || {}) as { colorways?: { name: string; preview?: string }[] }).colorways || []).find((c) => cwKey(c.name) === cwKey(d.colorway!));
+  // …and each colorway a colorway change puts on some of its garments (Imprint.colorwayBy)
+  const cwPics = [...new Map(groups.flatMap((g) => g.imprints).filter((d) => d.design_id && designs[d.design_id]).flatMap((d) => [d.colorway, ...Object.values(d.colorwayBy || {})].filter((n): n is string => !!n).map((name) => {
+    const cw = (((designs[d.design_id!].specs || {}) as { colorways?: { name: string; preview?: string }[] }).colorways || []).find((c) => cwKey(c.name) === cwKey(name));
     return cw?.preview ? [`${d.design_id}:cw:${cwKey(cw.name)}`, cw.preview] as [string, string] : null;
-  }).filter((x): x is [string, string] => !!x)).entries()];
+  })).filter((x): x is [string, string] => !!x)).entries()];
   const toSign = [...mkPaths.flat(), ...dPaths.map((d) => d.preview_path), ...cwPics.map(([, path]) => path)];
   const signed = toSign.length ? (await admin.storage.from("proofs").createSignedUrls(toSign, 3600)).data || [] : [];
   const urlOf = new Map<string, string>();

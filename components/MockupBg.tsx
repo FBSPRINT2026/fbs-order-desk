@@ -8,11 +8,12 @@ import { useEffect, useRef, useState } from "react";
  * A small swatch in the picture's top-right corner. It starts on the group's most-used garment color; clicking it shows
  * the group's own colors first, then any color. Only the picture changes, never the garments.
  */
-export default function MockupBg({ value, auto, colors, onPick }: {
+export default function MockupBg({ value, auto, colors, onPick, small }: {
   /** the color picked (Group.mockupBg), else empty */ value?: string;
   /** the color it shows when nothing is picked: the garment with the most pieces */ auto: string;
   /** the group's garment colors: name and color, most pieces first */ colors: { name: string; hex: string; pcs: number }[];
   onPick: (hex: string | null) => void;
+  /** on a small close-up (a section's tile): a smaller swatch, the list opening to the right */ small?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -25,7 +26,7 @@ export default function MockupBg({ value, auto, colors, onPick }: {
   }, [open]);
   const cur = (value || auto || "#9aa1ab").toLowerCase();
   return (
-    <div className="mbg" ref={ref}>
+    <div className={"mbg" + (small ? " sm" : "")} ref={ref}>
       <button type="button" className={"mbg-btn" + (open ? " on" : "")} title="Background" aria-label="Background" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         <span style={{ background: cur }} />
       </button>

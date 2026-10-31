@@ -26,9 +26,9 @@ function hash(s: string): string { let h = 5381; for (let i = 0; i < s.length; i
 
 /** what a group's pictures are drawn from: each print's logo, spot, size, drop, inks and sew file */
 export function mockupArtKey(g: Pick<Group, "imprints"> & { mockupBg?: string; mockupKind?: string }): string {
-  // a logo mockup's background picked on the order (Group.mockupBg) and a print's colorway count too; left out when
+  // a logo mockup's background picked on the order (Group.mockupBg) and a print's colorway and colorway change count too; left out when
   // not set, so pictures saved before them aren't all drawn again
-  return hash((g.imprints || []).map((im) => stable([im.id, im.design_id || "", im.method || "", (im.location || "").trim(), (im.size || "").trim(), String(im.drop ?? "").trim(), (im.inks || "").trim(), im.inkMap?.map || null, im.inkBy || null, im.emb?.file?.path || "", ...(im.colorway ? [im.colorway] : [])])).join("|"))
+  return hash((g.imprints || []).map((im) => stable([im.id, im.design_id || "", im.method || "", (im.location || "").trim(), (im.size || "").trim(), String(im.drop ?? "").trim(), (im.inks || "").trim(), im.inkMap?.map || null, im.inkBy || null, im.emb?.file?.path || "", ...(im.colorway ? [im.colorway] : []), ...(im.colorwayBy && Object.keys(im.colorwayBy).length ? [im.colorwayBy] : [])])).join("|"))
     + (g.mockupKind === "logo" && g.mockupBg ? `:${g.mockupBg.toLowerCase()}` : "");
 }
 

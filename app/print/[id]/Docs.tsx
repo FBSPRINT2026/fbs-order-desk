@@ -1,5 +1,5 @@
 import { hasSpotChange, spotLines } from "@/lib/spotChange";
-import { cwLetter, printArtUrl, withSewFile } from "@/lib/brands";
+import { cwLetter, hasColorwayArt, printArtUrl, printOnColor, withSewFile } from "@/lib/brands";
 import { persOf, PERS_SHOW } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
@@ -68,7 +68,7 @@ const Swatch = ({ c }: { c: string }) => <span className="sw" style={{ backgroun
  */
 /** the garment colors (other than the first) a print changes ink on, with the swap for each (Imprint.inkBy, Oct 26) */
 const ckey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-export type Variant = { color: string; swap: Record<string, string> };
+export type Variant = { color: string; swap: Record<string, string>; /** a colorway change: the colorway this sheet runs */ cw?: string };
 function variantsOf(d: Imprint, colors: string[]): Variant[] {
   if (d.visualOnly) return [];
   return colors.slice(1).map((color) => {
@@ -79,6 +79,28 @@ function variantsOf(d: Imprint, colors: string[]): Variant[] {
   }).filter((v) => Object.keys(v.swap).length);
 }
 const swapInk = (k: string, sw?: Record<string, string> | null) => (sw && sw[k.trim().toLowerCase()]) || k;
+/**
+ * The press sheets a group's prints get: one each, and a print with a colorway change (Imprint.colorwayBy, Oct 31) one
+ * per colorway, each as that colorway runs (lib/brands.ts printOnColor: its own sew file, threads, stitches and picture)
+ * with the garments and pieces it goes on. A colorway is a different file on the machine, not a thread swap.
+ */
+type Sheet = { d: Imprint; di: number; variant?: Variant; qty?: number };
+function sheetsOf(g: Group, designs: Record<string, Design>): Sheet[] {
+  return g.imprints.flatMap((d, di): Sheet[] => {
+    const des = d.design_id ? designs[d.design_id] : null;
+    const by = Object.entries(d.colorwayBy || {});
+    if (!des || !by.length || d.visualOnly || d.supplied) return [{ d, di }];
+    const ls = g.lines.filter((l) => (l.color || "").trim() && lineQty(l) > 0);
+    const cwOf = (color: string) => by.find(([c]) => ckey(c) === ckey(color))?.[1] || "";
+    const names = ["", ...new Set(by.map(([, n]) => n))];
+    return names.map((name) => {
+      const on = ls.filter((l) => ckey(cwOf(l.color)) === ckey(name));
+      const colors = [...new Set(on.map((l) => l.color))];
+      const x = name ? printOnColor(d, des, colors[0] || "") : { ...d, inkBy: Object.fromEntries(Object.entries(d.inkBy || {}).filter(([c]) => !cwOf(c))) };
+      return { d: x, di, qty: on.reduce((a, l) => a + lineQty(l), 0), variant: { color: colors.join(", "), swap: {}, cw: x.colorway || name } };
+    }).filter((x) => x.qty > 0);
+  });
+}
 
 /** each color stop's thread (the worksheet's, else the print's threads in turn), for drawing its DST */
 function dstColorsOf(d: Imprint): string[] {
@@ -153,7 +175,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
     // doesn't change, you just need one close-up")
     // two close-ups a page (Oct 30, Nick: "a close-up of the left chest with the details on it, and then below it, close-up of
     // the full back"): a front and back print share one page
-    const printPages = allSup ? 0 : Math.ceil(g.imprints.length / 2);
+    const printPages = allSup ? 0 : Math.ceil(sheetsOf(g, p.designs).length / 2);
     return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
@@ -185,7 +207,8 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
         const pgMore = pg + 1, pgMk = pgMore + more.length, pgNotes = pgMk + mk.length, pgPrint = pgNotes + (notesPage ? 1 : 0);
         // each print's press sheet, then one more for each color change
         const printPg: number[] = [];
-        g.imprints.forEach((_d, di) => { printPg[di] = pgPrint + Math.floor(di / 2); });
+        const sheets = sheetsOf(g, p.designs);
+        sheets.forEach((sh, k) => { if (printPg[sh.di] == null) printPg[sh.di] = pgPrint + Math.floor(k / 2); });
         // their transfers: the print box points at the placement page
         if (allSup) g.imprints.forEach((_d, di) => { printPg[di] = mk.length ? pgMk : pg; });
         const where = g.imprints.map((d) => d.supplied?.where || "").find(Boolean) || "";
@@ -274,15 +297,18 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                   </>}
                   {g.imprints.length > 0 && !allSup && (
                     <div className={"wo-cubes n" + Math.min(3, g.imprints.length)}>
-                      {g.imprints.map((d, di) => {
-                        const des = d.design_id ? p.designs[d.design_id] : null, pic = des ? printArtUrl(p.designUrls, des.id, d) : "", sz = printSize(d, des);
-                        const v = col ? vars[di].find((x) => ckey(x.color) === ckey(col)) : undefined;
+                      {g.imprints.map((d0, di) => {
+                        const des = d0.design_id ? p.designs[d0.design_id] : null;
+                        // on this mockup's garment color: a colorway change runs that colorway (its own picture), else the print
+                        const dc = col ? printOnColor(d0, des, col) : d0, d = dc;
+                        const pic = des ? printArtUrl(p.designUrls, des.id, d) : "", sz = printSize(d, des);
+                        const v = col && dc === d0 ? vars[di].find((x) => ckey(x.color) === ckey(col)) : undefined;
                         return (
                           <div className="wo-cube" key={d.id}>
                             <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
                               {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} swap={v?.swap} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
                             </div>
-                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[d.colorway && des ? `${cwLetter(des, { name: d.colorway }) || ""} ${d.colorway}`.trim() : "", sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="wo-cc">{changeWord(d.method)}</span> : null}</div>
+                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[d.colorway && des ? `${cwLetter(des, { name: d.colorway }) || ""} ${d.colorway}`.trim() : "", sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="wo-cc">{changeWord(d.method)}</span> : dc !== d0 ? <span className="wo-cc">Colorway</span> : null}</div>
                           </div>
                         );
                       })}
@@ -303,14 +329,14 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
               </section>
             )}
             {/* 4. each print's press sheet */}
-            {!allSup && g.imprints.map((d, di) => (di % 2 ? null : g.imprints[di + 1]
+            {!allSup && sheets.map((sh, k) => (k % 2 ? null : sheets[k + 1]
               ? (
-                <section key={d.id} className="sheet cu-pair">
-                  {[d, g.imprints[di + 1]].map((x, k) => <CloseUp key={x.id} half d={x} di={di + k} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.allQty || 0} page={printPg[di]} total={total} footL={footL} />)}
-                  <div className="foot"><span>{footL}</span><span>Page {printPg[di]} of {total}</span></div>
+                <section key={sh.d.id + k} className="sheet cu-pair">
+                  {[sh, sheets[k + 1]].map((x, j) => <CloseUp key={x.d.id + (k + j)} half d={x.d} di={x.di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={x.variant ? x.variant.color : colors} qty={x.qty ?? (gc?.allQty || 0)} page={pgPrint + Math.floor(k / 2)} total={total} footL={footL} variant={x.variant} />)}
+                  <div className="foot"><span>{footL}</span><span>Page {pgPrint + Math.floor(k / 2)} of {total}</span></div>
                 </section>
               )
-              : <div key={d.id} style={{ display: "contents" }}><CloseUp d={d} di={di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={colors} qty={gc?.allQty || 0} page={printPg[di]} total={total} footL={footL} /></div>))}
+              : <div key={sh.d.id + k} style={{ display: "contents" }}><CloseUp d={sh.d} di={sh.di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={sh.variant ? sh.variant.color : colors} qty={sh.qty ?? (gc?.allQty || 0)} page={pgPrint + Math.floor(k / 2)} total={total} footL={footL} variant={sh.variant} /></div>))}
           </div>
         );
       })}
@@ -392,7 +418,8 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
   const sz0 = printSize(d, des), sc = screensOf(d, allLight), max = p.maxes[gi]?.[di] || null;
   // visual only: no guessed size or inks on the press sheet; the press writes what ran
   const sz = d.visualOnly ? { ...sz0, label: "" } : sz0;
-  const hex = variant ? p.colorHexes?.[ckey(variant.color)] || guessHex(variant.color) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
+  const vc = variant ? variant.color.split(",")[0].trim() : "";
+  const hex = vc ? p.colorHexes?.[ckey(vc)] || guessHex(vc) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
   // the art at 75%: scaled so it fills about three quarters of the panel, with its real measurements drawn on
   const s = sz.w && sz.h ? Math.min(4.8 / sz.w, 3.3 / sz.h) : sz.w ? 4.8 / sz.w : 0;
   const aw = s ? sz.w * s : 4.8, ah = s && sz.h ? sz.h * s : 3.3, top = 0.42;
@@ -425,7 +452,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
   return (
     <Wrap half={half}>
       <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">Print {di + 1} of {n} · {qty} pcs{colors ? ` · ${colors}` : ""}{groups.length > 1 ? ` · ${groups[gi].name || `Group ${gi + 1}`}` : ""}</div></div>
-      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{hasSpotChange(d, groups[gi]?.lines || []) && <div className="m"><b>Location change:</b> {spotLines(d, groups[gi].lines).map((x) => `${x.letter} · ${x.spot}: ${x.what}`).join("  ⟳  ")} · same file</div>}{variant && <div className="cc-tag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</div>}</div>
+      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{hasSpotChange(d, groups[gi]?.lines || []) && <div className="m"><b>Location change:</b> {spotLines(d, groups[gi].lines).map((x) => `${x.letter} · ${x.spot}: ${x.what}`).join("  ⟳  ")} · same file</div>}{variant && <div className="cc-tag">{variant.cw ? `COLORWAY ${des ? `${cwLetter(des, { name: variant.cw })} ` : ""}· ${variant.cw.toUpperCase()} · ON ${variant.color.toUpperCase()}` : `${changeWord(d.method).toUpperCase()} · ${variant.color.toUpperCase()}`}</div>}</div>
       {d.supplied ? (
         // their placement reference, big: the press follows it (Oct 27, Nick)
         <div className="art" style={{ background: "#fff" }}>
@@ -672,14 +699,15 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
               <div className="pf-cc-v" key={v.letter}>
                 <div className="pf-cc-pic">
                   <div className={"art pf-cc-tile" + (isDark(v.hex) ? " dark" : "")} style={{ background: v.hex }}>
-                    {pic ? <ArtPic d={d} des={des} pic={pic} swap={v.swap} style={{ top: `${(1 - tileH) / 2}in`, width: `${tileW}in`, height: `${tileH}in` }} /> : null}
+                    {/* a colorway change's version: that colorway's own picture, as it is */}
+                    {pic ? (() => { const own = v.colorway && des && hasColorwayArt(p.designUrls, des.id, { colorway: v.colorway }) ? printArtUrl(p.designUrls, des.id, { colorway: v.colorway }) : ""; return <ArtPic d={own ? { ...d, inkMap: undefined } : d} des={des} pic={own || pic} swap={own ? null : v.swap} style={{ top: `${(1 - tileH) / 2}in`, width: `${tileW}in`, height: `${tileH}in` }} />; })() : null}
                   </div>
-                  <i className="pf-cc-blk" style={{ background: colorHex(v.ink) || "#ccc" }} />
+                  <i className="pf-cc-blk" style={{ background: colorHex(v.ink.split(",")[0].trim()) || "#ccc" }} />
                 </div>
                 <div className="pf-cc-t">
-                  <b>{v.letter} · {v.letter === "A" ? "As printed" : changeWord(d.method)}</b>
+                  <b>{v.colorway ? `Colorway ${des ? `${cwLetter(des, { name: v.colorway })} · ` : ""}${v.colorway}` : `${v.letter} · ${v.letter === "A" ? "As printed" : changeWord(d.method)}`}</b>
                   <span>on {v.colors.join(", ")}{v.styles ? ` · ${v.styles}` : ""}</span>
-                  <span className="pf-cc-ink"><i style={{ background: colorHex(v.ink) || "#ccc" }} /><b>{v.ink}</b></span>
+                  <span className="pf-cc-ink"><i style={{ background: colorHex(v.ink.split(",")[0].trim()) || "#ccc" }} /><b>{v.ink}</b></span>
                   {v.from && <small>instead of {v.from}</small>}
                 </div>
               </div>

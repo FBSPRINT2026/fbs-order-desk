@@ -15,10 +15,11 @@ import type { Design, Imprint } from "@/lib/pricing";
  * one closes it again. Shown only for a logo with two or more colorways. Picking is the caller's: it applies the
  * colorway to the print (lib/brands.ts applyColorway), which sets its inks or threads, sew file and picture.
  */
-export default function ColorwaySwap({ d, im, urls, mockupNo, disabled, onPick }: {
+export default function ColorwaySwap({ d, im, urls, mockupNo, disabled, onPick, also }: {
   d: Pick<Design, "id" | "specs">; im: Pick<Imprint, "colorway" | "inks" | "emb">; urls: Record<string, string>;
   /** the saved mockup the group is made from (M-1240), for the line's "M-1240-B" */ mockupNo?: number | null;
   disabled?: boolean; onPick: (cw: Colorway) => void;
+  /** a colorway change's other colorways, after this one ("Group B: A Maroon / Black") */ also?: string;
 }) {
   const cws = colorwaysOf(d);
   const cur = printColorway(im, d);
@@ -39,7 +40,7 @@ export default function ColorwaySwap({ d, im, urls, mockupNo, disabled, onPick }
       <div className="pr-scr cws-line">
         <span className="pr-scr-l">Colorway</span>
         <span className="pr-scr-v cws-now">
-          {cur ? <>{pic(at)}<b className="cws-l">{L}</b><span className="cws-n">{cur.name}</span>{mockupNo ? <span className="cws-m">· M-{mockupNo}-{L}</span> : null}</>
+          {cur ? <>{pic(at)}<b className="cws-l">{L}</b><span className="cws-n">{cur.name}</span>{mockupNo ? <span className="cws-m">· M-{mockupNo}-{L}</span> : null}{also ? <span className="cws-m">· {also}</span> : null}</>
             : <span className="cws-n faint">Not one of its colorways</span>}
           {!disabled && (
             <button type="button" className={"cws-swap" + (open ? " on" : "")} aria-expanded={open} title="Change colorway" onClick={() => setOpen((x) => !x)}>
