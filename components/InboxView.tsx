@@ -756,7 +756,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
         {sugOpen && q.trim().length >= 2 && <MailSuggest q={q} senders={senders} onPick={(p) => { closeDrop(); window.scrollTo({ top: 0 }); setQ(p.label); void runSearch(p.label, p.emails, p.about ? { words: p.about, cust: p.cust } : undefined); }} onText={(t) => { closeDrop(); window.scrollTo({ top: 0 }); void runSearch(t); }} />}
       </div>}
       <div ref={fitRef} className={"ibx2" + (picked && hasSel ? " picked" : "") + (!listOpen && hasSel ? " nolist" : "")} style={{ ["--ibx-list" as string]: `${listW}px` }}>
-        {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: listW + 2 }} label="Drag to make the email list wider or narrower" />}
+        {(listOpen || !hasSel) && <Splitter dir="x" value={listW} min={220} max={560} onChange={setListW} className="ibx2-sv ibx2-sv-list" style={{ left: "calc(var(--ibx-lw) + 2px)" }} label="Drag to make the email list wider or narrower" />}
         {/* 1. the list */}
         <section className="ibx2-list" aria-label="Emails" ref={zoomRef}>
           <div className="ibx2-list-h">

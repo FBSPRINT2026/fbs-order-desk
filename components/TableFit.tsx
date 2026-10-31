@@ -54,6 +54,10 @@ function label(t: HTMLTableElement) {
 function squished(t: HTMLTableElement, box: HTMLElement): boolean {
   if (t.scrollWidth > box.clientWidth + 2) return true;
   const rows = [...t.querySelectorAll<HTMLTableRowElement>("tbody > tr")].slice(0, 25);
+  // a number box too narrow to show its number ("2…" in a price grid on a phone, Oct 31): a long note in a text box can
+  // scroll inside its box, but a number has to be read whole
+  for (const tr of rows) for (const i of tr.querySelectorAll<HTMLInputElement>("input[type=number]"))
+    if (i.value && i.clientWidth > 0 && i.scrollWidth > i.clientWidth + 1) return true;
   for (const tr of rows) for (const c of [...tr.cells]) {
     // a cell spanning rows (a board's name beside its jobs) sizes with the rows, not by its words
     if (c.colSpan > 1 || c.rowSpan > 1 || !c.innerText) continue;

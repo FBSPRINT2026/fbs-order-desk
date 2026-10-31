@@ -2711,7 +2711,8 @@ a.as-ai{text-decoration:none}
   /* the area tabs: a tidy grid of icon tiles instead of a strip that scrolls sideways */
   .aa-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;overflow:visible;padding:6px}
   .aa-tab{flex-direction:column;gap:3px;padding:8px 2px;font-size:10.5px;letter-spacing:.02em;min-width:0;position:relative}
-  .aa-tab span:not(.aa-n){max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* a two-word name ("Assistant & AI", "Paycheck advances") goes onto two lines instead of being cut (Oct 31) */
+  .aa-tab span:not(.aa-n){max-width:100%;overflow:hidden;white-space:normal;text-align:center;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .aa-tab .aa-n{position:absolute;top:3px;right:6px;min-width:16px;padding:0 4px;font-size:10px}
   .pd-top.with-pa .pa-ideas{flex-wrap:wrap;overflow:visible}
   .pd-top.with-pa .pa-ideas button{flex:0 1 auto}
@@ -5884,7 +5885,9 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ibx2-box i{width:8px;height:8px;border-radius:50%;background:#1F7A47}
 .ibx2-box.bad{color:var(--danger)}.ibx2-box.bad i{background:var(--danger)}
 .ibx2-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:50;background:var(--ink,#1d2433);color:#fff;font-size:13.5px;padding:9px 16px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:min(560px,92vw)}
-.ibx2{display:grid;grid-template-columns:var(--ibx-list,300px) minmax(0,1fr);gap:12px;height:calc(100vh - 150px);min-height:520px;position:relative}
+/* the list never takes the email's room: on a narrow main area (a side panel open, a small laptop) it gives way down to
+   220px so the email keeps ~440px, instead of the email squeezing to a sliver with a sideways scroll bar (Oct 31) */
+.ibx2{--ibx-lw:min(var(--ibx-list,300px),max(220px,calc(100% - 452px)));display:grid;grid-template-columns:var(--ibx-lw) minmax(0,1fr);gap:12px;height:calc(100vh - 150px);min-height:520px;position:relative}
 .ibx2.nolist{grid-template-columns:minmax(0,1fr)}.ibx2.nolist .ibx2-list{display:none}
 .ibx2-list,.ibx2-mail,.ibx2-ai,.ibx2-empty{background:var(--surface);border:1px solid var(--line);border-radius:12px;min-height:0;min-width:0;overflow:hidden;display:flex;flex-direction:column}
 .ibx2-empty{align-items:center;justify-content:center;gap:4px;text-align:center;padding:40px;color:var(--ink-3)}.ibx2-empty b{color:var(--ink)}
@@ -6443,7 +6446,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .lm-row .md-check{margin-top:2px}
 
 /* Email (components/MailFolders.tsx): the folder rail, folder lists, search as conversations */
-.ibx2.mf{grid-template-columns:190px var(--ibx-list,300px) minmax(0,1fr)}
+.ibx2.mf{--ibx-lw:min(var(--ibx-list,300px),max(220px,calc(100% - 654px)));grid-template-columns:190px var(--ibx-lw) minmax(0,1fr)}
 .ibx2.mf.nolist{grid-template-columns:190px minmax(0,1fr)}
 .mf-rail{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-y:auto;min-height:0;padding:8px 6px;display:flex;flex-direction:column;gap:1px}
 .mf-load{color:var(--ink-3);font-size:13px;padding:10px}
@@ -6479,7 +6482,7 @@ a.pdn-tag:hover{text-decoration:underline}
 .mf-fold{font-size:11px;color:var(--ink-3);background:var(--surface-2);border-radius:6px;padding:0 6px;white-space:nowrap}
 .mf-msg-b{padding:0 12px 12px;border-top:1px solid var(--line-2)}
 .mf-msg-a{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
-@media (max-width:1180px){ .ibx2.mf{grid-template-columns:var(--ibx-list,300px) minmax(0,1fr)} .ibx2.mf .mf-rail{display:none} .mf-pick{display:block} .ibx2.mf .ibx2-sv-list{display:none} }
+@media (max-width:1180px){ .ibx2.mf{--ibx-lw:min(var(--ibx-list,300px),max(220px,calc(100% - 452px)));grid-template-columns:var(--ibx-lw) minmax(0,1fr)} .ibx2.mf .mf-rail{display:none} .mf-pick{display:block} .ibx2.mf .ibx2-sv-list{display:none} }
 @media (max-width:760px){ .ibx2.mf{grid-template-columns:1fr} .mf-msg{max-width:100%} }
 @media (max-width:1180px){ .ibx2.mf.nolist{grid-template-columns:minmax(0,1fr)} }
 
@@ -9897,6 +9900,12 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .tk-who{grid-area:who;min-width:0;display:flex;flex-direction:column}
 .tk-who b{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tk-who small{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* a card with a time on its pill ("In since 5:59 AM", "Out 3:09 PM"): the pill goes under the name, so the name keeps the
+   card's width instead of being cut to "Kelsy Vic…" (Oct 31); a long name wraps to a second line before it's cut */
+.tk-cards .tk-card:not(.off){grid-template-columns:40px minmax(0,1fr);grid-template-areas:"av who" "av pill" "bar bar" "hrs wk";row-gap:6px}
+.tk-cards .tk-card:not(.off) .tk-pill{justify-self:start;align-self:start}
+.tk-cards .tk-card:not(.off) .tk-who{align-self:end}
+.tk-card .tk-who b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.25}
 .tk-pill{grid-area:pill;font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 9px;white-space:nowrap;background:var(--surface-2);color:var(--ink-3)}
 .tk-pill.in{background:var(--ok-soft);color:var(--ok)}.tk-pill.break{background:var(--warn-soft);color:var(--warn)}.tk-pill.late{background:var(--danger-soft);color:var(--danger)}
 .tk-bar-d{grid-area:bar;position:relative;height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden}
@@ -11410,16 +11419,18 @@ main.main .prs-tbl td.prs-prod{white-space:normal;min-width:9em}
   /* summary cards: two to a row */
   main.main :is(.stats, .sc-kpis, .rv-kpis, .db-kpis) > *{flex:1 1 45%;min-width:0}
   /* an order list on a phone (Oct 21, Nick: "just all runs together"): the number on the left; the job and its total;
-     the customer and what's owed; the status, pieces and due date. No "Status:" / "Customer:" labels */
-  main.main table.m-card tr:has(> td[data-label="Job"]){display:grid!important;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"num job job tot" "num cust cust bal" "num stat pcs due";gap:3px 10px;align-items:center;padding:12px 12px!important}
+     the customer, pieces and what's owed; the status (the whole row, Oct 31) and due date. No "Status:" / "Customer:" labels */
+  main.main table.m-card tr:has(> td[data-label="Job"]){display:grid!important;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"num job job tot" "num cust pcs bal" "num stat stat due";gap:3px 10px;align-items:center;padding:12px 12px!important}
   main.main table.m-card tr:has(> td[data-label="Job"]) > td{white-space:nowrap!important;overflow:hidden;text-overflow:ellipsis;font-size:13px}
   main.main table.m-card tr:has(> td[data-label="Job"]) > td::before{content:none!important}
   main.main table.m-card td[data-label="#"]{grid-area:num;align-self:start;display:flex!important;flex-direction:column;gap:4px;align-items:flex-start}
-  main.main table.m-card td[data-label="Job"]{grid-area:job;white-space:normal!important;font-weight:600}
+  main.main table.m-card td[data-label="Job"]{grid-area:job;font-weight:600}
+  /* the job's name wraps instead of being sliced off at the card's edge (the nowrap above outranked it, Oct 31) */
+  main.main table.m-card tr:has(> td[data-label="Job"]) > td[data-label="Job"]{white-space:normal!important;overflow-wrap:anywhere}
   main.main table.m-card td[data-label="Job"] .sub{display:none}
   main.main table.m-card td[data-label="Customer"]{grid-area:cust;color:var(--ink-2)}
   main.main table.m-card td[data-label="Customer"] .sub{display:none}
-  main.main table.m-card td[data-label="Status"]{grid-area:stat;white-space:normal!important}
+  main.main table.m-card td[data-label="Status"]{grid-area:stat}
   main.main table.m-card td[data-label="Status"] .pdn-tag{display:none}
   main.main table.m-card td[data-label="Pcs"]{grid-area:pcs;color:var(--ink-3);font-size:12px!important}
   main.main table.m-card td[data-label="Pcs"]::after{content:" pcs"}
@@ -11717,6 +11728,8 @@ html body main.main .tbl td.cu-td > div:first-child{white-space:nowrap}
 /* a long status in a list (Printavo's "SP - Ready for Production / Scheduling") is cut short in a narrower window;
    the whole status shows on hover */
 .pill-t{min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* a pill never runs out of its cell: a long status ends in "…" (the whole name is its tooltip) instead of being sliced off */
+.pill{max-width:100%}
 @media (max-width:1400px){ main.main .tbl .pill{max-width:180px} }
 
 /* ── Order: pricing under the customer, program pricing a switch beside it (Oct 21, Nick) ── */
@@ -14946,7 +14959,7 @@ main.main .apc-tabs + .toolbar{margin-top:0}
 .apc-jc{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .apc-job .sub{font-size:12px;color:var(--ink-3)}
 .apc-more{margin:0 12px 10px;font-size:12.5px}
-@media (max-width:900px){ .apc-wrap{grid-template-columns:1fr} .apc-side{position:static} .apc-tg{--hw:44px} .apc-ev span{display:none} }
+@media (max-width:900px){ .apc-wrap{grid-template-columns:minmax(0,1fr)} .apc-wrap > .apc-side{grid-column:1;grid-row:auto} .apc-side{position:static} .apc-tg{--hw:44px} .apc-ev span{display:none} }
 /* My Day: the Appointments / Jobs switch over its calendar (Oct 26) */
 /* a two-position switch: two equal halves, the picked one filled (Oct 26, Nick: "just a two position toggle") */
 main.main .md-calsw{display:grid!important;grid-template-columns:1fr 1fr;width:100%!important;margin:2px 0 10px;padding:3px!important;gap:0;border-radius:10px!important;background:var(--surface-2)!important;box-shadow:inset 0 0 0 1px var(--line-2)!important}
@@ -16017,12 +16030,16 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .spt-chk small{display:block;font-size:12.5px;color:var(--ink-3)}
 
 /* Job Center (app/shop/jobs): five groups, each a header with one line under it, its steps on a rail */
-.jc-groups{display:grid;grid-template-columns:2fr 2fr 2fr 1fr 1fr 2fr;gap:10px;align-items:stretch}
+/* each step group as wide as its steps (--n), never narrower than its names: a step's name wraps to two lines before it
+   is cut ("Make c…"), and when they still don't fit a group goes to the next row (Oct 31) */
+.jc-groups{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch}
+.jc-groups > .jc-g{flex:var(--n) 1 0;min-width:min-content}
 .jc-g{border:1px solid var(--line);border-top:3px solid var(--c);border-radius:var(--r);padding:8px 6px 10px;display:flex;flex-direction:column;gap:8px;min-width:0;background:var(--surface)}
 .jc-gh{display:flex;flex-direction:column;align-items:center;text-align:center;line-height:1.25}
 .jc-gh b{font-size:13.5px;color:var(--ink)}
 .jc-gh span{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.jc-st{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:6px}
+.jc-st{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(min-content,1fr));gap:6px}
+.jc-st .dgz-nm{white-space:normal;line-height:1.2;text-align:center}
 .jc-st .dgz-rail{left:25%;right:25%;top:24px}
 .jc-st .dgz-ring{width:46px;height:46px}
 .jc-tags{display:flex;flex-wrap:wrap;gap:4px}
@@ -16033,7 +16050,7 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 table.tbl.jc{min-width:0}
 table.tbl.jc td:last-child{text-align:right}
 table.tbl.jc th:last-child{text-align:right}
-@media (max-width:900px){.jc-groups{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:900px){.jc-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:520px){.jc-gh span{display:none}.jc-st .dgz-ring{width:40px;height:40px}.jc-st .dgz-rail{top:21px}.jc-decl{flex-wrap:wrap}.jc-decl input{width:100%}}
 
 table.tbl.jc td:first-child .sub{max-width:min(520px,52vw);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
