@@ -9,16 +9,24 @@ import type { TrainFile, TrainMsg } from "@/lib/ai/trainingChat";
 
 /**
  * Settings → Assistant & AI → Order training (Oct 30, Nick: "where are the trainings at now?… put them under settings…
- * how do we access the trainings?"). Every customer Create order has been taught: their training (the rules it follows
- * for their jobs, customer_private.order_training), when it's used ("Use it when the job says"), the worked examples it
+ * how do we access the trainings?"). Every training Create order has been taught (order_trainings, several per customer:
+ * one per end client): the rules it follows for those jobs, when it's used ("Use it when the job says"), the worked examples it
  * learned from finished orders (lib/ai/orderExamples.ts) and their brands' standard mockups. The same fields are on the
  * customer's Details; this is the one place to see and change them all.
  * Beside each training, a chat with Claude (Oct 30, Nick: "a package… we can talk to back and forth and make little
  * edits to"): say a change or attach a PO, Claude shows the training with each change marked, Apply saves it.
  */
-type Row = { customer_id: string; company: string; training: string; name: string; when: string };
+type Row = { id: string; customer_id: string; company: string; training: string; name: string; when: string };
 type Example = { id: string; order_id: string; title: string; confirmed_by: string; confirmed_at: string; order_text: string; active: boolean };
 type BrandRow = { id: string; name: string; customer_id: string; rules: { mockup?: string; mockups?: number[] } | null };
+type TRow = { id: string; customer_id: string; name: string; when_words: string; rules: string };
+const toRow = (t: TRow, company: string): Row => ({ id: t.id, customer_id: t.customer_id, company, training: t.rules || "", name: t.name || "", when: t.when_words || "" });
+
+/** a new, empty training for a customer (several per customer: one per end client, Oct 30) */
+async function newTraining(customerId: string): Promise<string | null> {
+  const r = await post({ action: "create", customerId });
+  return r.ok ? (r as { id?: string }).id || null : null;
+}
 
 export default function OrderTrainingAdmin() {
   const sb = useMemo(() => createClient(), []);
@@ -26,54 +34,56 @@ export default function OrderTrainingAdmin() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [brands, setBrands] = useState<BrandRow[]>([]);
   const [openId, setOpenId] = useSticky<string>("training.open", "");
-  const [adding, setAdding] = useState<{ id: string; label: string } | null>(null);
+  const [adding, setAdding] = useState("");
   const load = useCallback(async () => {
-    const { data: ps } = await sb.from("customer_private").select("customer_id, order_training, order_training_name, order_training_when").neq("order_training", "");
+    const { data: ts } = await sb.from("order_trainings").select("id, customer_id, name, when_words, rules").is("archived_at", null).order("created_at");
     const cj = await fetch("/api/ai/examples?customerId=all").then((r) => r.json()).catch(() => ({ counts: {} }));
     const n = (cj.counts || {}) as Record<string, number>;
-    const ids = [...new Set([...((ps || []) as { customer_id: string }[]).map((p) => p.customer_id), ...Object.keys(n), ...(adding ? [adding.id] : [])])];
+    const list = (ts || []) as TRow[];
+    const ids = [...new Set(list.map((t) => t.customer_id))];
     const [{ data: cs }, { data: bs }] = ids.length ? await Promise.all([
       sb.from("customers").select("id, company, name").in("id", ids),
       sb.from("brands").select("id, name, customer_id, rules").in("customer_id", ids).is("archived_at", null),
     ]) : [{ data: [] }, { data: [] }];
     const byId = new Map(((cs || []) as { id: string; company: string | null; name: string | null }[]).map((c) => [c.id, c.company || c.name || "Customer"]));
-    const priv = new Map(((ps || []) as { customer_id: string; order_training: string; order_training_name: string; order_training_when: string }[]).map((p) => [p.customer_id, p]));
     setCounts(n); setBrands((bs || []) as BrandRow[]);
-    setRows(ids.map((id) => ({ customer_id: id, company: byId.get(id) || "Customer", training: priv.get(id)?.order_training || "", name: priv.get(id)?.order_training_name || "", when: priv.get(id)?.order_training_when || "" })).sort((a, b) => a.company.localeCompare(b.company)));
-  }, [sb, adding]);
+    setRows(list.map((t) => toRow(t, byId.get(t.customer_id) || "Customer")).sort((a, b) => a.company.localeCompare(b.company) || a.name.localeCompare(b.name)));
+  }, [sb]);
   useEffect(() => { void load(); }, [load]);
 
-  const trained = (rows || []).filter((r) => r.training.trim()).length;
+  const trained = new Set((rows || []).filter((r) => r.training.trim()).map((r) => r.customer_id)).size;
   const examples = Object.values(counts).reduce((a, b) => a + b, 0);
   const stdMocks = brands.reduce((a, b) => a + (b.rules?.mockups?.length || 0), 0);
 
   return (
     <>
       <div className="stats">
+        <button type="button" className="stat"><span className="v">{(rows || []).length}</span><span className="k">Trainings</span></button>
         <button type="button" className="stat"><span className="v">{trained}</span><span className="k">Customers trained</span></button>
         <button type="button" className="stat"><span className="v">{examples}</span><span className="k">Worked examples</span></button>
         <button type="button" className="stat"><span className="v">{stdMocks}</span><span className="k">Standard mockups</span></button>
       </div>
       <section className="panel">
-        <div className="panel-h"><h2>Customers</h2><span className="faint">Create order reads a customer&apos;s training for every one of their jobs, and offers &ldquo;Make it with the rules&rdquo; when the job says one of its words</span></div>
+        <div className="panel-h"><h2>Trainings</h2><span className="faint">A customer can have several (one per end client). Create order uses the ones whose words are in the job; a training with no words, every job of theirs</span></div>
         <div className="panel-b stack">
           <div className="otr-add">
-            <CustomerPick value={adding?.id || null} label={adding?.label} field onPick={(id, label) => { if (id) { setAdding({ id, label }); setOpenId(id); } else setAdding(null); }} placeholder="Train another customer: type one" />
+            <CustomerPick value={null} field onPick={async (id) => { if (!id) return; setAdding("Starting a training…"); const t = await newTraining(id); setAdding(t ? "" : "Couldn't start it."); if (t) { setOpenId(t); await load(); } }} placeholder="New training: type the customer" />
+            {adding && <span className="faint">{adding}</span>}
           </div>
-          {rows === null ? <p className="faint">Loading…</p> : !rows.length ? <p className="faint">No customer has training yet.</p> : (
+          {rows === null ? <p className="faint">Loading…</p> : !rows.length ? <p className="faint">No trainings yet.</p> : (
             <div className="tbl-wrap"><table className="tbl">
               <thead><tr><th>Customer</th><th>Training</th><th>Used when the job says</th><th>Examples</th><th>Standard mockups</th></tr></thead>
               <tbody>{rows.map((r) => {
                 const mk = brands.filter((b) => b.customer_id === r.customer_id && (b.rules?.mockups || []).length);
                 return [
-                  <tr key={r.customer_id} className={"otr-row" + (openId === r.customer_id ? " on" : "")} onClick={() => setOpenId(openId === r.customer_id ? "" : r.customer_id)} style={{ cursor: "pointer" }}>
+                  <tr key={r.id} className={"otr-row" + (openId === r.id ? " on" : "")} onClick={() => setOpenId(openId === r.id ? "" : r.id)} style={{ cursor: "pointer" }}>
                     <td><b>{r.company}</b></td>
-                    <td>{r.training.trim() ? <>{r.name || "Trained"}<div className="sub">{r.training.trim().length.toLocaleString()} characters</div></> : <span className="faint">None yet</span>}</td>
+                    <td>{r.name || "Untitled training"}<div className="sub">{r.training.trim() ? `${r.training.trim().length.toLocaleString()} characters` : "no rules yet"}</div></td>
                     <td>{r.when || <span className="faint">every job of theirs</span>}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{counts[r.customer_id] || 0}</td>
                     <td>{mk.length ? mk.map((b) => <div key={b.id}>{b.name}: {(b.rules?.mockups || []).map((n) => `M-${n}`).join(", ")}</div>) : <span className="faint">—</span>}</td>
                   </tr>,
-                  openId === r.customer_id ? <tr key={r.customer_id + "-e"} className="otr-ed"><td colSpan={5}><TrainingEditor row={r} brands={brands.filter((b) => b.customer_id === r.customer_id)} onSaved={load} /></td></tr> : null,
+                  openId === r.id ? <tr key={r.id + "-e"} className="otr-ed"><td colSpan={5}><TrainingEditor row={r} brands={brands.filter((b) => b.customer_id === r.customer_id)} onSaved={load} /></td></tr> : null,
                 ];
               })}</tbody>
             </table></div>
@@ -84,28 +94,42 @@ export default function OrderTrainingAdmin() {
   );
 }
 
-/** one customer's training in a panel (the customer's Program & training tab, Oct 30, Nick: "think of program pricing and
- *  training as the same tab under a customer"): the same editor and chat as Settings → Order training */
+/** a customer's trainings on their Program & training tab (Oct 30, Nick: "think of program pricing and training as the
+ *  same tab under a customer"; then "another whole separate training for 9/18"): one tab per training, + New training,
+ *  the same editor and chat as Settings → Order training */
 export function CustomerTraining({ customerId }: { customerId: string }) {
   const sb = useMemo(() => createClient(), []);
-  const [row, setRow] = useState<Row | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
   const [brands, setBrands] = useState<BrandRow[]>([]);
-  const [ver, setVer] = useState(0);
+  const [pick, setPick] = useSticky<string>(`training.pick.${customerId}`, "");
+  const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
-    const [{ data: c }, { data: p }, { data: bs }] = await Promise.all([
+    const [{ data: c }, { data: ts }, { data: bs }] = await Promise.all([
       sb.from("customers").select("company, name").eq("id", customerId).maybeSingle(),
-      sb.from("customer_private").select("order_training, order_training_name, order_training_when").eq("customer_id", customerId).maybeSingle(),
+      sb.from("order_trainings").select("id, customer_id, name, when_words, rules").eq("customer_id", customerId).is("archived_at", null).order("created_at"),
       sb.from("brands").select("id, name, customer_id, rules").eq("customer_id", customerId).is("archived_at", null),
     ]);
-    const pr = (p || {}) as { order_training?: string; order_training_name?: string; order_training_when?: string };
-    setRow({ customer_id: customerId, company: String(c?.company || c?.name || "Customer"), training: pr.order_training || "", name: pr.order_training_name || "", when: pr.order_training_when || "" });
+    const company = String(c?.company || c?.name || "Customer");
+    setRows(((ts || []) as TRow[]).map((t) => toRow(t, company)));
     setBrands((bs || []) as BrandRow[]);
   }, [sb, customerId]);
   useEffect(() => { void load(); }, [load]);
+  const cur = (rows || []).find((r) => r.id === pick) || (rows || [])[0] || null;
+  const add = async () => { setBusy(true); const id = await newTraining(customerId); setBusy(false); if (id) { setPick(id); await load(); } };
   return (
     <section className="panel otr-panel">
-      <div className="panel-h"><h2>Rules in words</h2><span className="faint">What Create order follows for their jobs beyond the prices and mockups above: how to name the job, the PO, personalization, shipping, what to ask about</span></div>
-      <div className="panel-b">{row ? <TrainingEditor key={ver} row={row} brands={brands} onSaved={() => { void load().then(() => setVer((v) => v)); }} /> : <p className="faint">Loading…</p>}</div>
+      <div className="panel-h"><h2>Rules in words</h2><span className="faint">What Create order follows for their jobs beyond the prices and mockups above. One training per end client: each is used when the job says its words</span></div>
+      {rows && rows.length > 0 && (
+        <div className="toolbar"><div className="chips">
+          {rows.map((r) => <button key={r.id} type="button" className={"chip" + (cur?.id === r.id ? " on" : "")} onClick={() => setPick(r.id)}>{r.name || "Untitled training"}</button>)}
+          <button type="button" className="chip" disabled={busy} onClick={() => void add()}>+ New training</button>
+        </div></div>
+      )}
+      <div className="panel-b">
+        {rows === null ? <p className="faint">Loading…</p>
+          : !cur ? <div className="row"><span className="faint">No training yet. Start one, then tell the chat how their orders go or attach one of their POs.</span><button type="button" className="btn primary" disabled={busy} onClick={() => void add()}>+ New training</button></div>
+          : <TrainingEditor key={cur.id} row={cur} brands={brands} onSaved={load} />}
+      </div>
     </section>
   );
 }
@@ -120,7 +144,7 @@ function TrainingEditor({ row, brands, onSaved }: { row: Row; brands: BrandRow[]
   const changed = t !== row.training || name !== row.name || when !== row.when;
   const save = async () => {
     setState("Saving…");
-    const { error } = await sb.from("customer_private").upsert({ customer_id: row.customer_id, order_training: t.trim(), order_training_name: name.trim(), order_training_when: when.trim() }, { onConflict: "customer_id" });
+    const { error } = await sb.from("order_trainings").update({ rules: t.trim(), name: name.trim(), when_words: when.trim(), updated_at: new Date().toISOString() }).eq("id", row.id);
     setState(error ? "Couldn't save: " + error.message : "Saved");
     if (!error) onSaved();
   };
@@ -132,11 +156,11 @@ function TrainingEditor({ row, brands, onSaved }: { row: Row; brands: BrandRow[]
     <div className="otr-cols">
     <div className="otr-box">
       <div className="otr-two">
-        <div className="field"><label htmlFor={`otn-${row.customer_id}`}>Training name</label><input id={`otn-${row.customer_id}`} type="text" value={name} placeholder="All My Sons" onChange={(e) => setName(e.target.value)} /></div>
-        <div className="field"><label htmlFor={`otw-${row.customer_id}`}>Use it when the job says</label><input id={`otw-${row.customer_id}`} type="text" value={when} placeholder="AMS, All My Sons" onChange={(e) => setWhen(e.target.value)} /></div>
+        <div className="field"><label htmlFor={`otn-${row.id}`}>Training name</label><input id={`otn-${row.id}`} type="text" value={name} placeholder="All My Sons" onChange={(e) => setName(e.target.value)} /></div>
+        <div className="field"><label htmlFor={`otw-${row.id}`}>Use it when the job says</label><input id={`otw-${row.id}`} type="text" value={when} placeholder="AMS, All My Sons (blank = every job of theirs)" onChange={(e) => setWhen(e.target.value)} /></div>
       </div>
-      <div className="field"><label htmlFor={`ott-${row.customer_id}`}>The rules Create order follows for these jobs</label><textarea id={`ott-${row.customer_id}`} rows={14} value={t} placeholder="How their orders are made: the groups, which logo goes on what, personalization, pricing, shipping…" onChange={(e) => setT(e.target.value)} /></div>
-      <div className="row"><button type="button" className="btn primary" disabled={!changed} onClick={() => void save()}>Save training</button><span className="faint">{state}</span><span className="spacer" /><Link className="linkbtn" href={`/shop/customers/${row.customer_id}?area=artwork`}>Their brands &amp; standard mockups</Link></div>
+      <div className="field"><label htmlFor={`ott-${row.id}`}>The rules Create order follows for these jobs</label><textarea id={`ott-${row.id}`} rows={14} value={t} placeholder="How their orders are made: the groups, which logo goes on what, personalization, pricing, shipping… or just tell the chat and Apply" onChange={(e) => setT(e.target.value)} /></div>
+      <div className="row"><button type="button" className="btn primary" disabled={!changed} onClick={() => void save()}>Save training</button><span className="faint">{state}</span><span className="spacer" /><Link className="linkbtn" href={`/shop/customers/${row.customer_id}?area=program`}>Their program &amp; mockups</Link></div>
       {brands.some((b) => (b.rules?.mockups || []).length || b.rules?.mockup) && (
         <div className="otr-sub"><b>Mockups on new orders</b>{brands.map((b) => <div key={b.id} className="faint">{b.name}: {(b.rules?.mockups || []).length ? `standard ${(b.rules?.mockups || []).map((n) => `M-${n}`).join(", ")} (the same logos at the same spots get it)` : "no standard mockups"}{b.rules?.mockup === "logo" ? "; any other group gets a logo mockup made" : ""}</div>)}</div>
       )}
@@ -156,7 +180,7 @@ function TrainingEditor({ row, brands, onSaved }: { row: Row; brands: BrandRow[]
         )}
       </div>
     </div>
-    <TrainingChat customerId={row.customer_id} customerName={row.company} base={{ training: t, name, when }} onApplied={(v) => { setT(v.training); setName(v.name); setWhen(v.when); setState("Saved from the chat"); onSaved(); }} />
+    <TrainingChat trainingId={row.id} customerId={row.customer_id} customerName={`${row.company}${name ? ` · ${name}` : ""}`} base={{ training: t, name, when }} onApplied={(v) => { setT(v.training); setName(v.name); setWhen(v.when); setState("Saved from the chat"); onSaved(); }} />
     </div>
   );
 }
@@ -168,14 +192,14 @@ const post = async (body: Record<string, unknown>) => {
 const OP = { "+": "add", "~": "chg", "-": "del" } as const;
 
 /** the Messages-style chat (the same look as Brand standards' AI): blue for us, gray for Claude, the changes as a card */
-function TrainingChat({ customerId, customerName, base, onApplied }: { customerId: string; customerName: string; base: { training: string; name: string; when: string }; onApplied: (v: { training: string; name: string; when: string }) => void }) {
+function TrainingChat({ trainingId, customerId, customerName, base, onApplied }: { trainingId: string; customerId: string; customerName: string; base: { training: string; name: string; when: string }; onApplied: (v: { training: string; name: string; when: string }) => void }) {
   const [msgs, setMsgs] = useState<TrainMsg[] | null>(null);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => { post({ customerId, action: "thread" }).then((r) => (r.ok ? setMsgs(r.messages || []) : setErr(r.error || "Couldn't load the conversation."))); }, [customerId]);
+  useEffect(() => { setMsgs(null); post({ trainingId, action: "thread" }).then((r) => (r.ok ? setMsgs(r.messages || []) : setErr(r.error || "Couldn't load the conversation."))); }, [trainingId]);
   // keep the newest message in view inside the chat (never scroll the page)
   useEffect(() => { const b = box.current; if (b) b.scrollTop = b.scrollHeight; }, [msgs, busy]);
 
@@ -197,14 +221,14 @@ function TrainingChat({ customerId, customerName, base, onApplied }: { customerI
     setMsgs((m) => [...(m || []), { role: "staff", text: said, at: new Date().toISOString(), files: up.length ? up : undefined }]);
     setText(""); setFiles([]);
     setBusy(up.length ? "Reading the files… (can take a minute)" : "Thinking…");
-    const r = await post({ customerId, action: "chat", text: said, files: up, base });
+    const r = await post({ trainingId, action: "chat", text: said, files: up, base });
     setBusy("");
     if (!r.ok) { setErr(r.error || "Something went wrong."); setMsgs((m) => (m || []).slice(0, -1)); setText(said); return; }
     setMsgs(r.messages || []);
   }
   async function decide(i: number, action: "apply" | "dismiss") {
     setBusy(action === "apply" ? "Applying…" : ""); setErr("");
-    const r = await post({ customerId, action, index: i });
+    const r = await post({ trainingId, action, index: i });
     setBusy("");
     if (!r.ok) return setErr(r.error || "Couldn't do that.");
     setMsgs(r.messages || []);

@@ -29,7 +29,7 @@ export type TrainMsg = {
 };
 export type TrainBase = { training: string; name: string; when: string };
 
-const key = (customerId: string) => `training_chat:${customerId}`;
+const key = (trainingId: string) => `training_chat:${trainingId}`;
 const MAX_IMG = 3_600_000, MAX_PDF = 24_000_000;
 const imgType = (p: string) => (/\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.test(p) ? "image/jpeg" : /\.webp$/i.test(p) ? "image/webp" : /\.gif$/i.test(p) ? "image/gif" : null);
 
@@ -49,47 +49,49 @@ async function download(admin: SupabaseClient, path: string, max: number) {
   return buf.length > max ? null : buf;
 }
 
-export async function trainingThread(admin: SupabaseClient, customerId: string): Promise<TrainMsg[]> {
-  const { data } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", key(customerId)).limit(1).maybeSingle();
+export async function trainingThread(admin: SupabaseClient, trainingId: string): Promise<TrainMsg[]> {
+  const { data } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", key(trainingId)).limit(1).maybeSingle();
   return ((data?.payload as { messages?: TrainMsg[] } | null)?.messages || []);
 }
-async function saveThread(admin: SupabaseClient, customerId: string, title: string, messages: TrainMsg[], extra: Record<string, unknown> = {}) {
+async function saveThread(admin: SupabaseClient, trainingId: string, customerId: string, title: string, messages: TrainMsg[], extra: Record<string, unknown> = {}) {
   const now = new Date().toISOString();
   const last = [...messages].reverse().find((m) => m.role === "staff")?.text || "";
-  const row = { kind: "training_chat", dedupe_key: key(customerId), source: "ai", status: "done", priority: 3, customer_id: customerId, title: `Order training: ${title}`.slice(0, 120), body: last.slice(0, 500), payload: { messages: messages.slice(-60), ...extra }, updated_at: now };
+  const row = { kind: "training_chat", dedupe_key: key(trainingId), source: "ai", status: "done", priority: 3, customer_id: customerId, title: `Order training: ${title}`.slice(0, 120), body: last.slice(0, 500), payload: { messages: messages.slice(-60), ...extra }, updated_at: now };
   const { data: had } = await admin.from("ai_suggestions").select("id").eq("dedupe_key", row.dedupe_key).limit(1).maybeSingle();
   if (had) await admin.from("ai_suggestions").update(row).eq("id", had.id);
   else await admin.from("ai_suggestions").insert(row);
 }
 
-/** what Create order has to go by for this customer now */
-async function current(admin: SupabaseClient, customerId: string) {
-  const [{ data: c }, { data: p }, { data: bs }, { data: ds }, { data: ex }] = await Promise.all([
+/** what Create order has to go by for this training's customer now */
+async function current(admin: SupabaseClient, trainingId: string) {
+  const { data: t } = await admin.from("order_trainings").select("id, customer_id, name, when_words, rules").eq("id", trainingId).maybeSingle();
+  if (!t) return null;
+  const customerId = t.customer_id as string;
+  const [{ data: c }, { data: bs }, { data: ds }, { data: ex }] = await Promise.all([
     admin.from("customers").select("id, company, name").eq("id", customerId).maybeSingle(),
-    admin.from("customer_private").select("order_training, order_training_name, order_training_when").eq("customer_id", customerId).maybeSingle(),
     admin.from("brands").select("name, rules, notes").eq("customer_id", customerId).is("archived_at", null),
     admin.from("designs").select("number, name, inks").eq("customer_id", customerId).is("archived_at", null).eq("draft", false).order("starred", { ascending: false }).order("number", { ascending: false }).limit(80),
     admin.from("order_examples").select("title, source_text, order_text, active").eq("customer_id", customerId).eq("active", true).order("confirmed_at", { ascending: false }).limit(3),
   ]);
   if (!c) return null;
-  const pr = (p || {}) as { order_training?: string; order_training_name?: string; order_training_when?: string };
   return {
-    name: String(c.company || c.name || "this customer"),
-    saved: { training: pr.order_training || "", name: pr.order_training_name || "", when: pr.order_training_when || "" } as TrainBase,
+    customerId, name: String(c.company || c.name || "this customer"),
+    saved: { training: String(t.rules || ""), name: String(t.name || ""), when: String(t.when_words || "") } as TrainBase,
     brands: ((bs || []) as { name: string; rules: unknown; notes: string | null }[]),
     logos: ((ds || []) as { number: number; name: string | null; inks: string | null }[]),
     examples: ((ex || []) as { title: string; source_text: string; order_text: string }[]),
   };
 }
 
-export async function trainingChat(admin: SupabaseClient, s: Settings, customerId: string, by: string, message: string, files: TrainFile[], base0?: Partial<TrainBase>): Promise<{ ok: true; messages: TrainMsg[] } | { ok: false; error: string }> {
+export async function trainingChat(admin: SupabaseClient, s: Settings, trainingId: string, by: string, message: string, files: TrainFile[], base0?: Partial<TrainBase>): Promise<{ ok: true; messages: TrainMsg[] } | { ok: false; error: string }> {
   const msg = message.trim().slice(0, 6000);
   if (!msg && !files.length) return { ok: false, error: "Type something or attach a file." };
-  const cur = await current(admin, customerId);
-  if (!cur) return { ok: false, error: "Customer not found." };
+  const cur = await current(admin, trainingId);
+  if (!cur) return { ok: false, error: "That training isn't there any more." };
+  const customerId = cur.customerId;
   // what's on the screen (unsaved edits included) is what the change is made to
   const base: TrainBase = { training: base0?.training ?? cur.saved.training, name: base0?.name ?? cur.saved.name, when: base0?.when ?? cur.saved.when };
-  const thread = await trainingThread(admin, customerId);
+  const thread = await trainingThread(admin, trainingId);
 
   // files: what's attached now, then earlier ones in this conversation (newest first)
   const documents: { data: string; label?: string }[] = [];
@@ -173,31 +175,31 @@ Brands' rules (mockups on new orders, standard mockups, dark-goods ink) are set 
   // a newer proposal replaces an older open one
   const lastAi = messages.length - 1;
   messages.forEach((m, i) => { if (i < lastAi && m.status === "open" && messages[lastAi].proposal) m.status = "dismissed"; });
-  await saveThread(admin, customerId, cur.name, messages, { model: r.model, run_id: r.runId });
+  await saveThread(admin, trainingId, customerId, `${cur.name} · ${base.name || "training"}`, messages, { model: r.model, run_id: r.runId });
   return { ok: true, messages: messages.slice(-60) };
 }
 
-/** Apply a proposal (staff clicked Apply): saves the training on customer_private */
-export async function applyTraining(admin: SupabaseClient, customerId: string, index: number, by: string): Promise<{ ok: true; messages: TrainMsg[]; saved: TrainBase } | { ok: false; error: string }> {
-  const thread = (await trainingThread(admin, customerId)).slice(-60);
+/** Apply a proposal (staff clicked Apply): saves the training (order_trainings) */
+export async function applyTraining(admin: SupabaseClient, trainingId: string, index: number, by: string): Promise<{ ok: true; messages: TrainMsg[]; saved: TrainBase } | { ok: false; error: string }> {
+  const thread = (await trainingThread(admin, trainingId)).slice(-60);
   const m = thread[index];
   if (!m?.proposal || m.status !== "open") return { ok: false, error: "That change isn't open any more." };
-  const cur = await current(admin, customerId);
-  if (!cur) return { ok: false, error: "Customer not found." };
+  const cur = await current(admin, trainingId);
+  if (!cur) return { ok: false, error: "That training isn't there any more." };
   const saved: TrainBase = { training: m.proposal.training.slice(0, TRAINING_MAX), name: m.proposal.name ?? cur.saved.name, when: m.proposal.when ?? cur.saved.when };
-  const { error } = await admin.from("customer_private").upsert({ customer_id: customerId, order_training: saved.training, order_training_name: saved.name, order_training_when: saved.when }, { onConflict: "customer_id" });
+  const { error } = await admin.from("order_trainings").update({ rules: saved.training, name: saved.name, when_words: saved.when, updated_by: by, updated_at: new Date().toISOString() }).eq("id", trainingId);
   if (error) return { ok: false, error: error.message };
   thread[index] = { ...m, status: "applied", done_by: by, done_at: new Date().toISOString() };
-  await saveThread(admin, customerId, cur.name, thread);
+  await saveThread(admin, trainingId, cur.customerId, `${cur.name} · ${saved.name || "training"}`, thread);
   return { ok: true, messages: thread, saved };
 }
 
-export async function dismissTraining(admin: SupabaseClient, customerId: string, index: number, by: string) {
-  const thread = (await trainingThread(admin, customerId)).slice(-60);
+export async function dismissTraining(admin: SupabaseClient, trainingId: string, index: number, by: string) {
+  const thread = (await trainingThread(admin, trainingId)).slice(-60);
   if (thread[index]?.status === "open") {
     thread[index] = { ...thread[index], status: "dismissed", done_by: by, done_at: new Date().toISOString() };
-    const cur = await current(admin, customerId);
-    await saveThread(admin, customerId, cur?.name || "", thread);
+    const cur = await current(admin, trainingId);
+    if (cur) await saveThread(admin, trainingId, cur.customerId, `${cur.name} · ${cur.saved.name || "training"}`, thread);
   }
   return { ok: true as const, messages: thread };
 }

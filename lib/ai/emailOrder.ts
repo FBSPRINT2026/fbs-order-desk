@@ -2,6 +2,7 @@ import { fillFromLogo, logosOnFile, mergeLogoGroups } from "@/lib/ai/logosOnFile
 import "server-only";
 import { applyMasters, loadMasters } from "@/lib/masterMockups";
 import { addressBlock } from "@/lib/addressBlock";
+import { customerTrainings, trainingsForText } from "@/lib/orderTrainings";
 import { PO_RULES } from "@/lib/ai/poRules";
 import { newPart } from "@/lib/linkArt";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -426,7 +427,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-30n";
+export const READER_REV = "2026-10-30o";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -486,10 +487,11 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
   const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.filter((f) => !CAMERA_NAME.test(f.name)).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
   // orders staff finished from this customer's past emails, the closest first (lib/ai/orderExamples.ts): read the same way
-  // the shop's own training for this customer (customer_private.order_training, Oct 30: a big client's playbook), in full
-  const { data: trn } = a.customer_id ? await admin.from("customer_private").select("order_training").eq("customer_id", a.customer_id).maybeSingle() : { data: null };
-  const trainText = String((trn as { order_training?: string } | null)?.order_training || "").trim().slice(0, 8000);
-  const exText = (trainText ? `HOW TO MAKE ${String(cust?.company || cust?.name || "THIS CUSTOMER").toUpperCase()}'S ORDERS (the shop's own training for this customer: follow it exactly; it wins over your general rules where they differ):\n${trainText}\n\n` : "") + examplesText(await loadExamples(admin, (a.customer_id as string) || null, `${told} ${said}`).catch(() => []), String(cust?.company || cust?.name || "this customer"));
+  // the shop's own trainings for this customer that this job is for (lib/orderTrainings.ts, Oct 30: a big client's
+  // playbook, one per end client), in full
+  const trns = a.customer_id ? trainingsForText(await customerTrainings(admin, a.customer_id as string).catch(() => []), `${told} ${said} ${String(a.body || "").slice(3000, 6000)}`) : [];
+  const trainText = trns.map((t) => `${trns.length > 1 || t.name ? `[${t.name || "Training"}]\n` : ""}${t.rules.trim().slice(0, 8000)}`).join("\n\n").slice(0, 12000);
+  const exText = (trainText ? `HOW TO MAKE ${String(trns.map((t) => t.name).filter(Boolean).join(" / ") || cust?.company || cust?.name || "THIS CUSTOMER").toUpperCase()}'S ORDERS (the shop's own training for this customer: follow it exactly; it wins over your general rules where they differ):\n${trainText}\n\n` : "") + examplesText(await loadExamples(admin, (a.customer_id as string) || null, `${told} ${said}`).catch(() => []), String(cust?.company || cust?.name || "this customer"));
   let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];
   // the past job whose mockup is the picture in their email (app/api/inbox/order/look): first, and said so
   const lookRef = ((a as { meta?: { look?: { ref?: string; why?: string } } }).meta?.look?.ref) || "";

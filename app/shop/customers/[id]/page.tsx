@@ -94,8 +94,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   // a program, or training for Create order: the Program & training tab shows
   useEffect(() => {
     const sb = createClient();
-    Promise.all([sb.from("programs").select("id", { count: "exact", head: true }).eq("customer_id", id), sb.from("customer_private").select("order_training").eq("customer_id", id).maybeSingle()])
-      .then(([{ count }, { data: p }]) => setHasProgram(!!count || !!String((p as { order_training?: string } | null)?.order_training || "").trim()));
+    Promise.all([sb.from("programs").select("id", { count: "exact", head: true }).eq("customer_id", id), sb.from("order_trainings").select("id", { count: "exact", head: true }).eq("customer_id", id).is("archived_at", null)])
+      .then(([{ count }, { count: tn }]) => setHasProgram(!!count || !!tn));
   }, [id]);
   const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
   useEffect(() => {
@@ -285,7 +285,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>
               {/* Create order training lives on Program & training (Oct 30, Nick: "think of program pricing and training as the
                   same tab under a customer"), beside the prices and mockups it goes with */}
-              <p className="faint cu-train-link">Create order training{c.order_training_name ? <> (<b>{c.order_training_name}</b>)</> : null}: on <a href={`/shop/customers/${id}?area=program`}>Program &amp; training</a>.</p>
+              <p className="faint cu-train-link">Create order trainings (one per end client): on <a href={`/shop/customers/${id}?area=program`}>Program &amp; training</a>.</p>
             </div>
           </form>
           <div className="stack">
