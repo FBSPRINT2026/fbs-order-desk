@@ -908,11 +908,13 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const tiOf = (d: Imprint, side?: Side) => (side && split(d) ? tierIndex(sideQty(side), pl) : dq(d) === qty ? ti : tierIndex(dq(d), pl));
   const ixOf = (d: Imprint, side?: Side) => (side && split(d) ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQty(side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
   const anySplit = (g.imprints || []).some(split);
+  // the youth screens' own underbase: none when every youth shirt is light (a Natural), the same rule as the adult's
+  const kidLight = !!pl.darkAddsColor && !(g.lines || []).some((l, i) => kidAt[i] && billQty(l) > 0 && !isLightColor(l.color, pl));
   const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[]; /** PMS inks a color change prints in, charged as matches */ pmsChange?: string[]; /** PMS matches charged on this print */ pmsN?: number;
     /** its own youth screen: the youth print's price each and setup, and the pieces each side is priced at */ youth?: { each: number; setup: number; screens?: number; qty: number; adultQty: number; size: string } })[] =
     (g.imprints || []).map((d) => {
       if (!split(d)) return { id: d.id, ...imprintPrice(d, tiOf(d), pl, false, false, ixOf(d)) };
-      const y = imprintPrice(d, tiOf(d, "y"), pl, false, false, ixOf(d, "y"));
+      const y = imprintPrice(d, tiOf(d, "y"), pl, kidLight, kidLight, ixOf(d, "y"));
       return { id: d.id, ...imprintPrice(d, tiOf(d, "a"), pl, false, false, ixOf(d, "a")), youth: { each: y.each, setup: y.setup, screens: (y as { screens?: number }).screens, qty: yQty, adultQty: aQty, size: d.youth?.size || "" } };
     });
   // RULE (Nick, Oct 24 2026): one PMS matching fee per PMS color per ORDER. The same PMS on the front and the back (or on
