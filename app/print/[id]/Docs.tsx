@@ -6,7 +6,7 @@ import { threadByName } from "@/lib/embroidery";
 import { changeVersions, inkChanges, inkChangesText } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, FULL_COLOR, METHODS, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, FULL_COLOR, METHODS, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -555,7 +555,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                     const des = d.design_id ? p.designs[d.design_id] : null, sz = printSize(d, des), ink = d.visualOnly ? [] : inkNames(d.inks);
                     return (
                       <div className="pf-pr" key={d.id}>
-                        <b>{d.location}</b> · {d.visualOnly ? MATCH_PREV : <>{printHow(d)}{sz.label ? <> · <b>{sz.label}</b></> : null}</>}
+                        <b>{d.location}</b> · {d.visualOnly ? MATCH_PREV : <>{printHow(d)}{sz.label ? <> · {youthSplit(g, d) ? "Adult " : ""}<b>{sz.label}</b></> : null}{youthSplit(g, d) ? <> · Youth <b>{(d.youth?.size || "").replace(/\s*wide$/, "")}</b> (own screen)</> : g.youthSet && d.youth?.same ? " · youth same screen" : null}</>}
                         {ink.length > 0 && <div className="pf-inks">{ink.map((k) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{k}</span>)}</div>}
                       </div>
                     );
@@ -607,7 +607,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   const tileW = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.w) / sz.h) : 0.82, tileH = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.h) / sz.w) : 0.82;
   // a visual-only mockup (a reorder production confirms on the print run): the picture, none of our guessed details
   const specs: [string, string][] = d.visualOnly ? [["Location", d.location || "—"], ["Print", MATCH_PREV]] : [
-    ["Location", d.location || "—"], ["Print size", sz.label || "—"], ["Placement", d.drop ? `${d.drop}" below the collar` : "Standard"],
+    ["Location", d.location || "—"], ["Print size", (sz.label || "—") + (o.groups[gi] && youthSplit(o.groups[gi], d) ? ` adult · youth ${(d.youth?.size || "").replace(/\s*wide$/, "")} (own screen)` : o.groups[gi]?.youthSet && d.youth?.same ? " · youth same screen" : "")], ["Placement", d.drop ? `${d.drop}" below the collar` : "Standard"],
     ["Print", printHow(d)],
   ];
   return (
@@ -794,7 +794,7 @@ export function InvoiceDoc(p: DocData) {
             })}
             {gc.finishing.length > 0 && <div className="iv2-set fin"><span>Finishing: {gc.finishing.map((f) => { const ns = isRelabel(f) ? setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel) : null; return ns ? `${f.name} (their ${ns.name || "neck label"} printed inside the neck)` : f.name; }).join(", ")}</span></div>}
             {g.imprints.some((d) => (d.artChanges || []).length) && <div className="iv2-note">Changes we made to your art: {g.imprints.flatMap((d) => d.artChanges || []).join("; ")}</div>}
-            {gc.setupItems.map((s, i) => <div className="iv2-set" key={`s${i}`}><span>{SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</span><span>{money(s.amount)}</span></div>)}
+            {gc.setupItems.map((s, i) => <div className="iv2-set" key={`s${i}`}><span>{s.youth ? "Youth " + SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread).replace(/^Setup: /, "setup: ").replace(/^Digitizing/, "digitizing") : SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</span><span>{money(s.amount)}</span></div>)}
             {gc.materials > 0 && <div className="iv2-set"><span>2XL+ materials</span><span>{money(gc.materials)}</span></div>}
           </div>
         );

@@ -579,6 +579,20 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       </div>
     );
   };
+  // youth screens (Oct 30, Nick, #40302): a print with its own youth screen shows its youth size, its screens and their
+  // setup, and the pieces each side is priced at; a print the youth shirts share says so. Set in the Mockup Creator
+  const youthCtl = (d: Group["imprints"][number]) => {
+    if (!g.youthSet || !d.youth) return null;
+    const y = gc.imprints[g.imprints.indexOf(d)]?.youth;
+    if (!y) return <div className="pr-scr pr-youth-line"><span className="pr-scr-l">Youth</span><span className="pr-scr-v">Same {d.method === "screen" ? "screen" : "print"} as adult</span></div>;
+    const n = d.method === "screen" ? Math.min(+(y.screens || 0), 15) || 1 : 0;
+    return (
+      <div className="pr-scr pr-youth-line"><span className="pr-scr-l">Youth</span>
+        <span className="pr-scr-v"><b>{(y.size || "").replace(/\s*wide$/, "")}</b> · {d.method === "screen" ? `its own ${n} screen${n === 1 ? "" : "s"}` : d.method === "embroidery" ? "its own file" : "its own size"}{!hidePrices && y.setup > 0 && <> · <b className="num">{money(y.setup)}</b></>}
+          <span className="faint"> · priced at {y.qty} youth{!hidePrices && <> ({money(y.each)})</>}, adult at {y.adultQty}</span></span>
+      </div>
+    );
+  };
   // a print's screens, on its own line (Oct 15, Nick: "make the screens incorporate into the imprint lines")
   const screenCtl = (d: Group["imprints"][number]) => {
     // embroidery: its thread change on the same kind of line (Oct 26, Nick: "thread change… exactly the same as color change")
@@ -1035,7 +1049,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} extra={<>{screenCtl(d)}{youthCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={shirtHex} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1079,6 +1093,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {d.method === "dtf" && <label className="check imp-sup-chk"><input type="checkbox" checked={!!d.supplied} onChange={(e) => update((x) => { x.imprints[di].supplied = e.target.checked ? { ...(x.imprints[di].supplied || {}) } : undefined; })} />Customer supplied transfers <span className="faint">they send the transfers, we press them</span></label>}
                 {d.supplied && <SuppliedBox d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} />}
                 {!d.supplied && screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
+                {youthCtl(d) && <div className="imp-scr">{youthCtl(d)}</div>}
                 {!d.supplied && puffCtl(d) && <div className="imp-scr">{puffCtl(d)}</div>}
                 {!d.supplied && inkCtl(d, false) && <div className="imp-scr">{inkCtl(d, false)}</div>}
                 {/* retail prints have no screens line: the fashion hit / soft hand choice on its own (Oct 16, Nick) */}
