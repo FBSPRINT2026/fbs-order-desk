@@ -23,7 +23,16 @@ export async function sourceCtx(admin: SupabaseClient, groups: Group[]): Promise
   const { data: all } = bIds.length
     ? await admin.from("designs").select("id, name, brand_id, specs").in("brand_id", bIds).limit(200)
     : ids.length ? await admin.from("designs").select("id, name, brand_id, specs").in("id", ids) : { data: [] };
-  const logos: SrcLogo[] = ((all || []) as { id: string; name: string | null; brand_id: string | null; specs: unknown }[]).map((d) => ({ id: d.id, name: d.name || "", brand: d.brand_id, colorways: colorwaysOf({ specs: d.specs } as never).map((c) => c.name).filter(Boolean) }));
+  const rows = (all || []) as { id: string; name: string | null; brand_id: string | null; specs: unknown; number?: number }[];
+  // how often each is on an order staff said is right (the worked examples name logos by D-number)
+  const uses = new Map<string, number>();
+  if (rows.length > 1) {
+    const { data: nums } = await admin.from("designs").select("id, number").in("id", rows.map((d) => d.id));
+    const { data: ex } = await admin.from("order_examples").select("order_text").eq("active", true).ilike("order_text", "%logo D-%").order("confirmed_at", { ascending: false }).limit(400);
+    const text = ((ex || []) as { order_text: string }[]).map((e) => e.order_text).join("\n");
+    for (const n of (nums || []) as { id: string; number: number }[]) uses.set(n.id, (text.match(new RegExp(`logo D-${n.number}\\b`, "g")) || []).length);
+  }
+  const logos: SrcLogo[] = rows.map((d) => ({ id: d.id, name: d.name || "", brand: d.brand_id, colorways: colorwaysOf({ specs: d.specs } as never).map((c) => c.name).filter(Boolean), uses: uses.get(d.id) || 0 }));
   return { catalog, logos };
 }
 

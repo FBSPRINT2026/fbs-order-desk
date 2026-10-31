@@ -551,8 +551,12 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       // their mockup is only cut up for art when a print still needs its art: every print on a logo on file (MEI's carts:
       // the brand's logos), their PDF stays their mockup, as is (Oct 31, #94692111: the cart's product photos were offered
       // as "the art")
-      const needArt = d.groups.some((x) => x.imprints.some((im) => !im.design_id));
-      const used = new Set([...Object.values(d.art || {}), ...(needArt ? Object.values(d.mockups || {}).flat() : [])]);
+      // and only a group's own mockup or sheet: a file the reading calls something else (Oct 31, MEI #95955657: the
+      // ClickUp cart printout, "other", was offered as their mockup sheet because the cap's added flag had no art yet)
+      const dd: EODraft = d;
+      const roleOf = (p: string) => dd.files.find((f) => f.path === p)?.role;
+      const needArt = dd.groups.filter((x) => x.imprints.some((im) => !im.design_id && !dd.art?.[im.id]));
+      const used = new Set([...Object.values(dd.art || {}), ...needArt.flatMap((x) => dd.mockups?.[x.id] || []).filter((p) => roleOf(p) !== "other")]);
       const sb0 = createClient();
       const helperGot = new Map<string, Pulled | null>();
       for (const f of d.files.filter((x) => used.has(x.path) && (/pdf/i.test(x.type) || /\.pdf$/i.test(x.name)))) {

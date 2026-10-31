@@ -23,7 +23,7 @@ import { spotKey, spotOf } from "@/lib/spotChange";
  */
 
 export type SrcCatalog = Record<string, { title: string; brand: string; colors: string[] }>;
-export type SrcLogo = { id: string; name: string; brand?: string | null; colorways: string[] };
+export type SrcLogo = { id: string; name: string; brand?: string | null; colorways: string[]; /** how many orders staff said are right print it: when the words fit two logos the same ("Stacked" fits Secondary (stacked) and SMM (stacked)), the one the shop uses */ uses?: number };
 export type SrcFinding = {
   kind: "location" | "color" | "sizes" | "style" | "logo" | "colorway";
   /** the group (index) and lines it's about */ group: number; lineIds: string[];
@@ -261,8 +261,10 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
         const everywhere = new Set([...tokSet(peers[0].name)].filter((x) => peers.every((p) => tokSet(p.name).has(x))));
         const score = (p: SrcLogo) => [...tokSet(p.name)].filter((x) => !everywhere.has(x) && x.length >= 3 && W.has(x)).length;
         const best = Math.max(...peers.map(score));
-        const top = peers.filter((p) => score(p) === best);
-        if (best > 0 && top.length === 1 && top[0].id !== mineL.id && score(mineL) < best) out.push({ kind: "logo", group: gi, lineIds: ids, what, paper: top[0].name, order: mineL.name, say: `${what}: the paperwork names the ${top[0].name} logo, the order prints ${mineL.name}.` });
+        // a tie in words goes to the logo the shop's right orders use (MEI's carts: "Stacked Logo" is always D-10316)
+        const top0 = peers.filter((p) => score(p) === best), most = Math.max(...top0.map((p) => p.uses || 0));
+        const top = top0.length > 1 && most > 0 ? top0.filter((p) => (p.uses || 0) === most) : top0;
+        if (best > 0 && top.length === 1 && top[0].id !== mineL.id && (score(mineL) < best || (top[0].uses || 0) > (mineL.uses || 0))) out.push({ kind: "logo", group: gi, lineIds: ids, what, paper: top[0].name, order: mineL.name, say: `${what}: the paperwork names the ${top[0].name} logo, the order prints ${mineL.name}.` });
       }
       const named = [...mineL.colorways].sort((x, y) => y.length - x.length).find((cw) => { const cwW = words(cw).join(" "); return cwW && ` ${WS} `.includes(` ${cwW} `); });
       const now = Object.entries(im.colorwayBy || {}).find(([k]) => k.trim().toLowerCase() === it.color.trim().toLowerCase())?.[1] || im.colorway || "";
