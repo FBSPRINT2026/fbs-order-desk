@@ -8,6 +8,8 @@ import { fileB64, imgType, orderBrief } from "@/lib/ai/reorderCheck";
 import { loadMemories, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
 import { colorHex } from "@/lib/inkColors";
 import { pdfTextServer } from "@/lib/pdfTextServer";
+import { checkOrderSource } from "@/lib/ai/sourceCheckRun";
+import type { SrcFinding } from "@/lib/sourceCheck";
 import { calcOrder, LOCATIONS, mergeSettings, orderGroups, SIZES, uid, type Group, type Order, type Settings } from "@/lib/pricing";
 
 /**
@@ -128,11 +130,16 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
   const { data: cuBp } = o.customer_id ? await admin.from("customers").select("brand_print").eq("id", o.customer_id as string).maybeSingle() : { data: null };
   const hasMask = !!((cuBp?.brand_print || {}) as { distress?: { path?: string } }).distress?.path;
   const mem = await loadMemories(admin, (o.customer_id as string) || null).catch(() => []);
+  // what the order was made from, and the code's own item-by-item check against it (lib/sourceCheck.ts): a spot, a
+  // color, a size run, a style or a logo that isn't what the paperwork says (Oct 31, the MEI carts)
+  const sc = mode === "review" ? await checkOrderSource(admin, o as Order).catch(() => ({ findings: [] as SrcFinding[], source: "" })) : { findings: [] as SrcFinding[], source: "" };
   const prompt = [
     b.text,
     "Garment lines:", linesText(groups),
     ...pdfText.map((x) => `\n${x}`),
     `\nORDER JSON (what an "edit" changes; paths like /groups/0/lines/1/priceOverride, /fees/-, /due_date):\n${JSON.stringify(docOf(o as Record<string, unknown>)).slice(0, 60000)}`,
+    sc.source ? `\nWHAT THIS ORDER WAS MADE FROM (the email or ClickUp task, and its files' words):\n${sc.source.slice(0, 8000)}` : "",
+    sc.findings.length ? `\nCHECKED BY CODE, ITEM BY ITEM AGAINST THAT PAPERWORK. These don't match: name each one in your reply and give the change that fixes it (a garment the paperwork puts on another spot of an embroidered print is a location change on that print: its spotBy, keyed by the garment's style in lower case with no spaces; any other print: move the line to a group printing at that spot):\n${sc.findings.map((f) => `- ${f.say} (line ids ${f.lineIds.join(", ")})`).join("\n")}` : "",
     mem.length ? `\nWhat the shop has taught you about this customer:\n${mem.slice(0, 15).map((m) => `- ${m.text}`).join("\n")}` : "",
     shopRulesText(await loadShopRules(admin).catch(() => [])),
     earlier.trim() ? `\nEarlier in this check (already done; the order above already has these changes):\n${earlier.trim().slice(0, 3000)}` : "",
@@ -192,7 +199,9 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
     if (!t.ok) { skipped += ` (Couldn't: ${String(e.say || "a change")}: ${t.error}.)`; continue; }
     changes.push({ what: "order", id: "order", field: "edit", value: JSON.stringify(ops), say: String(e.say || "Changed the order").slice(0, 300) });
   }
-  const res: FixResult = { reply: (String(r.data.reply || "") + skipped).slice(0, 2000), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: clean(r.data.lesson), rule: clean(r.data.rule) };
+  // what the code found is said whatever the AI wrote
+  const found = sc.findings.length ? `Against the paperwork: ${sc.findings.map((f) => f.say).join(" ")}\n\n` : "";
+  const res: FixResult = { reply: (found + String(r.data.reply || "") + skipped).slice(0, 2600), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: clean(r.data.lesson), rule: clean(r.data.rule) };
   if (mode === "change") {
     const a = await applyChanges(admin, orderId, by, changes.filter((c) => c.what !== "art"));
     if (!a.ok) return a;

@@ -534,13 +534,27 @@ export async function saveOrderThread(orderId: string, thread: unknown) {
   } catch (e) { return fail(e); }
 }
 
-export async function markOrderChecked(orderId: string) {
+/**
+ * "Yes, it's right". Before the order is kept as a worked example (what the next orders like it learn from), it's checked
+ * against its paperwork item by item (lib/sourceCheck.ts): when a spot, color, size run, style or logo isn't what the
+ * paperwork says, that's said first (held) and nothing is kept, so a slip isn't learned (Oct 31: #40324's cover-up on the
+ * wrong chest). Yes again on the same differences (accepted) keeps it as it is: staff know better than the paperwork, and that's learned too.
+ */
+export async function markOrderChecked(orderId: string, /** what staff were told and said Yes to anyway */ accepted: string[] = []) {
   try {
     const { admin, email } = await staff();
-    await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: "Checked after it was made: everything right", actor: email });
+    let differs: string[] = [];
+    {
+      const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
+      const { checkOrderSource } = await import("@/lib/ai/sourceCheckRun");
+      const sc = o ? await checkOrderSource(admin, o as Order).catch(() => null) : null;
+      differs = (sc?.findings || []).map((f) => f.say);
+      if (differs.some((x) => !accepted.includes(x))) return { ok: true as const, held: differs };
+    }
+    await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: differs.length ? `Checked after it was made: right as it is (not as the paperwork says: ${differs.join(" ")})`.slice(0, 1500) : "Checked after it was made: everything right", actor: email });
     // what came in and the order staff say is right: Create order's worked example for this customer's next one
     const { saveExample } = await import("@/lib/ai/orderExamples");
     await saveExample(admin, orderId, email).catch((e) => console.warn("saveExample", e));
-    return { ok: true as const };
+    return { ok: true as const, held: [] as string[] };
   } catch (e) { return fail(e); }
 }

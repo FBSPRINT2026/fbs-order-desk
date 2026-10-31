@@ -907,6 +907,16 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         d = { ...d, groups: d.groups.map((y) => ({ ...y, imprints: y.imprints.map((z) => (z.id !== id ? z : { ...z, colors: keep ? n + 1 : n, notes: [z.notes, keep ? `Their ${bgName.toLowerCase()} box prints too` : `The ${bgName.toLowerCase()} box behind the art is taken out: the shirt shows through, ${n} color${n === 1 ? "" : "s"}`].filter(Boolean).join(". ").slice(0, 300) })) })) };
         did.push(`${y0(d, id)}: ${keep ? `the ${bgName.toLowerCase()} box prints too (${n + 1} colors)` : `${bgName.toLowerCase()} box taken out, ${n} color${n === 1 ? "" : "s"}${list ? ` (${list})` : ""}`}`);
       }
+      // a garment's color the paperwork names (lib/sourceCheck.ts): the answer, else the paperwork's (the guess)
+      for (const c of (d.check || []).filter((c0) => c0.local?.startsWith("sc|color|"))) {
+        const lids = c.local!.split("|")[2].split(","), to = rv.answers.find((x) => x.q === c.q)?.answer.trim() || c.guess;
+        const d0: EODraft = d!;
+        const l0: { brand?: string; style?: string; color?: string } | undefined = d0.groups.flatMap((y) => y.lines).find((l) => lids.includes(l.id));
+        if (!to || !l0 || l0.color === to) continue;
+        const was: string = l0.color || "", who: string = [l0.brand, l0.style].filter(Boolean).join(" ");
+        d = { ...d0, groups: d0.groups.map((y) => ({ ...y, lines: y.lines.map((l) => (lids.includes(l.id) ? { ...l, color: to } : l)) })) };
+        did.push(`${who}: ${to}, the paperwork's color (was ${was})`);
+      }
       const ans = rv.answers.filter((x) => !localOf.has(x.q));
       // a date question settled on a firm date ("Firm 11/2 (notes)"): the order's Firm box is ticked
       for (const c of (d.check || []).filter((c0) => /\b(due|dates?|in-?hands|deadline|needed by)\b/i.test(c0.q))) {

@@ -81,6 +81,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [rounds, setRounds] = useState<Round[]>(() => (saved0?.rounds || []).map((r) => ({ ...r, art: r.art.map((a) => (a.state === "doing" ? { ...a, state: "done" as const } : a)) })));
+  /** the paperwork check held the Yes once (markOrderChecked): the next Yes keeps the order as it is */
+  const [heldOnce, setHeldOnce] = useState<string[]>([]);
   const [pick, setPick] = useState<Record<number, boolean>>({});
   const [lesson, setLesson] = useState(saved0?.lesson || { on: true, text: "" });
   const [stale, setStale] = useState(false);
@@ -256,12 +258,20 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   const needMock = o?.groups.find((g) => g.imprints.some((im) => im.design_id) && !(g.mockupThumbs || []).length) || null;
   async function done() {
     if (needMock && !onMockupPage) window.open(next && next.includes("/mockup?") ? next : mockHref(needMock), "_blank", "noopener");
+    setBusy("Checking it against the paperwork…");
+    // checked against its paperwork before it's kept as an example: what differs is said, and Yes again keeps it as it is
+    const mk = await markOrderChecked(orderId, heldOnce).catch(() => null);
+    if (mk && mk.ok && mk.held.some((x) => !heldOnce.includes(x))) {
+      setHeldOnce(mk.held);
+      setRounds((rs) => [...rs, { you: "Yes, it\u2019s right", reply: `Before I keep it as an example for the next ones like it, the paperwork says otherwise in ${mk.held.length === 1 ? "one place" : `${mk.held.length} places`}: ${mk.held.join(" ")} Tell me what to change (or Check it for me), or press Yes again to keep it as it is.`, applied: [], art: [], suggest: [] }]);
+      setBusy("");
+      return;
+    }
     setBusy("Saving…");
     const kept = lesson.on && lesson.text.trim() ? await saveOrderLesson(orderId, lesson.text).catch(() => null) : null;
     const tr = kept && kept.ok && "trainings" in kept ? kept : null;
     const inTr = tr?.trainings?.length ? ` · added to the ${tr.trainings.join(" and ")} training` : "";
     const tooFull = tr?.full?.length ? ` · the ${tr.full.join(" and ")} training is full, so it wasn't added there` : "";
-    await markOrderChecked(orderId).catch(() => null);
     // the OK stays in the conversation, which is kept with the order
     const when = new Date().toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     const after: Round[] = [...rounds, { you: changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right", reply: `Marked right · ${when}${lesson.on && lesson.text.trim() ? ` · remembered for ${who}: ${kept && kept.ok ? kept.text : lesson.text.trim()}${inTr}${tooFull}` : ""}`, applied: [], art: [], suggest: [] }];

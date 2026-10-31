@@ -51,10 +51,10 @@ export function orderText(o: Partial<Order> & { groups: Group[] }, ctx: { design
   return out.join("\n");
 }
 
-async function sourceOf(admin: SupabaseClient, activityId: string): Promise<{ text: string; subject: string }> {
+export async function sourceOf(admin: SupabaseClient, activityId: string): Promise<{ text: string; subject: string }> {
   const { data: a } = await admin.from("activities").select("id, subject, body, from_email, thread_id, customer_id, occurred_at, meta").eq("id", activityId).maybeSingle();
   if (!a) return { text: "", subject: "" };
-  const parts: string[] = [`Email from ${a.from_email || "the customer"}${a.subject ? ` "${a.subject}"` : ""}:\n${String(a.body || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 1500)}`];
+  const parts: string[] = [`Email from ${a.from_email || "the customer"}${a.subject ? ` "${a.subject}"` : ""}:\n${String(a.body || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 3000)}`];
   let left = 3500;
   for (const f of ((a.meta as { attachments?: { path: string; name: string; type?: string; size?: number }[] } | null)?.attachments || []).slice(0, 8)) {
     if (left <= 0) break;
@@ -73,7 +73,7 @@ async function sourceOf(admin: SupabaseClient, activityId: string): Promise<{ te
 }
 
 /** the order's source email: the reading it was made from, else an email filed on it */
-async function sourceActivity(admin: SupabaseClient, orderId: string): Promise<{ activity: string | null; reading: { groups?: Group[] } | null }> {
+export async function sourceActivity(admin: SupabaseClient, orderId: string): Promise<{ activity: string | null; reading: { groups?: Group[] } | null }> {
   const { data: s } = await admin.from("ai_suggestions").select("activity_id, payload").in("kind", ["draft_order", "draft_order_part"]).eq("order_id", orderId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (s?.activity_id) return { activity: s.activity_id as string, reading: ((s.payload as { draft?: { groups?: Group[] } } | null)?.draft) || null };
   const { data: e } = await admin.from("activities").select("id").eq("order_id", orderId).eq("kind", "email").eq("direction", "in").order("occurred_at", { ascending: true }).limit(1).maybeSingle();
@@ -103,7 +103,7 @@ export async function saveExample(admin: SupabaseClient, orderId: string, by: st
   };
   const { error } = await admin.from("order_examples").upsert(row, { onConflict: "order_id" });
   if (!error) await learnDefaults(admin, o.customer_id as string, `${o.nickname || ""} ${subject} ${o.po_number || ""}`).catch((e) => console.warn("learnDefaults", e));
-  if (!error) await learnBrandLooks(admin, order).catch((e) => console.warn("learnBrandLooks", e));
+  if (!error) await learnBrandsFromAll(admin, o.customer_id as string).catch((e) => console.warn("learnBrandLooks", e));
   return error ? { ok: false, why: error.message } : { ok: true };
 }
 
@@ -202,7 +202,23 @@ ${x.reading_text}` : ""}`).join("\n\n")}`;
  *  - its logo mockups are the brand's standard mockups (BrandRules.mockups): a group whose prints are all one brand's logos
  *    with a saved logo mockup gives that mockup to the next group with the same logos, spots and colorway.
  */
-export async function learnBrandLooks(admin: SupabaseClient, order: Order) {
+/**
+ * Every order of the customer's that staff said is right, oldest first, teaches its brands again (Oct 31, Nick after
+ * eight MEI carts: "make it learn from those now"): orders marked right before a lesson existed are learned from too, and
+ * the newest order wins where two disagree. Runs each time one of their orders is marked right.
+ */
+export async function learnBrandsFromAll(admin: SupabaseClient, customerId: string) {
+  const { data: ex } = await admin.from("order_examples").select("order_id, source_text, confirmed_at").eq("customer_id", customerId).eq("active", true).order("confirmed_at", { ascending: true }).limit(60);
+  const rows = (ex || []) as { order_id: string; source_text: string }[];
+  if (!rows.length) return;
+  const { data: os } = await admin.from("orders").select("*").in("id", rows.map((e) => e.order_id));
+  const byId = new Map(((os || []) as Order[]).map((o) => [o.id, o]));
+  for (const e of rows) { const o = byId.get(e.order_id); if (o) await learnBrandLooks(admin, { ...o, groups: orderGroups(o) }, e.source_text || ""); }
+}
+
+export async function learnBrandLooks(admin: SupabaseClient, order: Order, /** what the order was made from: a version it names outright ("All White") is the customer's pick, not what the garment color takes */ source = "") {
+  const flat = (x: string) => ` ${x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+  const said = flat(source);
   const groups = orderGroups(order);
   const ids = [...new Set(groups.flatMap((g) => (g.imprints || []).map((im) => im.design_id)).filter(Boolean) as string[])];
   if (!ids.length) return;
@@ -224,7 +240,9 @@ export async function learnBrandLooks(admin: SupabaseClient, order: Order) {
       bOfG.add(bid);
       const r = rules.get(bid); if (!r) continue;
       for (const c of colors) {
-        const cw = colorwayOnColor(im, d, c)?.name;
+        const cw0 = colorwayOnColor(im, d, c)?.name;
+        // a version the paperwork asked for by name says nothing about the garment color's light or dark
+        const cw = cw0 && flat(cw0).trim() && said.includes(flat(cw0)) ? undefined : cw0;
         const side = cw && cwKey(cw) === cwKey(r.light) ? "light" : cw && cwKey(cw) === cwKey(r.dark) ? "dark" : cw && cwKey(cw) === cwKey(r.one_light) ? "light" : cw && cwKey(cw) === cwKey(r.one_dark) ? "dark" : null;
         if (side && r.goods?.[c] !== side) { r.goods = { ...(r.goods || {}), [c]: side }; changed.add(bid); }
       }

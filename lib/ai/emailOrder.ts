@@ -13,6 +13,8 @@ import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normali
 import { applySheetSizes, sheetBreakdown } from "@/lib/sheetSizes";
 import { confirmMeta, supplierConfirms } from "@/lib/supplierConfirm";
 import { pdfTextServer } from "@/lib/pdfTextServer";
+import { applyLocationFixes, sourceCheck } from "@/lib/sourceCheck";
+import { sourceCtx } from "@/lib/ai/sourceCheckRun";
 import { refetchAttachments } from "@/lib/mail/imap";
 import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
@@ -260,6 +262,8 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
   const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[] = [];
   const documents: { data: string; label: string }[] = [];
   const listing: string[] = [], confirms: string[] = [];
+  /** each file's words, read by code (the paperwork the order is checked against item by item: lib/sourceCheck.ts) */
+  const words: string[] = [];
   // a customer's pre-production sheet full of photos runs big (Oct 27: Cedar's SSG SO73417 PDF is 18.6 MB): up to 22 MB
   // is read (the API takes 32 MB with the base64); one too big still has its words read
   let budget = 22 * 1024 * 1024;
@@ -275,6 +279,7 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
       if (pdf && a.size < 60 * 1024 * 1024) {
         const { data: big } = await admin.storage.from("proofs").download(a.path).catch(() => ({ data: null }));
         const tx = big ? await pdfTextServer(new Uint8Array(await big.arrayBuffer())).catch(() => "") : "";
+        if (tx.trim()) words.push(tx);
         if (tx.trim()) { listing.push(`${tag} (too big to look at here; its words, read by code):\n"""\n${tx.slice(0, 6000)}\n"""`); continue; }
       }
       listing.push(`${tag} (too big to look at here)`); continue;
@@ -293,6 +298,7 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
       documents.push({ data: buf.toString("base64"), label: `${tag} (PDF):` });
       // a supplier's order confirmation (S&S, SanMar): its rows read by code, exactly (Oct 24, Dear Heart's In Every Season)
       const tx = await pdfTextServer(buf);
+      if (tx) words.push(tx);
       const cf = tx ? supplierConfirms([tx]) : null;
       if (cf?.rows) {
         confirms.push(tx);
@@ -300,10 +306,11 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
       } else listing.push(`${tag} (PDF, shown above)`);
     } else {
       const t = officeText(a.name, a.type, buf);
+      if (t) words.push(t);
       listing.push(t ? `${tag} contents:\n"""\n${t}\n"""` : `${tag} (couldn't be read${/\.(xls|doc)$/i.test(a.name) ? "; old Excel/Word format" : ""})`);
     }
   }
-  return { images, documents, listing, confirms };
+  return { images, documents, listing, confirms, words };
 }
 
 // ---------- the AI ----------
@@ -428,7 +435,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-31j";
+export const READER_REV = "2026-10-31k";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -520,7 +527,7 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
     lookedUp ? `Looked up online for that note: ${lookedUp.text}` : "",
   ].filter(Boolean).join("\n");
   const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts, convo.map((e) => e.id as string)).catch(() => new Set<string>());
-  const { images, documents, listing, confirms } = await readFiles(admin, atts, sigs);
+  const { images, documents, listing, confirms, words: fileWords } = await readFiles(admin, atts, sigs);
   // the brands' logos on file as small pictures, to match a logo in their photos by how it looks
   for (const pic of onFile?.pictures || []) {
     if (images.length >= 8) break;
@@ -1076,6 +1083,23 @@ ${staffSays}` : ""}`;
   }
   // each garment's description checked against its style: blank, or naming a logo instead of the garment → the style's name
   await describeFromStyles(admin, (a.customer_id as string) || null, draft).catch((e) => { console.warn("describeFromStyles", e); return [] as string[]; });
+  // the reading checked against the paperwork, item by item (lib/sourceCheck.ts, Oct 31 after the MEI carts: a garment
+  // the cart puts on the other chest, a color that isn't the cart's or the maker's, a style that's another brand's): a
+  // spot the paperwork names for one garment is put right here (an embroidered one as a location change); the rest is
+  // asked before the order is made
+  try {
+    const paper = [...convo.map((e) => `${e.subject || ""}\n${String(e.body || "")}`), ...fileWords].join("\n\n").slice(0, 60000);
+    const ctx = await sourceCtx(admin, draft.groups);
+    const fixed = applyLocationFixes(draft.groups, sourceCheck(paper, draft.groups, ctx), { split: false });
+    draft.groups = fixed.groups;
+    const left = sourceCheck(paper, draft.groups, ctx);
+    if (fixed.did.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}From the paperwork: ${fixed.did.join("; ")}.`.slice(0, 1800);
+    for (const f of left.slice(0, 6)) {
+      const want = f.fix || f.paper;
+      // a color is answered on the card itself (components/QuickOrder.tsx "sc|"): the paperwork's, else what staff pick
+      (draft.check ||= []).push({ q: f.say.slice(0, 300), guess: want.slice(0, 200), about: String(draft.groups[f.group]?.name || "").slice(0, 80), ...(want && f.order && want !== f.order ? { choices: [{ label: want.slice(0, 60) }, { label: f.order.slice(0, 60) }] } : {}), ...(f.kind === "color" ? { local: `sc|color|${f.lineIds.join(",")}` } : {}) });
+    }
+  } catch (e) { console.warn("sourceCheck", e); }
   const row = {
     kind: o.part ? "draft_order_part" : "draft_order", dedupe_key: o.part ? `email:${o.part.anchor || C.id}:order:${o.part.key}` : `email:${C.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
     customer_id: a.customer_id, order_id: null, activity_id: C.id,
