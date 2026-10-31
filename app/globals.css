@@ -16609,3 +16609,44 @@ table.tbl-stack > tbody > tr > td[data-label]:not([data-label=""]){position:rela
 table.tbl-stack > tbody > tr > td[data-label]:not([data-label=""])::before{content:attr(data-label);position:absolute;left:0;top:4px;width:7em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 table.tbl-stack > tbody > tr > td[colspan]{font-weight:700;padding-top:6px!important}
 .tbl-wrap:has(> table.tbl-stack){overflow-x:hidden}
+/* Programs tab (components/ProgramsTab.tsx, Oct 30): one program per end client, the chat beside it */
+.pgs{display:flex;flex-direction:column;gap:14px}
+.pgs-list{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pgs-p{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 14px 6px 8px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.pgs-p:hover{border-color:var(--accent)}
+.pgs-p.on{border-color:var(--fbs-blue);box-shadow:0 0 0 2px var(--accent-soft)}
+.pgs-i{width:36px;height:36px;border-radius:7px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font:800 11px var(--body);flex:none}
+.pgs-t{display:flex;flex-direction:column;line-height:1.25}
+.pgs-t b{font-size:14px}
+.pgs-t small{font-size:12px;color:var(--ink-3)}
+.pgs-add{border-style:dashed;color:var(--accent);font-weight:700;padding:6px 16px}
+.pgs-new{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pgs-new input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);min-width:240px}
+.pgs-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,400px);gap:14px;align-items:start}
+.pgs-main{display:flex;flex-direction:column;gap:14px;min-width:0}
+.pgs-main > .panel, .pgs-main > section{margin:0}
+.pgs-head{display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap}
+.pgs-head h2{margin:0;font:800 20px var(--display)}
+.pgs-head .faint{font-size:12.5px}
+.pgs-rules{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.pgs-rule{border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;background:var(--surface-2);font-size:13px;color:var(--ink-2);white-space:pre-line;overflow-wrap:break-word}
+.pgs-rule b{display:block;color:var(--ink);font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.pgs-rules-ed{width:100%;box-sizing:border-box;font:13px/1.45 var(--body)}
+.pgs-art{display:flex;flex-wrap:wrap;gap:10px}
+.pgs-logo{display:flex;flex-direction:column;gap:2px;width:104px;color:var(--ink);text-decoration:none;font-size:12px}
+.pgs-logo-t{position:relative;width:104px;height:72px;border-radius:6px;overflow:hidden;background:var(--swatch-light);border:1px solid var(--line)}
+.pgs-logo .faint{font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pgs-drop{width:104px;height:72px;border:1.5px dashed var(--line);border-radius:6px;display:grid;place-items:center;text-align:center;font-size:11.5px;color:var(--ink-3);cursor:pointer;padding:4px}
+.pgs-drop:hover{border-color:var(--accent);color:var(--accent)}
+.pgs-ex{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.pgs-ex .off{opacity:.55}
+.pgs-teach{border-color:var(--fbs-blue)}
+.pgs-teach-b{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.pgs-way{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:8px;padding:12px}
+.pgs-way.on{border-color:var(--fbs-blue);background:var(--accent-soft)}
+.pgs-way .row input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);width:180px;background:var(--surface);color:var(--ink)}
+.pga-more{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:12px}
+.pga-more > summary{cursor:pointer;font-weight:700;font-size:14px}
+.pga-more > summary .faint{font-weight:400;font-size:12.5px;margin-left:6px}
+.pga-more[open]{gap:14px}
+@media (max-width:1100px){ .pgs-cols{grid-template-columns:minmax(0,1fr)} }

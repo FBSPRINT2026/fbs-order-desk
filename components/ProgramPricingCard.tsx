@@ -37,8 +37,9 @@ const laneLabel = (l: Lane) => LANES.find((x) => x.id === l)?.label || "Screen p
 const plural = (n: number, w: string) => `${n.toLocaleString("en-US")} ${w}${n === 1 ? "" : "s"}`;
 const uniq = (xs: string[]) => { const seen = new Set<string>(); return xs.filter((x) => { const k = norm(x); if (!k || seen.has(k)) return false; seen.add(k); return true; }); };
 
-export default function ProgramPricingCard({ customerId, program, items, ver, editing, onToggleEdit, onEditItem, onAdd, onSaveItem, onSaveProgram }: {
+export default function ProgramPricingCard({ customerId, program, items, ver, editing, onToggleEdit, onEditItem, onAdd, onSaveItem, onSaveProgram, fixedWho }: {
   customerId: string; program: Program; items: ProgramItem[];
+  /** one program's prices only (the Programs tab picks the end client): its words; no client chips */ fixedWho?: string[];
   /** save a price's mockups */ onSaveItem: (id: string, patch: Partial<ProgramItem>) => void;
   /** save what leads */ onSaveProgram: (patch: Partial<Program>) => void;
   /** bumps when ProgramAdmin reloads: the numbers are counted again */ ver: number;
@@ -60,7 +61,8 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
     return [...m.values()];
   }, [live]);
   const [pick, setPick] = useSticky<string>("program.client", "");
-  const cur = clients.find((c) => c.key === pick) || clients[0];
+  const fixed = fixedWho?.map(norm).filter(Boolean);
+  const cur = fixed ? clients.find((c) => fixed.length ? c.who.some((w) => fixed.includes(norm(w))) : !c.who.length) : clients.find((c) => c.key === pick) || clients[0];
 
   const [stats, setStats] = useState<CardStats | null>(null);
   useEffect(() => {
@@ -166,10 +168,10 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
 
   if (!cur) return (
     <section className="panel prs">
-      <div className="panel-h prs-h"><div className="prs-ht"><h2>Program pricing</h2><span className="faint">no prices yet</span></div><div className="prs-hr"><Leads program={program} onSave={onSaveProgram} /></div></div>
+      <div className="panel-h prs-h"><div className="prs-ht"><h2>{fixed ? "Price lines" : "Program pricing"}</h2><span className="faint">no prices yet{fixed ? ": tell Claude, or + Product" : ""}</span></div><div className="prs-hr"><Leads program={program} onSave={onSaveProgram} /></div></div>
       <div className="prs-foot prs-noprint"><span className="faint">{design ? "Add each design they order, the words they call it and its mockups." : "Add each product they order, its styles and its mockup."}</span>
         <button type="button" className="btn" onClick={onToggleEdit}>{editing ? "Hide the rules" : "Edit the rules"}</button>
-        <button type="button" className="btn primary" onClick={() => onAdd([])}>{design ? "+ Design" : "+ Product"}</button></div>
+        <button type="button" className="btn primary" onClick={() => onAdd(fixedWho || [])}>{design ? "+ Design" : "+ Product"}</button></div>
     </section>
   );
   const st = stats?.who[cur.key];
@@ -209,9 +211,9 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
   return (
     <section className="panel prs">
       <div className="panel-h prs-h">
-        <div className="prs-ht"><h2>Program pricing</h2><span className="faint">{plural(clients.length, "end client")}</span></div>
+        <div className="prs-ht"><h2>{fixed ? "Price lines" : "Program pricing"}</h2><span className="faint">{fixed ? plural(cur.items.length, "price") : plural(clients.length, "end client")}</span></div>
         <div className="prs-hr">
-          {clients.length > 1 && (
+          {!fixed && clients.length > 1 && (
             <div className="chips prs-clients" role="tablist" aria-label="End clients">
               {clients.map((c) => <button key={c.key || "-"} type="button" role="tab" aria-selected={c.key === cur.key} className={"chip" + (c.key === cur.key ? " on" : "")} title={groupName(c)} onClick={() => setPick(c.key)}>{c.who[0] || program.name || "Program"}<span className="chip-n">{c.items.length}</span></button>)}
             </div>

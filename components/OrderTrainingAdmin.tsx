@@ -192,20 +192,38 @@ const post = async (body: Record<string, unknown>) => {
 const OP = { "+": "add", "~": "chg", "-": "del" } as const;
 
 /** the Messages-style chat (the same look as Brand standards' AI): blue for us, gray for Claude, the changes as a card */
-function TrainingChat({ trainingId, customerId, customerName, base, onApplied }: { trainingId: string; customerId: string; customerName: string; base: { training: string; name: string; when: string }; onApplied: (v: { training: string; name: string; when: string }) => void }) {
+export function TrainingChat({ trainingId, customerId, customerName, base, onApplied, ensure, autoSend, onAutoSent }: { trainingId: string; customerId: string; customerName: string; base: { training: string; name: string; when: string }; onApplied: (v: { training: string; name: string; when: string }) => void;
+  /** no training yet (a program with prices only): make it on the first message, and say its id */ ensure?: () => Promise<string | null>;
+  /** a message to send by itself once (+ New program → "Show me one order") */ autoSend?: string; onAutoSent?: () => void }) {
   const [msgs, setMsgs] = useState<TrainMsg[] | null>(null);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => { setMsgs(null); post({ trainingId, action: "thread" }).then((r) => (r.ok ? setMsgs(r.messages || []) : setErr(r.error || "Couldn't load the conversation."))); }, [trainingId]);
+  const tid = useRef(trainingId);
+  useEffect(() => {
+    if (!trainingId) { setMsgs([]); return; }
+    if (tid.current && tid.current === trainingId && msgs) return;
+    tid.current = trainingId;
+    post({ trainingId, action: "thread" }).then((r) => (r.ok ? setMsgs(r.messages || []) : setErr(r.error || "Couldn't load the conversation.")));
+  }, [trainingId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sentAuto = useRef("");
+  useEffect(() => {
+    if (!autoSend || !msgs || busy || sentAuto.current === autoSend) return;
+    sentAuto.current = autoSend; setText(autoSend); onAutoSent?.();
+    setTimeout(() => void send(autoSend), 0);
+  }, [autoSend, msgs]); // eslint-disable-line react-hooks/exhaustive-deps
   // keep the newest message in view inside the chat (never scroll the page)
   useEffect(() => { const b = box.current; if (b) b.scrollTop = b.scrollHeight; }, [msgs, busy]);
 
-  async function send() {
-    if (busy || (!text.trim() && !files.length)) return;
+  async function send(said0?: string) {
+    const said1 = said0 ?? text;
+    if (busy || (!said1.trim() && !files.length)) return;
     setErr("");
+    let id = tid.current;
+    if (!id && ensure) { setBusy("Starting…"); id = (await ensure()) || ""; tid.current = id; setBusy(""); }
+    if (!id) return setErr("Couldn't start this program's training.");
     const up: TrainFile[] = [];
     if (files.length) {
       setBusy("Uploading…");
@@ -217,18 +235,18 @@ function TrainingChat({ trainingId, customerId, customerName, base, onApplied }:
         up.push({ path, name: f.name, type: f.type });
       }
     }
-    const said = text;
+    const said = said1;
     setMsgs((m) => [...(m || []), { role: "staff", text: said, at: new Date().toISOString(), files: up.length ? up : undefined }]);
     setText(""); setFiles([]);
     setBusy(up.length ? "Reading the files… (can take a minute)" : "Thinking…");
-    const r = await post({ trainingId, action: "chat", text: said, files: up, base });
+    const r = await post({ trainingId: id, action: "chat", text: said, files: up, base });
     setBusy("");
     if (!r.ok) { setErr(r.error || "Something went wrong."); setMsgs((m) => (m || []).slice(0, -1)); setText(said); return; }
     setMsgs(r.messages || []);
   }
   async function decide(i: number, action: "apply" | "dismiss") {
     setBusy(action === "apply" ? "Applying…" : ""); setErr("");
-    const r = await post({ trainingId, action, index: i });
+    const r = await post({ trainingId: tid.current, action, index: i });
     setBusy("");
     if (!r.ok) return setErr(r.error || "Couldn't do that.");
     setMsgs(r.messages || []);

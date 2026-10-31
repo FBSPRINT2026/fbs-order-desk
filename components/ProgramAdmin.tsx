@@ -1,7 +1,6 @@
 "use client";
 import PrintavoSetup from "@/components/PrintavoSetup";
-import ProgramPricingCard from "@/components/ProgramPricingCard";
-import { CustomerTraining } from "@/components/OrderTrainingAdmin";
+import ProgramsTab from "@/components/ProgramsTab";
 import { useSticky } from "@/lib/useSticky";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -80,28 +79,27 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
   if (!loaded) return <div className="gb-empty">Loading…</div>;
   if (!program) return (
     <div className="pga">
-    <>
-    <PrintavoSetup customerId={customerId} onApplied={load} />
-    <ProgramAssist customerId={customerId} about={[]} onApplied={load} />
-    </>
-    <div className="pg-none">
-      <div className="pg-none-ic" aria-hidden="true">★</div>
-      <h3>No program yet</h3>
-      <p>Set up program pricing for this customer: their own price for each print (1/1, 2/1, 3/3…) on a base shirt, with a minimum. On an order, pick <b>Program</b> next to Retail / Wholesale and the prices fill in.</p>
-      <button type="button" className="btn primary" onClick={async () => { await sb.from("programs").insert({ customer_id: customerId, name: "Program", active: false, rate_card: newRateCard() }); load(); }}>Set it up by hand</button>
-    </div>
-    <CustomerTraining customerId={customerId} />
+      <ProgramsTab customerId={customerId} program={null} items={[]} ver={ver} editing={false} onReload={load}
+        onToggleEdit={() => {}} onEditItem={() => {}} onAdd={() => {}} onSaveItem={() => {}} onSaveProgram={() => {}} />
+      <details className="pga-more">
+        <summary>More settings <span className="faint">bring in from Printavo, a per-print rate card</span></summary>
+        <PrintavoSetup customerId={customerId} onApplied={load} />
+        <div className="row"><button type="button" className="btn" onClick={async () => { await sb.from("programs").insert({ customer_id: customerId, name: "Program", active: false, rate_card: newRateCard() }); load(); }}>Set up a per-print rate card by hand</button></div>
+      </details>
     </div>
   );
   const hasCard = items.some((i) => i.active && !i.archived_at);
   return (
     <div className="pga">
-      <ProgramPricingCard customerId={customerId} program={program} items={items} ver={ver} editing={editing}
+      <ProgramsTab customerId={customerId} program={program} items={items} ver={ver} editing={editing} onReload={load}
         onSaveItem={(id, patch) => void saveItem(id, patch)} onSaveProgram={(patch) => void saveProgram(patch)}
         onToggleEdit={() => { const on = !editing; setEditing(on); if (on) setGoTo("pga-rules"); }}
         onEditItem={(id) => { setEditing(true); setGoTo(`pga-item-${id}`); }}
         onAdd={(who) => void addItem(who)} />
-      {(!hasCard || editing) && <>
+      {/* everything else, folded away (Oct 30, Nick: "a lot of this is obsolete… it's just the top part") */}
+      <details className="pga-more" open={editing} onToggle={(e) => setEditing((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary>More settings <span className="faint">every price line in full, a per-print rate card, portal, bring in from Printavo</span></summary>
+      {<>
       <div className="aa-bar" id="pga-rules"><div className="aa-bar-l"><h2>{hasCard ? "The rules" : "Program pricing"}</h2><span className="aa-sum">{items.filter((i) => i.active).length} design price{items.filter((i) => i.active).length === 1 ? "" : "s"} · {state || "Saves as you type"}</span></div>
         <label className="check"><input type="checkbox" checked={program.active} onChange={(e) => saveProgram({ active: e.target.checked })} /> Show in their portal</label>
       </div>
@@ -234,7 +232,7 @@ export default function ProgramAdmin({ customerId }: { customerId: string }) {
       </div>
       <button type="button" className="btn primary" onClick={() => void addItem()}>+ Add a design price</button>
       </>}
-      <CustomerTraining customerId={customerId} />
+      </details>
     </div>
   );
 }

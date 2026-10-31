@@ -103,6 +103,27 @@ export async function saveExample(admin: SupabaseClient, orderId: string, by: st
   return error ? { ok: false, why: error.message } : { ok: true };
 }
 
+/** one of the customer's orders the way the training chat reads it ("look at #40284: this is how it goes every time"):
+ *  what it made, group by group, with each group's saved mockup number */
+export async function orderTextFor(admin: SupabaseClient, customerId: string, number: number): Promise<{ id: string; title: string; text: string } | null> {
+  const { data: o } = await admin.from("orders").select("*").eq("number", number).eq("customer_id", customerId).maybeSingle();
+  if (!o) return null;
+  const order = { ...(o as Order), groups: orderGroups(o as Order) };
+  const ids = [...new Set(order.groups.flatMap((g) => (g.imprints || []).map((im) => im.design_id)).filter(Boolean) as string[])];
+  const [{ data: ds }, { data: st }, { data: mk }] = await Promise.all([
+    ids.length ? admin.from("designs").select("id, number, name").in("id", ids) : Promise.resolve({ data: [] }),
+    admin.from("settings").select("data").eq("id", 1).maybeSingle(),
+    admin.from("mockups").select("number, group_id").eq("order_id", o.id).is("archived_at", null).not("number", "is", null),
+  ]);
+  const designs = Object.fromEntries(((ds || []) as { id: string; number: number; name: string }[]).map((d) => [d.id, { number: d.number, name: d.name }]));
+  const settings = mergeSettings(st?.data);
+  const finNames = Object.fromEntries(finishingList(settings, priceList(settings, (order.price_type || "retail") as PriceType)).map((f) => [f.id, f.name]));
+  const mockOf = new Map(((mk || []) as { number: number; group_id: string | null }[]).filter((m) => m.group_id).map((m) => [m.group_id!, m.number]));
+  const prices = order.groups.flatMap((g) => (g.lines || []).filter((l) => lineQty(l) > 0 && l.priceOverride != null).map((l) => `  ${[l.style, l.color].filter(Boolean).join(" ")} (${g.name || "group"}): $${(+l.priceOverride!).toFixed(2)} each`));
+  const text = [orderText(order, { designs, finNames }), ...order.groups.map((g, i) => (mockOf.has(g.id) ? `Group ${i + 1} "${g.name || ""}" mockup: M-${mockOf.get(g.id)}` : "")).filter(Boolean), prices.length ? `Prices on the order:\n${prices.join("\n")}` : ""].filter(Boolean).join("\n");
+  return { id: o.id as string, title: `#${o.number} ${o.nickname || ""}`.trim(), text: text.slice(0, 5000) };
+}
+
 /** the closest worked examples for a new email from this customer: the most words in common (the end client, the city,
  *  the products), newest first among equals */
 export async function loadExamples(admin: SupabaseClient, customerId: string | null, about: string, n = 2): Promise<OrderExample[]> {
