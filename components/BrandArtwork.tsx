@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { fitLocation, locationsFor, type Design, type Group, type Imprint } from "@/lib/pricing";
-import { brandPrint, colorwayFor, colorwaysOf, isDarkGarment, LANES, laneState, pickSewFile, SEW_KINDS, sewFilesOf, sewKindOf, type Brand, type Lane } from "@/lib/brands";
+import { brandPrint, colorwayFor, colorwaysOf, isDarkGarment, LANES, laneState, SEW_KINDS, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand, type Lane } from "@/lib/brands";
 
 /**
  * Customer artwork → their brands (Oct 27, Nick: Cedar Promos' MEI, ShipStation / WWEX, Embark: "select, group it and
@@ -71,7 +71,7 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
   const kind = sewKindOf(group.lines);
   useEffect(() => {
     if (!pick) return;
-    const fs = sewFilesOf(pick), best = pickSewFile(fs, kind);
+    const fs = sewFilesOf(pick), best = sewForPrint(pick, brandById(bOf(pick)), dark, kind);
     setSewIx(Math.max(0, best ? fs.indexOf(best) : 0));
     setCwName(colorwayFor(pick, brandById(bOf(pick)), dark)?.name || "");
     setSide(dark ? "dark" : "light");
@@ -83,7 +83,7 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
   const sews = pick ? sewFilesOf(pick) : [];
   const sew = lane === "embroidery" ? sews[sewIx] || null : null;
   const cws = pick ? colorwaysOf(pick) : [];
-  const threads = (side: "light" | "dark") => (sew?.threads?.[side]?.length ? sew.threads[side]! : brand?.embroidery[side] || []);
+  const threads = (side: "light" | "dark") => (sewThreads(sew, side).length ? sewThreads(sew, side) : brand?.embroidery[side] || []);
 
   async function add() {
     if (!pick) return;

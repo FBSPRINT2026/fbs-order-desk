@@ -11,9 +11,9 @@ async function myDesign(id: string) {
   if (!user) throw new Error("Please sign in again.");
   const admin = createAdminClient();
   // customers read through their own session, so row security only returns their designs
-  const { data } = await (isStaff ? admin : supabase).from("designs").select("id,customer_id,file_path,preview_path").eq("id", id).maybeSingle();
+  const { data } = await (isStaff ? admin : supabase).from("designs").select("id,number,customer_id,file_path,preview_path,specs").eq("id", id).maybeSingle();
   if (!data) throw new Error("We couldn't find that logo.");
-  return { admin, d: data as { id: string; customer_id: string; file_path: string; preview_path: string } };
+  return { admin, d: data as { id: string; number: number; customer_id: string; file_path: string; preview_path: string; specs: { master?: unknown } | null } };
 }
 async function inUse(admin: ReturnType<typeof createAdminClient>, d: { id: string; customer_id: string }) {
   const { data } = await admin.rpc("designs_in_use", { p_customer: d.customer_id });
@@ -22,10 +22,15 @@ async function inUse(admin: ReturnType<typeof createAdminClient>, d: { id: strin
 const done = () => { revalidatePath("/portal"); revalidatePath("/shop/artwork"); return { ok: true }; };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong." });
 
+/** a master logo is set in stone (Oct 31, Nick: "once we put it in… it can't be deleted, it's there"); the database refuses too */
+const masterNo = (d: { number?: number; specs?: { master?: unknown } | null }, what: string): Result | null =>
+  d.specs?.master ? { ok: false, error: `D-${d.number ?? ""} is a master logo, so it can't be ${what}. An owner can unlock it on its page first.` } : null;
+
 /** Delete a logo that hasn't been used on a mockup or order (file and preview too). */
 export async function deleteDesign(id: string): Promise<Result> {
   try {
     const { admin, d } = await myDesign(id);
+    const m = masterNo(d, "deleted"); if (m) return m;
     if (await inUse(admin, d)) return { ok: false, error: "This logo is on a mockup or order, so it can only be archived." };
     const files = [d.file_path, d.preview_path].filter(Boolean);
     if (files.length) await admin.storage.from("proofs").remove(files);
@@ -38,7 +43,8 @@ export async function deleteDesign(id: string): Promise<Result> {
 /** Archive (hide from pickers) or restore a logo. */
 export async function archiveDesign(id: string, archived: boolean): Promise<Result> {
   try {
-    const { admin } = await myDesign(id);
+    const { admin, d } = await myDesign(id);
+    if (archived) { const m = masterNo(d, "archived"); if (m) return m; }
     const { error } = await admin.from("designs").update({ archived_at: archived ? new Date().toISOString() : null, ...(archived ? { starred: false } : {}) }).eq("id", id);
     if (error) return { ok: false, error: error.message };
     return done();
@@ -55,8 +61,9 @@ export async function deleteDesignForever(id: string): Promise<Result> {
     const { isStaff } = await getViewer();
     if (!isStaff) return { ok: false, error: "Only shop staff can delete a logo for good." };
     const admin = createAdminClient();
-    const { data: d } = await admin.from("designs").select("id, customer_id, file_path, preview_path, archived_at").eq("id", id).maybeSingle();
+    const { data: d } = await admin.from("designs").select("id, number, customer_id, file_path, preview_path, archived_at, specs").eq("id", id).maybeSingle();
     if (!d) return { ok: false, error: "We couldn't find that logo." };
+    const m = masterNo(d as { number: number; specs: { master?: unknown } | null }, "deleted"); if (m) return m;
     if (!d.archived_at) return { ok: false, error: "Archive the logo first; only archived logos are deleted for good." };
     // the customer's orders that point at it: the print keeps everything but the link
     const { data: os } = d.customer_id ? await admin.from("orders").select("id, groups").eq("customer_id", d.customer_id) : { data: [] };

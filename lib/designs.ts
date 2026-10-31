@@ -138,6 +138,9 @@ export async function addColorway(sb: SupabaseClient, d: Design, f: File, o: { n
  * art and picture; the old ones are kept on the logo (specs.previous), its number, sew files and history stay.
  */
 export async function setLogoArt(sb: SupabaseClient, d: Design, f: File): Promise<Design> {
+  // a master logo's art is set in stone (the database refuses too)
+  const { data: m } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
+  if ((m?.specs as { master?: unknown } | null)?.master) throw new Error(`D-${d.number} is a master logo: its art can't be replaced. An owner can unlock it on its page first.`);
   const key = `designs/${d.id}-${crypto.randomUUID().slice(0, 8)}`;
   const orig = `${key}/${safe(f.name)}`;
   const up = await sb.storage.from("proofs").upload(orig, f, { contentType: f.type || undefined });

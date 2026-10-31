@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { colorwaysOf, pickSewFile, sewFilesOf, sewKindOf, type Brand } from "@/lib/brands";
+import { colorwaysOf, isDarkGarment, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand } from "@/lib/brands";
 import type { Design, GLine, Group, Imprint } from "@/lib/pricing";
 
 /**
@@ -63,7 +63,8 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
   im.design_id = d.id;
   im.fromBrand = brand?.name || "their logos";
   if (im.method === "embroidery") {
-    const sew = pickSewFile(sewFilesOf(d), sewKindOf(lines));
+    // the colorway's own sew file when the brand links one (light goods first, as the print's base), else the best fit
+    const sew = sewForPrint(d, brand, lines.length > 0 && lines.every((l) => isDarkGarment(l)), sewKindOf(lines));
     if (sew) {
       im.size = `${sew.wIn}" × ${sew.hIn}"`;
       im.stitches = sew.stitches;
@@ -72,7 +73,7 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
       if (sew.wIn) im.artRatio = Math.round((sew.hIn / sew.wIn) * 1000) / 1000;
       im.sizeFrom = "brand";
     }
-    if (!(im.inks || "").trim()) im.inks = (sew?.threads?.light?.length ? sew.threads.light : brand?.embroidery?.light || []).join(", ");
+    if (!(im.inks || "").trim()) im.inks = (sewThreads(sew).length ? sewThreads(sew) : brand?.embroidery?.light || []).join(", ");
   } else if (!(im.inks || "").trim()) {
     const cw = colorwaysOf(d).find((c) => c.name.toLowerCase() === String(brand?.rules?.light || "").toLowerCase()) || colorwaysOf(d)[0];
     if (cw) im.inks = cw.inks.join(", ");

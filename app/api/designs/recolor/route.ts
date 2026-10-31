@@ -19,6 +19,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const { data: d } = await admin.from("designs").select("id, number, name, file_path, file_name, file_type, preview_path, specs").eq("id", id).maybeSingle();
   if (!d) return NextResponse.json({ error: "No such logo." }, { status: 404 });
+  if ((d.specs as { master?: unknown } | null)?.master) return NextResponse.json({ error: `D-${d.number} is a master logo: its art can't be changed. Add the new colors as a colorway instead.` }, { status: 400 });
   if (!/\.svg$/i.test(String(d.file_path || ""))) return NextResponse.json({ error: "Only an SVG logo can be recolored here." }, { status: 400 });
   const { data: f } = await admin.storage.from("proofs").download(String(d.file_path));
   if (!f) return NextResponse.json({ error: "Couldn't open the logo's file." }, { status: 502 });

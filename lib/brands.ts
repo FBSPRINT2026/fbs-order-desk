@@ -1,5 +1,6 @@
 import type { DigitizedSet } from "@/lib/digitizedFiles";
 import { garmentHex } from "@/lib/mockup";
+import { needleThreads } from "@/lib/needleThreads";
 import { newImprint, type Design, type GLine, type Imprint, type Method } from "@/lib/pricing";
 
 /**
@@ -24,8 +25,12 @@ export type BrandRules = { light?: string; dark?: string; one_light?: string; on
 export type BrandEmb = { light?: string[]; dark?: string[]; backing?: string };
 export type Brand = { id: string; customer_id: string; name: string; colors: BrandColor[]; rules: BrandRules; embroidery: BrandEmb; notes: string; sort: number; archived_at?: string | null };
 
-/** a version of a logo in set colors ("Maroon / Black"): its inks, and its own picture when there is one */
-export type Colorway = { name: string; inks: string[]; preview?: string; file?: { path: string; name: string } };
+/** a version of a logo in set colors ("Maroon / Black"): its inks, and its own picture when there is one; `sew` is the
+ *  code of the logo's sew file that stitches it (E2), so an order that picks this colorway gets that DST (Oct 31, Nick) */
+export type Colorway = { name: string; inks: string[]; preview?: string; file?: { path: string; name: string }; sew?: string };
+/** a logo's colors (the swatches on its page): the brand's colors it uses, with their PMS (Oct 31, Nick: "here's the
+ *  logo, here's the colors… very visual") */
+export type LogoColor = { name: string; pms?: string; hex: string };
 /** a sew file: a DST made for one size and kind of goods. code = E1, E2… (D10241E1 on the Tajima's screen) */
 export type SewKind = "flat" | "cap" | "bag" | "puff" | "fleece";
 export const SEW_KINDS: Record<SewKind, string> = { flat: "Flat", cap: "Cap", bag: "Bag", puff: "3D puff", fleece: "Fleece" };
@@ -78,6 +83,24 @@ export function colorwayFor(d: Pick<Design, "specs">, brand: Brand | null | unde
   return cws.find((c) => k(c.name) === k(want)) || cws[0];
 }
 
+/** the sew file linked to a colorway (Colorway.sew), if it has one */
+export function colorwaySew(d: Pick<Design, "specs">, cw: Colorway | null | undefined): SewFile | null {
+  return cw?.sew ? sewFilesOf(d).find((f) => f.code === cw.sew) || null : null;
+}
+/** the threads a sew file sews in, in order ("Madeira 1981 Carmine"): its worksheet's, else the ones set on it */
+export function sewThreads(f: SewFile | null | undefined, side: "light" | "dark" = "light"): string[] {
+  if (!f) return [];
+  if (f.ws?.threads?.length) return needleThreads(f.ws, "").map((t) => t.label);
+  return f.threads?.[side] || [];
+}
+/** the sew file for a print: the one linked to the colorway the brand's rule picks for these goods (same kind of goods),
+ *  else the best fit by kind and size (pickSewFile) */
+export function sewForPrint(d: Pick<Design, "specs">, brand: Brand | null | undefined, dark: boolean, kind: SewKind, wantW?: number): SewFile | null {
+  const linked = colorwaySew(d, colorwayFor(d, brand, dark));
+  if (linked && (linked.kind || "flat") === kind) return linked;
+  return pickSewFile(sewFilesOf(d), kind, wantW);
+}
+
 /** the sew file that fits a print: the kind of goods, then the size closest to the one wanted (within about 10%) */
 export function pickSewFile(files: SewFile[], kind: SewKind, wantW?: number): SewFile | null {
   if (!files.length) return null;
@@ -122,7 +145,9 @@ export function brandPrint(o: { design: Design; brand: Brand | null; method: Lan
   const dark = lines.filter((l) => (l.color || "").trim() && isDk(l)), light = lines.filter((l) => (l.color || "").trim() && !isDk(l));
   const base = light.length || !dark.length ? "light" : "dark";
   if (method === "embroidery") {
-    const th = (side: "light" | "dark") => o.sew?.threads?.[side]?.length ? o.sew.threads[side]! : brand?.embroidery[side] || [];
+    // a colorway linked to its own sew file sews in that file's threads (the dark goods' colorway in its file's threads)
+    const linked = (side: "light" | "dark") => sewThreads(colorwaySew(d, colorwayFor(d, brand, side === "dark")));
+    const th = (side: "light" | "dark") => linked(side).length ? linked(side) : o.sew?.threads?.[side]?.length ? o.sew.threads[side]! : brand?.embroidery[side] || [];
     const a = th(base), b = th(base === "light" ? "dark" : "light");
     im.inks = a.join(", ");
     im.colors = Math.max(1, a.length || o.sew?.colors || 1);

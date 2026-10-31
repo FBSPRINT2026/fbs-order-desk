@@ -4,14 +4,16 @@ import Link from "next/link";
 import BackLink from "@/components/BackLink";
 import CustomerPick from "@/components/CustomerPick";
 import { use, useEffect, useMemo, useState } from "react";
-import LogoDetails, { logoSpecs } from "@/components/LogoDetails";
+import LogoDetails from "@/components/LogoDetails";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { designLabel, orderGroups, type Customer, type Design, type Order } from "@/lib/pricing";
 import { custLabel, fmtDate } from "@/lib/format";
-import { setDesignPreview } from "@/lib/designs";
+import { addColorway, setDesignPreview } from "@/lib/designs";
 import LogoEditor from "@/components/LogoEditor";
-import { colorwaysOf, nextSewCode, SEW_KINDS, sewFilesOf, tajimaName, type Brand, type SewFile } from "@/lib/brands";
+import { colorwaySew, colorwaysOf, nextSewCode, SEW_KINDS, sewFilesOf, sewThreads, tajimaName, type Brand, type Colorway, type SewFile } from "@/lib/brands";
+import { colorsText, colorwayUses, inkColor, logoColors, parseColors } from "@/lib/logoColors";
+import { useRole } from "@/components/RoleContext";
 import { tajimaFile } from "@/components/CustomerBrands";
 import { useSticky } from "@/lib/useSticky";
 import LogoResearch, { type LogoHistory, type Sew } from "@/components/LogoResearch";
@@ -25,7 +27,7 @@ import { heldFiles } from "@/lib/heldFiles";
  * on the right. "Find it everywhere" looks through the client's jobs for where it ran (components/LogoResearch.tsx).
  */
 type D = Design & { brand_id?: string | null };
-type Tab = "emb" | "sp" | "hp" | "hist";
+type Tab = "emb" | "sp" | "hp" | "ord" | "hist";
 type Sep = { id: string; number: number | null; location: string | null; garment_color: string | null; status: string | null; method: string | null; created_at: string };
 type Gang = { id: string; name: string | null; status: string | null; created_at: string; data: unknown };
 type Film = { id: string; name: string; file_path: string; order_id: string; created_at: string };
@@ -50,6 +52,7 @@ const TAB_ICONS: Record<Tab, React.ReactNode> = {
   emb: <path d="M4 20L20 4M14 4h6v6M6 14l4 4" />,
   sp: <><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 10h16M10 4v16" /></>,
   hp: <path d="M12 3c3 4 6 6 6 10a6 6 0 01-12 0c0-4 3-6 6-10z" />,
+  ord: <><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 9h6M9 13h6M9 17h4" /></>,
   hist: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
 };
 
@@ -80,6 +83,13 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [editing, setEditing] = useState(false);
   const [details, setDetails] = useState(false);
   const [sewBusy, setSewBusy] = useState(false);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [colEdit, setColEdit] = useState<string | null>(null);
+  const [cwEdit, setCwEdit] = useState<number | null>(null);
+  const [cwBusy, setCwBusy] = useState(false);
+  const [cwDark, setCwDark] = useState<boolean[]>([]);
+  const role = useRole().role;
+  const canUnlock = !role || role === "owner" || role === "admin";
   useEffect(() => { if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("edit") === "1") setEditing(true); }, []);
 
   async function load() {
@@ -110,6 +120,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     setSeps((s.data || []) as Sep[]);
     setSewouts(so.count || 0);
     setBrand((b.data as Brand | null) || null);
+    if (des.customer_id) { const { data: bs } = await sb.from("brands").select("*").eq("customer_id", des.customer_id).is("archived_at", null).order("sort"); setBrands((bs || []) as Brand[]); }
     setGangs(((g.data || []) as Gang[]).filter((x) => JSON.stringify(x.data || "").includes(des.id)));
     if (used.length) {
       const { data: af } = await sb.from("art_files").select("id, name, file_path, order_id, created_at").in("order_id", used.map((x) => x.id)).ilike("name", "Film:%");
@@ -118,6 +129,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   }
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   const shownUrl = shown >= 0 ? cwUrls[shown] || "" : pv;
+  // each colorway's picture on a dark backdrop when it has light parts (the same test as the big picture)
+  useEffect(() => { let on = true; void Promise.all(cwUrls.map((u) => (u ? isLightArt(u) : Promise.resolve(false)))).then((v) => { if (on) setCwDark(v); }); return () => { on = false; }; }, [cwUrls]);
   useEffect(() => { let on = true; setLightArt(false); if (shownUrl) void isLightArt(shownUrl).then((v) => { if (on) setLightArt(v); }); return () => { on = false; }; }, [shownUrl]);
 
   async function patch(p: Partial<D>) {
@@ -128,6 +141,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   }
   async function del() {
     if (!d) return;
+    if ((d.specs as { master?: unknown } | null)?.master) { setMsg("A master logo can't be deleted."); return; }
     if (!armed) { setArmed(true); setTimeout(() => setArmed(false), 3500); return; }
     await sb.storage.from("proofs").remove([d.file_path, d.preview_path].filter((x, i, a) => x && a.indexOf(x) === i));
     await sb.from("designs").delete().eq("id", d.id);
@@ -157,10 +171,42 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     await patch({ specs: { ...((d.specs || {}) as object), embroidery: { ...(((d.specs as { embroidery?: object } | null)?.embroidery) || {}), files: fs } } as Design["specs"] });
   }
 
+  /** change some of the logo's specs (fresh from the database, so nothing another tab saved is lost) */
+  async function setSpecs(p: Record<string, unknown>) {
+    if (!d) return;
+    const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
+    const specs = { ...((data?.specs || d.specs || {}) as Record<string, unknown>), ...p };
+    for (const k of Object.keys(p)) if (p[k] === undefined) delete specs[k];
+    await patch({ specs: specs as Design["specs"] });
+  }
+  async function setCw(i: number, p: Partial<Colorway>) {
+    if (!d) return;
+    const list = colorwaysOf(d).map((c, j) => { if (j !== i) return c; const n = { ...c, ...p }; if (!n.sew) delete n.sew; return n; });
+    await setSpecs({ colorways: list });
+  }
+  async function addCw(f: File | null) {
+    if (!d || !f) return;
+    setCwBusy(true);
+    try { await addColorway(sb, d, f, { name: f.name.replace(/\.[^.]+$/, "") }); setMsg("Colorway added"); await load(); }
+    catch (e) { setMsg(e instanceof Error ? e.message : "Couldn't add the colorway."); }
+    setCwBusy(false);
+  }
+  async function setBrandOf(id: string | null) {
+    if (!d) return;
+    await patch({ brand_id: id } as Partial<D>);
+    setBrand(brands.find((b) => b.id === id) || null);
+  }
+  /** a master logo is set in stone: it can't be deleted, archived or have its art replaced (the database refuses too) */
+  async function setMaster(on: boolean) {
+    if (!on && !canUnlock) { setMsg("Only an owner or admin can unlock a master logo."); return; }
+    const { data: u } = await sb.auth.getUser();
+    await setSpecs({ master: on ? { at: new Date().toISOString(), by: u.user?.email || "" } : undefined });
+    setMsg(on ? "Locked as a master logo" : "Unlocked");
+  }
+
   if (!d) return <div className="empty">{msg || "Loading…"}</div>;
-  const ratio = d.width_px && d.height_px ? d.height_px / d.width_px : 0;
   const sp = (d.specs || {}) as { printSize?: { wIn?: number; hIn?: number; location?: string }; source?: { printavo?: string; dropbox?: string; where?: string }; history?: LogoHistory[] };
-  const ps = sp.printSize, src = sp.source;
+  const src = sp.source;
   const sews = sewFilesOf(d) as Sew[];
   const cws = colorwaysOf(d);
   const hist: { at: string; text: string; href?: string }[] = [
@@ -169,7 +215,11 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     ...sews.map((f) => ({ at: (f.at || "").slice(0, 10), text: `${tajimaName(d.number, Number((f.code || "E1").slice(1)) || 1)} added (${f.wIn}" × ${f.hIn}")${f.lastUsed?.job ? ` from #${f.lastUsed.job}` : ""}` })),
     { at: (d.created_at || "").slice(0, 10), text: `Logo made${src?.printavo ? ` from Printavo #${src.printavo}` : src?.dropbox ? ` from Dropbox ${src.dropbox}` : ""}${d.created_by ? ` · ${d.created_by.split("@")[0]}` : ""}` },
   ].filter((h) => h.text).sort((a, b) => (b.at || "").localeCompare(a.at || ""));
-  const counts: Record<Tab, number> = { emb: sews.length, sp: seps.length + films.length, hp: gangs.length, hist: hist.length };
+  const colors = logoColors(d, brand);
+  const master = (d.specs as { master?: { at?: string; by?: string } | null } | null)?.master || null;
+  // every print of this logo on an order: where it went and how big (a logo's size lives with each use, Oct 31, Nick)
+  const uses = orders.flatMap((o) => orderGroups(o).flatMap((g) => g.imprints.filter((im) => im.design_id === d.id).map((im) => ({ o, where: im.location, size: im.size, method: im.method === "embroidery" ? "Embroidery" : im.method === "screen" ? "Screen print" : im.method === "dtf" ? "Heat press" : im.method, colors: im.inks }))));
+  const counts: Record<Tab, number> = { emb: sews.length, sp: seps.length + films.length, hp: gangs.length, ord: uses.length, hist: hist.length };
 
   return (
     <>
@@ -178,83 +228,129 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
       {details && <LogoDetails d={d} onClose={() => setDetails(false)} onSaved={(x) => { setDetails(false); setD(x as D); setMsg("Details saved"); }} />}
       {research && <LogoResearch d={d} brand={brand} onClose={() => setResearch(false)} onDone={(m) => { setResearch(false); setMsg(m); load(); }} />}
       <div className="page-head">
-        <div><h1>{designLabel(d)}</h1><div className="eyebrow">{custLabel(customers.find((c) => c.id === d.customer_id)) || "No customer"}{brand ? ` · ${brand.name}` : ""}</div></div>
+        <div>
+          <div className="lgx-title"><h1>{designLabel(d)}</h1>{master && <span className="lgx-master" title={`Master logo: it can't be deleted or have its art replaced${master.by ? ` (locked by ${master.by.split("@")[0]})` : ""}`}><LockIcon />Master logo</span>}</div>
+          <div className="eyebrow">{custLabel(customers.find((c) => c.id === d.customer_id)) || "No customer"}{brand ? ` › ${brand.name} brand` : ""} · {/\.(svg|ai|eps|pdf)$/i.test(d.file_name) ? "Vector" : "Picture"}{cws.length ? ` · ${cws.length} colorway${cws.length === 1 ? "" : "s"}` : ""}</div>
+        </div>
         <div className="row"><span className="save-state">{msg}</span>
           <button type="button" className="btn primary" onClick={() => setResearch(true)} title="Look through this client's jobs for everywhere this logo ran">Find it everywhere</button>
-          {d.customer_id && <Link className="btn" href={`/shop/art-builder?${new URLSearchParams({ customer: d.customer_id, into: d.id, q: (brand?.name || d.name).split(/\s*\/\s*/)[0], ...(d.brand_id ? { brand: d.brand_id } : {}) })}`} title="Pick this logo's art off a past job's file (the vector), or bring in another sew file">Pull its art from a job</Link>}
+          {d.customer_id && !master && <Link className="btn" href={`/shop/art-builder?${new URLSearchParams({ customer: d.customer_id, into: d.id, q: (brand?.name || d.name).split(/\s*\/\s*/)[0], ...(d.brand_id ? { brand: d.brand_id } : {}) })}`} title="Pick this logo's art out of a job's files">Pull its art from a job</Link>}
           <Link className="btn" href={`/shop/artwork/mockup?customer=${d.customer_id || ""}&design=${d.id}`}>Put on a shirt</Link>
-          <button type="button" className="btn" onClick={() => setEditing(true)}>Edit logo</button>
+          {!master && <button type="button" className="btn" onClick={() => setEditing(true)}>Edit logo</button>}
           {orig && <a className="btn" href={orig} target="_blank" rel="noreferrer">Download</a>}
-          <button className={"btn ghost danger" + (armed ? " armed" : "")} type="button" onClick={del}>{armed ? "Delete logo?" : "Delete"}</button></div>
+          {!master && <button className={"btn ghost danger" + (armed ? " armed" : "")} type="button" onClick={del}>{armed ? "Delete logo?" : "Delete"}</button>}</div>
       </div>
-      <div className="lg-grid">
-        <div className="stack">
-          <section className="panel">
-            <div className="panel-b stack">
-              {/* the logo's own art on the shirt picked for it, the same picture as its tiles everywhere (LogoFace; Oct 30, Nick:
-                  "I set it to Forest… it still comes back with this box"); a colorway, or no shirt picked: the art alone */}
-              <div className={"lg-art" + (shown < 0 && onShirtsOf(d).length && pv ? " on-shirt" : lightArt ? " dark" : "")}>{shown < 0 && onShirtsOf(d).length && pv
-                ? <LogoFace d={d} urls={{ [d.id]: pv, ...(shirtUrl ? { [onShirtsOf(d)[0].path as string]: shirtUrl } : {}) }} />
-                : shownUrl ? <img src={shownUrl} alt={d.name} /> : <span className="faint">No preview</span>}</div>
-              {cws.length > 0 && <div className="lg-cws" role="group" aria-label="Colorways"><button type="button" className={"lg-pill" + (shown < 0 ? " on" : "")} onClick={() => setShown(-1)}>As on file</button>{cws.map((c, i) => <button key={c.name + i} type="button" className={"lg-pill" + (shown === i ? " on" : "")} title={c.inks.join(", ")} onClick={() => setShown(i)}>{c.name}</button>)}</div>}
-              {ps?.wIn ? <div className="lg-size"><b>Prints {ps.wIn}&quot;{ps.hIn ? ` × ${ps.hIn}"` : " wide"}</b>{ps.location ? <span className="faint"> · {ps.location}</span> : null}</div> : null}
-              <div className="sub">{/\.(svg|ai|eps|pdf)$/i.test(d.file_name) ? "Vector" : "Picture"} · {d.colors} color{d.colors === 1 ? "" : "s"}{d.inks ? ` · ${d.inks}` : ""}{ratio ? ` · 1 : ${ratio.toFixed(2)}` : ""}</div>
-              {(() => { const ls = logoSpecs(d); return <>
-                {ls.inkList?.length ? <><div className="lg-k">Prints in</div><div className="lg-pills">{ls.inkList.map((c) => <span key={c.name} className="lg-pill">{c.hex ? <i className="lg-dot" style={{ background: c.hex }} /> : null}{c.name}</span>)}</div></> : null}
-                {ls.threads?.length ? <><div className="lg-k">Thread</div><div className="lg-pills">{ls.threads.map((c) => <span key={c.name} className="lg-pill">{c.hex ? <i className="lg-dot" style={{ background: c.hex }} /> : null}{c.name}</span>)}</div></> : null}
-                {ls.where && !ps?.location ? <><div className="lg-k">Goes on</div><div className="sub">{ls.where}</div></> : null}
-              </>; })()}
-              {src && (src.printavo || src.dropbox) && <><div className="lg-k">Came from</div><div className="sub">{src.printavo ? `Printavo #${src.printavo}` : `Dropbox: ${src.dropbox}`}{src.where ? ` · ${src.where}` : ""}</div></>}
-              {brand && <><div className="lg-k">Brand standard</div><div className="sub">{brand.name}{brand.rules?.light ? ` · light goods ${brand.rules.light}` : ""}{brand.rules?.dark ? ` · dark goods ${brand.rules.dark}` : ""}{brand.embroidery?.light?.length ? ` · thread ${brand.embroidery.light[0]}${brand.embroidery.dark?.length ? ` / ${brand.embroidery.dark[0]}` : ""}` : ""}</div></>}
-              <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setDetails(true)} title="What it prints and sews in, where it goes, a set size: all optional">Fill in its details</button>
-              <label className="btn sm" style={{ cursor: "pointer", alignSelf: "flex-start" }}>{pv ? "Replace preview image" : "Add preview image"}<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { setD(await setDesignPreview(sb, d, f)); setMsg("Preview updated"); load(); } catch (er) { setMsg(String(er)); } }} /></label>
-            </div>
-          </section>
-          <section className="panel">
-            <div className="panel-h"><h2>Details</h2></div>
-            <div className="panel-b grid g2">
-              <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="d-n">Name</label><input id="d-n" type="text" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} onBlur={(e) => patch({ name: e.target.value })} /></div>
-              <div className="field" style={{ gridColumn: "1 / -1" }}><label>Customer</label><CustomerPick field value={d.customer_id || null} options={customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" }))} placeholder="No customer: type to pick one" onPick={(v) => patch({ customer_id: v || null })} /></div>
-              <div className="field"><label htmlFor="d-k">Ink colors</label><input id="d-k" type="number" min="1" max="15" value={d.colors} onChange={(e) => patch({ colors: Math.max(1, +e.target.value || 1) })} /></div>
-              <div className="field"><label htmlFor="d-i">Inks / PMS</label><input id="d-i" type="text" value={d.inks} onChange={(e) => setD({ ...d, inks: e.target.value })} onBlur={(e) => patch({ inks: e.target.value })} /></div>
-              {/* a distressed logo: customers whose brand standards say "fashion hit for distressed logos" print it without an underbase (Oct 16) */}
-              <label className="check" style={{ gridColumn: "1 / -1" }} title="Worn / cracked texture in the art. A customer's brand standard can print distressed logos as a fashion hit (no underbase)."><input type="checkbox" checked={!!(d.specs as { distressed?: boolean } | null)?.distressed} onChange={(e) => patch({ specs: { ...((d.specs || {}) as object), distressed: e.target.checked || undefined } as Design["specs"] })} /> Distressed logo</label>
-              <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="d-no">Notes</label><textarea id="d-no" rows={3} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} onBlur={(e) => patch({ notes: e.target.value })} /></div>
-            </div>
-          </section>
-        </div>
 
-        <div className="stack">
-          <nav className="aa-nav ot-nav lg-nav" aria-label="Departments">
-            {([["emb", "Embroidery"], ["sp", "Screen print"], ["hp", "Heat press"], ["hist", "History"]] as [Tab, string][]).map(([k, l]) => (
-              <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)} title={l}><svg className="ot-ic" viewBox="0 0 24 24" aria-hidden>{TAB_ICONS[k]}</svg><span className="ot-l">{l}</span>{counts[k] > 0 && <span className="aa-n">{counts[k]}</span>}</button>
-            ))}
-          </nav>
+      {/* 1. the logo: its art as on file, and every color it comes in (Oct 31, Nick: "here's the logo, here's the colors… very visual") */}
+      <section className="panel">
+        <div className="panel-h"><h2>The logo</h2><span className="faint">As the customer sent it, and every color it comes in</span></div>
+        <div className="panel-b lgx-logo">
+          <div className="lgx-art-w">
+            <div className={"lg-art lgx-art" + (shown < 0 && onShirtsOf(d).length && pv ? " on-shirt" : lightArt ? " dark" : "")}>{shown < 0 && onShirtsOf(d).length && pv
+              ? <LogoFace d={d} urls={{ [d.id]: pv, ...(shirtUrl ? { [onShirtsOf(d)[0].path as string]: shirtUrl } : {}) }} />
+              : shownUrl ? <img src={shownUrl} alt={d.name} /> : <span className="faint">No preview</span>}</div>
+            {shown >= 0 && <div className="lgx-showing"><span>Showing <b>{cws[shown]?.name}</b></span><button type="button" className="linkbtn" onClick={() => setShown(-1)}>As on file</button></div>}
+          </div>
+          <div className="lgx-side">
+            <div className="lgx-k">Logo colors{!colEdit && <button type="button" className="linkbtn" onClick={() => setColEdit(colorsText(colors))}>Edit</button>}</div>
+            {colEdit !== null ? (
+              <div className="lgx-coledit">
+                <div className="field"><label htmlFor="lgx-c">One a line: name | PMS | #hex</label><textarea id="lgx-c" rows={5} value={colEdit} placeholder={"Maroon | PMS 492 C | #8B2E35\nOff White | PMS Warm Gray 1 C | #FAF6EC"} onChange={(e) => setColEdit(e.target.value)} /></div>
+                <div className="row"><button type="button" className="btn ghost sm" onClick={() => setColEdit(null)}>Cancel</button><button type="button" className="btn primary sm" onClick={() => { void setSpecs({ colors: parseColors(colEdit) }); setColEdit(null); }}>Save colors</button></div>
+              </div>
+            ) : colors.length ? (
+              <div className="lgx-sws">{colors.map((c) => (
+                <div key={c.name} className="lgx-sw"><span className="lgx-chip" style={{ background: c.hex }} /><b>{c.name}</b><span>{c.pms || " "}</span><small data-notranslate>{c.hex}</small></div>
+              ))}</div>
+            ) : <p className="faint">No colors yet: add them, or add colorways and their inks fill this in.</p>}
+            <div className="lgx-own">
+              <span className="lgx-k0">Belongs to</span>
+              <span>{custLabel(customers.find((c) => c.id === d.customer_id)) || "No customer"}</span>
+              {d.customer_id && <><span className="faint">›</span>
+                <select aria-label="Brand" className="lgx-brand" value={d.brand_id || ""} onChange={(e) => void setBrandOf(e.target.value || null)}>
+                  <option value="">No brand</option>{brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select></>}
+              <span className="lgx-sep" />
+              <label className={"lgx-lock" + (master ? " on" : "")} title={master ? (canUnlock ? "Locked: it can't be deleted or have its art replaced. Turn off to unlock." : "Locked: only an owner or admin can unlock a master logo") : "Make it a master logo: set in stone, it can't be deleted or have its art replaced"}>
+                <LockIcon /><span>Master logo</span>
+                <input type="checkbox" role="switch" checked={!!master} disabled={!!master && !canUnlock} onChange={(e) => void setMaster(e.target.checked)} /><i aria-hidden />
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. colorways: each version of the logo, when the brand uses it, and the sew file that stitches it */}
+      <section className="panel">
+        <div className="panel-h"><h2>Colorways</h2><span className="faint">Each version of the logo, and when the brand uses it</span><span className="spacer" />
+          <label className="btn sm" style={{ cursor: "pointer" }}>{cwBusy ? "Adding…" : "+ Add colorway"}<input type="file" hidden accept=".svg,.pdf,.ai,.eps,.png,.jpg,.jpeg,.webp" disabled={cwBusy} onChange={(e) => { void addCw(e.target.files?.[0] || null); e.target.value = ""; }} /></label></div>
+        <div className="panel-b">
+          {cws.length ? <div className="lgx-cws">{cws.map((c, i) => {
+            const uses = colorwayUses(c, brand), sew = colorwaySew(d, c);
+            return (
+              <div key={c.name + i} className={"lgx-cw" + (shown === i ? " on" : "")}>
+                <button type="button" className={"lgx-pic" + (cwDark[i] ? " dark" : "")} onClick={() => setShown(shown === i ? -1 : i)} title="Show it big">{cwUrls[i] ? <img src={cwUrls[i]} alt={c.name} /> : <span className="faint">No picture</span>}</button>
+                <div className="lgx-bar" aria-hidden>{(c.inks.length ? c.inks : ["?"]).map((ink, j) => <i key={j} style={{ background: inkColor(ink, colors).hex }} />)}</div>
+                {cwEdit === i ? (
+                  <div className="lgx-cwb lgx-cwedit">
+                    <div className="field"><label htmlFor={`cwn${i}`}>Name</label><input id={`cwn${i}`} type="text" defaultValue={c.name} onBlur={(e) => void setCw(i, { name: e.target.value.trim() || c.name })} /></div>
+                    <div className="field"><label htmlFor={`cwi${i}`}>Inks / PMS</label><input id={`cwi${i}`} type="text" defaultValue={c.inks.join(", ")} placeholder="PMS 492 C, Black" onBlur={(e) => void setCw(i, { inks: e.target.value.split(/\s*,\s*/).filter(Boolean) })} /></div>
+                    <button type="button" className="btn sm" onClick={() => setCwEdit(null)}>Done</button>
+                  </div>
+                ) : (
+                  <div className="lgx-cwb">
+                    <div className="lgx-cwt"><b>{c.name}</b><button type="button" className="linkbtn" onClick={() => setCwEdit(i)}>Edit</button></div>
+                    {uses.length ? <div className="lgx-uses">{uses.map((u) => <span key={u} className="lgx-use">{u}</span>)}</div> : null}
+                    <div className="sub">{c.inks.join(", ") || "No inks named"}</div>
+                    <div className="lgx-cwf">
+                      {sews.length ? <select aria-label={`Sew file for ${c.name}`} value={c.sew || ""} onChange={(e) => void setCw(i, { sew: e.target.value || undefined })} title="The sew file that stitches this colorway: an order with it gets this DST">
+                        <option value="">No sew file</option>{sews.map((f, j) => <option key={j} value={f.code || ""}>Sews as {tajimaName(d.number, Number((f.code || "E1").slice(1)) || j + 1)}</option>)}
+                      </select> : null}
+                      {c.file && <a href={fileLink(c.file.path, c.file.name)} target="_blank" rel="noreferrer">{/\.(svg|ai|eps|pdf)$/i.test(c.file.name) ? "Vector" : "File"}</a>}
+                    </div>
+                    {sew && <div className="sub" title="Its sew file's threads">{sewThreads(sew).join(" + ")}</div>}
+                  </div>
+                )}
+              </div>
+            );
+          })}</div> : <p className="faint">No colorways yet. Add each version of the logo (its file in those colors), or bring in the same art in other colors and pick &quot;Add as a colorway&quot;.</p>}
+        </div>
+      </section>
+
+      {/* 3. files and history: what each department has of it, and where it's been used (sizes live with each use) */}
+      <section className="panel">
+        <div className="panel-h"><h2>Files and history</h2><span className="faint">What each department has of this logo, and where it&apos;s been used</span></div>
+        <nav className="aa-nav ot-nav lg-nav lgx-nav" aria-label="Departments">
+          {([["emb", "Embroidery"], ["sp", "Screen print"], ["hp", "Heat press"], ["ord", "Orders"], ["hist", "History"]] as [Tab, string][]).map(([k, l]) => (
+            <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)} title={l}><svg className="ot-ic" viewBox="0 0 24 24" aria-hidden>{TAB_ICONS[k]}</svg><span className="ot-l">{l}</span>{counts[k] > 0 && <span className="aa-n">{counts[k]}</span>}</button>
+          ))}
+        </nav>
 
           {tab === "emb" && (
-            <section className="panel">
-              <div className="panel-h"><h2>Embroidery</h2><span className="faint">{sews.length ? "Each sew file: the DST with its EMB and sewing sheet" : "No sew files yet"}{sewouts ? ` · ${sewouts} sew-out${sewouts === 1 ? "" : "s"}` : ""}</span>
+            <div className="lgx-tab">
+              <div className="panel-h"><span className="faint">{sews.length ? "Each sew file: the DST with its EMB and sewing sheet, made at one size for one spot" : "No sew files yet"}{sewouts ? ` · ${sewouts} sew-out${sewouts === 1 ? "" : "s"}` : ""}</span>
                 <span className="spacer" /><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(heldFiles(e.target.files)); e.target.value = ""; }} /></label></div>
               {sews.length > 0 ? <div className="tbl-wrap"><table className="tbl lg-sew">
-                <thead><tr><th>Sew file</th><th>Size</th><th>Stitches</th><th>Kind</th><th>Where it goes</th><th>Last used</th><th>Files</th></tr></thead>
-                <tbody>{sews.map((f, i) => ({ f, i })).sort((a, b) => (b.f.wIn || 0) - (a.f.wIn || 0)).map(({ f, i }) => (
+                <thead><tr><th>Sew file</th><th>Colorway</th><th>Where · size</th><th>Threads</th><th>Stitches</th><th>Goods</th><th>Last used</th><th>Files</th></tr></thead>
+                <tbody>{sews.map((f, i) => ({ f, i })).sort((a, b) => (a.f.code || "").localeCompare(b.f.code || "", undefined, { numeric: true })).map(({ f, i }) => (
                   <tr key={i}>
                     <td><b className="ordno">{tajimaName(d.number, Number((f.code || "E1").slice(1)) || i + 1)}</b></td>
-                    <td style={{ whiteSpace: "nowrap" }}>{f.wIn}&quot; × {f.hIn}&quot;</td>
-                    <td style={{ whiteSpace: "nowrap" }}>{(f.stitches || 0).toLocaleString()}<div className="sub">{f.colors} color{f.colors === 1 ? "" : "s"}</div></td>
+                    <td>{cws.filter((c) => c.sew && c.sew === f.code).map((c) => c.name).join(", ") || <span className="faint">—</span>}</td>
+                    <td><input type="text" aria-label="Where it goes" defaultValue={f.placement || ""} placeholder="Left chest, Left sleeve…" title="Every place this file sews: one file can go on several spots" onBlur={(e) => { if ((f.placement || "") !== e.target.value.trim()) void setSew(i, { placement: e.target.value.trim() || undefined }); }} /><div className="sub" style={{ whiteSpace: "nowrap" }}>{f.wIn}&quot; × {f.hIn}&quot;</div></td>
+                    <td>{sewThreads(f).join(" + ") || <span className="faint">{f.colors} color{f.colors === 1 ? "" : "s"}</span>}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{(f.stitches || 0).toLocaleString()}</td>
                     <td><select className="lg-kind" aria-label="Kind" value={f.kind || "flat"} onChange={(e) => void setSew(i, { kind: e.target.value as Sew["kind"] })}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
-                    <td><input type="text" aria-label="Where it goes" defaultValue={f.placement || ""} placeholder="Left Chest, Left Sleeve…" title="Every place this file sews: one file can go on several spots" onBlur={(e) => { if ((f.placement || "") !== e.target.value.trim()) void setSew(i, { placement: e.target.value.trim() || undefined }); }} /></td>
                     <td>{f.lastUsed?.job ? <span style={{ whiteSpace: "nowrap" }}>#{f.lastUsed.job}<div className="sub">{f.lastUsed.date ? fmtDate(f.lastUsed.date) : ""}</div></span> : f.lastUsed?.dropbox ? <span className="sub">Dropbox: {f.lastUsed.dropbox.split("/").slice(-2).join(" / ")}</span> : <span className="faint">—</span>}</td>
                     <td style={{ whiteSpace: "nowrap" }}><a href={fileLink(f.path, f.name)} target="_blank" rel="noreferrer">DST</a>{f.emb && <> · <a href={fileLink(f.emb.path, f.emb.name)} target="_blank" rel="noreferrer">EMB</a></>}{f.sheet && <> · <a href={fileLink(f.sheet.path, f.sheet.name)} target="_blank" rel="noreferrer">Sheet</a></>}</td>
                   </tr>
                 ))}</tbody>
               </table></div> : <div className="panel-b faint">Add the digitizer&apos;s DST (with its EMB and sheet), or use Find it everywhere to bring in the ones from past jobs.</div>}
-            </section>
+            </div>
           )}
 
           {tab === "sp" && (
-            <section className="panel">
-              <div className="panel-h"><h2>Screen print</h2><span className="faint">Separations and films for this logo</span><span className="spacer" /><Link className="btn sm" href="/shop/separations">Separations</Link></div>
+            <div className="lgx-tab">
+              <div className="panel-h"><span className="faint">Separations and films for this logo</span><span className="spacer" /><Link className="btn sm" href="/shop/separations">Separations</Link></div>
               {seps.length > 0 ? <div className="tbl-wrap"><table className="tbl">
                 <thead><tr><th>Separation</th><th>Where</th><th>Shirt</th><th>Status</th><th>Made</th></tr></thead>
                 <tbody>{seps.map((x) => <tr key={x.id}><td><Link className="ordno" href={`/shop/separations/${x.id}`}>{x.number ? `S-${x.number}` : "Separation"}</Link><div className="sub">{x.method || ""}</div></td><td>{x.location || "—"}</td><td>{x.garment_color || "—"}</td><td>{x.status || "—"}</td><td style={{ whiteSpace: "nowrap" }}>{fmtDate(x.created_at.slice(0, 10))}</td></tr>)}</tbody>
@@ -263,29 +359,58 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
                 <thead><tr><th>Film</th><th>Order</th><th>Added</th></tr></thead>
                 <tbody>{films.map((f) => { const o = orders.find((x) => x.id === f.order_id); return <tr key={f.id}><td><a href={fileLink(f.file_path)} target="_blank" rel="noreferrer">{f.name.replace(/^Film:\s*/, "")}</a></td><td>{o ? <Link className="ordno" href={`/shop/orders/${o.id}`}>#{o.number}</Link> : "—"}</td><td style={{ whiteSpace: "nowrap" }}>{fmtDate(f.created_at.slice(0, 10))}</td></tr>; })}</tbody>
               </table></div>}
-            </section>
+            </div>
           )}
 
           {tab === "hp" && (
-            <section className="panel">
-              <div className="panel-h"><h2>Heat press</h2><span className="faint">Gang sheets this logo is on</span><span className="spacer" /><Link className="btn sm" href="/shop/gang-sheet/builder">Gang Sheet Builder</Link></div>
+            <div className="lgx-tab">
+              <div className="panel-h"><span className="faint">Gang sheets this logo is on</span><span className="spacer" /><Link className="btn sm" href="/shop/gang-sheet/builder">Gang Sheet Builder</Link></div>
               {gangs.length > 0 ? <div className="tbl-wrap"><table className="tbl">
                 <thead><tr><th>Gang sheet</th><th>Status</th><th>Made</th></tr></thead>
                 <tbody>{gangs.map((g) => <tr key={g.id}><td><b>{g.name || "Gang sheet"}</b></td><td>{g.status || "—"}</td><td style={{ whiteSpace: "nowrap" }}>{fmtDate(g.created_at.slice(0, 10))}</td></tr>)}</tbody>
               </table></div> : <div className="panel-b faint">{/\.svg$/i.test(d.file_name) ? "Not on a gang sheet yet. It's vector, so it prints sharp at any size." : "Not on a gang sheet yet."}</div>}
-            </section>
+            </div>
+          )}
+
+          {tab === "ord" && (
+            <div className="lgx-tab">
+              <div className="panel-h"><span className="faint">Every order it&apos;s on, with where it went and how big</span></div>
+              {uses.length ? <div className="tbl-wrap"><table className="tbl">
+                <thead><tr><th>Order</th><th>Where · size</th><th>How</th><th>Made</th></tr></thead>
+                <tbody>{uses.map((u, i) => <tr key={i}><td><Link className="ordno" href={`/shop/orders/${u.o.id}`}>#{u.o.number}</Link><div className="sub">{u.o.nickname || ""}</div></td><td><b>{u.where || "—"}</b>{u.size ? <span style={{ whiteSpace: "nowrap" }}> · {u.size}</span> : null}{u.colors ? <div className="sub">{u.colors}</div> : null}</td><td>{u.method}</td><td style={{ whiteSpace: "nowrap" }}>{fmtDate((u.o.created_at || "").slice(0, 10))}</td></tr>)}</tbody>
+              </table></div> : <div className="panel-b faint">Not on an order here yet. Find it everywhere looks through their Printavo jobs.</div>}
+            </div>
           )}
 
           {tab === "hist" && (
-            <section className="panel">
-              <div className="panel-h"><h2>History</h2><span className="faint">Where it came from and every order it ran on</span></div>
+            <div className="lgx-tab">
+              <div className="panel-h"><span className="faint">Where it came from and every order it ran on</span></div>
               <div className="panel-b lg-hist">{hist.map((h, i) => (
                 <div key={i} className="lg-h"><b>{h.at ? fmtDate(h.at) : "—"}</b>{h.href ? <Link href={h.href}>{h.text}</Link> : <span>{h.text}</span>}</div>
               ))}</div>
-            </section>
+            </div>
           )}
+      </section>
+
+      {/* the logo's details (name, customer, notes): the same fields as before, under everything */}
+      <section className="panel">
+        <div className="panel-h"><h2>Details</h2><span className="spacer" />
+          <button type="button" className="btn sm" onClick={() => setDetails(true)} title="What it prints and sews in, where it goes, a set size: all optional">Fill in its details</button>
+          {!master && <label className="btn sm" style={{ cursor: "pointer" }}>{pv ? "Replace preview image" : "Add preview image"}<input type="file" hidden accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; try { setD(await setDesignPreview(sb, d, f)); setMsg("Preview updated"); load(); } catch (er) { setMsg(String(er)); } }} /></label>}</div>
+        <div className="panel-b grid g2 lgx-details">
+          <div className="field"><label htmlFor="d-n">Name</label><input id="d-n" type="text" value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} onBlur={(e) => patch({ name: e.target.value })} /></div>
+          <div className="field"><label>Customer</label><CustomerPick field value={d.customer_id || null} options={customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" }))} placeholder="No customer: type to pick one" onPick={(v) => patch({ customer_id: v || null })} /></div>
+          <div className="field"><label htmlFor="d-k">Ink colors</label><input id="d-k" type="number" min="1" max="15" value={d.colors} onChange={(e) => patch({ colors: Math.max(1, +e.target.value || 1) })} /></div>
+          <div className="field"><label htmlFor="d-i">Inks / PMS</label><input id="d-i" type="text" value={d.inks} onChange={(e) => setD({ ...d, inks: e.target.value })} onBlur={(e) => patch({ inks: e.target.value })} /></div>
+          {src && (src.printavo || src.dropbox) && <div className="sub" style={{ gridColumn: "1 / -1" }}>Came from {src.printavo ? `Printavo #${src.printavo}` : `Dropbox: ${src.dropbox}`}{src.where ? ` · ${src.where}` : ""}</div>}
+          <label className="check" style={{ gridColumn: "1 / -1" }} title="Worn / cracked texture in the art. A customer's brand standard can print distressed logos as a fashion hit (no underbase)."><input type="checkbox" checked={!!(d.specs as { distressed?: boolean } | null)?.distressed} onChange={(e) => void setSpecs({ distressed: e.target.checked || undefined })} /> Distressed</label>
+          <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="d-no">Notes</label><textarea id="d-no" rows={3} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} onBlur={(e) => patch({ notes: e.target.value })} /></div>
         </div>
-      </div>
+      </section>
     </>
   );
+}
+
+function LockIcon() {
+  return <svg className="lgx-lockic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>;
 }

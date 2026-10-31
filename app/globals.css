@@ -16753,3 +16753,59 @@ html body .swh.swh-r::after{right:0;margin-left:-26px!important;order:9999;
 html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230E9BD8' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 6-6 6 6 6'/%3E%3C/svg%3E"),linear-gradient(to left,transparent,var(--swh-bg,#fff) 45%);
   background-position:left 2px center,0 0}
+
+/* ===== One logo's page (app/shop/artwork/[id]/page.tsx, Oct 31, Nick): the logo and its colors, its colorways, then
+   files and history by department; sizes live with each use, not on the logo ===== */
+.lgx-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lgx-master{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-soft);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:99px;padding:3px 10px 3px 8px;white-space:nowrap}
+.lgx-lockic{width:13px;height:13px;flex:none}
+.lgx-logo{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:1000px){.lgx-logo{grid-template-columns:minmax(0,1fr)}}
+.lgx-art{aspect-ratio:auto;min-height:220px;max-height:360px;height:100%;background-color:var(--surface);
+  background-image:linear-gradient(45deg,var(--surface-2) 25%,transparent 25%,transparent 75%,var(--surface-2) 75%),linear-gradient(45deg,var(--surface-2) 25%,transparent 25%,transparent 75%,var(--surface-2) 75%);background-size:22px 22px;background-position:0 0,11px 11px}
+.lgx-art.dark{background-image:none;background-color:var(--ink)}
+.lgx-art.on-shirt{background-image:none}
+.lgx-art img{max-width:86%;max-height:300px}
+.lgx-showing{display:flex;justify-content:space-between;gap:10px;margin-top:6px;font-size:12.5px;color:var(--ink-3)}
+.lgx-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.lgx-k{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.lgx-k .linkbtn{text-transform:none;letter-spacing:0;font-size:12.5px}
+.lgx-sws{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:12px}
+.lgx-sw{display:flex;flex-direction:column;gap:1px;font-size:12.5px;min-width:0}
+.lgx-chip{display:block;height:84px;border-radius:10px;border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);margin-bottom:6px}
+.lgx-sw b{font-size:14px;color:var(--ink)}
+.lgx-sw span{color:var(--ink-2)}
+.lgx-sw small{color:var(--ink-3);font-size:11.5px}
+.lgx-coledit{display:flex;flex-direction:column;gap:8px}
+.lgx-own{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:4px;padding-top:12px;border-top:1px solid var(--line-2);font-size:13.5px}
+.lgx-k0{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.lgx-brand{height:32px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:600 13.5px var(--body);color:var(--ink);background:var(--surface);min-width:110px}
+.lgx-sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+.lgx-lock{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+.lgx-lock.on{color:var(--warn)}
+.lgx-lock input{position:absolute;opacity:0;width:1px;height:1px}
+.lgx-lock i{width:32px;height:18px;border-radius:99px;background:var(--surface-3);position:relative;transition:background .15s}
+.lgx-lock i::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .15s}
+.lgx-lock input:checked + i{background:var(--warn)}
+.lgx-lock input:checked + i::after{left:16px}
+.lgx-lock input:disabled + i{opacity:.75;cursor:not-allowed}
+.lgx-lock input:focus-visible + i{outline:2px solid var(--accent);outline-offset:2px}
+.lgx-cws{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.lgx-cw{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;min-width:0}
+.lgx-cw.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.lgx-pic{all:unset;box-sizing:border-box;height:118px;display:flex;align-items:center;justify-content:center;padding:12px;cursor:pointer;background:var(--surface)}
+.lgx-pic.dark{background:var(--ink)}
+.lgx-pic img{max-width:100%;max-height:92px;object-fit:contain}
+.lgx-bar{display:flex;height:7px}
+.lgx-bar i{flex:1;box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--ink) 10%,transparent)}
+.lgx-cwb{display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;min-width:0}
+.lgx-cwt{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.lgx-cwt b{font-size:14.5px}
+.lgx-uses{display:flex;flex-wrap:wrap;gap:4px}
+.lgx-use{font-size:11.5px;font-weight:700;color:var(--ok);background:var(--ok-soft);border-radius:99px;padding:2px 9px;white-space:nowrap}
+.lgx-cwf{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px}
+.lgx-cwf select{height:30px;border:1px solid var(--line);border-radius:6px;padding:0 6px;font:13px var(--body);color:var(--ink);background:var(--surface);max-width:100%}
+.lgx-nav{margin:0;border-radius:0;border-left:0;border-right:0;border-top:0}
+.lgx-tab > .panel-h{border-bottom:0;padding-bottom:4px}
+.lgx-tab .tbl-wrap{border:0;border-radius:0}
+.lgx-details{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
