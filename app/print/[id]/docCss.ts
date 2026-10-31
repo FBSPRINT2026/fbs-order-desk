@@ -292,6 +292,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .pf-sign{display:grid;grid-template-columns:2fr 1.6fr 1fr;gap:18px;margin-top:32px}
 .pdoc .pf-sign div{border-top:1.5px solid var(--ink);padding-top:3px;position:relative;font-size:8.5pt;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .pdoc .pf-mk{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin-top:12px}
+.pdoc .pf-mk.sumd img{flex:1 1 0;min-height:0;max-height:none;width:100%;object-fit:contain}
 .pdoc .pf-art{height:7in;margin-top:12px}
 .pdoc .pf-art.pf-art-cc{height:5.9in}
 .pdoc .pf-cc{margin-top:12px}

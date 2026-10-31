@@ -17,6 +17,8 @@ export type ProgramItem = {
     /** only the standard print: at most this many colors on any print, and this many prints (Armstrong: 1 color, front
      *  and back = 2); a sleeve or a 2-color print isn't standard */
     maxColors?: number; maxPrints?: number;
+    /** at least this many prints (Oct 31, MEI: a hat with the logo AND "add American flag" is its own price, $2.50 more) */
+    minPrints?: number;
     /** the standard logos (design ids) this price is for (Oct 18, Nick: "you would likely only know if it is a special
      *  print based on the artwork"): a print with other art is a special, custom quoted; no art linked yet = the rules above */
     designs?: string[];
@@ -132,7 +134,7 @@ export function printKey(g: Pick<Group, "imprints">): { key: string } | { why: s
   return { key: `${f}/${b}` };
 }
 
-export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Record<string, { each: number; note: string } | null>;
+export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Record<string, { each: number; note: string; /** the program price it landed on */ item?: string } | null>;
   /** a design's flat price: everything in (no garment, no 2XL+ charge) */ flat?: boolean };
 /**
  * The program price for each line of a group, or why there isn't one. baseCost: the base shirt's blank cost now.
@@ -143,7 +145,10 @@ export type ProgramGroup = { ok: boolean; key?: string; note: string; lines: Rec
 export type DesignPrice = Pick<ProgramItem, "id" | "name" | "style" | "price" | "min_qty" | "design_id" | "active" | "tiers" | "price_mode" | "supplied" | "match"> & { imprints?: ProgramImprint[] };
 export type DesignCtx = { items: DesignPrice[]; /** the order's name and its prints' design names */ text: string; /** the group's garments: styles, brands, names */ garments?: string; /** the prints' art names only */ art?: string;
   /** each line's own garment text (by line id): a group with helper tees and hoodies prices each by its own garment
-   *  (Oct 30, Nick: All My Sons tees $1.35, hoodies $1.50 on one job) */ lineGarments?: Record<string, string> };
+   *  (Oct 30, Nick: All My Sons tees $1.35, hoodies $1.50 on one job) */ lineGarments?: Record<string, string>;
+  /** pieces in the whole order on each program price (by item id): a price's break counts all of them, not one group's
+   *  (Oct 31, Nick: MEI's cart orders, every embroidered piece on the cart counted together, 13 pieces = $5 each, however
+   *  many logos split them into groups). Filled by programForOrder */ pool?: Record<string, number> };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
   const ids = new Set((g.imprints || []).map((x) => x.design_id).filter(Boolean));
@@ -160,7 +165,7 @@ export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCt
     const sameMethod = (it: DesignPrice) => { const m = it.imprints?.[0]?.method; return !m || !methods.size || methods.has(m); };
     const imps = g.imprints || [];
     const standard = (it: DesignPrice) => (!it.match?.maxColors || imps.every((x) => (+(x as { colors?: number }).colors! || 1) <= it.match!.maxColors!))
-      && (!it.match?.maxPrints || imps.length <= it.match.maxPrints);
+      && (!it.match?.maxPrints || imps.length <= it.match.maxPrints) && (!it.match?.minPrints || imps.length >= it.match.minPrints);
     const art = imps.map((x) => x.design_id).filter(Boolean) as string[];
     const standardArt = (it: DesignPrice) => !it.match?.designs?.length || !art.length || art.every((id) => it.match!.designs!.includes(id));
     hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length) && standardArt(it)
@@ -181,7 +186,9 @@ export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCt
   if (!hits.length) return {};
   // every break of every matching entry, highest minimum first: the first one the quantity reaches
   const breaks = hits.flatMap((it) => tiersOf(it).map((t) => ({ ...it, price: t.price, min_qty: t.min }))).sort((a, b) => (b.min_qty || 0) - (a.min_qty || 0));
-  const item = breaks.find((it) => qty >= (it.min_qty || 0));
+  // the order's pieces on that same price count toward its break (never fewer than this group's)
+  const qOf = (it: DesignPrice) => Math.max(qty, d.pool?.[it.id] || 0);
+  const item = breaks.find((it) => qOf(it) >= (it.min_qty || 0));
   return item ? { item } : { under: breaks[breaks.length - 1] };
 }
 
@@ -201,7 +208,8 @@ export function programForGroup(g: Group, card: RateCard | null, baseCost: numbe
         const own = design.lineGarments?.[l.id] ? designPrice(g, qty, { ...design, garments: design.lineGarments[l.id] }).item : undefined;
         const x = own || it;
         names.add(x.name);
-        lines[l.id] = { each: r2(+x.price), note: `${x.name} program price: ${(+x.price).toFixed(2)}${x.min_qty ? ` at ${x.min_qty}+` : ""}` };
+        const pooled = design.pool?.[x.id] && design.pool[x.id] > qty ? ` (${design.pool[x.id]} on the order)` : "";
+        lines[l.id] = { each: r2(+x.price), note: `${x.name} program price: ${(+x.price).toFixed(2)}${x.min_qty ? ` at ${x.min_qty}+${pooled}` : ""}`, item: x.id };
       }
       const one = names.size <= 1;
       return { ok: true, flat: true, key: one ? it.name : [...names].join(" + "), note: one ? `${it.name}: ${(+it.price).toFixed(2)} a piece${it.min_qty ? ` at ${it.min_qty}+` : ""}, ${qty} pieces` : `${[...names].join(" + ")}: each garment at its own program price, ${qty} pieces`, lines };
@@ -227,6 +235,16 @@ export function programForGroup(g: Group, card: RateCard | null, baseCost: numbe
     lines[l.id] = { each: r2(price + diff), note: `Program ${k.key}: ${price.toFixed(2)} ${diff < 0 ? `− (${baseCost.toFixed(2)} − ${cost.toFixed(2)})` : `+ (${cost.toFixed(2)} − ${baseCost.toFixed(2)})`} × ${card.markup} = ${r2(price + diff).toFixed(2)}` };
   }
   return { ok: all, key: k.key, note: all ? `program ${k.key}, ${qty} pieces` : "program price waits for a blank cost", lines };
+}
+
+/** Every group's program prices for one order: a price's quantity break counts every piece of the order that lands on
+ *  that same price (Oct 31: MEI carts, polos with two different logos are two groups but one $5 break at 13 pieces). */
+export function programForOrder(groups: Group[], card: RateCard | null, baseCost: number | null, ctx: (g: Group) => DesignCtx | undefined): ProgramGroup[] {
+  const first = groups.map((g) => programForGroup(g, card, baseCost, ctx(g)));
+  const pool: Record<string, number> = {};
+  groups.forEach((g, gi) => (g.lines || []).forEach((l) => { const it = first[gi]?.lines[l.id]?.item; if (it) pool[it] = (pool[it] || 0) + qtyOf(l); }));
+  if (!Object.keys(pool).length) return first;
+  return groups.map((g) => { const c = ctx(g); return programForGroup(g, card, baseCost, c ? { ...c, pool } : c); });
 }
 
 /* ───────── a price for a quantity they've never had (Oct 14, Nick: "if they reorder a design that's part of their

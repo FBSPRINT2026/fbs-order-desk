@@ -60,7 +60,7 @@ import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/cr
 import { PAY_TERMS, SIZES, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
 import OrderHelper from "@/components/OrderHelper";
 import type { HelperAction, HelperOrder } from "@/lib/orderHelperShared";
-import { BIG_SIZES, cardForOrder, finishingIncluded, programForGroup, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
+import { BIG_SIZES, cardForOrder, finishingIncluded, programForOrder, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
 import { programCard, type ProgramCardOpt } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
@@ -510,7 +510,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       return fs.length ? { each: fs.reduce((a, f) => a + price(f), 0), names: fs.map((f) => f.name).join(", ") } : null;
     };
     const apply = (d: Order) => {
-      const plans = on ? d.groups.map((g) => programForGroup(g, prog!.card, prog!.baseCost, designCtx(d, g))) : [];
+      const plans = on ? programForOrder(d.groups, prog!.card, prog!.baseCost, (g) => designCtx(d, g)) : [];
       // personalizations (Oct 30): a line made by the first version (its own one-piece line, `pers`) becomes a name under
       // the line like the rest; each name priced at the program's own personalization price (Nine18 $5), else the list's
       const ownX: Record<string, number> = (on && prog?.card?.extraPrices) || {}, pk = Object.keys(ownX).find((k) => /personal/i.test(k));

@@ -524,6 +524,23 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
   const total = plan.reduce((a, x) => a + 1 + x.extra.length + x.prints, 0);
   let page = 0;
   const foot = () => { page++; return <div className="foot"><span>Art proof{p.version ? ` v${p.version}` : ""} · #{o.number} {o.nickname}{who ? ` · ${who}` : ""}</span><span>Page {page} of {total}</span></div>; };
+  /** one print's line under a mockup: on the cover every garment's sizes (adult and youth); on a garment's own page, the
+   *  size it prints at on that garment (Oct 31, Nick: the youth page "with nothing on it… put the youth information below") */
+  const printLine = (g: Group, d: Imprint, on?: Group["lines"][number]) => {
+    const des = d.design_id ? p.designs[d.design_id] : null, ink = d.visualOnly ? [] : inkNames(d.inks);
+    const split = youthSplit(g, d), kid = !!on && kidLine(on);
+    const sz = printSize(split && kid ? { ...d, size: d.youth?.size || "" } : d, des);
+    const yLabel = (d.youth?.size || "").replace(/\s*wide$/, "");
+    const tail = d.visualOnly ? null : !on
+      ? (split ? <> · Youth <b>{yLabel}</b> (own screen)</> : g.youthSet && d.youth?.same ? " · youth same screen" : null)
+      : split ? (kid ? " · youth screen" : " · adult screen") : g.youthSet && d.youth?.same && kid ? " · same screen as adult" : null;
+    return (
+      <div className="pf-pr" key={d.id}>
+        <b>{d.location}</b> · {d.visualOnly ? MATCH_PREV : <>{printHow(d)}{sz.label ? <> · {split && !on ? "Adult " : ""}<b>{sz.label}</b></> : null}{tail}</>}
+        {ink.length > 0 && <div className="pf-inks">{ink.map((k) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{k}</span>)}</div>}
+      </div>
+    );
+  };
   const approved = o.approved_at ? `${o.approved_name || "Approved"}, ${new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" })}` : "";
   return (
     <>
@@ -559,15 +576,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 <div>
                   <div className="lbl">Prints</div>
                   {g.imprints.length === 0 && <div className="pf-pr">No prints on this group.</div>}
-                  {g.imprints.map((d) => {
-                    const des = d.design_id ? p.designs[d.design_id] : null, sz = printSize(d, des), ink = d.visualOnly ? [] : inkNames(d.inks);
-                    return (
-                      <div className="pf-pr" key={d.id}>
-                        <b>{d.location}</b> · {d.visualOnly ? MATCH_PREV : <>{printHow(d)}{sz.label ? <> · {youthSplit(g, d) ? "Adult " : ""}<b>{sz.label}</b></> : null}{youthSplit(g, d) ? <> · Youth <b>{(d.youth?.size || "").replace(/\s*wide$/, "")}</b> (own screen)</> : g.youthSet && d.youth?.same ? " · youth same screen" : null}</>}
-                        {ink.length > 0 && <div className="pf-inks">{ink.map((k) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{k}</span>)}</div>}
-                      </div>
-                    );
-                  })}
+                  {g.imprints.map((d) => printLine(g, d))}
                 </div>
                 <div>
                   <div className="lbl">Garments</div>
@@ -582,7 +591,22 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
             {extra.map((pair, xi) => (
               <section className="sheet pf" key={"m" + xi}>
                 <div className="p2h"><div className="t disp">{capOf(idx[xi]) || "Mockup"}{gname ? ` · ${gname}` : ""}</div><div className="r">#{o.number} · {o.nickname}</div></div>
-                {pair.map((u) => <div className={"pf-mk" + (pair.length === 1 ? " one" : "")} key={u}><img src={u} alt="Mockup" /></div>)}
+                {pair.map((u) => <div className={"pf-mk sumd" + (pair.length === 1 ? " one" : "")} key={u}><img src={u} alt="Mockup" /></div>)}
+                {(() => {
+                  // this garment's own prints and sizes under its picture, like the cover's
+                  const l = shown[idx[xi]];
+                  const same = l ? g.lines.filter((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) : [];
+                  const sizes = SIZES.map((z) => [z, same.reduce((a, y) => a + (+(y.sizes?.[z] || 0)), 0)] as const).filter(([, n]) => n > 0);
+                  return l && (
+                    <div className="pf-sum">
+                      <div><div className="lbl">Prints</div>{g.imprints.length === 0 ? <div className="pf-pr">No prints on this group.</div> : g.imprints.map((d) => printLine(g, d, l))}</div>
+                      <div><div className="lbl">Garment</div>
+                        <div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#ccc"} /><b>{[l.brand, l.style].filter(Boolean).join(" ")}</b>{l.color ? ` · ${l.color}` : ""}</div>
+                        {sizes.length > 0 && <div className="pf-pr faint">{sizes.map(([z, n]) => `${z} ${n}`).join(" · ")} · {sizes.reduce((a, [, n]) => a + n, 0)} pcs</div>}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {foot()}
               </section>
             ))}

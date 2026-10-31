@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { money, fmtDate } from "@/lib/format";
 import type { Group, Settings } from "@/lib/pricing";
-import { cardHasPrices, programForGroup, suggestDesignPrice, type DesignCtx, type RateCard } from "@/lib/programs";
+import { cardHasPrices, programForOrder, suggestDesignPrice, type DesignCtx, type RateCard } from "@/lib/programs";
 import { addPriceBreak, pastPricesForDesign, type PastPrice } from "@/app/shop/program-pricing-actions";
 
 /**
@@ -16,10 +16,10 @@ export function ProgramNotes({ groups, card, baseCost, ctx }: { groups: Group[];
   return (
     <div className="prg-notes">
       {rules.map((r) => <div key={r} className="prg-note ok"><b>Program:</b> {r}</div>)}
-      {priced && groups.map((g, i) => {
-        const r = programForGroup(g, card, baseCost, ctx(g));
+      {priced && (() => { const all = programForOrder(groups, card, baseCost, ctx); return groups.map((g, i) => {
+        const r = all[i];
         return <div key={g.id} className={"prg-note" + (r.ok ? " ok" : "")}><b>{groups.length > 1 ? `Group ${i + 1}` : "Program"}:</b> {r.ok ? <>{r.note}{!card || card.noSetupEver || (card.waiveSetup && card.screenFee == null) ? ", no setup" : ""}</> : <>{r.note}; priced normally</>}</div>;
-      })}
+      }); })()}
     </div>
   );
 }
