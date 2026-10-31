@@ -1677,12 +1677,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
     }, 700);
   };
+  // what each photo was measured as (a cap, a bag, a shirt): measured again when that changes, so a garment whose
+  // catalog entry arrives after its photo (an order's caps, Oct 31: Amanda's 112FP drawn at a shirt's scale) is right
+  const fitKind = useRef<Record<string, string>>({});
   useEffect(() => {
     for (const l of lines) for (const v of ["front", "back"] as View[]) {
       const u = photo(l, v);
-      if (u.startsWith("data:") || u in fits) continue;
+      if (u.startsWith("data:")) continue;
+      const kind = isCap(l) ? "cap" : isBag(l) ? "bag" : "wear";
+      if (u in fits && fitKind.current[u] === kind) continue;
+      fitKind.current[u] = kind;
       setFits((f) => ({ ...f, [u]: null }));
-      loadImg(u).then((img) => { const fit = measureFor(l, img, v); setFits((f) => ({ ...f, [u]: fit })); }).catch(() => {});
+      loadImg(u).then((img) => { if (fitKind.current[u] !== kind) return; const fit = measureFor(l, img, v); setFits((f) => ({ ...f, [u]: fit })); }).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, catalog]);
