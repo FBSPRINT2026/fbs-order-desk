@@ -243,6 +243,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
           {!master && <button className={"btn ghost danger" + (armed ? " armed" : "")} type="button" onClick={del}>{armed ? "Delete logo?" : "Delete"}</button>}</div>
       </div>
 
+      <div className="stack">
       {/* 1. the logo: its art as on file, and every color it comes in (Oct 31, Nick: "here's the logo, here's the colors… very visual") */}
       <section className="panel">
         <div className="panel-h"><h2>The logo</h2><span className="faint">As the customer sent it, and every color it comes in</span></div>
@@ -409,6 +410,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
           <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="d-no">Notes</label><textarea id="d-no" rows={3} value={d.notes} onChange={(e) => setD({ ...d, notes: e.target.value })} onBlur={(e) => patch({ notes: e.target.value })} /></div>
         </div>
       </section>
+      </div>
     </>
   );
 }
