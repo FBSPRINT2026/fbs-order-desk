@@ -17,7 +17,7 @@ export const SETTINGS_GROUPS: Group[] = [
   { k: "garments", label: "Garments", icon: I("M8 4l-4 3 2 4 2-1v10h8V10l2 1 2-4-4-3c-1 2-3 2-4 2s-3 0-4-2z"), subs: [["/shop/catalog", "Garment catalog"], ["/shop/settings/garments/popular", "Popular garments"]] },
   { k: "production", label: "Production", icon: I("M3 7h18v10H3zM7 7V4h10v3"), subs: [["/shop/settings/production", "Machines & crews"], ["/shop/settings/production/times", "Run times"], ["/shop/settings/production/speed", "Real speed"]] },
   { k: "people", label: "People", icon: I("M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20c0-3 3-5 6-5s6 2 6 5M16 11a3 3 0 1 0 0-6M21 20c0-2-1-4-4-5"), subs: [["/shop/settings/people/staff", "Staff"], ["/shop/settings/access", "User access"], ["/shop/settings/people/owners", "Account owners"]] },
-  { k: "assistant", label: "Assistant & AI", icon: I("M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"), subs: [["/shop/settings/assistant", "Assistant & AI"]] },
+  { k: "assistant", label: "Assistant & AI", icon: I("M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"), subs: [["/shop/settings/assistant", "Assistant & AI"], ["/shop/settings/assistant/training", "Order training"]] },
   { k: "connections", label: "Connections", icon: I("M9 7H6a5 5 0 0 0 0 10h3M15 7h3a5 5 0 0 1 0 10h-3M8 12h8"), subs: [["/shop/settings/site-email", "Site email"], ["/shop/settings/quickbooks", "QuickBooks"], ["/shop/settings/canva", "Canva"], ["/shop/settings/dropbox", "Dropbox"], ["/shop/settings/texts", "Texts (Mac)"], ["/shop/customers/import", "Printavo"], ["/shop/settings/status", "Status"]] },
 ];
 const LAST = "fbs:settings.last";

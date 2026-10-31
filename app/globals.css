@@ -16526,3 +16526,13 @@ html body table:is(.tbl, .rv-tbl) td :is(input, select, textarea){max-width:100%
 .osp-trained{display:flex;flex-direction:column;gap:6px;padding:12px;border:1.5px solid var(--fbs-blue);border-radius:var(--r);background:var(--accent-soft);font-size:13px}
 .osp-trained b{font-size:14px;color:var(--ink)}
 .osp-trained span{color:var(--ink-2)}
+/* Settings → Order training (Oct 30) */
+.otr-add{max-width:420px}
+.otr-row.on td{background:var(--accent-soft)}
+.otr-ed > td{background:var(--surface-2)}
+.otr-box{display:flex;flex-direction:column;gap:12px;padding:6px 2px}
+.otr-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.otr-box textarea{width:100%;box-sizing:border-box;font:inherit;font-size:13px;line-height:1.45}
+.otr-sub{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.otr-ord{white-space:pre-wrap;font-size:12px;color:var(--ink-2);max-height:9em;overflow:auto}
+.otr-box tr.off td{opacity:.55}
