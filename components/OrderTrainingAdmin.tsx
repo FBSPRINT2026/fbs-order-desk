@@ -1,9 +1,11 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import CustomerPick from "@/components/CustomerPick";
 import { useSticky } from "@/lib/useSticky";
+import { fmtStamp } from "@/lib/format";
+import type { TrainFile, TrainMsg } from "@/lib/ai/trainingChat";
 
 /**
  * Settings → Assistant & AI → Order training (Oct 30, Nick: "where are the trainings at now?… put them under settings…
@@ -11,6 +13,8 @@ import { useSticky } from "@/lib/useSticky";
  * for their jobs, customer_private.order_training), when it's used ("Use it when the job says"), the worked examples it
  * learned from finished orders (lib/ai/orderExamples.ts) and their brands' standard mockups. The same fields are on the
  * customer's Details; this is the one place to see and change them all.
+ * Beside each training, a chat with Claude (Oct 30, Nick: "a package… we can talk to back and forth and make little
+ * edits to"): say a change or attach a PO, Claude shows the training with each change marked, Apply saves it.
  */
 type Row = { customer_id: string; company: string; training: string; name: string; when: string };
 type Example = { id: string; order_id: string; title: string; confirmed_by: string; confirmed_at: string; order_text: string; active: boolean };
@@ -99,6 +103,7 @@ function TrainingEditor({ row, brands, onSaved }: { row: Row; brands: BrandRow[]
     if (r.ok) setEx((xs) => (xs || []).map((x) => (x.id === e.id ? { ...x, active: !e.active } : x)));
   };
   return (
+    <div className="otr-cols">
     <div className="otr-box">
       <div className="otr-two">
         <div className="field"><label htmlFor={`otn-${row.customer_id}`}>Training name</label><input id={`otn-${row.customer_id}`} type="text" value={name} placeholder="All My Sons" onChange={(e) => setName(e.target.value)} /></div>
@@ -125,5 +130,117 @@ function TrainingEditor({ row, brands, onSaved }: { row: Row; brands: BrandRow[]
         )}
       </div>
     </div>
+    <TrainingChat customerId={row.customer_id} customerName={row.company} base={{ training: t, name, when }} onApplied={(v) => { setT(v.training); setName(v.name); setWhen(v.when); setState("Saved from the chat"); onSaved(); }} />
+    </div>
+  );
+}
+
+const post = async (body: Record<string, unknown>) => {
+  const r = await fetch("/api/ai/training", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return (await r.json().catch(() => ({ ok: false, error: "No answer from the server." }))) as { ok: boolean; error?: string; messages?: TrainMsg[]; saved?: { training: string; name: string; when: string } };
+};
+const OP = { "+": "add", "~": "chg", "-": "del" } as const;
+
+/** the Messages-style chat (the same look as Brand standards' AI): blue for us, gray for Claude, the changes as a card */
+function TrainingChat({ customerId, customerName, base, onApplied }: { customerId: string; customerName: string; base: { training: string; name: string; when: string }; onApplied: (v: { training: string; name: string; when: string }) => void }) {
+  const [msgs, setMsgs] = useState<TrainMsg[] | null>(null);
+  const [text, setText] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [busy, setBusy] = useState("");
+  const [err, setErr] = useState("");
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => { post({ customerId, action: "thread" }).then((r) => (r.ok ? setMsgs(r.messages || []) : setErr(r.error || "Couldn't load the conversation."))); }, [customerId]);
+  // keep the newest message in view inside the chat (never scroll the page)
+  useEffect(() => { const b = box.current; if (b) b.scrollTop = b.scrollHeight; }, [msgs, busy]);
+
+  async function send() {
+    if (busy || (!text.trim() && !files.length)) return;
+    setErr("");
+    const up: TrainFile[] = [];
+    if (files.length) {
+      setBusy("Uploading…");
+      const sb = createClient();
+      for (const f of files) {
+        const path = `brand-guides/${customerId}/training/${Date.now().toString(36)}-${f.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`;
+        const { error } = await sb.storage.from("proofs").upload(path, f, { contentType: f.type || undefined });
+        if (error) { setBusy(""); return setErr(`${f.name}: ${error.message}`); }
+        up.push({ path, name: f.name, type: f.type });
+      }
+    }
+    const said = text;
+    setMsgs((m) => [...(m || []), { role: "staff", text: said, at: new Date().toISOString(), files: up.length ? up : undefined }]);
+    setText(""); setFiles([]);
+    setBusy(up.length ? "Reading the files… (can take a minute)" : "Thinking…");
+    const r = await post({ customerId, action: "chat", text: said, files: up, base });
+    setBusy("");
+    if (!r.ok) { setErr(r.error || "Something went wrong."); setMsgs((m) => (m || []).slice(0, -1)); setText(said); return; }
+    setMsgs(r.messages || []);
+  }
+  async function decide(i: number, action: "apply" | "dismiss") {
+    setBusy(action === "apply" ? "Applying…" : ""); setErr("");
+    const r = await post({ customerId, action, index: i });
+    setBusy("");
+    if (!r.ok) return setErr(r.error || "Couldn't do that.");
+    setMsgs(r.messages || []);
+    if (action === "apply" && r.saved) onApplied(r.saved);
+  }
+  const showTime = (k: number) => { const l = msgs || []; return k === 0 || new Date(l[k].at).getTime() - new Date(l[k - 1].at).getTime() > 30 * 60_000; };
+  return (
+    <section className="im otr-chat" aria-label="Change the training with Claude">
+      <div className="im-h">
+        <span className="im-av" aria-hidden="true">✦</span>
+        <span className="im-who"><b>Training with Claude</b><small>{customerName}</small></span>
+      </div>
+      <div className="im-msgs" ref={box}>
+        {msgs && !msgs.length && (
+          <div className="im-row them"><div className="im-b them">{base.training.trim()
+            ? "Tell me what to change the way you'd say it (\"beanies go on the cuff now\", \"Pittsburgh ships UPS\"), or tap + to attach a PO and the order we made from it. I'll show the training with each change marked, and nothing is saved until you Apply."
+            : "Tell me how their orders go, or tap + to attach one of their POs. I'll write the training from that and from the orders we've already checked right, and nothing is saved until you Apply."}</div></div>
+        )}
+        {!msgs && !err && <div className="im-time">Loading…</div>}
+        {(msgs || []).map((m, i) => (
+          <div key={i} className="im-grp">
+            {showTime(i) && <div className="im-time">{fmtStamp(m.at)}</div>}
+            {m.role === "staff" ? (
+              <>
+                {m.files?.map((f) => <div key={f.path} className="im-row me"><div className="im-file">📄 <span>{f.name}</span></div></div>)}
+                {m.text && <div className="im-row me"><div className="im-b me">{m.text}</div></div>}
+                {m.by && <div className="im-by me">{m.by.split("@")[0]}</div>}
+              </>
+            ) : (
+              <>
+                {m.text && <div className="im-row them"><div className="im-b them">{m.text}</div></div>}
+                {m.lines?.length ? (
+                  <div className="im-row them">
+                    <div className={"im-card " + (m.status || "")}>
+                      <div className="im-card-h">{m.status === "applied" ? "✓ Applied" : m.status === "dismissed" ? "Not applied" : `Changes to the training (${m.lines.length})`}</div>
+                      {m.lines.map((l, k) => (
+                        <div key={k} className="im-line otr-line"><span className={"op " + OP[l.op]}>{l.op === "-" ? "−" : l.op}</span><span className="txt">{l.parts ? <span>{l.parts.map((p, q) => <span key={q} className={"otr-w " + p.k}>{p.t}</span>)}</span> : l.op === "-" ? <s>{l.text}</s> : l.text}</span></div>
+                      ))}
+                      {m.status === "open" ? (
+                        <div className="im-acts"><button type="button" className="im-apply" disabled={!!busy} onClick={() => void decide(i, "apply")}>{busy === "Applying…" ? "Applying…" : "Apply"}</button><button type="button" className="im-later" disabled={!!busy} onClick={() => void decide(i, "dismiss")}>Discard</button></div>
+                      ) : m.done_at ? <div className="im-card-f">{m.status === "applied" ? "Applied" : "Set aside"} by {(m.done_by || "").split("@")[0]} · {fmtStamp(m.done_at)}</div> : null}
+                    </div>
+                  </div>
+                ) : null}
+                {m.question && <div className="im-row them"><div className="im-b them">{m.question}</div></div>}
+              </>
+            )}
+          </div>
+        ))}
+        {busy && busy !== "Applying…" && (
+          <div className="im-row them"><div className="im-b them typing" title={busy} aria-label={busy}><i /><i /><i /></div>{/files/i.test(busy) && <span className="im-note">{busy}</span>}</div>
+        )}
+      </div>
+      {err && <div className="im-err">{err}</div>}
+      {files.length > 0 && <div className="im-staged">{files.map((f, i) => <span key={i}>📄 {f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}>✕</button></span>)}</div>}
+      <div className="im-in">
+        <label className="im-plus" title="Attach a PO, an order sheet or a picture" aria-label="Attach files">+<input type="file" hidden multiple accept="application/pdf,image/png,image/jpeg,image/webp,.xlsx,.xlsm,.docx,.csv,.txt" onChange={(e) => { const l = Array.from(e.target.files || []); e.target.value = ""; setFiles((x) => [...x, ...l].slice(0, 4)); }} /></label>
+        <div className="im-field">
+          <textarea rows={1} value={text} placeholder="Message" aria-label="Message" onChange={(e) => { setText(e.target.value); const t = e.target; t.style.height = "auto"; t.style.height = Math.min(140, t.scrollHeight) + "px"; }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
+          <button type="button" className="im-send" aria-label="Send" disabled={!!busy || (!text.trim() && !files.length)} onClick={() => void send()}>↑</button>
+        </div>
+      </div>
+    </section>
   );
 }
