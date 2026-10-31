@@ -1,4 +1,5 @@
 "use client";
+import { needsDarkBackdrop } from "@/lib/lightArt";
 import Link from "next/link";
 import BackLink from "@/components/BackLink";
 import CustomerPick from "@/components/CustomerPick";
@@ -38,10 +39,11 @@ async function isLightArt(url: string): Promise<boolean> {
     const g = c.getContext("2d", { willReadFrequently: true }); if (!g) return false;
     g.drawImage(im, 0, 0, c.width, c.height);
     const px = g.getImageData(0, 0, c.width, c.height).data;
-    let n = 0, sum = 0;
-    for (let i = 0; i < px.length; i += 4) if (px[i + 3] > 128) { n++; sum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]; }
-    // see-through art that's nearly all light (a white logo); a picture with a white background is opaque, so it stays on white
-    return n > 0 && n < (px.length / 4) * 0.97 && sum / n > 215;
+    let n = 0;
+    for (let i = 3; i < px.length; i += 4) if (px[i] > 128) n++;
+    // see-through art with light parts that would vanish on white (lib/lightArt.ts); a picture with a white background
+    // is opaque, so it stays on white
+    return n > 0 && n < (px.length / 4) * 0.97 && needsDarkBackdrop(px);
   } catch { return false; }
 }
 const TAB_ICONS: Record<Tab, React.ReactNode> = {

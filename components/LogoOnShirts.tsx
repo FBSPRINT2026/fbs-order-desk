@@ -1,4 +1,5 @@
 "use client";
+import { needsDarkBackdrop } from "@/lib/lightArt";
 import { useEffect, useState } from "react";
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { guessHex } from "@/lib/mockup";
@@ -80,9 +81,8 @@ function makeArt(url: string): Promise<Art | null> {
           og.putImageData(im, 0, 0);
           return o.toDataURL("image/png");
         };
-        let lum = 0, cnt = 0;
-        for (let i = 0; i < W * H; i += 3) if (alpha[i] > 128) { lum += 0.299 * p[i * 4] + 0.587 * p[i * 4 + 1] + 0.114 * p[i * 4 + 2]; cnt++; }
-        res({ mask: out(true), cut: out(false), ratio: ch / cw, light: cnt > 0 && lum / cnt > 205 });
+        // light parts that would vanish on white get the dark tile (lib/lightArt.ts, the same test as the logo's page)
+        res({ mask: out(true), cut: out(false), ratio: ch / cw, light: needsDarkBackdrop(p, (i) => alpha[i] > 128, 3) });
       } catch { res(null); } // a picture we can't read (no CORS): the plain picture is used
     };
     img.src = url;

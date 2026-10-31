@@ -9,8 +9,12 @@ import { sameArtCandidates, saveArtHashes, type ArtCandidate } from "@/app/same-
 /**
  * The fingerprint (v2, Oct 28: Nick showed the ShipStation Global logo matched to MEI SMM; the old 9×8 gray hash made
  * every wide logo on white look alike). Now: the art is cropped to its ink first, then a 17×16 difference hash
- * (256 bits) of its shape, plus its shape's width : height and its ink color. Written as "2" + ratio×100 (3 hex) +
+ * (256 bits) of its shape, plus its shape's width : height and its ink color. Written as "2" (v3: "3") + ratio×100 (3 hex) +
  * ink color (6 hex) + 64 hex. Old 16-hex fingerprints are worked out again the new way.
+ * v3 (Oct 31: MEI's "Maroon / Off White" and "All White" weren't seen as the same logo as "Maroon / Black", so each became
+ * its own logo): art with a see-through background is read by its shape (where there's ink at all), not by what shows up
+ * on white, so a white or light version has the same shape as the dark one. Art on a solid background is read as before.
+ * Written "3…"; v2 fingerprints are worked out again the new way.
  */
 export async function artHash(src: Blob | string): Promise<string | null> {
   try {
@@ -22,23 +26,35 @@ export async function artHash(src: Blob | string): Promise<string | null> {
     const bw = Math.max(1, Math.round(W0 * k)), bh = Math.max(1, Math.round(H0 * k));
     const b = document.createElement("canvas"); b.width = bw; b.height = bh;
     const bx = b.getContext("2d", { willReadFrequently: true }); if (!bx) return null;
-    bx.fillStyle = "#fff"; bx.fillRect(0, 0, bw, bh); bx.drawImage(im, 0, 0, bw, bh);
-    const px = bx.getImageData(0, 0, bw, bh).data;
+    bx.drawImage(im, 0, 0, bw, bh);
+    const raw = bx.getImageData(0, 0, bw, bh);
+    const px = raw.data;
+    // a see-through background: the ink is wherever there's anything at all, whatever its color (a white logo too)
+    let clear = 0;
+    for (let i = 3; i < px.length; i += 4) if (px[i] < 128) clear++;
+    const seeThrough = clear > (px.length / 4) * 0.02;
     let x0 = bw, y0 = bh, x1 = -1, y1 = -1, n = 0, sr = 0, sg = 0, sb = 0;
     for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
-      const i = (y * bw + x) * 4, r = px[i], g = px[i + 1], bl = px[i + 2];
-      if (r > 235 && g > 235 && bl > 235) continue;
+      const i = (y * bw + x) * 4, a = px[i + 3] / 255;
+      // on white, as it would print on a white page
+      const r = px[i] * a + 255 * (1 - a), g = px[i + 1] * a + 255 * (1 - a), bl = px[i + 2] * a + 255 * (1 - a);
+      if (seeThrough ? px[i + 3] < 64 : r > 235 && g > 235 && bl > 235) continue;
       if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-      n++; sr += r; sg += g; sb += bl;
+      n++; sr += px[i]; sg += px[i + 1]; sb += px[i + 2];
     }
     if (!n) return null; // a blank picture tells us nothing
+    // the picture the shape is read from: see-through art as its shape in black (every colorway alike), else on white
+    if (seeThrough) { for (let i = 0; i < px.length; i += 4) { px[i] = px[i + 1] = px[i + 2] = 0; } bx.putImageData(raw, 0, 0); }
+    const flat = document.createElement("canvas"); flat.width = bw; flat.height = bh;
+    const fx = flat.getContext("2d"); if (!fx) return null;
+    fx.fillStyle = "#fff"; fx.fillRect(0, 0, bw, bh); fx.drawImage(b, 0, 0);
     const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
     // 2) the cropped ink at 17×16, its own shape centered
     const c = document.createElement("canvas"); c.width = 17; c.height = 16;
     const x = c.getContext("2d", { willReadFrequently: true }); if (!x) return null;
     x.fillStyle = "#fff"; x.fillRect(0, 0, 17, 16);
     const r = Math.min(17 / cw, 16 / ch), w = cw * r, h = ch * r;
-    x.drawImage(b, x0, y0, cw, ch, (17 - w) / 2, (16 - h) / 2, w, h);
+    x.drawImage(flat, x0, y0, cw, ch, (17 - w) / 2, (16 - h) / 2, w, h);
     const d = x.getImageData(0, 0, 17, 16).data;
     const gr = (qx: number, qy: number) => { const i = (qy * 17 + qx) * 4; return d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114; };
     let bits = "";
@@ -46,10 +62,10 @@ export async function artHash(src: Blob | string): Promise<string | null> {
     let hex = ""; for (let i = 0; i < 256; i += 4) hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
     const ratio = Math.min(4095, Math.round((cw / ch) * 100)).toString(16).padStart(3, "0");
     const ink = [sr, sg, sb].map((v) => Math.round(v / n).toString(16).padStart(2, "0")).join("");
-    return `2${ratio}${ink}${hex}`;
+    return `3${ratio}${ink}${hex}`;
   } catch { return null; }
 }
-export const isArtHash = (h: string) => /^2[0-9a-f]{73}$/.test(h);
+export const isArtHash = (h: string) => /^3[0-9a-f]{73}$/.test(h);
 type Print = { ratio: number; ink: number[]; bits: string };
 const read = (h: string): Print => ({ ratio: parseInt(h.slice(1, 4), 16) / 100, ink: [4, 6, 8].map((i) => parseInt(h.slice(i, i + 2), 16)), bits: h.slice(10) });
 const bitsOff = (a: string, b: string) => { let n = 0; for (let i = 0; i < a.length; i++) { let v = parseInt(a[i], 16) ^ parseInt(b[i], 16); while (v) { n += v & 1; v >>= 1; } } return n; };

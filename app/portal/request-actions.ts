@@ -226,7 +226,7 @@ export async function saveMyLogo(meta: { /** made while building an order or a m
       width_px: meta.w || null, height_px: meta.h || null, method: "screen",
       colors: Math.max(1, Math.min(15, Math.round(meta.colors || 1))), inks: (meta.inks || "").slice(0, 300),
       notes: meta.layersPath ? "Made in the shirt designer" : "", created_by: email, draft: !!meta.draft,
-      ...(meta.artHash && /^2[0-9a-f]{73}$/.test(meta.artHash) ? { art_hash: meta.artHash } : {}),
+      ...(meta.artHash && /^3[0-9a-f]{73}$/.test(meta.artHash) ? { art_hash: meta.artHash } : {}),
       designer: meta.layersPath ? { file: meta.layersPath } : null,
     }).select("*").single();
     if (error) return { ok: false as const, error: error.message };

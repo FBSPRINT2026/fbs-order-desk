@@ -35,6 +35,6 @@ export async function saveArtHashes(list: { id: string; hash: string }[], custom
   try {
     const cid = await scope(customerId); if (!cid) return;
     const admin = createAdminClient();
-    for (const x of list.slice(0, 80)) if (/^2[0-9a-f]{73}$/.test(x.hash)) await admin.from("designs").update({ art_hash: x.hash }).eq("id", x.id).eq("customer_id", cid);
+    for (const x of list.slice(0, 80)) if (/^3[0-9a-f]{73}$/.test(x.hash)) await admin.from("designs").update({ art_hash: x.hash }).eq("id", x.id).eq("customer_id", cid);
   } catch { /* best effort */ }
 }
