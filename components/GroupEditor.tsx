@@ -597,16 +597,16 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const scr = d.method === "screen";
     const an = scr ? screensFor(d, wpl, allLight).n : 0, yn = scr ? Math.min(+(y.screens || 0), 15) || 1 : 0;
     const rows = [
-      { k: "Adult", st: styles(false), size: wh(d.size), pcs: y.adultQty, n: an, setup: ic.setup, each: ic.each, y: false },
+      { k: "Adult", st: styles(false), size: wh(d.size), pcs: y.adultQty, n: an, setup: gc.imprintSetups?.[g.imprints.indexOf(d)] ?? ic.setup, each: y.adultEach ?? ic.each, y: false },
       { k: "Youth", st: styles(true), size: wh(y.size), pcs: y.qty, n: yn, setup: y.setup, each: y.each, y: true },
     ];
     return (
       <div className="yth-wrap">
         <table className="tbl yth-tbl">
-          <thead><tr><th>{scr ? "Screens by size" : "By size"}</th><th>Size</th><th className="r">Pieces</th>{scr && <th className="r">Screens</th>}{!hidePrices && <><th className="r">Setup</th><th className="r">Each</th></>}</tr></thead>
+          <thead><tr><th>Shirts</th><th>Size</th><th className="r">Pieces</th>{scr && <th className="r">Screens</th>}{!hidePrices && <><th className="r">Setup</th><th className="r">Each</th></>}</tr></thead>
           <tbody>{rows.map((r) => (
             <tr key={r.k} className={r.y ? "y" : ""}>
-              <td>{r.k}{r.st && <span className="faint"> · {r.st}</span>}</td>
+              <td><b>{r.k}</b>{r.st && <span className="sub">{r.st}</span>}</td>
               <td className="big">{r.size}</td>
               <td className="r num">{r.pcs}</td>
               {scr && <td className="r num">{r.n}</td>}

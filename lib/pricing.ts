@@ -910,12 +910,14 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const anySplit = (g.imprints || []).some(split);
   // the youth screens' own underbase: none when every youth shirt is light (a Natural), the same rule as the adult's
   const kidLight = !!pl.darkAddsColor && !(g.lines || []).some((l, i) => kidAt[i] && billQty(l) > 0 && !isLightColor(l.color, pl));
+  const adultLight = !!pl.darkAddsColor && !(g.lines || []).some((l, i) => !kidAt[i] && billQty(l) > 0 && !isLightColor(l.color, pl));
   const imprints: (ReturnType<typeof imprintPrice> & { id: string; pmsShared?: string[]; /** PMS inks a color change prints in, charged as matches */ pmsChange?: string[]; /** PMS matches charged on this print */ pmsN?: number;
-    /** its own youth screen: the youth print's price each and setup, and the pieces each side is priced at */ youth?: { each: number; setup: number; screens?: number; qty: number; adultQty: number; size: string } })[] =
+    /** its own youth screen: the youth print's price each and setup, and the pieces each side is priced at */ youth?: { each: number; setup: number; screens?: number; qty: number; adultQty: number; size: string; /** the adult print's price each on its own shirts (light shirts priced as light) */ adultEach: number } })[] =
     (g.imprints || []).map((d) => {
       if (!split(d)) return { id: d.id, ...imprintPrice(d, tiOf(d), pl, false, false, ixOf(d)) };
       const y = imprintPrice(d, tiOf(d, "y"), pl, kidLight, kidLight, ixOf(d, "y"));
-      return { id: d.id, ...imprintPrice(d, tiOf(d, "a"), pl, false, false, ixOf(d, "a")), youth: { each: y.each, setup: y.setup, screens: (y as { screens?: number }).screens, qty: yQty, adultQty: aQty, size: d.youth?.size || "" } };
+      const a = imprintPrice(d, tiOf(d, "a"), pl, adultLight, adultLight, ixOf(d, "a"));
+      return { id: d.id, ...imprintPrice(d, tiOf(d, "a"), pl, false, false, ixOf(d, "a")), youth: { each: y.each, setup: y.setup, screens: (y as { screens?: number }).screens, qty: yQty, adultQty: aQty, size: d.youth?.size || "", adultEach: a.each } };
     });
   // RULE (Nick, Oct 24 2026): one PMS matching fee per PMS color per ORDER. The same PMS on the front and the back (or on
   // another group of the same order) is matched once, so only its first print pays. `seen` is shared by calcOrder.
@@ -1050,7 +1052,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;

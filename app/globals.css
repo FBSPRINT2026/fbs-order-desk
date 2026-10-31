@@ -16689,11 +16689,12 @@ html body .panel.mk-youth-lock{opacity:.5;filter:grayscale(.4)}
 /* youth screens on the order's print: a row a side (Oct 31, Nick picked option C) */
 html body .yth-wrap{margin:6px 0 2px;width:100%;grid-column:1/-1}
 html body table.yth-tbl{width:100%;border:1px solid var(--line);border-radius:var(--r);border-collapse:separate;border-spacing:0;overflow:hidden;font-size:13px}
-html body table.yth-tbl th{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:5px 10px;background:var(--surface-2);border-bottom:1px solid var(--line)}
-html body table.yth-tbl td{padding:7px 10px;border-bottom:1px solid var(--line-2,var(--line));white-space:nowrap;color:var(--ink)}
+html body table.yth-tbl th{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:5px 8px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+html body table.yth-tbl td{padding:6px 8px;border-bottom:1px solid var(--line-2,var(--line));white-space:nowrap;color:var(--ink)}
 html body table.yth-tbl tr:last-child td{border-bottom:0}
 html body table.yth-tbl td.big{font-weight:800;font-size:15px}
 html body table.yth-tbl .r{text-align:right}
-html body table.yth-tbl td .faint{color:var(--ink-3);font-size:12px}
+html body table.yth-tbl td .sub{display:block;color:var(--ink-3);font-size:12px;font-weight:400;white-space:normal}
 html body table.yth-tbl tr.y td{background:var(--accent-soft)}
-html body table.yth-tbl tr.y td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue);color:var(--fbs-blue);font-weight:700}
+html body table.yth-tbl tr.y td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
+html body table.yth-tbl tr.y td:first-child b{color:var(--fbs-blue)}
