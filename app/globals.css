@@ -16932,29 +16932,28 @@ body:has(.dla-bg.dock.wide:not(.og-hidden)){padding-right:min(var(--dock-w,540px
 .dla-bg.dock > .dla:hover::after{background:var(--ink-3)}
 body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:none!important}
 /* the Mockup Creator's Name & number builder (components/NameNumberBuilder.tsx, Oct 31) */
-.nnb-h{width:100%;border:0;background:none;cursor:pointer;text-align:left;font:inherit;display:flex;align-items:baseline;gap:8px}
-.nnb-h .faint{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nnb-car{width:12px;height:12px;flex:none;fill:none;stroke:var(--ink-3);stroke-width:1.8;align-self:center}
-.nnb-b{display:flex;flex-direction:column;gap:10px}
-.nnb-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mk-modal.nnb{max-width:460px;gap:12px}
+.nnb-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.nnb-lead{margin:-6px 0 0;font-size:12.5px}
+.nnb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;align-items:start}
+.nnb-grid .field,.nnb-list.field{margin:0}
+.nnb-lh{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .nnb-up{cursor:pointer}
-.nnb-list{border:1px solid var(--line);border-radius:var(--r);padding:8px}
-.nnb-lh{display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;font-size:13px;margin-bottom:6px}
-.nnb-lh .linkbtn{margin-left:auto}
-.nnb-warn{color:var(--warn);font-size:12px}
-.nnb-rows{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto}
-.nnb-r{display:grid;grid-template-columns:minmax(0,1fr) 56px 60px 28px;gap:4px;align-items:center}
-.nnb-r input{height:30px;min-width:0;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);color:var(--ink)}
-.nnb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
-.nnb-grid .field{margin:0}
+.nnb-list textarea{width:100%;min-height:72px;resize:vertical;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:14px/1.45 var(--body);color:var(--ink)}
+.nnb-count{font-size:12.5px}
+.nnb-warn{color:var(--warn)}
+.nnb-pv{display:grid;place-items:center;min-height:130px;max-height:220px;padding:14px;border-radius:var(--r);border:1px solid var(--line)}
+.nnb-pv svg{width:auto;height:auto;max-width:100%;max-height:190px}
+.nnb-more{align-self:flex-start;font-size:13px}
+.nnb-det{display:flex;flex-direction:column;gap:10px}
 .nnb-inks{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .nnb-k{font-size:12px;font-weight:600;color:var(--ink-3);width:52px}
 .nnb-ink{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);padding:0;cursor:pointer;font-size:12px;line-height:1;color:var(--ink-3);background:var(--surface)}
 .nnb-ink.on{outline:2px solid var(--accent);outline-offset:2px}
-.nnb-pv{display:grid;place-items:center;min-height:140px;max-height:240px;padding:14px;border-radius:var(--r);background:var(--surface-2)}
-.nnb-pv.dk{background:#3b4250}
-.nnb-pv svg{width:auto;height:auto;max-width:100%;max-height:210px}
-.nnb-msg{margin:0;font-size:12.5px}
+.nnb-msg{margin:0;font-size:12.5px;color:var(--ink-3)}
+.nnb-foot{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.mk-nnb-open{align-self:flex-start}
+.mk-nnb-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;padding:6px 8px;border-radius:6px;background:var(--surface-2)}
 /* the gang sheet's names & numbers question (Oct 31) */
 .gang-rs{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:6px 0 4px}
 .gang-rs-o{display:flex;flex-direction:column;gap:4px;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);cursor:pointer;font:inherit}

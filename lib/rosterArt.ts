@@ -46,8 +46,25 @@ export function parseRoster(table: string[][]): RosterRow[] {
   return body.map((r) => ({ name: iName >= 0 ? r[iName] || "" : "", number: iNum >= 0 ? (r[iNum] || "").replace(/^#/, "") : "", size: iSize >= 0 ? (r[iSize] || "").toUpperCase() : "" }))
     .filter((r) => r.name || r.number);
 }
-/** text lines ("SMITH, 23, L" / tab-separated / a CSV) into a table */
-export const textTable = (t: string): string[][] => t.split(/\r?\n/).map((ln) => (ln.includes("\t") ? ln.split("\t") : ln.split(/\s*,\s*/)).map((c) => c.replace(/^"|"$/g, "")));
+const HEAD_WORD = /^(name|names|last|first|player|number|numbers|no\.?|#|jersey|size|sizes)$/i;
+/**
+ * One typed line with no commas or tabs ("SMITH 23 L", "VAN DYKE #7", "23", "JOHN SMITH") as [name, number, size]: a
+ * size word at the end is the size, a 1–3 digit number (with or without #) is the number, the other words the name. A
+ * line of only column names ("Name Number Size") stays as words, so it's read as the header.
+ */
+function spacedLine(ln: string): string[] {
+  const w = ln.trim().split(/\s+/).filter(Boolean);
+  if (!w.length) return [];
+  if (w.every((x) => HEAD_WORD.test(x))) return w;
+  let size = "", num = "";
+  if (w.length > 1 && SIZE_RE.test(w[w.length - 1])) size = w.pop()!;
+  const ni = w.findIndex((x) => /^#?\d{1,3}$/.test(x));
+  if (ni >= 0) num = w.splice(ni, 1)[0];
+  if (!size && w.length > 1 && SIZE_RE.test(w[w.length - 1])) size = w.pop()!;
+  return [w.join(" "), num, size];
+}
+/** text lines ("SMITH, 23, L" / "SMITH 23 L" / tab-separated / a CSV) into a table */
+export const textTable = (t: string): string[][] => t.split(/\r?\n/).map((ln) => (ln.includes("\t") ? ln.split("\t") : ln.includes(",") ? ln.split(/\s*,\s*/) : spacedLine(ln)).map((c) => c.replace(/^"|"$/g, "")));
 
 /** a spreadsheet file (.csv, .tsv, .txt, .xlsx) into a table: an .xlsx is read here (a zip of XML; its first sheet) */
 export async function fileTable(f: File): Promise<string[][]> {
@@ -130,8 +147,21 @@ async function oneFont(font: string, weight: number): Promise<string> {
   }
 }
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-/** a capital letter's height as a share of the font size (most block and sport fonts sit near 0.72) */
+/** a capital letter's height as a share of the font size, when the browser can't measure the letters themselves */
 const CAP = 0.72;
+/**
+ * How a line of text really sits in its font: the ink's height above and below the baseline and its reach left and right
+ * of the line's center, per pixel of font size. Measured from the letters themselves, so every font (a tall slab, a short
+ * script) is the height asked for and nothing is cut off at the top or sides.
+ */
+function inkOf(ctx: CanvasRenderingContext2D, font: string, weight: number, text: string) {
+  ctx.font = `${weight} 200px '${font}'`;
+  const m = ctx.measureText(text), k = 1 / 200;
+  const asc = m.actualBoundingBoxAscent, desc = m.actualBoundingBoxDescent;
+  if (!(asc > 0)) return { asc: CAP, desc: 0.04, half: (m.width * k) / 2 + 0.02 };
+  const adv = m.width / 2;
+  return { asc: asc * k, desc: Math.max(0, desc) * k, half: Math.max(adv, m.actualBoundingBoxLeft + adv, m.actualBoundingBoxRight - adv) * k };
+}
 
 /**
  * One shirt's names & numbers as SVG, in the Design Lab's units (50 to the inch): the name over the number, centered,
@@ -141,26 +171,27 @@ const CAP = 0.72;
 export async function rosterSvg(spec: Pick<RosterSpec, "show" | "font" | "color" | "nameIn" | "numIn" | "gapIn" | "outline">, row: RosterRow, part: RosterShow = spec.show, embed = false): Promise<{ svg: string; w: number; h: number }> {
   const f = fontOf(spec.font), weight = f.weight;
   await loadFont(spec.font, weight);
+  try { await document.fonts.load(`${weight} 200px '${spec.font}'`); } catch { /* measured with what's there */ }
   const ctx = document.createElement("canvas").getContext("2d")!;
-  const lines: { text: string; size: number }[] = [];
+  const lines: { text: string; inches: number }[] = [];
   const name = (row.name || "").trim(), num = (row.number || "").trim();
-  if ((part === "both" || part === "name") && name) lines.push({ text: name.toUpperCase(), size: (spec.nameIn * UNITS_PER_IN) / CAP });
-  if ((part === "both" || part === "number") && num) lines.push({ text: num, size: (spec.numIn * UNITS_PER_IN) / CAP });
-  if (!lines.length) lines.push({ text: part === "number" ? "00" : "NAME", size: ((part === "number" ? spec.numIn : spec.nameIn) * UNITS_PER_IN) / CAP });
+  if ((part === "both" || part === "name") && name) lines.push({ text: name.toUpperCase(), inches: spec.nameIn });
+  if ((part === "both" || part === "number") && num) lines.push({ text: num, inches: spec.numIn });
+  if (!lines.length) lines.push({ text: part === "number" ? "00" : "NAME", inches: part === "number" ? spec.numIn : spec.nameIn });
   const ow = spec.outline ? Math.max(2, 0.06 * UNITS_PER_IN) : 0;
-  let y = ow, w = 0;
+  let y = ow, half = 0;
   const parts: string[] = [];
   const gap = spec.gapIn * UNITS_PER_IN;
   for (const [i, ln] of lines.entries()) {
-    ctx.font = `${weight} ${ln.size}px '${spec.font}'`;
-    const m = ctx.measureText(ln.text);
-    const cap = ln.size * CAP, tw = m.width;
-    w = Math.max(w, tw + 2 * ow);
-    const base = y + cap;
-    parts.push(`<text x="0" y="${base.toFixed(1)}" text-anchor="middle" font-family="'${esc(spec.font)}'" font-weight="${weight}" font-size="${ln.size.toFixed(1)}" fill="${spec.color}"${spec.outline ? ` stroke="${spec.outline}" stroke-width="${(ow * 2).toFixed(1)}" paint-order="stroke" stroke-linejoin="round"` : ""}>${esc(ln.text)}</text>`);
-    y = base + (i < lines.length - 1 ? gap : 0);
+    // the letters (capitals and digits) the height asked for, measured in this font
+    const ink = inkOf(ctx, spec.font, weight, ln.text);
+    const size = (ln.inches * UNITS_PER_IN) / ink.asc;
+    half = Math.max(half, ink.half * size + ow);
+    const base = y + ink.asc * size;
+    parts.push(`<text x="0" y="${base.toFixed(1)}" text-anchor="middle" font-family="'${esc(spec.font)}'" font-weight="${weight}" font-size="${size.toFixed(1)}" fill="${spec.color}"${spec.outline ? ` stroke="${spec.outline}" stroke-width="${(ow * 2).toFixed(1)}" paint-order="stroke" stroke-linejoin="round"` : ""}>${esc(ln.text)}</text>`);
+    y = base + ink.desc * size + (i < lines.length - 1 ? gap + ow * 2 : 0);
   }
-  const h = y + ow + (lines.length ? lines[lines.length - 1].size * 0.06 : 0);
+  const h = y + ow, w = half * 2;
   const fonts = embed ? await embeddedFonts([{ font: spec.font, weight }]) : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${(-w / 2).toFixed(1)} 0 ${w.toFixed(1)} ${h.toFixed(1)}" width="${(w / UNITS_PER_IN).toFixed(2)}in" height="${(h / UNITS_PER_IN).toFixed(2)}in">${fonts ? `<defs><style>${fonts}</style></defs>` : ""}${parts.join("")}</svg>`;
   return { svg, w, h };

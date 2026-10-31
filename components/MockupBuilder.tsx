@@ -669,6 +669,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const loadedIms = useRef<Record<string, Imprint>>({});
   /** the group's pieces (the Name & number builder checks its list against them) */
   const [pieceCount, setPieceCount] = useState(0);
+  /** the Name & number builder pop-up: the print it changes ("" for a new one) */
+  const [nnb, setNnb] = useState<{ imId: string } | null>(null);
   useEffect(() => {
     const on = async () => {
       setArtTick((t) => t + 1);
@@ -2134,13 +2136,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
   /** the Name & number builder's first shirt as a print (components/NameNumberBuilder.tsx): saved like a Design Lab design,
    *  put where it was asked for, with the list and its look on the print (Imprint.roster) for the gang sheet */
-  async function placeRoster(out: DesignerOut, spec: RosterSpec): Promise<string | void> {
+  async function placeRoster(out: DesignerOut, spec: RosterSpec, imId = ""): Promise<string | void> {
     try {
       const { data: u } = portal ? { data: { user: null } } : await sb.auth.getUser();
       const r = await saveDesignerLogo(sb, out, { portal, customerId, by: u.user?.email || "" });
       setDesigns((x) => [r.design, ...x]);
       if (r.url) setUrls((x) => ({ ...x, [r.design.id]: r.url }));
-      const was = imprints.find((x) => x.roster);
+      const was = imId ? imprints.find((x) => x.id === imId) : undefined;
       const side: Side = /front|chest/i.test(spec.location) ? "front" : /sleeve/i.test(spec.location) ? "sleeve" : "back";
       const note = `Names & numbers (${spec.rows.length}): ${spec.rows.map((x) => [x.name, x.number, x.size].filter(Boolean).join(" ")).join("; ")}`.slice(0, 1500);
       placeFromLab(side, was?.id || "", r.design, out.box, note, spec.location);
@@ -4161,6 +4163,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               </div>
             </div>
           )}
+          {nnb && (() => { const im = imprints.find((x) => x.id === nnb.imId); return (
+            <NameNumberBuilder spots={locsFor(curTab)} start={im?.roster || null} pieces={pieceCount || undefined} bg={shirtHex(lines[active])}
+              onPlace={(out, spec) => placeRoster(out, spec, im?.id || "")} onClose={() => setNnb(null)} />
+          ); })()}
           {pop && (() => {
             const im = imprints.find((x) => x.id === pop.id);
             const pt = paints[pop.id];
@@ -4279,6 +4285,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         </div>
                       ); })()}
                       {p.wIn > im.area.w + 0.01 || (p.hIn || 0) > im.area.h + 0.01 ? <span className="err">The logo is bigger than the area ({im.area.w.toFixed(2)}&quot; × {im.area.h.toFixed(2)}&quot;).</span> : null}
+                    </div>}
+                    {im.roster && <div className="mk-nnb-row">
+                      <span><b>Names &amp; numbers</b> · {im.roster.rows.length} shirt{im.roster.rows.length === 1 ? "" : "s"} · {im.roster.font}</span>
+                      {!viewId && <button type="button" className="linkbtn" onClick={() => setNnb({ imId: im.id })}>Edit</button>}
                     </div>}
                     {/* Upload logo right under the location (Oct 9, Nick: no Logo / Text switch; text comes from + Add Text) */}
                     <label className="btn sm mk-upload" style={{ cursor: "pointer" }}>Upload logo<input type="file" hidden accept={DESIGN_ACCEPT} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; if (qt[im.id]) textMode(im, false); uploadNew(im, f); }} /></label>
@@ -4547,6 +4557,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   </div>
                 );
               })}
+              {/* names & numbers: a small button under the prints, the builder pops up (Oct 31, Nick) */}
+              {!viewId && <button type="button" className="btn sm mk-nnb-open" onClick={() => setNnb({ imId: "" })}>+ Names &amp; numbers</button>}
               {orderId && <div className="faint" style={{ fontSize: 12 }}>Changes here (locations, designs, sizes, inks) go back to the order when you save.</div>}
             </div>
           </section>
@@ -4727,7 +4739,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             </section>
           )}
           {/* names & numbers (Oct 31, Nick): the list, the look, the first shirt on the mockup for approval */}
-          {!viewId && <NameNumberBuilder pieces={pieceCount || undefined} start={imprints.find((x) => x.roster)?.roster || null} onPlace={placeRoster} />}
         </div>
       </div>
     </BrandCtx.Provider>
