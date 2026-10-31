@@ -1,4 +1,5 @@
 import "server-only";
+import { addressBlock } from "@/lib/addressBlock";
 import { cutClean } from "@/lib/sentenceCut";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude } from "@/lib/ai/claude";
@@ -34,7 +35,7 @@ const ORDER_FIELDS: Record<string, { say: string; set: (v: string) => unknown | 
   due_date: { say: "YYYY-MM-DD", set: (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined) },
   firm: { say: "yes/no", set: (v) => yes(v) },
   delivery_method: { say: "pickup, deliver, ship or tbd (not told yet)", set: (v) => { const k = v.toLowerCase(); return /tbd|not sure|unknown|don.?t know|not told/.test(k) ? "tbd" : /pick/.test(k) ? "pickup" : /deliver/.test(k) ? "deliver" : /ship/.test(k) ? "ship" : undefined; } },
-  ship_to: { say: "the address", set: (v) => v.slice(0, 500) },
+  ship_to: { say: "the address", set: (v) => addressBlock(v).slice(0, 500) },
   nickname: { say: "the job name", set: (v) => (v ? v.slice(0, 120) : undefined) },
   po_number: { say: "the customer's PO number", set: (v) => v.slice(0, 80) },
   production_date: { say: "YYYY-MM-DD or \"\"", set: (v) => (!v ? null : /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined) },

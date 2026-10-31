@@ -6,7 +6,8 @@
  */
 const STATE_ZIP = /^[A-Z]{2}\.?\s*\d{5}(-\d{4})?$/;
 export function addressBlock(raw: string): string {
-  const t = (raw || "").replace(/\r/g, "").trim();
+  // a reader that wrote its line breaks out as "\n" text (Oct 31, #40318: "MEI\nATTN: Craig Hanchett\n262 Caplos Road")
+  const t = (raw || "").replace(/\r/g, "").replace(/\\r\\n|\\n|\\r/g, "\n").trim();
   if (!t) return "";
   const tidy = (ls: string[]) => ls.map((l) => l.replace(/\s+/g, " ").replace(/[,\s]+$/, "").trim()).filter(Boolean).join("\n");
   if (t.includes("\n")) return tidy(t.split("\n"));

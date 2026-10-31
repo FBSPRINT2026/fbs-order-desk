@@ -337,7 +337,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
               <div className="osp-trained" role="note">
                 <b>This looks like a{/^[aeiou]/i.test(trained.customer) ? "n" : ""} {trained.customer}{trained.name && trained.name !== trained.customer ? ` · ${trained.name}` : ""} order.</b>
                 <span>Make it with the {trained.name || trained.customer} rules? They win over everything on this card.</span>
-                <div className="osp-card-go"><button type="button" className="btn primary" onClick={() => onPick({ told: [RULES(trained.name || trained.customer), aiNote.trim()].filter(Boolean).join(" "), orderType: "new" })}>Make it with the rules</button><button type="button" className="btn" onClick={() => setTrained(null)}>No, use the card</button></div>
+                <div className="osp-card-go"><button type="button" className="btn primary" onClick={() => onPick({ told: [RULES(trained.name || trained.customer), aiNote.trim()].filter(Boolean).join(" ") })}>Make it with the rules</button><button type="button" className="btn" onClick={() => setTrained(null)}>No, use the card</button></div>
               </div>
             )}
             {/* one order: the same card (Oct 24) */}

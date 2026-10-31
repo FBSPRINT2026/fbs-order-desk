@@ -1,4 +1,5 @@
 import "server-only";
+import { addressBlock } from "@/lib/addressBlock";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
@@ -293,7 +294,7 @@ async function runTool(name: string, input: Record<string, unknown>, c: Ctx): Pr
     const draft: EODraft = {
       v: 2, kind: "new", summary: String(p.summary || "").slice(0, 300), confidence: p.confidence || "medium",
       nickname: String(p.nickname || "").slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(String(p.due_date || "")) ? String(p.due_date) : null,
-      delivery: p.delivery === "ship" || p.delivery === "deliver" ? p.delivery : "pickup", ship_to: String(p.ship_to || "").slice(0, 500), po_number: String(p.po_number || "").slice(0, 60),
+      delivery: p.delivery === "ship" || p.delivery === "deliver" ? p.delivery : "pickup", ship_to: addressBlock(String(p.ship_to || "")).slice(0, 500), po_number: String(p.po_number || "").slice(0, 60),
       notes: String(p.notes || "").slice(0, 1500), goods: { supplied: false, supplier: "", expected: "", note: "" }, groups, art, mockups: {}, reorderOf: null,
       questions: (p.questions || []).map(String).slice(0, 10), files,
     };
