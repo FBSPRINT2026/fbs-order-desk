@@ -24,7 +24,7 @@ import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
 import { attachMockupToRequest, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
-import { isVector, knockOut, trimClear, type CleanArt } from "@/lib/artPrep";
+import { isVector, knockOut, trimClear, trimSolid, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
 import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
@@ -331,7 +331,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const imgCache = useRef(new Map<string, HTMLImageElement>());
   // raster logos (JPG, PNG…) on a solid background get it knocked out; staff can keep it per logo
   const [clean, setClean] = useState<Record<string, string>>({});
-  const [keepBg, setKeepBg] = useState<Record<string, boolean>>({});
+  // kept with the logo (Design.specs.bg, Oct 31, Nick on the American flag: "it's knocking it out each time the white, even
+  // though I uncheck it, and then it comes back"): "keep" = its background is art, "remove" = taken out; every mockup,
+  // the order page's redraws and the logo mockups draw it the same way
+  const [keepBgLocal, setKeepBg] = useState<Record<string, boolean>>({});
+  const bgKey = designs.map((x) => `${x.id}:${((x.specs || {}) as { bg?: string }).bg || ""}`).join(",");
+  const keepBg = useMemo<Record<string, boolean>>(() => ({ ...Object.fromEntries(designs.filter((x) => ((x.specs || {}) as { bg?: string }).bg).map((x) => [x.id, ((x.specs || {}) as { bg?: string }).bg === "keep"])), ...keepBgLocal }), [bgKey, keepBgLocal]); // eslint-disable-line react-hooks/exhaustive-deps
   const [keepInside, setKeepInside] = useState<Record<string, boolean>>({});
   // where the art really is once the background is gone (or a see-through logo's empty margins are cut off): the
   // logo is sized on the shirt by that, not by the old box around it
@@ -367,7 +372,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // too, when its art sits on a solid box (Oct 23, Nick on #40113: Tongue in Cheek came on a black background, "you've
       // got to know to remove the background so that you can have that be the shirt color and then size it"): only the
       // box around the art comes out, the same color inside the art stays
-      const k: CleanArt | null = (keepBg[d.id] ? null : knockOut(img, { keepInside: vec || !!keepInside[d.id] })) || (vec ? null : trimClear(img));
+      const k: CleanArt | null = (keepBg[d.id] ? null : knockOut(img, { keepInside: vec || !!keepInside[d.id] })) || (vec ? null : trimClear(img)) || (keepBg[d.id] && !vec ? trimSolid(img) : null);
       if (k) {
         // a vector's box taken out for the first time: its print plan was worked out with the box's color as an ink
         if (vec && !d.art_box) replan.current.add(d.id);
@@ -391,7 +396,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setClean((c) => { const n = { ...c }; delete n[d.id]; return n; });
     setPaints((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v.design !== d.id)));
   }
-  function toggleBg(d: Design) { resetLogo(d); setKeepBg((k) => ({ ...k, [d.id]: !k[d.id] })); }
+  function toggleBg(d: Design) { resetLogo(d); setBg(d, !keepBg[d.id]); }
+  /** the background kept or taken out, saved on the logo so it stays that way everywhere (staff only) */
+  function setBg(d: Design, keep: boolean) {
+    setKeepBg((k) => ({ ...k, [d.id]: keep }));
+    if (portal || d.id.startsWith("qt-")) return;
+    const specs = { ...((d.specs || {}) as Record<string, unknown>), bg: keep ? "keep" : "remove" };
+    setDesigns((xs) => xs.map((x) => (x.id === d.id ? { ...x, specs } as Design : x)));
+    void sb.from("designs").update({ specs }).eq("id", d.id);
+  }
   const [msg, setMsg] = useState("");
   const autoWant = useRef<Record<string, { colors: number; inks: string }>>({});
   /** the sizes on the order (2T, 3T, 4T…): one screen prints them all, so prints are capped to the smallest */
@@ -983,7 +996,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [rasterAsk, setRasterAsk] = useState<{ imId: string; d: Design } | null>(null);
   const [rasterBg, setRasterBg] = useState(true);
   function askRaster(imId: string, d: Design) {
-    if (isVector(d.file_type, d.file_name) || rasterOk[d.id]) return;
+    // asked once per logo: its answer is kept on it (Design.specs.bg)
+    if (isVector(d.file_type, d.file_name) || rasterOk[d.id] || ((d.specs || {}) as { bg?: string }).bg) return;
     setRasterBg(!keepBg[d.id]);
     setRasterAsk({ imId, d });
   }
@@ -4168,7 +4182,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 <label className="check"><input type="checkbox" checked={rasterBg} onChange={(e) => setRasterBg(e.target.checked)} /> Remove the background (the white box around the logo)</label>
                 <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
                   <button type="button" className="btn ghost" onClick={() => { const a = rasterAsk; setRasterAsk(null); setImprints((xs) => xs.map((x) => (x.id === a.imId && x.design_id === a.d.id ? { ...x, design_id: undefined } : x))); }}>Choose a different file</button>
-                  <button type="button" className="btn primary" autoFocus onClick={() => { const a = rasterAsk; setRasterAsk(null); setRasterOk((r) => ({ ...r, [a.d.id]: true })); if (rasterBg === !!keepBg[a.d.id]) toggleBg(a.d); }}>OK</button>
+                  <button type="button" className="btn primary" autoFocus onClick={() => { const a = rasterAsk; setRasterAsk(null); setRasterOk((r) => ({ ...r, [a.d.id]: true })); if (rasterBg === !!keepBg[a.d.id]) toggleBg(a.d); else setBg(a.d, !rasterBg); }}>OK</button>
                 </div>
               </div>
             </div>

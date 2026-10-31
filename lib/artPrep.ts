@@ -60,6 +60,35 @@ export function trimClear(img: HTMLImageElement): CleanArt | null {
 }
 
 /**
+ * A logo whose background stays (staff said keep it: a flag's white stripes are white, not the shirt): only the plain
+ * margin of the edge color around it is cut off, nothing made see-through. Null when there's no margin to cut.
+ */
+export function trimSolid(img: HTMLImageElement): CleanArt | null {
+  const W = img.naturalWidth, H = img.naturalHeight;
+  if (!W || !H) return null;
+  const k = Math.min(1, 2000 / Math.max(W, H));
+  const w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
+  const { c, x } = canvasOf(img, w, h);
+  let data: ImageData;
+  try { data = x.getImageData(0, 0, w, h); } catch { return null; }
+  const d = data.data, bg = [d[0], d[1], d[2]];
+  const off = (p: number) => Math.hypot(d[p * 4] - bg[0], d[p * 4 + 1] - bg[1], d[p * 4 + 2] - bg[2]) > 40 && d[p * 4 + 3] > 12;
+  const rowPlain = (y: number) => { for (let X = 0; X < w; X++) if (off(y * w + X)) return false; return true; };
+  const colPlain = (X: number, y0: number, y1: number) => { for (let y = y0; y <= y1; y++) if (off(y * w + X)) return false; return true; };
+  let y0 = 0, y1 = h - 1, x0 = 0, x1 = w - 1;
+  while (y0 < y1 && rowPlain(y0)) y0++;
+  while (y1 > y0 && rowPlain(y1)) y1--;
+  while (x0 < x1 && colPlain(x0, y0, y1)) x0++;
+  while (x1 > x0 && colPlain(x1, y0, y1)) x1--;
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  if (bw >= w * 0.97 && bh >= h * 0.97) return null;
+  const out = document.createElement("canvas");
+  out.width = bw; out.height = bh;
+  out.getContext("2d")!.drawImage(c, x0, y0, bw, bh, 0, 0, bw, bh);
+  return { url: out.toDataURL("image/png"), bg: "", w: bw, h: bh, box: { x: Math.round(x0 / k), y: Math.round(y0 / k), w: Math.min(W, Math.round(bw / k)), h: Math.min(H, Math.round(bh / k)) }, of: { w: W, h: H } };
+}
+
+/**
  * If the image has no transparency and its edges are one solid color (the white box around a JPG logo),
  * make that background see-through everywhere — including inside letters (the holes in e, d, p, ®).
  * Edge pixels that are part logo / part background get partial see-through and their color "un-mixed"
