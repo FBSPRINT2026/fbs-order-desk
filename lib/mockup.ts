@@ -564,7 +564,9 @@ const kOf = (b?: Body | null) => {
 function fitSpot(s: Loc, b?: Body | null): Loc {
   const k = kOf(b);
   if (!k) return s;
-  const maxW = half(s.maxW * k.gw), maxH = half(s.maxH * k.gl);
+  // a sleeve's print area is what fits the sleeve platen, not a share of the body: 3.5" on every size (Oct 30, Nick on a
+  // Gildan 64000B: "it's maxing out the size at 3 inches on the sleeve… we can do 3.5 inches in all sleeves")
+  const maxW = s.wrap ? s.maxW : half(s.maxW * k.gw), maxH = s.wrap ? s.maxH : half(s.maxH * k.gl);
   // the drop below the collar shrinks less than the shirt does: the neckline doesn't scale down with a toddler tee, so
   // a straight scale (4" × 0.55 = 2.2" on a 3T) crowds the collar. Smaller garments use the square root (~3" on a 3T).
   // A onesie's length runs down to the snaps (a 12M is 19.5" long, 9.88" wide), so its length says nothing about where
