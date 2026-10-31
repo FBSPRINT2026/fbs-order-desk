@@ -16689,9 +16689,10 @@ html body .panel.mk-youth-lock{opacity:.5;filter:grayscale(.4)}
 /* youth screens on the order's print (Oct 31, Nick: "a simple adult and then youth" right under the name, and "in bold,
    two different setups" next to the colors): plain text rows, the youth row in blue */
 html body .pr-ynote{color:var(--ink);font-weight:700}
-html body table.yth-mini{border-collapse:collapse;font-size:13px;color:var(--ink-2);margin:2px 0 4px}
+html body table.yth-mini{border-collapse:collapse;font-size:13px;color:var(--ink-2);margin:2px 0 4px;width:auto;max-width:100%}
 html body table.yth-mini td{padding:1px 18px 1px 0;vertical-align:baseline}
-html body table.yth-mini td:nth-child(2){white-space:nowrap}
+html body table.yth-mini td{white-space:nowrap}
+html body table.yth-mini td:last-child{white-space:normal}
 html body table.yth-mini td:first-child{color:var(--ink-3);font-size:12px;width:56px}
 html body table.yth-mini tr.y td{color:var(--fbs-blue)}
 html body table.yth-mini tr.y td:first-child{font-weight:700}

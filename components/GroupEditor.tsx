@@ -1742,7 +1742,7 @@ function PrintRow({ youth, shown, d, n, hex, designs, urls, each, detailsHref, o
         {/* visual only: no guessed inks or size anywhere, so nobody takes a guess for how it printed (Oct 20, Nick) */}
         <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
-          {youth && <b className="pr-ynote">{youth.note}</b>}
+          {youth && <span className="pr-ynote">{youth.note}</span>}
           {!youth && size && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
           {!youth && !(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
           {d.method === "screen" && d.puff && <span className="pr-puff">Puff print</span>}
