@@ -17,6 +17,8 @@ export type ProgramItem = {
     /** only the standard print: at most this many colors on any print, and this many prints (Armstrong: 1 color, front
      *  and back = 2); a sleeve or a 2-color print isn't standard */
     maxColors?: number; maxPrints?: number;
+    /** every one of these words in the order's name too (Oct 31, MEI: "Cart": a store cart, never MEI's bulk orders) */
+    allOf?: string[];
     /** at least this many prints (Oct 31, MEI: a hat with the logo AND "add American flag" is its own price, $2.50 more) */
     minPrints?: number;
     /** the standard logos (design ids) this price is for (Oct 18, Nick: "you would likely only know if it is a special
@@ -170,6 +172,7 @@ export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCt
     const standardArt = (it: DesignPrice) => !it.match?.designs?.length || !art.length || art.every((id) => it.match!.designs!.includes(id));
     hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length) && standardArt(it)
       && (!it.match?.who?.length || has(who, it.match.who)) && (!it.match?.what?.length || has(what, it.match.what))
+      && (it.match?.allOf || []).every((x) => has(who, [x]))
       && !(it.match?.not?.length && has(who, it.match.not)) && !(it.match?.notArt?.length && has(sing(d.art || ""), it.match.notArt)) && sameMethod(it) && standard(it));
     // the most specific match wins: a style number ("W961") over a word, a longer phrase ("knit cap") over one word
     // ("short" is in "Short Sleeve UV Daybreak Shirt"), and any garment match over a catch-all with no garment list
