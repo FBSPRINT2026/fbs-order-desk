@@ -3,16 +3,23 @@ import { useCallback, useEffect, useState } from "react";
 import { TRACK, trackingUrl } from "@/lib/goods";
 import { money } from "@/lib/format";
 import ShopGoods from "@/components/ShopGoods";
-import { addGoodsInfo, goodsPanel, readGoodsPaste, setBuyReceived, type GoodsAdd, type GoodsPanel, type PanelTrack } from "@/app/shop/goods-panel-actions";
+import SuppliedBox from "@/components/SuppliedBox";
+import type { Group, Imprint } from "@/lib/pricing";
+import { addGoodsInfo, goodsPanel, readGoodsPaste, setBuyReceived, setSupplyReceived, type GoodsAdd, type GoodsPanel, type PanelSup, type PanelTrack } from "@/app/shop/goods-panel-actions";
 
 /**
  * The order's Goods panel, under Totals (Oct 29, Nick): "N/A" and "No current information" until something is known;
  * then "FBS ordered" (our purchases: Order goods' S&S and SanMar orders, or any vendor added here) and/or "Customer
  * supplied" (their goods), with the PO, arrival and tracking. Add: who ordered, the vendor, the order number, arrival,
  * tracking; or paste a confirmation, a shipping email, a ClickUp note and the Goods reader fills it in.
+ * Their transfers (Oct 31, Nick: "like shirts its customer supplied… when you check it it adds items to the goods
+ * page"): a print ticked "Customer supplied transfers" is a card here, with who made them and their order #, tracking and
+ * Mark received (order_supplies, kept in step with the prints).
  */
 const day = (d?: string | null) => (d ? new Date(d.length === 10 ? d + "T12:00" : d).toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }) : "");
-const blank = (who: "fbs" | "cust"): GoodsAdd => ({ who, vendor: "", po: "", eta: "", carrier: "", tracking: "" });
+const blank = (who: GoodsAdd["who"]): GoodsAdd => ({ who, vendor: "", po: "", eta: "", carrier: "", tracking: "" });
+const STEPS = ["Ordered", "Shipped", "Delivered", "Received"];
+const supStep = (x: PanelSup) => (x.received ? 3 : x.tracking.length && x.tracking.every((t) => t.delivered || t.status === "delivered") ? 2 : x.tracking.length || x.status === "on_way" ? 1 : 0);
 
 function Track({ t }: { t: PanelTrack }) {
   const st = t.delivered ? `Delivered ${day(t.delivered)}` : t.status && TRACK[t.status] ? TRACK[t.status] + (t.eta && t.status !== "delivered" ? ` · ${day(t.eta)}` : "") : "";
@@ -22,7 +29,9 @@ function Track({ t }: { t: PanelTrack }) {
   );
 }
 
-export default function OrderGoodsPanel({ orderId, wholesale, customerId }: { orderId: string; wholesale: boolean; customerId: string | null }) {
+export default function OrderGoodsPanel({ orderId, wholesale, customerId, groups, onPrints, thumbUrls }: { orderId: string; wholesale: boolean; customerId: string | null;
+  /** the order page's groups and a way to change prints (their transfers' details live on the prints, saved with the order) */
+  groups?: Group[]; onPrints?: (ids: string[], fn: (im: Imprint) => void) => void; thumbUrls?: Record<string, string> }) {
   const [p, setP] = useState<GoodsPanel | null>(null), [err, setErr] = useState("");
   const [add, setAdd] = useState<GoodsAdd | null>(null), [paste, setPaste] = useState(""), [busy, setBusy] = useState("");
   const load = useCallback(() => { void goodsPanel(orderId).then((r) => (r.ok ? (setP(r.panel), setErr("")) : setErr(r.error))); }, [orderId]);
@@ -31,13 +40,15 @@ export default function OrderGoodsPanel({ orderId, wholesale, customerId }: { or
     // Order goods placed an order, or the order was changed elsewhere
     const on = () => load();
     window.addEventListener("fbs:order-changed", on);
-    return () => window.removeEventListener("fbs:order-changed", on);
+    window.addEventListener("fbs:goods-changed", on);
+    return () => { window.removeEventListener("fbs:order-changed", on); window.removeEventListener("fbs:goods-changed", on); };
   }, [load]);
 
-  const fbs = p?.fbs || [];
+  const fbs = p?.fbs || [], sup = p?.sup || [];
   // the customer's goods: wholesale orders, or any order where they've told us something (the old panel's card, as is)
   const showCust = wholesale || !!p?.cust;
-  const head = fbs.length && showCust ? "Customer + FBS" : fbs.length ? "FBS ordered" : showCust ? "Customer supplied" : "N/A";
+  const head0 = fbs.length && showCust ? "Customer + FBS" : fbs.length ? "FBS ordered" : showCust ? "Customer supplied" : "";
+  const head = [head0, sup.length ? "their transfers" : ""].filter(Boolean).join(" + ").replace(/^their/, "Their") || "N/A";
   const open = (who?: "fbs" | "cust", buyId?: string) => { setAdd({ ...blank(who || (wholesale ? "cust" : "fbs")), ...(buyId ? { buyId } : {}) }); setPaste(""); setErr(""); };
   async function read() {
     setBusy("read"); setErr("");
@@ -45,11 +56,18 @@ export default function OrderGoodsPanel({ orderId, wholesale, customerId }: { or
     setBusy("");
     if (!r.ok) return setErr(r.error);
     // what the reader found fills the form; anything it didn't find keeps what was typed
-    setAdd((a) => ({ ...(a || blank(r.add.who)), ...Object.fromEntries(Object.entries(r.add).filter(([, v]) => v)) } as GoodsAdd));
+    setAdd((a) => ({ ...(a || blank(r.add.who)), ...Object.fromEntries(Object.entries(r.add).filter(([, v]) => v)), ...(a?.who === "sup" ? { who: "sup" as const } : {}) } as GoodsAdd));
   }
   async function received(buyId: string, yes: boolean) {
     setBusy("recv"); setErr("");
     const r = await setBuyReceived(orderId, buyId, yes);
+    setBusy("");
+    if (!r.ok) return setErr(r.error);
+    load();
+  }
+  async function supReceived(id: string, yes: boolean) {
+    setBusy("recv"); setErr("");
+    const r = await setSupplyReceived(orderId, id, yes);
     setBusy("");
     if (!r.ok) return setErr(r.error);
     load();
@@ -71,7 +89,34 @@ export default function OrderGoodsPanel({ orderId, wholesale, customerId }: { or
       <div className="panel-h"><h2>Goods</h2><span className="faint">{head === "N/A" ? head : <b className="osp-now">{head}</b>}</span></div>
       <div className="panel-b">
         {!p && !err && <div className="faint">Loading…</div>}
-        {p && !fbs.length && !showCust && !add && <div className="ogp-foot"><span className="faint">No current information</span><button type="button" className="btn sm" onClick={() => open()}>Add</button></div>}
+        {sup.map((x) => {
+          const at = supStep(x), c = at === 3 ? "var(--ok)" : "var(--accent)";
+          return (
+            <div className="ogp-sec" key={x.id}>
+              {(fbs.length > 0 || showCust || sup.length > 1) && <div className="ogp-lbl">Their transfers</div>}
+              <article className="gc" style={{ ["--gc" as string]: c }}>
+                <header className="gc-h"><span className="gc-st">{STEPS[at]}</span></header>
+                <ol className="gc-steps" aria-label="Transfers progress">{STEPS.map((l, i) => <li key={l} className={i < at ? "done" : i === at ? "now" : ""}><span />{l}</li>)}</ol>
+                {(() => {
+                  // who made them, their order #, where they go and the placement picture: on the print, changed here
+                  const im = (groups || []).flatMap((g) => g.imprints).find((y) => x.prints.includes(y.id) && y.supplied);
+                  const g = im ? (groups || []).find((gg) => gg.imprints.includes(im)) : undefined;
+                  return im && onPrints ? <>
+                    <div className="gc-from">Customer supplied transfers{g?.name ? <> · <b>{g.name}</b></> : null}{im.location ? ` · ${im.location}` : ""}</div>
+                    <SuppliedBox d={im} onChange={(fn) => onPrints(x.prints, fn)} url={(p) => thumbUrls?.[p] || ""} />
+                  </> : <div className="gc-from" data-notranslate>{x.vendor || x.ref ? <>Transfers from <b>{x.vendor || "their maker"}</b>{x.ref ? ` · order ${x.ref}` : ""}</> : <span className="faint">Customer supplied transfers</span>}</div>;
+                })()}
+                <div className="ogp-r"><span className="faint">{[x.where, x.expected && at < 2 ? `arrive ${day(x.expected)}` : "", x.received ? `received ${day(x.received)}` : ""].filter(Boolean).join(" · ")}</span></div>
+                {x.tracking.map((t) => <Track key={t.tracking} t={t} />)}
+                <div className="gc-acts">
+                  <button type="button" className="btn sm" disabled={!!busy} onClick={() => void supReceived(x.id, at !== 3)}>{at === 3 ? "Not received" : "Mark received"}</button>
+                  {at < 3 && <button type="button" className="btn sm" onClick={() => { setAdd({ ...blank("sup"), supId: x.id }); setPaste(""); setErr(""); }}>+ Add tracking</button>}
+                </div>
+              </article>
+            </div>
+          );
+        })}
+        {p && !fbs.length && !showCust && !sup.length && !add && <div className="ogp-foot"><span className="faint">No current information</span><button type="button" className="btn sm" onClick={() => open()}>Add</button></div>}
         {showCust && <div className="ogp-sec">
           {fbs.length > 0 && <div className="ogp-lbl">Customer supplied</div>}
           <ShopGoods orderIds={[orderId]} customerId={customerId} compact onCount={() => load()} />
@@ -97,15 +142,15 @@ export default function OrderGoodsPanel({ orderId, wholesale, customerId }: { or
             </div>
           );
         })}
-        {(fbs.length > 0 || showCust) && !add && <div className="ogp-foot"><span className="faint">{fbs.length ? "" : "We ordered some too? "}</span><button type="button" className="btn sm" onClick={() => open(fbs.length ? undefined : "fbs")}>Add</button></div>}
+        {(fbs.length > 0 || showCust || sup.length > 0) && !add && <div className="ogp-foot"><span className="faint">{fbs.length ? "" : "We ordered some too? "}</span><button type="button" className="btn sm" onClick={() => open(fbs.length ? undefined : "fbs")}>Add</button></div>}
         {add && <div className="ogp-add">
-          <div className="chips" role="radiogroup" aria-label="Who ordered the goods">
+          {add.who === "sup" ? <div className="ogp-lbl">Their transfers</div> : <div className="chips" role="radiogroup" aria-label="Who ordered the goods">
             <button type="button" className={"chip" + (add.who === "fbs" ? " on" : "")} role="radio" aria-checked={add.who === "fbs"} onClick={() => setAdd({ ...add, who: "fbs" })}>FBS ordered</button>
             <button type="button" className={"chip" + (add.who === "cust" ? " on" : "")} role="radio" aria-checked={add.who === "cust"} onClick={() => setAdd({ ...add, who: "cust" })}>Customer supplied</button>
-          </div>
-          <div className="field"><label htmlFor="ogp-v">{add.who === "fbs" ? "Ordered from" : "Coming from"}</label><input id="ogp-v" type="text" value={add.vendor} placeholder="SanMar, S&S, One Stop, Alpha…" onChange={(e) => setAdd({ ...add, vendor: e.target.value })} /></div>
+          </div>}
+          {add.who !== "sup" && <div className="field"><label htmlFor="ogp-v">{add.who === "fbs" ? "Ordered from" : "Coming from"}</label><input id="ogp-v" type="text" value={add.vendor} placeholder="SanMar, S&S, One Stop, Alpha…" onChange={(e) => setAdd({ ...add, vendor: e.target.value })} /></div>}
           <div className="ogp-2">
-            <div className="field"><label htmlFor="ogp-po">Order / PO #</label><input id="ogp-po" type="text" value={add.po} onChange={(e) => setAdd({ ...add, po: e.target.value })} /></div>
+            {add.who !== "sup" && <div className="field"><label htmlFor="ogp-po">Order / PO #</label><input id="ogp-po" type="text" value={add.po} onChange={(e) => setAdd({ ...add, po: e.target.value })} /></div>}
             <div className="field"><label htmlFor="ogp-eta">Arrives</label><input id="ogp-eta" type="date" value={add.eta} onChange={(e) => setAdd({ ...add, eta: e.target.value })} /></div>
           </div>
           <div className="field"><label htmlFor="ogp-t">Tracking</label><input id="ogp-t" type="text" value={add.tracking} placeholder="1Z…" onChange={(e) => setAdd({ ...add, tracking: e.target.value })} /></div>
