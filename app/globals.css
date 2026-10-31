@@ -16708,3 +16708,12 @@ html body .matrix input{padding:6px 4px}
 html body .line-h{flex-wrap:wrap;row-gap:4px}
 html body .line-h input.grp-name{min-width:min(220px,100%)}
 html body .ord .line-h .grp-desc-in{min-width:min(160px,100%)}
+/* Printavo archive: the info boxes never get narrower than a label and its value side by side (Oct 31: at 820px the
+   dates box wrapped "Oct 22, / 2026" and the PO a word per line); long values break between words, not letters */
+html body .pv-info{grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr))}
+html body .pv-info .pv-dates dd{overflow-wrap:break-word}
+/* Every panel header wraps when it has to (Oct 31: eight panels had each added their own fix; the Printavo archive's
+   "Messages, Emails…" title still squeezed a word per line on a phone): the title and its note or buttons stay on one
+   line when there's room, the note drops under the title when there isn't */
+html body .panel-h{flex-wrap:wrap;row-gap:4px}
+html body .panel-h > h2{min-width:min(100%,14ch)}
