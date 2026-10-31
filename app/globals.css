@@ -16954,6 +16954,15 @@ body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:
 .nnb-ink.on{outline:2px solid var(--accent);outline-offset:2px}
 .nnb-msg{margin:0;font-size:12.5px;color:var(--ink-3)}
 .nnb-foot{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.nnb-sp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.nnb-sp .nnb-k{width:56px}
+.nnb-fit{flex-wrap:nowrap}
+.nnb-sl{display:flex;align-items:center;gap:8px;flex:1 1 160px;min-width:160px}
+.nnb-sl input[type=range]{flex:1;min-width:0;accent-color:var(--accent)}
+.nnb-sl .faint{font-size:12.5px;white-space:nowrap;width:40px;text-align:right}
+.nnb-fitw{display:flex;align-items:center;gap:6px;flex:1 1 160px}
+.nnb-fitw input{width:76px;height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink)}
+.nnb-fitw .faint{font-size:12.5px;white-space:nowrap}
 .mk-nnb-open{align-self:flex-start}
 .mk-nnb-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;padding:6px 8px;border-radius:6px;background:var(--surface-2)}
 /* the gang sheet's names & numbers question (Oct 31) */

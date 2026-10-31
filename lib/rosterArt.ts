@@ -16,6 +16,8 @@ export type RosterSpec = {
   rows: RosterRow[]; show: RosterShow; font: string; color: string;
   /** the letters' height and the numbers' height (inches), and the space between them */ nameIn: number; numIn: number; gapIn: number;
   /** an outline around the letters (a second color), "" for none */ outline?: string;
+  /** extra space between the letters of the name and between the digits of the number (inches) */ nameTrack?: number; numTrack?: number;
+  /** every name spread (or, when it's too long, squeezed) to this width (inches); 0 / unset: as spaced */ nameFitIn?: number;
   location: string;
 };
 export const ROSTER_DEFAULT: Omit<RosterSpec, "rows" | "location"> = { show: "both", font: "Graduate", color: "#FFFFFF", nameIn: 2, numIn: 8, gapIn: 0.5, outline: "" };
@@ -168,16 +170,18 @@ function inkOf(ctx: CanvasRenderingContext2D, font: string, weight: number, text
  * each line's capitals the height set. `part` picks the name, the number or both (the gang sheet makes them apart).
  * Returns the SVG and its size; `embed` builds the font into it (for files that leave the page).
  */
-export async function rosterSvg(spec: Pick<RosterSpec, "show" | "font" | "color" | "nameIn" | "numIn" | "gapIn" | "outline">, row: RosterRow, part: RosterShow = spec.show, embed = false): Promise<{ svg: string; w: number; h: number }> {
+export async function rosterSvg(spec: Pick<RosterSpec, "show" | "font" | "color" | "nameIn" | "numIn" | "gapIn" | "outline" | "nameTrack" | "numTrack" | "nameFitIn">, row: RosterRow, part: RosterShow = spec.show, embed = false): Promise<{ svg: string; w: number; h: number }> {
   const f = fontOf(spec.font), weight = f.weight;
   await loadFont(spec.font, weight);
   try { await document.fonts.load(`${weight} 200px '${spec.font}'`); } catch { /* measured with what's there */ }
   const ctx = document.createElement("canvas").getContext("2d")!;
-  const lines: { text: string; inches: number }[] = [];
+  const lines: { text: string; inches: number; track: number; fit: number }[] = [];
   const name = (row.name || "").trim(), num = (row.number || "").trim();
-  if ((part === "both" || part === "name") && name) lines.push({ text: name.toUpperCase(), inches: spec.nameIn });
-  if ((part === "both" || part === "number") && num) lines.push({ text: num, inches: spec.numIn });
-  if (!lines.length) lines.push({ text: part === "number" ? "00" : "NAME", inches: part === "number" ? spec.numIn : spec.nameIn });
+  const nameLine = (text: string) => ({ text, inches: spec.nameIn, track: spec.nameTrack || 0, fit: spec.nameFitIn || 0 });
+  const numLine = (text: string) => ({ text, inches: spec.numIn, track: spec.numTrack || 0, fit: 0 });
+  if ((part === "both" || part === "name") && name) lines.push(nameLine(name.toUpperCase()));
+  if ((part === "both" || part === "number") && num) lines.push(numLine(num));
+  if (!lines.length) lines.push(part === "number" ? numLine("00") : nameLine("NAME"));
   const ow = spec.outline ? Math.max(2, 0.06 * UNITS_PER_IN) : 0;
   let y = ow, half = 0;
   const parts: string[] = [];
@@ -186,15 +190,50 @@ export async function rosterSvg(spec: Pick<RosterSpec, "show" | "font" | "color"
     // the letters (capitals and digits) the height asked for, measured in this font
     const ink = inkOf(ctx, spec.font, weight, ln.text);
     const size = (ln.inches * UNITS_PER_IN) / ink.asc;
-    half = Math.max(half, ink.half * size + ow);
     const base = y + ink.asc * size;
-    parts.push(`<text x="0" y="${base.toFixed(1)}" text-anchor="middle" font-family="'${esc(spec.font)}'" font-weight="${weight}" font-size="${size.toFixed(1)}" fill="${spec.color}"${spec.outline ? ` stroke="${spec.outline}" stroke-width="${(ow * 2).toFixed(1)}" paint-order="stroke" stroke-linejoin="round"` : ""}>${esc(ln.text)}</text>`);
+    const paint = `font-family="'${esc(spec.font)}'" font-weight="${weight}" font-size="${size.toFixed(1)}" fill="${spec.color}"${spec.outline ? ` stroke="${spec.outline}" stroke-width="${(ow * 2).toFixed(1)}" paint-order="stroke" stroke-linejoin="round"` : ""}`;
+    const sp = spaced(ctx, spec.font, weight, ln.text, size, ln.track * UNITS_PER_IN, ln.fit * UNITS_PER_IN);
+    if (!sp) {
+      half = Math.max(half, ink.half * size + ow);
+      parts.push(`<text x="0" y="${base.toFixed(1)}" text-anchor="middle" ${paint}>${esc(ln.text)}</text>`);
+    } else {
+      // each letter at its own place (an x list every program reads), squeezed sideways only when a fitted name is too long
+      half = Math.max(half, sp.half + ow);
+      const t = `<text x="${sp.xs.map((v) => v.toFixed(1)).join(" ")}" y="${base.toFixed(1)}" ${paint}>${esc(ln.text)}</text>`;
+      parts.push(sp.sx < 1 ? `<g transform="scale(${sp.sx.toFixed(4)} 1)">${t}</g>` : t);
+    }
     y = base + ink.desc * size + (i < lines.length - 1 ? gap + ow * 2 : 0);
   }
   const h = y + ow, w = half * 2;
   const fonts = embed ? await embeddedFonts([{ font: spec.font, weight }]) : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${(-w / 2).toFixed(1)} 0 ${w.toFixed(1)} ${h.toFixed(1)}" width="${(w / UNITS_PER_IN).toFixed(2)}in" height="${(h / UNITS_PER_IN).toFixed(2)}in">${fonts ? `<defs><style>${fonts}</style></defs>` : ""}${parts.join("")}</svg>`;
   return { svg, w, h };
+}
+
+/**
+ * Letters spread apart (Oct 31, Nick: "a tool for spacing out the letters… put more space and make it fill up more
+ * area"): `track` more room between each pair (design units), or `fit` a width the whole line spans, the room between
+ * letters worked out per name, so a short name and a long one cover the same width; a name too long for it at no extra
+ * room is squeezed sideways (sx < 1) instead of overlapping. The letters' places come from the font's own advances (its
+ * kerning kept). Null when nothing is spread (the plain centered line is used).
+ */
+function spaced(ctx: CanvasRenderingContext2D, font: string, weight: number, text: string, size: number, track: number, fit: number) {
+  const ch = [...text];
+  if (ch.length < 2 || (!(track > 0) && !(fit > 0))) return null;
+  ctx.font = `${weight} 200px '${font}'`;
+  const k = size / 200;
+  const at = ch.map((_, i) => ctx.measureText(ch.slice(0, i).join("")).width * k);
+  const m = ctx.measureText(text), adv = m.width * k;
+  const inkL = (m.actualBoundingBoxLeft || 0) * k, inkR = (m.actualBoundingBoxRight || m.width) * k - adv; // overhang past the first/last advance
+  let gap = track > 0 ? track : 0, sx = 1;
+  if (fit > 0) {
+    const room = fit - inkL - inkR - adv;
+    if (room >= 0) gap = room / (ch.length - 1);
+    else { gap = 0; sx = Math.max(0.5, fit / (adv + inkL + inkR)); }
+  }
+  const span = adv + gap * (ch.length - 1), x0 = -span / 2;
+  const xs = at.map((x, i) => (x0 + x + gap * i) / sx);
+  return { xs, sx, half: (span / 2 + Math.max(0, inkL, inkR)) * sx };
 }
 
 /** an SVG drawn to a PNG at `dpi` (300 for transfers), its longest side at most `max` pixels */

@@ -118,8 +118,23 @@ export default function NameNumberBuilder({ spots, start, pieces, bg, onPlace, o
             <div className="nnb-grid">
               {look.show !== "number" && <div className="field"><label htmlFor="nnb-nh">Letters (in. tall)</label><input id="nnb-nh" type="number" min={0.5} max={6} step={0.25} value={look.nameIn} onChange={(e) => set({ nameIn: Math.max(0.25, +e.target.value || 0) })} /></div>}
               {look.show !== "name" && <div className="field"><label htmlFor="nnb-mh">Numbers (in. tall)</label><input id="nnb-mh" type="number" min={1} max={14} step={0.5} value={look.numIn} onChange={(e) => set({ numIn: Math.max(0.5, +e.target.value || 0) })} /></div>}
-              {look.show === "both" && <div className="field"><label htmlFor="nnb-g">Space between (in.)</label><input id="nnb-g" type="number" min={0} max={4} step={0.25} value={look.gapIn} onChange={(e) => set({ gapIn: Math.max(0, +e.target.value || 0) })} /></div>}
+              {look.show === "both" && <div className="field"><label htmlFor="nnb-g">Space between lines (in.)</label><input id="nnb-g" type="number" min={0} max={4} step={0.25} value={look.gapIn} onChange={(e) => set({ gapIn: Math.max(0, +e.target.value || 0) })} /></div>}
             </div>
+            {/* spacing the letters out (Oct 31, Nick): a slider for the room between letters, or every name spread to a width */}
+            {look.show !== "number" && <div className="nnb-sp">
+              <span className="nnb-k">Name</span>
+              <div className="chips nnb-fit" role="group" aria-label="Name spacing">
+                <button type="button" className={"chip" + (!look.nameFitIn ? " on" : "")} onClick={() => set({ nameFitIn: 0 })}>Letter spacing</button>
+                <button type="button" className={"chip" + (look.nameFitIn ? " on" : "")} onClick={() => set({ nameFitIn: look.nameFitIn || 11 })}>Fill a width</button>
+              </div>
+              {look.nameFitIn
+                ? <label className="nnb-fitw"><input type="number" aria-label="Width every name fills, in inches" min={2} max={16} step={0.5} value={look.nameFitIn} onChange={(e) => set({ nameFitIn: Math.min(16, Math.max(1, +e.target.value || 0)) })} /><span className="faint">in. wide, every name</span></label>
+                : <label className="nnb-sl"><input type="range" aria-label="Space between the name's letters" min={0} max={1.5} step={0.05} value={look.nameTrack || 0} onChange={(e) => set({ nameTrack: +e.target.value })} /><span className="faint">{(look.nameTrack || 0).toFixed(2)}&quot;</span></label>}
+            </div>}
+            {look.show !== "name" && <div className="nnb-sp">
+              <span className="nnb-k">Number</span>
+              <label className="nnb-sl"><input type="range" aria-label="Space between the number's digits" min={0} max={2} step={0.05} value={look.numTrack || 0} onChange={(e) => set({ numTrack: +e.target.value })} /><span className="faint">{(look.numTrack || 0).toFixed(2)}&quot;</span></label>
+            </div>}
           </div>
         )}
         {msg && <p className="nnb-msg" role="status">{msg}</p>}
