@@ -509,18 +509,24 @@ export function measureCap(img: HTMLImageElement, view: View): Fit | null {
   const strong = (p: number) => { const r = d[p * 4], g = d[p * 4 + 1], b = d[p * 4 + 2]; return !bg[p] && (Math.min(r, g, b) < 225 || Math.max(r, g, b) - Math.min(r, g, b) > 20); };
   let top = -1, bot = -1, maxW = 0, cxSum = 0, cxN = 0;
   const Ls = new Int16Array(H).fill(-1), Rs = new Int16Array(H).fill(-1);
-  for (let y = 0; y < H; y++) {
-    let L = -1, R = -1;
-    for (let X = 0; X < W; X++) if (strong(y * W + X)) { if (L < 0) L = X; R = X; }
-    Ls[y] = L; Rs[y] = R;
-    if (L >= 0 && R - L > 20) { if (top < 0) top = y; bot = y; maxW = Math.max(maxW, R - L); }
-  }
+  const scan = (is: (p: number) => boolean) => {
+    top = -1; bot = -1; maxW = 0;
+    for (let y = 0; y < H; y++) {
+      let L = -1, R = -1;
+      for (let X = 0; X < W; X++) if (is(y * W + X)) { if (L < 0) L = X; R = X; }
+      Ls[y] = L; Rs[y] = R;
+      if (L >= 0 && R - L > 20) { if (top < 0) top = y; bot = y; maxW = Math.max(maxW, R - L); }
+    }
+  };
+  scan(strong);
+  // a white or natural cap (nothing that strong): everything that isn't the white background
+  if (top < 0 || bot - top < 100 || maxW < 150) scan((p) => !bg[p]);
   if (top < 0 || bot - top < 100 || maxW < 150) return null;
   for (let y = top; y <= bot; y++) if (Ls[y] >= 0 && Rs[y] - Ls[y] >= maxW * 0.85) { cxSum += (Ls[y] + Rs[y]) / 2; cxN++; }
   const cx = cxN ? cxSum / cxN : W / 2;
   const ppi = maxW / CAP_FRONT_W, tall = bot - top;
   // the front panels: from under the button to the brim seam (front); the back: the crown above the closure
-  const y0 = top + tall * (view === "back" ? 0.1 : 0.08), y1 = top + tall * (view === "back" ? 0.62 : 0.74);
+  const y0 = top + tall * (view === "back" ? 0.1 : 0.14), y1 = top + tall * (view === "back" ? 0.62 : 0.76);
   const none = { x: cx, y: top, rot: 0 };
   return { s: 1, cx, top, mask: mc.toDataURL("image/png"), sleeve: { left: none, right: none }, flat: { cx, top: y0, w: maxW * 0.62, h: y1 - y0, ppi } };
 }
