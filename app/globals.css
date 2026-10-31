@@ -16556,7 +16556,7 @@ html body table:is(.tbl, .rv-tbl) td :is(input, select, textarea){max-width:100%
 /* Program & training: each price's mockups at the end of its line, and what leads (Oct 30) */
 .prs-leads{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .prs-leads-k{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
-.prs-tbl td.prs-mkc{white-space:normal;cursor:default}
+.prs-tbl td.prs-mkc{white-space:normal;cursor:default;min-width:184px}
 .prs-mks{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
 .prs-mk{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;width:84px}
 .prs-mk-pic{width:84px;height:64px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);overflow:hidden;display:grid;place-items:center}
