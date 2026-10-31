@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { addDays, dayLabel, fullName, hm, jobMinutes, localDay, localMinutes, localToIso, timeLabel, type JobTime, type OpenJob } from "@/lib/timeclock";
 import { loadOpenJobs } from "@/lib/jobsClient";
 import type { TeamData } from "./types";
+import { allRows } from "@/lib/readAll";
 
 /** Every job-time entry for a date range, by day; fix one (times, task, pieces), void it, or add a missed one. */
 export default function TeamTimes({ d }: { d: TeamData }) {
@@ -12,9 +13,12 @@ export default function TeamTimes({ d }: { d: TeamData }) {
   const [rows, setRows] = useState<JobTime[] | null>(null);
   const [edit, setEdit] = useState<Partial<JobTime> | null>(null);
   const load = useCallback(async () => {
-    let q = createClient().from("job_time").select("*").gte("started_at", localToIso(from, 0)).lt("started_at", localToIso(addDays(to, 1), 0)).order("started_at", { ascending: false }).limit(2000);
-    if (who) q = q.eq("employee_id", who);
-    const { data } = await q; setRows((data || []) as JobTime[]);
+    const { data } = await allRows((r0, r1) => {
+      let q = createClient().from("job_time").select("*").gte("started_at", localToIso(from, 0)).lt("started_at", localToIso(addDays(to, 1), 0));
+      if (who) q = q.eq("employee_id", who);
+      return q.order("started_at", { ascending: false }).order("id").range(r0, r1);
+    }, 2000);
+    setRows((data || []) as JobTime[]);
   }, [from, to, who]);
   useEffect(() => { load(); }, [load]);
   const days = useMemo(() => { const m = new Map<string, JobTime[]>(); for (const r of rows || []) { const k = localDay(r.started_at); m.set(k, [...(m.get(k) || []), r]); } return [...m.entries()]; }, [rows]);

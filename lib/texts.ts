@@ -1,6 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Customer texts from a Mac (Oct 15, Nick: "texts… adding that stuff into the jobs"). The Mac mini, signed in to
@@ -33,8 +34,8 @@ export function handleForms(key: string): string[] {
 export async function customerHandles(admin: SupabaseClient): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const [{ data: cs }, { data: cts }] = await Promise.all([
-    admin.from("customers").select("id, phone, contact2_phone, email, contact2_email, is_test").limit(20000),
-    admin.from("customer_contacts").select("customer_id, phone, email").limit(20000),
+    allRows((r0, r1) => admin.from("customers").select("id, phone, contact2_phone, email, contact2_email, is_test").order("id").range(r0, r1), 20000),
+    allRows((r0, r1) => admin.from("customer_contacts").select("customer_id, phone, email").order("id").range(r0, r1), 20000),
   ]);
   const add = (v: string | null | undefined, id: string) => {
     for (const part of String(v || "").split(/[,;/]| or /i)) {
@@ -95,7 +96,7 @@ export async function purgeOurOwn(admin: SupabaseClient) {
   const { data: cs } = await admin.from("customers").select("id").or("email.ilike.%@fbsprint.com,contact2_email.ilike.%@fbsprint.com,is_test.eq.true").limit(500);
   const ids = ((cs || []) as { id: string }[]).map((c) => c.id);
   if (!ids.length) return 0;
-  const { data: tx } = await admin.from("text_messages").select("id, files").in("customer_id", ids).limit(2000);
+  const { data: tx } = await allRows((r0, r1) => admin.from("text_messages").select("id, files").in("customer_id", ids).order("id").range(r0, r1), 2000);
   const rows = (tx || []) as { id: string; files: { path: string }[] }[];
   if (!rows.length) return 0;
   const paths = rows.flatMap((r) => (r.files || []).map((f) => f.path)).filter(Boolean);

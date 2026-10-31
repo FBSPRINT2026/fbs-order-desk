@@ -6,6 +6,7 @@ import { imapClient, toMsg } from "./imap";
 import { simpleParser } from "mailparser";
 import { aiState } from "@/lib/ai/claude";
 import { organizeEmail } from "@/lib/ai/organize";
+import { allRows } from "@/lib/readAll";
 
 /**
  * The Outlook Inbox, mirrored (Oct 12, Nick: "I leave in there just the stuff I need to work on for the day… I archive
@@ -55,7 +56,7 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
       });
     }
   }
-  const { data: cur } = await admin.from("mail_inbox").select("id, uid, uidvalidity, message_id, activity_id, unread, flagged, has_attachments").eq("account_id", acct.id).is("gone_at", null).limit(2000);
+  const { data: cur } = await allRows((r0, r1) => admin.from("mail_inbox").select("id, uid, uidvalidity, message_id, activity_id, unread, flagged, has_attachments").eq("account_id", acct.id).is("gone_at", null).order("id").range(r0, r1), 2000);
   const rows = (cur || []) as Row[];
   const byUid = new Map(rows.filter((r) => Number(r.uidvalidity) === validity).map((r) => [Number(r.uid), r]));
   const byMsg = new Map(rows.filter((r) => r.message_id).map((r) => [r.message_id, r]));
@@ -199,7 +200,7 @@ export async function pruneInboxEws(admin: SupabaseClient, acct: MailAccount, fo
   const ids = await ewsInboxMessageIds(acct);
   if (!ids) return 0;
   // only emails the mirror had before this read (a brand-new one may not be listed yet)
-  const { data: cur } = await admin.from("mail_inbox").select("id, message_id, activity_id").eq("account_id", acct.id).is("gone_at", null).lt("first_seen", t0).limit(2000);
+  const { data: cur } = await allRows((r0, r1) => admin.from("mail_inbox").select("id, message_id, activity_id").eq("account_id", acct.id).is("gone_at", null).lt("first_seen", t0).order("id").range(r0, r1), 2000);
   const curRows = (cur || []) as { id: string; message_id: string | null; activity_id: string | null }[];
   const gone = curRows.filter((r) => r.message_id && !ids.has(r.message_id));
   if (!gone.length) return 0;

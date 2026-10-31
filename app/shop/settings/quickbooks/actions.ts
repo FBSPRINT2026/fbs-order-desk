@@ -7,6 +7,7 @@ import { customerDiff, OWNED_FIELDS, ownedFromOurs, ownedFromQbo, type OurCustom
 import { claimLock, loadQboSettings, releaseLock, runQueue } from "@/lib/qbo/runner";
 import { adoptExisting, confirmProposals, runMatching, setPrimary } from "@/lib/qbo/matchRun";
 import { SITE_URL } from "@/lib/config";
+import { allRows } from "@/lib/readAll";
 
 /** Settings → QuickBooks (owner only). Every action checks the viewer is the owner before using the server client. */
 
@@ -248,8 +249,8 @@ export async function qboMatching(): Promise<R<{ proposals: ProposalRow[]; links
     const qs = await loadQboSettings(admin);
     const { data: last } = await admin.from("qbo_match_proposals").select("run_at").eq("realm_id", qs.realm_id).order("run_at", { ascending: false }).limit(1);
     const runAt = last?.[0]?.run_at || null;
-    const { data: props } = runAt ? await admin.from("qbo_match_proposals").select("*").eq("realm_id", qs.realm_id).eq("run_at", runAt).order("local_name").limit(5000) : { data: [] };
-    const { data: links } = await admin.from("qbo_links").select("id, local_id, qbo_id, is_primary, source, confidence, changed_in_qbo, qbo_owned_fields, last_pushed_at, last_seen_qbo").eq("realm_id", qs.realm_id).eq("entity", "customer").order("local_id").limit(5000);
+    const { data: props } = runAt ? await allRows((r0, r1) => admin.from("qbo_match_proposals").select("*").eq("realm_id", qs.realm_id).eq("run_at", runAt).order("local_name").order("id").range(r0, r1), 5000) : { data: [] };
+    const { data: links } = await allRows((r0, r1) => admin.from("qbo_links").select("id, local_id, qbo_id, is_primary, source, confidence, changed_in_qbo, qbo_owned_fields, last_pushed_at, last_seen_qbo").eq("realm_id", qs.realm_id).eq("entity", "customer").order("local_id").order("id").range(r0, r1), 5000);
     const localIds = [...new Set((links || []).map((l) => String(l.local_id)))];
     const names = new Map<string, string>();
     for (let i = 0; i < localIds.length; i += 300) {
@@ -259,7 +260,7 @@ export async function qboMatching(): Promise<R<{ proposals: ProposalRow[]; links
     const qName = new Map((props || []).map((p) => [String(p.qbo_id), String(p.qbo_name)]));
     // ours with an order from adopt-from up and no QuickBooks customer linked: made in QuickBooks with their first invoice
     const linked = new Set(localIds);
-    const { data: recent } = await admin.from("orders").select("customer_id").gte("number", qs.adopt_from_number).not("customer_id", "is", null).limit(5000);
+    const { data: recent } = await allRows((r0, r1) => admin.from("orders").select("customer_id").gte("number", qs.adopt_from_number).not("customer_id", "is", null).order("id").range(r0, r1), 5000);
     const counts = new Map<string, number>();
     for (const o of recent || []) if (!linked.has(String(o.customer_id))) counts.set(String(o.customer_id), (counts.get(String(o.customer_id)) || 0) + 1);
     const wo = [...counts.keys()];
@@ -371,7 +372,7 @@ export async function qboDifferences(): Promise<R<{ rows: DiffRow[]; unread: num
   try {
     const { admin } = await owner();
     const qs = await loadQboSettings(admin);
-    const { data: links } = await admin.from("qbo_links").select("id, local_id, qbo_id, last_sent, last_seen_qbo, last_seen_at, qbo_owned_fields, ours_base").eq("realm_id", qs.realm_id).eq("entity", "customer").eq("is_primary", true).limit(5000);
+    const { data: links } = await allRows((r0, r1) => admin.from("qbo_links").select("id, local_id, qbo_id, last_sent, last_seen_qbo, last_seen_at, qbo_owned_fields, ours_base").eq("realm_id", qs.realm_id).eq("entity", "customer").eq("is_primary", true).order("id").range(r0, r1), 5000);
     const ls = links || [];
     const ids = [...new Set(ls.map((l) => String(l.local_id)))];
     const cs = new Map<string, OurCustomer>();
@@ -399,7 +400,7 @@ export async function qboReadLinkedCustomers(): Promise<R> {
   try {
     const { admin } = await owner();
     const qs = await loadQboSettings(admin);
-    const { data: links } = await admin.from("qbo_links").select("id, qbo_id, last_sent").eq("realm_id", qs.realm_id).eq("entity", "customer").limit(5000);
+    const { data: links } = await allRows((r0, r1) => admin.from("qbo_links").select("id, qbo_id, last_sent").eq("realm_id", qs.realm_id).eq("entity", "customer").order("id").range(r0, r1), 5000);
     const byQ = new Map<string, Record<string, unknown>>((links || []).map((l: Record<string, unknown>) => [String(l.qbo_id), l] as [string, Record<string, unknown>]));
     const q = new Qbo(admin, { entity: "customer" });
     const all = [...byQ.keys()];

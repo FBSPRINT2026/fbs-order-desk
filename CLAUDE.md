@@ -88,6 +88,11 @@
   - where an embroidered print is in digitizing: `digitizeState` / `digitizeStamp` in `lib/digitizeStatus.ts` (the
     Digitizing page's tabs and the order's print stamps).
   When you tell Nick it's fixed, say where else it was fixed.
+- **Lists over 1,000 rows are read in pages** (Oct 31: the database answers at most 1,000 rows per request whatever
+  `.limit()` says, so the Time page's pay period, a mail folder, the dashboard's Printavo jobs and SanMar's styles were
+  quietly cut at 1,000). Any read that can pass 1,000 rows goes through `readAll` / `allRows` from `lib/readAll.ts`
+  with a fixed order (end with `.order("id")`). Run `node scripts/big-reads.mjs` after adding a query: it lists any
+  `.limit()` over 1,000 that isn't paged.
 - **Order reader rules.** When you change the email/PO order reader's rules (`lib/ai/emailOrder.ts`), raise `READER_REV`
   there, or Create order keeps reusing readings saved with the old rules (Oct 24 2026).
 - **One PMS matching fee per PMS color per order** (Nick, Oct 24 2026: "if you have a same color on the front and the

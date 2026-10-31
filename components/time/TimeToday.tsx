@@ -10,6 +10,7 @@ import { PunchEditor, PunchList } from "./TimeCards";
 import { EmployeeEditor } from "./TimeEmployees";
 import { useSticky } from "@/lib/useSticky";
 import { useRole } from "@/components/RoleContext";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Today: the crew board (Oct 20, Nick: "a really nice user interface for myself and Jose Moreno that shows the
@@ -36,7 +37,7 @@ export default function TimeToday({ d }: { d: TimeData }) {
   const load = useCallback(async () => {
     const sb = createClient();
     const [{ data: p }, { data: s }, { data: dm }] = await Promise.all([
-      sb.from("time_punches").select("*").eq("voided", false).gte("at", localToIso(addDays(from, -1), 0)).order("at").limit(8000),
+      allRows((r0, r1) => sb.from("time_punches").select("*").eq("voided", false).gte("at", localToIso(addDays(from, -1), 0)).order("at").order("id").range(r0, r1)),
       sb.from("shifts").select("*").gte("starts_at", new Date(Date.parse(today + "T00:00:00Z") - 12 * 3600000).toISOString()).lte("starts_at", new Date(Date.parse(today + "T00:00:00Z") + 36 * 3600000).toISOString()),
       sb.from("time_issue_dismissals").select("key").gte("dismissed_at", new Date(Date.now() - 40 * 86400000).toISOString()),
     ]);
@@ -143,7 +144,7 @@ function IssuesByPeriod({ d, current, onFixed }: { d: TimeData; current: { start
   const autoPrev = useRef(false);
   const load = useCallback(async () => {
     const sb = createClient();
-    const read = (a: string, b: string) => sb.from("time_punches").select("id, employee_id, kind, at, source, voided").eq("voided", false).gte("at", localToIso(addDays(a, -1), 0)).lt("at", localToIso(addDays(b, 2), 0)).order("at").limit(8000);
+    const read = (a: string, b: string) => allRows((r0, r1) => sb.from("time_punches").select("id, employee_id, kind, at, source, voided").eq("voided", false).gte("at", localToIso(addDays(a, -1), 0)).lt("at", localToIso(addDays(b, 2), 0)).order("at").order("id").range(r0, r1));
     const onCur = p.start === current.start;
     const [{ data: ps }, { data: dm }, pv] = await Promise.all([
       read(p.start, p.end),

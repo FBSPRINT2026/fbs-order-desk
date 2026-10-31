@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 import { zkQueueUsers } from "@/lib/zkteco";
 import { addDays, dayLabel, fullName, localDay, localToIso, mergeTime, punchLabel, timeLabel, timecard, withLunch, type Employee, type Punch } from "@/lib/timeclock";
+import { allRows } from "@/lib/readAll";
 
 /**
  * The time clock's helpers for the people who run it (Nick, and Jose with "Runs the time clock"): tell it what to fix
@@ -85,7 +86,7 @@ export async function timeAsk(said: string): Promise<{ ok: true; understood: str
     const now = new Date(), today = localDay(now), from = addDays(today, -35);
     const [{ data: es }, { data: ps }] = await Promise.all([
       admin.from("employees").select("*").order("last_name"),
-      admin.from("time_punches").select("id, employee_id, kind, at, source, note, original_at, voided").eq("voided", false).gte("at", localToIso(from, 0)).order("at").limit(8000),
+      allRows((r0, r1) => admin.from("time_punches").select("id, employee_id, kind, at, source, note, original_at, voided").eq("voided", false).gte("at", localToIso(from, 0)).order("at").order("id").range(r0, r1)),
     ]);
     const punches = (ps || []) as Punch[];
     const withPunches = new Set(punches.map((p) => p.employee_id));

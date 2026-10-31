@@ -5,6 +5,7 @@ import { simpleParser } from "mailparser";
 import type { MailAccount } from "./config";
 import { slimHtml, withBox, type Convo, type FullMsg, type MsgRow } from "./folders";
 import { ewsMessage } from "./ews";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Email cached mode (Oct 12): the last 45 days of a person's mail kept in mail_cache, like Outlook's cached mode, so
@@ -55,7 +56,7 @@ export async function cacheAccount(admin: SupabaseClient, acct: MailAccount, dea
         const found = await c.search({ since: since() }, { uid: true }).catch(() => null);
         if (!Array.isArray(found)) continue;
         const inWindow = new Set(found);
-        const { data: have } = await admin.from("mail_cache").select("id, uid, uidvalidity").eq("account_id", acct.id).eq("folder", f.path).is("gone_at", null).limit(20000);
+        const { data: have } = await allRows((r0, r1) => admin.from("mail_cache").select("id, uid, uidvalidity").eq("account_id", acct.id).eq("folder", f.path).is("gone_at", null).order("id").range(r0, r1));
         const rows = (have || []) as { id: string; uid: number; uidvalidity: number }[];
         const cached = new Set(rows.filter((r) => Number(r.uidvalidity) === validity).map((r) => Number(r.uid)));
         // left the folder (or the folder was rebuilt): gone

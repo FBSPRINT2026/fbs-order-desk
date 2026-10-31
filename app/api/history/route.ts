@@ -6,6 +6,7 @@ import { designWords } from "@/lib/ai/specHistory";
 import { latestSpecs, type DesignSpecs } from "@/lib/designSpecs";
 import { designEmails } from "@/lib/designMail";
 import { mailboxToRead } from "@/lib/mail/viewing";
+import { allRows } from "@/lib/readAll";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +43,7 @@ export async function GET(req: Request) {
 
   // the jobs and designs the customer has, to know which words are design names
   const [{ data: arch }, { data: ords }, { data: dsgs }, { data: cust }] = await Promise.all([
-    admin.from("archived_orders").select("id, visual_id, nickname, order_date, search_text, total, qty, status_name").eq("customer_id", cid).order("order_date").limit(2000),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, search_text, total, qty, status_name").eq("customer_id", cid).order("order_date").order("id").range(r0, r1), 2000),
     admin.from("orders").select("id, number, nickname, notes, created_at, status, groups").eq("customer_id", cid).order("created_at").limit(1000),
     admin.from("designs").select("id, name, specs").eq("customer_id", cid).limit(1000),
     admin.from("customers").select("company, name, email").eq("id", cid).maybeSingle(),
@@ -110,7 +111,7 @@ export async function GET(req: Request) {
   for (const e of found.emails) items.push({ kind: "email", date: e.date, from: e.from, incoming: e.incoming, subject: e.subject, text: e.text, ...(e.pics?.length ? { pics: e.pics } : {}) });
   // texts with them that name the design, and pictures sent around those (Oct 15: the Mac's texts; owners only)
   if (await canSeeTexts(v.email, v.role)) {
-    const { data: tx } = await admin.from("text_messages").select("from_me, body, sent_at, files").eq("customer_id", cid).order("sent_at").limit(3000);
+    const { data: tx } = await allRows((r0, r1) => admin.from("text_messages").select("from_me, body, sent_at, files").eq("customer_id", cid).order("sent_at").order("id").range(r0, r1), 3000);
     const all = (tx || []) as { from_me: boolean; body: string; sent_at: string; files: { path: string; type: string }[] }[];
     const near = all.filter((t) => hit(t.body)).map((t) => Date.parse(t.sent_at));
     for (const t of all) {

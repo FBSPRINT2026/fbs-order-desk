@@ -6,6 +6,7 @@ import { useSticky } from "@/lib/useSticky";
 import { addDays, dayLabel, fullName, localDay, mergeTime, periodOf, r2 } from "@/lib/timeclock";
 import { advanceLeft, extraLine, guessPayee, loadPayday, payDateOf, planLabel, type CheckSetup, type Keyed, type Payday, type PaydayRow } from "@/lib/payday";
 import { addVendor, closePayday, issueAdvance, makeChecks, markEntered, payrollQbo, pullActuals, type Payee } from "./actions";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Payroll Center (Admin Tools, Oct 30, Nick: "make a payday tool… create checks from the time clock… paycheck
@@ -546,7 +547,7 @@ function PastPaydays({ onOpen, onReopen }: { onOpen: (start: string) => void; on
   const [rows, setRows] = useState<Row[] | null>(null);
   useEffect(() => {
     const sb = createClient();
-    Promise.all([sb.from("payday_lines").select("period_start, qbo_purchase_id, check_total, done_at").order("period_start", { ascending: false }).limit(4000), sb.from("paydays").select("*")]).then(([{ data }, { data: pd }]) => {
+    Promise.all([allRows((r0, r1) => sb.from("payday_lines").select("period_start, qbo_purchase_id, check_total, done_at").order("period_start", { ascending: false }).order("employee_id").range(r0, r1), 4000), sb.from("paydays").select("*")]).then(([{ data }, { data: pd }]) => {
       const recs = new Map(((pd || []) as Payday[]).map((x) => [x.period_start, x]));
       const m = new Map<string, Row>();
       for (const l of (data || []) as { period_start: string; qbo_purchase_id: string | null; check_total: number | null; done_at: string | null }[]) {

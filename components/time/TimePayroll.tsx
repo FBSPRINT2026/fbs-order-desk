@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { addDays, dayLabel, fullName, localDay, localToIso, payFor, periodOf, r2, timecard, timeLabel, weekOf, type Employee, type Punch, type TimeOff, type PayLine } from "@/lib/timeclock";
 import { isBoss, type TimeData } from "./types";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Payroll Report (Oct 20, Nick): one master sheet at the end of each pay period. Every employee's regular and
@@ -31,7 +32,7 @@ export default function TimePayroll({ d }: { d: TimeData }) {
   const load = useCallback(async () => {
     const sb = createClient();
     const [{ data: p }, { data: o }, { data: ap }, { data: pr }] = await Promise.all([
-      sb.from("time_punches").select("*").gte("at", localToIso(addDays(period.start, -1), 0)).lt("at", localToIso(addDays(period.end, 2), 0)).order("at").limit(10000),
+      allRows((r0, r1) => sb.from("time_punches").select("*").gte("at", localToIso(addDays(period.start, -1), 0)).lt("at", localToIso(addDays(period.end, 2), 0)).order("at").order("id").range(r0, r1)),
       sb.from("time_off").select("*").lte("starts_on", period.end).gte("ends_on", period.start),
       sb.from("time_periods").select("approved_at, approved_by").eq("starts_on", period.start).maybeSingle(),
       sb.from("employee_pay").select("employee_id, rate, salary"),

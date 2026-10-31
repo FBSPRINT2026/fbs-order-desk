@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
+import { allRows } from "@/lib/readAll";
 import {
   DEFAULT_INK_PLAN, densityOf, fmtVol, gramsFrom, inkStatus, jobsFromOrders, jobsFromPrintavo, mergeInkPlan, planUsage,
   type CountLite, type FormulaLite, type GarmentFabric, type InkPlanSettings, type InkStatus, type Job, type StockLite,
@@ -34,7 +35,7 @@ export default function InkInventory({ stock, formulas, canStock }: { stock: Sto
   const today = localDay();
 
   async function loadCounts() {
-    const { data, error } = await createClient().from("ink_counts").select("stock_ink_id, grams, counted_at, counted_by, kind").order("counted_at", { ascending: false }).limit(3000);
+    const { data, error } = await allRows((r0, r1) => createClient().from("ink_counts").select("stock_ink_id, grams, counted_at, counted_by, kind").order("counted_at", { ascending: false }).order("id").range(r0, r1), 3000);
     if (error) setErr(error.message); else setCounts((data || []) as CountLite[]);
   }
   useEffect(() => { loadCounts(); }, []);

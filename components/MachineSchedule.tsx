@@ -9,6 +9,7 @@ import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricin
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
 import { useCan, useRole } from "@/components/RoleContext";
+import { allRows } from "@/lib/readAll";
 
 /**
  * The production calendar, on the shop's real hours.
@@ -297,7 +298,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
       // two weeks back: an operator with no punches in that time doesn't use the clock, so the schedule doesn't wait on them
       const from = new Date(Date.parse(addDay(ws < addDay(day, -14) ? ws : addDay(day, -14), -1) + "T00:00:00Z")).toISOString();
       const [{ data: p }, { data: st }, { data: em }] = await Promise.all([
-        sb.from("time_punches").select("employee_id, kind, at, source").in("employee_id", ids).eq("voided", false).gte("at", from).order("at").limit(5000),
+        allRows((r0, r1) => sb.from("time_punches").select("employee_id, kind, at, source").in("employee_id", ids).eq("voided", false).gte("at", from).order("at").order("id").range(r0, r1)),
         sb.from("uattend_sync").select("last_ok_at").eq("id", 1).maybeSingle(),
         sb.from("employees").select("id, first_name").in("id", ids),
       ]);

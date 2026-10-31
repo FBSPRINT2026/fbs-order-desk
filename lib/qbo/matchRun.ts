@@ -4,6 +4,7 @@ import { Qbo, QboError } from "@/lib/qbo/client";
 import { matchPayment, ownedFromOurs, type OurCustomer, type OurPayment } from "@/lib/qbo/map";
 import { HIGH_CONFIDENCE, proposeMatches, type OrderRef, type OurCustomerLite, type QboCustomerLite, type QboInvoiceLite } from "@/lib/qbo/match";
 import { loadQboSettings } from "@/lib/qbo/runner";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Customer matching, run by the owner after connecting (and again whenever wanted): reads every QuickBooks customer
@@ -156,7 +157,7 @@ export async function adoptExisting(admin: SupabaseClient) {
   const qbo = new Qbo(admin, { entity: "adopt" });
   const realm = await qbo.realm();
   const orders = await all<Record<string, unknown>>((a, b) => admin.from("orders").select("id, number, printavo_visual_id, customer_id").gte("number", qs.adopt_from_number).order("number").range(a, b));
-  const { data: haveInv } = await admin.from("qbo_links").select("local_id, qbo_id").eq("realm_id", realm).eq("entity", "invoice").limit(100000);
+  const { data: haveInv } = await allRows((r0, r1) => admin.from("qbo_links").select("local_id, qbo_id").eq("realm_id", realm).eq("entity", "invoice").order("id").range(r0, r1), 100000);
   const linked = new Map<string, string>((haveInv || []).map((l: Record<string, unknown>) => [String(l.local_id), String(l.qbo_id)] as [string, string]));
   const want = new Map<string, Record<string, unknown>>();
   for (const o of orders) if (!linked.has(String(o.id))) { want.set(String(o.number), o); if (o.printavo_visual_id) want.set(String(o.printavo_visual_id), o); }

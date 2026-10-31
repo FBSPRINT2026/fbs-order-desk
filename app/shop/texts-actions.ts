@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { organizerFor } from "@/lib/mail/mirror";
 import { canSeeTexts, handleKey, newToken, sha } from "@/lib/texts";
+import { allRows } from "@/lib/readAll";
 
 /** Settings > Texts: the Macs that send customer texts (owners only, like the texts themselves) */
 async function owner() {
@@ -28,7 +29,7 @@ export async function listTextMacs() {
     for (const d of (data || []) as Omit<TextMac, "texts" | "customers" | "last_text">[]) {
       const { count } = await admin.from("text_messages").select("id", { count: "exact", head: true }).eq("device_id", d.id);
       const { data: last } = await admin.from("text_messages").select("sent_at").eq("device_id", d.id).order("sent_at", { ascending: false }).limit(1).maybeSingle();
-      const { data: cs } = await admin.from("text_messages").select("customer_id").eq("device_id", d.id).limit(5000);
+      const { data: cs } = await allRows((r0, r1) => admin.from("text_messages").select("customer_id").eq("device_id", d.id).order("id").range(r0, r1), 5000);
       out.push({ ...d, texts: count || 0, customers: new Set(((cs || []) as { customer_id: string | null }[]).map((x) => x.customer_id).filter(Boolean)).size, last_text: (last?.sent_at as string) || null });
     }
     return { ok: true as const, macs: out };

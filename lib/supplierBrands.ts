@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Which supplier carries which brand, from their own catalogs (Oct 29, Nick: "some products are only available at
@@ -20,7 +21,7 @@ export async function supplierBrands(admin: SupabaseClient): Promise<{ ss: Set<s
   if (memo && Date.now() - memo.at < 30 * 60_000) return memo;
   const [{ data: st }, { data: smRows }] = await Promise.all([
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
-    admin.from("sanmar_styles").select("brand").eq("sellable", true).limit(10000),
+    allRows((r0, r1) => admin.from("sanmar_styles").select("brand").eq("sellable", true).order("style").range(r0, r1), 10000),
   ]);
   const d = (st?.data || {}) as { ssBrands?: { at: string; list: string[] }; osBrands?: { at: string; list: string[] } };
   let ssList = d.ssBrands?.list || [];

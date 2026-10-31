@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
 import type { PendingShipment } from "@/lib/manifest";
+import { allRows } from "@/lib/readAll";
 
 const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "");
 const supName = (s: string) => (s === "sanmar" ? "SanMar" : s === "ss" ? "S&S Activewear" : s);
@@ -103,7 +104,7 @@ function ResolveRow({ g, onDone }: { g: PendingShipment; onDone: () => void }) {
   const unknown = !g.us && !g.customer;
   useEffect(() => {
     if (!unknown) return;
-    createClient().from("customers").select("id, company, name").order("company").limit(3000)
+    allRows((r0, r1) => createClient().from("customers").select("id, company, name").order("company").order("id").range(r0, r1), 3000)
       .then(({ data }) => setCusts(((data || []) as { id: string; company: string; name: string }[]).map((c) => ({ id: c.id, label: c.company || c.name })).filter((c) => c.label)));
   }, [unknown]);
   const suggested = g.lines.some((l) => l.suggest);

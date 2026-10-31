@@ -1,6 +1,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { saveExample } from "@/lib/ai/orderExamples";
+import { allRows } from "@/lib/readAll";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function GET(req: Request) {
   const customerId = new URL(req.url).searchParams.get("customerId") || "";
   // every customer's count (Settings → Order training)
   if (customerId === "all") {
-    const { data } = await createAdminClient().from("order_examples").select("customer_id").eq("active", true).limit(5000);
+    const { data } = await allRows((r0, r1) => createAdminClient().from("order_examples").select("customer_id").eq("active", true).order("id").range(r0, r1), 5000);
     const n: Record<string, number> = {};
     for (const r of (data || []) as { customer_id: string }[]) n[r.customer_id] = (n[r.customer_id] || 0) + 1;
     return Response.json({ counts: n });

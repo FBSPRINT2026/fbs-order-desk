@@ -16,6 +16,7 @@ import { SS_SHIP, FREE_CODE, paidShipLines } from "@/lib/goodsShip";
 import { PaidShipAsk } from "@/components/PaidShipAsk";
 import { useSticky } from "@/lib/useSticky";
 import ReceivingSettings from "@/components/ReceivingSettings";
+import { allRows } from "@/lib/readAll";
 
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
@@ -870,7 +871,7 @@ function LinkModal({ r, onClose, onDone }: { r: Row; onClose: () => void; onDone
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const [ask, setAsk] = useState<string | null>(null); // linked; now: make this a rule?
   useEffect(() => {
-    createClient().from("customers").select("id, company, name").order("company").limit(4000)
+    allRows((r0, r1) => createClient().from("customers").select("id, company, name").order("company").order("id").range(r0, r1), 4000)
       .then(({ data }) => setCusts(((data || []) as { id: string; company: string; name: string }[]).map((c) => ({ id: c.id, label: c.company || c.name })).filter((c) => c.label)));
   }, []);
   useEffect(() => {

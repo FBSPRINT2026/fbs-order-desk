@@ -15,6 +15,7 @@ import { guessHex } from "@/lib/mockup";
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { useSticky } from "@/lib/useSticky";
 import { laneState, type Brand } from "@/lib/brands";
+import { allRows } from "@/lib/readAll";
 
 type Mock = { id: string; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[]; group_id?: string | null; /** saved with its setup: can be edited again */ set?: string | null };
 /** which clients: the top 10 by what they spent this year, every client, the newest logos first; or the mockups */
@@ -63,7 +64,7 @@ export default function ArtworkPage() {
   const [drag, setDrag] = useState<{ c: string; id: string } | null>(null);
   const [over, setOver] = useState("");
   useEffect(() => {
-    sb.from("orders").select("id, number, nickname, status, customer_id, total, created_at, discarded_at, draft, groups, lines").order("created_at", { ascending: false }).limit(3000)
+    allRows((r0, r1) => sb.from("orders").select("id, number, nickname, status, customer_id, total, created_at, discarded_at, draft, groups, lines").order("created_at", { ascending: false }).order("id").range(r0, r1), 3000)
       .then(async ({ data }) => {
         setLogoShirts(logoShirtsFrom((data || []) as never[])); setOrders(((data || []) as Ord[]).filter((o) => !o.discarded_at && !o.draft));
         setPrinted(logoPrintFrom((data || []) as never[], (c) => colorHex(c) || guessHex(c), deltaE));

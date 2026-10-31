@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PvGroup } from "@/lib/archive";
+import { allRows } from "@/lib/readAll";
 
 /**
  * A customer's designs catalog (Oct 20, Nick, about Dear Heart Designs: "they order a lot of different designs and it
@@ -94,7 +95,7 @@ const isPic = (p: string) => /\.(png|jpe?g|webp|gif|pdf)$/i.test(p);
 
 export async function buildCatalog(admin: SupabaseClient, customerId: string): Promise<Catalog> {
   const [{ data: arch }, { data: ords }, { data: cust }, { data: rr }] = await Promise.all([
-    admin.from("archived_orders").select("id, visual_id, nickname, order_date, qty, status_name, data, files").eq("customer_id", customerId).order("order_date").limit(1500),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, qty, status_name, data, files").eq("customer_id", customerId).order("order_date").order("id").range(r0, r1), 1500),
     admin.from("orders").select("id, number, nickname, created_at, status, groups").eq("customer_id", customerId).neq("status", "void").order("created_at").limit(1000),
     admin.from("customers").select("company, name").eq("id", customerId).maybeSingle(),
     admin.from("customer_designs").select("rules").eq("customer_id", customerId).maybeSingle(),

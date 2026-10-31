@@ -7,6 +7,7 @@ import { LOCATIONS, type Settings } from "@/lib/pricing";
 import { latestSpecs, type DesignSpecs } from "@/lib/designSpecs";
 import { designEmails } from "@/lib/designMail";
 import type { MailAccount } from "@/lib/mail/config";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Spec history (Oct 14, Nick: "any time we place a reorder, scan everything: every email about this design, the text
@@ -126,7 +127,7 @@ export async function specHistory(admin: SupabaseClient, s: Settings, orderId: s
 
   // 3b. texts with them (the Mac, Oct 15: "Gateway approved the placement photo by text"): the ones that name the
   // design, and pictures sent within two days of those
-  const { data: tx } = await admin.from("text_messages").select("from_me, body, sent_at, files").eq("customer_id", o.customer_id).order("sent_at").limit(3000);
+  const { data: tx } = await allRows((r0, r1) => admin.from("text_messages").select("from_me, body, sent_at, files").eq("customer_id", o.customer_id).order("sent_at").order("id").range(r0, r1), 3000);
   const texts = (tx || []) as { from_me: boolean; body: string; sent_at: string; files: { path: string; name: string }[] }[];
   const named = texts.filter((t) => hit(t.body)).map((t) => Date.parse(t.sent_at));
   for (const t of texts) {

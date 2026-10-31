@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { DEFAULT_PRODUCTION, estimate, fmtMin, mergeProduction, needsForOrder, needsForPrintavo, type Crew, type Machine, type MachineType, type ProductionSettings, type Shift } from "@/lib/production";
 import { jobKey, jobMinutes, type JobTime } from "@/lib/timeclock";
 import type { Group } from "@/lib/pricing";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Settings → Production: the machines the calendar schedules, and the time standards it uses to figure how long a job
@@ -188,7 +189,7 @@ function Learning({ s, onApply }: { s: ProductionSettings; onApply: (t: MachineT
       const sb = createClient();
       const since = new Date(Date.now() - 60 * 86400000).toISOString();
       const [{ data: jt }, { data: sl }] = await Promise.all([
-        sb.from("job_time").select("*").eq("voided", false).not("ended_at", "is", null).gte("started_at", since).limit(5000),
+        allRows((r0, r1) => sb.from("job_time").select("*").eq("voided", false).not("ended_at", "is", null).gte("started_at", since).order("id").range(r0, r1)),
         sb.from("production_slots").select("order_id, archived_order_id, machine, kind").gte("day", since.slice(0, 10)),
       ]);
       const js = (jt || []) as JobTime[];

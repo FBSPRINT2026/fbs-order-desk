@@ -6,6 +6,7 @@ import {
 } from "@/lib/merchServer";
 import { DEFAULT_FIELDS, r2, type Field, type MerchOrder, type Product, type Store, type StoreStatus } from "@/lib/merch";
 import type { Garment } from "@/lib/pricing";
+import { allRows } from "@/lib/readAll";
 
 type R<T = undefined> = { ok: true; data: T } | { ok: false; error: string };
 const fail = (e: unknown): { ok: false; error: string } => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong." });
@@ -37,7 +38,7 @@ export async function listStores(): Promise<R<{ stores: StoreRow[]; staff: boole
     });
     let customers: { id: string; name: string }[] = [];
     if (a.staff) {
-      const { data: all } = await a.admin.from("customers").select("id, company, name").order("company").limit(5000);
+      const { data: all } = await allRows((r0, r1) => a.admin.from("customers").select("id, company, name").order("company").order("id").range(r0, r1), 5000);
       customers = ((all || []) as { id: string; company: string; name: string }[]).map((c) => ({ id: c.id, name: c.company || c.name })).filter((c) => c.name);
     } else {
       const { data: mine } = await a.admin.from("customers").select("id, company, name").in("id", a.customerIds);

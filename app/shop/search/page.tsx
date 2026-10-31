@@ -13,6 +13,7 @@ import { quickJump } from "@/app/shop/search-actions";
 import { previewUrls } from "@/lib/designs";
 import { ARCHIVE_LIST_COLS, type ArchiveSummary } from "@/lib/archive";
 import { PAY_TERMS, type Design, type PayTerms } from "@/lib/pricing";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Search everything (Oct 21, Nick: "this looks like a complete disaster… it should be much more informative"). The
@@ -101,7 +102,7 @@ function SearchInner() {
       if (live) setArch(all as never); done();
       // each matched customer's totals (for the card and the other customers' lines)
       if (cs.length) {
-        const { data: st } = await sb.from("archived_orders").select(ARCHIVE_LIST_COLS).in("customer_id", cs.map((x) => x.id)).limit(5000);
+        const { data: st } = await allRows((r0, r1) => sb.from("archived_orders").select(ARCHIVE_LIST_COLS).in("customer_id", cs.map((x) => x.id)).order("id").range(r0, r1), 5000);
         const rows = (st || []) as ArchiveSummary[];
         if (!live) return;
         setBestArch(rows);

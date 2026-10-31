@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewerPerms } from "@/lib/access";
 import { cardSetsAnything, cardsOf, tiersOf, type DesignPrice, type Program, type RateCard } from "@/lib/programs";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Program pricing on the order page (Oct 14, Nick): the customer's rate card (with the base shirt's blank cost now),
@@ -272,8 +273,8 @@ export async function programCardStats(customerId: string): Promise<{ ok: true; 
     if (!p) return { ok: true, stats: { since, who: {}, styles: {} } };
     const { data: its } = await admin.from("program_items").select("match").eq("program_id", p.id).eq("active", true).is("archived_at", null);
     const [{ data: ar }, { data: os }] = await Promise.all([
-      admin.from("archived_orders").select("nickname, qty, total, search_text").eq("customer_id", customerId).gte("order_date", since).limit(5000),
-      admin.from("orders").select("nickname, qty, total, groups, po_number").eq("customer_id", customerId).gte("created_at", since).neq("status", "request").limit(2000),
+      allRows((r0, r1) => admin.from("archived_orders").select("nickname, qty, total, search_text").eq("customer_id", customerId).gte("order_date", since).order("id").range(r0, r1), 5000),
+      allRows((r0, r1) => admin.from("orders").select("nickname, qty, total, groups, po_number").eq("customer_id", customerId).gte("created_at", since).neq("status", "request").order("id").range(r0, r1), 2000),
     ]);
     const jobs = [
       ...((ar || []) as { nickname: string; qty: number; total: number; search_text: string }[]).map((j) => ({ name: j.nickname || "", qty: +j.qty || 0, total: +j.total || 0, text: ` ${(j.search_text || "").toLowerCase()} ` })),

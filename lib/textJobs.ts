@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Which job each customer text is about (Oct 15, Nick: "invoice 27166… emails and texts that correspond to this
@@ -25,8 +26,8 @@ export function jobKeys(name: string): string[] {
 
 export async function customerJobs(admin: SupabaseClient, customerId: string): Promise<Job[]> {
   const [{ data: pv }, { data: os }] = await Promise.all([
-    admin.from("archived_orders").select("id, visual_id, nickname, order_date, due_date, kind").eq("customer_id", customerId).limit(3000),
-    admin.from("orders").select("id, number, nickname, created_at, due_date, status").eq("customer_id", customerId).limit(2000),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, due_date, kind").eq("customer_id", customerId).order("id").range(r0, r1), 3000),
+    allRows((r0, r1) => admin.from("orders").select("id, number, nickname, created_at, due_date, status").eq("customer_id", customerId).order("id").range(r0, r1), 2000),
   ]);
   const t = (d: string | null | undefined) => (d ? Date.parse(d.length === 10 ? d + "T12:00:00Z" : d) : NaN);
   const out: Job[] = [];
@@ -47,7 +48,7 @@ type T = { id: string; body: string; sent_at: string; from_me: boolean; job_ref:
 
 /** file a customer's texts not filed yet; `ai` lets the AI pick when several jobs were open */
 export async function fileCustomerTexts(admin: SupabaseClient, customerId: string, ai?: (session: T[], jobs: Job[], around: string) => Promise<string | null>) {
-  const { data } = await admin.from("text_messages").select("id, body, sent_at, from_me, job_ref, job_not, files").eq("customer_id", customerId).is("job_ref", null).is("job_checked_at", null).order("sent_at").limit(3000);
+  const { data } = await allRows((r0, r1) => admin.from("text_messages").select("id, body, sent_at, from_me, job_ref, job_not, files").eq("customer_id", customerId).is("job_ref", null).is("job_checked_at", null).order("sent_at").order("id").range(r0, r1), 3000);
   const texts = (data || []) as T[];
   if (!texts.length) return 0;
   const jobs = await customerJobs(admin, customerId);

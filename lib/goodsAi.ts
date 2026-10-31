@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState, askClaude } from "@/lib/ai/claude";
 import { orderGroups, type Order } from "@/lib/pricing";
 import { AI_TAG, PV, PV_PRINTED, __ai, abbrevHit, applyGroup, customerForAccount, linkLines, sizeKey, unlinkedFrom, type Group, type ManifestRow, type Waiting } from "@/lib/manifest";
+import { allRows } from "@/lib/readAll";
 
 /**
  * The AI matcher. The rules in lib/manifest.ts link what they're sure of; whatever is still waiting comes here.
@@ -45,7 +46,7 @@ const usable = (status: string) => !/quote|cancel/i.test(status);
 /** Jobs due in a window (our blanks, unknown accounts): fetched once per run. */
 async function windowJobs(admin: SupabaseClient, from: string, to: string): Promise<Job[]> {
   const [{ data: ar }, { data: os }] = await Promise.all([
-    admin.from("archived_orders").select(PV_COLS).gte("due_date", from).lte("due_date", to).limit(2500),
+    allRows((r0, r1) => admin.from("archived_orders").select(PV_COLS).gte("due_date", from).lte("due_date", to).order("id").range(r0, r1), 2500),
     admin.from("orders").select(LIVE_COLS).not("status", "in", "(quote,request)").gte("due_date", from).lte("due_date", to).limit(1000),
   ]);
   return [
@@ -148,9 +149,11 @@ export async function aiMatchPending(admin: SupabaseClient, deadline: number, op
   const st = await aiState(admin);
   if (!st.ready) return { ...out, off: st.reason };
   const model = st.settings.assistant.ai.model || "claude-sonnet-5";
-  let q = admin.from("supplier_manifest_lines").select("*").eq("kind", "").order("created_at", { ascending: false }).limit(3000);
-  if (opts.only?.length) q = q.in("id", opts.only);
-  const { data } = await q;
+  const { data } = await allRows((r0, r1) => {
+    let q = admin.from("supplier_manifest_lines").select("*").eq("kind", "");
+    if (opts.only?.length) q = q.in("id", opts.only);
+    return q.order("created_at", { ascending: false }).order("id").range(r0, r1);
+  }, 3000);
   // arrived first (those are what people are waiting on), then the newest
   const groups = groupLines((data || []) as Waiting[]).sort((a, b) => Number(b.lines.some((l) => l.delivered_at || l.track_status === "delivered")) - Number(a.lines.some((l) => l.delivered_at || l.track_status === "delivered")));
   if (!groups.length) return out;

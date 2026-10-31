@@ -3,6 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { viewerPerms } from "@/lib/access";
 import { storedPath } from "@/lib/archive";
+import { allRows } from "@/lib/readAll";
 
 /**
  * "Set up from Printavo" on a customer's Program tab (Oct 15, Nick: Amanda converts her clients herself, "like what we
@@ -46,7 +47,7 @@ export async function printavoSetup(input: { customerId: string; since: number }
     const { admin } = await me();
     const since = `${Math.max(2015, Math.min(new Date().getFullYear(), Math.round(input.since || 2023)))}-01-01`;
     const [{ data: rows }, { data: prog }, { data: c }, { data: cts }, { data: priv }] = await Promise.all([
-      admin.from("archived_orders").select("id, visual_id, nickname, order_date, data, files").eq("customer_id", input.customerId).eq("kind", "invoice").gte("order_date", since).order("order_date", { ascending: false }).limit(1500),
+      allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, data, files").eq("customer_id", input.customerId).eq("kind", "invoice").gte("order_date", since).order("order_date", { ascending: false }).order("id").range(r0, r1), 1500),
       admin.from("programs").select("id").eq("customer_id", input.customerId).order("created_at").limit(1).maybeSingle(),
       admin.from("customers").select("name, email, phone, contact2_name, contact2_email, contact2_phone").eq("id", input.customerId).maybeSingle(),
       admin.from("customer_contacts").select("name, email, phone").eq("customer_id", input.customerId),

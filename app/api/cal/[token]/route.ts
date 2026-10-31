@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { allRows } from "@/lib/readAll";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
   if (!f) return new Response("Not found", { status: 404 });
   const since = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
   const [{ data: evs }, { data: who }, shop] = await Promise.all([
-    admin.from("events").select("id, title, notes, place, starts_at, ends_at, day, all_day, created_at").eq("owner", f.owner).eq("status", "added").gte("day", since).limit(2000),
+    allRows((r0, r1) => admin.from("events").select("id, title, notes, place, starts_at, ends_at, day, all_day, created_at").eq("owner", f.owner).eq("status", "added").gte("day", since).order("id").range(r0, r1), 2000),
     admin.from("staff").select("name").eq("email", f.owner).maybeSingle(),
-    false ? admin.from("orders").select("id, number, nickname, due_date, status, customers(company, name)").gte("due_date", since).not("status", "in", "(quote,quote_sent,request)").limit(2000) : Promise.resolve({ data: [] }),
+    false ? allRows((r0, r1) => admin.from("orders").select("id, number, nickname, due_date, status, customers(company, name)").gte("due_date", since).not("status", "in", "(quote,quote_sent,request)").order("id").range(r0, r1), 2000) : Promise.resolve({ data: [] }),
   ]);
   const stamp = utc(new Date().toISOString());
   const site = (process.env.NEXT_PUBLIC_SITE_URL || "https://portal.fbsprint.com").replace(/\/$/, "");

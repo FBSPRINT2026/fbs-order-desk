@@ -2,6 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clickupTokens, ensureClickUpFiles, importClickUpTask, reopenClickUpTask, setClickUpBox, setClickUpDone, type ClickUpTaskRow, type ClickUpTeamRow, type CuFile } from "@/lib/clickup";
+import { allRows } from "@/lib/readAll";
 
 /** ClickUp Jobs (app/shop/clickup/page.tsx): the customers' ClickUp jobs, read by lib/clickup.ts */
 
@@ -33,8 +34,8 @@ async function knownJobs(admin: ReturnType<typeof createAdminClient>, tasks: Cli
   if (!custs.length) return out;
   const since = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
   const [{ data: pv }, { data: ord }] = await Promise.all([
-    admin.from("archived_orders").select("id, visual_id, nickname, po_number, status_name, order_date, customer_id").in("customer_id", custs).gte("order_date", since).limit(4000),
-    admin.from("orders").select("id, number, nickname, po_number, customer_id, created_at").in("customer_id", custs).gte("created_at", since).limit(4000),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, po_number, status_name, order_date, customer_id").in("customer_id", custs).gte("order_date", since).order("id").range(r0, r1), 4000),
+    allRows((r0, r1) => admin.from("orders").select("id, number, nickname, po_number, customer_id, created_at").in("customer_id", custs).gte("created_at", since).order("id").range(r0, r1), 4000),
   ]);
   const nums = (s: string) => [...new Set((s.match(/\d{3,10}/g) || []).filter((n) => !/^20[2-3]\d$/.test(n)))];
   const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !/^\d+$/.test(w)));
@@ -108,7 +109,7 @@ export async function listClickUp(): Promise<{ ok: true; connected: boolean; tok
     admin.from("clickup_teams").select("*").order("name"),
     admin.from("clickup_tasks").select("*").not("status_type", "in", "(closed,done)").is("parent", null).order("created_at_cu", { ascending: false }).limit(600),
     admin.from("clickup_tasks").select("*").not("order_id", "is", null).gte("synced_at", since).limit(200),
-    admin.from("customers").select("id, company, name").limit(5000),
+    allRows((r0, r1) => admin.from("customers").select("id, company, name").order("id").range(r0, r1), 5000),
   ]);
   if (st.error) return { ok: false, error: "ClickUp Jobs needs its database update (migration 185)." };
   const byId = new Map<string, ClickUpTaskRow>();
@@ -216,7 +217,7 @@ export async function clickUpWorkspace(teamId: string): Promise<{ ok: true; team
   const admin = createAdminClient();
   const [{ data: team }, { data: tasks, error }] = await Promise.all([
     admin.from("clickup_teams").select("*").eq("id", teamId).maybeSingle(),
-    admin.from("clickup_tasks").select("*").eq("team_id", teamId).is("parent", null).order("created_at_cu", { ascending: false }).limit(3000),
+    allRows((r0, r1) => admin.from("clickup_tasks").select("*").eq("team_id", teamId).is("parent", null).order("created_at_cu", { ascending: false }).order("id").range(r0, r1), 3000),
   ]);
   if (error) return { ok: false, error: error.message };
   const rows = (tasks || []) as ClickUpTaskRow[];

@@ -9,6 +9,7 @@ import { carrierOf } from "@/lib/goods";
 import { companyKey } from "@/lib/printavoImport";
 import { readTracker, startTracker } from "@/lib/goodsTrack";
 import { excelDate } from "@/lib/xlsx";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Supplier manifests (S&S Activewear today; SanMar once we've seen theirs): every box shipping to us, with the
@@ -281,7 +282,7 @@ async function guessCustomerByGoods(admin: SupabaseClient, g: Group) {
   if (pcs < 6) return null; // a couple of pieces fit too many jobs
   const lo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10), hi = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
   const [{ data: ar }, { data: os }] = await Promise.all([
-    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").gte("due_date", lo).lte("due_date", hi).not("status_name", "ilike", "%job completed%").limit(1500),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").gte("due_date", lo).lte("due_date", hi).not("status_name", "ilike", "%job completed%").order("id").range(r0, r1), 1500),
     admin.from("orders").select("id, number, nickname, po_number, customer_id, due_date, status, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).gte("due_date", lo).lte("due_date", hi).limit(500),
   ]);
   type J = { id: string; number: number; nickname: string; po: string; customerId: string | null; customer: string; due: string | null; items: { style: string; color: string; qty: number }[] };
@@ -754,7 +755,7 @@ function groupLines(lines: Waiting[]) {
  * added to an order link automatically; otherwise a fresh best guess is saved for someone to OK. Also refreshes tracking.
  */
 export async function resolvePending(admin: SupabaseClient, deadline: number) {
-  const { data } = await admin.from("supplier_manifest_lines").select("*").eq("kind", "").order("created_at").limit(3000);
+  const { data } = await allRows((r0, r1) => admin.from("supplier_manifest_lines").select("*").eq("kind", "").order("created_at").order("id").range(r0, r1), 3000);
   const out = { linked: 0, suggested: 0, tracked: 0 };
   const notFor = await unlinkedFrom(admin).catch(() => new Map());
   for (const g of groupLines((data || []) as Waiting[])) {
@@ -839,9 +840,11 @@ function summarize(g: Group<Waiting>, customer: { id: string; name: string } | n
 
 /** Every shipment on a manifest that isn't on an order yet (the resolution center), with the customer's open orders to pick from. */
 export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: string[]): Promise<PendingShipment[]> {
-  let q = admin.from("supplier_manifest_lines").select("*").eq("kind", "").order("created_at", { ascending: false }).limit(3000);
-  if (onlyCustomers) q = q.in("customer_id", onlyCustomers.length ? onlyCustomers : ["00000000-0000-0000-0000-000000000000"]);
-  const { data } = await q;
+  const { data } = await allRows((r0, r1) => {
+    let q = admin.from("supplier_manifest_lines").select("*").eq("kind", "");
+    if (onlyCustomers) q = q.in("customer_id", onlyCustomers.length ? onlyCustomers : ["00000000-0000-0000-0000-000000000000"]);
+    return q.order("created_at", { ascending: false }).order("id").range(r0, r1);
+  }, 3000);
   const out: PendingShipment[] = [];
   const custCache = new Map<string, { id: string; name: string } | null>(), orderCache = new Map<string, PendingShipment["orders"]>();
   for (const g of groupLines((data || []) as Waiting[])) {
@@ -1009,7 +1012,7 @@ export const PV_PRINTED = /job\s*completed|shipping|ready\s*to\s*ship|ready\s*fo
  */
 export async function printavoGoods(admin: SupabaseClient): Promise<PrintavoGoods[]> {
   // two links to archived_orders (linked + guessed): name the one we mean, or the query fails and returns nothing
-  const { data, error } = await admin.from("supplier_manifest_lines").select("*, archived_orders!supplier_manifest_lines_archived_order_id_fkey(visual_id, nickname, due_date, status_name, customers(company, name))").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).order("created_at", { ascending: false }).limit(2000);
+  const { data, error } = await allRows((r0, r1) => admin.from("supplier_manifest_lines").select("*, archived_orders!supplier_manifest_lines_archived_order_id_fkey(visual_id, nickname, due_date, status_name, customers(company, name))").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).order("created_at", { ascending: false }).order("id").range(r0, r1), 2000);
   if (error) throw new Error(`Goods on Printavo jobs: ${error.message}`);
   type Row = Waiting & { archived_order_id: string; archived_orders: { visual_id: string | number; nickname: string; due_date: string | null; status_name?: string; customers: { company: string; name: string } | null } | null };
   const m = new Map<string, Row[]>();
@@ -1046,8 +1049,8 @@ export type TruckStop = { key: string; supplier_order: string; who: string; po: 
 
 /** Everything on S&S's local truck (no tracking number) that nobody has signed for yet. */
 export async function truckPending(admin: SupabaseClient): Promise<TruckStop[]> {
-  const { data } = await admin.from("supplier_manifest_lines").select("id, supplier_order, customer_name, customer_po, box, qty_shipped, ship_date, kind, order_id, archived_order_id, customer_id, orders!supplier_manifest_lines_order_id_fkey(number, customers(company, name)), archived_orders!supplier_manifest_lines_archived_order_id_fkey(visual_id, customers(company, name)), customers(company, name)")
-    .eq("supplier", "ss").eq("tracking", "").neq("kind", "ignored").neq("track_status", "delivered").order("ship_date", { ascending: false }).limit(3000);
+  const { data } = await allRows((r0, r1) => admin.from("supplier_manifest_lines").select("id, supplier_order, customer_name, customer_po, box, qty_shipped, ship_date, kind, order_id, archived_order_id, customer_id, orders!supplier_manifest_lines_order_id_fkey(number, customers(company, name)), archived_orders!supplier_manifest_lines_archived_order_id_fkey(visual_id, customers(company, name)), customers(company, name)")
+    .eq("supplier", "ss").eq("tracking", "").neq("kind", "ignored").neq("track_status", "delivered").order("ship_date", { ascending: false }).order("id").range(r0, r1), 3000);
   type R = { id: string; supplier_order: string; customer_name: string; customer_po: string; box: string; qty_shipped: number; ship_date: string | null; kind: string; order_id: string | null; archived_order_id: string | null;
     orders: { number: number; customers: { company: string; name: string } | null } | null; archived_orders: { visual_id: string | number; customers: { company: string; name: string } | null } | null; customers: { company: string; name: string } | null };
   const m = new Map<string, R[]>();
@@ -1206,7 +1209,7 @@ export async function unlinkLines(admin: SupabaseClient, lineIds: string[], by: 
 
 /** Jobs staff said a shipment is NOT for (by group key). */
 export async function unlinkedFrom(admin: SupabaseClient): Promise<Map<string, { orderIds: string[]; numbers: number[]; note: string; wasHow: string }>> {
-  const { data } = await admin.from("ai_suggestions").select("dedupe_key, payload").eq("kind", "goods_unlink").limit(2000);
+  const { data } = await allRows((r0, r1) => admin.from("ai_suggestions").select("dedupe_key, payload").eq("kind", "goods_unlink").order("id").range(r0, r1), 2000);
   return new Map(((data || []) as { dedupe_key: string; payload: { orderIds: string[]; numbers: number[]; note: string; wasHow: string } }[]).map((x) => [x.dedupe_key.slice("goods-unlink:".length), x.payload]));
 }
 

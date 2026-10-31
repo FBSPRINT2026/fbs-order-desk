@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { uaPunches, uaRaw, uaSkipped, uaUserFields, uaUsers, uattendReady, type UaUser } from "@/lib/uattend";
 import { addDays, localDay, localToIso } from "@/lib/timeclock";
 import { settleDoubleEntries } from "@/lib/timeclockServer";
+import { allRows } from "@/lib/readAll";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -89,7 +90,7 @@ async function run(admin: Admin, from: string, to: string, withUsers: boolean) {
     const live = new Set(keys), fromIso = localToIso(addDays(a, 1), 0), toIso = localToIso(addDays(b, 1), 0);
     const emps = [...new Set(ps.map((p) => map!.get(p.user)).filter(Boolean))] as string[];
     if (emps.length && fromIso < toIso) {
-      const { data: old } = await admin.from("time_punches").select("id, uattend_id").eq("source", "uattend").eq("voided", false).is("edited_at", null).in("employee_id", emps).gte("at", fromIso).lt("at", toIso).limit(5000);
+      const { data: old } = await allRows((r0, r1) => admin.from("time_punches").select("id, uattend_id").eq("source", "uattend").eq("voided", false).is("edited_at", null).in("employee_id", emps).gte("at", fromIso).lt("at", toIso).order("id").range(r0, r1), 5000);
       const stale = ((old || []) as { id: string; uattend_id: string | null }[]).filter((r) => r.uattend_id && !live.has(r.uattend_id)).map((r) => r.id);
       for (let i = 0; i < stale.length; i += 200) await admin.from("time_punches").update({ voided: true, note: "Changed or removed in uAttend" }).in("id", stale.slice(i, i + 200));
       summary.updated += stale.length;

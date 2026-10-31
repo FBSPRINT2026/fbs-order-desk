@@ -4,6 +4,7 @@ import { calcOrder, lineQty, mergeSettings, orderGroups, type Imprint, type Orde
 import { digitizeState } from "@/lib/digitizeStatus";
 import { accountOwners } from "@/lib/accountOwners";
 import { mailRows, type MailAct, type MailSug } from "@/lib/inbox";
+import { allRows } from "@/lib/readAll";
 
 /**
  * The Job Center (Oct 29, Nick: "this is basically where I'm going to keep everything pre-production… it doesn't always
@@ -105,7 +106,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   // ticked In Printavo, not closed, no order: clickup_tasks.waiting); neither once an order was made from it
   const mails = acts.filter((a) => a.kind === "email");
   const mailFrom = mails.reduce((m, a) => (a.occurred_at < m ? a.occurred_at : m), new Date().toISOString());
-  const { data: outs } = mails.length ? await admin.from("activities").select("id, direction, occurred_at, external_id, thread_id, customer_id, from_email, to_email, meta").eq("kind", "email").eq("direction", "out").gte("occurred_at", mailFrom).limit(5000) : { data: [] };
+  const { data: outs } = mails.length ? await allRows((r0, r1) => admin.from("activities").select("id, direction, occurred_at, external_id, thread_id, customer_id, from_email, to_email, meta").eq("kind", "email").eq("direction", "out").gte("occurred_at", mailFrom).order("id").range(r0, r1), 5000) : { data: [] };
   const needs = new Set(mailRows([...mails, ...((outs || []) as MailAct[])], [] as MailSug[]).filter((r) => !r.answered && !r.archived && !r.ccOnly && !r.x.meta?.no_reply).map((r) => r.x.id));
   const cuIds = acts.filter((a) => a.kind === "clickup").map((a) => String((a.meta as { clickup?: { id?: string } } | null)?.clickup?.id || "")).filter(Boolean);
   const cuWaiting = new Set((await inChunks<{ id: string }>(cuIds, (p) => admin.from("clickup_tasks").select("id").in("id", p).eq("waiting", true), 100)).map((t) => t.id));

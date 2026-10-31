@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { addDays, dec, fullName, hm, jobKey, jobMinutes, localDay, localToIso, timecard, type JobTime, type Punch } from "@/lib/timeclock";
 import { money, payMoney } from "@/lib/format";
 import type { TeamData } from "./types";
+import { allRows } from "@/lib/readAll";
 
 type Ord = { key: string; label: string; customer: string; qty: number; total: number; href: string };
 
@@ -25,9 +26,9 @@ export default function TeamEfficiency({ d }: { d: TeamData }) {
     const sb = createClient();
     const lo = localToIso(from, 0), hi = localToIso(addDays(to, 1), 0);
     const [{ data: j }, pr, { data: p }] = await Promise.all([
-      sb.from("job_time").select("*").eq("voided", false).gte("started_at", lo).lt("started_at", hi).limit(10000),
+      allRows((r0, r1) => sb.from("job_time").select("*").eq("voided", false).gte("started_at", lo).lt("started_at", hi).order("id").range(r0, r1)),
       pay ? sb.from("employee_pay").select("employee_id, rate, salary") : Promise.resolve({ data: [] }),
-      sb.from("time_punches").select("*").eq("voided", false).gte("at", lo).lt("at", hi).limit(20000),
+      allRows((r0, r1) => sb.from("time_punches").select("*").eq("voided", false).gte("at", lo).lt("at", hi).order("id").range(r0, r1)),
     ]);
     const js = (j || []) as JobTime[];
     setRows(js); setPunches((p || []) as Punch[]);

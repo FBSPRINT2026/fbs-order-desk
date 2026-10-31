@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allRows } from "@/lib/readAll";
 
 /**
  * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
@@ -150,8 +151,8 @@ async function guessCustomer(admin: SupabaseClient, name: string, members: strin
   const norm = (s: string) => ` ${s.toLowerCase().replace(/&/g, " and ").replace(/['’]s\b/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\b(the|llc|inc|co|company|team|group|printing|solutions|apparel|promos?|promotions|workspace|and|fbs)\b/g, " ").replace(/\s+/g, " ").trim()} `;
   const doms = new Set(members.map((e) => e.split("@")[1]).filter((d) => d && !GENERIC.test(d)));
   const [{ data: cs }, { data: cc }] = await Promise.all([
-    admin.from("customers").select("id, company, name, email").limit(5000),
-    doms.size ? admin.from("customer_contacts").select("customer_id, email").limit(10000) : Promise.resolve({ data: [] as { customer_id: string; email: string }[] }),
+    allRows((r0, r1) => admin.from("customers").select("id, company, name, email").order("id").range(r0, r1), 5000),
+    doms.size ? allRows((r0, r1) => admin.from("customer_contacts").select("customer_id, email").order("id").range(r0, r1), 10000) : Promise.resolve({ data: [] as { customer_id: string; email: string }[] }),
   ]);
   const hits = new Set<string>();
   const tn = norm(name);
@@ -568,7 +569,7 @@ export async function sizeClickUp(admin: SupabaseClient, perTeam: number, deadli
   const out = await Promise.all(((teams || []) as { id: string; name: string }[]).map(async (t) => {
     const tok = await tokenFor(admin, t.id);
     const { count } = await admin.from("clickup_tasks").select("id", { count: "exact", head: true }).eq("team_id", t.id).is("parent", null).gte("created_at_cu", since);
-    const { data: ids } = await admin.from("clickup_tasks").select("id").eq("team_id", t.id).is("parent", null).gte("created_at_cu", since).limit(3000);
+    const { data: ids } = await allRows((r0, r1) => admin.from("clickup_tasks").select("id").eq("team_id", t.id).is("parent", null).gte("created_at_cu", since).order("id").range(r0, r1), 3000);
     const pool = ((ids || []) as { id: string }[]).map((x) => x.id).sort(() => Math.random() - 0.5).slice(0, perTeam);
     let sampled = 0, files = 0, bytes = 0, biggest = 0, withFiles = 0;
     const types: Record<string, number> = {};

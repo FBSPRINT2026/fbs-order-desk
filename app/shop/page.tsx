@@ -18,6 +18,7 @@ import { emailIsMine, personName, senderLabel } from "@/lib/mail/sender";
 import EmailSummary, { type EmailGroups, type EmailItem } from "@/components/EmailSummary";
 import { DETAILS_LABEL, detailsCount, ordersNeedingDetails } from "@/lib/productionDetails";
 import type { Group } from "@/lib/pricing";
+import { allRows } from "@/lib/readAll";
 
 /**
  * The daily dashboard: the first thing every admin sees. Everything that needs someone today, in one place:
@@ -83,11 +84,11 @@ export default function Dashboard() {
         sb.from("messages").select("id, order_id, customer_id, author_name, author_email, body, created_at, topic").eq("author_type", "customer").is("read_at", null).order("created_at", { ascending: false }).limit(30),
         sb.from("activities").select("id, customer_id, order_id, subject, body, from_email, to_email, occurred_at, direction, external_id, thread_id, meta").eq("kind", "email").gte("occurred_at", new Date(Date.now() - 21 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(500),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, order_date, total, kind, owner:data->>owner").eq("kind", "invoice").gte("order_date", lastYearFrom).lte("order_date", lastYearTo).order("order_date").limit(400),
-        sb.from("archived_orders").select("customer_id, order_date, owner:data->>owner").gte("order_date", addDays(-240)).order("order_date", { ascending: false }).limit(3000),
-        sb.from("supplier_manifest_lines").select("tracking, track_status, est_delivery, delivered_at, ship_date, method").neq("kind", "ignored").gte("created_at", new Date(Date.now() - 20 * 86400000).toISOString()).limit(3000),
+        allRows((r0, r1) => sb.from("archived_orders").select("customer_id, order_date, owner:data->>owner").gte("order_date", addDays(-240)).order("order_date", { ascending: false }).order("id").range(r0, r1), 3000),
+        allRows((r0, r1) => sb.from("supplier_manifest_lines").select("tracking, track_status, est_delivery, delivered_at, ship_date, method").neq("kind", "ignored").gte("created_at", new Date(Date.now() - 20 * 86400000).toISOString()).order("id").range(r0, r1), 3000),
         sb.from("archived_orders").select("id, visual_id, nickname, customer_id, balance, due_date").eq("kind", "invoice").gt("balance", 0.5).order("balance", { ascending: false }).limit(60),
         sb.from("separations").select("id, number, order_id, location, garment_color, status, due_date, customer_id, channels, updated_at").not("status", "in", "(cancelled,films)").order("due_date", { ascending: true, nullsFirst: false }).limit(200),
-        sb.from("customer_private").select("customer_id, account_owner").neq("account_owner", "").limit(5000),
+        allRows((r0, r1) => sb.from("customer_private").select("customer_id, account_owner").neq("account_owner", "").order("customer_id").range(r0, r1), 5000),
       ]);
       ordersNeedingDetails<{ id: string; number: number; nickname: string; customer_id: string | null; due_date: string | null; groups: Group[] }>(sb, "id, number, nickname, customer_id, due_date, groups")
         .then(async (r) => {

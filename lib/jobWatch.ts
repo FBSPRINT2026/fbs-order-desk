@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { mergeSettings, orderGroups, type Group, type Order } from "@/lib/pricing";
 import { ssAllocate, ssConfigured } from "@/lib/ss";
 import { matchToSS, type GoodsRow } from "@/lib/ssMatch";
+import { allRows } from "@/lib/readAll";
 
 /**
  * Only what's at risk (Oct 12, Nick, after the first run: "a bunch of jobs just naturally flow through… there shouldn't
@@ -187,7 +188,7 @@ export async function customerOwners(admin: SupabaseClient, ids: string[]): Prom
   const [{ data: st }, { data: ao }, { data: pv }] = await Promise.all([
     admin.from("staff").select("email, name"),
     admin.from("customer_private").select("customer_id, account_owner").in("customer_id", ids).neq("account_owner", ""),
-    admin.from("archived_orders").select("customer_id, order_date, owner:data->>owner").in("customer_id", ids).order("order_date", { ascending: false }).limit(2000),
+    allRows((r0, r1) => admin.from("archived_orders").select("customer_id, order_date, owner:data->>owner").in("customer_id", ids).order("order_date", { ascending: false }).order("id").range(r0, r1), 2000),
   ]);
   const staff = (st || []) as { email: string; name: string | null }[];
   const emailOf = (n?: string | null) => { const t = (n || "").trim().toLowerCase(); if (!t) return undefined; const first = t.split(/\s+/)[0]; const m = staff.find((x) => (x.name || "").toLowerCase() === t) || staff.find((x) => (x.name || "").toLowerCase().split(/\s+/)[0] === first) || staff.find((x) => x.email.toLowerCase().split("@")[0] === first); return m?.email.toLowerCase(); };

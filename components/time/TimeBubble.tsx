@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { addDays, dayLabel, localDay, localToIso, mergeTime, periodOf, type Employee, type Punch, type TimeSettings } from "@/lib/timeclock";
 import { timeIssues, type TimeIssue } from "@/lib/timeIssues";
 import { useRole } from "@/components/RoleContext";
+import { allRows } from "@/lib/readAll";
 
 /**
  * The time clock's little notification (Oct 20, Nick: "like on your iPhone when it has a little bubble… you have a
@@ -24,7 +25,7 @@ export async function loadIssueData(force = false): Promise<Loaded> {
   const [{ data: s }, { data: es }, { data: ps }, { data: dm }] = await Promise.all([
     sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     sb.from("employees").select("id, first_name, last_name, active, department, code, takes_lunch"),
-    sb.from("time_punches").select("id, employee_id, kind, at, source, voided").eq("voided", false).gte("at", localToIso(from, 0)).order("at").limit(5000),
+    allRows((r0, r1) => sb.from("time_punches").select("id, employee_id, kind, at, source, voided").eq("voided", false).gte("at", localToIso(from, 0)).order("at").order("id").range(r0, r1)),
     sb.from("time_issue_dismissals").select("key").gte("dismissed_at", new Date(Date.now() - 40 * 86400000).toISOString()),
   ]);
   const out: Loaded = { s: mergeTime((s?.data as { time?: unknown } | null)?.time), emps: (es || []) as Employee[], punches: (ps || []) as Punch[], dismissed: ((dm || []) as { key: string }[]).map((x) => x.key), at: Date.now() };

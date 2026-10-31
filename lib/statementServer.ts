@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { payDueDate, type PayTerms } from "@/lib/pricing";
+import { allRows } from "@/lib/readAll";
 
 export type OpenInvoice = { id: string; number: number; nickname: string; po_number: string; customer_id: string; created_at: string; total: number; paid: number; balance: number; pay_due: string | null; status: string };
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -9,7 +10,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 export async function openInvoices(admin: SupabaseClient, customerIds: string[]): Promise<OpenInvoice[]> {
   if (!customerIds.length) return [];
   const [{ data: os }, { data: cs }] = await Promise.all([
-    admin.from("orders").select("id, number, nickname, po_number, customer_id, created_at, completed_at, approved_at, sent_at, total, status, type").in("customer_id", customerIds).eq("type", "invoice").neq("status", "quote").limit(5000),
+    allRows((r0, r1) => admin.from("orders").select("id, number, nickname, po_number, customer_id, created_at, completed_at, approved_at, sent_at, total, status, type").in("customer_id", customerIds).eq("type", "invoice").neq("status", "quote").order("id").range(r0, r1), 5000),
     admin.from("customers").select("id, payment_terms").in("id", customerIds),
   ]);
   const orders = (os || []) as { id: string; number: number; nickname: string | null; po_number: string | null; customer_id: string; created_at: string; completed_at: string | null; approved_at: string | null; sent_at: string | null; total: number; status: string }[];
