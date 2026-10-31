@@ -12,8 +12,16 @@ const key = (s: string) => words(s).join(" ");
 const ALIAS: Record<string, string> = { rust: "redwood", "burnt orange": "redwood", forest: "forest green", wine: "maroon", burgundy: "maroon", "vintage black": "black" };
 
 export function matchColor(asked: string, options: string[]): { color: string; sure: boolean } | null {
-  // "Rust/Burnt Orange", "Vintage Black/Charcoal": an old job's two names for one color; the best match of either
   const parts = asked.split(/\s*\/\s*/).filter(Boolean);
+  // a two-tone color is one color (Oct 31, Nick: a Richardson 112 "Black/White" came in as Black, with "Black/ White"
+  // right there): the whole name first, however its slash is spaced; it wins when it's the style's own name, or a
+  // name holding every color they wrote
+  if (parts.length > 1) {
+    const whole = matchOne(asked, options);
+    // the same colors in another order (White/Black for Black/ White) may be another cap: a guess staff confirm
+    if (whole && (whole.sure || parts.every((p) => words(p).every((w) => words(whole.color).includes(w))))) return { color: whole.color, sure: whole.sure && key(whole.color) === key(asked) };
+  }
+  // "Rust/Burnt Orange", "Vintage Black/Charcoal": an old job's two names for one color; the best match of either
   if (parts.length > 1) {
     const each = parts.map((x) => matchColor(x, options)).filter(Boolean) as { color: string; sure: boolean }[];
     return each.find((x) => x.sure) ? { ...each.find((x) => x.sure)!, sure: false } : each[0] || null;
