@@ -35,9 +35,15 @@ export function logoColors(d: Pick<Design, "specs" | "inks">, brand: Pick<Brand,
   });
   const inks = [...colorwaysOf(d).flatMap((c) => c.inks), ...(d.inks || "").split(/\s*,\s*/)].map((s) => s.trim()).filter(Boolean);
   const out: LogoColor[] = [];
+  // one color once: the same name, or (an ink with no PMS of its own) a color already there that looks the same (Oct 31,
+  // Nick on D-10316: "why two black here?", its colorways' Black and its print's ink Black Diamond)
+  const rgb = (h: string) => { const v = parseInt((h || "#cccccc").replace("#", "").slice(0, 6), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+  const near = (a: string, b: string) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < 24; };
   for (const ink of inks) {
     const c = inkColor(ink, brand?.colors || []);
-    if (!out.some((x) => x.name.toLowerCase() === c.name.toLowerCase())) out.push(c.pms || c.name !== ink ? c : { ...c, pms: /\d/.test(ink) ? ink : undefined });
+    if (out.some((x) => x.name.toLowerCase() === c.name.toLowerCase())) continue;
+    if (!c.pms && !/\d/.test(ink) && out.some((x) => near(x.hex, c.hex))) continue;
+    out.push(c.pms || c.name !== ink ? c : { ...c, pms: /\d/.test(ink) ? ink : undefined });
   }
   return out;
 }
