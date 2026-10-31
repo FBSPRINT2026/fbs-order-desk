@@ -267,6 +267,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               {/* Create order training (Oct 30, Nick: "it's okay to have special training for All My Sons… one of our top 10
                   clients"): how this customer's orders are made, read in full every time Create order reads one of theirs */}
               <div className="field"><label htmlFor="cu-training">Create order training</label><textarea id="cu-training" rows={6} placeholder="How their orders are made: the groups, which logo goes on what, personalization, pricing, shipping… Create order reads all of it for every one of their orders." value={c.order_training || ""} onChange={(e) => set("order_training", e.target.value)} /></div>
+              <div className="cu-train-when">
+                <div className="field"><label htmlFor="cu-train-n">Training name</label><input id="cu-train-n" type="text" value={c.order_training_name || ""} placeholder="All My Sons" onChange={(e) => set("order_training_name", e.target.value)} /></div>
+                <div className="field"><label htmlFor="cu-train-w">Use it when the job says</label><input id="cu-train-w" type="text" value={c.order_training_when || ""} placeholder="AMS, All My Sons" onChange={(e) => set("order_training_when", e.target.value)} /></div>
+              </div>
             </div>
           </form>
           <div className="stack">

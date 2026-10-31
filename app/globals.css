@@ -16519,3 +16519,10 @@ html body table:is(.tbl, .rv-tbl) td :is(input, select, textarea){max-width:100%
 .gc-ln .gc-track{margin:0;white-space:nowrap}
 .gc-ln .faint{color:var(--ink-3);font-size:12.5px}
 .gc-sg .nw,.gc-ln .nw{white-space:nowrap}
+
+/* the customer's Create order training: its name and the words that mark a job for it, side by side when there's room */
+.cu-train-when{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+/* Create order: a job for a customer with training ("make it with the rules", Oct 30) */
+.osp-trained{display:flex;flex-direction:column;gap:6px;padding:12px;border:1.5px solid var(--fbs-blue);border-radius:var(--r);background:var(--accent-soft);font-size:13px}
+.osp-trained b{font-size:14px;color:var(--ink)}
+.osp-trained span{color:var(--ink-2)}
