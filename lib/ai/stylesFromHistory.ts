@@ -58,7 +58,7 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
   const strip = (ws: Set<string>) => new Set([...ws].filter((w) => !brandWords.has(w)));
   for (const k of known) k.name = strip(k.name);
   // the catalog last: only when their own history has nothing
-  let catalog: Known[] | null = null;
+  const catalog = new Map<string, Known[]>();
   const done: string[] = [];
   for (const l of todo) {
     const said = ((l as { called?: string }).called || l.garment || "").trim();
@@ -90,17 +90,21 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
     };
     let hit: Known | null = named || pick(known), from = "their past orders";
     if (!hit) {
-      if (!catalog) {
-        // our garment list, then SanMar's whole style list (its titles end with the style: "… 1/2-Zip NKDX6720")
+      // our garment list and SanMar's whole style list (its titles end with the style: "… 1/2-Zip NKDX6720"), searched
+      // for this name's two longest words: a list read whole stops at 1,000 rows, so most of it was never looked at
+      const key = [...want].filter((w) => !KINDS.has(w) && /^[a-z]{4,}$/.test(w)).sort((a, b) => b.length - a.length).slice(0, 2);
+      if (!key.length) continue;
+      const ck = key.join(" ");
+      if (!catalog.has(ck)) {
         const [{ data }, { data: sm }] = await Promise.all([
-          admin.from("garments").select("style, brand, description").limit(5000),
-          admin.from("sanmar_styles").select("style, brand, title").eq("sellable", true).limit(6000),
+          admin.from("garments").select("style, brand, description").or(key.map((w) => `description.ilike.%${w}%`).join(",")).limit(500),
+          admin.from("sanmar_styles").select("style, brand, title").eq("sellable", true).or(key.map((w) => `title.ilike.%${w}%`).join(",")).limit(500),
         ]);
         const rows = [...((data || []) as { style: string; brand: string; description: string }[]),
           ...((sm || []) as { style: string; brand: string; title: string }[]).map((r) => ({ style: r.style, brand: r.brand, description: (r.title || "").replace(new RegExp(`\\.?\\s*${(r.style || "").replace(/[^A-Za-z0-9]/g, "")}\\s*$`, "i"), "") }))];
-        catalog = rows.map((g) => { const name = strip(words(g.description || "", g.brand || "")); return { style: (g.style || "").toUpperCase(), brand: g.brand || "", name, kind: KIND(name), n: 1 }; }).filter((g) => g.style && g.name.size >= 2);
+        catalog.set(ck, rows.map((g) => { const name = strip(words(g.description || "", g.brand || "")); return { style: (g.style || "").toUpperCase(), brand: g.brand || "", name, kind: KIND(name), n: 1 }; }).filter((g) => g.style && g.name.size >= 2));
       }
-      hit = pick(catalog); from = "our garment catalog";
+      hit = pick(catalog.get(ck) || []); from = "our garment catalog";
     }
     if (!hit) continue;
     l.style = hit.style;
