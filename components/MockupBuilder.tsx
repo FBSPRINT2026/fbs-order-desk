@@ -47,7 +47,8 @@ import { maskBehindHood, snapToEdge } from "@/lib/hoodSnap";
 import { FULL_WHY, isFullColorWhy } from "@/lib/fullColor";
 import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorChangeWant, colorHex, deltaE, detectColors, paintPrint, recolorTrim, suggestInk } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
-import { closestThread, isThreadName, threadLabel } from "@/lib/embroidery";
+import { closestThread, isThreadName, threadByName, threadLabel } from "@/lib/embroidery";
+import { needleThreads } from "@/lib/needleThreads";
 import { loadThreadStock } from "@/lib/threadStock";
 import { stitchLook } from "@/lib/stitchLook";
 import { mockupArtStamp } from "@/lib/mockupFresh";
@@ -758,12 +759,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const saved = im.inkMap?.design === d.id ? im.inkMap.map : null;
           const stock = portal ? new Set<string>() : await loadThreadStock(sb).catch(() => new Set<string>());
           const map: Paint["map"] = {};
+          // the threads the print already names (or its sew file's worksheet, needle by needle) are what sews (Oct 30, AMS
+          // Baton Rouge: D-10301 on black shorts came out "1801 Super White, 1770 Light Emerald Green": the thread names
+          // weren't read as colors, so the art was matched to the whole thread chart, and its black taken for the shirt):
+          // each logo color goes on the nearest of THOSE threads, and a thread the shirt's color still sews
+          const namedT = (() => {
+            const fromInks = (im.inks || "").split(/\s*,\s*/).map((z) => threadByName(z)).filter((t): t is NonNullable<typeof t> => !!t).map((t) => ({ name: threadLabel(t), hex: t.hex }));
+            if (fromInks.length) return fromInks;
+            const ws = im.emb?.file?.ws;
+            return ws?.threads?.length ? needleThreads(ws, "").map((t) => ({ name: t.label, hex: t.hex })) : [];
+          })();
           for (const k of groups) {
             const was = saved?.[k.hex] && (isThreadName(saved[k.hex].name) || saved[k.hex].name === "none") ? saved[k.hex] : null;
-            // the shirt's own color isn't sewn (not on a heather)
-            const own = groups.length > 1 && !!line?.color && !isHeather(line.color) && far(k.hex, shirtHex(line)) < 45 ** 2;
-            const t = was ? null : closestThread(k.hex, { line: im.emb?.line, stock });
-            const pick = was || (own ? { name: "none", hex: k.hex } : t ? { name: threadLabel(t), hex: t.hex } : { name: "none", hex: k.hex });
+            const named = !was && namedT.length ? namedT.slice().sort((a, b) => far(k.hex, a.hex) - far(k.hex, b.hex))[0] : null;
+            // the shirt's own color isn't sewn (not on a heather), unless the print's own threads say it is
+            const own = !named && groups.length > 1 && !!line?.color && !isHeather(line.color) && far(k.hex, shirtHex(line)) < 45 ** 2;
+            const t = was || named ? null : closestThread(k.hex, { line: im.emb?.line, stock });
+            const pick = was || named || (own ? { name: "none", hex: k.hex } : t ? { name: threadLabel(t), hex: t.hex } : { name: "none", hex: k.hex });
             for (const hex of [k.hex, ...k.also]) map[hex] = saved?.[hex] && isThreadName(saved[hex].name) ? saved[hex] : pick;
           }
           setPaints((p) => ({ ...p, [im.id]: { design: d.id, shirt: sh, sources, map, unite: true, plan: plan!, off, method: "embroidery" } }));
