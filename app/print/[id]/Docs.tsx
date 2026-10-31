@@ -396,7 +396,7 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
         {inks.length > 0 && <><i>{inks.length === 1 ? "Ink" : "Inks"}</i>
           <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && <b>{n + 1} </b>}<b>{k}</b></span>)}</div></>}
         {ways.map((w) => <span key={w.name} style={{ display: "contents" }}><i>{des ? cwLetter(des, { name: w.name }) || "Colorway" : "Colorway"}</i>
-          <span className="w2-way"><b>{w.name}</b>{w.file ? ` · ${w.file.replace(/\.dst$/i, "")}` : ""} · <span className="faint">on {w.on} ({w.qty})</span>
+          <span className="w2-way"><span><b>{w.name}</b>{w.file ? <span className="faint"> · {w.file.replace(/\.dst$/i, "")}</span> : null}</span><span className="faint">on {w.on} ({w.qty})</span>
             <span className="w2-th">{w.threads.map((k) => <span key={k}><Swatch c={threadByName(k)?.hex || colorHex(k) || "#ccc"} />{k}</span>)}</span></span></span>)}
         {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> ({changeWord(d.method).toLowerCase()}, not {a}) </span>)}</span></span>)}
         <i>Size</i><span>{d.visualOnly ? <b>Set on press (reorder)</b> : <>{sz.label ? <b>{sz.label}</b> : "—"} · {dropLabel(d).toLowerCase()}</>}</span>
