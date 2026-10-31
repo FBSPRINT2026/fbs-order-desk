@@ -279,7 +279,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }
   // their goods may already be on a supplier's manifest (Oct 30, Nick on #40284: All My Sons' blanks came in days before
   // the order was entered): match the waiting manifest lines now, not at the next hourly run
-  if (d.goods?.supplied) await resolvePending(admin, Date.now() + 15_000).catch((e) => console.warn("goods match", e));
+  // (resolvePending stops 15s before its deadline: a deadline 15s out matched nothing, Oct 30 #40285–#40290)
+  if (d.goods?.supplied) await resolvePending(admin, Date.now() + 40_000).catch((e) => console.warn("goods match", e));
   // a reorder of a portal order: our saved mockups come along (the latest of each group), so nothing is made again
   // (Oct 20, Nick: "when we've got a mock-up made in our new system, we don't need to recreate anything, just copy it")
   if (reorderOf?.startsWith("o:")) {

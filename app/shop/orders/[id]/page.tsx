@@ -1684,7 +1684,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <label className="jl-k" htmlFor="o-nick">Job name</label>
                   <div className="jl-v"><input id="o-nick" className="jl-in" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
                   <label className="jl-k" htmlFor="o-po">PO #</label>
-                  <div className="jl-v"><input id="o-po" className="jl-in" type="text" value={o.po_number || ""} placeholder="None" onChange={(e) => patch((d) => { d.po_number = e.target.value; })} /></div>
+                  <div className="jl-v"><input id="o-po" className="jl-in" type="text" value={o.po_number || ""} placeholder="None" onFocus={(e) => { e.currentTarget.dataset.was = e.currentTarget.value; }} onChange={(e) => patch((d) => { d.po_number = e.target.value; })}
+                    // a new PO: the suppliers' manifests waiting for it are matched now (lib/manifest.ts resolvePending), once it's saved
+                    onBlur={(e) => { if (e.currentTarget.value.trim() && e.currentTarget.value !== e.currentTarget.dataset.was) setTimeout(() => { void save().then(() => fetch("/api/goods/manifest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ retry: true }) })).catch(() => null); }, 300); }} /></div>
                   <label className="jl-k" htmlFor="o-prod">Production</label>
                   <div className="jl-v"><input id="o-prod" className="jl-in jl-date" type="date" value={o.production_date || ""} onChange={(e) => patch((d) => { d.production_date = e.target.value || null; })} /></div>
                   <label className="jl-k" htmlFor="o-due">In hands</label>

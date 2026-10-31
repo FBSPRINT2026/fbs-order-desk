@@ -79,6 +79,9 @@ function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "p
           ? <span>Coming from <b>{supplierLabel(it.goods.supplier)}</b>{it.goods.supplier_po ? <> · order/PO {it.goods.supplier_po}</> : null}{it.goods.ship_date ? <> · ships {when(it.goods.ship_date)}</> : null}</span>
           : <span>{mode === "portal" ? "Where are these goods coming from? SanMar, S&S Activewear…" : "Supplier not known yet."}</span>}
         {act.saveInfo && <button type="button" className="linkbtn" disabled={!canAct} onClick={() => setPanel(panel === "info" ? "" : "info")}>{it.goods.supplier ? "Change" : "Add"}</button>}
+        {/* the suppliers' manifests are matched by themselves (when one comes in, every hour, when an order is made or its PO
+            changes); this checks again right now (Oct 30, Nick: "should everything just automatically check… or a button") */}
+        {mode === "shop" && ["waiting", "on_way", "partial"].includes(it.goods.status) && <button type="button" className="linkbtn" disabled={!canAct || busy} onClick={() => run(fetch("/api/goods/manifest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ retry: true }) }).then(async (r) => { const j = await r.json().catch(() => ({})); return r.ok ? { ok: true } : { ok: false, error: j.error || "Couldn't check." }; }), "Checked the suppliers' manifests.")}>{busy ? "Checking…" : "Check manifests"}</button>}
       </div>
       {panel === "info" && act.saveInfo && (
         <div className="gc-form">
