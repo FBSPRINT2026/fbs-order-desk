@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { brandDark, colorwaysOf, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand } from "@/lib/brands";
+import { brandDark, colorwayFor, colorwaysOf, goodsColorway, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand } from "@/lib/brands";
 import type { Design, GLine, Group, Imprint } from "@/lib/pricing";
 
 /**
@@ -64,7 +64,9 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
   im.fromBrand = brand?.name || "their logos";
   if (im.method === "embroidery") {
     // the colorway's own sew file when the brand links one (light goods first, as the print's base), else the best fit
-    const sew = sewForPrint(d, brand, lines.length > 0 && lines.every((l) => brandDark(brand, l)), sewKindOf(lines));
+    const own = goodsColorway(d, brand, lines);
+    const sew = sewForPrint(d, brand, lines.length > 0 && lines.every((l) => brandDark(brand, l)), sewKindOf(lines), undefined, own);
+    if (own && !sew) im.colorway = own.name;
     if (sew) {
       // the colorway that sews this file, by name on the print (a standard mockup is matched by it)
       { const cw = colorwaysOf(d).find((c) => c.sew && c.sew === sew.code); if (cw) im.colorway = cw.name; }
@@ -76,10 +78,15 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
       im.sizeFrom = "brand";
     }
     if (!(im.inks || "").trim()) im.inks = (sewThreads(sew).length ? sewThreads(sew) : brand?.embroidery?.light || []).join(", ");
-  } else if (!(im.inks || "").trim()) {
-    const cw = colorwaysOf(d).find((c) => c.name.toLowerCase() === String(brand?.rules?.light || "").toLowerCase()) || colorwaysOf(d)[0];
-    if (cw) im.inks = cw.inks.join(", ");
-    else if (d.inks) im.inks = d.inks;
+  } else {
+    // a heat transfer or screen print of the logo: its version for these goods by name (a standard mockup is matched by
+    // it; Oct 31, #40328's transfer had none and missed M-1138), its inks when the reading named none
+    const k = (s?: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const named = (im.inks || "").trim() ? colorwaysOf(d).find((c) => k(c.inks.join(",")) === k(im.inks)) : null;
+    const dark = lines.length > 0 && lines.every((l) => brandDark(brand, l));
+    const cw = named || goodsColorway(d, brand, lines) || colorwayFor(d, brand, dark);
+    if (cw && !im.colorway) im.colorway = cw.name;
+    if (!(im.inks || "").trim()) { if (cw) im.inks = cw.inks.join(", "); else if (d.inks) im.inks = d.inks; }
   }
   im.colors = Math.max(1, (im.inks || "").split(/\s*,\s*/).filter(Boolean).length || im.colors || 1);
   // the garments in another thread or ink: one color change per garment color (Imprint.inkBy)

@@ -219,6 +219,8 @@ export async function learnBrandsFromAll(admin: SupabaseClient, customerId: stri
 export async function learnBrandLooks(admin: SupabaseClient, order: Order, /** what the order was made from: a version it names outright ("All White") is the customer's pick, not what the garment color takes */ source = "") {
   const flat = (x: string) => ` ${x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
   const said = flat(source);
+  // the paperwork asked for the logo in full color: a one-color version on a garment color is that color's own
+  const askedFull = /\bfull[\s-]*colou?r\b/i.test(source);
   const groups = orderGroups(order);
   const ids = [...new Set(groups.flatMap((g) => (g.imprints || []).map((im) => im.design_id)).filter(Boolean) as string[])];
   if (!ids.length) return;
@@ -243,7 +245,10 @@ export async function learnBrandLooks(admin: SupabaseClient, order: Order, /** w
         const cw0 = colorwayOnColor(im, d, c)?.name;
         // a version the paperwork asked for by name says nothing about the garment color's light or dark
         const cw = cw0 && flat(cw0).trim() && said.includes(flat(cw0)) ? undefined : cw0;
-        const side = cw && cwKey(cw) === cwKey(r.light) ? "light" : cw && cwKey(cw) === cwKey(r.dark) ? "dark" : cw && cwKey(cw) === cwKey(r.one_light) ? "light" : cw && cwKey(cw) === cwKey(r.one_dark) ? "dark" : null;
+        // the brand's full-color pair says light or dark; any other version staff put on a color it wasn't asked for by name
+        // is that color's own (Oct 31, #40328: All Black on the hi-vis Brite Lime when the cart said Full Color)
+        const side = cw && cwKey(cw) === cwKey(r.light) ? "light" : cw && cwKey(cw) === cwKey(r.dark) ? "dark"
+          : cw && askedFull ? cw : cw && cwKey(cw) === cwKey(r.one_light) ? "light" : cw && cwKey(cw) === cwKey(r.one_dark) ? "dark" : null;
         if (side && r.goods?.[c] !== side) { r.goods = { ...(r.goods || {}), [c]: side }; changed.add(bid); }
       }
     }

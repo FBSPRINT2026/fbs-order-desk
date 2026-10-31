@@ -430,8 +430,12 @@ async function standardMockups(admin: SupabaseClient, custId: string, groups: Gr
   // and the same colorway (Oct 31, #40319: M-1144 is the Primary logo in Maroon / Black; a black jacket's Maroon / Off
   // White is another mockup)
   const cwOf = (im: { colorway?: string; design_id?: string | null }) => norm(im.colorway || "");
-  const key = (ims: { design_id?: string | null; location?: string; colorway?: string }[]) => [...new Set(ims.filter((im) => im.design_id).map((im) => `${im.design_id}@${norm(im.location || "")}#${cwOf(im)}`))].sort().join("|");
-  const keyOf = (r: StdMockup) => { const ims = ((r.snapshot as { imprints?: { design_id?: string | null; location?: string }[] } | null)?.imprints || []); return ims.length ? key(ims) : ""; };
+  // a logo mockup is the logo by itself on the garment color (no spot on a shirt): the same logo, version and way it's
+  // decorated (a transfer's colors aren't thread), wherever it goes (Oct 31, #40328: M-1138, the heat transfer on the
+  // Right Chest, is the Left Chest transfer's mockup too)
+  const isLogo = (r: Pick<StdMockup, "title">) => / — Logo /.test(r.title || "");
+  const key = (ims: { design_id?: string | null; location?: string; colorway?: string; method?: string }[], logo = false) => [...new Set(ims.filter((im) => im.design_id).map((im) => `${im.design_id}@${logo ? norm(im.method || "") : norm(im.location || "")}#${cwOf(im)}`))].sort().join("|");
+  const keyOf = (r: StdMockup) => { const ims = ((r.snapshot as { imprints?: { design_id?: string | null; location?: string; method?: string }[] } | null)?.imprints || []); return ims.length ? key(ims, isLogo(r)) : ""; };
   const allIds = [...new Set(groups.flatMap((g) => g.imprints.map((im) => im.design_id).filter(Boolean) as string[]))];
   const { data: ds } = allIds.length ? await admin.from("designs").select("id, preview_path, file_path").in("id", allIds) : { data: [] };
   for (const g of groups) {
@@ -440,7 +444,9 @@ async function standardMockups(admin: SupabaseClient, custId: string, groups: Gr
     if (!master && ((g.mockupThumbs || []).some(Boolean) || !g.imprints.length || !g.imprints.every((im) => im.design_id && im.fromBrand && byBrand.has(im.fromBrand)))) continue;
     // of the matching ones, one drawn on this group's garment color first (Oct 31, #40322: M-1142 drawn on gray went on a
     // black jacket and its boxes stayed gray)
-    const fits = master ? [] : rows.filter((r) => (byBrand.get(g.imprints[0].fromBrand!) || []).includes(r.number) && keyOf(r) === key(g.imprints));
+    const fits = master ? [] : rows.filter((r) => (byBrand.get(g.imprints[0].fromBrand!) || []).includes(r.number) && keyOf(r) === key(g.imprints, isLogo(r)))
+      // a mockup of this group's own spots before a logo one
+      .sort((p, q) => Number(isLogo(p)) - Number(isLogo(q)));
     const colorsOf = (r: StdMockup) => new Set((((r.snapshot as { lines?: { color?: string }[] } | null)?.lines) || []).map((l) => norm(l.color || "")));
     const mine = [...new Set((g.lines || []).map((l) => norm(l.color || "")).filter(Boolean))];
     const m = master || fits.find((r) => mine.length > 0 && mine.every((c) => colorsOf(r).has(c))) || fits[0];

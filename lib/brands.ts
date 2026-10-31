@@ -26,7 +26,7 @@ export type BrandRules = { light?: string; dark?: string; one_light?: string; on
   mockups?: number[];
   /** garment colors this brand's logos treat as light or dark goods, learned from the orders staff mark right (Oct 31,
    *  Nick on #40319: Dark Gray Heather takes Maroon / Black, the light colorway): wins over reading the color */
-  goods?: Record<string, "light" | "dark"> };
+  goods?: Record<string, "light" | "dark" | string> };
 export type BrandEmb = { light?: string[]; dark?: string[]; backing?: string };
 export type Brand = { id: string; customer_id: string; name: string; colors: BrandColor[]; rules: BrandRules; embroidery: BrandEmb; notes: string; sort: number; archived_at?: string | null };
 
@@ -144,7 +144,24 @@ export function isDarkGarment(l: Pick<GLine, "color"> & { hex?: string | null })
 /** light or dark goods for a brand's logos: what the brand learned for this color (BrandRules.goods), else the color read */
 export function brandDark(brand: Pick<Brand, "rules"> | null | undefined, l: Pick<GLine, "color"> & { hex?: string | null }): boolean {
   const g = brand?.rules?.goods?.[(l.color || "").trim().toLowerCase()];
-  return g ? g === "dark" : isDarkGarment(l);
+  if (g === "dark" || g === "light") return g === "dark";
+  // a color with a version of its own: dark when that version is the brand's dark one
+  const k = (s?: string) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+  if (g && [brand?.rules?.dark, brand?.rules?.one_dark].some((x) => x && k(x) === k(g))) return true;
+  if (g && [brand?.rules?.light, brand?.rules?.one_light].some((x) => x && k(x) === k(g))) return false;
+  return isDarkGarment(l);
+}
+/**
+ * A garment color that takes a version of the logo of its own (Oct 31, Nick on MEI #40328: the cart said Full Color, but
+ * a hi-vis Brite Lime sweatshirt gets the logo All Black): learned from the orders staff mark right (BrandRules.goods
+ * holding the version's name, not light or dark). When every garment of the print is such a color and all agree, it's
+ * that version; else null (the brand's light or dark rule decides).
+ */
+export function goodsColorway(d: Pick<Design, "specs">, brand: Pick<Brand, "rules"> | null | undefined, lines: Pick<GLine, "color">[]): Colorway | null {
+  const k = (s?: string) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+  const names = [...new Set(lines.filter((l) => (l.color || "").trim()).map((l) => brand?.rules?.goods?.[(l.color || "").trim().toLowerCase()] || ""))];
+  if (names.length !== 1 || !names[0] || names[0] === "light" || names[0] === "dark") return null;
+  return colorwaysOf(d).find((c) => k(c.name) === k(names[0])) || null;
 }
 /** the brand's colorway for light or dark goods, as one of the logo's colorways (by name; the first when it has no match) */
 export function colorwayFor(d: Pick<Design, "specs">, brand: Brand | null | undefined, dark: boolean, one = false): Colorway | null {
@@ -336,7 +353,7 @@ export function withLogoSetup(im: Imprint, d: Pick<Design, "id" | "specs"> | nul
   const cws = colorwaysOf(d);
   const goods = lines.filter((l) => (l.color || "").trim());
   const main = mainLine(goods.length ? goods : lines);
-  const cw = printColorway(x, d) || (fresh && cws.length ? colorwayFor(d, brand, main ? brandDark(brand, main) : false) : null);
+  const cw = printColorway(x, d) || (fresh && cws.length ? goodsColorway(d, brand, goods) || colorwayFor(d, brand, main ? brandDark(brand, main) : false) : null);
   if (im.method === "embroidery") {
     const kind = sewKindOf(lines);
     const files = sewFilesOf(d, brand), linked = cw ? colorwaySew(d, cw, brand, kind) : null;
@@ -378,8 +395,8 @@ export function withMethod(im: Imprint, method: Method, d: Pick<Design, "id" | "
 }
 /** the sew file for a print: the one linked to the colorway the brand's rule picks for these goods (same kind of goods),
  *  else the best fit by kind and size (pickSewFile) */
-export function sewForPrint(d: Pick<Design, "specs">, brand: Brand | null | undefined, dark: boolean, kind: SewKind, wantW?: number): SewFile | null {
-  const linked = colorwaySew(d, colorwayFor(d, brand, dark), brand);
+export function sewForPrint(d: Pick<Design, "specs">, brand: Brand | null | undefined, dark: boolean, kind: SewKind, wantW?: number, /** a version the goods take (goodsColorway) */ cw?: Colorway | null): SewFile | null {
+  const linked = colorwaySew(d, cw || colorwayFor(d, brand, dark), brand);
   if (linked && (linked.kind || "flat") === kind) return linked;
   return pickSewFile(sewFilesOf(d, brand), kind, wantW);
 }
