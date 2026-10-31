@@ -22,6 +22,7 @@ import { Pill } from "@/components/bits";
 import { StarOrder } from "@/components/PortalDashBits";
 import PortalSwitch from "@/components/PortalSwitch";
 import { heldFiles } from "@/lib/heldFiles";
+import RowLink from "@/components/RowLink";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -309,7 +310,8 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
             const owes = !o.archived && o.balance > 0.004 && !(all && o.type !== "invoice") && cols !== "quote";
             const dt = cols === "quote" ? when(o.created_at) : when(o.due_date);
             return (
-              <li key={o.id} className={"aa-oc" + (owes && payDue(o) && (payDue(o) as string) < today() ? " late" : "")} onClick={() => router.push(orderHref(o.id))}>
+              <li key={o.id} className={"rl aa-oc" + (owes && payDue(o) && (payDue(o) as string) < today() ? " late" : "")}>
+                <RowLink href={orderHref(o.id)} label={`Open ${o.nickname || `#${o.number}`}`} />
                 <div className="aa-oc-top">
                   <Link href={orderHref(o.id)} className="aa-oc-n" onClick={(e) => e.stopPropagation()}>{o.nickname || (o.type === "invoice" ? "Order" : "Quote")}</Link>
                   {o.archived ? <PrintavoMark /> : mode === "portal" && <span onClick={(e) => e.stopPropagation()}><StarOrder id={o.id} on={!!o.starred} canAct={canAct} /></span>}
@@ -500,8 +502,8 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
             <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Date</th><th>Due</th><th className="r">Pcs</th>{showBal && <th className="r money-only">Balance</th>}<th className="r money-only">Total</th></tr></thead>
             <tbody>
               {P.items.map((o) => (
-                <tr key={o.id} tabIndex={0} onClick={() => router.push(orderHref(o.id))} onKeyDown={(e) => e.key === "Enter" && router.push(orderHref(o.id))}>
-                  <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.archived && <PrintavoMark />}</td>
+                <tr className="rl" key={o.id}>
+                  <td><RowLink href={orderHref(o.id)} /><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.archived && <PrintavoMark />}</td>
                   <td><div>{o.nickname || "Untitled Job"}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
                   <td>{o.archived ? <span className="pv-dot" style={{ ["--sc" as string]: o.statusColor || "#888" }}>{o.statusLabel || "Archived"}</span> : <Pill status={o.status} pv={o.pv} />}</td>
                   <td>{when(dayOf(o)) || "—"}</td>
@@ -619,8 +621,8 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         <div className="aa-card aa-tblcard"><table className="aa-tbl">
           <thead><tr><th>Draft</th><th>Pieces</th><th>Last changed</th><th /></tr></thead>
           <tbody>{draftsLive.map((d) => (
-            <tr key={d.id} onClick={() => router.push(`/portal/request/${d.id}${hrefQuery}`)}>
-              <td className="m"><div className="aa-t">{d.name || "Untitled order"}</div></td>
+            <tr className="rl" key={d.id}>
+              <td className="m"><RowLink href={`/portal/request/${d.id}${hrefQuery}`} /><div className="aa-t">{d.name || "Untitled order"}</div></td>
               <td>{d.pcs || "—"}</td>
               <td className="dt">{when(d.updated)}</td>
               <td className="r" onClick={(e) => e.stopPropagation()}>
@@ -737,8 +739,8 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
               <thead><tr><th>#</th><th>Order</th><th>Status</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th><th /></tr></thead>
               <tbody>
                 {shown.map((o) => (
-                  <tr key={o.id} onClick={() => router.push(orderHref(o.id))}>
-                    <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
+                  <tr className="rl" key={o.id}>
+                    <td className="num"><RowLink href={orderHref(o.id)} /><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link></td>
                     <td className="m"><div className="aa-t">{o.nickname || "Order"}</div></td>
                     <td>{pill(o)}</td>
                     <td className="r num" data-l="Total">{money(o.total)}</td>
@@ -785,8 +787,8 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
                 {shown.map((g) => {
                   const many = g.lines.length > 1, open = openPay === g.key;
                   return [
-                    <tr key={g.key} className={many ? "ph-g" + (open ? " open" : "") : ""} onClick={() => (many ? setOpenPay(open ? null : g.key) : router.push(g.lines[0].href || orderHref(g.lines[0].order_id)))}>
-                      <td className="dt">{when(g.date)}</td>
+                    <tr key={g.key} className={many ? "ph-g" + (open ? " open" : "") : "rl"} onClick={many ? () => setOpenPay(open ? null : g.key) : undefined}>
+                      <td className="dt"><RowLink href={g.lines[0].href || orderHref(g.lines[0].order_id)} off={many} />{when(g.date)}</td>
                       <td className="m">{many ? <button type="button" className="ph-toggle" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpenPay(open ? null : g.key); }}>{g.lines.length} invoices <span aria-hidden="true">{open ? "▴" : "▾"}</span></button>
                         : <Link className="num" href={g.lines[0].href || orderHref(g.lines[0].order_id)} onClick={(e) => e.stopPropagation()}>#{g.lines[0].number}</Link>}</td>
                       <td className="mt">{g.method || "—"}{g.fee > 0.004 ? <small className="faint"> (+{money(g.fee)} card fee)</small> : null}</td>

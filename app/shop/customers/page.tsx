@@ -8,6 +8,7 @@ import { useShopData } from "@/lib/shopData";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
 import { fmtPhone } from "@/lib/phone";
+import RowLink from "@/components/RowLink";
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -109,8 +110,8 @@ export default function CustomersPage() {
               const head = !anyFav ? "" : i === 0 ? "fav" : !fav && isFav(all[i - 1]) ? "all" : "";
               return [
                 head ? <tr key={"h" + c.id} className={"cu-grp" + (head === "fav" ? " fav" : " rest")}><td colSpan={6}>{head === "fav" ? <><span className="cu-grp-star" aria-hidden>★</span>Favorites</> : "All customers"}</td></tr> : null,
-                <tr key={c.id} tabIndex={0} className={fav ? "cu-favrow" : undefined} onClick={() => router.push(`/shop/customers/${c.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/customers/${c.id}`)}>
-                  <td className="cu-td"><div><button type="button" className={"cu-star sm" + (isFav(c) ? " on" : "")} onClick={(e) => { e.stopPropagation(); void star(c); }} aria-pressed={isFav(c)} aria-label={isFav(c) ? "Unstar" : "Star"} title={isFav(c) ? "Starred: at the top of the list" : "Star: keep at the top of the list"}>{isFav(c) ? "★" : "☆"}</button><b>{c.company || c.name || "Unnamed"}</b>{c.is_test && <span className="ta-tag">Test</span>}{c.price_type === "wholesale" && <span className="tag i" style={{ marginLeft: 6 }}>Wholesale</span>}</div><div className="sub">{c.company ? c.name : ""}{(c.tags || []).length ? <>{c.company && c.name ? " · " : ""}{(c.tags || []).join(", ")}</> : null}</div></td>
+                <tr key={c.id} className={["rl", fav ? "cu-favrow" : undefined].filter(Boolean).join(" ")}>
+                  <td className="cu-td"><RowLink href={`/shop/customers/${c.id}`} label={`Open ${c.company || c.name || "customer"}`} /><div><button type="button" className={"cu-star sm" + (isFav(c) ? " on" : "")} onClick={(e) => { e.stopPropagation(); void star(c); }} aria-pressed={isFav(c)} aria-label={isFav(c) ? "Unstar" : "Star"} title={isFav(c) ? "Starred: at the top of the list" : "Star: keep at the top of the list"}>{isFav(c) ? "★" : "☆"}</button><b>{c.company || c.name || "Unnamed"}</b>{c.is_test && <span className="ta-tag">Test</span>}{c.price_type === "wholesale" && <span className="tag i" style={{ marginLeft: 6 }}>Wholesale</span>}</div><div className="sub">{c.company ? c.name : ""}{(c.tags || []).length ? <>{c.company && c.name ? " · " : ""}{(c.tags || []).join(", ")}</> : null}</div></td>
                   <td><div className="cu-em" title={c.email || undefined}>{c.email}</div><div className="sub">{fmtPhone(c.phone)}</div></td>
                   <td>{c.next_follow_up ? <span className={(daysUntil(c.next_follow_up) ?? 1) <= 0 ? "due-late" : ""}>{fmtDate(c.next_follow_up)}</span> : <span className="faint">—</span>}<div className="sub">{c.last_contact_at ? `Last ${fmtStamp(c.last_contact_at).split(",")[0]}` : ""}</div></td>
                   <td className="r">{s.n}</td>

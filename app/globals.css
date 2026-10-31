@@ -17001,3 +17001,15 @@ body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:
 .puff-part.on{outline:2px solid var(--accent);outline-offset:1px}
 .puff-say{margin-top:8px}
 .puff-say input{height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink)}
+
+/* Rows that open a page are real links (components/RowLink.tsx, Oct 31): right-click Open in new tab, middle-click and
+   Ctrl/Cmd-click, like Printavo. The row's link covers it; anything clickable in the row sits above the link. */
+tr.rl, li.rl { position: relative; cursor: pointer; }
+a.rl-a { position: static; color: inherit; text-decoration: none; }
+a.rl-a::after { content: ""; position: absolute; inset: 0; z-index: 0; }
+/* :where keeps this at no weight, so a control placed by its own rule (absolute) stays where it is */
+:where(tr.rl, li.rl) :where(button, input, select, textarea, label, summary, a:not(.rl-a)) { position: relative; z-index: 1; }
+tr.rl:has(a.rl-a:focus-visible), li.rl:has(a.rl-a:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* stacked by TableFit: the row's link still covers the whole row (its cell isn't the box it fills), the cell's label kept in place */
+table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a){position:static!important}
+table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label=""])::before{left:12px;top:14px}

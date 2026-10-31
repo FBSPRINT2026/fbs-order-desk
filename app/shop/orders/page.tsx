@@ -16,6 +16,7 @@ import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { bulkDeleteOrders } from "@/app/shop/bulk-delete-actions";
+import RowLink from "@/components/RowLink";
 
 /** A Printavo status in our words, so the filters work on Printavo orders too. */
 function pvStatus(a: { kind: string; status_name: string }): string {
@@ -201,9 +202,9 @@ export default function OrdersPage() {
                 const c = customers[o.customer_id || ""];
                 const paid = o.balance <= 0.004 && o.total > 0;
                 return (
-                  <tr key={o.id} tabIndex={0} className={picking && picked.has(o.id) ? "picked" : undefined} onClick={() => (picking ? togglePick(o.id) : router.push(`/shop/orders/${o.id}`))} onKeyDown={(e) => e.key === "Enter" && (picking ? togglePick(o.id) : router.push(`/shop/orders/${o.id}`))}>
+                  <tr key={o.id} tabIndex={picking ? 0 : undefined} className={(picking ? (picked.has(o.id) ? "picked" : "") : "rl") || undefined} onClick={picking ? () => togglePick(o.id) : undefined} onKeyDown={picking ? (e) => { if (e.key === "Enter") togglePick(o.id); } : undefined}>
                     {picking && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select #${o.number}`} checked={picked.has(o.id)} onChange={() => togglePick(o.id)} /></td>}
-                    <td><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.unread > 0 && <span className="unread" title="Unread customer message" />}</td>
+                    <td><RowLink href={`/shop/orders/${o.id}`} label={`Open #${o.number}`} off={picking} /><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.unread > 0 && <span className="unread" title="Unread customer message" />}</td>
                     <td><div>{o.nickname || "Untitled Job"}{o.rush && <span className="tag" style={{ marginLeft: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}</div><div className="sub">{summaryLine(o)}{o.po_number ? ` · PO ${o.po_number}` : ""}</div></td>
                     <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
                     <td><Pill status={o.status} pv={pvStatusOf(o as never)} />{orderNeedsDetails(o.groups) && <div className="pdn-tag" title="Production confirms the print size and inks from the old job">Reorder Details Needed</div>}</td>
@@ -216,9 +217,9 @@ export default function OrdersPage() {
               }
               const c = customers[a!.customer_id];
               return (
-                <tr key={a!.id} tabIndex={0} className={picking ? "nopick" : undefined} onClick={() => router.push(`/shop/archive/${a!.id}`)} onKeyDown={(e) => e.key === "Enter" && router.push(`/shop/archive/${a!.id}`)}>
+                <tr key={a!.id} className={["rl", picking ? "nopick" : undefined].filter(Boolean).join(" ")}>
                   {picking && <td />}
-                  <td><span className="ordno">{a!.visual_id}</span> <span className={"tag " + (a!.kind === "quote" ? "q" : "i")}>{a!.kind === "quote" ? "Quote" : "Inv"}</span></td>
+                  <td><RowLink href={`/shop/archive/${a!.id}`} label={`Open Printavo #${a!.visual_id}`} /><span className="ordno">{a!.visual_id}</span> <span className={"tag " + (a!.kind === "quote" ? "q" : "i")}>{a!.kind === "quote" ? "Quote" : "Inv"}</span></td>
                   <td><div>{a!.nickname || "Untitled Job"}<span className="aa-arch">Printavo</span></div><div className="sub">{a!.order_date ? fmtDateLong(a!.order_date) : ""}</div></td>
                   <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
                   <td><span className="pv-dot" style={{ ["--sc" as string]: a!.status_color || "#888" }}>{a!.status_name}</span></td>

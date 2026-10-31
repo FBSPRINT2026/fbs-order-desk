@@ -14,6 +14,7 @@ import { previewUrls } from "@/lib/designs";
 import { ARCHIVE_LIST_COLS, type ArchiveSummary } from "@/lib/archive";
 import { PAY_TERMS, type Design, type PayTerms } from "@/lib/pricing";
 import { allRows } from "@/lib/readAll";
+import RowLink from "@/components/RowLink";
 
 /**
  * Search everything (Oct 21, Nick: "this looks like a complete disaster… it should be much more informative"). The
@@ -254,8 +255,8 @@ function SearchInner() {
               <thead><tr><th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only">Balance</th></tr></thead>
               <tbody>
                 {shownRows.map((r) => (
-                  <tr key={r.key} tabIndex={0} onClick={() => router.push(r.href)} onKeyDown={(e) => e.key === "Enter" && router.push(r.href)}>
-                    <td><span className="ordno">{r.number}</span> <span className={"tag " + (r.quote ? "q" : "i")}>{r.quote ? "Quote" : "Inv"}</span></td>
+                  <tr className="rl" key={r.key}>
+                    <td><RowLink href={r.href} /><span className="ordno">{r.number}</span> <span className={"tag " + (r.quote ? "q" : "i")}>{r.quote ? "Quote" : "Inv"}</span></td>
                     <td><div className="sx-job"><span className="sx-th">{thumbs[r.key] ? <img src={thumbs[r.key]} alt="" /> : null}</span><span>{r.name}{r.archived && <span className="aa-arch">Printavo</span>}</span></div></td>
                     <td>{r.customer}</td>
                     <td>{r.archived ? <span className="pv-dot" style={{ ["--sc" as string]: r.color }}>{r.label}</span> : <Pill status={r.status} pv={r.pv} />}</td>
@@ -285,7 +286,7 @@ function SearchInner() {
         <section className="sx-sec">
           <h3>Messages <span className="faint">{msgs.length} · portal messages and texts that mention it</span></h3>
           <div className="tbl-wrap"><table className="tbl"><tbody>
-            {msgs.map((m) => <tr key={m.key} onClick={() => router.push(m.href)}><td style={{ width: 70 }}><span className="tag">{m.kind}</span></td><td style={{ width: 160 }}><b>{m.who}</b></td><td className="sx-msg">{m.text}</td><td className="r">{fmtDay(m.when)}</td></tr>)}
+            {msgs.map((m) => <tr className="rl" key={m.key}><td style={{ width: 70 }}><RowLink href={m.href} /><span className="tag">{m.kind}</span></td><td style={{ width: 160 }}><b>{m.who}</b></td><td className="sx-msg">{m.text}</td><td className="r">{fmtDay(m.when)}</td></tr>)}
           </tbody></table></div>
         </section>
       )}
@@ -293,14 +294,14 @@ function SearchInner() {
       {show("shipments") && (
         <section className="sx-sec">
           <h3>Supplier shipments <span className="faint">{ships.length}</span></h3>
-          <div className="tbl-wrap"><table className="tbl"><tbody>{ships.map((s, i) => <tr key={i} onClick={() => router.push(s.href)}><td><b>{s.title}</b></td><td className="faint">{s.sub}</td></tr>)}</tbody></table></div>
+          <div className="tbl-wrap"><table className="tbl"><tbody>{ships.map((s, i) => <tr className="rl" key={i}><td><RowLink href={s.href} /><b>{s.title}</b></td><td className="faint">{s.sub}</td></tr>)}</tbody></table></div>
         </section>
       )}
 
       {show("projects") && (
         <section className="sx-sec">
           <h3>Projects <span className="faint">{projs.length}</span></h3>
-          <div className="tbl-wrap"><table className="tbl"><tbody>{projs.map((p, i) => <tr key={i} onClick={() => router.push(p.href)}><td><b>{p.title}</b></td><td>{p.sub}</td><td><span className="tag">{p.tag}</span></td></tr>)}</tbody></table></div>
+          <div className="tbl-wrap"><table className="tbl"><tbody>{projs.map((p, i) => <tr className="rl" key={i}><td><RowLink href={p.href} /><b>{p.title}</b></td><td>{p.sub}</td><td><span className="tag">{p.tag}</span></td></tr>)}</tbody></table></div>
         </section>
       )}
 
@@ -313,7 +314,7 @@ function SearchInner() {
               const st = otherStats[c.id] || { n: 0, total: 0, last: "" };
               const n = mine.length + st.n, tot = mine.reduce((s, o) => s + o.total, 0) + st.total;
               const last = [st.last, ...mine.map((o) => (o.created_at || "").slice(0, 10))].sort().reverse()[0] || "";
-              return <tr key={c.id} onClick={() => router.push(`/shop/customers/${c.id}`)}><td><b>{c.company || c.name}</b></td><td className="faint">{[c.company ? c.name : "", c.email].filter(Boolean).join(" · ")}</td><td>{n ? `${n} order${n === 1 ? "" : "s"}${last ? ` · last ${fmtDay(last)}` : ""}` : "No orders yet"}</td><td className="r money-only">{n ? `${money(tot)} lifetime` : ""}</td></tr>;
+              return <tr className="rl" key={c.id}><td><RowLink href={`/shop/customers/${c.id}`} /><b>{c.company || c.name}</b></td><td className="faint">{[c.company ? c.name : "", c.email].filter(Boolean).join(" · ")}</td><td>{n ? `${n} order${n === 1 ? "" : "s"}${last ? ` · last ${fmtDay(last)}` : ""}` : "No orders yet"}</td><td className="r money-only">{n ? `${money(tot)} lifetime` : ""}</td></tr>;
             })}
           </tbody></table></div>
         </section>

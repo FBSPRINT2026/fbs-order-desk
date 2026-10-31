@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PROJECT_STATUS, countdown, type Project, type ProjectOrder, type ProjectStatus, type ProjectTask } from "@/lib/projects";
 import { fmtDateLong, money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
+import RowLink from "@/components/RowLink";
 
 type R = Promise<{ ok: boolean; error?: string; id?: string }>;
 export type ProjectActs = {
@@ -90,8 +91,8 @@ export default function ProjectView({ mode, project, tasks, orders, linkable, me
               {orders.length ? (
                 <table className="aa-tbl pv2-orders"><tbody>
                   {orders.map((o) => (
-                    <tr key={o.id} onClick={() => (location.href = o.href)}>
-                      <td className="num"><Link href={o.href} onClick={(e) => e.stopPropagation()}>#{o.number}</Link>{o.archived && <PrintavoMark />}</td>
+                    <tr className="rl" key={o.id}>
+                      <td className="num"><RowLink href={o.href} /><Link href={o.href} onClick={(e) => e.stopPropagation()}>#{o.number}</Link>{o.archived && <PrintavoMark />}</td>
                       <td><div className="aa-t">{o.nickname || (o.type === "quote" ? "Quote" : "Order")}</div>{o.due_date && <div className="aa-s">In hands {fmtDateLong(o.due_date)}</div>}</td>
                       <td><span className="aa-pill" style={{ ["--sc" as string]: o.statusColor || "var(--accent)" }}>{o.statusLabel}</span></td>
                       <td className="r num b">{money(o.total)}</td>

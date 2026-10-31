@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createStore, listStores, type StoreRow } from "@/app/merch-actions";
 import { fmtDate, stepOf } from "@/lib/merch";
 import { useSticky } from "@/lib/useSticky";
+import RowLink from "@/components/RowLink";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const TONE: Record<string, string> = { draft: "#7C8799", review: "#6477D6", open: "#1E9D5B", closed: "#C98A0C", ordered: "#C98A0C", production: "#E0582E", packing: "#A152C9", ready: "#0A8FC0", delivered: "#6B7688" };
@@ -36,8 +37,8 @@ export default function StoreList({ base }: { base: string }) {
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>Store</th>{staff && <th>Customer</th>}<th>Status</th><th>Closes</th><th className="r">Orders</th><th className="r">Pieces</th><th className="r">Sales</th><th className="r">Give-back</th></tr></thead>
           <tbody>{list.map((s) => (
-            <tr key={s.id} onClick={() => router.push(`${base}/${s.id}`)}>
-              <td><Link href={`${base}/${s.id}`} onClick={(e) => e.stopPropagation()}><b>{s.name}</b></Link><div className="faint" style={{ fontSize: 12 }}>/s/{s.slug}</div></td>
+            <tr className="rl" key={s.id}>
+              <td><RowLink href={`${base}/${s.id}`} /><Link href={`${base}/${s.id}`} onClick={(e) => e.stopPropagation()}><b>{s.name}</b></Link><div className="faint" style={{ fontSize: 12 }}>/s/{s.slug}</div></td>
               {staff && <td>{s.customer || "—"}</td>}
               <td><span className="pill" style={{ ["--sc" as string]: TONE[s.status] || "#7C8799" }}>{stepOf(s.status).label}</span></td>
               <td>{s.closes_at ? fmtDate(s.closes_at, false) : "—"}</td>
