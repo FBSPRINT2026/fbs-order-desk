@@ -231,13 +231,24 @@ export type RunsAsk = { runs: Run[]; prefs: PreferredGood[]; company: string; se
  * their usual colors per style (for the color check after).
  */
 export async function garmentStep(groups: Group[], o: { customerId?: string | null; activityId?: string | null; ask: (a: RunsAsk) => Promise<{ picks: Record<string, RunPick | null>; remember: boolean } | null> }): Promise<{ groups: Group[]; asked: boolean; skipped: string[]; usual: Record<string, string[]>; did: string[] }> {
-  const blank = groups.flatMap((x) => x.lines).filter((l) => !String(l.style || "").trim() && (l.color || Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
+  let blank = groups.flatMap((x) => x.lines).filter((l) => !String(l.style || "").trim() && (l.color || Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
   if (!blank.length) return { groups, asked: false, skipped: [], usual: {}, did: [] };
   const sb = createClient();
   const [{ data: cu }, { data: em }] = await Promise.all([
-    o.customerId ? sb.from("customers").select("preferred_goods, company, name").eq("id", o.customerId).maybeSingle() : Promise.resolve({ data: null }),
+    o.customerId ? sb.from("customers").select("preferred_goods, company, name, price_type").eq("id", o.customerId).maybeSingle() : Promise.resolve({ data: null }),
     o.activityId ? sb.from("activities").select("from_email, meta").eq("id", o.activityId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  // their own goods (a wholesale customer: decoration only, Oct 31, Nick: "Cutter and Buck is just their own brand… he
+  // gets it from their own website… bring it in the way it's stated"): a garment they named comes in as named, with no
+  // style number to find; we don't buy it and its mockup is the logo mockup. Only a garment they didn't name is asked.
+  if ((cu as { price_type?: string } | null)?.price_type === "wholesale") {
+    const named = blank.filter((l) => String(l.called || l.garment || "").trim());
+    if (named.length) {
+      for (const l of named) if (!(l.garment || "").trim()) l.garment = String(l.called || "").trim();
+      blank = blank.filter((l) => !named.includes(l));
+      if (!blank.length) return { groups, asked: false, skipped: [], usual: {}, did: [`${named.length} garment${named.length === 1 ? "" : "s"} brought in as named (their own goods, no style number): ${named.map((l) => l.garment).join("; ")}`.slice(0, 400)] };
+    }
+  }
   const prefs = (((cu as { preferred_goods?: PreferredGood[] } | null)?.preferred_goods) || []).filter((x) => x && x.style);
   const company = String((cu as { company?: string } | null)?.company || (cu as { name?: string } | null)?.name || "This customer");
   const sender = (() => { const n = String(((em as { meta?: { from_name?: string } } | null)?.meta?.from_name) || "").replace(/["']/g, "").trim(); const m = /^([^,@]+),\s*([^,@]+)$/.exec(n); return ((m ? m[2] : n).split(/\s+/).find((w) => w && !/@/.test(w)) || ""); })();
