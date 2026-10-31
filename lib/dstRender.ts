@@ -91,7 +91,9 @@ const rand = (seed: number) => { let s = seed >>> 0 || 1; return () => ((s = (s 
 export function renderThreads(info: DstInfo, colors: string[], opts: { width?: number; fabric?: string; trimJumps?: boolean; pad?: number } = {}): HTMLCanvasElement {
   let segs = stitchesOf(info);
   const hidden = opts.trimJumps === false ? new Set<number>() : jumpStitches(segs);
-  segs = segs.filter((_, i) => !hidden.has(i));
+  // a stop set to not sew ("" or "none" for its color, Oct 31: MEI's M icon is the stacked file without the words)
+  const unsewn = (b: number) => { const x = colors.length ? colors[b % colors.length] : "#2a2a2a"; return x === "" || x === "none"; };
+  segs = segs.filter((s, i) => !hidden.has(i) && !unsewn(s.block));
   const c = document.createElement("canvas");
   if (!segs.length) { c.width = c.height = 1; return c; }
   const xs = segs.flatMap((s) => [s.x0, s.x1]), ys = segs.flatMap((s) => [s.y0, s.y1]);

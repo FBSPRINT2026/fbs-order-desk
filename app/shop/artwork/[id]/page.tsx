@@ -73,6 +73,26 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
   const [sewBusy, setSewBusy] = useState(false);
   /** the kind of goods new sew files are for (Oct 31, Nick: "these are specifically for sewing a bag") */
   const [sewKind, setSewKind] = useState<keyof typeof SEW_KINDS>("flat");
+  /** another of their logos' sew files, to sew this logo from (Oct 31, Nick: the M icon is "in the same embroidery file"
+   *  as the stacked logo, sewn without the words): its DST, EMB and sheet, copied here as this logo's next file */
+  const [others, setOthers] = useState<{ id: string; number: number; name: string; f: SewFile }[] | null>(null);
+  async function loadOthers() {
+    if (!d?.customer_id) { setOthers([]); return; }
+    const { data } = await sb.from("designs").select("id, number, name, specs").eq("customer_id", d.customer_id).neq("id", d.id).is("archived_at", null);
+    setOthers(((data || []) as Pick<Design, "id" | "number" | "name" | "specs">[]).flatMap((x) => sewFilesOf(x).map((f) => ({ id: x.id, number: x.number, name: x.name, f }))));
+  }
+  async function useOther(k: number) {
+    const o = others?.[k]; if (!d || !o) return;
+    const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
+    const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[]; removed?: SewFile[] };
+    const code = nextSewCode([...(em.files || []), ...(em.removed || [])]);
+    const f: SewFile = { ...o.f, code, kind: o.f.kind || "flat", from: `D-${o.number} ${o.f.code || ""}`.trim() };
+    const specs = { ...sp, embroidery: { ...em, files: [...(em.files || []), f] } };
+    const { error } = await sb.from("designs").update({ specs }).eq("id", d.id);
+    if (error) { setMsg("Couldn't add it: " + error.message); return; }
+    setD({ ...d, specs: specs as Design["specs"] }); setOthers(null);
+    setMsg(`${code} sews ${o.f.name}: set the needles it leaves out to Don't sew`);
+  }
   const [brands, setBrands] = useState<Brand[]>([]);
   const [colEdit, setColEdit] = useState<string | null>(null);
   const [cwEdit, setCwEdit] = useState<number | null>(null);
@@ -247,11 +267,20 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     await load();
   };
   /** one needle of a sew file on the thread we really ran (null: back to what the digitizer's sheet says) */
-  const setNeedle = async (i: number, needle: number, thread: string | null) => {
+  const setNeedle = async (i: number, needle: number, thread: string | null | { skip: boolean }) => {
     const f = sews[i];
     if (!f?.ws) return;
-    const threads = f.ws.threads.map((x) => { if (x.needle !== needle) return x; const y = { ...x }; if (thread) { y.ours = thread; y.oursFrom = "staff"; } else { delete y.ours; delete y.oursFrom; } return y; });
-    await setSew(i, { ws: { ...f.ws, threads } });
+    const threads = f.ws.threads.map((x) => {
+      if (x.needle !== needle) return x;
+      const y = { ...x };
+      // not sewn on this logo (Oct 31, Nick: the M icon is the stacked file "with the bottom part set to no sewing")
+      if (thread && typeof thread === "object") { if (thread.skip) y.skip = true; else delete y.skip; return y; }
+      if (thread) { y.ours = thread; y.oursFrom = "staff"; delete y.skip; } else { delete y.ours; delete y.oursFrom; }
+      return y;
+    });
+    // what this logo sews of the file: its stitches and colors without the needles left out
+    const sewn = threads.filter((x) => !x.skip);
+    await setSew(i, { ws: { ...f.ws, threads }, ...(threads.some((x) => x.skip) || f.ws.threads.some((x) => x.skip) ? { stitches: sewn.reduce((a, x) => a + (x.stitches || 0), 0) || f.stitches, colors: Math.max(1, sewn.length) } : {}) });
   };
   const stdColors = standardColors({ specs: { ...((d.specs || {}) as object), colors } as Design["specs"] }, brand);
   const threadSuggest = [...new Set(colors.map((c) => c.thread).filter(Boolean) as string[])];
@@ -395,7 +424,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
           {tab === "emb" && (
             <div className="lgx-tab">
               <div className="panel-h"><span className="faint">{sews.length ? "Each sew file: the DST with its EMB and sewing sheet, made at one size for one spot" : "No sew files yet"}{sewouts ? ` · ${sewouts} sew-out${sewouts === 1 ? "" : "s"}` : ""}</span>
-                <span className="spacer" /><select className="lg-newkind" aria-label="New sew files are for" title="The kind of goods the new sew files are for: a group of those goods sews them" value={sewKind} onChange={(e) => setSewKind(e.target.value as keyof typeof SEW_KINDS)}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>For {l.toLowerCase()}</option>)}</select><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(heldFiles(e.target.files)); e.target.value = ""; }} /></label></div>
+                <span className="spacer" />{others ? <select className="lg-newkind" aria-label="Sew from another logo's file" value="" onChange={(e) => { if (e.target.value === "x") setOthers(null); else if (e.target.value) void useOther(+e.target.value); }}><option value="">{others.length ? "Pick a file to sew from…" : "No other sew files"}</option>{others.map((o, k) => <option key={k} value={k}>D-{o.number} {o.name} · {o.f.name} · {o.f.wIn}&quot; × {o.f.hIn}&quot;</option>)}<option value="x">Cancel</option></select>
+                  : <button type="button" className="btn sm" style={{ marginRight: 6 }} title="Sew this logo from another logo's file (the M icon from the stacked logo's file, without the words)" onClick={() => void loadOthers()}>From another logo&apos;s file</button>}<select className="lg-newkind" aria-label="New sew files are for" title="The kind of goods the new sew files are for: a group of those goods sews them" value={sewKind} onChange={(e) => setSewKind(e.target.value as keyof typeof SEW_KINDS)}>{Object.entries(SEW_KINDS).map(([k, l]) => <option key={k} value={k}>For {l.toLowerCase()}</option>)}</select><label className="btn sm" style={{ cursor: "pointer" }}>{sewBusy ? "Adding…" : "+ Add sew file"}<input type="file" hidden multiple accept=".dst,.emb,.pdf,.zip" disabled={sewBusy} onChange={(e) => { void addSew(heldFiles(e.target.files)); e.target.value = ""; }} /></label></div>
               {sews.length > 0 ? <div className="tbl-wrap"><table className="tbl lg-sew">
                 <thead><tr><th>Sew file</th><th>Colorway</th><th>Where · size</th><th>Threads</th><th>Stitches</th><th>Goods</th>{anyUsed && <th>Last used</th>}<th>Files</th><th aria-label="Remove" /></tr></thead>
                 <tbody>{sews.map((f, i) => ({ f, i })).sort((a, b) => (a.f.code || "").localeCompare(b.f.code || "", undefined, { numeric: true })).map(({ f, i }) => (
@@ -417,7 +447,8 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
                               : <> · <span title={`None of the logo's colors is near ${nt.sheet}`}>no logo color to set it on</span></>)}</div>}
                           {ed && <div className="lgx-thed sm">
                             <ThreadSelect value={nt.label} line={null} suggest={threadSuggest} onChange={(n) => void setNeedle(i, nt.needle, n)} />
-                            {nt.why === "staff" && <button type="button" className="linkbtn" onClick={() => void setNeedle(i, nt.needle, null)}>Undo this pick</button>}
+                            {nt.why === "staff" && !x.skip && <button type="button" className="linkbtn" onClick={() => void setNeedle(i, nt.needle, null)}>Undo this pick</button>}
+                            <button type="button" className="linkbtn" title={x.skip ? "Sew this needle again" : "Leave this needle's stops out: the same file sews only the rest (the M without the words)"} onClick={() => void setNeedle(i, nt.needle, { skip: !x.skip })}>{x.skip ? "Sew it" : "Don't sew this needle"}</button>
                             <button type="button" className="btn ghost sm" onClick={() => setThrAt(null)}>Done</button>
                           </div>}
                         </div>

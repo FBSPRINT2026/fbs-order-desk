@@ -41,7 +41,8 @@ export type LogoColor = { name: string; pms?: string; hex: string;
 /** a sew file: a DST made for one size and kind of goods. code = E1, E2… (D10241E1 on the Tajima's screen) */
 export type SewKind = "flat" | "cap" | "bag" | "puff" | "fleece";
 export const SEW_KINDS: Record<SewKind, string> = { flat: "Flat", cap: "Cap", bag: "Bag", puff: "3D puff", fleece: "Fleece" };
-export type SewFile = DigitizedSet & { code?: string; kind?: SewKind; placement?: string; threads?: { light?: string[]; dark?: string[] } };
+export type SewFile = DigitizedSet & { code?: string; kind?: SewKind; placement?: string; threads?: { light?: string[]; dark?: string[] };
+  /** sewn from another logo's file ("D-10316 E2"): the same DST, some of its needles set to Don't sew (Oct 31, MEI's M icon) */ from?: string };
 
 export type Lane = "embroidery" | "screen" | "dtf";
 export const LANES: { id: Lane; label: string; short: string }[] = [
@@ -174,7 +175,7 @@ export function withLiveSew<T extends Pick<Imprint, "emb">>(im: T, d: Pick<Desig
 /** the threads a sew file sews in, in order ("Madeira 1981 Carmine"): its worksheet's, else the ones set on it */
 export function sewThreads(f: SewFile | null | undefined, side: "light" | "dark" = "light"): string[] {
   if (!f) return [];
-  if (f.ws?.threads?.length) return needleThreads(f.ws, "").map((t) => t.label);
+  if (f.ws?.threads?.length) return needleThreads(f.ws, "").filter((t) => !t.skip).map((t) => t.label);
   return f.threads?.[side] || [];
 }
 /** a sew file's threads in the order they sew (its worksheet's color sequence), else as listed */

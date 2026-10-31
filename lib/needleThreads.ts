@@ -18,7 +18,8 @@ import { guessHex } from "@/lib/mockup";
  * `sewn` (needle → thread name) is what was actually sewn, when a sew-out recorded it, and wins.
  */
 export type NeedleThread = { needle: number; label: string; hex: string; thread: Thread | null; from: "sheet" | "order" | "default" | "ours";
-  /** "ours": what the worksheet said instead ("Madeira 1800 Black") and whether staff picked it or the client's standard did */ sheet?: string; why?: "staff" | "standard" };
+  /** "ours": what the worksheet said instead ("Madeira 1800 Black") and whether staff picked it or the client's standard did */ sheet?: string; why?: "staff" | "standard";
+  /** not sewn on this logo (SheetThread.skip): its stops are left out of the picture, the threads and the stitch count */ skip?: boolean };
 
 const isDefault = (chart: string) => /^default$/i.test(chart || "");
 const lineOf = (chart: string): Thread["line"] => (/isacord/i.test(chart) ? "Isacord 40" : /classic|rayon/i.test(chart) ? "Classic Rayon 40" : "Polyneon 40");
@@ -46,6 +47,7 @@ export function needleThreads(ws: Worksheet | null | undefined, inks: string, se
     return left.splice(i, 1)[0].n;
   };
   return ws.threads.map((x) => {
+    if (x.skip) { const st = sheetThread(x); return { needle: x.needle, label: "Don't sew", hex: "", thread: null, from: "ours" as const, sheet: st ? threadLabel(st) : `${x.code}${x.name ? ` ${x.name}` : ""}`, why: "staff" as const, skip: true }; }
     if (sewn?.[x.needle]) return fromName(sewn[x.needle], x.needle, "order");
     // the thread we really run (picked on the logo's page, or the client's standard for that color) wins over the sheet
     if (x.ours) { const st = sheetThread(x); return { ...fromName(x.ours, x.needle, "ours"), sheet: st ? threadLabel(st) : `${x.code}${x.name ? ` ${x.name}` : ""}`, why: x.oursFrom || "staff" }; }
@@ -64,5 +66,6 @@ export function stopColors(ws: Worksheet | null | undefined, inks: string, sewn?
   const nt = needleThreads(ws, inks, sewn);
   if (!ws?.sequence?.length) return nt.map((t) => t.hex);
   const by = new Map(nt.map((t) => [t.needle, t.hex]));
-  return ws.sequence.map((s: Stop) => by.get(s.needle) || (isDefault(s.chart) ? defaultHex(s.name) : sheetThread(s)?.hex || "#333333"));
+  // a needle that isn't sewn: "" (lib/dstRender.ts leaves its stops out)
+  return ws.sequence.map((s: Stop) => (by.has(s.needle) ? by.get(s.needle)! : (isDefault(s.chart) ? defaultHex(s.name) : sheetThread(s)?.hex || "#333333")));
 }

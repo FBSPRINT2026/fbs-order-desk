@@ -11,7 +11,8 @@ export type Stop = { n: number; needle: number; stitches: number; code: string; 
 export type SheetThread = { needle: number; code: string; name: string; chart: string; stitches: number; stops: number;
   /** the thread we really run on this needle (Oct 31, Nick: "the digitizer doesn't know what we have on the wall"): picked
    *  by staff on the logo's page ("staff"), or the logo color's standard thread nearest the worksheet's ("standard",
-   *  lib/brands.ts withStandards). The worksheet's own code and name stay as it said */ ours?: string; oursFrom?: "staff" | "standard" };
+   *  lib/brands.ts withStandards). The worksheet's own code and name stay as it said */ ours?: string; oursFrom?: "staff" | "standard";
+  /** this needle isn't sewn on this logo (Oct 31, Nick: the M icon is the stacked logo's file "with the bottom part set to no sewing") */ skip?: boolean };
 export type Worksheet = {
   stitches: number; wIn: number; hIn: number; colors: number; changes: number; stops: number; trims: number;
   sequence: Stop[];
