@@ -98,7 +98,9 @@ function sheetsOf(g: Group, designs: Record<string, Design>): Sheet[] {
       const colors = [...new Set(on.map((l) => l.color))];
       const x = name ? printOnColor(d, des, colors[0] || "") : { ...d, inkBy: Object.fromEntries(Object.entries(d.inkBy || {}).filter(([c]) => !cwOf(c))) };
       return { d: x, di, qty: on.reduce((a, l) => a + lineQty(l), 0), variant: { color: colors.join(", "), swap: {}, cw: x.colorway || name } };
-    }).filter((x) => x.qty > 0);
+    }).filter((x) => x.qty > 0)
+      // in the colorways' letter order (A, then B), whichever is the print's own, as on the order page
+      .sort((a, b) => cwLetter(des, { name: a.variant?.cw || "" }).localeCompare(cwLetter(des, { name: b.variant?.cw || "" })));
   });
 }
 
@@ -665,7 +667,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
   const inks = d.visualOnly ? [] : inkNames(d.inks).map((k) => swapInk(k, variant?.swap));
   // the color change's versions (A as printed, then each change) with the garments each goes on (lib/inkBy.ts)
-  const ccVers = variant ? [] : changeVersions(d, o.groups[gi]?.lines || []).map((v) => ({ ...v, hex: v.letter === "A" ? p.hexes[gi] || "#9aa1ab" : p.colorHexes?.[ckey(v.colors[0])] || guessHex(v.colors[0]) || "#9aa1ab" }));
+  const ccVers = variant ? [] : changeVersions(d, o.groups[gi]?.lines || []).sort((a, b) => (a.colorway && b.colorway && des ? cwLetter(des, { name: a.colorway }).localeCompare(cwLetter(des, { name: b.colorway })) : 0)).map((v) => ({ ...v, hex: v.letter === "A" ? p.hexes[gi] || "#9aa1ab" : p.colorHexes?.[ckey(v.colors[0])] || guessHex(v.colors[0]) || "#9aa1ab" }));
   // the tile: the art fit in a 1" square
   const tileW = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.w) / sz.h) : 0.82, tileH = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.h) / sz.w) : 0.82;
   // a visual-only mockup (a reorder production confirms on the print run): the picture, none of our guessed details

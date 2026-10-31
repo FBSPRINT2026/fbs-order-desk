@@ -281,7 +281,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   };
   // color changes across the group's prints: each garment color's version (A as printed, B… a change), for grouping lines
   const ccImps = g.imprints.filter((x) => versionsOf(x).length > 0);
-  const verKey = (color: string) => ccImps.map((x) => versionOfColor(x, color)).join(".");
+  // a colorway split's sections go by the colorway's letter (A, then B), whichever is the print's own (Oct 31, Nick: "it's
+  // grouping the items out of order… B, A, A, B. So the top should always go A and B, and then the bottom… A and B")
+  const sectionKey = (imps: Imprint[], color: string) => imps.filter((x) => versionsOf(x).length > 0).map((x) => (isCw(x) ? cwLetter(designOf(x)!, cwOn(x, color)) || "?" : String(versionOfColor(x, color)))).join(".");
+  const verKey = (color: string) => sectionKey(g.imprints, color);
+  /** the group's lines in their sections' order (the order otherwise kept), after a color change or colorway split */
+  const sortLines = (x: Group) => { x.lines = x.lines.map((ln, i) => ({ ln, i })).sort((a, b) => sectionKey(x.imprints, a.ln.color).localeCompare(sectionKey(x.imprints, b.ln.color)) || a.i - b.i).map((v) => v.ln); };
   // a colorway change (Imprint.colorwayBy, Oct 31): each section is a colorway of the logo, by its letter and name
   const designOf = (x: Imprint) => (x.design_id ? (designs || []).find((y) => y.id === x.design_id) : undefined);
   const isCw = (x: Imprint) => Object.keys(x.colorwayBy || {}).length > 0;
@@ -312,19 +317,27 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     // individual colorway swatches"), else its garment with the most pieces
     const auto = l ? hexOfColor(l.color) : "#9aa1ab", bgKey = (v.to || "").trim().toLowerCase();
     const hex = g.mockupBgBy?.[bgKey] || auto, bg = tileBg(bgKey, auto);
-    const color = `Group ${String.fromCharCode(66 + i)}`;
+    let color = `Group ${String.fromCharCode(66 + i)}`;
     if (v.cw) {
       // a colorway change: that colorway's own picture, as it is (its inks painted on the logo when it has none)
       const des = designOf(d), cw = des ? colorwaysOf(des).find((c) => c.name === v.to) : undefined;
       const own = des && hasColorwayArt(designUrls, des.id, { colorway: v.to }) ? printArtUrl(designUrls, des.id, { colorway: v.to }) : "";
       const swap = Object.fromEntries(Object.entries((l && Object.entries(d.inkBy || {}).find(([c]) => c.trim().toLowerCase() === l.color.trim().toLowerCase())?.[1]) || {}).filter(([a, b]) => b && a.trim().toLowerCase() !== b.trim().toLowerCase()).map(([a, b]) => [a.trim().toLowerCase(), b.trim()]));
       const L = des && cw ? cwLetter(des, cw) : "";
+      if (L) color = `Group ${L}`;
       return { color, hex, swap, bg, caption: `Colorway ${L ? `${L} · ` : ""}${v.to}`, ...(own && cw ? { url: own, to: cw.inks.join(", ") } : {}) };
     }
     // a brand logo has its own picture in that thread (its colorway): shown as it is
     const own = d.design_id ? designUrls?.[`${d.design_id}:ink:${v.to.trim().toLowerCase()}`] : "";
     return { color, hex, bg, swap: { [v.from.trim().toLowerCase()]: v.to.trim() }, ...(own ? { url: own, to: v.to.trim() } : {}) };
   });
+  /** a colorway split's close-ups in letter order: where the print's own colorway's tile goes among the others, and its label */
+  const cwMain = (d: Group["imprints"][number]) => {
+    const des = designOf(d), base = des ? printColorway(d, des) : null, L = des && base ? cwLetter(des, base) : "";
+    const order = <T extends { color: string },>(t: T[]) => (!isCw(d) || !L ? t : [...t].sort((a, b) => a.color.localeCompare(b.color)));
+    if (!isCw(d) || !L) return { label: "Group A", at: 0, order };
+    return { label: `Group ${L}`, at: order(groupTiles(d)).filter((t) => t.color < `Group ${L}`).length, order };
+  };
   /** the group's garment colors, most pieces first, with their own colors (the background pickers' choices) */
   const bgColors = () => {
     const by = new Map<string, { name: string; hex: string; pcs: number }>();
@@ -362,7 +375,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const canSplit = !!printColorway(d, cur) && new Set(g.lines.filter((x) => lineQty(x) > 0).map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size > 1;
     return <ColorwaySwap d={cur} im={d} urls={designUrls || {}} mockupNo={g.masterMockup || g.fromMockup?.number || null} disabled={fixed || printsFixed}
       split={isCw(d) ? cwChangeText(d) : undefined} onSplit={canSplit ? () => setCwcAt(di) : undefined}
-      onPick={(cw) => { update((x) => { x.imprints[di] = applyColorway(x.imprints[di], cur, cw); }); redrawSoon(); }} />;
+      onPick={(cw) => { update((x) => { x.imprints[di] = applyColorway(x.imprints[di], cur, cw); if (isCw(x.imprints[di])) sortLines(x); }); redrawSoon(); }} />;
   };
   /** "B Maroon / Off White  ⟳  A Maroon / Black · EB530 Charcoal Gray (12)" */
   const cwChangeText = (d: Imprint) => {
@@ -1051,7 +1064,9 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             // the first mockup big, the rest small under it (Oct 20, Nick: six onesie colors stacked full size made the
             // group five screens long)
             // every mockup opens big in a pop-up, with the other colors to flip through (Oct 21, Nick)
-            ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].map((p) => thumbUrls![p])} />
+            // a logo mockup is one layout (Oct 31, Nick: "I don't need the imprint in two little things. I just need the one
+            // layout and then the A, B group on the right"): its other garment colors are the close-ups beside it
+            ? <MockGallery urls={[...new Set((g.mockupThumbs || []).filter((p) => thumbUrls?.[p]))].slice(0, g.mockupKind === "logo" ? 1 : undefined).map((p) => thumbUrls![p])} />
             : (() => { const bp = g.imprints.find((x) => (x.fromBrand || x.sizeFrom === "brand") && x.design_id && designUrls?.[x.design_id]);
                 // a logo added from their brand: the logo itself, large, where the mockup goes (Oct 27, Nick)
                 if (bp) return <div className="mk-pref mk-brandlogo" style={{ "--mkbg": shirtHex } as React.CSSProperties}><MockGallery urls={[printArtUrl(designUrls, bp.design_id, bp)]} /><small>{bp.fromBrand ? `From ${bp.fromBrand}` : "From their brand"} · no mockup needed</small></div>;
@@ -1129,10 +1144,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   const y = applyColorwayChange(im, des, byColor);
                   if (y.method === "screen") y.inkChanges = colorChanges(y);
                   x.imprints[at!] = y;
-                  // the group's lines by colorway: the print's own first, then each other one (the order otherwise kept)
-                  const cc = x.imprints.filter((z) => versionsOf(z).length > 0);
-                  const key = (c: string) => cc.map((z) => versionOfColor(z, c)).join(".");
-                  x.lines = x.lines.map((ln, i) => ({ ln, i })).sort((a, b) => key(a.ln.color).localeCompare(key(b.ln.color)) || a.i - b.i).map((v) => v.ln);
+                  sortLines(x);
                 }); redrawSoon(); }} />}
                 {ccAt != null && g.imprints[ccAt] && <ColorChange im={g.imprints[ccAt]} lines={g.lines} onClose={() => setCcAt(null)} onSave={(inkBy) => { setCcAt(null); update((x) => {
                   const im = x.imprints[ccAt!];
@@ -1140,13 +1152,11 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   im.inkBy = inkBy;
                   if (im.method === "screen") im.inkChanges = colorChanges(im);
                   // the group's lines grouped by version: A's together, then B's (the order otherwise kept)
-                  const cc = x.imprints.filter((y) => versionsOf(y).length > 0);
-                  const key = (c: string) => cc.map((y) => versionOfColor(y, c)).join(".");
-                  x.lines = x.lines.map((ln, i) => ({ ln, i })).sort((a, b) => key(a.ln.color).localeCompare(key(b.ln.color)) || a.i - b.i).map((v) => v.ln);
+                  sortLines(x);
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? "Group A" : firstColor} changes={ccShow && versionsOf(d).length ? groupTiles(d) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? g.mockupBgBy?.[ASIS_BG] || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? g.mockupBgBy?.[ASIS_BG] || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1727,7 +1737,7 @@ const ASIS_BG = "_a";
 function CcIcon() {
   return <svg className="cc-ic" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 9a8 8 0 0 0-14.3-3.6L4 7" /><path d="M4 3v4h4" /><path d="M4 15a8 8 0 0 0 14.3 3.6L20 17" /><path d="M20 21v-4h-4" /><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none" /></svg>;
 }
-function ChangeTile({ d, url, color, hex, swap, sym, own, bg, caption }: { d: Group["imprints"][number]; url: string; color: string; hex: string; swap: Record<string, string>; /** the color change symbol instead of the word */ sym?: boolean;
+function ChangeTile({ d, url, color, hex, swap, sym, own, bg, caption, first }: { /** the first tile of the row (no change mark under it) */ first?: boolean; d: Group["imprints"][number]; url: string; color: string; hex: string; swap: Record<string, string>; /** the color change symbol instead of the word */ sym?: boolean;
   /** the logo's own picture in the new thread (a brand colorway): drawn as it is, not repainted */ own?: { url: string; to: string };
   /** its background swatch (components/MockupBg.tsx) */ bg?: React.ReactNode; /** what it is, in the blow-up ("Colorway A · Maroon / Black") */ caption?: string }) {
   const pic = usePainted(own ? own.url : url, own ? { ...d, inkMap: undefined, inks: own.to } : d, own ? undefined : swap);
@@ -1736,7 +1746,7 @@ function ChangeTile({ d, url, color, hex, swap, sym, own, bg, caption }: { d: Gr
     <div className="pr-tw">
       <span className="pr-tc">{color}</span>
       <span className="pr-lw"><button type="button" className="pr-logo" style={{ background: hex }} onClick={() => pic && setZoom(true)} title="See it bigger">{pic ? <img src={pic} alt="" /> : <span>No logo</span>}</button>{bg}</span>
-      {sym ? <span className="pr-cc sym" title={changeWord(d.method)}><CcIcon /></span> : <span className="pr-cc">{changeWord(d.method)}</span>}
+      {first ? null : sym ? <span className="pr-cc sym" title={changeWord(d.method)}><CcIcon /></span> : <span className="pr-cc">{changeWord(d.method)}</span>}
       {zoom && pic && <div className="pr-zoom" role="dialog" aria-modal="true" aria-label={`On ${color}`} onClick={() => setZoom(false)} tabIndex={-1} ref={(el) => el?.focus()} onKeyDown={(e) => { if (e.key === "Escape") setZoom(false); }}>
         <figure onClick={(e) => e.stopPropagation()}>
           <img src={pic} alt="" style={{ background: hex }} />
@@ -1747,9 +1757,10 @@ function ChangeTile({ d, url, color, hex, swap, sym, own, bg, caption }: { d: Gr
   );
 }
 
-function PrintRow({ youth, shown, d, n, hex, mainBg, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym, orderId, sewout, onFind }: { /** youth screens on: the adult and youth rows under the name */ youth?: YouthInfo | null; /** "Already digitized?": find the print's existing stitch files (components/DigitizedFinder.tsx) */ onFind?: () => void; /** color change tiles show the symbol */ sym?: boolean; /** the order (staff): the digitizing stamp opens it on the Digitizing page */ orderId?: string; /** this print's live sew-out, its photo signed */ sewout?: DgzSewout & { url?: string }; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
+function PrintRow({ youth, shown, d, n, hex, mainBg, mainAt = 0, designs, urls, each, detailsHref, onMockup, extra, inksLine, listed, color, changes, sym, orderId, sewout, onFind }: { /** youth screens on: the adult and youth rows under the name */ youth?: YouthInfo | null; /** "Already digitized?": find the print's existing stitch files (components/DigitizedFinder.tsx) */ onFind?: () => void; /** color change tiles show the symbol */ sym?: boolean; /** the order (staff): the digitizing stamp opens it on the Digitizing page */ orderId?: string; /** this print's live sew-out, its photo signed */ sewout?: DgzSewout & { url?: string }; /** the art as saved with the mockup (Imprint.shownArt), signed */ shown?: string; d: Group["imprints"][number]; n: number; hex: string; /** the print's screens line */ extra?: React.ReactNode;
   /** the first garment's color (over the close-up when there's a color change) */ color?: string; /** the other garment colors this print changes ink on */ changes?: { color: string; hex: string; swap: Record<string, string>; url?: string; to?: string; bg?: React.ReactNode; caption?: string }[];
   /** the as-printed close-up's background swatch, when the sections show */ mainBg?: React.ReactNode;
+  /** where the print's own close-up goes among the others (a colorway split: in letter order) */ mainAt?: number;
   /** its inks as chips (with PMS matches) */ inksLine?: React.ReactNode; /** the garment prices were typed: "each" is the list price, not what's charged */ listed?: boolean; designs: Design[]; urls: Record<string, string>; each: string | null; detailsHref?: string; onMockup: () => void }) {
   const cur = designs.find((x) => x.id === d.design_id);
   const m = (d.size || "").match(/^([\d.]+)\D*(wide|tall)?/i);
@@ -1818,8 +1829,9 @@ function PrintRow({ youth, shown, d, n, hex, mainBg, designs, urls, each, detail
         if (!changes?.length || !cur) return main;
         return (
           <div className="pr-tiles">
-            <div className="pr-tw"><span className="pr-tc">{color || "As printed"}</span><span className="pr-lw">{main}{mainBg}</span></div>
-            {changes.map((c) => <ChangeTile key={c.color} d={d} url={urls[cur.id] || ""} color={c.color} hex={c.hex} swap={c.swap} sym={sym} own={c.url && c.to ? { url: c.url, to: c.to } : undefined} bg={c.bg} caption={c.caption} />)}
+            {changes.slice(0, mainAt).map((c, k) => <ChangeTile key={c.color} first={k === 0} d={d} url={urls[cur.id] || ""} color={c.color} hex={c.hex} swap={c.swap} sym={sym} own={c.url && c.to ? { url: c.url, to: c.to } : undefined} bg={c.bg} caption={c.caption} />)}
+            <div className="pr-tw"><span className="pr-tc">{color || "As printed"}</span><span className="pr-lw">{main}{mainBg}</span>{mainAt > 0 && sym ? <span className="pr-cc sym" title={changeWord(d.method)}><CcIcon /></span> : null}</div>
+            {changes.slice(mainAt).map((c) => <ChangeTile key={c.color} d={d} url={urls[cur.id] || ""} color={c.color} hex={c.hex} swap={c.swap} sym={sym} own={c.url && c.to ? { url: c.url, to: c.to } : undefined} bg={c.bg} caption={c.caption} />)}
           </div>
         );
       })()}
