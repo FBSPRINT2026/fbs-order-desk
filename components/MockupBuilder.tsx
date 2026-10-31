@@ -18,7 +18,7 @@ import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
 import NameNumberBuilder from "@/components/NameNumberBuilder";
 import type { RosterSpec } from "@/lib/rosterArt";
-import { applyColorway, sewKindOf, colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
+import { applyColorway, sewKindOf, withMethod, colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
 import ColorwaySwap from "@/components/ColorwaySwap";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
@@ -4266,7 +4266,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         // Custom: a name and the spot's area, shown on the picture to drag into place (Oct 27, Nick)
                         setImprints((xs) => xs.map((x) => (x.id !== im.id ? x : v === "__custom" ? { ...x, location: x.area ? x.location : "Custom spot", area: x.area || { w: 5, h: 4, view: curTab === "back" ? "back" : "front" } } : { ...x, location: v, area: undefined })));
                         if (v === "__custom") setGrid(true); }}>{!locsFor(curTab).includes(im.location) && !(im.area && isCustomSpot(im.location)) && <option>{im.location}</option>}{locsFor(curTab).map((z) => <option key={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
-                      <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, method: m, colors: m === "embroidery" ? Math.min(x.colors, 15) : x.colors } : x)));
+                      <select aria-label={`Decoration method for ${im.location}`} value={im.method} onChange={(e) => { const m = e.target.value as Method; const dz = designOf(im); setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...withMethod(x, m, dz, lines as unknown as GLine[], dz ? logoBrandOf(dz) : null), setupFrom: dz?.id } : x)));
+                        // into or out of embroidery: the picture is drawn again for the new method
+                        if (m === "embroidery" || im.method === "embroidery") setPaints((pp) => { const n = { ...pp }; delete n[im.id]; return n; });
                         // heat press: the art back to its own colors (knock-outs stay)
                         if (m === "dtf") setPaints((pp) => { const pt = pp[im.id]; if (!pt) return pp; const map = { ...pt.map }; for (const x of pt.sources) if (map[x.hex]?.name !== "none") map[x.hex] = { name: "Full color", hex: x.hex }; return { ...pp, [im.id]: { ...pt, map } }; }); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                     </div>

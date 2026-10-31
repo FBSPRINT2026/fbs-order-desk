@@ -1,4 +1,5 @@
 "use client";
+import { withMethod } from "@/lib/brands";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { makePreview } from "@/lib/artPrep";
 import { ALL_LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
@@ -413,7 +414,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
                   {im.design_id ? (logos[im.design_id]?.url ? <span className="eo-art on" title={logos[im.design_id].d.name}><LogoThumb d={logos[im.design_id].d} url={logos[im.design_id].url} /></span> : <span className="eo-art on" title="Uses the design on file">Design</span>)
                     : art && urlOf(art) ? <Thumb className="eo-art" url={urlOf(art)} name={art} /> : <span className="eo-art">No art</span>}
                   <input list="eo-locs" aria-label="Location" value={im.location} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].location = e.target.value; })} />
-                  <select aria-label="Method" value={im.method} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                  <select aria-label="Method" value={im.method} onChange={(e) => patchG(gi, (x) => { x.imprints[ii] = withMethod(x.imprints[ii], e.target.value as Method, null, x.lines); })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
                   {im.method !== "dtf" && <label className="eo-n">Colors<input inputMode="numeric" value={im.colors} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].colors = Math.max(1, Math.min(15, +e.target.value.replace(/\D/g, "") || 1)); })} /></label>}
                   <input aria-label="Inks" placeholder="Inks" value={im.inks} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].inks = e.target.value; })} />
                   <input aria-label="Print size" className="eo-short" placeholder="Size" value={im.size} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].size = e.target.value; })} />

@@ -348,6 +348,25 @@ export function withLogoSetup(im: Imprint, d: Pick<Design, "id" | "specs"> | nul
   if (fresh && cw && im.method === "screen") return applyColorway(x, d, cw);
   return x;
 }
+/**
+ * A print's decoration method changed (Oct 31, Nick: "if you accidentally add a logo in screen printing, then you switch
+ * it to embroidery… there's no rule to reset the sizing for embroidery"): it's set up again from its logo for the new
+ * method, the same as picking the logo fresh. To embroidery: the logo's sew file for these goods (its size, stitches and
+ * threads, size locked to the file); out of embroidery: the sew file, stitches and digitized mark come off, and a screen
+ * print takes its colorway's inks. Every place a method is changed goes through here.
+ */
+export function withMethod(im: Imprint, method: Method, d: Pick<Design, "id" | "specs"> | null | undefined, lines: GLine[], brand?: Brand | null): Imprint {
+  if (im.method === method) return im;
+  const x: Imprint = { ...im, method };
+  if (im.method === "embroidery") {
+    if (x.emb) { const e = { ...x.emb }; delete e.file; delete e.stitchesFrom; x.emb = e; }
+    delete x.stitches; delete x.digitized;
+  }
+  if (method === "embroidery") x.colors = Math.min(Math.max(1, x.colors || 1), 15);
+  if (!d || x.design_id !== d.id) return x;
+  delete x.setupFrom;
+  return withLogoSetup(x, d, lines, brand, true);
+}
 /** the sew file for a print: the one linked to the colorway the brand's rule picks for these goods (same kind of goods),
  *  else the best fit by kind and size (pickSewFile) */
 export function sewForPrint(d: Pick<Design, "specs">, brand: Brand | null | undefined, dark: boolean, kind: SewKind, wantW?: number): SewFile | null {

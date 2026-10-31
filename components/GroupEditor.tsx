@@ -8,7 +8,7 @@ import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
 import MockupBg from "@/components/MockupBg";
-import { applyColorway, applyColorwayChange, colorwayOnColor, colorwaySew, colorwaysOf, cwLetter, printColorway, sewKindOf, withLogoSetup } from "@/lib/brands";
+import { applyColorway, applyColorwayChange, colorwayOnColor, colorwaySew, colorwaysOf, cwLetter, printColorway, sewKindOf, withLogoSetup, withMethod } from "@/lib/brands";
 import ColorwayChange from "@/components/ColorwayChange";
 import { hasColorwayArt, printArtUrl } from "@/lib/designs";
 import { colorChangeWant, colorHex, paintPrint } from "@/lib/inkColors";
@@ -1223,7 +1223,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {!!onMockup && !skipped && !d.supplied && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
                 {(
                 <div className={"imp-grid" + (d.supplied ? " sup" : "")}>
-                  <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { x.imprints[di].method = e.target.value as Method; })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                  <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { const des = (designs || []).find((z) => z.id === x.imprints[di].design_id); x.imprints[di] = withMethod(x.imprints[di], e.target.value as Method, des, x.lines); })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
                   <div className="f-loc"><span className="imp-l">Location</span>{(locs.includes(d.location) || (!d.location && locs !== LOCATIONS))
                       ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; frontFirst(x.imprints); })}>{!d.location && <option value="">Pick a spot…</option>}{locs.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
                       : <div className="loc-custom"><input type="text" autoFocus={!d.location} aria-label="Custom location" placeholder="Custom location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })} /><button type="button" className="btn icon ghost" tabIndex={-1} title="Back to the location list" aria-label="Back to the location list" onClick={() => update((x) => { x.imprints[di].location = "Full Front"; })}>▾</button></div>}</div>
