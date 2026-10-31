@@ -812,9 +812,54 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     q = o.groups.length === 1 ? q.or(`group_id.eq.${g.id},group_id.is.null`) : q.eq("group_id", g.id);
     const { error } = await q;
     if (error) return say("Couldn't remove the mockup: " + error.message);
-    patch((d) => { const x = d.groups[gi]; if (!x) return; delete x.mockupAt; delete x.mockupSkipped; x.mockupThumbs = []; });
+    // a clean slate (Oct 30, Nick: "if you delete a mockup that's already there that you built the [prices] up, that is a…
+    // clean slate, wipe this imprints, get rid of it"): its prints, their screens and setups, where they sat on the shirts,
+    // and a program's flat price that came with it all go; the garments, sizes and any price staff typed stay
+    patch((d) => {
+      const x = d.groups[gi]; if (!x) return;
+      const flat = !!x.allIn || x.masterMockup != null;
+      x.imprints = [];
+      x.mockupThumbs = [];
+      for (const k of ["mockupAt", "mockupSkipped", "mockupKind", "masterMockup", "mockupArt", "mockupSize", "mockupOffsets", "allIn", "reprintOf", "fromMockup", "remake", "reprintAsked"] as const) delete x[k];
+      x.lines.forEach((l) => { delete l.shade; if (flat) l.priceOverride = null; });
+    });
     setArmed("");
-    say("Mockup removed. Create mockup makes a new one.");
+    say("Mockup and its prints removed. Create mockup starts this group fresh.");
+  }
+
+  /** a garment line moved to another group (dragged there, or picked from its Move menu; Oct 30, Nick: Printavo's "add to
+   *  first group"). It takes its sizes, cost and price with it; a group left with no garments goes, like Remove group.
+   *  Undo puts everything back. */
+  const [movedMsg, setMovedMsg] = useState("");
+  function moveLine(lineId: string, from: string, to: string) {
+    if (!o) return;
+    helperUndo.current = JSON.parse(JSON.stringify(o));
+    const fg0 = o.groups.find((x) => x.id === from), ln0 = fg0?.lines.find((l) => l.id === lineId);
+    if (!fg0 || !ln0) return;
+    const name = (x: Group | undefined, i: number) => x?.name?.trim() || `Group ${i + 1}`;
+    const ti = o.groups.findIndex((x) => x.id === to);
+    const tg0 = ti >= 0 ? o.groups[ti] : undefined;
+    patch((d) => {
+      const fg = d.groups.find((x) => x.id === from); if (!fg) return;
+      const li = fg.lines.findIndex((l) => l.id === lineId); if (li < 0) return;
+      const [ln] = fg.lines.splice(li, 1);
+      let tg = to === "new" ? undefined : d.groups.find((x) => x.id === to);
+      if (!tg) {
+        tg = { ...newGroup(), lines: [], imprints: [] };
+        if (fg.finishing) tg.finishing = [...fg.finishing];
+        if (fg.customFin?.length) tg.customFin = [...fg.customFin];
+        d.groups.splice(d.groups.indexOf(fg) + 1, 0, tg);
+      }
+      tg.lines.push(ln);
+      if (!fg.lines.length) d.groups.splice(d.groups.indexOf(fg), 1);
+    });
+    const what = [ln0.style, ln0.color].filter((x) => (x || "").trim()).join(" ") || "The garment";
+    const left = fg0.lines.length === 1 ? ` ${name(fg0, o.groups.indexOf(fg0))} had nothing else in it, so it's gone.` : "";
+    const stale = tg0?.mockupAt ? " Its mockup doesn't show it yet: Edit mockup to add it." : "";
+    const msg = to === "new" ? `${what} moved to a new group of its own.${left}` : `${what} moved to ${name(tg0, ti)}.${left}${stale}`;
+    setMovedMsg(msg);
+    // Undo puts the whole order back as it was, so it's only offered for a little while after the move
+    window.setTimeout(() => setMovedMsg((m) => (m === msg ? "" : m)), 15000);
   }
 
   async function saveToCatalog(l: GLine) {
@@ -1366,6 +1411,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
       {flash && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>{flash}</div>}
+      {movedMsg && <div className="banner moved-msg" role="status" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+        <span>{movedMsg}</span>
+        <button type="button" className="btn sm" onClick={() => { undoHelper(); setMovedMsg(""); }}>Undo</button>
+        <button type="button" className="btn sm ghost" aria-label="Close" onClick={() => setMovedMsg("")}>✕</button>
+      </div>}
       {(drafts.logos > 0 || drafts.mockups > 0) && ["quote", "request"].includes(o.status) && (
         <div className="draft-note" role="note">
           <span><b>Draft art.</b> {[drafts.logos ? `${drafts.logos} logo${drafts.logos === 1 ? "" : "s"}` : "", drafts.mockups ? `${drafts.mockups} mockup${drafts.mockups === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")} made for this order {drafts.logos + drafts.mockups === 1 ? "isn't" : "aren't"} in the customer&apos;s library yet. {drafts.logos + drafts.mockups === 1 ? "It joins" : "They join"} when the order is sent or approved, and go away if it&apos;s deleted.</span>
@@ -1611,7 +1661,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : undefined} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
-              onRemove={() => patch((d) => { d.groups.splice(gi, 1); })} />
+              onRemove={() => patch((d) => { d.groups.splice(gi, 1); })}
+              moveTo={o.groups.flatMap((x, xi) => (x.id === g.id ? [] : [{ id: x.id, label: [x.name?.trim() || `Group ${xi + 1}`, x.lines.map((l) => l.style).filter(Boolean).slice(0, 2).join(", ")].filter(Boolean).join(" · ") }]))}
+              onMoveLine={moveLine} />
           ))}
           <div className="row grp-add">
             <button className="btn" type="button" onClick={() => patch((d) => { const ng = newGroup(); if (!finPerGroup) { ng.finishing = (d.groups[0]?.finishing || []).filter(isFin); if (d.groups[0]?.customFin?.length) ng.customFin = [...d.groups[0].customFin]; } d.groups.push(ng); })}>+ Add line item group</button>

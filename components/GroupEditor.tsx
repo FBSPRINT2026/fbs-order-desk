@@ -83,7 +83,16 @@ type Props = {
    *  a mockup, the garments and colors fixed; only the sizes are theirs to fill in */ fixed?: boolean;
   /** a reorder print waiting on production details: where production confirms it */
   detailsHref?: string;
+  /** move a garment line to another group (Oct 30, Nick: "in Printavo, I can just drag the line… to the first, and it
+   *  says like add to first group"): dragged by its handle onto another group, or picked from the handle's menu.
+   *  `moveTo` lists the order's other groups; "new" makes a group of its own */
+  moveTo?: { id: string; label: string }[];
+  onMoveLine?: (lineId: string, from: string, to: string) => void;
 };
+
+/** the garment line being dragged, so a group knows while it's dragged over it (a drag's data can only be read on drop) */
+let dragging: { from: string; lineId: string; label: string } | null = null;
+const MoveIcon = () => <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" /></svg>;
 
 /** Screen prints: the inks listed must match the number of colors chosen. */
 const inkCount = (s: string) => (s || "").split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length;
@@ -98,7 +107,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts }: Props) {
+export default function GroupEditor({ persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
   // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
   const locs = locationsFor(g.lines);
   // a hat group with shirt spots on it (a reorder pulled from Printavo: "Full Back"): moved to the hat spot it means, once
@@ -127,6 +136,15 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // you want to change all the items on this group to 2.25?")
   const [askAll, setAskAll] = useState<null | { li: number; v: number }>(null);
   const [blockMsg, setBlockMsg] = useState("");
+  const [moveMenu, setMoveMenu] = useState("");
+  const [dropOn, setDropOn] = useState("");
+  const gLabel = g.name?.trim() || `Group ${gi + 1}`;
+  useEffect(() => {
+    if (!moveMenu) return;
+    const off = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest?.(".gl-move-wrap")) setMoveMenu(""); };
+    document.addEventListener("pointerdown", off);
+    return () => document.removeEventListener("pointerdown", off);
+  }, [moveMenu]);
   // the color change pop-up for a print (its index), Oct 27
   const [ccAt, setCcAt] = useState<number | null>(null);
   const [lcAt, setLcAt] = useState<number | null>(null);
@@ -655,7 +673,11 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     );
   })();
   return (
-    <section className={"line" + (hidePrices ? " np" : "") + (fixed ? " fixed" : "")}>
+    <section className={"line" + (hidePrices ? " np" : "") + (fixed ? " fixed" : "") + (dropOn ? " ge-drop" : "")}
+      onDragOver={onMoveLine ? (e) => { if (!dragging || dragging.from === g.id || !e.dataTransfer.types.includes("application/x-fbs-line")) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dropOn !== dragging.label) setDropOn(dragging.label); } : undefined}
+      onDragLeave={onMoveLine ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropOn(""); } : undefined}
+      onDrop={onMoveLine ? (e) => { const d = dragging; setDropOn(""); if (!d || d.from === g.id) return; e.preventDefault(); dragging = null; onMoveLine(d.lineId, d.from, g.id); } : undefined}>
+      {dropOn && <div className="ge-dropmsg" role="status">Drop to add {dropOn} to {gLabel}</div>}
       {finderFor && <DigitizedFinder designId={finderDesign?.id || null}
         where={[finderFor.location, finderDesign ? designLabel(finderDesign) : "", g.name || ""].filter(Boolean).join(" · ")}
         hint={(finderDesign?.name || g.name || "").replace(/\b(mockup|front|back|left|right|chest|logo|final|copy)\b/gi, " ").replace(/\s+/g, " ").trim()}
@@ -783,6 +805,25 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                       <button type="button" tabIndex={-1} className="x" aria-label="Not extras: charge for this line" title="Not extras: charge for this line" onClick={() => update((x) => { const ln = x.lines[li]; delete ln.extras; delete ln.extrasPrint; delete ln.extrasFree; delete ln.shopUse; if (ln.priceOverride === 0) ln.priceOverride = null; })}>×</button>
                     </span>}
                     {l.note == null && noteOpen !== l.id && <button className="btn icon ghost ln-add" type="button" tabIndex={-1} title="Add a note for this line" aria-label="Add a line note" onClick={() => setNoteOpen(l.id)}><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 6h14M5 11h14M5 16h8" /></svg></button>}
+                    {onMoveLine && !fixed && (!!moveTo?.length || g.lines.length > 1) && (() => {
+                      const label = [l.style, l.color].filter((x) => (x || "").trim()).join(" ") || "this garment";
+                      return (
+                        <span className="gl-move-wrap">
+                          <button className="btn icon ghost gl-move" type="button" tabIndex={-1} draggable aria-label="Move this garment to another group" aria-expanded={moveMenu === l.id}
+                            title="Drag onto another group, or click to pick where it goes"
+                            onDragStart={(e) => { dragging = { from: g.id, lineId: l.id, label }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("application/x-fbs-line", l.id); const row = (e.currentTarget as HTMLElement).closest(".gl"); if (row) e.dataTransfer.setDragImage(row, 24, 18); setMoveMenu(""); }}
+                            onDragEnd={() => { dragging = null; }}
+                            onClick={() => setMoveMenu(moveMenu === l.id ? "" : l.id)}><MoveIcon /></button>
+                          {moveMenu === l.id && (
+                            <span className="gl-move-menu" role="menu">
+                              <span className="gl-move-k">Move {label} to</span>
+                              {(moveTo || []).map((t) => <button key={t.id} type="button" role="menuitem" onClick={() => { setMoveMenu(""); onMoveLine(l.id, g.id, t.id); }}>{t.label}</button>)}
+                              {g.lines.length > 1 && <button type="button" role="menuitem" onClick={() => { setMoveMenu(""); onMoveLine(l.id, g.id, "new"); }}>A new group of its own</button>}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })()}
                     {g.lines.length > 1 && !fixed && <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove garment" onClick={() => update((x) => { x.lines.splice(li, 1); })}>✕</button>}
                   </div>
                 </div>
@@ -943,8 +984,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 <span>Customer artwork</span></button>}
             </div>
           )}
-          {onRemoveMockup && g.mockupAt && <button className={"btn sm ghost danger" + (armed === "mk" + g.id ? " armed" : "")} type="button" title="Take this mockup off the order (it's archived, not deleted) so you can make a new one"
-            onClick={() => (armed === "mk" + g.id ? onRemoveMockup() : arm("mk" + g.id))}>{armed === "mk" + g.id ? "Remove the mockup?" : "Remove mockup"}</button>}
+          {onRemoveMockup && g.mockupAt && <button className={"btn sm ghost danger" + (armed === "mk" + g.id ? " armed" : "")} type="button" title="Take this mockup and its prints off the order (the mockup is archived, not deleted) and start this group fresh"
+            onClick={() => (armed === "mk" + g.id ? onRemoveMockup() : arm("mk" + g.id))}>{armed === "mk" + g.id ? "Remove the mockup and its prints?" : "Remove mockup"}</button>}
           {mockupExtra}
           {g.mockupAt && !mockupExtra && <span className="faint mk-when">Saved {new Date(g.mockupAt).toLocaleDateString()}</span>}
           {blockMsg && mockupBlock && <span className="ink-warn" style={{ margin: 0 }}>{blockMsg}</span>}
