@@ -129,3 +129,51 @@ export function drawPuff(m: PuffMap, shapes: Set<number>, cv: HTMLCanvasElement)
   }
   g.putImageData(out, 0, 0);
 }
+
+/**
+ * The art's parts, top to bottom (Oct 31, Nick: "not everything gets puffed… you should be able to select different
+ * components of the art, even if the whole thing is the same color"): the shapes grouped into bands that sit on their own
+ * rows (a mark over a name over a tagline), each with a point on every shape (for PuffSel on / off) and where it is.
+ * Tiny specks join the band they sit in. One band (a single line of art) splits into its side-by-side pieces instead.
+ */
+export type PuffPart = { comps: number[]; pts: [number, number][]; y0: number; y1: number; x0: number; x1: number };
+export function puffParts(m: PuffMap): PuffPart[] {
+  const n = m.compCls.length;
+  const box = Array.from({ length: n }, () => ({ x0: m.w, x1: -1, y0: m.h, y1: -1, p: -1 }));
+  for (let p = 0; p < m.w * m.h; p++) {
+    const c = m.comp[p]; if (c < 0) continue;
+    const x = p % m.w, y = (p / m.w) | 0, b = box[c];
+    if (b.p < 0) b.p = p;
+    if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x; if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y;
+  }
+  const ids = box.map((_, i) => i).filter((i) => box[i].x1 >= 0 && m.compArea[i] >= 4);
+  const group = (axis: "y" | "x") => {
+    const lo = axis === "y" ? "y0" : "x0", hi = axis === "y" ? "y1" : "x1";
+    const span = axis === "y" ? m.h : m.w, gap = Math.max(2, Math.round(span * 0.015));
+    const sorted = [...ids].sort((a, b) => box[a][lo] - box[b][lo]);
+    const out: number[][] = [];
+    let cur: number[] = [], end = -Infinity;
+    for (const i of sorted) {
+      if (cur.length && box[i][lo] > end + gap) { out.push(cur); cur = []; end = -Infinity; }
+      cur.push(i); end = Math.max(end, box[i][hi]);
+    }
+    if (cur.length) out.push(cur);
+    return out;
+  };
+  let bands = group("y");
+  if (bands.length < 2) bands = group("x");
+  return bands.map((cs) => ({
+    comps: cs,
+    pts: cs.map((i) => [Math.round(((box[i].p % m.w) / Math.max(1, m.w - 1)) * 1000) / 1000, Math.round((((box[i].p / m.w) | 0) / Math.max(1, m.h - 1)) * 1000) / 1000] as [number, number]),
+    y0: Math.min(...cs.map((i) => box[i].y0)) / m.h, y1: (Math.max(...cs.map((i) => box[i].y1)) + 1) / m.h,
+    x0: Math.min(...cs.map((i) => box[i].x0)) / m.w, x1: (Math.max(...cs.map((i) => box[i].x1)) + 1) / m.w,
+  }));
+}
+/** a part's name by where it sits: top / middle / bottom (or left / right), else "part 3" */
+export function partName(parts: PuffPart[], i: number): string {
+  const rows = parts.length > 1 && parts.every((p, k) => !k || p.y0 >= parts[k - 1].y1 - 0.01);
+  const n = parts.length;
+  if (n === 2) return rows ? (i ? "bottom" : "top") : i ? "right" : "left";
+  if (n === 3) return rows ? ["top", "middle", "bottom"][i] : ["left", "middle", "right"][i];
+  return `part ${i + 1}`;
+}

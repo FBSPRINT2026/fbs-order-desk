@@ -242,6 +242,7 @@ export type EmbSpec = {
   puff?: boolean; metallic?: boolean; detail?: boolean;
   /** 3D puff on part of the logo (Oct 26): thread colors and clicked shapes; none = all of it */ puffParts?: import("@/lib/puff").PuffSel;
   /** what's puffed, in words (work order, digitizing request), and a warning when it's too small to puff */ puffNote?: string; puffWarn?: string;
+  /** staff's own words for the digitizer about the puff ("logo puffed, tagline flat"), in puffNote too */ puffSay?: string;
   line?: Thread["line"];
   /** the digitized file (DST) for this print, with the EMB and the worksheet when they came with it */ file?: import("@/lib/digitizedFiles").DigitizedSet;
   /** asked of the digitizer when the print has no logo on file to keep it on (a request sent outside the portal) */

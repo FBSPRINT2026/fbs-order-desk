@@ -107,7 +107,7 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
         {emb.puff && artUrl && (
           <PuffPicker artUrl={artUrl} rows={rows.map((r) => ({ key: r.hexes.join(","), hexes: r.hexes, label: r.cur && r.cur.name !== "none" ? r.cur.name : r.hexes[0] }))} wIn={wIn}
             sel={emb.puffParts || {}} minIn={prod?.embroidery.puffMinIn ?? 0.125} maxIn={prod?.embroidery.puffMaxIn ?? 0.5}
-            onChange={(sel) => set({ puffParts: sel })}
+            onChange={(sel) => set({ puffParts: sel })} say={emb.puffSay || ""} onSay={(t) => set({ puffSay: t || undefined })}
             onSummary={(note, warn) => { if (note !== (emb.puffNote || "") || warn !== (emb.puffWarn || "")) set({ puffNote: note || undefined, puffWarn: warn || undefined }); }} />
         )}
         {warns.length > 0 && <ul className="emb-warn">{warns.map((w, i) => <li key={i} className="bad">{w}</li>)}</ul>}

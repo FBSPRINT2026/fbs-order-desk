@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { analyzeArt, drawPuff, puffedShapes, puffWidths, shapeAt, type PuffMap, type PuffRow, type PuffSel } from "@/lib/puff";
+import { analyzeArt, drawPuff, partName, puffedShapes, puffParts, puffWidths, shapeAt, type PuffMap, type PuffRow, type PuffSel } from "@/lib/puff";
 
 /**
  * What's puffed on an embroidered logo, and whether it's big enough to puff (Oct 26, Nick: "the cross gets puffed, but
@@ -10,8 +10,9 @@ import { analyzeArt, drawPuff, puffedShapes, puffWidths, shapeAt, type PuffMap, 
 const inch = (v: number) => `${v.toFixed(2).replace(/^0/, "")}"`;
 const frac = (v: number) => (Math.abs(v - 0.125) < 0.001 ? '1/8"' : Math.abs(v - 0.25) < 0.001 ? '1/4"' : Math.abs(v - 0.5) < 0.001 ? '1/2"' : inch(v));
 
-export default function PuffPicker({ artUrl, rows, wIn, sel, minIn, maxIn, onChange, onSummary }: {
+export default function PuffPicker({ artUrl, rows, wIn, sel, minIn, maxIn, onChange, onSummary, say = "", onSay }: {
   artUrl: string; rows: PuffRow[]; wIn: number; sel: PuffSel; minIn: number; maxIn: number;
+  /** staff's own words for the digitizer ("logo puffed, tagline flat"), and setting them */ say?: string; onSay?: (t: string) => void;
   onChange: (s: PuffSel) => void;
   /** a line for the work order and the digitizing request, and a warning when it's too small */
   onSummary: (note: string, warn: string) => void;
@@ -30,6 +31,38 @@ export default function PuffPicker({ artUrl, rows, wIn, sel, minIn, maxIn, onCha
   const all = sel.all !== false && !sel.colors?.length && !sel.on?.length;
   const shapes = useMemo(() => (map ? puffedShapes(map, rows, all ? {} : { ...sel, all: false }) : new Set<number>()), [map, rowKey, JSON.stringify(sel)]); // eslint-disable-line react-hooks/exhaustive-deps
   const widths = useMemo(() => (map ? puffWidths(map, shapes, wIn) : []), [map, shapes, wIn]);
+  // the art's parts (a mark, a name, a tagline…), each switched as one, whatever its colors (Oct 31, Nick)
+  const parts = useMemo(() => (map ? puffParts(map) : []), [map]);
+  const partOn = (i: number) => parts[i].comps.every((c) => shapes.has(c));
+  const partPics = useMemo(() => {
+    if (!map) return [] as string[];
+    return parts.map((pt) => {
+      const x0 = Math.floor(pt.x0 * map.w), y0 = Math.floor(pt.y0 * map.h), w = Math.max(1, Math.ceil(pt.x1 * map.w) - x0), h = Math.max(1, Math.ceil(pt.y1 * map.h) - y0);
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const g = c.getContext("2d"); if (!g) return "";
+      const im = g.createImageData(w, h);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const p = (y0 + y) * map.w + x0 + x, q = (y * w + x) * 4;
+        if (!pt.comps.includes(map.comp[p])) continue;
+        im.data[q] = map.rgba[p * 4]; im.data[q + 1] = map.rgba[p * 4 + 1]; im.data[q + 2] = map.rgba[p * 4 + 2]; im.data[q + 3] = 255;
+      }
+      g.putImageData(im, 0, 0);
+      return c.toDataURL("image/png");
+    });
+  }, [map, parts]);
+  const togglePart = (i: number) => {
+    const turnOn = !partOn(i), pts = parts[i].pts;
+    const base: PuffSel = all ? { all: false, colors: rows.map((x) => x.key), on: [], off: [] } : { all: false, colors: sel.colors || [], on: sel.on || [], off: sel.off || [] };
+    const inPart = (p: [number, number]) => { const k = map ? shapeAt(map, p) : -1; return k >= 0 && parts[i].comps.includes(k); };
+    const on = (base.on || []).filter((p) => !inPart(p)), off = (base.off || []).filter((p) => !inPart(p));
+    const cols = new Set((base.colors || []).map((k) => rows.findIndex((r) => r.key === k)));
+    for (const [k, c] of parts[i].comps.entries()) {
+      const byColor = !!map && cols.has(map.compCls[c]);
+      if (turnOn && !byColor) on.push(pts[k]);
+      if (!turnOn && byColor) off.push(pts[k]);
+    }
+    onChange({ ...base, on, off });
+  };
   const cv = useRef<HTMLCanvasElement>(null);
   useEffect(() => { if (map && cv.current) drawPuff(map, shapes, cv.current); }, [map, shapes]);
 
@@ -44,10 +77,16 @@ export default function PuffPicker({ artUrl, rows, wIn, sel, minIn, maxIn, onCha
     ...(worst ? [`It would need to be about ${Math.ceil((minIn / worst) * 10) / 10}× bigger (${inch(wIn * (minIn / worst))} wide), or puff only the bold parts.`] : []),
     ...wide.map((x) => `${label(x.row)}: parts about ${inch(x.wide)} wide, more than ${frac(maxIn)}: the digitizer splits them or the puff flattens.`),
   ];
-  const note = !map ? "" : all ? "3D puff: all of it" : shapes.size === 0 ? "3D puff: nothing picked yet" : `3D puff: ${[
+  // in words for the digitizer and the work order: by part when the picks are whole parts ("the top part puffed, the
+  // bottom part flat"), else by color and shapes; staff's own words after
+  const wholeParts = parts.length > 1 && !all && parts.every((_, i) => partOn(i) || parts[i].comps.every((c) => !shapes.has(c)));
+  const auto = !map ? "" : all ? "3D puff: all of it" : shapes.size === 0 ? "3D puff: nothing picked yet" : wholeParts
+    ? `3D puff: the ${parts.map((_, i) => i).filter(partOn).map((i) => partName(parts, i)).join(" and ")} part${parts.filter((_, i) => partOn(i)).length === 1 ? "" : "s"}; flat: the ${parts.map((_, i) => i).filter((i) => !partOn(i)).map((i) => partName(parts, i)).join(" and ")}. Sew the puff last, with a stop for the foam`
+    : `3D puff: ${[
     ...(sel.colors || []).map((k) => rows.find((r) => r.key === k)?.label).filter(Boolean) as string[],
     ...(sel.on?.length ? [`${sel.on.length} shape${sel.on.length === 1 ? "" : "s"} picked on the logo`] : []),
   ].join(", ")}${sel.off?.length ? ` (not ${sel.off.length} shape${sel.off.length === 1 ? "" : "s"} clicked off)` : ""}; the rest flat. Sew the puff last, with a stop for the foam`;
+  const note = auto && say.trim() ? `${auto}. ${say.trim()}` : auto;
   const warnText = warn.join(" ");
   useEffect(() => { if (map) onSummary(note, warnText); }, [note, warnText]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -85,6 +124,16 @@ export default function PuffPicker({ artUrl, rows, wIn, sel, minIn, maxIn, onCha
           <canvas ref={cv} onClick={click} title="Click a part of the logo to puff it or keep it flat" aria-label="The logo: click a part to puff it or keep it flat" />
           <span className="faint">Raised = puffed. Click a part to switch it.</span>
         </div>
+        {parts.length > 1 && (
+          <div className="puff-parts" role="group" aria-label="Parts of the art">
+            <span className="emb-l">Parts</span>
+            {parts.map((_, i) => (
+              <button key={i} type="button" className={"puff-part" + (partOn(i) ? " on" : "")} aria-pressed={partOn(i)} title={`The ${partName(parts, i)} part: ${partOn(i) ? "puffed (click to keep it flat)" : "flat (click to puff it)"}`} onClick={() => togglePart(i)}>
+                {partPics[i] ? <img src={partPics[i]} alt="" /> : null}<span>{partName(parts, i)} · {partOn(i) ? "puff" : "flat"}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {rows.length > 1 && (
           <div className="puff-cols">
             {rows.map((r) => {
@@ -99,6 +148,7 @@ export default function PuffPicker({ artUrl, rows, wIn, sel, minIn, maxIn, onCha
           </div>
         )}
       </div>
+      {onSay && <div className="field puff-say"><label htmlFor="puff-say">Note for the digitizer</label><input id="puff-say" type="text" value={say} placeholder="Logo puffed, tagline flat" onChange={(e) => onSay(e.target.value)} /></div>}
       {okMsg && <p className="puff-ok">✓ {okMsg}</p>}
       {warn.length > 0 && <ul className="emb-warn">{warn.map((w, i) => <li key={i} className="bad">{w}</li>)}</ul>}
     </div>
