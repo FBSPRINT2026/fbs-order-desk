@@ -55,8 +55,12 @@ function squished(t: HTMLTableElement, box: HTMLElement): boolean {
   if (t.scrollWidth > box.clientWidth + 2) return true;
   const rows = [...t.querySelectorAll<HTMLTableRowElement>("tbody > tr")].slice(0, 25);
   for (const tr of rows) for (const c of [...tr.cells]) {
-    if (c.colSpan > 1 || !c.innerText) continue;
+    // a cell spanning rows (a board's name beside its jobs) sizes with the rows, not by its words
+    if (c.colSpan > 1 || c.rowSpan > 1 || !c.innerText) continue;
     const cs = getComputedStyle(c);
+    // only text that's allowed to break inside a word can be squished (a letter or two per line); normal text that
+    // doesn't fit makes the table wider, which the check above catches
+    if (!/anywhere|break-word/.test(cs.overflowWrap) && !/break-all|break-word/.test(cs.wordBreak)) continue;
     // a cell set to stay on one line (money, dates) or cut off with … on purpose isn't squished
     if (/nowrap/.test(cs.whiteSpace) || cs.textOverflow === "ellipsis") continue;
     const inner = c.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
