@@ -1,4 +1,5 @@
 "use client";
+import { remakeMockup } from "@/lib/mockupFresh";
 import { sizeRank } from "@/lib/sizeOrder";
 import { clearPageFile } from "@/lib/inkColors";
 import { pdfText } from "@/lib/printavoArt";
@@ -957,8 +958,21 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     let url = `/shop/orders/${j.id}`, mockup = false;
     try {
       const sb = createClient();
-      const { data: o } = await sb.from("orders").select("groups").eq("id", j.id).maybeSingle();
+      const { data: o } = await sb.from("orders").select("groups, customer_id").eq("id", j.id).maybeSingle();
       const gs = ((o?.groups || []) as Group[]);
+      // a brand that wants a logo mockup on new orders (its "Mockup on new orders", Oct 30: All My Sons, like #40284): each
+      // group of its logos gets one, drawn out of sight by the logo builder, before the order opens
+      if (o?.customer_id) {
+        const { data: bs } = await sb.from("brands").select("name, rules").eq("customer_id", o.customer_id).is("archived_at", null);
+        const wants = new Set(((bs || []) as { name: string; rules: { mockup?: string } | null }[]).filter((b) => b.rules?.mockup === "logo").map((b) => b.name));
+        const logoGs = gs.filter((x) => x.imprints.length > 0 && x.imprints.every((im) => im.design_id && im.fromBrand && wants.has(im.fromBrand)) && !(x.mockupThumbs || []).some(Boolean));
+        for (const [i, x] of logoGs.entries()) {
+          note(`Making the logo mockup${logoGs.length > 1 ? ` (${i + 1} of ${logoGs.length})` : ""}…`);
+          const ok = await remakeMockup(j.id, { id: x.id, mockupKind: "logo" }).catch(() => false);
+          did.push(ok ? `Logo mockup made for ${x.name || "the group"}` : `The logo mockup for ${x.name || "the group"} didn't finish: Edit mockup makes it`);
+          if (ok) x.mockupThumbs = ["made"];
+        }
+      }
       if (gs.some((x) => (x.customerMockups || []).length)) note("Saving the customer's mockup to Production files…");
       if (gs.some((x) => (x.customerMockups || []).length)) await Promise.race([stampOrderMockups(sb, j.id, gs), new Promise((res) => setTimeout(res, 25_000))]);
       // a brand's logo on file needs no mockup (it shows as the logo itself on the order, like #40195)

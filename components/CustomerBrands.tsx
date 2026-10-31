@@ -40,7 +40,7 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
   const [sel, setSel] = useSticky<string>(`brands.sel.${customerId}`, "");
   const [laneSaved, setLane] = useSticky<Lane>("brands.lane", "embroidery");
   const lane: Lane = embroideryOnly ? "embroidery" : laneSaved;
-  const [edit, setEdit] = useState<{ name: string; colors: string; light: string; dark: string; one_light: string; one_dark: string; tLight: string; tDark: string; backing: string; notes: string } | null>(null);
+  const [edit, setEdit] = useState<{ name: string; colors: string; light: string; dark: string; one_light: string; one_dark: string; tLight: string; tDark: string; backing: string; notes: string; mockup: string } | null>(null);
   const [adding, setAdding] = useState(""), [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const [kind, setKind] = useState<SewKind>("flat"), [place, setPlace] = useState("Left chest");
 
@@ -72,7 +72,7 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
   async function saveBrand() {
     if (!brand || !edit) return;
     setBusy("save"); setErr("");
-    const row = { name: edit.name.trim() || brand.name, colors: parseColors(edit.colors), rules: { light: edit.light.trim(), dark: edit.dark.trim(), one_light: edit.one_light.trim(), one_dark: edit.one_dark.trim() }, embroidery: { light: list(edit.tLight), dark: list(edit.tDark), backing: edit.backing.trim() }, notes: edit.notes.trim() };
+    const row = { name: edit.name.trim() || brand.name, colors: parseColors(edit.colors), rules: { light: edit.light.trim(), dark: edit.dark.trim(), one_light: edit.one_light.trim(), one_dark: edit.one_dark.trim(), ...(edit.mockup === "logo" ? { mockup: "logo" as const } : {}) }, embroidery: { light: list(edit.tLight), dark: list(edit.tDark), backing: edit.backing.trim() }, notes: edit.notes.trim() };
     const { error } = await sb.from("brands").update(row).eq("id", brand.id);
     setBusy("");
     if (error) return setErr(error.message);
@@ -109,7 +109,7 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
     await sb.from("designs").update({ specs }).eq("id", d.id);
     setDs(ds.map((x) => (x.id === d.id ? { ...x, specs } : x)));
   }
-  const startEdit = (b: Brand) => setEdit({ name: b.name, colors: colorsText(b.colors || []), light: b.rules?.light || "", dark: b.rules?.dark || "", one_light: b.rules?.one_light || "", one_dark: b.rules?.one_dark || "", tLight: (b.embroidery?.light || []).join(", "), tDark: (b.embroidery?.dark || []).join(", "), backing: b.embroidery?.backing || "", notes: b.notes || "" });
+  const startEdit = (b: Brand) => setEdit({ name: b.name, colors: colorsText(b.colors || []), light: b.rules?.light || "", dark: b.rules?.dark || "", one_light: b.rules?.one_light || "", one_dark: b.rules?.one_dark || "", tLight: (b.embroidery?.light || []).join(", "), tDark: (b.embroidery?.dark || []).join(", "), backing: b.embroidery?.backing || "", notes: b.notes || "", mockup: b.rules?.mockup || "" });
 
   return (
     <section className="panel cb">
@@ -137,6 +137,7 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
                 {lane !== "embroidery" && <><dt>Light goods</dt><dd>{brand.rules?.light || "—"}</dd><dt>Dark goods</dt><dd>{brand.rules?.dark || "—"}</dd>{(brand.rules?.one_light || brand.rules?.one_dark) && <><dt>One color</dt><dd>{[brand.rules.one_light, brand.rules.one_dark].filter(Boolean).join(" / ")}</dd></>}</>}
                 {lane === "embroidery" && <><dt>Threads, light goods</dt><dd>{brand.embroidery?.light?.join(", ") || "—"}</dd><dt>Threads, dark goods</dt><dd>{brand.embroidery?.dark?.join(", ") || "—"}</dd>{brand.embroidery?.backing && <><dt>Backing</dt><dd>{brand.embroidery.backing}</dd></>}</>}
               </dl>
+              {brand.rules?.mockup === "logo" && <p className="faint">New orders get a logo mockup (the logos on the shirt color).</p>}
               {brand.notes && <p className="cb-notes">{brand.notes}</p>}
               <button type="button" className="btn sm ghost" onClick={() => startEdit(brand)}>Edit brand</button>
             </div>
@@ -150,6 +151,8 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
               <div className="field"><label htmlFor="cb-od">One color, dark goods</label><input id="cb-od" value={edit.one_dark} placeholder="All White" onChange={(e) => setEdit({ ...edit, one_dark: e.target.value })} /></div>
               <div className="field"><label htmlFor="cb-tl">Threads, light goods</label><input id="cb-tl" value={edit.tLight} placeholder="Madeira 1743 Oxford Blue" onChange={(e) => setEdit({ ...edit, tLight: e.target.value })} /></div>
               <div className="field"><label htmlFor="cb-td">Threads, dark goods</label><input id="cb-td" value={edit.tDark} placeholder="Madeira 1801 Super White" onChange={(e) => setEdit({ ...edit, tDark: e.target.value })} /></div>
+              {/* what Create order makes for a new order with this brand's logos (Oct 30, Nick: All My Sons only) */}
+              <div className="field"><label htmlFor="cb-mk">Mockup on new orders</label><select id="cb-mk" value={edit.mockup} onChange={(e) => setEdit({ ...edit, mockup: e.target.value })}><option value="">None: the logo shows on the order</option><option value="logo">Logo mockup: the logos on the shirt color</option></select></div>
               <div className="field"><label htmlFor="cb-bk">Backing</label><input id="cb-bk" value={edit.backing} onChange={(e) => setEdit({ ...edit, backing: e.target.value })} /></div>
               <div className="field cb-wide"><label htmlFor="cb-no">Notes</label><textarea id="cb-no" rows={2} value={edit.notes} onChange={(e) => setEdit({ ...edit, notes: e.target.value })} /></div>
               <div className="cb-acts"><button type="button" className="btn ghost" onClick={() => setEdit(null)}>Cancel</button><button type="button" className="btn primary" disabled={busy === "save"} onClick={() => void saveBrand()}>{busy === "save" ? "Saving…" : "Save brand"}</button></div>

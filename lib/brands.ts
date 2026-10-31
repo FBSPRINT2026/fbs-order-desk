@@ -14,7 +14,10 @@ import { newImprint, type Design, type GLine, type Imprint, type Method } from "
  * The brand on an order is only its rules: which colorway goes on a light, a dark or a one-color job, and the threads.
  */
 export type BrandColor = { name: string; pms?: string; hex: string; /** a thread matched to it */ thread?: string };
-export type BrandRules = { light?: string; dark?: string; one_light?: string; one_dark?: string };
+export type BrandRules = { light?: string; dark?: string; one_light?: string; one_dark?: string;
+  /** new orders with this brand's logos (Oct 30, Nick: All My Sons gets a logo mockup, like #40284; "only for this
+   *  account"): "logo" = Create order makes the logo mockup (the logos on the shirt color) by itself; unset = none */
+  mockup?: "logo" };
 export type BrandEmb = { light?: string[]; dark?: string[]; backing?: string };
 export type Brand = { id: string; customer_id: string; name: string; colors: BrandColor[]; rules: BrandRules; embroidery: BrandEmb; notes: string; sort: number; archived_at?: string | null };
 
