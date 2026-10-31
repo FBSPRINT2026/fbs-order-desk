@@ -205,7 +205,7 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
    *  "Cuff"); every other garment sews at `location` (Oct 30, Nick: "a location change… same logo, same file") */ spotBy?: Record<string, string>;
   /** customer supplied transfers (Oct 27, Nick: "there should be a click box that says customer supplied… you should be
    *  able to just upload the placement reference"): heat press only; they send the transfers (DTF Dallas, their order
-   *  number) and we press them where their placement reference shows. Not priced; nothing else on the print to fill in.
+   *  number) and we press them where their placement reference shows. Priced as pressing (suppliedPress); nothing else on the print to fill in.
    *  picture = the placement reference as a picture (a PDF's first page), file = what was uploaded */
   /** the customer's picture of where this logo goes (Oct 27, Nick: "just like you did with Heat Press… a customer placement
    *  PDF, we need to have that exact same thing there"): shown on the order and the work order */
@@ -213,7 +213,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** a custom spot's area (Oct 27, Nick: "front pocket… set the artboard size… 5x4"): inches, and which side; the
    *  location is the name typed (lib/mockup.ts registerAreas) */
   area?: { w: number; h: number; view?: "front" | "back" };
-  supplied?: { by?: string; ref?: string; /** where they go, in words ("Front & back"), under the picture on the work order */ where?: string; picture?: { path: string; name: string; file?: string } };
+  supplied?: { by?: string; ref?: string; /** where they go, in words ("Front & back"), under the picture on the work order */ where?: string; picture?: { path: string; name: string; file?: string };
+    /** the press price each, set by the customer's program (its card's extraPrices.dtf_supplied, Cedar Promos $1.50);
+     *  else the price list's (PriceList.dtfSupplied, $2) */ price?: number };
   /** a color change across variations (Oct 27, Nick: #40111 Section Stack on the Charcoal tee and the Neon Blue long
    *  sleeve, two groups): this print is the same art as `imprint` (a print in another group of the order) in other inks.
    *  inks: that print's ink → the ink here ("" = that color isn't printed here). It prints from the same screens:
@@ -445,6 +447,12 @@ export function brandHitFor(bp: BrandPrint | null | undefined, distressed: boole
   if (bp.hit === "fashion" && (!bp.distressedOnly || distressed)) return { printStyle: "fashion", softHand: !!bp.soft };
   return { softHand: bp.hit === "standard" && !!bp.soft && !bp.distressedOnly ? true : undefined };
 }
+/** pressing the customer's own transfers, each piece per location (Imprint.supplied): the list's, else $2; a program
+ *  sets its own (RateCard.extraPrices.dtf_supplied) on the print (Imprint.supplied.price) */
+export const SUPPLIED_PRESS = 2, SUPPLIED_PRESS_ID = "dtf_supplied";
+/** the program extra for it (a program's own price for pressing their transfers) */
+export const SUPPLIED_PRESS_EXTRA = { id: SUPPLIED_PRESS_ID, name: "Pressing customer supplied transfers (per location)", price: SUPPLIED_PRESS };
+export const suppliedPress = (pl: Pick<PriceList, "dtfSupplied">) => (pl.dtfSupplied == null || isNaN(+pl.dtfSupplied) ? SUPPLIED_PRESS : +pl.dtfSupplied);
 /** puff ink on a screen print, each piece per puffed location (Imprint.puff) */
 export const PUFF_PRICE = 1;
 export const puffEach = (pl: Pick<PriceList, "puffPrice">) => (pl.puffPrice == null || isNaN(+pl.puffPrice) ? PUFF_PRICE : +pl.puffPrice);
@@ -527,6 +535,8 @@ export type PriceList = {
   embExtras?: Finishing[];
   /** puff ink on a screen print (Imprint.puff), per puffed location per piece; not set = $1 (Oct 30, Nick) */
   puffPrice?: number;
+  /** pressing customer supplied transfers, each piece per location; $2 when not set */
+  dtfSupplied?: number;
   /** names & numbers: each name, and each digit of a number (Imprint.roster); $2 and $3 when not set */
   rosterName?: number; rosterDigit?: number;
   /** the price sheet's own notes (spoilage, rush, digitizing ranges…), shown with the list */
@@ -916,7 +926,8 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     // the logo digitized before (its DST on file): no digitizing charge (Imprint.digitized, like repeat screens)
     return { each: r2(num(s.embroidery[eti]) + extra), setup: digitizingFee(d, s), inkFee };
   }
-  if (d.method === "dtf") return d.supplied ? { each: 0, setup: 0, inkFee: 0 } : { each: num(s.dtf[ti]), setup: 0, inkFee };
+  // their own transfers: we press them, per location (Oct 31, Nick: "$2 for everybody… $1.50 for him")
+  if (d.method === "dtf") return d.supplied ? { each: d.supplied.price != null && !isNaN(+d.supplied.price) ? +d.supplied.price : suppliedPress(s), setup: 0, inkFee: 0 } : { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
 }
 

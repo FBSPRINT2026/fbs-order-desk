@@ -16981,3 +16981,9 @@ body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:
 .tdf-f{margin:0}
 .tdf-f :is(select,input){height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink)}
 .tdf-n{font-size:12px}
+
+/* customer supplied transfers on the order's print row (GroupEditor supRow) */
+.pr-sup{flex-wrap:wrap;align-items:center;gap:4px 10px}
+.pr-sup .check{font-weight:600}
+.pr-sup .faint{font-size:12.5px}
+.pr-sup-box{flex:1 1 100%}

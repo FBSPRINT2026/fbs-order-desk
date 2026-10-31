@@ -414,6 +414,16 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     return [base ? `${cwLetter(des, base)} ${base.name}` : "", ...versionsOf(d).map((v) => `${cwLetter(des, { name: v.to })} ${v.to} · ${on(v.to)}`)].filter(Boolean).join("  ⟳  ");
   };
   /** a names & numbers print (Imprint.roster, the Mockup Creator's Name & number builder): its list, and the gang sheet */
+  /** customer supplied transfers on a heat press print (Oct 31, Nick: "a little checkbox… customer supplied… we just
+   *  charge… $1.50 per location for Cedar Promos… $2 for everybody else"): pressing only, priced per location */
+  const supRow = (d: Group["imprints"][number], di: number) => {
+    if (d.method !== "dtf") return null;
+    return <div className="pr-scr pr-ccrow pr-sup">
+      <label className="check"><input type="checkbox" checked={!!d.supplied} disabled={fixed || printsFixed} onChange={(e) => update((x) => { x.imprints[di].supplied = e.target.checked ? { ...(x.imprints[di].supplied || {}) } : undefined; })} />Customer supplied transfers</label>
+      <span className="faint">{d.supplied ? `we press them${hidePrices ? "" : ` · ${money(gc.imprints[di]?.each)} a location`}` : "they send the transfers, we press them"}</span>
+      {d.supplied && <div className="pr-sup-box"><SuppliedBox d={d} onChange={(fn) => update((x) => { fn(x.imprints[di]); })} url={(p) => thumbUrls?.[p] || ""} /></div>}
+    </div>;
+  };
   const rosterRow = (d: Group["imprints"][number]) => {
     const r = d.roster; if (!r?.rows?.length) return null;
     const what = r.show === "name" ? "names" : r.show === "number" ? "numbers" : "names & numbers";
@@ -1200,7 +1210,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">

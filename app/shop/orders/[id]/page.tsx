@@ -57,7 +57,7 @@ import { FillFromText, type StatusLine } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
-import { PAY_TERMS, SIZES, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
+import { PAY_TERMS, SIZES, SUPPLIED_PRESS_ID, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
 import OrderHelper from "@/components/OrderHelper";
 import type { HelperAction, HelperOrder } from "@/lib/orderHelperShared";
 import { BIG_SIZES, cardForOrder, finishingIncluded, programForOrder, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
@@ -539,6 +539,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         if (l.pers && !l.persList?.length) { l.persList = persOf(l); if (l.note === `Personalization: ${l.pers}`) delete l.note; delete l.pers; }
         for (const e of l.persList || []) { const want = pk ? +ownX[pk] : undefined; if (want == null) { if (e.price != null) delete e.price; } else if (e.price !== want) e.price = want; }
       }));
+      // pressing their own transfers at the program's price (Oct 31, Nick: Cedar Promos $1.50 a location), else the list's
+      { const sp = ownX[SUPPLIED_PRESS_ID] != null ? +ownX[SUPPLIED_PRESS_ID] : undefined;
+        d.groups.forEach((g) => g.imprints.forEach((im) => { if (!im.supplied) return; if (sp == null) { if (im.supplied.price != null) delete im.supplied.price; } else if (im.supplied.price !== sp) im.supplied.price = sp; })); }
       // a group priced by a program design's flat price is everything in: no setup on it (Oct 30, Nick: "the program
       // pricing overrides the setup… zero setups")
       d.groups.forEach((g, gi) => { const all = !!(on && plans[gi]?.ok && plans[gi]?.flat); if (all) { if (!g.allIn) g.allIn = true; } else if (g.allIn) delete g.allIn; });

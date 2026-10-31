@@ -18,7 +18,8 @@ import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
 import NameNumberBuilder from "@/components/NameNumberBuilder";
 import type { RosterSpec } from "@/lib/rosterArt";
-import { colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
+import { applyColorway, colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
+import ColorwaySwap from "@/components/ColorwaySwap";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
 import { attachMockupToRequest, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
@@ -4323,6 +4324,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         if (error) setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred: !starred } : x)));
                       }} />
                     {!p.d && <div className="ink-warn">Which logo goes on the {im.location}? Pick one{portal ? " of your logos" : " of the customer's logos"}, or upload new art.</div>}
+                    {/* the logo's colorways, the same picker as the order's (Oct 31, Nick: "a way to add the color variation
+                        here… I don't want to bring it in the wrong way"): its inks or threads, sew file and picture */}
+                    {p.d && !(im.visualOnly && !im.confirmed) && <ColorwaySwap d={p.d} im={im} urls={urls} onPick={(cw) => {
+                      const dz = p.d!;
+                      setImprints((xs) => xs.map((x) => (x.id === im.id ? applyColorway(x, dz, cw) : x)));
+                      setPaints((pp) => { const n = { ...pp }; delete n[im.id]; return n; });
+                      setCwTick((t) => t + 1);
+                    }} />}
                     {/* embroidery: threads and stitches, its own panel (Oct 23, Nick: "keep this completely separate") */}
                     {p.d && im.method === "embroidery" && paints[im.id]?.method === "embroidery" && (
                       <>
