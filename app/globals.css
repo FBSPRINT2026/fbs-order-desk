@@ -16742,3 +16742,14 @@ html body .pgs-uses label{white-space:nowrap}
 /* any checkbox's label inside a table keeps its words whole (the cells may break long words; a label never should) */
 html body td label.check{overflow-wrap:normal;word-break:normal}
 html body td label.check:not(:has(> span, > div)){white-space:nowrap}
+
+/* ===== A row you swipe sideways shows an arrow at the edge that has more (components/SwipeHint.tsx, Oct 31, Nick:
+   "put a small arrow to the right so that it indicates left or right scrolling of the menu") ===== */
+html body .swh.swh-r::after,html body .swh.swh-l::before{content:"";display:flex!important;align-items:center;position:sticky;z-index:3;flex:0 0 26px;align-self:stretch;margin:0;padding:0;border:0;
+  background-repeat:no-repeat;background-size:16px 16px,100% 100%;cursor:pointer}
+html body .swh.swh-r::after{right:0;margin-left:-26px!important;order:9999;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230E9BD8' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E"),linear-gradient(to right,transparent,var(--swh-bg,#fff) 45%);
+  background-position:right 2px center,0 0}
+html body .swh.swh-l::before{left:0;margin-right:-26px!important;order:-9999;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230E9BD8' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 6-6 6 6 6'/%3E%3C/svg%3E"),linear-gradient(to left,transparent,var(--swh-bg,#fff) 45%);
+  background-position:left 2px center,0 0}
