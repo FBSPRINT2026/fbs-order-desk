@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { applyProgramProposal, programAssist, type ProgramProposal } from "@/app/shop/program-pricing-actions";
-import { LOCATIONS, SUPPLIED_PRESS_EXTRA } from "@/lib/pricing";
+import { LOCATIONS, SUPPLIED_PRESS_EXTRA, PATCH_APPLY_EXTRA } from "@/lib/pricing";
 import { BIG_SIZES, BACKS, COMMON_INCLUDED, FRONTS, cardHasPrices, cardsOf, newRateCard, PROGRAM_SIZES, tiersOf, type Program, type ProgramImprint, type ProgramItem, type RateCard } from "@/lib/programs";
 
 const blankItem = (programId: string, position: number): Omit<ProgramItem, "id"> => ({ program_id: programId, name: "", style: "", brand: "", garment: "", colors: [], sizes: ["S", "M", "L", "XL", "2XL"], price: 0, min_qty: 0, imprints: [{ location: "Full Front", method: "screen", colors: 1, inks: "", size: "", notes: "" }], design_id: null, image_path: "", notes: "", active: true, position });
@@ -269,7 +269,7 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
   useEffect(() => { sb.from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => {
     const d = (data?.data || {}) as { finishing?: { id: string; name: string; price: number }[]; wholesale?: { finishing?: { id: string; name: string; price: number }[]; embExtras?: { id: string; name: string; price: number }[] } };
     setShopFin((d.finishing || []).map((f) => f.name).filter(Boolean));
-    const all = [...(d.finishing || []), ...(d.wholesale?.finishing || []), ...(d.wholesale?.embExtras || []), SUPPLIED_PRESS_EXTRA];
+    const all = [...(d.finishing || []), ...(d.wholesale?.finishing || []), ...(d.wholesale?.embExtras || []), SUPPLIED_PRESS_EXTRA, PATCH_APPLY_EXTRA];
     setExtraList(all.filter((f, i) => f?.id && all.findIndex((x) => x.id === f.id) === i));
   }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const inc = c.included || [];

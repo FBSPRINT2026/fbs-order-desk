@@ -17016,3 +17016,5 @@ table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label="
 
 /* a print of customer supplied transfers: who made them in a line; the rest on the Goods tab (components/SuppliedBox.tsx) */
 .imp-sup-note{font-size:12.5px;margin-top:4px}
+/* the Patch button on a heat press print in the Mockup Creator (the Patch Application fee) */
+.mk-patch{margin-left:8px}

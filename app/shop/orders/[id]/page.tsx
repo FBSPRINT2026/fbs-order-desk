@@ -57,7 +57,7 @@ import { FillFromText, type StatusLine } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
-import { PAY_TERMS, SIZES, SUPPLIED_PRESS_ID, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
+import { PAY_TERMS, SIZES, SUPPLIED_PRESS_ID, PATCH_APPLY_ID, patchEach, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
 import OrderHelper from "@/components/OrderHelper";
 import type { HelperAction, HelperOrder } from "@/lib/orderHelperShared";
 import { BIG_SIZES, cardForOrder, finishingIncluded, programForOrder, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
@@ -535,7 +535,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       return fs.length ? { each: fs.reduce((a, f) => a + price(f), 0), names: fs.map((f) => f.name).join(", ") } : null;
     };
     const apply = (d: Order) => {
-      const plans = on ? programForOrder(d.groups, prog!.card, prog!.baseCost, (g) => designCtx(d, g)) : [];
+      // a patch (Imprint.patch) is its own fee, added on top: the program prices the group as if it weren't there
+      const noPatch = (g: Group): Group => (g.imprints.some((im) => im.patch) ? { ...g, imprints: g.imprints.filter((im) => !im.patch) } : g);
+      const plans = on ? programForOrder(d.groups.map(noPatch), prog!.card, prog!.baseCost, (g) => designCtx(d, g)) : [];
       // personalizations (Oct 30): a line made by the first version (its own one-piece line, `pers`) becomes a name under
       // the line like the rest; each name priced at the program's own personalization price (Nine18 $5), else the list's
       const ownX: Record<string, number> = (on && prog?.card?.extraPrices) || {}, pk = Object.keys(ownX).find((k) => /personal/i.test(k));
@@ -546,6 +548,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       // pressing their own transfers at the program's price (Oct 31, Nick: Cedar Promos $1.50 a location), else the list's
       { const sp = ownX[SUPPLIED_PRESS_ID] != null ? +ownX[SUPPLIED_PRESS_ID] : undefined;
         d.groups.forEach((g) => g.imprints.forEach((im) => { if (!im.supplied) return; if (sp == null) { if (im.supplied.price != null) delete im.supplied.price; } else if (im.supplied.price !== sp) im.supplied.price = sp; })); }
+      // the Patch Application fee at the program's price (extraPrices.patch_apply), else the list's
+      { const pp = ownX[PATCH_APPLY_ID] != null ? +ownX[PATCH_APPLY_ID] : undefined;
+        d.groups.forEach((g) => g.imprints.forEach((im) => { if (!im.patch) return; if (pp == null) { if (im.patch.price != null) delete im.patch.price; } else if (im.patch.price !== pp) im.patch.price = pp; })); }
       // a group priced by a program design's flat price is everything in: no setup on it (Oct 30, Nick: "the program
       // pricing overrides the setup… zero setups")
       d.groups.forEach((g, gi) => { const all = !!(on && plans[gi]?.ok && plans[gi]?.flat); if (all) { if (!g.allIn) g.allIn = true; } else if (g.allIn) delete g.allIn; });
@@ -557,7 +562,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         const want0 = on ? plans[gi]?.lines[l.id] || null : null;
         // finishing on this job that isn't part of their program price is added on top (Oct 17: the card says what's
         // included, e.g. Peticolas's roll & rubber band and neck labels); a design's flat price is everything in
-        const extra = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
+        const extra0 = want0 ? finishingExtra(d, g, !!plans[gi]?.flat) : null;
+        // a patch on this group: its fee on top of the program price (MEI: the hat's price + $2.50 for the flag)
+        const pList = priceList(settings, (d.price_type || "retail") as PriceType);
+        const patchAdd = Math.round(g.imprints.filter((im) => im.patch).reduce((a, im) => a + patchEach(im, pList), 0) * 100) / 100;
+        const extra = want0 && patchAdd ? { each: Math.round(((extra0?.each || 0) + patchAdd) * 100) / 100, names: [extra0?.each ? extra0.names : "", "Patch application"].filter(Boolean).join(", ") } : extra0;
         const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)`, base: want0.each, adds: `${extra.names.replace(/\s*\([^)]*\)/g, "")} ${extra.each.toFixed(2)}` } : want0;
         if (want) {
           const up: GLine["sizeUp"] = {};

@@ -4374,7 +4374,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         away. It's all just a full color image and you're figuring by size") */}
                     {p.d && im.method === "dtf" && (
                       <div className="mk-full">
-                        <b>Heat press (DTF)</b> <span className="faint">Full color, as it shows here: no inks or screens, just the size below.</span>
+                        <b>Heat press (DTF)</b> <span className="faint">{im.patch ? "A patch heat pressed on: the Patch Application fee, nothing else to set." : "Full color, as it shows here: no inks or screens, just the size below."}</span>
+                        {/* a patch (Oct 31, Nick: "just have a button that says patch… make that 2.50"): priced as the Patch Application fee */}
+                        {!portal && <button type="button" className={"chip mk-patch" + (im.patch ? " on" : "")} aria-pressed={!!im.patch} title="A patch heat pressed on (the American flag): charged the Patch Application fee per piece" onClick={() => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, patch: x.patch ? undefined : {} } : x)))}>Patch</button>}
                         {/* knock a color out (Oct 26, Nick: "you don't need the color identifier… but you should be able to knock out colors") */}
                         {paints[im.id] && paints[im.id].sources.length > 0 && (
                           <div className="mk-ko">

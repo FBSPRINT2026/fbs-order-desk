@@ -17,7 +17,7 @@ export type ProposedOrder = {
     name?: string;
     garments?: { style?: string; brand?: string; description?: string; color?: string; sizes?: Record<string, number>; note?: string; /** the email didn't name the style: what they called it ("tees") */ called?: string;
       /** what it looks like in the customer's photo, to draw it when it isn't in a catalog (rule 3d) */ look?: { kind?: string; hex?: string; trim?: string | null; heather?: boolean; stripes?: string | null; quilted?: boolean } | null }[];
-    prints?: { method?: string; location?: string; colors?: number | "full"; inks?: string; size?: string; notes?: string; /** rule 4f: their own heat transfers */ supplied_transfers?: { by?: string; order?: string } | null }[];
+    prints?: { method?: string; location?: string; colors?: number | "full"; inks?: string; size?: string; notes?: string; /** rule 4f: their own heat transfers */ supplied_transfers?: { by?: string; order?: string } | null; /** a patch heat pressed on (the Patch Application fee) */ patch?: boolean | null }[];
   }[];
   questions?: string[];
   confidence?: "high" | "medium" | "low";
@@ -138,7 +138,8 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       // Puff print box, so it's priced and planned as puff
       if (im.method === "screen" && /\bpuff/i.test(`${im.notes} ${im.inks}`)) im.puff = true;
       // the customer's own heat transfers (rule 4f): pressed where their placement reference shows, not priced
-      if (d.supplied_transfers && im.method === "dtf") { im.supplied = { by: String(d.supplied_transfers.by || "").trim().slice(0, 60), ref: String(d.supplied_transfers.order || "").trim().slice(0, 60) }; im.location = ""; im.size = ""; }
+      if (d.patch) { im.method = "dtf"; im.patch = {}; }
+      if (d.supplied_transfers && im.method === "dtf" && !im.patch) { im.supplied = { by: String(d.supplied_transfers.by || "").trim().slice(0, 60), ref: String(d.supplied_transfers.order || "").trim().slice(0, 60) }; im.location = ""; im.size = ""; }
       return im;
     });
     if (!lines.length && !imprints.length) continue;

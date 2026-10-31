@@ -216,6 +216,10 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   supplied?: { by?: string; ref?: string; /** where they go, in words ("Front & back"), under the picture on the work order */ where?: string; picture?: { path: string; name: string; file?: string };
     /** the press price each, set by the customer's program (its card's extraPrices.dtf_supplied, Cedar Promos $1.50);
      *  else the price list's (PriceList.dtfSupplied, $2) */ price?: number };
+  /** a patch heat pressed on (Oct 31, Nick: "in the heat press imprints on the mock-up creators, just have a button that
+   *  says patch… make that 2.50"; MEI's American flag on hats and bags): priced as the Patch Application fee per piece
+   *  (PriceList.patchApply, $2.50; a program sets its own, RateCard.extraPrices.patch_apply), nothing else on the print */
+  patch?: { price?: number };
   /** a color change across variations (Oct 27, Nick: #40111 Section Stack on the Charcoal tee and the Neon Blue long
    *  sleeve, two groups): this print is the same art as `imprint` (a print in another group of the order) in other inks.
    *  inks: that print's ink → the ink here ("" = that color isn't printed here). It prints from the same screens:
@@ -453,6 +457,12 @@ export const SUPPLIED_PRESS = 2, SUPPLIED_PRESS_ID = "dtf_supplied";
 /** the program extra for it (a program's own price for pressing their transfers) */
 export const SUPPLIED_PRESS_EXTRA = { id: SUPPLIED_PRESS_ID, name: "Pressing customer supplied transfers (per location)", price: SUPPLIED_PRESS };
 export const suppliedPress = (pl: Pick<PriceList, "dtfSupplied">) => (pl.dtfSupplied == null || isNaN(+pl.dtfSupplied) ? SUPPLIED_PRESS : +pl.dtfSupplied);
+/** the Patch Application fee: a patch heat pressed on, per piece (Imprint.patch) */
+export const PATCH_APPLY = 2.5, PATCH_APPLY_ID = "patch_apply";
+export const PATCH_APPLY_EXTRA = { id: PATCH_APPLY_ID, name: "Patch application (per piece)", price: PATCH_APPLY };
+export const patchApply = (pl: Pick<PriceList, "patchApply">) => (pl.patchApply == null || isNaN(+pl.patchApply) ? PATCH_APPLY : +pl.patchApply);
+/** a patch print's price each: the program's, else the list's */
+export const patchEach = (d: Pick<Imprint, "patch">, pl: Pick<PriceList, "patchApply">) => (d.patch?.price != null && !isNaN(+d.patch.price) ? +d.patch.price : patchApply(pl));
 /** puff ink on a screen print, each piece per puffed location (Imprint.puff) */
 export const PUFF_PRICE = 1;
 export const puffEach = (pl: Pick<PriceList, "puffPrice">) => (pl.puffPrice == null || isNaN(+pl.puffPrice) ? PUFF_PRICE : +pl.puffPrice);
@@ -537,6 +547,8 @@ export type PriceList = {
   puffPrice?: number;
   /** pressing customer supplied transfers, each piece per location; $2 when not set */
   dtfSupplied?: number;
+  /** the Patch Application fee, per piece (a patch heat pressed on); $2.50 when not set */
+  patchApply?: number;
   /** names & numbers: each name, and each digit of a number (Imprint.roster); $2 and $3 when not set */
   rosterName?: number; rosterDigit?: number;
   /** the price sheet's own notes (spoilage, rush, digitizing ranges…), shown with the list */
@@ -927,6 +939,7 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     return { each: r2(num(s.embroidery[eti]) + extra), setup: digitizingFee(d, s), inkFee };
   }
   // their own transfers: we press them, per location (Oct 31, Nick: "$2 for everybody… $1.50 for him")
+  if (d.method === "dtf" && d.patch) return { each: patchEach(d, s), setup: 0, inkFee: 0 };
   if (d.method === "dtf") return d.supplied ? { each: d.supplied.price != null && !isNaN(+d.supplied.price) ? +d.supplied.price : suppliedPress(s), setup: 0, inkFee: 0 } : { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
 }
@@ -1213,7 +1226,8 @@ export function imprintLabel(d: Imprint) {
   if (d.method === "screen" && d.printStyle === "fashion") parts.push(d.softHand ? "fashion print (soft, no underbase)" : "fashion print (no underbase)");
   else if (d.method === "screen" && d.softHand) parts.push("soft hand");
   if (d.method === "screen" && d.puff) parts.push("puff ink");
-  if (d.inks) parts.push(d.inks);
+  if (d.method === "dtf" && d.patch) parts.push("patch application");
+  if (d.inks && !d.patch) parts.push(d.inks);
   if (d.size) parts.push(d.size);
   if (d.drop) parts.push(`${d.drop}" drop`);
   return parts.join(" · ");

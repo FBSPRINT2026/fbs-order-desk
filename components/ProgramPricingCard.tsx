@@ -6,7 +6,7 @@ import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { previewUrls } from "@/lib/designs";
 import { LANES, laneState, type Lane } from "@/lib/brands";
-import { SUPPLIED_PRESS_EXTRA, type Design } from "@/lib/pricing";
+import { SUPPLIED_PRESS_EXTRA, PATCH_APPLY_EXTRA, type Design } from "@/lib/pricing";
 import { cardsOf, tiersOf, type Program, type ProgramItem, type ProgramMockup, type RateCard } from "@/lib/programs";
 import { programCardStats, type CardStats } from "@/app/shop/program-pricing-actions";
 
@@ -88,7 +88,7 @@ export default function ProgramPricingCard({ customerId, program, items, ver, ed
       const missing = linked.filter((id) => !all.some((d) => d.id === id));
       if (missing.length) { const { data: more } = await sb.from("designs").select("*").in("id", missing); all = [...all, ...((more || []) as D[])]; }
       const d = (st?.data || {}) as { finishing?: Extra[]; wholesale?: { finishing?: Extra[]; embExtras?: Extra[] } };
-      const xs = [...(d.finishing || []), ...(d.wholesale?.finishing || []), ...(d.wholesale?.embExtras || []), SUPPLIED_PRESS_EXTRA];
+      const xs = [...(d.finishing || []), ...(d.wholesale?.finishing || []), ...(d.wholesale?.embExtras || []), SUPPLIED_PRESS_EXTRA, PATCH_APPLY_EXTRA];
       if (!on) return;
       setBrands((bs || []) as { id: string; name: string }[]);
       setDesigns(all);

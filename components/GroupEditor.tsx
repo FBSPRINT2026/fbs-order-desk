@@ -418,7 +418,13 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
    *  charge… $1.50 per location for Cedar Promos… $2 for everybody else"): pressing only, priced per location */
   const supRow = (d: Group["imprints"][number], di: number) => {
     if (d.method !== "dtf") return null;
+    // a patch heat pressed on (Oct 31, Nick: "a button that says patch… make that 2.50"): the Patch Application fee
+    if (d.patch) return <div className="pr-scr pr-ccrow pr-sup">
+      <label className="check"><input type="checkbox" checked disabled={fixed || printsFixed} onChange={() => update((x) => { x.imprints[di].patch = undefined; })} />Patch</label>
+      <span className="faint">Patch Application fee{hidePrices ? "" : ` · ${money(gc.imprints[di]?.each)} a piece`}</span>
+    </div>;
     return <div className="pr-scr pr-ccrow pr-sup">
+      <label className="check"><input type="checkbox" checked={false} disabled={fixed || printsFixed} onChange={() => update((x) => { x.imprints[di].patch = {}; x.imprints[di].supplied = undefined; })} />Patch</label>
       <label className="check"><input type="checkbox" checked={!!d.supplied} disabled={fixed || printsFixed} onChange={(e) => update((x) => { x.imprints[di].supplied = e.target.checked ? { ...(x.imprints[di].supplied || {}) } : undefined; })} />Customer supplied transfers</label>
       <span className="faint">{d.supplied ? `we press them${hidePrices ? "" : ` · ${money(gc.imprints[di]?.each)} a location`}` : "they send the transfers, we press them"}</span>
       {d.supplied && <SupNote d={d} />}
@@ -1251,7 +1257,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 </div>
                 {/* customer supplied transfers (Oct 27, Nick): heat press only; ticked, the rest is grayed out and only who made
                     them, their order number and the placement reference are filled in */}
-                {d.method === "dtf" && <label className="check imp-sup-chk"><input type="checkbox" checked={!!d.supplied} onChange={(e) => update((x) => { x.imprints[di].supplied = e.target.checked ? { ...(x.imprints[di].supplied || {}) } : undefined; })} />Customer supplied transfers <span className="faint">they send the transfers, we press them</span></label>}
+                {d.method === "dtf" && <label className="check imp-sup-chk"><input type="checkbox" checked={!!d.patch} onChange={(e) => update((x) => { x.imprints[di].patch = e.target.checked ? { ...(x.imprints[di].patch || {}) } : undefined; })} />Patch <span className="faint">a patch heat pressed on: the Patch Application fee{hidePrices ? "" : `, ${money(gc.imprints[di]?.each)} a piece`}</span></label>}
+                {d.method === "dtf" && !d.patch && <label className="check imp-sup-chk"><input type="checkbox" checked={!!d.supplied} onChange={(e) => update((x) => { x.imprints[di].supplied = e.target.checked ? { ...(x.imprints[di].supplied || {}) } : undefined; })} />Customer supplied transfers <span className="faint">they send the transfers, we press them</span></label>}
                 {d.supplied && <SupNote d={d} />}
                 {!d.supplied && screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
                 {youthInfo(d) && <div className="imp-scr"><YouthSpec y={youthInfo(d)!} note /></div>}
