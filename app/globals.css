@@ -8458,16 +8458,16 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 .pr-scr-opts{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 14px;padding:3px 10px;border-radius:8px;background:var(--surface-2)}
 /* Order check: where the job stands in a few big bullets (Oct 15, Nick) */
 .os-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
-.os{display:flex;align-items:flex-start;gap:10px}
-.os i{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:13px;font-weight:800;margin-top:1px}
-.os.ok i{background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok)}
-.os.wait i{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:var(--warn);font-size:18px;line-height:0}
-.os.bad i{background:var(--danger-soft);color:var(--danger)}
-.os.info i{background:var(--surface-2);color:var(--ink-3)}
-.os span{display:flex;flex-direction:column;min-width:0}
-.os b{font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.3}
-.os.info b{color:var(--ink-2);font-weight:600}
-.os small{font-size:12px;color:var(--ink-3)}
+.ock{display:flex;align-items:flex-start;gap:10px}
+.ock i{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:13px;font-weight:800;margin-top:1px}
+.ock.ok i{background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok)}
+.ock.wait i{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:var(--warn);font-size:18px;line-height:0}
+.ock.bad i{background:var(--danger-soft);color:var(--danger)}
+.ock.info i{background:var(--surface-2);color:var(--ink-3)}
+.ock span{display:flex;flex-direction:column;min-width:0}
+.ock b{font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.3}
+.ock.info b{color:var(--ink-2);font-weight:600}
+.ock small{font-size:12px;color:var(--ink-3)}
 .os-checks{margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2)}
 /* a group, tighter (Oct 15, Nick: "a lot of wasted space… especially vertically… more compressed") */
 .ord .line-b{padding:12px 14px;gap:10px}
@@ -10769,8 +10769,8 @@ button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999
 .jv-last-r a{font-weight:700}
 .jv-last-r .btn{margin-left:auto}
 /* Shop steps on the order (Oct 21) */
-.os{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;display:flex;flex-direction:column;gap:8px;font-size:12.5px}
-.os-pv{background:var(--surface-2);border:0}
+.osp-old{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+.osp-old-pv{background:var(--surface-2);border:0}
 .osp .panel-h .faint{font-size:12px}
 .osp-now{color:var(--accent)}
 .osp-cust{font-size:12.5px;padding:4px 10px;border-radius:8px;background:var(--surface-2);margin-bottom:8px}
@@ -14129,8 +14129,8 @@ html body .ord .line-b .gl-list .gl.ver{padding-left:16px}
 .cb-sewopts,.cb-loose{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
 .cb-sewopts input,.cb-sewopts select,.cb-loose select{height:32px}
 @media (max-width:900px){ .cb-edit{grid-template-columns:1fr 1fr} }
-.ca-acts{display:flex;justify-content:flex-end;align-items:flex-end;gap:8px;flex-wrap:wrap}
-.ca-acts .field{margin:0;min-width:180px}
+.cba-acts{display:flex;justify-content:flex-end;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.cba-acts .field{margin:0;min-width:180px}
 .rq-pick .toolbar{margin:4px 0 10px}
 .rq-pick-c.on{outline:2px solid var(--accent);outline-offset:-2px}
 /* Customer artwork / My files → search old orders (Oct 24) */
@@ -16238,12 +16238,12 @@ html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html bo
 .cu-strip .cu-who{flex:1 1 auto;min-width:0}
 .cu-strip .cu-co{font-size:17px}
 .cu-strip .cu-sym{flex-direction:row;gap:4px;margin-left:6px}
-.cu-line{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--ink-3);align-items:center}
+.cu-strip .cu-line{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--ink-3);align-items:center}
 .cu-addr{all:unset;cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600}
 .cu-addr:focus-visible{outline:2px solid var(--accent)}
 .cu-strip .cu-more{display:flex;flex-direction:column;gap:3px;font-size:13px;margin-top:6px;padding:8px 10px;background:var(--surface-2);border-radius:6px}
 .cu-strip .cu-price{display:flex;flex-direction:column;gap:0;margin:0;padding:0;border:0;flex:none;align-self:flex-start}
-.cu-k{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin:0}
+.cu-strip .cu-k{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin:0}
 .cu-pv{display:flex;align-items:center;gap:6px;border-bottom:1px dashed var(--line);min-width:170px}
 .cu-strip .pt-applied{align-self:center}
 .cu-chg{align-self:center;white-space:nowrap}

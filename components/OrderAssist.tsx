@@ -27,7 +27,7 @@ export function ChecksPanel({ checks, status, orderId, save, reorder }: { checks
       <div className="panel-h"><h2>Order check</h2><span className="faint num" style={{ color: behind ? "var(--danger)" : checks.length ? "var(--warn)" : "var(--ok)" }}>{behind ? "Needs a look" : checks.length ? `${checks.length} to look at` : "All good"}</span></div>
       <div className="panel-b">
         <ul className="os-list">
-          {status.map((x, i) => <li key={i} className={"os " + x.tone}><i aria-hidden>{x.tone === "ok" ? "✓" : x.tone === "bad" ? "!" : x.tone === "wait" ? "•" : "–"}</i><span><b>{x.text}</b>{x.sub && <small>{x.sub}</small>}</span></li>)}
+          {status.map((x, i) => <li key={i} className={"ock " + x.tone}><i aria-hidden>{x.tone === "ok" ? "✓" : x.tone === "bad" ? "!" : x.tone === "wait" ? "•" : "–"}</i><span><b>{x.text}</b>{x.sub && <small>{x.sub}</small>}</span></li>)}
         </ul>
         {checks.length > 0 && <div className="chk-list os-checks">{checks.map((c, i) => <div key={i} className={"chk " + c.level}>{c.text}</div>)}</div>}
         {reorder && <ReorderCheckBox orderId={orderId} save={save} />}

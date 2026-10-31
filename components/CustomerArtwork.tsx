@@ -301,7 +301,7 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
                       ))}</div>
                       {mocks.some((f) => f.pdf) && <span className="faint">The mockup goes to the Helper in the Mockup Creator: it pulls the art off and asks which print is which.</span>}
                       {err && <span className="err">{err}</span>}
-                      <div className="ca-acts">
+                      <div className="cba-acts">
                         <button type="button" className="btn ghost" disabled={busy} onClick={() => setWhatStep(false)}>Back</button>
                         {fs.length === 1 && mocks.length === 1 && <button type="button" className="btn" disabled={busy} onClick={() => void useFile(mocks[0], false)}>Use it as a visual only</button>}
                         <button type="button" className="btn primary" disabled={busy || (!prints.length && !mocks.length)} onClick={() => void bringFiles()}>{busy ? "Bringing it in…" : "Open in the Mockup Creator"}</button>
@@ -319,7 +319,7 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
             <span className="faint">{prints(pick).join("  |  ") || "Its prints"}. They replace this group&apos;s prints.</span>
             {diff(pick) && <span className="ca-warn">That mockup is on {garments(pick.snap).join(", ") || "other garments"}. This group has {[...new Set(group.lines.filter((l) => (l.style || "").trim()).map((l) => [l.style, l.color].filter(Boolean).join(" ")))].join(", ")}.</span>}
             {err && <span className="err">{err}</span>}
-            <div className="ca-acts">
+            <div className="cba-acts">
               <button type="button" className={"btn" + (diff(pick) ? "" : " primary")} disabled={busy} onClick={() => void useSave(pick, false)}>Use the picture as it is</button>
               <button type="button" className={"btn" + (diff(pick) ? " primary" : "")} disabled={busy} onClick={() => void useSave(pick, true)}>{busy ? "Bringing it in…" : "Remake on this order's garments"}</button>
             </div>
@@ -328,7 +328,7 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
         {logo && tab === "logos" && (
           <div className="ca-use">
             <b>Add {logo.label}</b>
-            <div className="ca-acts">
+            <div className="cba-acts">
               <div className="field"><label htmlFor="ca-loc">Where it prints</label><select id="ca-loc" value={loc} onChange={(e) => setLoc(e.target.value)}>{LOCATIONS.map((l) => <option key={l}>{l}</option>)}</select></div>
               <button type="button" className="btn primary" disabled={busy} onClick={() => void useLogo()}>{busy ? "Bringing it in…" : "Add and make the mockup"}</button>
             </div>

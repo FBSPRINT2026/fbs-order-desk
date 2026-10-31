@@ -192,7 +192,7 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
           {lane === "embroidery" && !sews.length && <span className="ca-warn">No sew file for this logo yet: it goes on stamped Needs digitizing (stitches and price confirmed after the sew-out).</span>}
           {lane === "screen" && !laneState(pick, "screen").ready && <span className="ca-warn">No vector art for screen printing yet: it goes on as the art on file, for separations.</span>}
           {err && <span className="err">{err}</span>}
-          <div className="ca-acts"><button type="button" className="btn primary" disabled={busy} onClick={() => void add()}>{busy ? "Adding…" : "Add to group"}</button></div>
+          <div className="cba-acts"><button type="button" className="btn primary" disabled={busy} onClick={() => void add()}>{busy ? "Adding…" : "Add to group"}</button></div>
         </div>
       )}
     </div>

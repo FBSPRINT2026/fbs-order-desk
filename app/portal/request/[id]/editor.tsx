@@ -638,7 +638,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
                   <b>Bring in {artPick.name} from #{artPick.number}</b>
                   <span className="faint">{artPick.prints.join("  |  ") || "Its prints"}. They replace this group&apos;s prints.</span>
                   {artDiff(artPick) && <span className="ca-warn">That mockup is on {artPick.garments.join(", ")}. Remake it on the garments in this order.</span>}
-                  <div className="ca-acts">
+                  <div className="cba-acts">
                     {!artDiff(artPick) && <button type="button" className="btn primary" disabled={!!picking || preview} onClick={() => void bringArt(artPick, true)}>{picking === artPick.key ? "Bringing it in…" : "Use this mockup"}</button>}
                     <button type="button" className={"btn" + (artDiff(artPick) ? " primary" : "")} disabled={!!picking || preview} onClick={() => void bringArt(artPick, false)}>{artDiff(artPick) ? (picking === artPick.key ? "Bringing it in…" : "Remake on these garments") : "Change it in the Mockup Creator"}</button>
                   </div>
