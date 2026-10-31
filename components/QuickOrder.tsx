@@ -509,6 +509,8 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         guard();
         const gi = c.gi != null && d.groups[c.gi] ? c.gi : d.groups.findIndex((x) => x.name === c.about);
         const grp = d.groups[gi]; if (!grp) continue;
+        // a group whose prints are all logos on file has its art: nothing to cut off their sheet
+        if (grp.imprints.length && grp.imprints.every((im) => im.design_id)) continue;
         if (!bufs.has(c.path)) { const { data: blob } = await sbc.storage.from("proofs").download(c.path); if (blob) bufs.set(c.path, await blob.arrayBuffer()); }
         const buf = bufs.get(c.path); if (!buf) continue;
         step(`${of}Cutting ${grp.name || "the product"} off ${c.name}…`);
@@ -546,7 +548,11 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       if (cutFiles.size) d = { ...d, files: d.files.map((x) => (cutFiles.has(x.path) ? { ...x, role: "other" as const, kind: "customer_mockup" } : x)) };
     }
     if (d.kind !== "reorder" || theirs.size || !sentArt.length) {
-      const used = new Set([...Object.values(d.art || {}), ...Object.values(d.mockups || {}).flat()]);
+      // their mockup is only cut up for art when a print still needs its art: every print on a logo on file (MEI's carts:
+      // the brand's logos), their PDF stays their mockup, as is (Oct 31, #94692111: the cart's product photos were offered
+      // as "the art")
+      const needArt = d.groups.some((x) => x.imprints.some((im) => !im.design_id));
+      const used = new Set([...Object.values(d.art || {}), ...(needArt ? Object.values(d.mockups || {}).flat() : [])]);
       const sb0 = createClient();
       const helperGot = new Map<string, Pulled | null>();
       for (const f of d.files.filter((x) => used.has(x.path) && (/pdf/i.test(x.type) || /\.pdf$/i.test(x.name)))) {
