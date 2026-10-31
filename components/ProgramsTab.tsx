@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import ProgramPricingCard from "@/components/ProgramPricingCard";
+import TrainingDefaults from "@/components/TrainingDefaults";
 import LogoThumb from "@/components/LogoThumb";
 import { TrainingChat } from "@/components/OrderTrainingAdmin";
 import { previewUrls, uploadDesign } from "@/lib/designs";
@@ -195,6 +196,7 @@ function RulesPanel({ training, onSaved }: { training: Training | null; onSaved:
           ) : (
             <div className="pgs-rules">{cards.map((c, i) => <div key={i} className="pgs-rule">{c.h && <b>{c.h}</b>}<span>{c.b}</span></div>)}</div>
           )}
+        {training && <TrainingDefaults trainingId={training.id} />}
       </div>
     </section>
   );

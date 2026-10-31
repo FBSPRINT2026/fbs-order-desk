@@ -5,6 +5,7 @@ import { officeText } from "@/lib/officeText";
 import { finishingList, lineQty, mergeSettings, orderGroups, persOf, priceList, SIZES, type GLine, type Group, type Order, type PriceType } from "@/lib/pricing";
 import { hasSpotChange, spotLines } from "@/lib/spotChange";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
+import { customerTrainings, DEFAULT_FIELDS, SHIP_SAID, trainingsForText, type DefaultField, type TrainingDefaults } from "@/lib/orderTrainings";
 
 /**
  * Worked examples for Create order (Oct 30, Nick after #40284: "how do we train the create order… to make this exactly
@@ -100,7 +101,52 @@ export async function saveExample(admin: SupabaseClient, orderId: string, by: st
     confirmed_by: by, confirmed_at: new Date().toISOString(), active: true,
   };
   const { error } = await admin.from("order_examples").upsert(row, { onConflict: "order_id" });
+  if (!error) await learnDefaults(admin, o.customer_id as string, `${o.nickname || ""} ${subject} ${o.po_number || ""}`).catch((e) => console.warn("learnDefaults", e));
   return error ? { ok: false, why: error.message } : { ok: true };
+}
+
+/** what an order's setting is for each training default (the order page's values) */
+function settingsOf(o: Order): Record<DefaultField, string | boolean | undefined> {
+  const prints = orderGroups(o).flatMap((g) => g.imprints || []);
+  return {
+    order_type: o.order_type || undefined,
+    confirm: prints.length ? prints.some((im) => !im.confirmed && !!im.confirm && (!!im.confirm.size || !!im.confirm.ink)) : undefined,
+    delivery_method: ["pickup", "ship", "deliver"].includes(o.delivery_method) ? o.delivery_method : undefined,
+    ship_method: o.delivery_method === "ship" && (o.ship_method || "").trim() ? o.ship_method.trim() : undefined,
+  };
+}
+/**
+ * The trainings learn their order defaults from the orders staff mark right (Oct 31, Nick: "the order page is not
+ * learning, really… for MEI… default shipping always FedEx Ground… always set to reorder… no production
+ * confirmation"): for each training this job uses, its last three worked examples; a setting the last two or more all
+ * agree on becomes its default (shipping only from jobs that didn't name a carrier themselves). A field staff set on the
+ * training stays theirs.
+ */
+export async function learnDefaults(admin: SupabaseClient, customerId: string, jobText: string) {
+  const all = await customerTrainings(admin, customerId);
+  const ts = trainingsForText(all, jobText);
+  if (!ts.length) return;
+  const { data: ex } = await admin.from("order_examples").select("order_id, title, source_text").eq("customer_id", customerId).eq("active", true).order("confirmed_at", { ascending: false }).limit(40);
+  for (const t of ts) {
+    const mine = ((ex || []) as { order_id: string; title: string; source_text: string }[]).filter((e) => trainingsForText(all, `${e.title}`).some((x) => x.id === t.id)).slice(0, 3);
+    if (mine.length < 2) continue;
+    const { data: os } = await admin.from("orders").select("*").in("id", mine.map((e) => e.order_id));
+    const byId = new Map(((os || []) as Order[]).map((o) => [o.id, o]));
+    const d: TrainingDefaults = { ...(t.defaults || {}) }, learned = { ...(d.learned || {}) };
+    let changed = false;
+    for (const f of DEFAULT_FIELDS) {
+      if ((d.set || []).includes(f)) continue;
+      const use = mine.filter((e) => byId.has(e.order_id) && !((f === "delivery_method" || f === "ship_method") && SHIP_SAID.test(e.source_text || "")));
+      if (use.length < 2) continue;
+      const vals = use.map((e) => settingsOf(byId.get(e.order_id)!)[f]);
+      if (vals.some((v) => v === undefined) || new Set(vals.map(String)).size !== 1) continue;
+      if ((d as Record<string, unknown>)[f] === vals[0]) continue;
+      (d as Record<string, unknown>)[f] = vals[0];
+      learned[f] = use.map((e) => `#${(byId.get(e.order_id) as { number?: number }).number}`).join(", ");
+      changed = true;
+    }
+    if (changed) await admin.from("order_trainings").update({ defaults: { ...d, learned } }).eq("id", t.id);
+  }
 }
 
 /** one of the customer's orders the way the training chat reads it ("look at #40284: this is how it goes every time"):

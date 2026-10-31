@@ -16972,3 +16972,12 @@ body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:
 .gang-rs-o b{font-size:14px;color:var(--ink)}
 .gang-rs-o span{font-size:12.5px;color:var(--ink-3);line-height:1.35}
 .gang-rs-o:hover{border-color:var(--accent);background:var(--accent-soft)}
+
+/* a training's order defaults (components/TrainingDefaults.tsx) */
+.tdf{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.tdf-h{font-size:13px}
+.tdf-st{margin-left:8px}
+.tdf-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;align-items:start}
+.tdf-f{margin:0}
+.tdf-f :is(select,input){height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink)}
+.tdf-n{font-size:12px}

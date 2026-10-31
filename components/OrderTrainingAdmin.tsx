@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import CustomerPick from "@/components/CustomerPick";
+import TrainingDefaults from "@/components/TrainingDefaults";
 import { useSticky } from "@/lib/useSticky";
 import { fmtStamp } from "@/lib/format";
 import type { TrainFile, TrainMsg } from "@/lib/ai/trainingChat";
@@ -161,6 +162,7 @@ function TrainingEditor({ row, brands, onSaved }: { row: Row; brands: BrandRow[]
       </div>
       <div className="field"><label htmlFor={`ott-${row.id}`}>The rules Create order follows for these jobs</label><textarea id={`ott-${row.id}`} rows={14} value={t} placeholder="How their orders are made: the groups, which logo goes on what, personalization, pricing, shipping… or just tell the chat and Apply" onChange={(e) => setT(e.target.value)} /></div>
       <div className="row"><button type="button" className="btn primary" disabled={!changed} onClick={() => void save()}>Save training</button><span className="faint">{state}</span><span className="spacer" /><Link className="linkbtn" href={`/shop/customers/${row.customer_id}?area=program`}>Their program &amp; mockups</Link></div>
+      <TrainingDefaults trainingId={row.id} />
       {brands.some((b) => (b.rules?.mockups || []).length || b.rules?.mockup) && (
         <div className="otr-sub"><b>Mockups on new orders</b>{brands.map((b) => <div key={b.id} className="faint">{b.name}: {(b.rules?.mockups || []).length ? `standard ${(b.rules?.mockups || []).map((n) => `M-${n}`).join(", ")} (the same logos at the same spots get it)` : "no standard mockups"}{b.rules?.mockup === "logo" ? "; any other group gets a logo mockup made" : ""}</div>)}</div>
       )}

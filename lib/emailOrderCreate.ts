@@ -12,6 +12,7 @@ import { SITE_URL } from "@/lib/config";
 import { namesForPaths } from "@/lib/printavoFileMeta";
 import { oldJobLabel } from "@/lib/printavoNames";
 import { tickInPrintavo } from "@/lib/clickup";
+import { customerTrainings, defaultsOf, SHIP_SAID, trainingsForText } from "@/lib/orderTrainings";
 
 /**
  * Make the order staff checked in the Inbox's "Create order" panel (lib/ai/emailOrder.ts suggested it):
@@ -235,18 +236,30 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // the brand's standard mockups (its "Standard mockups", Oct 30, Nick: "save the mockup number and reuse those… you don't
   // need to make it each time"): a group with exactly those logos gets that mockup, copied, nothing drawn
   const std = await standardMockups(admin, custId, groups).catch((e) => { console.warn("standard mockups", e); return new Map<string, StdMockup>(); });
+  // the training's order defaults (lib/orderTrainings.ts TrainingDefaults; Oct 31, Nick on MEI: "FedEx Ground, unless he
+  // says something different… reorder by default with no production confirmation"): shipping only when the job doesn't
+  // name a carrier or pickup itself
+  const tdef = custId ? defaultsOf(trainingsForText(await customerTrainings(admin, custId).catch(() => []), `${a?.subject || ""} ${d.nickname || ""} ${d.po_number || ""}`)) : {};
+  const shipSaid = SHIP_SAID.test(`${a?.subject || ""}\n${(a as { body?: string | null } | null)?.body || ""}\n${notes || ""}`);
+  if (tdef.confirm !== undefined) for (const g of groups) for (const im of g.imprints) {
+    if (im.confirmed) continue;
+    if (tdef.confirm === false) { delete im.confirm; delete im.visualOnly; }
+    else if (!(im.confirm && (im.confirm.size || im.confirm.ink))) im.confirm = { size: true, ink: true, why: tdef.order_type === "new" || !tdef.order_type ? "New order: production confirms the details before printing" : "Reorder: production confirms on the run" };
+  }
+  const tDelivery = !shipSaid && tdef.delivery_method ? tdef.delivery_method : "";
   const orderRow = {
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
     nickname: (flag + (d.nickname || "").replace(/^🚩\s*/u, "")).slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
     ...(d.firm && d.due_date ? { firm: true } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
-    delivery_method: ["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup", ship_to: addressBlock(d.ship_to || "").slice(0, 500),
+    delivery_method: tDelivery || (["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup"), ship_to: addressBlock(d.ship_to || "").slice(0, 500),
     // a customer who ships on their own carrier account (customers.ship_on): the order ships on it, $0 shipping, the same
     // as picking it on the order page (Oct 30, #40284: Nine18 on "Nine18 FEDEX")
-    ...(d.delivery === "ship" && cust?.ship_on ? { ship_method: await ownAccountMethod(String(cust.ship_on)) } : {}),
+    ...((tDelivery || d.delivery) === "ship" && cust?.ship_on ? { ship_method: await ownAccountMethod(String(cust.ship_on)) } : (tDelivery || d.delivery) === "ship" && !shipSaid && tdef.ship_method ? { ship_method: tdef.ship_method.slice(0, 60) } : {}),
     // every group is one of the program's master mockups (lib/masterMockups.ts): a reorder of known-good work, nothing
     // for production to confirm (Oct 30, Nick on All My Sons: "set it to reorder and then don't confirm any of the details")
     ...(groups.length && groups.every((g) => g.masterMockup || !g.imprints.length) && groups.some((g) => g.masterMockup) ? { order_type: "reorder" } : {}),
+    ...(tdef.order_type ? { order_type: tdef.order_type } : {}),
     price_type: priceType, tax_exempt: !!cust?.tax_exempt, ...(st.k === "approved" ? { approved_at: new Date().toISOString(), approved_name: `${by}${a ? " (from the customer's email)" : ""}` } : {}),
   };
   const { data: o, error } = intoId
