@@ -1,5 +1,5 @@
 import { resolvePending } from "@/lib/manifest";
-import { mockupArtStamp } from "@/lib/mockupFresh";
+import { mockupArtStamp, mockupGarmentKey } from "@/lib/mockupFresh";
 import "server-only";
 import { addressBlock } from "@/lib/addressBlock";
 import { applyConfirmedSpecs } from "@/lib/designSpecs";
@@ -438,12 +438,21 @@ async function standardMockups(admin: SupabaseClient, custId: string, groups: Gr
     // a master mockup's group (lib/masterMockups.ts) is that mockup; any other group gets one with the same logos at the same spots
     const master = g.masterMockup ? rows.find((r) => r.number === g.masterMockup) : null;
     if (!master && ((g.mockupThumbs || []).some(Boolean) || !g.imprints.length || !g.imprints.every((im) => im.design_id && im.fromBrand && byBrand.has(im.fromBrand)))) continue;
-    const m = master || rows.find((r) => (byBrand.get(g.imprints[0].fromBrand!) || []).includes(r.number) && keyOf(r) === key(g.imprints));
+    // of the matching ones, one drawn on this group's garment color first (Oct 31, #40322: M-1142 drawn on gray went on a
+    // black jacket and its boxes stayed gray)
+    const fits = master ? [] : rows.filter((r) => (byBrand.get(g.imprints[0].fromBrand!) || []).includes(r.number) && keyOf(r) === key(g.imprints));
+    const colorsOf = (r: StdMockup) => new Set((((r.snapshot as { lines?: { color?: string }[] } | null)?.lines) || []).map((l) => norm(l.color || "")));
+    const mine = [...new Set((g.lines || []).map((l) => norm(l.color || "")).filter(Boolean))];
+    const m = master || fits.find((r) => mine.length > 0 && mine.every((c) => colorsOf(r).has(c))) || fits[0];
     if (!m) continue;
     g.mockupThumbs = [m.file_path.replace(/\.png$/i, "-thumb.png")];
     g.mockupAt = new Date().toISOString();
     if (/ — Logo /.test(m.title || "")) g.mockupKind = "logo";
     g.mockupArt = mockupArtStamp(g, (ds || []) as { id: string; preview_path?: string | null; file_path?: string | null }[]);
+    // drawn on other garments: stamped with those, so the order page draws it again on this group's own (mockupStale)
+    { const snapLines = ((m.snapshot as { lines?: Group["lines"] } | null)?.lines) || [];
+      const sameColors = mine.length > 0 && mine.every((c) => colorsOf(m).has(c));
+      if (snapLines.length && !sameColors) g.mockupArt = { ...g.mockupArt, gk: mockupGarmentKey({ lines: snapLines }) }; }
     out.set(g.id, m);
   }
   return out;
