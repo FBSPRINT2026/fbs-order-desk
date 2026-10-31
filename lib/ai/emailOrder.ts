@@ -1,6 +1,7 @@
 import { fillFromLogo, logosOnFile, mergeLogoGroups } from "@/lib/ai/logosOnFile";
 import "server-only";
 import { applyMasters, loadMasters } from "@/lib/masterMockups";
+import { stylesFromHistory } from "@/lib/ai/stylesFromHistory";
 import { addressBlock } from "@/lib/addressBlock";
 import { customerTrainings, trainingsForText } from "@/lib/orderTrainings";
 import { PO_RULES } from "@/lib/ai/poRules";
@@ -427,7 +428,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-30o";
+export const READER_REV = "2026-10-31a";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -1063,6 +1064,11 @@ ${staffSays}` : ""}`;
     const about = `${a.subject || ""} ${String(a.body || "").slice(0, 4000)} ${draft.nickname || ""}`;
     const did = applyMasters(draft, await loadMasters(admin, a.customer_id as string, about).catch(() => ({ leads: "garment" as const, masters: [] })), about);
     if (did.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}Master mockups: ${did.join(", ")}.`.slice(0, 1200);
+  }
+  // a garment named by product, no style number: the style the shop put that product on before (lib/ai/stylesFromHistory.ts)
+  if (a.customer_id) {
+    const got = await stylesFromHistory(admin, a.customer_id as string, draft).catch((e) => { console.warn("stylesFromHistory", e); return [] as string[]; });
+    if (got.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}Styles: ${got.join("; ")}.`.slice(0, 1600);
   }
   const row = {
     kind: o.part ? "draft_order_part" : "draft_order", dedupe_key: o.part ? `email:${o.part.anchor || C.id}:order:${o.part.key}` : `email:${C.id}:order`, priority: 1, source: "ai", model: r.model, run_id: r.runId, status: "open",
