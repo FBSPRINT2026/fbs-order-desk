@@ -118,7 +118,7 @@ export default function NameNumberBuilder({ spots, start, pieces, bg, onPlace, o
             <div className="nnb-grid">
               {look.show !== "number" && <div className="field"><label htmlFor="nnb-nh">Letters (in. tall)</label><input id="nnb-nh" type="number" min={0.5} max={6} step={0.25} value={look.nameIn} onChange={(e) => set({ nameIn: Math.max(0.25, +e.target.value || 0) })} /></div>}
               {look.show !== "name" && <div className="field"><label htmlFor="nnb-mh">Numbers (in. tall)</label><input id="nnb-mh" type="number" min={1} max={14} step={0.5} value={look.numIn} onChange={(e) => set({ numIn: Math.max(0.5, +e.target.value || 0) })} /></div>}
-              {look.show === "both" && <div className="field"><label htmlFor="nnb-g">Space between lines (in.)</label><input id="nnb-g" type="number" min={0} max={4} step={0.25} value={look.gapIn} onChange={(e) => set({ gapIn: Math.max(0, +e.target.value || 0) })} /></div>}
+              {look.show === "both" && <div className="field"><label htmlFor="nnb-g">Line gap (in.)</label><input id="nnb-g" type="number" min={0} max={4} step={0.25} value={look.gapIn} onChange={(e) => set({ gapIn: Math.max(0, +e.target.value || 0) })} /></div>}
             </div>
             {/* spacing the letters out (Oct 31, Nick): a slider for the room between letters, or every name spread to a width */}
             {look.show !== "number" && <div className="nnb-sp">
