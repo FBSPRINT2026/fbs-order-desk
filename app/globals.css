@@ -13536,6 +13536,19 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 .pdx-track .pdx-track-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 .pl-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:4px 0 4px}
 .pl-head h2{margin:0;font-family:var(--display);font-size:20px}
+/* a title with its sub text and buttons beside it (Nov 1, Nick: "this header… sub text should drop underneath when it
+   gets too long"): on a phone the title keeps the row with its buttons and the sub text runs the full width under both,
+   instead of wrapping to three lines in the narrow column beside the buttons */
+@media (max-width:640px){
+  .portal :is(.page-head,.pl-head):has(> div:first-child > :is(h1,h2):first-child + .eyebrow){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:4px;align-items:start}
+  .portal :is(.page-head,.pl-head):has(> div:first-child > :is(h1,h2):first-child + .eyebrow) > div:first-child{display:contents}
+  .portal :is(.page-head,.pl-head):has(> div:first-child > :is(h1,h2):first-child + .eyebrow) > div:first-child > :not(:first-child){grid-column:1 / -1;grid-row:auto}
+  .portal :is(.page-head,.pl-head):has(> div:first-child > :is(h1,h2):first-child + .eyebrow) > div:first-child > :first-child{grid-column:1;grid-row:1;align-self:center}
+  .portal :is(.page-head,.pl-head):has(> div:first-child > :is(h1,h2):first-child + .eyebrow) > :not(div:first-child){grid-column:2;grid-row:1}
+}
+/* a panel's note beside its title keeps clear of the title's underline, which runs 36px past the title (on a narrow
+   screen the note drops under it) */
+.portal .panel-h{column-gap:44px}
 @media print{.portal .aa-nav,.pl-head .row{display:none!important}}
 /* the left column: the assistant, with Order tracking under it (Oct 24, Nick's mock-up) */
 .pdx-left>.pdx-asst{flex:0 0 auto}

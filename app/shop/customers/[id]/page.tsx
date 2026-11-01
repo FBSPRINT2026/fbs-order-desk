@@ -1,7 +1,9 @@
 "use client";
 import { archiveMyMockup } from "@/app/portal/actions";
 import { oneOfEach } from "@/lib/mockupList";
-import { logoShirtsFrom } from "@/lib/logoShirts";
+import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/lib/logoShirts";
+import { colorHex, deltaE } from "@/lib/inkColors";
+import { guessHex } from "@/lib/mockup";
 import BackLink from "@/components/BackLink";
 import CustomerProductionFiles from "@/components/CustomerProductionFiles";
 import CustomerBrands from "@/components/CustomerBrands";
@@ -188,6 +190,25 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const os = orders.filter((o) => o.customer_id === id);
   // the shirt color each logo was printed on (newest order first), for its card instead of a checkerboard (Oct 16)
   const logoShirts = logoShirtsFrom(os);
+  // how each logo last printed, so the Artwork cards look the way it ran (the same as the shop's Artwork page and the
+  // customer's portal, Nov 1): its ink map on that shirt, or the mockup's own picture of it
+  const printedKey = os.map((o) => o.id).join(",");
+  const [logoLooks, setLogoLooks] = useState<Record<string, { printed?: LogoPrint; shown?: { url: string; shirt: string } }>>({});
+  useEffect(() => {
+    let live = true;
+    const looks: Record<string, { printed?: LogoPrint; shown?: { url: string; shirt: string } }> = {};
+    for (const [k, p] of Object.entries(logoPrintFrom(os as never[], (x) => colorHex(x) || guessHex(x), deltaE))) looks[k] = { printed: p };
+    setLogoLooks({ ...looks });
+    const sh = logoShownFrom(os as never[]), paths = [...new Set(Object.values(sh).map((x) => x.path))];
+    if (paths.length) createClient().storage.from("proofs").createSignedUrls(paths, 3600).then(({ data: sg }) => {
+      if (!live) return;
+      const at = Object.fromEntries((sg || []).map((x, i) => [paths[i], x.signedUrl || ""]));
+      for (const [k, v] of Object.entries(sh)) if (at[v.path]) looks[k] = { ...(looks[k] || {}), shown: { url: at[v.path], shirt: looks[k]?.printed?.shirt || v.shirt } };
+      setLogoLooks({ ...looks });
+    });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the orders' ids say when they changed
+  }, [printedKey]);
   const spent = os.filter((o) => orderCountsAsSale(o as { type: string; status: string; source?: string })).reduce((a, o) => a + o.total, 0) + archive.filter((a) => pvCountsAsSale(a.kind, a.status_name)).reduce((s, a) => s + (+a.total || 0), 0);
   const owed = os.filter((o) => o.type === "invoice").reduce((a, o) => a + Math.max(0, o.balance), 0);
 
@@ -356,7 +377,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           ...archive.map((a) => archiveAsOrder(a, `/shop/archive/${a.id}`))]} terms={PAY_TERMS[c.payment_terms || "receipt"]} payments={[...payments, ...archive.flatMap((a) => archivePayments(a, `/shop/archive/${a.id}`))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at))} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
         hrefBase="/shop/orders/"
         onSend={async (body) => { const r = await staffCustomerMessage(id, body); if (r.ok) setReload((n) => n + 1); return r; }}
-        logoShirts={logoShirts} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onDeleteForever={async (did) => { const r = await deleteDesignForever(did); if (r.ok) setDesigns((ds) => ds.filter((x) => x.id !== did)); return r; }}
+        logoShirts={logoShirts} logoLooks={logoLooks} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onDeleteForever={async (did) => { const r = await deleteDesignForever(did); if (r.ok) setDesigns((ds) => ds.filter((x) => x.id !== did)); return r; }}
         onArchiveMockup={archiveMyMockup}
         onStarMockup={async (mid, starred) => { const { error } = await createClient().rpc("set_mockup_star", { p_mockup: mid, p_starred: starred }); return { ok: !error, error: error?.message }; }}
         onUploadLogos={async (files, star, progress) => {

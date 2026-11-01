@@ -31,6 +31,9 @@ import { loadGoodsItems } from "@/lib/goodsServer";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction, storedPath } from "@/lib/archive";
 import { fmtPhone } from "@/lib/phone";
 import PortalDesignCatalog from "@/components/PortalDesignCatalog";
+import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/lib/logoShirts";
+import { colorHex, deltaE } from "@/lib/inkColors";
+import { guessHex } from "@/lib/mockup";
 
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string; c?: string }> }) {
   const { as, c: startConvo } = await searchParams;
@@ -49,6 +52,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   let payments: APayment[] = [], designs: Design[] = [], mockups: AMockup[] = [], messages: AMessage[] = [];
   const usedIds: string[] = [];
   const designUrls: Record<string, string> = {};
+  // how each logo last printed, so the Artwork cards look the way it ran (lib/logoShirts.ts, as the shop's Artwork page)
+  let logoShirts: Record<string, string> = {};
+  const logoLooks: Record<string, { printed?: LogoPrint; shown?: { url: string; shirt: string } }> = {};
   // the queries that only need the customer, started together up front (Oct 24, Nick: "the customer portal is slow")
   const cids = ctx.customerIds;
   const early = cids.length ? {
@@ -93,6 +99,14 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     if (withPv.length) {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(withPv.map((x) => x.preview_path), 3600);
       withPv.forEach((x, i) => { if (sg?.[i]?.signedUrl) designUrls[x.id] = sg[i].signedUrl!; });
+    }
+    logoShirts = logoShirtsFrom(orders);
+    for (const [id, p] of Object.entries(logoPrintFrom(orders, (c) => colorHex(c) || guessHex(c), deltaE))) logoLooks[id] = { printed: p };
+    const sh = logoShownFrom(orders), shPaths = [...new Set(Object.values(sh).map((x) => x.path))];
+    if (shPaths.length) {
+      const { data: sg } = await admin.storage.from("proofs").createSignedUrls(shPaths, 3600);
+      const at = Object.fromEntries((sg || []).map((x, i) => [shPaths[i], x.signedUrl || ""]));
+      for (const [id, v] of Object.entries(sh)) if (at[v.path]) logoLooks[id] = { ...(logoLooks[id] || {}), shown: { url: at[v.path], shirt: logoLooks[id]?.printed?.shirt || v.shirt } };
     }
     const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null; shelved_at?: string | null }[]);
     if (ml.length) {
@@ -376,7 +390,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             onPaySelect={aiPaySelect}
             statementHref={`/portal/statement${qs}`}
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} projects={projects.map((p) => ({ id: p.id, name: p.name, href: `/portal/projects/${p.id}${qs}` }))} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
-            orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} mockups={mockups} messages={messages}
+            orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} logoShirts={logoShirts} logoLooks={logoLooks} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
             onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup} drafts={drafts} onDiscardDraft={discardRequest} settingsHref={`/portal/settings${qs}`} pricingPanel={ctx.customers.some((c) => c.price_type === "wholesale") ? <PortalPricing pl={priceList(ctx.settings, "wholesale")} company={ctx.customers[0]?.company || ctx.customers[0]?.name || ""} phone={ctx.settings.shop.phone || ""} msgHref={msgLink(null)} /> : undefined}
             terms={PAY_TERMS[acct?.payment_terms || "receipt"]}

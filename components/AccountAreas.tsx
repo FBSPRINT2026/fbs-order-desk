@@ -5,7 +5,7 @@ import { colorHex } from "@/lib/inkColors";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArtSearchContext } from "@/components/ArtSearchContext";
 import Link from "next/link";
-import { LogoFace, LogoPic, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
+import { LogoFace, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import MockupOrderButton from "@/components/MockupOrderButton";
 import { ST, type Design } from "@/lib/pricing";
@@ -78,7 +78,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
@@ -129,6 +129,10 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
   onStar?: (designId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** the shirt color each logo was printed on (its latest order), for the card's background */
   logoShirts?: Record<string, string>;
+  /** how each logo last printed (lib/logoShirts.ts logoPrintFrom / logoShownFrom): the mockup's picture of it, signed, or
+   *  its ink map on that shirt, so the cards look the way it ran, as on the shop's Artwork page (Nov 1, Nick: "didn't we
+   *  make it so these artworks looked more like they do on the shirts") */
+  logoLooks?: Record<string, { printed?: { shirt: string; map?: Record<string, { hex: string; name: string }>; ink?: string }; shown?: { url: string; shirt: string } }>;
   /** shop: bring logos in for future use (Oct 16, Nick: "a good thing to knock out when we're transitioning them") */
   onUploadLogos?: (files: File[], star: boolean, progress: (done: number) => void) => Promise<string | void>;
   /** logos on a mockup or order: archive only, no delete */
@@ -906,7 +910,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     };
     const card = (d: Design, isArchived: boolean) => { const views = onShirtsOf(d); return (
       <div key={d.id} className={"design-card" + (d.starred ? " starred" : "") + (isArchived ? " archived" : "")}>
-        <div className="dc-img">{designUrls[d.id] ? <LogoPic url={designUrls[d.id]} alt={d.name} shirt={logoShirts[d.id]} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
+        <div className="dc-img">{designUrls[d.id] ? <LogoFace d={d} urls={designUrls} shirt={logoShirts[d.id]} shown={logoLooks[d.id]?.shown || null} printed={logoLooks[d.id]?.printed || null} /> : <span>{(d.file_name.split(".").pop() || "file").toUpperCase()}</span>}
           {/* how it looks on their shirt colors (Oct 16, Nick: a portfolio of their logos), picked in the strip below */}
           {(() => { const k = shirtSel[d.id] ?? 0, v = views[k], own = v?.path ? designUrls[v.path] : ""; return v && designUrls[d.id] ? <ShirtView className="main" url={own || designUrls[d.id]} shirt={v.shirt} ink={own ? "Original colors" : v.ink} /> : null; })()}
           {/* archive top left, the star top right (Oct 24, Nick: "make the archive button on the top left, like the opposite
@@ -995,7 +999,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         <div className="aa-attn-t">Logos</div>
         {favs.map((d) => (
           <div key={d.id} className="aa-fav">
-            {designUrls[d.id] ? <span className="aa-fav-pic"><LogoFace d={d} urls={designUrls} shirt={logoShirts[d.id]} /></span> : <span className="aa-fav-ph">{(d.file_name.split(".").pop() || "").toUpperCase()}</span>}
+            {designUrls[d.id] ? <span className="aa-fav-pic"><LogoFace d={d} urls={designUrls} shirt={logoShirts[d.id]} shown={logoLooks[d.id]?.shown || null} printed={logoLooks[d.id]?.printed || null} /></span> : <span className="aa-fav-ph">{(d.file_name.split(".").pop() || "").toUpperCase()}</span>}
             <span className="aa-fav-t">{mode === "shop" ? <Link href={`/shop/artwork/${d.id}`}><b>D-{d.number}</b></Link> : <b>D-{d.number}</b>}<span>{d.name || "Logo"}</span></span>
             {onStar && <button type="button" className="dc-star on" title="Remove from favorites" aria-label="Remove from favorites" onClick={() => star(d)}>★</button>}
           </div>
