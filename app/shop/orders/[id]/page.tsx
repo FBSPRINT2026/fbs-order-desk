@@ -546,7 +546,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (frozen) {
       if (!on) return;
       const unfold = (d: Order) => d.groups.forEach((g) => g.lines.forEach((l) => {
-        if (!l.prog || l.prog.base == null || !l.prog.adds || l.progOff || l.priceOverride !== l.prog.each) return;
+        // the price still the folded one, or typed back to the base by hand (then only the stale extra is cleared)
+        if (!l.prog || l.prog.base == null || !l.prog.adds || l.progOff || (l.priceOverride !== l.prog.each && l.priceOverride !== l.prog.base)) return;
         if (finishingExtra(d, g, false)) return;
         const base = l.prog.base;
         l.prog = { each: base, note: l.prog.note.split(" + ")[0] };
