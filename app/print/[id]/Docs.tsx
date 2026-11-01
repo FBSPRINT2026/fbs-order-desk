@@ -160,15 +160,21 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
     const lines = g.lines.filter((l) => lineQty(l) > 0 || g.lines.length === 1);
     const first = gi === 0;
     const gc = c.groups[gi];
+    // the ship-to on one line, and a note that only says the ship method it already says dropped (Oct 31, #40336: "Ship
+    // FedEx Ground." over a five-line ship-to that ended "(FedEx Ground)" spilled the notes onto a second page)
+    const shipM = (o.ship_method || "").trim().toLowerCase();
+    const notes0 = first && p.notes ? p.notes.split("\n").filter((ln) => !(shipM && /^\s*ship(ping)?\s*(via|method|by)?:?\s*/i.test(ln) && ln.toLowerCase().replace(/^\s*ship(ping)?\s*(via|method|by)?:?\s*/, "").replace(/[.\s]+$/, "") === shipM)).join("\n").replace(/\n{3,}/g, "\n\n").trim() : "";
     const noteParts = [
-      first && p.notes ? p.notes : "",
+      notes0,
       gc?.finishing.length ? `Finishing: ${gc.finishing.map((f) => f.name).join(", ")}` : "",
       neckLine(cust, g, gc?.finishing || []),
-      first && o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to}${o.ship_method || isThirdParty(o) ? ` (${[o.ship_method, isThirdParty(o) ? thirdPartyLabel(o.third_party, true) : ""].filter(Boolean).join(", ")})` : ""}` : "",
+      first && o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to.split(/\s*\n+\s*/).filter(Boolean).join(", ")}${o.ship_method || isThirdParty(o) ? ` (${[o.ship_method, isThirdParty(o) ? thirdPartyLabel(o.third_party, true) : ""].filter(Boolean).join(", ")})` : ""}` : "",
     ].filter(Boolean);
     const extra = first ? p.shopNotes.length + (p.cust.brand_print?.rules || []).length : 0;
     const noteText = noteParts.join("\n\n");
-    const longNotes = noteText.length + extra * 120 > 380 || noteText.split("\n").length + extra > 6;
+    // how many printed lines the notes take (a long line wraps at about 100 characters), not how many lines they're typed in
+    const vis = noteText.split("\n").reduce((n, ln) => n + Math.max(1, Math.ceil(ln.length / 100)), 0);
+    const longNotes = noteText.length + extra * 120 > 520 || vis + extra * 2 > 8;
     const more: (typeof lines)[] = [];
     for (let i = WO_FIRST; i < lines.length; i += 10) more.push(lines.slice(i, i + 10));
     // only the customer's own transfers (Oct 27, Nick: "you need really just two, a count in and then… the mock-up large,
@@ -181,7 +187,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
     // …but it still shows on the first page (Oct 30, #40284 said "No mockup yet" with a mockup made): the picture, no page
     const firstMk = logoMk ? (p.mockups[gi] || []).slice(0, 1) : mk;
     // notes too long to sit under the mockup get their own page (Oct 27, Nick: "they're flowing over… going everywhere")
-    const veryLong = noteText.length + extra * 120 > 650 || noteText.split("\n").length + extra > 9;
+    const veryLong = noteText.length + extra * 120 > 900 || vis + extra * 2 > 13;
     const notesPage = longNotes && (!mk.length || veryLong);
     const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
     const vars = g.imprints.map((d) => variantsOf(d, colorList));
