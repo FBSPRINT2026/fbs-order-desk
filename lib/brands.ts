@@ -142,8 +142,19 @@ export function isDarkGarment(l: Pick<GLine, "color"> & { hex?: string | null })
 }
 
 /** light or dark goods for a brand's logos: what the brand learned for this color (BrandRules.goods), else the color read */
+/** what a brand learned for a garment color (BrandRules.goods), however the color is spelled: "Gray Steel" is the "grey
+ *  steel" it learned (Oct 31, #40331: missed, so a Gray Steel jacket got the dark-goods version) */
+export function goodsFor(brand: Pick<Brand, "rules"> | null | undefined, color: string): string | undefined {
+  const goods = brand?.rules?.goods;
+  if (!goods) return undefined;
+  const c = (color || "").trim().toLowerCase();
+  if (goods[c]) return goods[c];
+  const k = (x: string) => x.toLowerCase().replace(/grey/g, "gray").replace(/[^a-z0-9]+/g, " ").trim();
+  const want = k(c);
+  return want ? Object.entries(goods).find(([x]) => k(x) === want)?.[1] : undefined;
+}
 export function brandDark(brand: Pick<Brand, "rules"> | null | undefined, l: Pick<GLine, "color"> & { hex?: string | null }): boolean {
-  const g = brand?.rules?.goods?.[(l.color || "").trim().toLowerCase()];
+  const g = goodsFor(brand, l.color || "");
   if (g === "dark" || g === "light") return g === "dark";
   // a color with a version of its own: dark when that version is the brand's dark one
   const k = (s?: string) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
@@ -159,7 +170,7 @@ export function brandDark(brand: Pick<Brand, "rules"> | null | undefined, l: Pic
  */
 export function goodsColorway(d: Pick<Design, "specs">, brand: Pick<Brand, "rules"> | null | undefined, lines: Pick<GLine, "color">[]): Colorway | null {
   const k = (s?: string) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
-  const names = [...new Set(lines.filter((l) => (l.color || "").trim()).map((l) => brand?.rules?.goods?.[(l.color || "").trim().toLowerCase()] || ""))];
+  const names = [...new Set(lines.filter((l) => (l.color || "").trim()).map((l) => goodsFor(brand, l.color || "") || ""))];
   if (names.length !== 1 || !names[0] || names[0] === "light" || names[0] === "dark") return null;
   return colorwaysOf(d).find((c) => k(c.name) === k(names[0])) || null;
 }
@@ -396,8 +407,10 @@ export function withMethod(im: Imprint, method: Method, d: Pick<Design, "id" | "
 /** the sew file for a print: the one linked to the colorway the brand's rule picks for these goods (same kind of goods),
  *  else the best fit by kind and size (pickSewFile) */
 export function sewForPrint(d: Pick<Design, "specs">, brand: Brand | null | undefined, dark: boolean, kind: SewKind, wantW?: number, /** a version the goods take (goodsColorway) */ cw?: Colorway | null): SewFile | null {
-  const linked = colorwaySew(d, cw || colorwayFor(d, brand, dark), brand);
-  if (linked && (linked.kind || "flat") === kind) return linked;
+  // the version first, then the goods' kind (Oct 31, #40331: fleece jackets on light goods have no fleece file, and the
+  // first file on the logo, the dark-goods version, was sewn instead): that version's file for these goods, else its own
+  const linked = colorwaySew(d, cw || colorwayFor(d, brand, dark), brand, kind);
+  if (linked) return linked;
   return pickSewFile(sewFilesOf(d, brand), kind, wantW);
 }
 
@@ -415,10 +428,12 @@ export function pickSewFile(files: SewFile[], kind: SewKind, wantW?: number): Se
  * print was made, so the work order painted the flat art in thread colors and said "7,500 (est.)"). A print with its own
  * file keeps it; one without takes its logo's file for its goods and size (pickSewFile), with that file's stitches.
  */
-export function withSewFile<T extends Pick<Imprint, "method" | "emb" | "size" | "stitches">>(im: T, design: Pick<Design, "specs"> | null | undefined, lines: Pick<GLine, "garment" | "style" | "brand">[]): T {
+export function withSewFile<T extends Pick<Imprint, "method" | "emb" | "size" | "stitches"> & { colorway?: string }>(im: T, design: Pick<Design, "specs"> | null | undefined, lines: Pick<GLine, "garment" | "style" | "brand">[]): T {
   if (im.method !== "embroidery" || im.emb?.file || !design) return im;
   const w = /(\d+(?:\.\d+)?)/.exec(im.size || "");
-  const f = pickSewFile(sewFilesOf(design), sewKindOf(lines), w ? +w[1] : undefined);
+  // the print's version's file when it has one (never another version's because it came first)
+  const cw = im.colorway ? colorwaysOf(design).find((c) => c.name.toLowerCase().replace(/[^a-z0-9]/g, "") === im.colorway!.toLowerCase().replace(/[^a-z0-9]/g, "")) : null;
+  const f = (cw && colorwaySew(design, cw, undefined, sewKindOf(lines))) || pickSewFile(sewFilesOf(design), sewKindOf(lines), w ? +w[1] : undefined);
   if (!f) return im;
   return { ...im, emb: { ...(im.emb || {}), file: f, stitchesFrom: "file" }, stitches: f.stitches || im.stitches };
 }

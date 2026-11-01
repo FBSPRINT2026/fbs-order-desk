@@ -5,7 +5,7 @@ import { officeText } from "@/lib/officeText";
 import { finishingList, lineQty, mergeSettings, orderGroups, persOf, priceList, SIZES, type Design, type GLine, type Group, type Order, type PriceType } from "@/lib/pricing";
 import { hasSpotChange, spotLines } from "@/lib/spotChange";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
-import { colorwayOnColor, type BrandRules } from "@/lib/brands";
+import { colorwayOnColor, colorwaysOf, type BrandRules } from "@/lib/brands";
 import { customerTrainings, DEFAULT_FIELDS, SHIP_SAID, trainingsForText, type DefaultField, type TrainingDefaults } from "@/lib/orderTrainings";
 
 /**
@@ -265,8 +265,11 @@ export async function learnBrandLooks(admin: SupabaseClient, order: Order, /** w
         const cw = cw0 && flat(cw0).trim() && said.includes(flat(cw0)) ? undefined : cw0;
         // the brand's full-color pair says light or dark; any other version staff put on a color it wasn't asked for by name
         // is that color's own (Oct 31, #40328: All Black on the hi-vis Brite Lime when the cart said Full Color)
+        // (only a logo that has the brand's light and dark versions: the MEI Icon's Full Color is just "Maroon", which says
+        // nothing about the color it's on, Oct 31: it taught Blacktop "Maroon")
+        const pair = [r.light, r.dark].every((x) => x && colorwaysOf(d).some((y) => cwKey(y.name) === cwKey(x)));
         const side = cw && cwKey(cw) === cwKey(r.light) ? "light" : cw && cwKey(cw) === cwKey(r.dark) ? "dark"
-          : cw && askedFull ? cw : cw && cwKey(cw) === cwKey(r.one_light) ? "light" : cw && cwKey(cw) === cwKey(r.one_dark) ? "dark" : null;
+          : cw && askedFull && pair ? cw : cw && cwKey(cw) === cwKey(r.one_light) ? "light" : cw && cwKey(cw) === cwKey(r.one_dark) ? "dark" : null;
         if (side && r.goods?.[c] !== side) { r.goods = { ...(r.goods || {}), [c]: side }; changed.add(bid); }
       }
     }
