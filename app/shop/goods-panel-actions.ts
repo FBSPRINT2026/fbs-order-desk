@@ -202,7 +202,7 @@ export async function openSupplies(): Promise<{ ok: true; rows: OpenSupply[] } |
     const admin = createAdminClient();
     const { data } = await admin.from("order_supplies").select("*, orders(id, number, nickname, due_date, status, customers(company, name))").in("status", ["waiting", "on_way"]).order("created_at").limit(500);
     type R = SupRow & { order_id: string; orders: { id: string; number: number; nickname: string | null; due_date: string | null; status: string; customers: { company: string | null; name: string | null } | null } | null };
-    const rows = ((data || []) as unknown as R[]).filter((x) => x.orders && !["completed", "canceled", "cancelled"].includes(x.orders.status)).map((x) => ({
+    const rows = ((data || []) as unknown as R[]).filter((x) => x.orders && !["completed", "void", "canceled", "cancelled"].includes(x.orders.status)).map((x) => ({
       ...supOf(x), orderId: x.order_id, number: x.orders!.number, nickname: x.orders!.nickname || "", customer: x.orders!.customers?.company || x.orders!.customers?.name || "", due: x.orders!.due_date,
     }));
     rows.sort((p, q) => (p.due || "9999").localeCompare(q.due || "9999"));

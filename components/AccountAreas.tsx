@@ -166,7 +166,12 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
   // shop (Oct 21, Nick: "the dashboard can be dashboard and orders… it just needs to be simpler"): Quotes and Orders are
   // the Orders tab's Active / Quotes / Done; Texts are in Conversations; Details is a panel the page opens
   const shopArea: Record<string, Area> = { quotes: "home", orders: "home", invoices: "home", texts: "messages", details: "home" };
-  const area: Area = mode === "portal" && rawArea === "quotes" ? "orders" : mode === "shop" ? shopArea[rawArea] || rawArea : rawArea;
+  // the portal's other names for its areas (a link or a bookmark saying "goods" or "art"); an area this page doesn't have
+  // opens the dashboard instead of a blank page (Oct 31: ?area=goods showed nothing but the header)
+  const portalArea: Record<string, Area> = { quotes: "orders", goods: "receive", art: "artwork", artwork: "artwork", payment: "payments", pricing: "pricing" };
+  const KNOWN = ["home", "orders", "payments", "artwork", "messages", "receive", "projects", "program", "pricing", "settings", "designs"];
+  const area0: Area = mode === "portal" ? (portalArea[rawArea] || rawArea) : shopArea[rawArea] || rawArea;
+  const area: Area = mode === "portal" && !KNOWN.includes(area0) ? "home" : area0;
   // All (quotes and orders, newest first, like Printavo), Quotes, Completed (Oct 21, Nick)
   const [ordF, setOrdF] = useSticky<"all" | "quotes" | "completed">("customer.orderList", "all");
   const oFilter: "all" | "quotes" | "completed" = mode === "shop" && rawArea === "quotes" ? "quotes" : ["all", "quotes", "completed"].includes(ordF) ? ordF : "all";

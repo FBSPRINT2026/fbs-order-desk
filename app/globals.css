@@ -8777,6 +8777,11 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
   .ar-stage,.ar-pr{grid-template-columns:minmax(0,1fr)}
   .ar-mk{min-height:0}
 }
+/* the art on the shirt is drawn for a 504px-wide box (380px of art plus its measurements): narrower, the whole drawing
+   shrinks to fit instead of its size labels being cut off at the edge (Oct 31, phone check of the proof review) */
+@media (max-width:640px){.ar-cl{zoom:.75}}
+@media (max-width:440px){.ar-cl{zoom:.64}}
+@media (max-width:380px){.ar-cl{zoom:.58}}
 
 /* old Printavo jobs: the items table fits its card, no sideways scroll (Oct 15, Nick): tighter cells, the
    description wraps, headers may wrap; money and sizes stay on one line */
@@ -8831,6 +8836,8 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 .pdx-asst .pa-in input{font-size:15px}
 .pdx-asst .pa-ideas{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;overflow:visible}
 .pdx-asst .pa-ideas button,.pdx-asst .pa-person{font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:var(--surface);color:var(--ink-2);flex:0 1 auto;max-width:none;white-space:nowrap;overflow:visible}
+/* a long idea ("Where's my MEI Store Holly Gardner Cart #97908152 order?") wraps inside the card on a phone instead of running off it (Oct 31) */
+.pdx-asst .pa-ideas button{max-width:100%;white-space:normal;text-align:left}
 .pdx-asst .pa-person{color:#0a7fb3;border-color:#cfe6f3;font-weight:700;text-decoration:none}
 .pdx-asst .pa-talk{max-height:300px}
 .pdx-badge{background:var(--fbs-salmon);color:#fff;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:700}
@@ -8950,6 +8957,8 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 .portal .gc{border:1px solid var(--line);border-radius:14px;padding:16px 18px;gap:12px;position:relative;overflow:hidden}
 .portal .gc::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--gc)}
 .portal .gc-t b{font-family:var(--display);font-stretch:85%;font-weight:800;font-size:22px;line-height:1.15}
+/* a job's name wraps to a second line instead of being cut to "MEI Store V…" in the order page's narrow side card (Oct 31) */
+.portal .gc-t b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
 .portal .gc-no{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
 .portal .gc-sub{font-size:13.5px;color:var(--ink-2);margin-top:2px}
 .portal .gc-st{font-size:12.5px}
