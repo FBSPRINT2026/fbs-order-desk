@@ -17175,4 +17175,8 @@ table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label="
   .tbl :is(th,td).ol-bal{display:none!important}
   .ol-paid{display:inline-grid;place-items:center;width:18px;height:18px;margin-left:6px;border-radius:50%;background:var(--ok);color:#fff;font-size:11.5px;font-weight:800;line-height:1;vertical-align:1px}
   .ol-paid.part{background:none;color:var(--ok);box-shadow:inset 0 0 0 1.5px var(--ok)}
+  /* the order card without its Balance: the pieces move into the balance's spot, on the right under the total */
+  html body main.main table.m-card tr:has(> td[data-label="Job"]):has(> td.ol-bal){grid-template-areas:"num job job tot" "num cust cust pcs" "num stat stat due"}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Pcs"]{text-align:right!important}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Total"]{overflow:visible!important}
 }
