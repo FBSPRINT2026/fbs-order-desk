@@ -1,5 +1,6 @@
 "use server";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
+import { allRows } from "@/lib/readAll";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
@@ -13,7 +14,7 @@ async function me() {
   const { supabase, user, email, isStaff } = await getViewer();
   if (!user) throw new Error("Please sign in again.");
   if (isStaff) throw new Error("This is a preview. Use Report an issue in the shop menu.");
-  const { data: cs } = await supabase.from("customers").select("id, company, name");
+  const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, company, name").order("id").range(ra, rb));
   const c = (cs || [])[0] as { id: string; company: string | null; name: string | null } | undefined;
   if (!c) throw new Error("We couldn't find your account.");
   return { c, email, admin: createAdminClient() };

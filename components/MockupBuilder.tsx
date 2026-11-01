@@ -1,5 +1,6 @@
 "use client";
 import BackLink from "@/components/BackLink";
+import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
@@ -601,7 +602,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         }
         return;
       }
-      const [cat, cu] = await Promise.all([sb.from("garments").select("*"), sb.from("customers").select("*")]);
+      const [cat, cu] = await Promise.all([sb.from("garments").select("*"), allRows((a, b) => sb.from("customers").select("*").order("id").range(a, b))]);
       setCatalog((cat.data || []) as Garment[]);
       setCustomers(((cu.data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
       if (!orderId && reopenId) await reopenMockup();

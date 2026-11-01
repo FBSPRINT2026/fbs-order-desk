@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { allRows } from "@/lib/readAll";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -15,7 +16,7 @@ async function me() {
   const { supabase, user, email, isStaff } = await getViewer();
   if (!user) throw new Error("Please sign in again.");
   if (isStaff) throw new Error("This is a preview. Customers do this from their own login.");
-  const { data: cs } = await supabase.from("customers").select("id, name, company, price_type, tax_exempt");
+  const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, name, company, price_type, tax_exempt").order("id").range(ra, rb));
   const cust = (cs || [])[0];
   if (!cust) throw new Error("We couldn't find your account.");
   return { supabase, email, cust, admin: createAdminClient() };

@@ -1,5 +1,6 @@
 "use client";
 import VersionTag from "@/components/VersionTag";
+import { allRows } from "@/lib/readAll";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { recordVisit, touchCurrent } from "@/lib/navTrail";
@@ -261,7 +262,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     getInboxUnread().then((r) => { if (r.ok) setMailNew(r.unread); }, () => null);
     if (realRole === "owner") qboProblemCount().then((r) => setQbProblems(r.n), () => null);
     // 40,000-series orders with Printavo changes waiting to be accepted (the owner's view only)
-    if (realRole === "owner") Promise.all([sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
+    if (realRole === "owner") Promise.all([allRows((a, b) => sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000).order("id").range(a, b)), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
       .then(async ([{ data }, { data: st }]) => {
         const s = mergeSettings(st?.data), os = (data || []) as Order[];
         const { data: oi } = os.length ? await sb.from("order_internal").select("order_id, production_notes").in("order_id", os.map((o) => o.id)) : { data: [] };

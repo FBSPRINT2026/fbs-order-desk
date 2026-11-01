@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allRows } from "@/lib/readAll";
 import { orderGroups, type Order } from "@/lib/pricing";
 import { sizeKey, PV, mixedBoxes, type MixedBox } from "@/lib/manifest";
 import { goodsFromPrintavo, type PvSnap } from "@/lib/printavoSend";
@@ -87,10 +88,12 @@ const CLOSED = /job\s*completed|quote|cancel|closed/i;
  */
 export async function checkinJobs(admin: SupabaseClient, from: string, to: string, only?: { kind: "o" | "a"; id: string }): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
   const lo = addDays(from, -21), hi = addDays(to, 30);
-  const pvQ = admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)");
+  // a fresh query each time it's used (a query is changed by each filter put on it: one can't be read page after page)
+  const pvQ0 = () => admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)");
+  const pvQ = pvQ0();
   const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name), printavo_id, pv:printavo_state->pv, pv_status:printavo_state->>status");
   const [{ data: pv, error: e1 }, { data: os, error: e2 }, { data: open, error: e3 }] = await Promise.all([
-    only ? (only.kind === "a" ? pvQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : pvQ.gte("due_date", lo).lte("due_date", hi).limit(1500),
+    only ? (only.kind === "a" ? pvQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : allRows((ra, rb) => pvQ0().gte("due_date", lo).lte("due_date", hi).order("id").range(ra, rb), 3000),
     only ? (only.kind === "o" ? oQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : oQ.not("status", "in", "(completed,quote,quote_sent,request)").limit(800),
     admin.from("goods_checkins").select("order_id, archived_order_id").eq("status", "issue").is("resolved_at", null).limit(500),
   ]);

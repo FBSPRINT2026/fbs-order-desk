@@ -1,5 +1,6 @@
 "use server";
 import { orderSubject } from "@/lib/orderSubject";
+import { allRows } from "@/lib/readAll";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -136,8 +137,8 @@ export async function shopMessages(customerId: string): Promise<{ ok: boolean; e
     const admin = createAdminClient();
     const { data: os } = await admin.from("orders").select("id").eq("customer_id", customerId);
     const oids = (os || []).map((o) => o.id);
-    const { data } = await admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
-      .or(`customer_id.eq.${customerId}${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").limit(2000);
+    const { data } = await allRows((ra, rb) => admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
+      .or(`customer_id.eq.${customerId}${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").order("id").range(ra, rb));
     const messages = await withFiles(data || [], async (paths) => {
       const { data: s } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
       return (s || []).map((x) => x.signedUrl || null);

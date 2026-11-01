@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import { allRows } from "@/lib/readAll";
 import { createClient } from "@/lib/supabase/client";
 import { mergeSettings, orderGroups, type Customer, type Order, type Settings } from "@/lib/pricing";
 import { withPrivate } from "@/lib/crm/private";
@@ -21,9 +22,9 @@ export function useShopData() {
   const load = useCallback(async () => {
     const sb = createClient();
     const [o, c, p, m, s] = await Promise.all([
-      sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type,submitted_at,approved_at,sent_at,completed_at,project_id,printavo_id,pv_status:printavo_state->>status").eq("draft", false).is("discarded_at", null).order("number", { ascending: false }),
-      sb.from("customers").select("*"),
-      sb.from("payments").select("order_id,amount"),
+      allRows((a, b) => sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type,submitted_at,approved_at,sent_at,completed_at,project_id,printavo_id,pv_status:printavo_state->>status").eq("draft", false).is("discarded_at", null).order("number", { ascending: false }).order("id").range(a, b)),
+      allRows((a, b) => sb.from("customers").select("*").order("id").range(a, b)),
+      allRows((a, b) => sb.from("payments").select("order_id,amount").order("id").range(a, b)),
       sb.from("messages").select("order_id").eq("author_type", "customer").is("read_at", null),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);

@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { allRows } from "@/lib/readAll";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fmtPhone } from "@/lib/phone";
@@ -15,7 +16,7 @@ async function me() {
   const { supabase, user, email, isStaff } = await getViewer();
   if (!user) throw new Error("Please sign in again.");
   if (isStaff) throw new Error("This is a preview. Customers change their settings from their own login.");
-  const { data: cs } = await supabase.from("customers").select("id, company, name, email, phone, brand_logo");
+  const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, company, name, email, phone, brand_logo").order("id").range(ra, rb));
   const cust = (cs || [])[0] as { id: string; company: string | null; name: string | null; email: string | null; phone: string | null; brand_logo: string | null } | undefined;
   if (!cust) throw new Error("We couldn't find your account.");
   return { cust, email, admin: createAdminClient() };
@@ -77,7 +78,7 @@ export async function mySheetBrand() {
   try {
     const { supabase, user, isStaff } = await getViewer();
     if (!user) throw new Error("Please sign in again.");
-    const { data: cs } = await supabase.from("customers").select("id, company, name, email, phone, brand_logo");
+    const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, company, name, email, phone, brand_logo").order("id").range(ra, rb));
     const c = (cs || [])[0] as { company: string | null; name: string | null; email: string | null; phone: string | null; brand_logo: string | null } | undefined;
     if (!c || isStaff) return { ok: true as const, name: "", line: "", logoUrl: "" };
     const name = c.company || c.name || "";
@@ -99,7 +100,7 @@ const low = (s: string | null | undefined) => String(s || "").trim().toLowerCase
 async function company() {
   const { supabase, user, email, isStaff } = await getViewer();
   if (!user) throw new Error("Please sign in again.");
-  const { data: cs } = await supabase.from("customers").select("id, name, email, phone, contact2_name, contact2_email, contact2_phone");
+  const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, name, email, phone, contact2_name, contact2_email, contact2_phone").order("id").range(ra, rb));
   const c = (cs || [])[0] as { id: string; name: string | null; email: string | null; phone: string | null; contact2_name: string | null; contact2_email: string | null; contact2_phone: string | null } | undefined;
   if (!c) throw new Error("We couldn't find your account.");
   return { c, me: low(email), isStaff, admin: createAdminClient() };

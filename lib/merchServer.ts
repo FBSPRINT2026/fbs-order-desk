@@ -1,5 +1,6 @@
 import { AUTO_CUSTOMER_CONTACT } from "@/lib/customerContact";
 import "server-only";
+import { allRows } from "@/lib/readAll";
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
@@ -28,7 +29,7 @@ export async function merchAccess(): Promise<MerchAccess> {
   const settings = mergeSettings(s?.data);
   if (isStaff) return { admin, staff: true, email, customerIds: [], settings };
   // row security: only their own customer records come back
-  const { data: cs } = await supabase.from("customers").select("id, merch_client");
+  const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, merch_client").order("id").range(ra, rb));
   const ids = ((cs || []) as { id: string; merch_client: boolean }[]).filter((c) => c.merch_client).map((c) => c.id);
   if (!ids.length) throw new Error("Online stores aren't turned on for your account yet. Ask FBS Print to turn them on.");
   return { admin, staff: false, email, customerIds: ids, settings };

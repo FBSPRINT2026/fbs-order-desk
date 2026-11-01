@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { allRows } from "@/lib/readAll";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -319,7 +320,7 @@ function BringInArt() {
   /** where each Printavo job's embroidery went (read off its mockups) */
   const [usage, setUsage] = useState<Record<string, string[]>>({});
 
-  useEffect(() => { sb.from("customers").select("*").then(({ data }) => setCustomers(((data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))))); }, [sb]);
+  useEffect(() => { allRows((a, b) => sb.from("customers").select("*").order("id").range(a, b)).then(({ data }) => setCustomers(((data || []) as Customer[]).sort((a, b) => custLabel(a).localeCompare(custLabel(b))))); }, [sb]);
   const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
   async function loadDesigns(id: string) {
     const { data } = await sb.from("designs").select("*").eq("customer_id", id).eq("draft", false).order("number", { ascending: false });

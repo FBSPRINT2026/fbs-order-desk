@@ -92,7 +92,9 @@
   `.limit()` says, so the Time page's pay period, a mail folder, the dashboard's Printavo jobs and SanMar's styles were
   quietly cut at 1,000). Any read that can pass 1,000 rows goes through `readAll` / `allRows` from `lib/readAll.ts`
   with a fixed order (end with `.order("id")`). Run `node scripts/big-reads.mjs` after adding a query: it lists any
-  `.limit()` over 1,000 that isn't paged.
+  `.limit()` over 1,000 that isn't paged, and any growing table (orders, customers, logos, mockups, payments, messages…)
+  read whole in one go (Nov 1: logos grow 100+ a week; the shop's order list, the order page's customer list and the
+  Artwork page all read whole tables).
 - **Order reader rules.** When you change the email/PO order reader's rules (`lib/ai/emailOrder.ts`), raise `READER_REV`
   there, or Create order keeps reusing readings saved with the old rules (Oct 24 2026).
 - **One PMS matching fee per PMS color per order** (Nick, Oct 24 2026: "if you have a same color on the front and the

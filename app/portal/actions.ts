@@ -1,5 +1,6 @@
 "use server";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
+import { allRows } from "@/lib/readAll";
 import Stripe from "stripe";
 import { revalidatePath } from "next/cache";
 import { getViewer } from "@/lib/supabase/server";
@@ -228,7 +229,7 @@ export async function customerGeneralMessage(body: string): Promise<Result> {
     const { supabase, user, email, isStaff } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
     if (isStaff) return { ok: false, error: "This is a preview. Customers send messages from their own login." };
-    const { data: cs } = await supabase.from("customers").select("id,name,company");
+    const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id,name,company").order("id").range(ra, rb));
     const cust = (cs || [])[0];
     if (!cust) return { ok: false, error: "We couldn't find your account." };
     const admin = createAdminClient();

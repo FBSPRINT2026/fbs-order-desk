@@ -1,5 +1,6 @@
 "use server";
 import { termsPct } from "@/lib/payTerms";
+import { allRows } from "@/lib/readAll";
 import { revalidatePath } from "next/cache";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
@@ -31,7 +32,7 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
   const [{ data: pays }, { data: s }, { data: cs }] = await Promise.all([
     admin.from("payments").select("*").in("order_id", ids),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
-    supabase.from("customers").select("*"),
+    allRows((ra, rb) => supabase.from("customers").select("*").order("id").range(ra, rb)),
   ]);
   const settings = mergeSettings(s?.data);
   const lines = items.map((it) => {

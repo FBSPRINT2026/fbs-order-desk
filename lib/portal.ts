@@ -1,5 +1,6 @@
 import "server-only";
 import { redirect } from "next/navigation";
+import { allRows } from "@/lib/readAll";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -36,7 +37,7 @@ export async function getPortalCtx(as?: string, next = "/portal"): Promise<Porta
     if (!c) redirect("/shop/customers");
     return { db: admin, email, isStaff, preview: c as Customer, customerIds: [c.id], customers: [c as Customer], settings };
   }
-  const { data: cs } = await supabase.from("customers").select("*");
+  const { data: cs } = await allRows((a, b) => supabase.from("customers").select("*").order("id").range(a, b));
   const customers = (cs || []) as Customer[];
   return { db: supabase as unknown as SupabaseClient, email, isStaff, preview: null, customerIds: customers.map((c) => c.id), customers, settings };
 }

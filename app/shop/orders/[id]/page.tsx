@@ -1,5 +1,6 @@
 "use client";
 import { accountOfMethod, carrierOf, isThirdParty, notOurShipping, onAccountMethod, type ThirdParty } from "@/lib/thirdParty";
+import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { ownedFiles } from "@/lib/ownedFiles";
 import ProofHistory from "@/components/ProofHistory";
@@ -244,7 +245,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       const side = loadSide();
       const [ord, cu, st, inn, cat] = await Promise.all([
         sb.from("orders").select("*").eq("id", id).maybeSingle(),
-        sb.from("customers").select("*"),
+        allRows((a, b) => sb.from("customers").select("*").order("id").range(a, b)),
         sb.from("settings").select("data").eq("id", 1).maybeSingle(),
         sb.from("order_internal").select("production_notes").eq("order_id", id).maybeSingle(),
         sb.from("garments").select("*").order("style"),

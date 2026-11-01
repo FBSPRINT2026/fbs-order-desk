@@ -1,5 +1,6 @@
 "use server";
 import { getViewer } from "@/lib/supabase/server";
+import { allRows } from "@/lib/readAll";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 import { ST, type Order } from "@/lib/pricing";
@@ -60,7 +61,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const admin = createAdminClient();
 
     // this customer's own account (row security limits what comes back)
-    const { data: cs } = await supabase.from("customers").select("id, company, price_type, payment_terms");
+    const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, company, price_type, payment_terms").order("id").range(ra, rb));
     const ids = (cs || []).map((c) => c.id);
     if (!ids.length) return { ok: false, error: "We couldn't find your account." };
     const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking, groups, approved_at").neq("status", "quote").order("created_at", { ascending: false }).limit(150);
@@ -205,7 +206,7 @@ export async function reorderArchived(archivedId: string, note = ""): Promise<{ 
   try {
     const { supabase, user, isStaff } = await getViewer();
     if (!user || isStaff) return { ok: false, error: "Reorders start from the customer's own login." };
-    const { data: cs } = await supabase.from("customers").select("id");
+    const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id").order("id").range(ra, rb));
     const admin = createAdminClient();
     const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, qty").eq("id", archivedId).in("customer_id", (cs || []).map((c) => c.id)).maybeSingle();
     if (!a) return { ok: false, error: "We couldn't find that order." };

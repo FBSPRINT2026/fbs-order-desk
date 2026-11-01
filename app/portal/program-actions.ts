@@ -1,5 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { allRows } from "@/lib/readAll";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -19,7 +20,7 @@ export async function placeProgramOrder(input: { lines: ProgramCartLine[]; due_d
     const { supabase, user, email, isStaff } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
     if (isStaff) return { ok: false, error: "This is a preview. Customers order from their own login." };
-    const { data: cs } = await supabase.from("customers").select("id, name, company, price_type, tax_exempt");
+    const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, name, company, price_type, tax_exempt").order("id").range(ra, rb));
     const cust = (cs || [])[0];
     if (!cust) return { ok: false, error: "We couldn't find your account." };
     // row security: only their own active program items come back

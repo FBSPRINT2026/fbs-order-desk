@@ -81,9 +81,9 @@ export default function ArtworkPage() {
   }, [sb]);
   async function load() {
     const [d, c, m] = await Promise.all([
-      sb.from("designs").select("*").eq("draft", false).order("number", { ascending: false }),
-      sb.from("customers").select("*"),
-      sb.from("mockups").select("id,number,title,file_path,customer_id,order_id,created_at,starred,design_ids,group_id,set:snapshot->>set").is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
+      allRows((a, b) => sb.from("designs").select("*").eq("draft", false).order("number", { ascending: false }).order("id").range(a, b)),
+      allRows((a, b) => sb.from("customers").select("*").order("id").range(a, b)),
+      allRows((a, b) => sb.from("mockups").select("id,number,title,file_path,customer_id,order_id,created_at,starred,design_ids,group_id,set:snapshot->>set").is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }).order("id").range(a, b)),
     ]);
     const list = (d.data || []) as Design[];
     const ml = oneOfEach((m.data || []) as Mock[]);

@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { allRows } from "@/lib/readAll";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { calcOrder, mergeSettings, type Order, type Settings } from "@/lib/pricing";
@@ -22,7 +23,7 @@ export default function PrintavoSyncPage() {
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [showAll, setShowAll] = useState(false);
   const load = useCallback(async () => {
     const [{ data, error }, { data: st }] = await Promise.all([
-      sb.from("orders").select("*, customers(company, name)").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000).order("number", { ascending: false }),
+      allRows((a, b) => sb.from("orders").select("*, customers(company, name)").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000).order("number", { ascending: false }).order("id").range(a, b)),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     if (error) return setErr(error.message);

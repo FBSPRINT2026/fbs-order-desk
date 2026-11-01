@@ -1120,7 +1120,7 @@ export async function searchManifests(admin: SupabaseClient, q: string): Promise
     .select("*, orders!supplier_manifest_lines_order_id_fkey(id, number, customers(company, name)), archived_orders!supplier_manifest_lines_archived_order_id_fkey(id, visual_id, customers(company, name)), customers(company, name)")
     .neq("kind", "ignored")
     .or(["customer_po", "customer_name", "supplier_order", "tracking", "style", "color", "invoice", "sku"].map((c) => `${c}.ilike.${like}`).join(","))
-    .order("ship_date", { ascending: false }).limit(1500);
+    .order("ship_date", { ascending: false }).limit(1000);
   if (error) throw new Error(error.message);
   type R = Waiting & { kind: string; order_id: string | null; archived_order_id: string | null;
     orders: { id: string; number: number; customers: { company: string; name: string } | null } | null;

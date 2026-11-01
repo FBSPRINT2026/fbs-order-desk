@@ -1,5 +1,6 @@
 "use server";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
+import { allRows } from "@/lib/readAll";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
@@ -23,7 +24,7 @@ async function who(as?: string) {
     if (!c) throw new Error("Customer not found.");
     return { admin, email, preview: true, customers: [c] };
   }
-  const { data: cs } = await supabase.from("customers").select("id,name,company,email");
+  const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id,name,company,email").order("id").range(ra, rb));
   if (!cs?.length) throw new Error("We couldn't find your account.");
   return { admin, email, preview: false, customers: cs };
 }
@@ -39,8 +40,8 @@ export async function portalMessages(as?: string): Promise<{ ok: boolean; error?
     const ids = customers.map((c) => c.id);
     const { data: os } = await admin.from("orders").select("id").in("customer_id", ids).neq("status", "quote");
     const oids = (os || []).map((o) => o.id);
-    const { data } = await admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
-      .or(`customer_id.in.(${ids.join(",")})${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").limit(2000);
+    const { data } = await allRows((ra, rb) => admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
+      .or(`customer_id.in.(${ids.join(",")})${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").order("id").range(ra, rb));
     return { ok: true, messages: await withFiles(data || [], sign(admin)) };
   } catch (e) { return fail(e); }
 }

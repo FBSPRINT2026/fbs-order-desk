@@ -1,5 +1,6 @@
 "use client";
 import { isLightArtUrl } from "@/lib/lightArt";
+import { allRows } from "@/lib/readAll";
 import Link from "next/link";
 import BackLink from "@/components/BackLink";
 import CustomerPick from "@/components/CustomerPick";
@@ -119,7 +120,7 @@ export default function DesignPage({ params }: { params: Promise<{ id: string }>
     const sv = onShirtsOf(des)[0]?.path || "";
     setShirtUrl(sv ? (await sb.storage.from("proofs").createSignedUrl(sv, 3600)).data?.signedUrl || "" : "");
     const [c, o, s, so, b, g] = await Promise.all([
-      sb.from("customers").select("*"),
+      allRows((a, b) => sb.from("customers").select("*").order("id").range(a, b)),
       des.customer_id ? sb.from("orders").select("*").eq("customer_id", des.customer_id).order("number", { ascending: false }) : Promise.resolve({ data: [] }),
       sb.from("separations").select("id, number, location, garment_color, status, method, created_at").eq("design_id", des.id).order("created_at", { ascending: false }),
       sb.from("sewouts").select("id", { count: "exact", head: true }).eq("design_id", des.id).is("archived_at", null),
