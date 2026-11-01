@@ -56,7 +56,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
               {open.map((o) => { const a = age(o.pay_due); return (
                 <tr key={o.id} className={[a !== null && a > 0 ? "late" : "", o.paid > 0.004 ? "part" : ""].filter(Boolean).join(" ") || undefined}>
                   <td className="num st-n">#{o.number}</td><td className="st-d">{fmtDateLong(o.created_at.slice(0, 10))}</td><td className="st-j">{o.nickname || "Order"}</td><td className="st-po">{o.po_number ? <><span className="st-ph">PO </span>{o.po_number}</> : ""}</td>
-                  <td className="st-pd"><span className="st-ph">Due </span>{o.pay_due ? `${fmtDateLong(o.pay_due)}${a !== null && a > 0 ? ` (${a}d late)` : ""}` : "When done"}</td>
+                  <td className="st-pd"><span className="st-ph">Due: </span>{o.pay_due ? `${fmtDateLong(o.pay_due)}${a !== null && a > 0 ? ` (${a}d late)` : ""}` : "When done"}</td>
                   <td className="r num st-t"><span className="st-ph">of </span>{money(o.total)}</td><td className="r num st-p">{money(o.paid)}</td><td className="r num b st-b">{money(o.balance)}</td>
                 </tr>
               ); })}

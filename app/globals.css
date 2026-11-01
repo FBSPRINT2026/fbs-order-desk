@@ -1607,7 +1607,7 @@ a.as-ai{text-decoration:none}
   html body .st-tbl tbody tr{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px;row-gap:3px;padding:10px 0;border-bottom:1px solid #eef1f4}
   html body .st-tbl tbody tr::after{content:"";order:4;flex-basis:100%;height:0}
   html body .st-tbl tbody td{display:block;padding:0!important;border:0!important;font-size:13.5px;min-width:0}
-  html body .st-tbl tbody td.st-n{order:1;font-weight:700;white-space:nowrap;margin-right:4px}
+  html body .st-tbl tbody td.st-n{order:1;font-weight:700;white-space:nowrap;margin-right:4px;min-width:58px}
   html body .st-tbl tbody td.st-j{order:2;flex:1 1 0;font-weight:600}
   html body .st-tbl tbody td.st-b{order:3;white-space:nowrap;margin-left:6px}
   html body .st-tbl tbody td:is(.st-d,.st-po,.st-pd){order:5;font-size:12px;color:#5b6576}
@@ -2220,7 +2220,7 @@ a.as-ai{text-decoration:none}
 .rv-views{align-items:center;flex-wrap:wrap}
 .rv-search.rv-search-tabs{margin:0 0 4px;width:420px;max-width:100%;flex:none;padding:0 10px}
 .rv-search.rv-search-tabs input{padding:7px 0;font-size:13.5px}
-@media (max-width:900px){.rv-search.rv-search-tabs{width:100%}}
+@media (max-width:900px){.rv-search.rv-search-tabs{width:auto;flex:1 1 0;min-width:0}}
 .rv-tabrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .rv-tabrow .aa-sub{margin-bottom:0}
 .rv-search.rv-search-tabs{margin:0}
@@ -17269,3 +17269,12 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
    or "Manually enter info" is picked (components/GroupEditor.tsx, Nov 1) */
 .mk-lock.hide > .mk-body{display:none}
 .mk-manual{padding:6px 2px 2px;font-size:13px}
+/* A portal order's name on a phone takes up to two lines instead of being cut at "#97908…" (Nov 1); longer still ends in "…" */
+@media (max-width:640px){
+  .aa-tbl .aa-t1 .aa-tn{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+}
+/* A page's buttons on a phone, when they wrap under the title, start at the left edge like the title instead of hanging
+   off to the right in a ragged stack (Nov 1, Receiving's three buttons) */
+@media (max-width:640px){
+  html body main.main .page-head > div:not(:first-child) .row,html body main.main .page-head > .row:not(:first-child){justify-content:flex-start!important;flex-wrap:wrap}
+}
