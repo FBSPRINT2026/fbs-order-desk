@@ -77,16 +77,24 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
       if (sew.wIn) im.artRatio = Math.round((sew.hIn / sew.wIn) * 1000) / 1000;
       im.sizeFrom = "brand";
     }
-    if (!(im.inks || "").trim()) im.inks = (sewThreads(sew).length ? sewThreads(sew) : brand?.embroidery?.light || []).join(", ");
+    // the threads the file sews (the file is what runs; Oct 31, #40332: "Carmine, Black" was read for a file that sews
+    // Carmine + Cream), else what was read, else the brand's thread for light goods
+    if (sewThreads(sew).length) im.inks = sewThreads(sew).join(", ");
+    else if (!(im.inks || "").trim()) im.inks = (brand?.embroidery?.light || []).join(", ");
   } else {
     // a heat transfer or screen print of the logo: its version for these goods by name (a standard mockup is matched by
     // it; Oct 31, #40328's transfer had none and missed M-1138), its inks when the reading named none
     const k = (s?: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const named = (im.inks || "").trim() ? colorwaysOf(d).find((c) => k(c.inks.join(",")) === k(im.inks)) : null;
     const dark = lines.length > 0 && lines.every((l) => brandDark(brand, l));
-    const cw = named || goodsColorway(d, brand, lines) || colorwayFor(d, brand, dark);
+    // a brand with light and dark versions decides by the goods, not by inks the reading guessed (Oct 31, #40332: a black
+    // tee's transfer read as "PMS 492 C, Black", the light-goods version); a version the paperwork names is put on after
+    // (lib/ai/sourceCheckRun.ts applyColorwayFixes)
+    const ruled = !!(brand?.rules?.light && brand?.rules?.dark);
+    const cw = goodsColorway(d, brand, lines) || (ruled ? colorwayFor(d, brand, dark) : null) || named || colorwayFor(d, brand, dark);
     if (cw && !im.colorway) im.colorway = cw.name;
-    if (!(im.inks || "").trim()) { if (cw) im.inks = cw.inks.join(", "); else if (d.inks) im.inks = d.inks; }
+    if (cw && (ruled || !(im.inks || "").trim())) im.inks = cw.inks.join(", ");
+    else if (!(im.inks || "").trim() && d.inks) im.inks = d.inks;
   }
   im.colors = Math.max(1, (im.inks || "").split(/\s*,\s*/).filter(Boolean).length || im.colors || 1);
   // the garments in another thread or ink: one color change per garment color (Imprint.inkBy)
@@ -109,6 +117,19 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
       else if (nFrom === nTo || nFrom === 1) inkBy[lc.trim().toLowerCase()] = { [from]: to };
     }
   }
+  // goods of both kinds in one group (Oct 31, #40332: black polos with a Stone shirt, all "Full Color"): the print is one
+  // of the brand's light / dark versions; a garment color on the other side, or with a version of its own, gets its
+  // version as a colorway change (like brandPrint does when a logo is added by hand)
+  const base = colorwaysOf(d).find((c) => (im.colorway || "").toLowerCase().replace(/[^a-z0-9]/g, "") === c.name.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const pairNames = [brand?.rules?.light, brand?.rules?.dark].map((x) => kk(x || ""));
+  if (base && pairNames.every(Boolean) && pairNames.includes(kk(base.name))) {
+    for (const l of lines) {
+      const lc = (l.color || "").trim().toLowerCase();
+      if (!lc || cwBy[lc]) continue;
+      const want = goodsColorway(d, brand, [l]) || colorwayFor(d, brand, brandDark(brand, l));
+      if (want && kk(want.name) !== kk(base.name)) { cwBy[lc] = want.name; delete inkBy[lc]; }
+    }
+  }
   if (Object.keys(inkBy).length) im.inkBy = inkBy;
   if (Object.keys(cwBy).length) Object.assign(im, applyColorwayChange(im, d, { ...(im.colorwayBy || {}), ...cwBy }));
   return im;
@@ -126,7 +147,10 @@ export function mergeLogoGroups(groups: Group[], brands: Brand[] = []): { groups
   const into = new Map<Group, Group>();
   const ck2 = (c: string) => (c || "").trim().toLowerCase();
   const isLogo = (g: Group) => g.imprints.length > 0 && g.imprints.every((im) => im.design_id && im.fromBrand);
-  const sig = (g: Group) => g.imprints.map((im) => `${im.method}|${ck2(im.location)}|${im.design_id}`).sort().join("~");
+  // caps and bags sew their own files in their own hoops: never one group with shirts (Oct 31, #40332: a knit skull cap
+  // went in with the left-chest polos)
+  const kindOf = (g: Group) => { const k = sewKindOf(g.lines || []); return k === "cap" || k === "bag" ? k : ""; };
+  const sig = (g: Group) => g.imprints.map((im) => `${im.method}|${ck2(im.location)}|${im.design_id}|${im.method === "embroidery" ? kindOf(g) : ""}`).sort().join("~");
   const bySig = new Map<string, Group[]>();
   for (const g of groups) if (isLogo(g)) { const k = sig(g); bySig.set(k, [...(bySig.get(k) || []), g]); }
   const out: Group[] = [];

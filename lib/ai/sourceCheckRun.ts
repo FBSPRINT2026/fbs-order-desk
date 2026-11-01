@@ -46,7 +46,15 @@ export function applyColorwayFixes(groups: Group[], findings: SrcFinding[], desi
   const did: string[] = [];
   const key = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
   const out = groups.map((g) => ({ ...g, imprints: [...(g.imprints || [])] }));
+  // one per print and version: several garments of a group asking for the same version are the whole group's (Oct 31,
+  // #40332: six garments all asked All White, and each got it as a color change on a Maroon / Black print)
+  const by = new Map<string, SrcFinding>();
   for (const f of findings) {
+    if (f.kind !== "colorway" || !f.designId) continue;
+    const k = `${f.group}|${f.designId}|${key(f.paper)}`, was = by.get(k);
+    by.set(k, was ? { ...was, lineIds: [...new Set([...was.lineIds, ...f.lineIds])], what: `${was.what}, ${f.what}` } : f);
+  }
+  for (const f of by.values()) {
     if (f.kind !== "colorway" || !f.designId) continue;
     const g = out[f.group], d = designs.get(f.designId);
     if (!g || !d) continue;
@@ -59,6 +67,37 @@ export function applyColorwayFixes(groups: Group[], findings: SrcFinding[], desi
     if (mine.length === lines.length) g.imprints[k] = applyColorway({ ...im, colorwayBy: undefined, inkBy: undefined }, d, cw, sewKindOf(lines));
     else g.imprints[k] = applyColorwayChange(im, d, { ...(im.colorwayBy || {}), ...Object.fromEntries(mine.map((l) => [l.color || "", cw.name])) });
     did.push(`${f.what}: ${d.name} in ${cw.name}`);
+  }
+  return { groups: out, did };
+}
+
+/**
+ * The logo the paperwork names, put on the order at the reading (Oct 31, #40332: the cart's "MEI Stacked Logo" was read
+ * as the SMM stacked logo, a look-alike with no sew files): the print takes that logo, in the same version when it has
+ * one (its sew file, threads, inks). Only where every garment of the group names it; otherwise it's asked.
+ */
+export function applyLogoFixes(groups: Group[], findings: SrcFinding[], designs: Map<string, Design>): { groups: Group[]; did: string[] } {
+  const did: string[] = [];
+  const key = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const out = groups.map((g) => ({ ...g, imprints: [...(g.imprints || [])] }));
+  const by = new Map<string, SrcFinding>();
+  for (const f of findings) {
+    if (f.kind !== "logo" || !f.designId || !f.toDesign) continue;
+    const k = `${f.group}|${f.designId}|${f.toDesign}`, was = by.get(k);
+    by.set(k, was ? { ...was, lineIds: [...new Set([...was.lineIds, ...f.lineIds])] } : f);
+  }
+  for (const f of by.values()) {
+    const g = out[f.group], d2 = designs.get(f.toDesign!);
+    if (!g || !d2) continue;
+    const k = g.imprints.findIndex((im) => im.design_id === f.designId);
+    const lines = (g.lines || []).filter((l) => lineQty(l) > 0);
+    if (k < 0 || !lines.length || !lines.every((l) => f.lineIds.includes(l.id))) continue;
+    const im = g.imprints[k];
+    const x = { ...im, design_id: d2.id, emb: im.emb ? { ...im.emb, file: undefined } : im.emb } as typeof im;
+    delete x.shownArt; delete x.inkMap;
+    const cw = im.colorway ? colorwaysOf(d2).find((c) => key(c.name) === key(im.colorway!)) : null;
+    g.imprints[k] = cw ? applyColorway(x, d2, cw, sewKindOf(lines)) : x;
+    did.push(`${f.what}: the ${d2.name} logo`);
   }
   return { groups: out, did };
 }

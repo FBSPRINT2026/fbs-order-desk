@@ -33,6 +33,7 @@ export type SrcFinding = {
   /** one plain sentence for staff */ say: string;
   /** what to put on the order: the location, the color (the maker's name when known) */ fix?: string;
   /** the logo it's about (a logo's version named in the paperwork) */ designId?: string;
+  /** the logo the paperwork names instead (kind "logo") */ toDesign?: string;
 };
 
 type Tok = { w: string; at: number; end: number };
@@ -294,11 +295,12 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
         // a tie in words goes to the logo the shop's right orders use (MEI's carts: "Stacked Logo" is always D-10316)
         const top0 = peers.filter((p) => score(p) === best), most = Math.max(...top0.map((p) => p.uses || 0));
         const top = top0.length > 1 && most > 0 ? top0.filter((p) => (p.uses || 0) === most) : top0;
-        if (best > 0 && top.length === 1 && top[0].id !== mineL.id && (score(mineL) < best || (top[0].uses || 0) > (mineL.uses || 0))) out.push({ kind: "logo", group: gi, lineIds: ids, what, paper: top[0].name, order: mineL.name, say: `${what}: the paperwork names the ${top[0].name} logo, the order prints ${mineL.name}.` });
+        if (best > 0 && top.length === 1 && top[0].id !== mineL.id && (score(mineL) < best || (top[0].uses || 0) > (mineL.uses || 0))) out.push({ kind: "logo", group: gi, lineIds: ids, what, paper: top[0].name, order: mineL.name, designId: mineL.id, toDesign: top[0].id, say: `${what}: the paperwork names the ${top[0].name} logo, the order prints ${mineL.name}.` });
       }
       const named = [...mineL.colorways].sort((x, y) => y.length - x.length).find((cw) => { const cwW = words(cw).join(" "); return cwW && ` ${WS} `.includes(` ${cwW} `); });
       const now = Object.entries(im.colorwayBy || {}).find(([k]) => k.trim().toLowerCase() === it.color.trim().toLowerCase())?.[1] || im.colorway || "";
-      if (named && now && words(named).join(" ") !== words(now).join(" ")) out.push({ kind: "colorway", group: gi, lineIds: ids, what, paper: named, order: now, designId: mineL.id, say: `${what}: the paperwork asks for the ${mineL.name} logo in ${named}, the order has ${now}.` });
+      // (a print with no version at all is off too: Oct 31, #40332's "Stacked Logo All Black" had none)
+      if (named && words(named).join(" ") !== words(now).join(" ")) out.push({ kind: "colorway", group: gi, lineIds: ids, what, paper: named, order: now || "no version", designId: mineL.id, say: `${what}: the paperwork asks for the ${mineL.name} logo in ${named}, the order has ${now || "no version"}.` });
     }
   });
   return out;
