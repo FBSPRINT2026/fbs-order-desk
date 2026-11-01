@@ -17286,3 +17286,12 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
   .tk-bar textarea{flex:1 1 calc(100% - 40px)}
   .tk-bar textarea + *{margin-left:auto}
 }
+/* A group's header on a phone (Nov 1): the name with Duplicate and Remove on the same line at the right, its note under
+   them across the full width (it had been name / Duplicate on the right / Remove alone on a third line) */
+@media (max-width:640px){
+  html body .ord .line-h{flex-wrap:wrap;row-gap:4px}
+  html body .ord .line-h > .grp-name{order:1;flex:1 1 0;min-width:0}
+  html body .ord .line-h > .spacer{display:none}
+  html body .ord .line-h > .btn{order:2;flex:none;padding-left:8px;padding-right:8px}
+  html body .ord .line-h > .grp-desc-in{order:3;flex:1 1 100%;min-width:0}
+}

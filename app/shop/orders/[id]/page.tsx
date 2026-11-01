@@ -1804,7 +1804,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="jd-typebox">
                   <OrderTypeRow o={o} patch={patch} bare />
                 </div>
-                <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved by ${o.approved_name} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
+                <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved${o.approved_name ? ` by ${o.approved_name}` : ""} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
               </div>
           </section>
           {!seesMoney && (

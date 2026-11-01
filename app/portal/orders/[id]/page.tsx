@@ -186,7 +186,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         )}
         {o.status === "quote_sent" && <QuoteApproval orderId={o.id} total={money(c.total)} terms={ctx.settings.shop.terms} disabled={preview} defaultName={ctx.customers.find((x) => x.id === o.customer_id)?.name || ""} />}
-        {o.approved_at && <div className="muted" style={{ fontSize: 13 }}>Quote approved by <b>{o.approved_name}</b> on {fmtStamp(o.approved_at)}.</div>}
+        {o.approved_at && <div className="muted" style={{ fontSize: 13 }}>Quote approved{o.approved_name ? <> by <b>{o.approved_name}</b></> : null} on {fmtStamp(o.approved_at)}.</div>}
 
         {pendingProofs.length > 0 && (
           <div className="callout" style={{ borderColor: "color-mix(in srgb, #A152C9 45%, var(--line))", background: "color-mix(in srgb, #A152C9 10%, var(--surface))" }}>
