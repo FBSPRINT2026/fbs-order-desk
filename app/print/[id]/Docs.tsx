@@ -412,7 +412,9 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
           {/* one line each (Oct 31, Nick: "the number is the most important"): a thread's maker short, its number and name */}
           <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && d.method !== "embroidery" && <b>{n + 1} </b>}<b>{d.method === "embroidery" ? threadShort(k) : k}</b></span>)}</div></>}
         {ways.map((w) => <span key={w.name} style={{ display: "contents" }}><i>{des ? cwLetter(des, { name: w.name }) || "Colorway" : "Colorway"}</i>
-          <span className="w2-way"><span><b>{w.on}</b> with {andList(w.name.split(/\s*\/\s*/))} {d.method === "embroidery" ? "thread" : "ink"}{w.qty ? <span className="faint"> ({w.qty})</span> : null}</span>
+          <span className="w2-way">{/* the garments and how many; the threads' swatches below say the colors (Oct 31, Nick: "Maroon and Black thread"
+                over the Maroon and Black swatches was the same thing twice) */}
+            <span><b>{w.on}</b>{w.threads.length ? null : <> with {andList(w.name.split(/\s*\/\s*/))} {d.method === "embroidery" ? "thread" : "ink"}</>}{w.qty ? <span className="faint"> ({w.qty})</span> : null}</span>
             {w.file ? <span className="w2-file">{w.file}</span> : null}
             <span className="w2-th">{w.threads.map((k) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{threadShort(k)}</span>)}</span></span></span>)}
         {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> ({changeWord(d.method).toLowerCase()}, not {a}) </span>)}</span></span>)}
