@@ -3,7 +3,7 @@ import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { inkNames, isPmsInk, lineQty, sizeLabel, FULL_COLOR, METHODS, SIZES, type Order, type Proof, withoutShopPieces } from "@/lib/pricing";
+import { inkNames, isPmsInk, lineQty, sizeLabel, FULL_COLOR, METHODS, methodLabel, SIZES, type Order, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { guessHex, lineColor } from "@/lib/mockup";
 import { fmtStamp } from "@/lib/format";
@@ -113,7 +113,7 @@ export default async function ReviewArt({ params, searchParams }: { params: Prom
                     <div className="ar-ps">
                       <div className="ar-loc">{d.location || "Print"}</div>
                       {/* a visual-only mockup (a reorder production confirms on the run): the picture, none of our guesses */}
-                      <div className="muted">{METHODS[d.method] || d.method}{d.visualOnly ? " · printed to match your previous order" : ` · ${colors}`}</div>
+                      <div className="muted">{methodLabel(d)}{d.visualOnly ? " · printed to match your previous order" : ` · ${colors}`}</div>
                       {!d.visualOnly && <dl>
                         {sz.label && <><dt>Size</dt><dd>{sz.w ? `${+sz.w.toFixed(2)}" wide` : ""}{sz.h ? ` × ${+sz.h.toFixed(2)}" tall` : ""}</dd></>}
                         <dt>Placement</dt><dd>{d.drop ? `${d.drop}" below the collar` : "Standard (about 3\" below the collar)"}</dd>

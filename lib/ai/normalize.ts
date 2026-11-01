@@ -3,7 +3,7 @@
 // methods and locations are mapped onto the shop's lists. No prices or costs ever come from the AI.
 
 import type { GarmentLook, StockKind } from "@/lib/stockGarments";
-import { FULL_COLOR, LOCATIONS, METHODS, SIZES, newGLine, newImprint, uid, waistOf, type Group, type Method, type Size } from "@/lib/pricing";
+import { FULL_COLOR, LOCATIONS, METHODS, methodLabel, SIZES, newGLine, newImprint, uid, waistOf, type Group, type Method, type Size } from "@/lib/pricing";
 
 export type ProposedOrder = {
   nickname?: string;
@@ -153,7 +153,7 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
 export function describeGroups(groups: Group[]) {
   return groups.map((g, i) => {
     const lines = g.lines.map((l) => `  - ${[l.brand, l.style, l.garment].filter(Boolean).join(" ") || "(no style)"}, color ${l.color || "(none)"}: ${Object.entries(l.sizes || {}).filter(([, q]) => q).map(([z, q]) => `${z} ${q}`).join(", ") || "no sizes"}`);
-    const prints = g.imprints.map((d) => `  - ${METHODS[d.method] || d.method} on ${d.location || "(no location)"}, ${d.method === "dtf" ? "full color" : d.colors >= FULL_COLOR ? "full color" : `${d.colors} color(s)`}${d.inks ? `, inks ${d.inks}` : ", no inks listed"}${d.size ? `, size ${d.size}` : ", no size"}${d.design_id ? ", logo attached" : ", NO logo attached"}${d.notes ? `, notes: ${d.notes}` : ""}`);
+    const prints = g.imprints.map((d) => `  - ${methodLabel(d)} on ${d.location || "(no location)"}, ${d.method === "dtf" ? "full color" : d.colors >= FULL_COLOR ? "full color" : `${d.colors} color(s)`}${d.inks ? `, inks ${d.inks}` : ", no inks listed"}${d.size ? `, size ${d.size}` : ", no size"}${d.design_id ? ", logo attached" : ", NO logo attached"}${d.notes ? `, notes: ${d.notes}` : ""}`);
     return [`Group ${i + 1}${g.name ? ` (${g.name})` : ""}:`, " Garments:", ...lines, " Prints:", ...(prints.length ? prints : ["  - none"])].join("\n");
   }).join("\n");
 }

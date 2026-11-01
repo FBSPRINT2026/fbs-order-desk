@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleContext";
-import { METHODS, type Group, type Imprint, type Order } from "@/lib/pricing";
+import { METHODS, methodLabel, type Group, type Imprint, type Order } from "@/lib/pricing";
 import { needsDetails, type DetailsInput } from "@/lib/productionDetails";
 import { applySpec, latestSpecs, reorderLabel, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
 import { confirmDetails } from "@/app/shop/details-actions";
@@ -206,7 +206,7 @@ export default function ReorderPanel({ o, total, patch, save, onReload }: {
                 <div key={im.id} className={"ro-print" + (guess ? " guess" : " done")}>
                   <div className="ro-ph">
                     <b>{im.location || "Print"}</b>
-                    <span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}</span>
+                    <span className="faint">{methodLabel(im)}{garment ? ` on ${garment}` : ""}</span>
                     <span className="spacer" />
                     {guess ? <span className="ro-chip wait">{im.confirm?.filled ? "Filled in · awaiting production" : "Awaiting production confirmation"}</span>
                       : im.confirmed ? <span className="ro-chip ok">✓ Confirmed by {im.confirmed.by} · {day(im.confirmed.at)}{im.confirmed.from ? ` (${im.confirmed.from})` : ""}</span>

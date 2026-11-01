@@ -3,7 +3,7 @@ import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
 import { kidLine } from "@/lib/pricing";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, puffEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
@@ -1188,7 +1188,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             // the customer's builder: a small grayed-out outline of the prints, not the whole form under a cover (Oct 24,
             // Nick: "this grayed out area, it shouldn't even be that big… just a grayed out version of that")
             ? <div className="mk-need-sum" role="note">
-                {g.imprints.map((d, di) => <div key={d.id} className="mk-need-row"><b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method], d.method === "screen" ? `${d.colors >= 11 ? "Full color" : `${d.colors || 1} color${(d.colors || 1) > 1 ? "s" : ""}`}` : ""].filter(Boolean).join(" · ")}</span><span>Logo</span><span>Size</span></div>)}
+                {g.imprints.map((d, di) => <div key={d.id} className="mk-need-row"><b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, methodLabel(d), d.method === "screen" ? `${d.colors >= 11 ? "Full color" : `${d.colors || 1} color${(d.colors || 1) > 1 ? "s" : ""}`}` : ""].filter(Boolean).join(" · ")}</span><span>Logo</span><span>Size</span></div>)}
                 <small>{needMockup}</small>
               </div>
             : <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup — or click here to manually enter info</span></button>)}
@@ -1220,7 +1220,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
-                  <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, METHODS[d.method]].filter(Boolean).join(" · ")}</span>{d.supplied && <span className="imp-sup-tag">Customer supplied transfers</span>}
+                  <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, methodLabel(d)].filter(Boolean).join(" · ")}</span>{d.supplied && <span className="imp-sup-tag">Customer supplied transfers</span>}
                   <span className="spacer" />
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
                   {!frozen && <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>}
@@ -1229,7 +1229,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {!!onMockup && !skipped && !d.supplied && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
                 {(
                 <div className={"imp-grid" + (d.supplied ? " sup" : "")}>
-                  <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { const des = (designs || []).find((z) => z.id === x.imprints[di].design_id); x.imprints[di] = withMethod(x.imprints[di], e.target.value as Method, des, x.lines); })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+                  <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { const des = (designs || []).find((z) => z.id === x.imprints[di].design_id); x.imprints[di] = withMethod(x.imprints[di], e.target.value as Method, des, x.lines); })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{k === "dtf" && d.patch ? "Heat press patch" : v}</option>)}</select></div>
                   <div className="f-loc"><span className="imp-l">Location</span>{(locs.includes(d.location) || (!d.location && locs !== LOCATIONS))
                       ? <select aria-label="Location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value === "__custom" ? "" : e.target.value; frontFirst(x.imprints); })}>{!d.location && <option value="">Pick a spot…</option>}{locs.map((z) => <option key={z} value={z}>{z}</option>)}<option value="__custom">Custom…</option></select>
                       : <div className="loc-custom"><input type="text" autoFocus={!d.location} aria-label="Custom location" placeholder="Custom location" value={d.location} onChange={(e) => update((x) => { x.imprints[di].location = e.target.value; })} /><button type="button" className="btn icon ghost" tabIndex={-1} title="Back to the location list" aria-label="Back to the location list" onClick={() => update((x) => { x.imprints[di].location = "Full Front"; })}>▾</button></div>}</div>
@@ -1910,7 +1910,7 @@ function PrintRow({ youth, shown, d, n, hex, mainBg, mainAt = 0, designs, urls, 
         <div className="pr-top">
           {n > 0 && <span className="pr-n">{n}</span>}
           <b>{d.location || "Print"}</b>
-          <span className="pr-how">{METHODS[d.method]}</span>
+          <span className="pr-how">{methodLabel(d)}</span>
           {each && <span className="pr-each" title={listed ? "The price list's price for this print. The garment prices were typed, so it's not charged separately." : undefined}>{listed ? "list" : "each"} <b>{each}</b></span>}
         </div>
         {/* visual only: no guessed inks or size anywhere, so nobody takes a guess for how it printed (Oct 20, Nick) */}

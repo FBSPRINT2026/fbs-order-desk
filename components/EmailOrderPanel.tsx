@@ -2,7 +2,7 @@
 import { withMethod } from "@/lib/brands";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { makePreview } from "@/lib/artPrep";
-import { ALL_LOCATIONS, METHODS, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
+import { ALL_LOCATIONS, METHODS, methodLabel, SIZES, newGLine, newImprint, sizeLabel, type GLine, type Group, type Method } from "@/lib/pricing";
 import { SUPPLIERS } from "@/lib/goods";
 import CarryNotes from "@/components/CarryNotes";
 import { isPicture, ROLE_LABEL, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
@@ -414,7 +414,7 @@ export default function EmailOrderPanel({ activityId, onClose, onCreated, start,
                   {im.design_id ? (logos[im.design_id]?.url ? <span className="eo-art on" title={logos[im.design_id].d.name}><LogoThumb d={logos[im.design_id].d} url={logos[im.design_id].url} /></span> : <span className="eo-art on" title="Uses the design on file">Design</span>)
                     : art && urlOf(art) ? <Thumb className="eo-art" url={urlOf(art)} name={art} /> : <span className="eo-art">No art</span>}
                   <input list="eo-locs" aria-label="Location" value={im.location} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].location = e.target.value; })} />
-                  <select aria-label="Method" value={im.method} onChange={(e) => patchG(gi, (x) => { x.imprints[ii] = withMethod(x.imprints[ii], e.target.value as Method, null, x.lines); })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                  <select aria-label="Method" value={im.method} onChange={(e) => patchG(gi, (x) => { x.imprints[ii] = withMethod(x.imprints[ii], e.target.value as Method, null, x.lines); })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{k === "dtf" && im.patch ? "Heat press patch" : v}</option>)}</select>
                   {im.method !== "dtf" && <label className="eo-n">Colors<input inputMode="numeric" value={im.colors} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].colors = Math.max(1, Math.min(15, +e.target.value.replace(/\D/g, "") || 1)); })} /></label>}
                   <input aria-label="Inks" placeholder="Inks" value={im.inks} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].inks = e.target.value; })} />
                   <input aria-label="Print size" className="eo-short" placeholder="Size" value={im.size} onChange={(e) => patchG(gi, (x) => { x.imprints[ii].size = e.target.value; })} />
@@ -507,7 +507,7 @@ function Review({ d, files, urlOf, custName, job, finishing }: { d: EODraft; fil
             <dt>Prints</dt>
             <dd>{g.imprints.length ? g.imprints.map((im) => {
               const art = d.art[im.id] || "";
-              return <div key={im.id} className="eo-rev-print">{art && urlOf(art) ? <Thumb url={urlOf(art)} name={art} /> : im.design_id ? (logos[im.design_id]?.url ? <span className="eo-art on" title={logos[im.design_id].d.name}><LogoThumb d={logos[im.design_id].d} url={logos[im.design_id].url} /></span> : <span className="eo-art on">Design</span>) : <span className="eo-art">No art</span>}<span>{im.location}, {METHODS[im.method] || im.method}{im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}{im.size ? `, ${im.size}` : ""}{im.drop ? `, ${im.drop}" down` : ""}</span></div>;
+              return <div key={im.id} className="eo-rev-print">{art && urlOf(art) ? <Thumb url={urlOf(art)} name={art} /> : im.design_id ? (logos[im.design_id]?.url ? <span className="eo-art on" title={logos[im.design_id].d.name}><LogoThumb d={logos[im.design_id].d} url={logos[im.design_id].url} /></span> : <span className="eo-art on">Design</span>) : <span className="eo-art">No art</span>}<span>{im.location}, {methodLabel(im)}{im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}{im.inks ? ` (${im.inks})` : ""}{im.size ? `, ${im.size}` : ""}{im.drop ? `, ${im.drop}" down` : ""}</span></div>;
             }) : "None"}</dd>
             {(g.finishing || []).length > 0 && <><dt>Finishing</dt><dd>{(g.finishing || []).map((id) => finishing.find((f) => f.id === id)?.name || id).join(", ")}</dd></>}
           </Fragment>

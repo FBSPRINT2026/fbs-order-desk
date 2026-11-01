@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { FULL_COLOR, imprintLabel, METHODS, type Imprint } from "@/lib/pricing";
+import { FULL_COLOR, imprintLabel, METHODS, methodLabel, type Imprint } from "@/lib/pricing";
 import { needsDetails } from "@/lib/productionDetails";
 
 /**
@@ -13,7 +13,7 @@ export default function ImprintSpecs({ list, sep = " · " }: { list: Imprint[]; 
       {list.map((d, i) => {
         const pre = i ? sep : "";
         if (!needsDetails(d)) return <Fragment key={d.id || i}>{pre}{imprintLabel(d)}</Fragment>;
-        const head = `${METHODS[d.method] || d.method} ${d.location}`.trim();
+        const head = `${methodLabel(d)} ${d.location}`.trim();
         const specs = [
           d.method === "screen" || d.method === "embroidery" ? (d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`) : "",
           d.inks, d.size, d.drop ? `${d.drop}" drop` : "",

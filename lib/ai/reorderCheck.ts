@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
-import { LOCATIONS, METHODS, orderGroups, type Imprint, type Order, type Settings } from "@/lib/pricing";
+import { LOCATIONS, METHODS, methodLabel, orderGroups, type Imprint, type Order, type Settings } from "@/lib/pricing";
 
 /**
  * Reorder check: before a reorder goes to the customer or the press, the AI looks over the new order next to the old
@@ -163,7 +163,7 @@ function describe(groups: ReturnType<typeof orderGroups>) {
   return groups.map((g, i) => [
     `Group ${i + 1}:`,
     ...g.lines.map((l) => `  Garment: ${[l.brand, l.style, l.garment].filter(Boolean).join(" ")}, color ${l.color || "?"}: ${Object.entries(l.sizes || {}).filter(([, q]) => q).map(([z, q]) => `${z} ${q}`).join(", ")}`),
-    ...g.imprints.map((d: Imprint) => `  Print id ${d.id}: ${METHODS[d.method] || d.method} on ${d.location || "?"}, ${d.colors} color(s), inks ${d.inks || "none listed"}, size ${d.size || "not set"}${d.drop ? `, drop ${d.drop}"` : ""}${d.sizeFrom === "film" ? " (size off the film)" : ""}${d.design_id ? ", art attached" : ", NO art"}${d.confirm ? `, production to confirm: ${[d.confirm.size && "size", d.confirm.ink && "ink"].filter(Boolean).join(" + ")}` : ""}${d.notes ? `; notes: ${d.notes}` : ""}`),
+    ...g.imprints.map((d: Imprint) => `  Print id ${d.id}: ${methodLabel(d)} on ${d.location || "?"}, ${d.colors} color(s), inks ${d.inks || "none listed"}, size ${d.size || "not set"}${d.drop ? `, drop ${d.drop}"` : ""}${d.sizeFrom === "film" ? " (size off the film)" : ""}${d.design_id ? ", art attached" : ", NO art"}${d.confirm ? `, production to confirm: ${[d.confirm.size && "size", d.confirm.ink && "ink"].filter(Boolean).join(" + ")}` : ""}${d.notes ? `; notes: ${d.notes}` : ""}`),
   ].join("\n")).join("\n");
 }
 

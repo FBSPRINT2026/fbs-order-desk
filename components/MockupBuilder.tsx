@@ -13,7 +13,7 @@ import { BrandCtx, InkSelect, resolveInk, type Brand, type BrandInk } from "@/co
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
-import { LOCATIONS, fitLocation, METHODS, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
+import { LOCATIONS, fitLocation, METHODS, methodLabel, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
 import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
 import NameNumberBuilder from "@/components/NameNumberBuilder";
@@ -3782,7 +3782,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             details={[
               // the garments, then each print: where, how, its inks and size (Oct 24, Nick: "add the details, the imprint locations")
               ...[...new Set(lines.filter((z) => z.style).map((z) => [z.brand, z.style, garmentFor(z)?.description || z.garment].filter(Boolean).join(" ")))],
-              ...imprints.filter((im) => im.location).map((im) => [im.location, METHODS[im.method], im.inks, im.size ? `${im.size}` : ""].filter(Boolean).join(" · ")),
+              ...imprints.filter((im) => im.location).map((im) => [im.location, methodLabel(im), im.inks, im.size ? `${im.size}` : ""].filter(Boolean).join(" · ")),
             ]}
             shop={sheetShop} onClose={() => setSheetOpen(false)} />
         )}
@@ -4293,7 +4293,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         // into or out of embroidery: the picture is drawn again for the new method
                         if (m === "embroidery" || im.method === "embroidery") setPaints((pp) => { const n = { ...pp }; delete n[im.id]; return n; });
                         // heat press: the art back to its own colors (knock-outs stay)
-                        if (m === "dtf") setPaints((pp) => { const pt = pp[im.id]; if (!pt) return pp; const map = { ...pt.map }; for (const x of pt.sources) if (map[x.hex]?.name !== "none") map[x.hex] = { name: "Full color", hex: x.hex }; return { ...pp, [im.id]: { ...pt, map } }; }); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+                        if (m === "dtf") setPaints((pp) => { const pt = pp[im.id]; if (!pt) return pp; const map = { ...pt.map }; for (const x of pt.sources) if (map[x.hex]?.name !== "none") map[x.hex] = { name: "Full color", hex: x.hex }; return { ...pp, [im.id]: { ...pt, map } }; }); }}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{k === "dtf" && im.patch ? "Heat press patch" : v}</option>)}</select>
                     </div>
                     {im.area && <div className="mk-custom">
                       <label><span className="lbl">Custom location</span><input type="text" value={im.location} placeholder="Front pocket" onChange={(e) => { const v = e.target.value.slice(0, 40); setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: v } : x))); }} /></label>
@@ -4374,9 +4374,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         away. It's all just a full color image and you're figuring by size") */}
                     {p.d && im.method === "dtf" && (
                       <div className="mk-full">
-                        <b>Heat press (DTF)</b> <span className="faint">{im.patch ? "A patch heat pressed on: the Patch Application fee, nothing else to set." : "Full color, as it shows here: no inks or screens, just the size below."}</span>
-                        {/* a patch (Oct 31, Nick: "just have a button that says patch… make that 2.50"): priced as the Patch Application fee */}
-                        {!portal && <button type="button" className={"chip mk-patch" + (im.patch ? " on" : "")} aria-pressed={!!im.patch} title="A patch heat pressed on (the American flag): charged the Patch Application fee per piece" onClick={() => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, patch: x.patch ? undefined : {} } : x)))}>Patch</button>}
+                        <b>{methodLabel(im)}</b> <span className="faint">{im.patch ? "The Patch Application fee, $2.50 a piece." : "Full color, as it shows here: no inks or screens, just the size below."}</span>
+                        {/* a patch (Oct 31, Nick: "just make it a little check mark that says patch… call it heat press patch… $2.50") */}
+                        {!portal && <label className="check mk-patch"><input type="checkbox" checked={!!im.patch} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, patch: e.target.checked ? {} : undefined } : x)))} /> Patch</label>}
                         {/* knock a color out (Oct 26, Nick: "you don't need the color identifier… but you should be able to knock out colors") */}
                         {paints[im.id] && paints[im.id].sources.length > 0 && (
                           <div className="mk-ko">

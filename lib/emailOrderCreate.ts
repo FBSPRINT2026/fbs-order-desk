@@ -5,7 +5,7 @@ import { addressBlock } from "@/lib/addressBlock";
 import { applyConfirmedSpecs } from "@/lib/designSpecs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { proposalToGroups } from "@/lib/ai/normalize";
-import { METHODS, SIZES, STATUSES, sizeLabel, type Group } from "@/lib/pricing";
+import { METHODS, methodLabel, SIZES, STATUSES, sizeLabel, type Group } from "@/lib/pricing";
 import { carryOf, isPicture, oldNoteText, type EODraft } from "@/lib/emailOrderShared";
 import { trimPng } from "@/lib/pngTrim";
 import { SITE_URL } from "@/lib/config";
@@ -369,7 +369,7 @@ export function confirmationReply(o: { number: number; id: string; nickname: str
       if (qty) lines.push(`- ${[l.brand, l.style].filter(Boolean).join(" ")}${l.color ? `, ${l.color}` : ""}${l.garment ? ` (${l.garment})` : ""}: ${sizes} (${qty} pcs)`);
     }
     // a reorder print production hasn't confirmed: no guessed specs in the customer's email (lib/designSpecs.ts)
-    for (const im of g.imprints) lines.push(im.confirm && (im.confirm.size || im.confirm.ink) ? `- ${im.location}: ${METHODS[im.method] || im.method}, printed to match your previous order` : `- ${im.location}: ${METHODS[im.method] || im.method}${im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${im.inks ? ` (${im.inks})` : ""}${im.size ? `, ${im.size}` : ""}`);
+    for (const im of g.imprints) lines.push(im.confirm && (im.confirm.size || im.confirm.ink) ? `- ${im.location}: ${methodLabel(im)}, printed to match your previous order` : `- ${im.location}: ${methodLabel(im)}${im.method !== "dtf" ? `, ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}${im.inks ? ` (${im.inks})` : ""}${im.size ? `, ${im.size}` : ""}`);
   }
   const due = o.due && /^\d{4}-\d{2}-\d{2}$/.test(o.due) ? new Date(o.due + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : "";
   const body = [

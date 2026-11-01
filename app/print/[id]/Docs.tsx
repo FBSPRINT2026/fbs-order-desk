@@ -6,7 +6,7 @@ import { threadByName } from "@/lib/embroidery";
 import { changeVersions, inkChanges, inkChangesText, inksOnColor } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -401,7 +401,7 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
     <div className="wo-pc">
       <div className="h"><b className="disp">{sideOf(d, all)}</b><span>close-up p. {page}</span></div>
       <div className="kv">
-        <i>Method</i><span>{METHODS[d.method] || d.method} · <b>{colorsLabel(d)}</b>{d.printStyle === "fashion" ? " · fashion hit" : ""}{d.softHand ? " · soft hand" : ""}</span>
+        <i>Method</i><span>{methodLabel(d)} · <b>{colorsLabel(d)}</b>{d.printStyle === "fashion" ? " · fashion hit" : ""}{d.softHand ? " · soft hand" : ""}</span>
         {inks.length > 0 && <><i>{d.method === "embroidery" ? (inks.length === 1 ? "Thread" : "Threads") : inks.length === 1 ? "Ink" : "Inks"}</i>
           {/* one line each (Oct 31, Nick: "the number is the most important"): a thread's maker short, its number and name */}
           <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && d.method !== "embroidery" && <b>{n + 1} </b>}<b>{d.method === "embroidery" ? threadShort(k) : k}</b></span>)}</div></>}
@@ -489,7 +489,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
   return (
     <Wrap half={half}>
       <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">Print {di + 1} of {n} · {qty} pcs{colors ? ` · ${colors}` : ""}{groups.length > 1 ? ` · ${groups[gi].name || `Group ${gi + 1}`}` : ""}</div></div>
-      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{METHODS[d.method] || d.method} · {colorsLabel(d)} · {dropLabel(d)}</div>{hasSpotChange(d, groups[gi]?.lines || []) && <div className="m"><b>Location change:</b> {spotLines(d, groups[gi].lines).map((x) => `${x.letter} · ${x.spot}: ${x.what}`).join("  ⟳  ")} · same file</div>}{variant && <div className="doc-cctag">{variant.cw ? `COLORWAY ${des ? `${cwLetter(des, { name: variant.cw })} ` : ""}· ${variant.cw.toUpperCase()} · ON ${variant.color.toUpperCase()}` : `${changeWord(d.method).toUpperCase()} · ${variant.color.toUpperCase()}`}</div>}</div>
+      <div className="loc"><div className="n disp">{(d.location || "Print").toUpperCase()}</div><div className="m">{methodLabel(d)} · {colorsLabel(d)} · {dropLabel(d)}</div>{hasSpotChange(d, groups[gi]?.lines || []) && <div className="m"><b>Location change:</b> {spotLines(d, groups[gi].lines).map((x) => `${x.letter} · ${x.spot}: ${x.what}`).join("  ⟳  ")} · same file</div>}{variant && <div className="doc-cctag">{variant.cw ? `COLORWAY ${des ? `${cwLetter(des, { name: variant.cw })} ` : ""}· ${variant.cw.toUpperCase()} · ON ${variant.color.toUpperCase()}` : `${changeWord(d.method).toUpperCase()} · ${variant.color.toUpperCase()}`}</div>}</div>
       {d.supplied ? (
         // their placement reference, big: the press follows it (Oct 27, Nick)
         <div className="art" style={{ background: "#fff" }}>
@@ -848,7 +848,7 @@ export function InvoiceDoc(p: DocData) {
         const prints = g.imprints.map((d) => ({ d, inks: d.visualOnly ? [] : inkNames(d.inks) }));
         return (
           <div className="iv2-g" key={g.id}>
-            <div className="iv2-gh disp"><span>{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}{prints.length > 0 && <span className="iv2-gm"> · {[...new Set(prints.map(({ d }) => DECO[d.method] || METHODS[d.method] || d.method).filter(Boolean))].join(" + ")}</span>}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
+            <div className="iv2-gh disp"><span>{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}{prints.length > 0 && <span className="iv2-gm"> · {[...new Set(prints.map(({ d }) => (d.patch ? "Heat press patch" : DECO[d.method]) || methodLabel(d)).filter(Boolean))].join(" + ")}</span>}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
             {g.description?.trim() && <div className="iv2-gd">{g.description.trim()}</div>}
             <div className="iv2-cols lbl"><span>Item</span><span>Qty</span><span>Each</span><span>Amount</span></div>
             {lines.map(({ l, li, lc }) => {
@@ -878,7 +878,7 @@ export function InvoiceDoc(p: DocData) {
                         <div className="iv2-prs">
                           {/* how it's decorated, then each spot (Oct 30, Nick: "right underneath sizes… screen printing, embroidery,
                               or heat press, whatever it is, then go into the front") */}
-                          <div className="iv2-pr iv2-how"><em>Decoration</em><span>{[...new Set(prints.map(({ d }) => DECO[d.method] || METHODS[d.method] || d.method).filter(Boolean))].join(" + ")}</span></div>
+                          <div className="iv2-pr iv2-how"><em>Decoration</em><span>{[...new Set(prints.map(({ d }) => (d.patch ? "Heat press patch" : DECO[d.method]) || methodLabel(d)).filter(Boolean))].join(" + ")}</span></div>
                           {/* each print's inks or threads on this garment's color: a color change or colorway split swaps them in */}
                           {prints.map(({ d, inks: inks0 }) => { const inks = d.visualOnly ? inks0 : [...new Set(inksOnColor(d, l.color || "").map((x) => x.name))]; return (
                             <div className="iv2-pr" key={d.id}>

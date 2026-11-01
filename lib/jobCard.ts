@@ -1,7 +1,7 @@
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { mergeSettings, orderGroups, sizeLabel, SIZES, METHODS, ST, type Order, type Customer } from "@/lib/pricing";
+import { mergeSettings, orderGroups, sizeLabel, SIZES, METHODS, methodLabel, ST, type Order, type Customer } from "@/lib/pricing";
 import { addressLines, plain, sizeLabel as pvSizeLabel, sizeOrder as pvSizeOrder, type PvOrder } from "@/lib/archive";
 
 /**
@@ -56,7 +56,7 @@ export async function loadJobCard(admin: SupabaseClient, ref: { number: string }
           return { style: l.style || "", color: l.color || "", desc: l.garment || "", sizes, total: sizes.reduce((a, x) => a + x.qty, 0) };
         }),
         prints: g.imprints.map((d) => ({
-          location: d.location || "", method: METHODS[d.method] || d.method || "", colors: d.method === "screen" ? (d.colors >= 11 ? "Full color" : `${d.colors} color${d.colors === 1 ? "" : "s"}`) : d.method === "embroidery" ? `${d.colors} thread${d.colors === 1 ? "" : "s"}` : "Full color",
+          location: d.location || "", method: methodLabel(d) || d.method || "", colors: d.method === "screen" ? (d.colors >= 11 ? "Full color" : `${d.colors} color${d.colors === 1 ? "" : "s"}`) : d.method === "embroidery" ? `${d.colors} thread${d.colors === 1 ? "" : "s"}` : "Full color",
           inks: d.inks || "", size: d.size || "", drop: d.drop ? `${d.drop}" from collar` : "", notes: d.notes || "", designId: d.design_id,
         })),
       }));

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useRole } from "@/components/RoleContext";
-import { METHODS, type Group, type Imprint } from "@/lib/pricing";
+import { METHODS, methodLabel, type Group, type Imprint } from "@/lib/pricing";
 import { BACKINGS, TOPPINGS } from "@/lib/embroidery";
 import { DETAILS_LABEL, needsDetails, ordersNeedingDetails, type DetailsInput } from "@/lib/productionDetails";
 import { confirmDetails } from "../details-actions";
@@ -175,7 +175,7 @@ export default function ProductionDetailsPage() {
         <div key={im.id} className="pdd-print">
           <div className="pdd-art">{im.design_id && dUrl[im.design_id] ? <img src={dUrl[im.design_id]} alt="" /> : <span className="faint">No art</span>}</div>
           <div className="pdd-fields">
-            <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{METHODS[im.method] || im.method}{garment ? ` on ${garment}` : ""}{ims.length > 1 ? ` · the same print on ${gs.length} garment groups${im.method === "embroidery" ? "" : ", one set of screens"}` : ""}</span></div>
+            <div className="pdd-ph"><b>{im.location || "Print"}</b><span className="faint">{methodLabel(im)}{garment ? ` on ${garment}` : ""}{ims.length > 1 ? ` · the same print on ${gs.length} garment groups${im.method === "embroidery" ? "" : ", one set of screens"}` : ""}</span></div>
             {vis && <div className="pdd-why faint">Visual mockup only: set what ran on press. The old job says {im.colors} color{im.colors === 1 ? "" : "s"}.</div>}
             {!vis && im.confirm?.why && <div className="pdd-why faint">Our guess: {im.confirm.why}.{(im.size || im.inks || im.drop) && !(f.size || f.inks || f.drop) && <> <button type="button" className="linkbtn" onClick={() => set(im.id, { ...guessOf(im), screensOnFile: f.screensOnFile, notes: f.notes })}>Copy in our guesses</button></>}</div>}
             {im.method === "embroidery" ? (

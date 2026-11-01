@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude } from "@/lib/ai/claude";
-import { LOCATIONS, METHODS, type Group, type Settings } from "@/lib/pricing";
+import { LOCATIONS, METHODS, methodLabel, type Group, type Settings } from "@/lib/pricing";
 import type { EODraft } from "@/lib/emailOrderShared";
 
 /**
@@ -43,7 +43,7 @@ export async function fillFromOldNotes(admin: SupabaseClient, s: Settings, draft
   const label = `Printavo #${row.visual_id}`;
   const prints = draft.groups.map((g, gi) => [
     `Group ${gi + 1}: ${g.lines.map((l) => [l.brand, l.style, l.color].filter(Boolean).join(" ")).join("; ")}`,
-    ...g.imprints.map((im) => `  Print id ${im.id}: ${METHODS[im.method] || im.method} on ${im.location}, ${im.colors} color(s)${im.inks ? `, inks ${im.inks}` : ", no inks yet"}${im.size ? `, size ${im.size}` : ""}`),
+    ...g.imprints.map((im) => `  Print id ${im.id}: ${methodLabel(im)} on ${im.location}, ${im.colors} color(s)${im.inks ? `, inks ${im.inks}` : ", no inks yet"}${im.size ? `, size ${im.size}` : ""}`),
   ].join("\n")).join("\n");
   const r = await askClaude<Answer>({
     task: "reorder_old_notes", model: s.assistant.ai.model, maxTokens: 1500, timeoutMs: 40_000, admin,
