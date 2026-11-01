@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
 import QuickOrder from "@/components/QuickOrder";
 import PartialOrder from "@/components/tools/PartialOrder";
+import ReorderPick from "@/components/tools/ReorderPick";
 
 /**
  * THE Create order / Create reorder tool (Oct 23, Nick: "think of each of these as an individual tool that just gets
@@ -14,9 +15,11 @@ import PartialOrder from "@/components/tools/PartialOrder";
  * works (Oct 23, Nick: "a pop-up on the right, like Claude in Chrome… so I can still go back and click attachments"). Every Create order
  * button opens this; change it here and it changes everywhere. Listed in the AI Workbench's Tools (lib/aiTools.ts).
  */
-export default function CreateOrderTool({ activityId, text, guess = "", suggested, onClose, onCreated, onReview, begin }: {
-  activityId: string;
-  /** what it's about (the email's subject and summary, the job's name): past jobs named in it come first */ text: string;
+export default function CreateOrderTool({ activityId = "", archivedId, text = "", guess = "", suggested, onClose, onCreated, onReview, begin }: {
+  activityId?: string;
+  /** a reorder of an old Printavo job (the archive's Reorder): its goods and every file on it, each sorted by you
+   *  (components/tools/ReorderPick.tsx) */ archivedId?: string;
+  /** what it's about (the email's subject and summary, the job's name): past jobs named in it come first */ text?: string;
   guess?: "new" | "reorder" | "";
   /** what the Assistant suggested ("Create the reorder of #31174") */ suggested?: { label: string; told?: string; job?: string };
   onClose: () => void;
@@ -30,6 +33,7 @@ export default function CreateOrderTool({ activityId, text, guess = "", suggeste
     window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: true } }));
     return () => { window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: false } })); };
   }, []);
+  if (archivedId) return <ReorderPick archivedId={archivedId} onClose={onClose} onCreated={onCreated} />;
   // "Other options": only part of the order, no questions (components/tools/PartialOrder.tsx)
   if (quick?.partial) return <PartialOrder key={quick.n} activityId={activityId} start={{ ...quick, partial: quick.partial }} onClose={() => { setQuick(null); onClose(); }} onCreated={(id, n, label) => onCreated?.(id, n, label)} />;
   if (quick) return (
