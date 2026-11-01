@@ -829,9 +829,13 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const finAll = gc.lines.reduce((a, lc) => a + lc.qty * finOf(lc), 0);
     const tags = gc.lines.reduce((a, lc) => a + lc.qty * Math.min(tagEach, finOf(lc)), 0);
     const fin = Math.round((finAll - tags) * 100) / 100;
-    const gar = Math.round((gc.sub - imp - finAll) * 100) / 100;
+    // names (personalization, names & numbers) are their own part of the total, not "Garments" (Nov 1, #40345: the
+    // three names' $15 showed as Garments $15.00 on customer supplied jackets)
+    const pers = Math.round(((gc as { persTotal?: number }).persTotal || 0) * 100) / 100;
+    const gar = Math.round((gc.sub - imp - finAll - pers) * 100) / 100;
     const bits: [string, number, string?][] = [
       ...(gc.wholesale && Math.abs(gar) < 0.01 ? [] : [["Garments", gar] as [string, number]]),
+      ...(pers > 0.004 ? [["Personalization", pers, `${(gc as { persItems?: unknown[] }).persItems?.length || 0} name${((gc as { persItems?: unknown[] }).persItems?.length || 0) === 1 ? "" : "s"}`] as [string, number, string]] : []),
       ["Imprints", imp],
       // finishing by name when there's one ("Tag removal & custom imprint"), its own line on top of the prints
       ...(tags ? [["Tag prints", tags, `${money(tagEach)} a piece`] as [string, number, string]] : []),

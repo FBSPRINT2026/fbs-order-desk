@@ -522,7 +522,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // a price typed by hand wins and stays; off, or not covered (under the minimum, a print the card doesn't have), the
   // line goes back to normal pricing. Not once the job is in production.
   useEffect(() => {
-    if (!o || ["production", "ready", "completed"].includes(o.status)) return;
+    if (!o) return;
+    // in production the prices stay as they are, except what's below (frozen)
+    const frozen = ["production", "ready", "completed"].includes(o.status);
     const on = !!o.use_program && !!prog;
     const findGm = (l: GLine) => catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || c.brand.toLowerCase() === l.brand.toLowerCase()));
     // flat: a design's own price. Finishing on the job is added on top of it (Oct 21, Nick: Mewjira's tagging is $1 a
@@ -532,11 +534,29 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       const pl = priceList(settings, d.price_type || "retail");
       const list = finishingList(settings, pl, g.customFin);
       const own = prog!.card?.extraPrices || {};
-      const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !finishingIncluded(prog!.card, f) && (!flat || !prog!.card?.designsAllIn || own[f.id] != null));
+      // personalization is never folded into a piece's price: it's charged per name on the line (Nov 1, Nick on #40345:
+      // the jackets showed $8.75 = $3.75 + $5, and the three names $5 each on top, "it's not adding up")
+      const fs = (g.finishing || []).map((id) => list.find((f) => f.id === id)).filter((f): f is NonNullable<typeof f> => !!f && !/personali[sz]/i.test(`${f.id} ${f.name}`) && !finishingIncluded(prog!.card, f) && (!flat || !prog!.card?.designsAllIn || own[f.id] != null));
       // the tag print's price typed on the group wins, then the program's own price, then the list's
       const price = (f: { id: string; price: number }) => (f.id === "relabel" && g.tagPrice != null ? +g.tagPrice : own[f.id] != null ? +own[f.id] : +f.price || 0);
       return fs.length ? { each: fs.reduce((a, f) => a + price(f), 0), names: fs.map((f) => f.name).join(", ") } : null;
     };
+    // in production: an extra the program folded into a line's price for finishing that's since come off the group (or
+    // that's no longer folded in, like personalization) comes back out; nothing else is repriced
+    if (frozen) {
+      if (!on) return;
+      const unfold = (d: Order) => d.groups.forEach((g) => g.lines.forEach((l) => {
+        if (!l.prog || l.prog.base == null || !l.prog.adds || l.progOff || l.priceOverride !== l.prog.each) return;
+        if (finishingExtra(d, g, false)) return;
+        const base = l.prog.base;
+        l.prog = { each: base, note: l.prog.note.split(" + ")[0] };
+        l.priceOverride = base;
+      }));
+      const t: Order = JSON.parse(JSON.stringify(o));
+      unfold(t);
+      if (JSON.stringify(t.groups) !== JSON.stringify(o.groups)) patch(unfold);
+      return;
+    }
     const apply = (d: Order) => {
       // a patch (Imprint.patch) is its own fee, added on top: the program prices the group as if it weren't there
       const noPatch = (g: Group): Group => (g.imprints.some((im) => im.patch) ? { ...g, imprints: g.imprints.filter((im) => !im.patch) } : g);
