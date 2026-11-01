@@ -385,6 +385,8 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         }
       }
     })(ws).catch((e) => { out.problems.push(`${ws.team.name}: ${e instanceof Error ? e.message : String(e)}`); })));
+    // jobs ticked for an order that's gone: unticked and back on New (healOrphanTicks)
+    if (Date.now() < deadline - 5000) { const h = await healOrphanTicks(admin, deadline - 3000).catch(() => null); if (h?.healed.length) (out as unknown as Record<string, unknown>).healed = h.healed; if (h?.problems.length) out.problems.push(...h.problems); }
     const stats = { at: new Date().toISOString(), calls: Object.fromEntries([...calls].map(([t, c]) => [tokens.find((x) => x.token === t)?.key || "?", c])), ...out };
     await admin.from("clickup_state").update({ last_ok_at: new Date().toISOString(), last_error: out.problems.length ? out.problems.join(" · ").slice(0, 500) : null, cursors, stats }).eq("id", 1);
   } catch (e) {
@@ -462,15 +464,25 @@ export async function importClickUpTask(admin: SupabaseClient, id: string, by: s
   return { ok: true, activityId: made.id as string };
 }
 
+/**
+ * The task's own "In Printavo" check box (its id from ClickUp, `printavo_field`), set on or off. The one box our order
+ * making ticks and putting a job back unticks (Nov 1: putting a job back looked the box up by name and found the
+ * "Printavo" number field first, so eight Nine18 jobs whose orders were deleted here kept In Printavo ✓ in ClickUp and
+ * dropped off the New list: on no list anywhere).
+ */
+async function setInPrintavoBox(admin: SupabaseClient, taskId: string, on: boolean) {
+  let { data: t } = await admin.from("clickup_tasks").select("printavo_field, team_id").eq("id", taskId).maybeSingle();
+  if (!t?.printavo_field) { await readClickUpTask(admin, taskId); ({ data: t } = await admin.from("clickup_tasks").select("printavo_field, team_id").eq("id", taskId).maybeSingle()); }
+  if (!t?.printavo_field) throw new Error("This task has no In Printavo box.");
+  await cu(await tokenFor(admin, String(t.team_id || "")), `/task/${encodeURIComponent(taskId)}/field/${encodeURIComponent(t.printavo_field)}`, { method: "POST", body: { value: on } });
+}
+
 /** the order is made: note it on the job and tick the task's "In Printavo" box in ClickUp (the only write to ClickUp) */
 export async function tickInPrintavo(admin: SupabaseClient, taskId: string, order: { id: string; number: number }) {
   await admin.from("clickup_tasks").update({ order_id: order.id, order_number: order.number, waiting: false }).eq("id", taskId);
   if (!clickupTokens().length) return { ok: false as const, error: "ClickUp isn't connected." };
   try {
-    let { data: t } = await admin.from("clickup_tasks").select("printavo_field, team_id").eq("id", taskId).maybeSingle();
-    if (!t?.printavo_field) { await readClickUpTask(admin, taskId); ({ data: t } = await admin.from("clickup_tasks").select("printavo_field, team_id").eq("id", taskId).maybeSingle()); }
-    if (!t?.printavo_field) throw new Error("This task has no In Printavo box to tick.");
-    await cu(await tokenFor(admin, String(t.team_id || "")), `/task/${encodeURIComponent(taskId)}/field/${encodeURIComponent(t.printavo_field)}`, { method: "POST", body: { value: true } });
+    await setInPrintavoBox(admin, taskId, true);
     await admin.from("clickup_tasks").update({ in_printavo: true, ticked_at: new Date().toISOString(), tick_error: null }).eq("id", taskId);
     return { ok: true as const };
   } catch (e) {
@@ -517,22 +529,39 @@ export async function setClickUpDone(admin: SupabaseClient, taskId: string, done
  * so the next read of ClickUp doesn't take it off again.
  */
 export async function reopenClickUpTask(admin: SupabaseClient, taskId: string): Promise<{ ok: true; note?: string } | { ok: false; error: string }> {
-  const { data: t0 } = await admin.from("clickup_tasks").select("id, field_ids, fields").eq("id", taskId).maybeSingle();
+  const { data: t0 } = await admin.from("clickup_tasks").select("id").eq("id", taskId).maybeSingle();
   if (!t0) return { ok: false, error: "That ClickUp job isn't on file." };
   await admin.from("clickup_tasks").update({ order_id: null, order_number: null }).eq("id", taskId);
-  const names = [...Object.keys((t0.field_ids || {}) as Record<string, string>), ...Object.keys((t0.fields || {}) as Record<string, string>)];
-  const box = names.find((k) => /printavo/i.test(k));
   let note = "";
-  if (box && clickupTokens().length) {
-    const r = await setClickUpBox(admin, taskId, box, false);
-    if (r.ok) return { ok: true };
-    note = `Its ${box} box couldn't be unticked in ClickUp (${r.error}): untick it there, or ClickUp's next read takes the job off New again.`;
+  if (clickupTokens().length) {
+    try { await setInPrintavoBox(admin, taskId, false); }
+    catch (e) { note = `Its In Printavo box couldn't be unticked in ClickUp (${e instanceof Error ? e.message : String(e)}): untick it there, or ClickUp's next read takes the job off New again.`; }
   }
-  // no box, or ClickUp couldn't be reached: back on New here
+  // back on New here (ClickUp's next read agrees once the box is unticked); our tick is undone
   const { data: t } = await admin.from("clickup_tasks").select("team_id, parent, status_type, order_id, dismissed_at, pv_number, where_text, created_at_cu").eq("id", taskId).maybeSingle();
   const { data: team } = t ? await admin.from("clickup_teams").select("hidden").eq("id", t.team_id).maybeSingle() : { data: null };
-  if (t) await admin.from("clickup_tasks").update({ in_printavo: false, waiting: waitingOf({ parent: t.parent as string | null, status_type: String(t.status_type), in_printavo: false, order_id: null, dismissed_at: t.dismissed_at as string | null, pv_number: t.pv_number as string | null, where_text: String(t.where_text || ""), created_at_cu: t.created_at_cu as string | null }, !!team?.hidden) }).eq("id", taskId);
+  if (t) await admin.from("clickup_tasks").update({ in_printavo: false, ticked_at: null, waiting: waitingOf({ parent: t.parent as string | null, status_type: String(t.status_type), in_printavo: false, order_id: null, dismissed_at: t.dismissed_at as string | null, pv_number: t.pv_number as string | null, where_text: String(t.where_text || ""), created_at_cu: t.created_at_cu as string | null }, !!team?.hidden) }).eq("id", taskId);
   return { ok: true, ...(note ? { note } : {}) };
+}
+
+/**
+ * Jobs whose In Printavo box we ticked for an order that's since gone (deleted here) and that aren't on a Printavo
+ * order either: unticked and back on New, every ClickUp read (Nov 1: Nine18's Denver, New Orleans, Indianapolis,
+ * Boulder, Birmingham, Baton Shorts and Rhode Island sat with ✓ and no order anywhere). Only the box we ticked
+ * (ticked_at), only open jobs, at most a few a run.
+ */
+export async function healOrphanTicks(admin: SupabaseClient, deadline: number): Promise<{ healed: string[]; problems: string[] }> {
+  const out = { healed: [] as string[], problems: [] as string[] };
+  if (!clickupTokens().length) return out;
+  const { data: rows } = await admin.from("clickup_tasks").select("id, name, order_id").eq("in_printavo", true).not("ticked_at", "is", null).is("order_id", null).is("pv_id", null).is("dismissed_at", null).neq("status_type", "closed").neq("status_type", "done").limit(10);
+  for (const r of (rows || []) as { id: string; name: string }[]) {
+    if (Date.now() > deadline) break;
+    const { data: pvn } = await admin.from("clickup_tasks").select("pv_number").eq("id", r.id).maybeSingle();
+    if (pvn?.pv_number) continue;
+    const x = await reopenClickUpTask(admin, r.id);
+    if (x.ok && !x.note) out.healed.push(r.name); else out.problems.push(`${r.name}: ${x.ok ? x.note : x.error}`);
+  }
+  return out;
 }
 
 /**
