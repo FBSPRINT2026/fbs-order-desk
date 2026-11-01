@@ -304,13 +304,19 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
     for (const im of groups[gi].imprints || []) {
       const mineL = im.design_id ? ctx.logos?.find((x) => x.id === im.design_id) : null;
       if (!mineL) continue;
-      const peers = (ctx.logos || []).filter((x) => (x.brand || "") === (mineL.brand || ""));
+      // the logos the group's other prints print aren't this one's to be (Oct 31, #40334: the hat's flag patch, with the
+      // Stacked logo sewn beside it, was "the Stacked logo" too)
+      const others = new Set((groups[gi].imprints || []).filter((x) => x !== im && x.design_id && x.design_id !== im.design_id).map((x) => x.design_id));
+      const peers = (ctx.logos || []).filter((x) => (x.brand || "") === (mineL.brand || "") && !others.has(x.id));
       if (peers.length > 1) {
         const everywhere = new Set([...tokSet(peers[0].name)].filter((x) => peers.every((p) => tokSet(p.name).has(x))));
         const score = (p: SrcLogo) => [...tokSet(p.name)].filter((x) => !everywhere.has(x) && x.length >= 3 && W.has(x)).length;
         const best = Math.max(...peers.map(score));
         // a tie in words goes to the logo the shop's right orders use (MEI's carts: "Stacked Logo" is always D-10316)
-        const top0 = peers.filter((p) => score(p) === best), most = Math.max(...top0.map((p) => p.uses || 0));
+        // (a tie only between logos the same words fit: "Stacked" fits Secondary and SMM (stacked); "Flag" and "Stacked"
+        // both in the words name two logos, and the flag print is the flag)
+        const hits = (p: SrcLogo) => [...tokSet(p.name)].filter((x) => !everywhere.has(x) && x.length >= 3 && W.has(x)).sort().join(" ");
+        const top0 = peers.filter((p) => score(p) === best && (score(mineL) < best || hits(p) === hits(mineL))), most = Math.max(...top0.map((p) => p.uses || 0));
         const top = top0.length > 1 && most > 0 ? top0.filter((p) => (p.uses || 0) === most) : top0;
         if (best > 0 && top.length === 1 && top[0].id !== mineL.id && (score(mineL) < best || (top[0].uses || 0) > (mineL.uses || 0))) out.push({ kind: "logo", group: gi, lineIds: ids, what, paper: top[0].name, order: mineL.name, designId: mineL.id, toDesign: top[0].id, say: `${what}: the paperwork names the ${top[0].name} logo, the order prints ${mineL.name}.` });
       }

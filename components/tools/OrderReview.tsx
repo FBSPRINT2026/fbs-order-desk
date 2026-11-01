@@ -388,6 +388,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
       </div>
 
       <div className="orv-compose">
+        {/* a group with no mockup yet: said above the box, not another button in the row (Oct 31, Nick) */}
+        {needMock && !onMockupPage && <p className="orv-mknote">{needMockN > 1 ? `${needMockN} groups have no mockup.` : "One group has no mockup."} <button type="button" className="orv-mklink" onClick={makeMock} disabled={!!busy} title="Opens the Mockup Creator in a new tab">{needMockN > 1 ? "Make them" : "Make it"}</button></p>}
         <div className="orv-box">
           <textarea ref={box} rows={1} value={text} onChange={(e) => { setText(e.target.value); setErr(""); const t = e.target; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
@@ -396,10 +398,9 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
           <button type="button" className="orv-send" onClick={send} disabled={!!busy || !text.trim()} aria-label="Make the changes" title="Make the changes (Enter)">↑</button>
         </div>
         <div className="orv-quick">
-          {res.length > 0 && <button type="button" className="chip orv-rsc-h" onClick={() => setResOpen(true)} title="What came in with the order (their PO, mockup, art), opened in the middle of the screen">Order resources <span className="orv-rsc-n">{res.length}</span></button>}
+          {res.length > 0 && <button type="button" className="chip orv-rsc-h" onClick={() => setResOpen(true)} title="What came in with the order (their PO, mockup, art), opened in the middle of the screen">Resources <span className="orv-rsc-n">{res.length}</span></button>}
           <span className="spacer" />
-          <button type="button" className="chip" onClick={() => void ask("review")} disabled={!!busy}>{rounds.length ? "Check it again for me" : "Check it for me"}</button>
-          {needMock && !onMockupPage && <button type="button" className="chip" onClick={makeMock} disabled={!!busy} title="Opens the Mockup Creator for the group with no mockup, in a new tab">{needMockN > 1 ? `Make ${needMockN} mockups` : "Make the mockup"}</button>}
+          <button type="button" className="chip" onClick={() => void ask("review")} disabled={!!busy} title="I look the order over against what came in">{rounds.length ? "Check again" : "Check it"}</button>
           <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working || askNext} title="Saves it and closes">{yesLabel}</button>
         </div>
       </div>

@@ -18,7 +18,8 @@ const ALIAS: Record<string, string> = { rust: "redwood", "burnt orange": "redwoo
  * with its first letter, with letters left out. A one-piece name is never a short name ("Black" isn't "Blackberry").
  */
 export function isShortFor(short: string, full: string): boolean {
-  const split = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/grey/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
+  // "TNFDkGyH" is TNF Dk Gy H: a run of capitals before a capitalized word is a word of its own
+  const split = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").toLowerCase().replace(/grey/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
   const ps = split(short), ws = split(full);
   // SanMar may drop the color family off the end: K867's "DpSmkHthr" is Deep Smoke Heather Gray (Oct 31, #40332)
   const FAMILY = /^(gray|black|white|blue|navy|red|green|brown|tan|pink|purple|orange|yellow)$/;
