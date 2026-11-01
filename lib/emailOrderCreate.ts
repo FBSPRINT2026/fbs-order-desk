@@ -450,7 +450,13 @@ async function standardMockups(admin: SupabaseClient, custId: string, groups: Gr
     const colorsOf = (r: StdMockup) => new Set((((r.snapshot as { lines?: { color?: string }[] } | null)?.lines) || []).map((l) => norm(l.color || "")));
     const mine = [...new Set((g.lines || []).map((l) => norm(l.color || "")).filter(Boolean))];
     const m = master || fits.find((r) => mine.length > 0 && mine.every((c) => colorsOf(r).has(c))) || fits[0];
-    if (!m) continue;
+    // none saved for this logo and version yet: made the way the brand's are (Oct 31, #40332: MEI's standards are all logo
+    // mockups, and a new version's was made as a garment drawing in the Mockup Creator instead of in the logo builder)
+    if (!m) {
+      const own = rows.filter((r) => (byBrand.get(g.imprints[0].fromBrand!) || []).includes(r.number));
+      if (!master && own.length && own.filter(isLogo).length * 2 >= own.length) g.mockupKind = "logo";
+      continue;
+    }
     g.mockupThumbs = [m.file_path.replace(/\.png$/i, "-thumb.png")];
     g.mockupAt = new Date().toISOString();
     if (/ — Logo /.test(m.title || "")) g.mockupKind = "logo";
