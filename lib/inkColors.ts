@@ -423,6 +423,14 @@ export function clearPage(c: HTMLCanvasElement): HTMLCanvasElement {
   const w = c.width, h = c.height, x = c.getContext("2d", { willReadFrequently: true })!;
   const data = x.getImageData(0, 0, w, h), d = data.data;
   const white = (p: number) => d[p * 4 + 3] > 200 && d[p * 4] > 236 && d[p * 4 + 1] > 236 && d[p * 4 + 2] > 236;
+  // a page is all around the art: art on a see-through background has no page, and its own white touching the edge is
+  // the art (Oct 31, Nick: "why is the M missing" — the All White logo's M runs to the picture's edge and was taken
+  // off as if it were paper)
+  { let n = 0, clear = 0;
+    const look = (p: number) => { n++; if (d[p * 4 + 3] < 200) clear++; };
+    for (let i = 0; i < w; i += Math.max(1, Math.floor(w / 200))) { look(i); look((h - 1) * w + i); }
+    for (let j = 0; j < h; j += Math.max(1, Math.floor(h / 200))) { look(j * w); look(j * w + w - 1); }
+    if (n && clear / n > 0.2) return c; }
   const seen = new Uint8Array(w * h), stack: number[] = [];
   for (let i = 0; i < w; i++) { stack.push(i, (h - 1) * w + i); }
   for (let j = 0; j < h; j++) { stack.push(j * w, j * w + w - 1); }
