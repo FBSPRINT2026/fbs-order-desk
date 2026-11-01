@@ -71,7 +71,8 @@ Doing it:
 - Youth sizes go on a youth style, not the adult one: the youth line of the same color if the order has one; else add one with the youth style that goes with the adult style (the list above, or one you know for sure, like Gildan 5000 → 5000B); if you don't know it, ask.
 - Prices: set_price "each" is the whole price per piece (garment and prints); null puts it back on the price list. set_size_charge is the extra each for a big size ("make the 2XLs $2 more" → {"2XL": 2}); leave group/line out to change every line. A fee is a line on the invoice (setup, rush, art, shipping). Discount: pct or amt.
 - Prints: set_imprint with the group and location (${LOCATIONS.join(", ")}); method screen, embroidery or dtf (heat press transfers are dtf); colors a number; inks comma separated.
-- Job name, due date (YYYY-MM-DD), PO and notes: set_order; group_name renames a group.`,
+- Job name, due date (YYYY-MM-DD), PO and notes: set_order; group_name renames a group.
+- A file dropped with nothing asked ("Dropped: <file name>"): say in one line what it is (an S&S / SanMar order confirmation and its number, the customer's PO, a size sheet, a mockup). When it has sizes, DON'T change anything yet: list each style and color with its sizes and the group it would go on (a garment already on the order goes to its line; say which group for one that isn't on the order, or that could go on more than one), then ask "Add these sizes?" (or "Add these sizes? Which group should <style color> go on?"). When staff say yes or name a group, do it with set_sizes (mode replace) and add_line, then say the totals. A supplier's confirmation lists the blanks ordered: its quantities ARE the sizes to print.`,
     prompt,
   });
   if (!r.ok) return { ok: false, error: r.error };

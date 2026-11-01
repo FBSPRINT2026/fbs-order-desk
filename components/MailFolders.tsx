@@ -636,7 +636,7 @@ function saveAll(files: MailFile[]) {
 }
 function FileRow({ f }: { f: MailFile }) {
   const inner = <><span className={"mf-ft " + kindOf(f)}>{ext(f)}</span><span className="mf-fn">{f.name}</span>{f.size ? <span className="mf-fs">{kb(f.size)}</span> : null}<span className="mf-fo">Open</span></>;
-  return f.href ? <a className="mf-fr" href={f.href} target="_blank" rel="noreferrer">{inner}</a> : <button type="button" className="mf-fr" onClick={f.onOpen} disabled={!f.onOpen}>{inner}</button>;
+  return f.href ? <a className="mf-fr" href={f.href} target="_blank" rel="noreferrer" data-file-name={f.name} data-file-type={f.type || undefined}>{inner}</a> : <button type="button" className="mf-fr" onClick={f.onOpen} disabled={!f.onOpen}>{inner}</button>;
 }
 /**
  * The attachments, as their own section between the email's header and its body (Oct 21, Nick: "they need to be their
@@ -660,7 +660,7 @@ export function FileTray({ files, inBar, note }: { files: MailFile[]; /** phones
       <div className="mf-tray-g">{files.map((f) => {
         const body = <>{isImg(f) && f.href ? <img className="mf-tp" src={f.href} alt="" loading="lazy" /> : <span className={"mf-tp mf-ft " + kindOf(f)}>{ext(f)}</span>}
           <span className="mf-tn" title={f.name}>{f.name}</span>{f.size ? <span className="mf-fs">{kb(f.size)}</span> : null}</>;
-        return f.href ? <a key={f.key} className="mf-tile" href={f.href} target="_blank" rel="noreferrer"
+        return f.href ? <a key={f.key} className="mf-tile" href={f.href} target="_blank" rel="noreferrer" data-file-name={f.name} data-file-type={f.type || undefined}
           onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0 || !canLook(f) || (typeof window !== "undefined" && window.innerWidth < 760 && !officeKind(f.name, f.type))) return; e.preventDefault(); setLook(files.indexOf(f)); }}>{body}</a>
           : <button key={f.key} type="button" className="mf-tile" onClick={f.onOpen} disabled={!f.onOpen}>{body}</button>;
       })}</div>

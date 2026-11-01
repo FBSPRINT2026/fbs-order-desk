@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { downloadUrl } from "@/lib/printavoNames";
 import { PROD_KINDS, fileTypeOf, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 import { heldFiles } from "@/lib/heldFiles";
+import { dragFile } from "@/lib/dragFile";
 import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
 
 /** `fileName`: what a download saves as (defaults to `name`) */
@@ -48,7 +49,7 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
             onDrop={onUpload ? (e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files?.length) onUpload(e.dataTransfer.files); } : undefined}>
             {files.map((f) => (
               <div key={f.id} className="prod-file">
-                <button type="button" className="prod-thumb" title={f.name} onClick={(e) => (isImg(f) && f.url ? setZoom(f) : lookable.some((x) => x.key === f.id) && !(e.metaKey || e.ctrlKey || e.shiftKey) ? setLook(f.id) : f.url && window.open(f.url, "_blank", "noopener"))}>
+                <button type="button" className="prod-thumb" title={f.name} draggable={!!f.url} onDragStart={(e) => dragFile(e, { name: f.fileName || f.name, href: f.url, type: f.mime })} onClick={(e) => (isImg(f) && f.url ? setZoom(f) : lookable.some((x) => x.key === f.id) && !(e.metaKey || e.ctrlKey || e.shiftKey) ? setLook(f.id) : f.url && window.open(f.url, "_blank", "noopener"))}>
                   {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <FileThumb f={f} />}
                 </button>
                 <div className="prod-fname" title={f.name}>{f.name}</div>

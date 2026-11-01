@@ -3,6 +3,7 @@ import MenuItem from "@/components/MenuItem";
 import { openOrderGoodsForOrder } from "@/components/tools/OrderGoodsTool";
 import { useEffect, useRef, useState } from "react";
 import type { HelperAction, HelperMsg, HelperOrder } from "@/lib/orderHelperShared";
+import { startListening } from "@/components/VoiceDraft";
 
 /**
  * "Ask AI" on the order page (Oct 21, Nick: "you'd click it and it would create a pop-up… what can I help you with?…
@@ -14,6 +15,22 @@ import type { HelperAction, HelperMsg, HelperOrder } from "@/lib/orderHelperShar
 type Pic = { media_type: "image/jpeg"; data: string; url: string };
 type Step = { label: string; state: "wait" | "doing" | "done" | "error" };
 type Msg = HelperMsg & { pics?: string[]; steps?: Step[]; undo?: boolean; error?: boolean };
+
+/** a PDF's first pages as pictures to send (an S&S / SanMar confirmation, a PO, a size sheet) */
+async function pdfPics(f: Blob): Promise<Pic[]> {
+  try {
+    const { pdfPicture } = await import("@/lib/printavoArt");
+    const buf = await f.arrayBuffer();
+    const out: Pic[] = [];
+    for (let n = 1; n <= 3; n++) {
+      const c = await pdfPicture(buf.slice(0), 1800, n).catch(() => null);
+      if (!c) break;
+      const d = c.toDataURL("image/jpeg", 0.85);
+      out.push({ media_type: "image/jpeg", data: d.split(",")[1], url: d });
+    }
+    return out;
+  } catch { return []; }
+}
 
 /** a picture made small enough to send (longest side 2000px, JPEG) */
 async function shrink(f: Blob): Promise<Pic | null> {
@@ -39,10 +56,22 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
-  const [pics, setPics] = useState<Pic[]>([]);
+  const [pics0, setPics] = useState<Pic[]>([]);
   const [busy, setBusy] = useState(false);
   const lastPics = useRef<Pic[]>([]);
   const box = useRef<HTMLTextAreaElement>(null), end = useRef<HTMLDivElement>(null), file = useRef<HTMLInputElement>(null);
+  // the microphone (Nov 1, Nick: "make that something you can talk to"): on until you tap it off; what it hears goes in the box
+  const [mic, setMic] = useState<{ on: boolean; err: string }>({ on: false, err: "" });
+  const listener = useRef<ReturnType<typeof startListening>>(null);
+  const micOn = () => { const l = startListening(text); listener.current = l; if (!l) { setMic({ on: false, err: "" }); return; } l.sub = () => { setText(l.text); setMic({ on: l.on, err: l.err }); }; setMic({ on: true, err: "" }); };
+  const micOff = () => { listener.current?.stop(); listener.current = null; setMic({ on: false, err: "" }); };
+  const [over, setOver] = useState(false);
+  // open on the right like Create order: the left menu folds to icons while it's open
+  useEffect(() => {
+    if (!open) return;
+    window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: true } }));
+    return () => { window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: false } })); listener.current?.stop(); };
+  }, [open]);
   useEffect(() => { if (open) setTimeout(() => box.current?.focus(), 30); }, [open]);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [msgs, open]);
   useEffect(() => {
@@ -51,16 +80,27 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
     window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k);
   }, [open, busy]);
 
+  // pictures and PDFs (Nov 1, Nick: "take a PDF or a snip… just drop it in… if you read a SanMar order confirmation, an
+  // S&S order confirmation… you should just immediately ask, do you want me to add these sizes"): a file dropped with
+  // nothing typed is sent straight away, and the helper says what it is and asks before changing anything
   async function addFiles(fs: (File | Blob)[]) {
-    const out: Pic[] = [];
-    for (const f of fs.filter((x) => /^image\//.test(x.type)).slice(0, 4)) { const p = await shrink(f); if (p) out.push(p); }
-    if (out.length) setPics((ps) => [...ps, ...out].slice(0, 4));
+    const out: Pic[] = [], names: string[] = [];
+    for (const f of fs.slice(0, 4)) {
+      const nm = (f as File).name || "";
+      if (/pdf/i.test(f.type) || /\.pdf$/i.test(nm)) { const ps = await pdfPics(f); if (ps.length) { out.push(...ps); names.push(nm || "PDF"); } }
+      else if (/^image\//.test(f.type)) { const p = await shrink(f); if (p) { out.push(p); names.push(nm || "Snip"); } }
+    }
+    if (!out.length) return;
+    if (!text.trim() && !busy) { void send({ pics: out.slice(0, 6), message: `Dropped: ${names.join(", ")}` }); return; }
+    setPics((ps) => [...ps, ...out].slice(0, 6));
   }
   const setLast = (fn: (m: Msg) => Msg) => setMsgs((ms) => ms.map((m, i) => (i === ms.length - 1 ? fn(m) : m)));
   const stepTo = (n: number, state: Step["state"] = "doing") => setLast((m) => ({ ...m, steps: m.steps?.map((s, i) => ({ ...s, state: i < n ? "done" : i === n ? state : "wait" })) }));
 
-  async function send() {
-    const message = text.trim();
+  async function send(o?: { pics?: Pic[]; message?: string }) {
+    micOff();
+    const message = (o?.message ?? text).trim();
+    const pics = o?.pics ?? pics0;
     if ((!message && !pics.length) || busy) return;
     const order = snapshot();
     if (!order) return;
@@ -115,15 +155,17 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
         </details>
       ) : <button type="button" className="btn oh-btn" onClick={() => setOpen(true)} title="Tell the AI what to do with this order, or paste a snip of the customer's email">✦ Ask AI</button>}
       {open && (
-        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Order helper" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setOpen(false); }}>
-          <div className="dla oh" onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addFiles(fs); } }}
-            onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }}>
-            <div className="oh-h"><b>✦ What can I help you with?</b><span className="oh-sp" />
+        <div className="dla-bg dock" role="dialog" aria-label="Quick ask">
+          <div className={"dla oh oh-dock" + (over ? " oh-over" : "")} onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addFiles(fs); } }}
+            onDragOver={(e) => { e.preventDefault(); if (!over) setOver(true); }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
+            onDrop={(e) => { e.preventDefault(); setOver(false); void addFiles([...e.dataTransfer.files]); }}>
+            <div className="oh-h"><b>✦ Quick ask</b><span className="oh-sp" />
               {msgs.length > 0 && !busy && <button type="button" className="linkbtn" onClick={() => { setMsgs([]); lastPics.current = []; }}>Start over</button>}
               <button type="button" className="qo-x oh-x" onClick={() => setOpen(false)} disabled={busy} aria-label="Close">×</button></div>
             <div className="oh-thread">
               {!msgs.length && <div className="oh-hint">
-                Paste a snip (Ctrl+V), drop a screenshot, or tell me what to do:
+                <button type="button" className="oh-drop" onClick={() => file.current?.click()}><b>Drop a PDF, a snip or a picture here</b><span>S&amp;S or SanMar confirmations, POs, size sheets: I&apos;ll ask before adding anything</span></button>
+                Or talk, paste (Ctrl+V) or type what to do:
                 <ul>{["Fill in the sizes from this snip", "Make this order: here's what they want", "Make all the 2XLs $2 more and the 3XLs $2.50", "Set the 1717s to $14 each", "Add a $25 rush fee", "Change the red to cardinal"].map((x) => <li key={x}><button type="button" className="linkbtn" onClick={() => { setText(x); box.current?.focus(); }}>{x}</button></li>)}</ul>
               </div>}
               {msgs.map((m, i) => m.role === "staff" ? (
@@ -133,19 +175,26 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
                   {m.steps && !m.text && <ol className="qo-steps oh-steps">{m.steps.map((s, k) => <li key={k} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}</span></li>)}</ol>}
                   {m.text && <div className="oh-text">{m.text}</div>}
                   {m.done && m.done.length > 0 && <ul className="oh-done">{m.done.map((d, k) => <li key={k}>{d}</li>)}</ul>}
+                  {/* a question: one tap to answer it (yes, or which group) */}
+                  {i === msgs.length - 1 && !busy && !m.error && !m.done?.length && /\?\s*$/.test(m.text || "") && (() => { const o = snapshot(); const gs = (o?.groups || []).map((g, k) => g.name || `Group ${k + 1}`); return (
+                    <div className="oh-quick">{["Yes, do it", ...(gs.length > 1 ? gs.map((g) => `Put them on ${g}`) : []), ...(gs.length ? ["Make a new group"] : [])].map((q) => <button key={q} type="button" className="chip" onClick={() => void send({ message: q, pics: [] })}>{q}</button>)}</div>); })()}
                   {m.undo && <div className="oh-acts"><button type="button" className="btn sm" onClick={() => { if (undo()) setMsgs((ms) => ms.map((x, k) => (k === i ? { ...x, undo: false, done: [...(x.done || []), "Undone: the order is back the way it was"] } : x))); }}>Undo</button></div>}
                 </div>
               ))}
               <div ref={end} />
             </div>
-            {pics.length > 0 && <div className="oh-pics oh-pend">{pics.map((p, k) => <span key={k}><img src={p.url} alt="Snip to send" /><button type="button" aria-label="Remove" onClick={() => setPics((ps) => ps.filter((_, x) => x !== k))}>×</button></span>)}</div>}
+            {pics0.length > 0 && <div className="oh-pics oh-pend">{pics0.map((p, k) => <span key={k}><img src={p.url} alt="Snip to send" /><button type="button" aria-label="Remove" onClick={() => setPics((ps) => ps.filter((_, x) => x !== k))}>×</button></span>)}</div>}
             <div className="oh-box">
               <textarea ref={box} rows={2} value={text} placeholder="Tell me what to do, or paste a snip…" aria-label="Tell the helper what to do"
                 onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-              <input ref={file} type="file" accept="image/*" multiple hidden onChange={(e) => { void addFiles([...(e.target.files || [])]); e.target.value = ""; }} />
-              <button type="button" className="btn icon ghost" title="Add a picture" aria-label="Add a picture" onClick={() => file.current?.click()}>🖼</button>
-              <button type="button" className="btn primary" disabled={busy || (!text.trim() && !pics.length)} onClick={() => void send()}>{busy ? "Working…" : "Go"}</button>
+              <input ref={file} type="file" accept="image/*,application/pdf,.pdf" multiple hidden onChange={(e) => { void addFiles([...(e.target.files || [])]); e.target.value = ""; }} />
+              <button type="button" className="btn icon ghost" title="Add a PDF or a picture" aria-label="Add a PDF or a picture" onClick={() => file.current?.click()}>📎</button>
+              <button type="button" className={"btn icon oh-mic" + (mic.on ? " on" : "")} title={mic.on ? "Stop listening" : "Talk: tap, say what to do, tap again"} aria-label={mic.on ? "Stop listening" : "Talk"} aria-pressed={mic.on} onClick={() => (mic.on ? micOff() : micOn())}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>
+              </button>
+              <button type="button" className="btn primary" disabled={busy || (!text.trim() && !pics0.length)} onClick={() => void send()}>{busy ? "Working…" : "Go"}</button>
             </div>
+            {(mic.on || mic.err) && <div className={"oh-listen" + (mic.err ? " err" : "")}>{mic.err || "Listening… tap the mic when you're done, then Go"}</div>}
           </div>
         </div>
       )}

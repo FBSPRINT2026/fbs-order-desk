@@ -8,6 +8,7 @@ import type { ReorderFile } from "@/app/api/archive/reorder/route";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import SizeFitAsk, { applySizeFit, checkSizeFit, type FitRow } from "@/components/SizeFit";
 import { QuickLook, type MailFile } from "@/components/MailFolders";
+import { dragFile } from "@/lib/dragFile";
 
 /**
  * Reorder of an old Printavo job, inside THE Create order tool (Nov 1, Nick: "when you click a reorder, you should pop
@@ -167,7 +168,7 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
             <div className="rop-h"><b>Everything attached</b><span className="faint">{d.files.length ? "Say what each one is" : "No files on the old job"}</span></div>
             {d.files.map((f, i) => (
               <div key={f.key} className={"rop-file" + (what[f.key] === "skip" ? " off" : "")}>
-                <button type="button" className="rop-th" onClick={() => setLook(i)} title="Look at it">
+                <button type="button" className="rop-th" onClick={() => setLook(i)} title="Look at it" draggable onDragStart={(e) => dragFile(e, { name: f.name, href: href(f), type: f.mime })}>
                   {f.thumb ? <img src={href({ path: f.thumb, name: f.name })} alt="" loading="lazy" /> : <span>{(f.path.split(".").pop() || "file").toUpperCase()}</span>}
                 </button>
                 <div className="rop-fi">
