@@ -40,7 +40,9 @@ export async function planEmail(admin: SupabaseClient, activityId: string, by: s
   if (!o.fresh) {
     const { data: had } = await admin.from("ai_suggestions").select("payload").eq("dedupe_key", key).maybeSingle();
     const p = had?.payload as EmailPlan | undefined;
-    if (p?.seen && p.seen >= seen) return { ok: true, plan: p };
+    // a saved plan with no orders in it is a reading that went wrong, not "no orders": read again (Nov 1: 82 emails,
+    // Dear Heart's 4-design "DH Orders 10/26!" among them, kept "0 orders" and never offered the split)
+    if (p?.seen && p.seen >= seen && p.parts?.length) return { ok: true, plan: p };
   }
   const { settings, ready, reason } = await aiState(admin);
   if (!ready) return { ok: false, error: reason };
@@ -100,6 +102,8 @@ ${memoryText(mems, cat?.customer || "this customer")}` : ""}`,
   });
   if (!r.ok) return { ok: false, error: r.error };
   // the AI sometimes hands a list back as text (Oct 20: "F.map is not a function"): read it as a list, or none
+  // a list of files as written: an array, a JSON array, or "F1, F3" / "1 and 3"
+  const listAny = (x: unknown): unknown[] => { if (Array.isArray(x)) return x; if (typeof x === "string") { try { const j = JSON.parse(x); if (Array.isArray(j)) return j; } catch { /* not JSON */ } return x.split(/[,;]|\band\b/).map((y) => y.trim()).filter(Boolean); } return x == null ? [] : [x]; };
   const list = <T,>(x: unknown): T[] => { if (Array.isArray(x)) return x as T[]; if (typeof x === "string") { try { const j = JSON.parse(x); if (Array.isArray(j)) return j as T[]; } catch { /* not a list */ } const nums = x.match(/\d+/g); return (nums || []).map(Number) as unknown as T[]; } return []; };
   const raw = list<NonNullable<typeof r.data.orders>[number]>(r.data.orders).filter((x) => x && typeof x === "object").slice(0, 12);
   const used = new Set<string>();
@@ -109,7 +113,9 @@ ${memoryText(mems, cat?.customer || "this customer")}` : ""}`,
     // the past order: in the design's orders (else any of theirs) by its number; a Printavo job is "a:<id>" when read
     const job = num ? (d?.jobs.find((j) => j.number === num) || (cat?.designs || []).flatMap((z) => z.jobs).find((j) => j.number === num)) : undefined;
     const ref = job ? `${job.src === "printavo" ? "a" : "o"}:${job.id}` : null;
-    const fs = list<number>(x.files).map((n) => real[Math.floor(+n) - 1]).filter(Boolean);
+    // a file as its F number (3, "3", "F3") or its name, however the AI writes it
+    const fileOf = (n: unknown) => { const t = String(n ?? "").trim(); const k = /^f?\s*(\d+)$/i.exec(t)?.[1]; if (k) return real[+k - 1]; const lc = t.toLowerCase(); return lc.length > 3 ? real.find((f) => f.name.toLowerCase() === lc) || real.find((f) => f.name.toLowerCase().includes(lc) || lc.includes(f.name.toLowerCase())) : undefined; };
+    const fs = [...new Set(listAny(x.files).map(fileOf).filter((f): f is NonNullable<typeof f> => !!f))];
     let k = slug(d?.name || x.label || `order ${i + 1}`); while (used.has(k)) k += "-2"; used.add(k);
     const pieces = fs.reduce((n, f) => n + pcsOf(f.name), 0);
     return {
@@ -117,8 +123,12 @@ ${memoryText(mems, cat?.customer || "this customer")}` : ""}`,
       job: ref, ...(job ? { jobLabel: `#${job.number}${job.title ? ` ${job.title}` : ""}` } : {}),
       changes: String(x.changes || "").trim().slice(0, 600), files: fs.map((f) => f.path), names: fs.map((f) => f.name), ...(pieces ? { pieces } : {}),
     } as EOPart;
-  }).filter((p) => p.files.length || p.job);
+  // an order with neither files nor a past job is only dropped when it's the only one (several orders are each checked)
+  }).filter((p) => p.files.length || p.job || raw.length > 1);
+  if (!parts.length && real.length) console.warn("planEmail: no orders read", C.id, JSON.stringify(r.data).slice(0, 1500));
   const plan: EmailPlan = { parts, note: String(r.data.note || "").slice(0, 300), seen, at: new Date().toISOString(), anchor };
+  // nothing read from an email with files: not kept, so the next open reads it again
+  if (!parts.length && real.length) return { ok: true, plan };
   await admin.from("ai_suggestions").upsert({
     kind: "email_plan", dedupe_key: key, priority: 3, source: "ai", model: r.model, run_id: r.runId, status: "done",
     customer_id: cid, activity_id: anchor, title: `${parts.length} order${parts.length === 1 ? "" : "s"} in this email`, body: parts.map((p) => p.label).join("; ").slice(0, 500), payload: plan,
