@@ -52,7 +52,9 @@ const GENERIC = new Set(["jacket", "jac", "jacke", "shirt", "tee", "polo", "swea
   // who it's cut for and what it's called in general: the cart's "Unisex CVC T-Shirt" is SanMar's "Adult CVC Tee"
   "unisex", "adult", "adults", "kids", "kid", "toddler", "infant", "girls", "boys", "tall", "tshirt", "tees",
   // how it was made, which makers word differently: the cart's "Garment-Dyed Heavyweight T-Shirt" is the 1717 "Heavyweight Ring Spun Tee"
-  "garment", "dyed", "ring", "spun", "ringspun"]);
+  "garment", "dyed", "ring", "spun", "ringspun",
+  // how a cap closes or fits, not which cap
+  "adjustable", "snapback", "snap", "back", "fitted", "structured", "unstructured"]);
 
 /** the spots words can name, longest first; a sleeve by any name is a sleeve */
 const LOC_PHRASES: { w: string[]; loc: string }[] = [
@@ -97,7 +99,13 @@ export function styleFits(name: string, brand: string, c: { title: string; brand
   const ct = tokSet(c.title);
   const gw = [...new Set(words(name).filter((w) => w.length > 1 && !STOP.has(w)))];
   const distinct = gw.filter((x) => x.length >= 4 && !GENERIC.has(x) && !/^\d+$/.test(x) && !cb.has(x) && !lb.has(x));
-  const nameOff = distinct.length > 0 && distinct.filter((x) => ct.has(x)).length < Math.ceil(distinct.length / 2);
+  // a name that says the style number itself is that style (Oct 31, #40332: "112 Richardson® 112 Adjustable Snapback
+  // Trucker Cap" is SanMar's "Richardson Trucker Cap 112"); the catalog's title ends with its number
+  const st = ((c.title || "").match(/([a-z0-9-]*\d[a-z0-9-]*)\s*\.?\s*$/i) || [])[1]?.toLowerCase().replace(/[^a-z0-9]/g, "") || "";
+  const says = !!st && st.length >= 3 && gw.some((w) => w.replace(/[^a-z0-9]/g, "") === st);
+  // and one that says another number the catalog's name doesn't have names another style ("Richardson 115" isn't the 112)
+  const otherNo = !says && !!st && gw.some((w) => /\d/.test(w) && w.length >= 3 && !ct.has(w) && w.replace(/[^a-z0-9]/g, "") !== st);
+  const nameOff = otherNo || (!says && distinct.length > 0 && distinct.filter((x) => ct.has(x)).length < Math.ceil(distinct.length / 2));
   return { brandOff, nameOff };
 }
 

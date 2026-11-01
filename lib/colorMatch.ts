@@ -20,7 +20,9 @@ const ALIAS: Record<string, string> = { rust: "redwood", "burnt orange": "redwoo
 export function isShortFor(short: string, full: string): boolean {
   const split = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/grey/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
   const ps = split(short), ws = split(full);
-  if (ps.length < 2 || ps.length !== ws.length) return false;
+  // SanMar may drop the color family off the end: K867's "DpSmkHthr" is Deep Smoke Heather Gray (Oct 31, #40332)
+  const FAMILY = /^(gray|black|white|blue|navy|red|green|brown|tan|pink|purple|orange|yellow)$/;
+  if (ps.length < 2 || !(ps.length === ws.length || (ws.length === ps.length + 1 && FAMILY.test(ws[ws.length - 1])))) return false;
   return ps.every((p, i) => { const w = ws[i]; if (p[0] !== w[0]) return false; let j = 0; for (const ch of w) if (ch === p[j]) j++; return j === p.length; });
 }
 
