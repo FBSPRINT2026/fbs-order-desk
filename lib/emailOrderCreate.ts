@@ -14,6 +14,14 @@ import { oldJobLabel } from "@/lib/printavoNames";
 import { tickInPrintavo } from "@/lib/clickup";
 import { customerTrainings, defaultsOf, SHIP_SAID, trainingsForText } from "@/lib/orderTrainings";
 import { learnDefaults } from "@/lib/ai/orderExamples";
+import { after } from "next/server";
+
+/** work the person doesn't wait on (Nov 1, Nick: "creating the orders take longer than I would like"): run after the
+ *  answer goes back when there's a request to hang it on, else right away (a background job) */
+function afterAnswer(work: () => Promise<unknown>) {
+  try { after(() => work().catch((e) => console.warn("after create", e))); }
+  catch { void work().catch((e) => console.warn("after create", e)); }
+}
 
 /**
  * Make the order staff checked in the Inbox's "Create order" panel (lib/ai/emailOrder.ts suggested it):
@@ -308,7 +316,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // their goods may already be on a supplier's manifest (Oct 30, Nick on #40284: All My Sons' blanks came in days before
   // the order was entered): match the waiting manifest lines now, not at the next hourly run
   // (resolvePending stops 15s before its deadline: a deadline 15s out matched nothing, Oct 30 #40285–#40290)
-  if (d.goods?.supplied) await resolvePending(admin, Date.now() + 40_000).catch((e) => console.warn("goods match", e));
+  // (after the answer: it read every waiting manifest line and could hold Create order up to 25 seconds)
+  if (d.goods?.supplied) afterAnswer(() => resolvePending(admin, Date.now() + 40_000));
   // a reorder of a portal order: our saved mockups come along (the latest of each group), so nothing is made again
   // (Oct 20, Nick: "when we've got a mock-up made in our new system, we don't need to recreate anything, just copy it")
   if (reorderOf?.startsWith("o:")) {
@@ -344,8 +353,13 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // made from a ClickUp job: tick its "In Printavo" box in ClickUp (Oct 22, Nick: "at the end you would go back and
   // click the In Printavo button in ClickUp")
   if (cuJob) {
-    const r = await tickInPrintavo(admin, cuJob.id, { id: oid, number: o.number as number }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
-    await admin.from("order_events").insert({ order_id: oid, kind: "clickup", detail: r.ok ? `Ticked "In Printavo" on the ClickUp job "${cuJob.name}".` : `Couldn't tick "In Printavo" on the ClickUp job "${cuJob.name}": ${r.error}`, actor: by });
+    // linked to the job right away (it leaves New); ClickUp's box is ticked after the answer
+    await admin.from("clickup_tasks").update({ order_id: oid, order_number: o.number, waiting: false }).eq("id", cuJob.id);
+    const job = cuJob;
+    afterAnswer(async () => {
+      const r = await tickInPrintavo(admin, job.id, { id: oid, number: o.number as number }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+      await admin.from("order_events").insert({ order_id: oid, kind: "clickup", detail: r.ok ? `Ticked "In Printavo" on the ClickUp job "${job.name}".` : `Couldn't tick "In Printavo" on the ClickUp job "${job.name}": ${r.error}`, actor: by });
+    });
   }
   return { ok: true, id: oid, number: o.number as number };
 }

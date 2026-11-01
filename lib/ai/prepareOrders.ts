@@ -47,8 +47,9 @@ async function readAhead(admin: SupabaseClient, activityId: string, deadline: nu
   doneConvos.add(anchor);
   // an order already made from this conversation: nothing to do
   const ids = cv.convo.map((e) => e.id);
-  const { data: made } = await admin.from("ai_suggestions").select("id").in("activity_id", ids).in("kind", ["draft_order", "draft_order_part"]).eq("status", "done").limit(1);
-  if (made?.length || cv.convo.some((e) => (e as { order_id?: string | null }).order_id)) return;
+  // (an order made and since deleted doesn't count: Nov 1, Baton Rouge was back on New and read only when clicked)
+  const { data: made } = await admin.from("ai_suggestions").select("order_id").in("activity_id", ids).in("kind", ["draft_order", "draft_order_part"]).eq("status", "done").limit(20);
+  if (await stillMade(admin, [...((made || []) as { order_id: string | null }[]).map((m) => m.order_id), ...cv.convo.map((e) => (e as { order_id?: string | null }).order_id)])) return;
   const r = await planEmail(admin, a.id, "assistant").catch(() => null);
   if (!r?.ok) { out.push(`${a.id}: no plan`); return; }
   const plan: EmailPlan = r.plan;
@@ -64,22 +65,30 @@ async function readAhead(admin: SupabaseClient, activityId: string, deadline: nu
     // looking only under the first one never found it, and every part was read again every run (the Oct 22 bill)
     for (const p of plan.parts) {
       if (Date.now() > deadline - 60_000) break;
-      const { data: hads } = await admin.from("ai_suggestions").select("status, payload").in("dedupe_key", [...new Set([`email:${anchor}:order:${p.key}`, `email:${newest.id}:order:${p.key}`])]);
+      const { data: hads } = await admin.from("ai_suggestions").select("status, payload, order_id").in("dedupe_key", [...new Set([`email:${anchor}:order:${p.key}`, `email:${newest.id}:order:${p.key}`])]);
       const later = (a?: string | null, b?: string | null) => !!a && !!b && Date.parse(a) >= Date.parse(b);
-      if ((hads || []).some((had) => had.status === "done" || later((had.payload as { seen?: string } | null)?.seen, plan.seen))) continue;
+      if (await stillMade(admin, (hads || []).filter((had) => had.status === "done").map((had) => had.order_id as string | null)) || (hads || []).some((had) => had.status !== "done" && later((had.payload as { seen?: string } | null)?.seen, plan.seen))) continue;
       const x = await suggestEmailOrder(admin, newest.id, "assistant", { jobRef: p.job, reorderOk: !!p.job, part: p }).catch(() => null);
       out.push(`${p.label}: ${x?.ok ? "ready" : "failed"}`);
     }
   } else {
     // one order: read in full as the email's order, with the past order it repeats
     const p = plan.parts[0];
-    const { data: had } = await admin.from("ai_suggestions").select("status, payload").eq("dedupe_key", `email:${newest.id}:order`).maybeSingle();
+    const { data: had } = await admin.from("ai_suggestions").select("status, payload, order_id").eq("dedupe_key", `email:${newest.id}:order`).maybeSingle();
     const pl = had?.payload as { v?: number; seen?: string } | null;
-    if (had?.status === "done" || (pl?.v === 2 && !!pl.seen && Date.parse(pl.seen) >= Date.parse(plan.seen))) return;
+    if ((had?.status === "done" && await stillMade(admin, [had.order_id as string | null])) || (had?.status !== "done" && (pl?.v === 2 && !!pl.seen && Date.parse(pl.seen) >= Date.parse(plan.seen)))) return;
     const told = p ? [p.kind === "reorder" && p.jobLabel ? `This is a reorder of ${p.jobLabel}.` : p.kind === "new" ? "This is a new order." : "", p.changes ? `What's different: ${p.changes}` : ""].filter(Boolean).join(" ") : "";
     const x = await suggestEmailOrder(admin, newest.id, "assistant", { told, jobRef: p?.job || null, reorderOk: !!p?.job }).catch(() => null);
     out.push(`${p?.label || newest.id}: ${x?.ok ? "ready" : "failed"}`);
   }
+}
+
+/** any of these orders still exists (an order made from the conversation that wasn't deleted since) */
+async function stillMade(admin: SupabaseClient, ids: (string | null | undefined)[]): Promise<boolean> {
+  const want = [...new Set(ids.filter(Boolean) as string[])];
+  if (!want.length) return false;
+  const { data } = await admin.from("orders").select("id").in("id", want).limit(1);
+  return !!data?.length;
 }
 
 /**
@@ -108,8 +117,10 @@ export async function prepareClickUpOrders(admin: SupabaseClient, deadline: numb
     if (!ok.has(t.team_id)) continue;
     // already brought in and read (or an order made from it): nothing to do
     if (t.activity_id) {
-      const { data: had } = await admin.from("ai_suggestions").select("id").eq("activity_id", t.activity_id).in("kind", ["draft_order", "draft_order_part"]).limit(1);
-      if (had?.length) continue;
+      // a reading waiting to be used, or an order that still exists; a reading whose order was deleted is read again
+      const { data: had } = await admin.from("ai_suggestions").select("status, order_id").eq("activity_id", t.activity_id).in("kind", ["draft_order", "draft_order_part"]).limit(20);
+      const hs = (had || []) as { status: string; order_id: string | null }[];
+      if (hs.some((h) => h.status !== "done") || await stillMade(admin, hs.map((h) => h.order_id))) continue;
     }
     n++;
     const im = await importClickUpTask(admin, t.id, "assistant").catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
