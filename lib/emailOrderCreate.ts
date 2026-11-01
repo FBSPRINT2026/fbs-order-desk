@@ -13,6 +13,7 @@ import { namesForPaths } from "@/lib/printavoFileMeta";
 import { oldJobLabel } from "@/lib/printavoNames";
 import { tickInPrintavo } from "@/lib/clickup";
 import { customerTrainings, defaultsOf, SHIP_SAID, trainingsForText } from "@/lib/orderTrainings";
+import { learnDefaults } from "@/lib/ai/orderExamples";
 
 /**
  * Make the order staff checked in the Inbox's "Create order" panel (lib/ai/emailOrder.ts suggested it):
@@ -239,7 +240,12 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // the training's order defaults (lib/orderTrainings.ts TrainingDefaults; Oct 31, Nick on MEI: "FedEx Ground, unless he
   // says something different… reorder by default with no production confirmation"): shipping only when the job doesn't
   // name a carrier or pickup itself
-  const tdef = custId ? defaultsOf(trainingsForText(await customerTrainings(admin, custId).catch(() => []), `${a?.subject || ""} ${d.nickname || ""} ${d.po_number || ""}`)) : {};
+  // first brought up to date from the orders staff marked right (Nov 1: All My Sons had six right orders, every one a
+  // reorder shipped FedEx on Nine18's account, but they were marked right before the defaults could learn, so #40337
+  // came in as a new order): the defaults learn on every Create order, not only when the next order is marked right
+  const jobText = `${a?.subject || ""} ${d.nickname || ""} ${d.po_number || ""}`;
+  if (custId) await learnDefaults(admin, custId, jobText).catch((e) => console.warn("learnDefaults", e));
+  const tdef = custId ? defaultsOf(trainingsForText(await customerTrainings(admin, custId).catch(() => []), jobText)) : {};
   const shipSaid = SHIP_SAID.test(`${a?.subject || ""}\n${(a as { body?: string | null } | null)?.body || ""}\n${notes || ""}`);
   if (tdef.confirm !== undefined) for (const g of groups) for (const im of g.imprints) {
     if (im.confirmed) continue;
