@@ -12668,6 +12668,36 @@ body:has(.dla-bg.dock.wide) .mf-look-bg{right:min(760px,100vw)}
 .mf-pdf-th.on canvas{outline:2px solid var(--accent);outline-offset:1px}
 .mf-pdf-th.on{color:var(--accent)}
 .mf-pdf-err{padding:24px;text-align:center}
+/* Office files in the quick look (components/OfficeView, Nov 1): the sheet on white paper like a PDF page, fitted to the
+   window (never sideways), every sheet a chip above it; Word and PowerPoint as pages */
+.mf-look-b:has(.ofv){display:block;overflow:hidden}
+.ofv{display:flex;flex-direction:column;height:100%;min-height:0}
+.ofv-tabs{flex:none;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+.ofv-tabs .chips{flex-wrap:wrap}
+.ofv-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:16px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.ofv-empty{padding:24px;text-align:center;font-size:14px}
+.ofv-note{font-size:12px}
+.ofv-grid{border-collapse:collapse;table-layout:fixed;background:#fff;color:#1f2937;font:13px/1.35 var(--body);box-shadow:0 1px 4px rgba(0,0,0,.14)}
+.ofv-grid col.ofv-rn{width:38px}
+.ofv-grid th{background:#f3f4f6;color:#6b7280;font-weight:600;font-size:11px;text-align:center;border:1px solid #e5e7eb;padding:2px 3px;white-space:nowrap;overflow:hidden}
+.ofv-grid td{border:1px solid #e5e7eb;padding:3px 5px;vertical-align:bottom;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal}
+.ofv-grid td.n{white-space:nowrap;text-align:right;overflow:hidden;text-overflow:ellipsis}
+.ofv-page{width:min(820px,100%);background:#fff;color:#1f2937;box-shadow:0 1px 4px rgba(0,0,0,.14);padding:36px 44px;font:14px/1.5 var(--body);overflow-wrap:anywhere}
+.ofv-doc p{margin:0 0 8px;white-space:pre-wrap}
+.ofv-doc p.ofv-gap{min-height:8px}
+.ofv-doc :is(h2,h3,h4){font-family:var(--display);margin:14px 0 8px;color:inherit}
+.ofv-doc .ofv-li{padding-left:18px;position:relative}
+.ofv-doc .ofv-li::before{content:"•";position:absolute;left:4px}
+.ofv-dtbl{width:100%;border-collapse:collapse;margin:8px 0 12px}
+.ofv-dtbl td{border:1px solid #d1d5db;padding:4px 6px;vertical-align:top}
+.ofv-dtbl td p{margin:0}
+.ofv-slide{aspect-ratio:16/9;height:auto;padding:28px 36px;overflow:hidden}
+.ofv-slide-n{font-size:11px;color:#6b7280;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em}
+.ofv-slide p{margin:0 0 6px}
+.ofv-slide .ofv-slide-t{font:700 22px/1.25 var(--display);margin-bottom:12px}
+.ofv-text{white-space:pre-wrap;font:13px/1.5 var(--body);margin:0}
+@media (max-width:640px){.ofv-scroll{padding:8px}.ofv-grid{font-size:11.5px}.ofv-grid col.ofv-rn{width:28px}.ofv-page{padding:18px 16px}.ofv-slide{aspect-ratio:auto}}
+
 .rv .rv-k{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px}
 .rv .rv-files{margin:8px 0 4px}
 .rv .rv-fl{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}

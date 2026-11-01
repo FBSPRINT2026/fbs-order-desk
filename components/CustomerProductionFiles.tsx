@@ -7,6 +7,7 @@ import type { SepRow } from "@/components/SeparationStudio";
 import { ARCHIVE_DAYS, SEP_STATUS, sepStage } from "@/lib/sepStatus";
 import { useJobFiles } from "@/components/job/JobFiles";
 import { heldFiles } from "@/lib/heldFiles";
+import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
 
 /**
  * A customer's production files, under their Artwork (staff only, never in the portal): what we print or sew from,
@@ -75,7 +76,12 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
     }
     setBusy(""); loadFiles();
   }
-  async function open(f: F) {
+  // a PDF, a picture, an Excel / Word / PowerPoint file opens in the quick look here (Nov 1); anything else downloads
+  const [look, setLook] = useState<{ list: MailFile[]; at: number } | null>(null);
+  const asLook = (f: F): MailFile => ({ key: f.path, name: shown(f.name), href: `/api/files/open?${new URLSearchParams({ p: f.path, n: shown(f.name) })}` });
+  async function open(f: F, from: F[] = []) {
+    const list = from.map(asLook).filter(canQuickLook), at = list.findIndex((x) => x.key === f.path);
+    if (at >= 0) { setLook({ list, at }); return; }
     const { data } = await sb.storage.from("proofs").createSignedUrl(f.path, 600, { download: shown(f.name) });
     if (data?.signedUrl) window.open(data.signedUrl, "_blank");
   }
@@ -104,7 +110,7 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
   const fileRow = (f: F, archived: boolean) => (
     <li key={f.path} className="pf-file">
       <span className="pf-kind">{kindOf(f.name)}</span>
-      <button type="button" className="linkbtn pf-name" onClick={() => open(f)} title="Download" data-notranslate>{shown(f.name)}</button>
+      <button type="button" className="linkbtn pf-name" onClick={() => void open(f, archived ? archFiles : files || [])} title={canQuickLook(asLook(f)) ? "Open" : "Download"} data-notranslate>{shown(f.name)}</button>
       <span className="faint pf-meta">{[size(f.size), f.at ? new Date(f.at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""].filter(Boolean).join(" · ")}</span>
       <button type="button" className="btn sm ghost" onClick={() => move(f, !archived)} title={archived ? "Back to the files" : "Archive (kept, out of the list)"}>{archived ? "Restore" : "Archive"}</button>
     </li>
@@ -112,6 +118,7 @@ export default function CustomerProductionFiles({ customerId }: { customerId: st
 
   return (
     <div className="aa-card pf">
+      {look && <QuickLook files={look.list} at={look.at} onClose={() => setLook(null)} />}
       <div className="aa-sec-h"><h3>Production files</h3><span className="pf-staff" title="Only shop staff see these. They never show in the customer's portal.">Staff only</span>
         <span className="faint">What we print and sew from. Kept with the shop: the customer never sees these.</span></div>
 

@@ -1,4 +1,5 @@
 "use client";
+import OfficeView, { officeKind } from "@/components/OfficeView";
 import { useSticky } from "@/lib/useSticky";
 import { openAddToCustomer } from "@/components/AddToCustomer";
 import { mzCss } from "@/components/MailZoom";
@@ -623,8 +624,8 @@ const kb = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${M
 
 /** one attachment, wherever an email shows it (an email box, the Inbox, a customer's email) */
 export type MailFile = { key: string; name: string; size?: number; type?: string; href?: string; onOpen?: () => void; /** a short name for a tab (Order resources) */ label?: string };
-/** can it be shown in the quick look (a PDF, an Illustrator file, a picture) */
-export const canQuickLook = (f: MailFile) => !!f.href && (kindOf(f) === "pdf" || kindOf(f) === "img" || /^AI$/.test(ext(f)));
+/** can it be shown in the quick look (a PDF, an Illustrator file, a picture, an Excel / Word / PowerPoint file, a CSV) */
+export const canQuickLook = (f: MailFile) => !!f.href && (kindOf(f) === "pdf" || kindOf(f) === "img" || /^AI$/.test(ext(f)) || !!officeKind(f.name, f.type));
 export const msgFiles = (m: FullMsg): MailFile[] => m.attachments.map((a) => ({ key: String(a.i), name: a.name, size: a.size, type: a.type,
   href: a.ews ? `/api/mail/box?${new URLSearchParams({ do: "ewsatt", id: a.ews })}` : attUrl(m.folder, m.uid, a.i) }));
 const ext = (f: MailFile) => (/\.([a-z0-9]{1,5})$/i.exec(f.name)?.[1] || (f.type || "").split("/")[1] || "file").toUpperCase().slice(0, 4);
@@ -660,7 +661,7 @@ export function FileTray({ files, inBar, note }: { files: MailFile[]; /** phones
         const body = <>{isImg(f) && f.href ? <img className="mf-tp" src={f.href} alt="" loading="lazy" /> : <span className={"mf-tp mf-ft " + kindOf(f)}>{ext(f)}</span>}
           <span className="mf-tn" title={f.name}>{f.name}</span>{f.size ? <span className="mf-fs">{kb(f.size)}</span> : null}</>;
         return f.href ? <a key={f.key} className="mf-tile" href={f.href} target="_blank" rel="noreferrer"
-          onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0 || !canLook(f) || (typeof window !== "undefined" && window.innerWidth < 760)) return; e.preventDefault(); setLook(files.indexOf(f)); }}>{body}</a>
+          onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0 || !canLook(f) || (typeof window !== "undefined" && window.innerWidth < 760 && !officeKind(f.name, f.type))) return; e.preventDefault(); setLook(files.indexOf(f)); }}>{body}</a>
           : <button key={f.key} type="button" className="mf-tile" onClick={f.onOpen} disabled={!f.onOpen}>{body}</button>;
       })}</div>
     </section>
@@ -759,7 +760,7 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
           <button type="button" className="mf-look-x" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="mf-look-b">
-          {kindOf(f) === "img" ? <img src={f.href} alt={f.name} /> : <PdfPages key={f.key} url={f.href!} />}
+          {kindOf(f) === "img" ? <img src={f.href} alt={f.name} /> : officeKind(f.name, f.type) ? <OfficeView key={f.key} url={f.href!} name={f.name} type={f.type} /> : <PdfPages key={f.key} url={f.href!} />}
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { downloadUrl } from "@/lib/printavoNames";
 import { PROD_KINDS, fileTypeOf, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 import { heldFiles } from "@/lib/heldFiles";
+import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
 
 /** `fileName`: what a download saves as (defaults to `name`) */
 export type ProdFile = { id: string; name: string; url?: string; /** a stamped customer mockup: their file without the stamp (hold to see it) */ plain?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null; /** shown, not labeled or removed here (a job photo) */ readOnly?: boolean };
@@ -23,6 +24,10 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
   const [armed, setArmed] = useState("");
   const [zoom, setZoom] = useState<ProdFile | null>(null);
   const [peek, setPeek] = useState(false);
+  // a PDF, Excel, Word or PowerPoint file opens in the one quick look, right here (Nov 1, Nick: "view the Excel
+  // spreadsheet without having to go outside the system"); the rest still opens in a tab
+  const [look, setLook] = useState<string | null>(null);
+  const lookable: MailFile[] = files.filter((f) => f.url && !isImg(f)).map((f) => ({ key: f.id, name: f.name, type: f.mime, href: f.url })).filter(canQuickLook);
   const input = useRef<HTMLInputElement>(null);
   const edit = !!onNote;
   return (
@@ -43,7 +48,7 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
             onDrop={onUpload ? (e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files?.length) onUpload(e.dataTransfer.files); } : undefined}>
             {files.map((f) => (
               <div key={f.id} className="prod-file">
-                <button type="button" className="prod-thumb" title={f.name} onClick={() => (isImg(f) && f.url ? setZoom(f) : f.url && window.open(f.url, "_blank", "noopener"))}>
+                <button type="button" className="prod-thumb" title={f.name} onClick={(e) => (isImg(f) && f.url ? setZoom(f) : lookable.some((x) => x.key === f.id) && !(e.metaKey || e.ctrlKey || e.shiftKey) ? setLook(f.id) : f.url && window.open(f.url, "_blank", "noopener"))}>
                   {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <FileThumb f={f} />}
                 </button>
                 <div className="prod-fname" title={f.name}>{f.name}</div>
@@ -76,6 +81,7 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
         </div>
         {children}
       </div>
+      {look && lookable.some((x) => x.key === look) && <QuickLook files={lookable} at={lookable.findIndex((x) => x.key === look)} onClose={() => setLook(null)} />}
       {zoom && (
         <div className="pv-zoom" role="dialog" aria-label={zoom.name} onClick={() => setZoom(null)}>
           <img src={peek && zoom.plain ? zoom.plain : zoom.url} alt={zoom.name} onClick={(e) => e.stopPropagation()} />

@@ -74,7 +74,7 @@ export type ClickUpTaskRow = {
 };
 export type ClickUpTeamRow = { id: string; name: string; members: string[]; customer_id: string | null; guessed: boolean; hidden: boolean; seen_at: string; token_key: string;
   /** the workspace's fields that aren't kept or shown (Oct 27, Nick: McKenna's "PO RECEIVED", "we don't need to sync that column") */ hidden_fields?: string[] };
-export type ClickUpRun = { /** open jobs whose boxes or fields were put right (a tick in ClickUp doesn't change a task's updated time) */ boxes?: number; ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number; backfilled?: number };
+export type ClickUpRun = { /** open jobs whose boxes or fields were put right (a tick in ClickUp doesn't change a task's updated time) */ boxes?: number; ok: boolean; waiting?: string; error?: string; teams?: number; read?: number; newJobs?: string[]; later?: number; backfilled?: number; /** waiting jobs ClickUp no longer has, set aside */ gone?: number };
 
 /** ClickUp calls per token this run (ClickUp allows 100 a minute per token) */
 const calls = new Map<string, number>();
@@ -91,6 +91,8 @@ async function cu<T>(tok: string, path: string, init?: { method: "POST" | "PUT";
   return r.json() as Promise<T>;
 }
 
+/** who set a job aside when ClickUp no longer has it (deleted or archived there) */
+export const GONE_BY = "ClickUp: deleted or archived there";
 const ms = (s?: string | null) => (s ? Number(s) || 0 : 0);
 const iso = (t: number) => (t ? new Date(t).toISOString() : null);
 const day = (t: number) => new Date(t).toLocaleDateString("en-US", { timeZone: "America/Chicago", weekday: "short", month: "short", day: "numeric", year: "numeric" });
@@ -287,6 +289,28 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
             waiting: waitingOf({ ...r, ...st0 }, hidden) }).eq("id", r.id);
         }
       }
+      // still there? (Nov 1, Nick on ARMSTRONG 43160 CHATTANOOGA: "I don't even show it in ClickUp"): the read below only
+      // brings tasks ClickUp changed, and a task deleted or archived in ClickUp never comes back in it, so it stayed a job
+      // to make here forever. Each run looks up the waiting jobs not read for longest; one ClickUp no longer has (or has
+      // archived) is set aside as gone from ClickUp, and comes back by itself if ClickUp shows it again
+      {
+        const { data: old } = await admin.from("clickup_tasks").select("id, parent, in_printavo, order_id, dismissed_at, pv_number, where_text, created_at_cu").eq("team_id", team.id).eq("waiting", true)
+          .lt("synced_at", new Date(Date.now() - 6 * 3600e3).toISOString()).order("synced_at").limit(8);
+        for (const r of (old || []) as { id: string; parent: string | null; in_printavo: boolean; order_id: string | null; dismissed_at: string | null; pv_number: string | null; where_text: string; created_at_cu: string | null }[]) {
+          if (Date.now() > deadline - 15000 || used(tok) > 50) break;
+          let x: (CuTask & { archived?: boolean; deleted?: boolean }) | null = null, gone = false;
+          try { x = await cu<CuTask & { archived?: boolean; deleted?: boolean }>(tok, `/task/${encodeURIComponent(r.id)}`); }
+          // "Task not found, deleted" (ITEM_013) is a 404 or a 400; anything else (a busy ClickUp, a timeout) is a try next run
+          catch (e) { const m = String((e as Error).message || ""); if (/: 404 /.test(m) || (/: 400 /.test(m) && /not found|deleted|ITEM_013/i.test(m))) gone = true; else continue; }
+          if (gone || x?.archived || x?.deleted) {
+            await admin.from("clickup_tasks").update({ dismissed_at: new Date().toISOString(), dismissed_by: GONE_BY, waiting: false, synced_at: new Date().toISOString() }).eq("id", r.id);
+            out.gone = (out.gone || 0) + 1;
+            continue;
+          }
+          const st0 = { status: String(x!.status?.status || ""), status_type: String(x!.status?.type || "") };
+          await admin.from("clickup_tasks").update({ ...st0, synced_at: new Date().toISOString(), waiting: waitingOf({ ...r, ...st0 }, hidden) }).eq("id", r.id);
+        }
+      }
       const since = cursors[team.id];
       // tasks changed since the last run (the first time: every open task)
       const tasks: CuTask[] = [];
@@ -298,9 +322,9 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         if (r.last_page === true || (r.tasks || []).length < 100) break;
       }
       tasks.sort((a, b) => ms(a.date_updated) - ms(b.date_updated));
-      const known = new Map<string, { id: string; order_id: string | null; dismissed_at: string | null; updated_at_cu: string | null; waiting: boolean; attachments: CuFile[]; pv_number: string | null; priority: string }>();
+      const known = new Map<string, { id: string; order_id: string | null; dismissed_at: string | null; dismissed_by: string | null; updated_at_cu: string | null; waiting: boolean; attachments: CuFile[]; pv_number: string | null; priority: string }>();
       for (let i = 0; i < tasks.length; i += 200) {
-        const { data } = await admin.from("clickup_tasks").select("id, order_id, dismissed_at, updated_at_cu, waiting, attachments, pv_number, priority").in("id", tasks.slice(i, i + 200).map((t) => t.id));
+        const { data } = await admin.from("clickup_tasks").select("id, order_id, dismissed_at, dismissed_by, updated_at_cu, waiting, attachments, pv_number, priority").in("id", tasks.slice(i, i + 200).map((t) => t.id));
         for (const r of data || []) known.set(r.id as string, r as never);
       }
       let cur = since || 0, n = 0;
@@ -309,6 +333,8 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         if (now - upd < QUIET_MS) { out.later!++; break; } // still being filled in: the next run
         if (Date.now() > deadline || used(tok) > 70 || n >= perTeam) { out.later!++; break; }
         const k = known.get(t0.id);
+        // set aside as gone from ClickUp, and ClickUp shows it again (restored, unarchived): it's back
+        if (k && k.dismissed_by === GONE_BY) { await admin.from("clickup_tasks").update({ dismissed_at: null, dismissed_by: null }).eq("id", t0.id); k.dismissed_at = null; k.dismissed_by = null; k.updated_at_cu = null; }
         if (k?.updated_at_cu && Date.parse(k.updated_at_cu) >= upd) {
           // read before priorities were kept: just the priority, from the list (no extra call)
           const pr = String(t0.priority?.priority || "").toLowerCase();
