@@ -395,7 +395,7 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
   // their own transfers: who made them and where they go, nothing to set up (Oct 27, Nick)
   if (d.supplied) return (
     <div className="wo-pc">
-      <div className="h"><b className="disp">HEAT PRESS</b><span>customer supplied transfers</span></div>
+      <div className="h"><b className="disp">{(d.location || "Heat press").toUpperCase()}</b><span>their transfers</span></div>
       <div className="kv">
         <i>Method</i><span>Heat press · <b>customer supplied transfers</b></span>
         <i>Transfers</i><span>{[d.supplied.by, d.supplied.ref ? `order ${d.supplied.ref}` : ""].filter(Boolean).join(" · ") || "From the customer"}</span>

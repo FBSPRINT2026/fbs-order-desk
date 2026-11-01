@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { designOther, SIZES, type Design, type Garment, type Group, type Imprint } from "@/lib/pricing";
-import { guessHex, garmentHex, lineHex, mainLine, registerAreas, spotFor } from "@/lib/mockup";
+import { designOther, headwearOf, SIZES, type Design, type Garment, type Group, type Imprint } from "@/lib/pricing";
+import { guessHex, garmentHex, lineHex, mainLine, registerAreas, setHeadwearSpots, spotFor } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes } from "@/lib/garmentBody";
 
 /**
@@ -48,9 +48,14 @@ export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
     const run = sortSizes(ordered);
     const shown = g.mockupSize && run.includes(g.mockupSize) ? bodyAt(gar, g.mockupSize) : bodyOf(gar, run);
     const b = smallestOrdered(gar, ordered, shown) || shown;
+    // a group of caps: its "Full Front" is the cap's front, not a shirt's (Oct 31, #40328: the hats' close-up drew a
+    // shirt-sized max box past the page)
+    const hats = g.lines.length > 0 && g.lines.every((x) => headwearOf(x) === "hat");
     return g.imprints.map((d) => {
       if (!d.location) return null;
+      setHeadwearSpots(hats);
       const sp = spotFor(d.location, b);
+      setHeadwearSpots(false);
       return sp.maxW && sp.maxH ? { w: sp.maxW, h: sp.maxH, on: b.kind === "adult" ? "" : b.size } : null;
     });
   });
