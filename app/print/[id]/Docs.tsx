@@ -45,7 +45,7 @@ export type DocData = {
 const DELIVERY: Record<string, string> = { pickup: "Pickup", ship: "Ship", deliver: "Delivery", tbd: "Pickup / ship: TBD" };
 const day = (s: string | null | undefined, f: Intl.DateTimeFormatOptions) => { const d = parseDate(s); return d ? d.toLocaleDateString("en-US", f).replace(",", "") : ""; };
 
-const colorsLabel = (d: Imprint) => (d.method === "dtf" || d.colors >= FULL_COLOR ? "Full color" : `${d.colors || 1} color${d.colors === 1 || !d.colors ? "" : "s"}`);
+const colorsLabel = (d: Imprint) => (d.method === "dtf" && d.patch ? "Patch" : d.method === "dtf" || d.colors >= FULL_COLOR ? "Full color" : `${d.colors || 1} color${d.colors === 1 || !d.colors ? "" : "s"}`);
 const dropLabel = (d: Imprint) => (d.drop ? `${d.drop}" drop` : "Standard drop");
 const inkLine = (n: string) => (WILFLEX_HEX[n] ? "Wilflex Epic Rio RFU" : isPmsInk(n) ? "PMS match" : "");
 const isDark = (hex: string) => {
@@ -472,7 +472,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
     : d.supplied
       ? [["Transfers", "Customer supplied"], ["Made by", d.supplied.by || "—"], ["Their order", d.supplied.ref || "—"], ["Pieces", String(qty)]]
     : d.method === "dtf"
-      ? [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Transfer", "Full color"], ["Pieces", String(qty)]]
+      ? [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], d.patch ? ["Patch", "Patch application"] : ["Transfer", "Full color"], ["Pieces", String(qty)]]
       : [["Print size", sz.label || "—"], ["Drop", d.drop ? `${d.drop}"` : "Standard"], ["Screens", sc?.n ? String(sc.n) : "—"], ["Underbase", d.printStyle === "fashion" ? "NO · fashion hit" : sc?.under ? "Yes" : "No"]];
   // the logo's colorway the print is (Swap on the order, Oct 31): its letter and name, first, so the press and the
   // machine run the right version

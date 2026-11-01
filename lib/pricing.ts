@@ -489,8 +489,8 @@ export function rosterCount(r: { show: string; rows: { name?: string; number?: s
   return { names, digits };
 }
 /** a screen print as the customer reads it: "3-color screen print", "2-color fashion print (soft, no underbase)", "1-color puff print" */
-export function printHow(d: Pick<Imprint, "method" | "colors" | "printStyle" | "softHand" | "puff">): string {
-  if (d.method !== "screen") return d.method === "embroidery" ? "embroidery" : "full color DTF transfer";
+export function printHow(d: Pick<Imprint, "method" | "colors" | "printStyle" | "softHand" | "puff" | "patch">): string {
+  if (d.method !== "screen") return d.method === "embroidery" ? "embroidery" : d.patch ? "patch" : "full color DTF transfer";
   if (d.colors >= FULL_COLOR) return "full color screen print";
   const n = `${d.colors || 1}-color`;
   if (d.printStyle === "fashion") return `${n} fashion ${d.puff ? "puff " : ""}print (${d.softHand ? "soft, " : ""}no underbase)`;

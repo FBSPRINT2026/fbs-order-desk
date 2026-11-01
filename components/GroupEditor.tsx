@@ -421,7 +421,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     // a patch heat pressed on (Oct 31, Nick: "a button that says patch… make that 2.50"): the Patch Application fee
     if (d.patch) return <div className="pr-scr pr-ccrow pr-sup">
       <label className="check"><input type="checkbox" checked disabled={fixed || printsFixed} onChange={() => update((x) => { x.imprints[di].patch = undefined; })} />Patch</label>
-      <span className="faint">Patch Application fee{hidePrices ? "" : ` · ${money(gc.imprints[di]?.each)} a piece`}</span>
+      {!hidePrices && <span className="faint">{money(gc.imprints[di]?.each)} a piece</span>}
     </div>;
     return <div className="pr-scr pr-ccrow pr-sup">
       <label className="check"><input type="checkbox" checked={false} disabled={fixed || printsFixed} onChange={() => update((x) => { x.imprints[di].patch = {}; x.imprints[di].supplied = undefined; })} />Patch</label>
@@ -768,6 +768,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // to run on and on… the inks can go up underneath the imprints, just like we charge for screens")
   const inkCtl = (d: Group["imprints"][number], chips = true) => {
     // heat press: no inks, just "DTF transfer" (Oct 26, Nick: "it shouldn't say inks anymore. It should just say transfer")
+    // a patch: said once, on its Patch row below (Oct 31, Nick: "anywhere it says DTF or transfer… it just says patch")
+    if (d.method === "dtf" && d.patch) return null;
     if (d.method === "dtf") return <div key={"ink" + d.id} className="pr-scr pr-inkl"><span className="pr-scr-l">DTF transfer</span></div>;
     const di = g.imprints.indexOf(d), inks = pmsInks(d), isScr = scrImps.includes(d);
     const pms = isScr ? inks.filter((x) => x.auto) : [];
@@ -1830,7 +1832,7 @@ function PrintRow({ youth, shown, d, n, hex, mainBg, mainAt = 0, designs, urls, 
   const val = m ? +m[1] : 0, given: "W" | "H" = m && /tall/i.test(m[2] || "") ? "H" : "W";
   const other = cur && val ? designOther(cur, val, given, d.artRatio) : 0;
   const size = val ? (given === "W" ? `${val}" × ${other || "?"}"` : `${other || "?"}" × ${val}"`) : "";
-  const colors = d.method === "dtf" || d.colors === FULL_COLOR ? "Full color" : d.colors ? `${d.colors} color${d.colors === 1 ? "" : "s"}` : "";
+  const colors = d.method === "dtf" && d.patch ? "" : d.method === "dtf" || d.colors === FULL_COLOR ? "Full color" : d.colors ? `${d.colors} color${d.colors === 1 ? "" : "s"}` : "";
   // click the logo to see it big (Oct 15, Nick: "you should be able to click it and zoom in")
   const [zoom, setZoom] = useState(false);
   // in the inks picked in the Mockup Creator (Oct 20: the logo here still showed its uploaded green after it was set to yellow)
