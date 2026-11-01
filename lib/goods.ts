@@ -75,6 +75,20 @@ export function trackingUrl(carrier: string, t: string): string {
 /** Plain words for a package: "Arrived", a real problem (delivery problem, waiting at carrier…), or just "On the way". */
 export const TRACK_PROBLEMS = ["failure", "return_to_sender", "error", "available_for_pickup", "cancelled"];
 export const trackWord = (st: string | null | undefined) => (st === "delivered" ? "Arrived" : st && TRACK_PROBLEMS.includes(st) ? TRACK[st] || st : "On the way");
+/**
+ * Where a job's goods are by their tracking (Nov 1: ten jobs showed "On the way" with every box delivered, because a
+ * manifest that came in after a package was already delivered set "On the way", and the tracking check only runs in
+ * shop hours). Every package with tracking delivered → "arrived" (we're counting them in); some → "partial"; otherwise
+ * what it was. Only moves a job forward from "waiting" / "on_way" (never undoes a count-in or an issue). Used where a
+ * status is saved (the manifest, the tracking check) and where it's shown (the goods cards), so they can't disagree.
+ */
+export function trackedGoods(status: GoodsStatus, ships: { tracking?: string | null; track_status?: string | null }[]): GoodsStatus {
+  if (status !== "waiting" && status !== "on_way") return status;
+  const t = ships.filter((x) => x.tracking);
+  if (!t.length) return status;
+  const d = t.filter((x) => x.track_status === "delivered").length;
+  return d === t.length ? "arrived" : d ? "partial" : status;
+}
 export const CARRIERS = ["UPS", "FedEx", "USPS", "DHL", "S&S freight", "SanMar", "Other"];
 
 /** Wholesale jobs whose goods matter: from the moment the order is sent in (request) until it's completed. */

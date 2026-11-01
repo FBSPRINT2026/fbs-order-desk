@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings } from "@/lib/pricing";
-import { carrierOf, supplierLabel, TRACK } from "@/lib/goods";
+import { carrierOf, supplierLabel, TRACK, trackedGoods, type GoodsStatus } from "@/lib/goods";
 import { AUTO_CUSTOMER_CONTACT } from "@/lib/customerContact";
 
 /**
@@ -173,11 +173,12 @@ export async function goodsCheck(admin: SupabaseClient, deadline: number) {
     }
 
     // 2. everything delivered → arrived, we're counting them in
-    if (mine.length && mine.every((x) => x.track_status === "delivered") && ["waiting", "on_way"].includes(status)) {
+    const byTracking = trackedGoods(status as GoodsStatus, mine);
+    if (byTracking === "arrived" && status !== "arrived") {
       await admin.from("order_goods").upsert({ order_id: o.id, status: "arrived", updated_by: "tracking", updated_at: new Date().toISOString() }, { onConflict: "order_id" });
       await tell(ctx, o, `📦 Your goods for #${o.number} were delivered to us. We're counting them in now and will let you know once everything checks out.`, `Goods delivered for #${o.number}`, { customer: false, shop: false });
       done.alerts++;
-    } else if (mine.some((x) => x.track_status === "delivered") && mine.some((x) => x.track_status !== "delivered") && ["waiting", "on_way"].includes(status) && !alerted.partial) {
+    } else if (byTracking === "partial" && status !== "partial" && !alerted.partial) {
       await admin.from("order_goods").upsert({ order_id: o.id, status: "partial", updated_by: "tracking", updated_at: new Date().toISOString() }, { onConflict: "order_id" });
       await tell(ctx, o, `📦 Part of your goods for #${o.number} were delivered. We're still waiting on the rest.`, `Part of the goods arrived for #${o.number}`, { customer: false, shop: false });
       alerted.partial = "1"; done.alerts++;

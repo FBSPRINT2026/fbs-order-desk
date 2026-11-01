@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { bySizeOrder } from "@/lib/sizeOrder";
 import Link from "next/link";
-import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, goodsNeedInfo, ISSUES, shipFrom, shipGroups, supplierLabel, TRACK, trackWord, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
+import { carrierOf, CARRIERS, GOODS, GOODS_ORDER, goodsNeedInfo, ISSUES, shipFrom, shipGroups, supplierLabel, TRACK, trackedGoods, trackWord, trackingUrl, type GoodsItem, type GoodsStatus, type IssueType } from "@/lib/goods";
 import GoodsInfoFields, { cleanGoodsInfo, type GoodsInfoValue } from "@/components/GoodsInfoFields";
 import type { Attachment } from "@/lib/messages";
 import { fmtDateLong } from "@/lib/format";
@@ -39,7 +39,9 @@ export default function GoodsBoard({ mode, items, act, canAct = true, compact = 
   return <div className={"gb" + (compact ? " compact" : "") + (dense ? " dense" : "")}>{items.map((it) => <GoodsCard key={it.order.id} it={it} mode={mode} act={act} canAct={canAct} compact={compact || dense} />)}</div>;
 }
 
-function GoodsCard({ it, mode, act, canAct, compact }: { it: GoodsItem; mode: "portal" | "shop"; act: GoodsActions; canAct: boolean; compact: boolean }) {
+function GoodsCard({ it: given, mode, act, canAct, compact }: { it: GoodsItem; mode: "portal" | "shop"; act: GoodsActions; canAct: boolean; compact: boolean }) {
+  // shown where the tracking says the goods are, even before the next tracking check saves it (lib/goods.ts trackedGoods)
+  const it: GoodsItem = { ...given, goods: { ...given.goods, status: trackedGoods(given.goods.status, given.shipments) } };
   const g = GOODS[it.goods.status];
   const [panel, setPanel] = useState<"" | "track" | "msg" | "status" | "info" | "count">("");
   const needInfo = goodsNeedInfo(it.goods, it.shipments);

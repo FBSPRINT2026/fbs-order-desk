@@ -62,11 +62,14 @@ function Head({ g, staff }: { g: PendingShipment; staff: boolean }) {
 
 /** The customer's view: "these goods are for order #…" (whole shipment, or as we suggested). */
 export function PortalIncoming({ list, canAct, link }: { list: PendingShipment[]; canAct: boolean; link: (pick: { lineId: string; orderId: string }[]) => Promise<{ ok: boolean; error?: string }> }) {
+  const [all, setAll] = useState(false);
   if (!list.length) return null;
+  const shown = all ? list : list.slice(0, SHOW_FIRST);
   return (
     <div className="in-list">
       <p className="muted" style={{ margin: "0 0 6px", fontSize: 13.5 }}>Your supplier shipped these to us, but we can&apos;t tell which order they&apos;re for. Tell us and we&apos;ll track them on that order.</p>
-      {list.map((g) => <PortalRow key={g.key} g={g} canAct={canAct} link={link} />)}
+      {shown.map((g) => <PortalRow key={g.key} g={g} canAct={canAct} link={link} />)}
+      <MoreShipments left={list.length - shown.length} onMore={() => setAll(true)} />
     </div>
   );
 }
@@ -107,8 +110,18 @@ function PortalRow({ g, canAct, link }: { g: PendingShipment; canAct: boolean; l
  *   - our blanks ("FBS") → type the order #
  */
 export function ResolveList({ list, onDone, empty }: { list: PendingShipment[]; onDone: () => void; empty?: string }) {
+  const [all, setAll] = useState(false);
   if (!list.length) return <div className="gb-empty">{empty || "Nothing to resolve. Every shipment on the manifests is on its order."}</div>;
-  return <div className="in-list">{list.map((g) => <ResolveRow key={g.key} g={g} onDone={onDone} />)}</div>;
+  const shown = all ? list : list.slice(0, SHOW_FIRST);
+  return <div className="in-list">{shown.map((g) => <ResolveRow key={g.key} g={g} onDone={onDone} />)}<MoreShipments left={list.length - shown.length} onMore={() => setAll(true)} /></div>;
+}
+
+/** a long list of shipments shows the first few, then one button for the rest (Nov 1: twelve of them filled a phone's
+ *  goods page before the customer's own jobs showed) */
+const SHOW_FIRST = 4;
+function MoreShipments({ left, onMore }: { left: number; onMore: () => void }) {
+  if (left <= 0) return null;
+  return <button type="button" className="btn in-more" onClick={onMore}>Show {left} more shipment{left === 1 ? "" : "s"}</button>;
 }
 
 async function post(body: unknown) {

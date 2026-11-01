@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings, orderGroups, type Order } from "@/lib/pricing";
-import { carrierOf } from "@/lib/goods";
+import { carrierOf, trackedGoods, type GoodsStatus } from "@/lib/goods";
 import { companyKey } from "@/lib/printavoImport";
 import { readTracker, startTracker } from "@/lib/goodsTrack";
 import { excelDate } from "@/lib/xlsx";
@@ -671,11 +671,15 @@ export async function applyGroup(admin: SupabaseClient, supplier: string, g: Gro
   if (!added) return;
   // goods record: supplier, their order #, ship date; on the way
   const { data: cur } = await admin.from("order_goods").select("status, supplier, supplier_po, ship_date").eq("order_id", orderId).maybeSingle();
+  // on the way, or already delivered when the manifest came in after the boxes did (lib/goods.ts trackedGoods)
+  const { data: allShips } = await admin.from("goods_shipments").select("tracking, track_status").eq("order_id", orderId);
+  const was = (cur?.status || "waiting") as GoodsStatus;
+  const next = trackedGoods(was === "waiting" ? "on_way" : was, (allShips || []) as { tracking: string; track_status: string | null }[]);
   await admin.from("order_goods").upsert({
     // another supplier's order number never goes under this one's name (Oct 30, #40284: SanMar with S&S's 77288309);
     // the order's shipments carry each supplier's own order (lib/goods.ts shipGroups)
     order_id: orderId, supplier: cur?.supplier || supplier, supplier_po: cur?.supplier_po || (!cur?.supplier || cur.supplier === supplier ? g.supplier_order : ""), ship_date: cur?.ship_date || g.lines[0].ship_date,
-    ...(!cur || cur.status === "waiting" ? { status: "on_way" } : {}), updated_by: "manifest", updated_at: new Date().toISOString(),
+    ...(next !== was || !cur ? { status: next } : {}), updated_by: "manifest", updated_at: new Date().toISOString(),
   }, { onConflict: "order_id" });
   // tell the customer (and flag anything the supplier didn't ship)
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
