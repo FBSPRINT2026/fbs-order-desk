@@ -513,7 +513,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   /** what a group's design is called, for the designs' own program prices: the order's name and its prints' designs */
   const designCtx = (d: Pick<Order, "nickname">, g: Group): DesignCtx => ({ items: prog?.items || [], text: [d.nickname || "", ...g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "")].join(" "),
     art: g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "").join(" "),
-    garments: g.lines.map((l) => lineText(l)).join(" "), lineGarments: Object.fromEntries(g.lines.map((l) => [l.id, lineText(l)])) });
+    garments: g.lines.map((l) => lineText(l)).join(" "), lineGarments: Object.fromEntries(g.lines.map((l) => [l.id, lineText(l)])),
+    designs: Object.fromEntries(designs.map((y) => [y.id, { brand: (y as { brand_id?: string | null }).brand_id || null, live: !(y as { archived_at?: string | null }).archived_at }])) });
   const lineText = (l: Group["lines"][number]) => [l.style, l.brand, l.garment, catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase())?.description || ""].join(" ");
   // with Program on, each line gets the card's price (GLine.prog, saved as the line's price so every total agrees);
   // a price typed by hand wins and stays; off, or not covered (under the minimum, a print the card doesn't have), the

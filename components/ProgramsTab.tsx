@@ -10,7 +10,7 @@ import { TrainingChat } from "@/components/OrderTrainingAdmin";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { trainingWords, type Training } from "@/lib/orderTrainings";
 import type { Design } from "@/lib/pricing";
-import type { Program, ProgramItem } from "@/lib/programs";
+import { whoOf, type Program, type ProgramItem } from "@/lib/programs";
 
 /**
  * The customer's Programs tab (Oct 30, Nick: "click on an account and say program, click new program, just talk. And
@@ -58,11 +58,11 @@ export default function ProgramsTab({ customerId, program, items, ver, editing, 
     const live = items.filter((i) => i.active && !i.archived_at);
     const out: Prog[] = (trainings || []).map((t) => {
       const ws = trainingWords(t.when_words).map(norm);
-      return { key: norm(t.name) || t.id, name: t.name || "Untitled program", words: trainingWords(t.when_words), training: t, items: live.filter((it) => { const who = (it.match?.who || []).map(norm); return ws.length ? who.some((w) => ws.includes(w)) : !who.length; }) };
+      return { key: norm(t.name) || t.id, name: t.name || "Untitled program", words: trainingWords(t.when_words), training: t, items: live.filter((it) => { const who = whoOf(it).map(norm); return ws.length ? who.some((w) => ws.includes(w)) : !who.length; }) };
     });
     for (const it of live) {
       if (out.some((p) => p.items.includes(it))) continue;
-      const who = it.match?.who || [];
+      const who = whoOf(it);
       const k = norm(who[0] || program?.name || "Program");
       const p = out.find((x) => x.key === k);
       if (p) { p.items.push(it); continue; }

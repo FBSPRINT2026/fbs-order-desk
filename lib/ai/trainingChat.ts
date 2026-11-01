@@ -8,7 +8,7 @@ import { LOCATIONS, type Settings } from "@/lib/pricing";
 import { trainingDiff, type TrainLine } from "@/lib/trainingDiff";
 import { orderTextFor, saveExample } from "@/lib/ai/orderExamples";
 import { trainingWords } from "@/lib/orderTrainings";
-import type { ProgramItem } from "@/lib/programs";
+import { whoOf, type ProgramItem } from "@/lib/programs";
 export type { TrainLine };
 
 /**
@@ -76,7 +76,7 @@ async function programLines(admin: SupabaseClient, customerId: string, when: str
   if (!p) return { programId: null as string | null, items: [] as ProgramItem[] };
   const { data: its } = await admin.from("program_items").select("*").eq("program_id", p.id).is("archived_at", null).eq("active", true).order("position");
   const ws = trainingWords(when).map(norm);
-  const items = ((its || []) as ProgramItem[]).filter((it) => { const who = (it.match?.who || []).map(norm); return ws.length ? who.some((w) => ws.includes(w)) : !who.length; });
+  const items = ((its || []) as ProgramItem[]).filter((it) => { const who = whoOf(it).map(norm); return ws.length ? who.some((w) => ws.includes(w)) : !who.length; });
   return { programId: p.id as string, items };
 }
 const itemName = (it: ProgramItem) => (it.garment || "").split(":")[0].trim() || it.name || "Product";

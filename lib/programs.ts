@@ -41,6 +41,9 @@ export type ProgramItem = {
   mockups?: ProgramMockup[] | null;
 };
 export type ProgramMockup = { n: number; colors?: string[] };
+/** the words that say which jobs a price is for: its end client (who) and its all-of words ("Cart" = every store's cart),
+ *  so the Programs tab and a training's chat file a price under the program those words belong to */
+export const whoOf = (it: Pick<ProgramItem, "match">) => [...(it.match?.who || []), ...(it.match?.allOf || [])];
 /** a design price's breaks, lowest first: its tiers, or its one price at its minimum */
 export const tiersOf = (it: Pick<ProgramItem, "price" | "min_qty"> & { tiers?: { min: number; price: number }[] | null; price_mode?: string | null }) =>
   (it.price_mode === "flat" ? [{ min: 0, price: +it.price }] : it.tiers?.length ? it.tiers : [{ min: it.min_qty || 0, price: +it.price }]).filter((t) => +t.price > 0).map((t) => ({ min: Math.max(0, Math.round(+t.min || 0)), price: +t.price })).sort((a, b) => a.min - b.min);
@@ -150,7 +153,11 @@ export type DesignCtx = { items: DesignPrice[]; /** the order's name and its pri
    *  (Oct 30, Nick: All My Sons tees $1.35, hoodies $1.50 on one job) */ lineGarments?: Record<string, string>;
   /** pieces in the whole order on each program price (by item id): a price's break counts all of them, not one group's
    *  (Oct 31, Nick: MEI's cart orders, every embroidered piece on the cart counted together, 13 pieces = $5 each, however
-   *  many logos split them into groups). Filled by programForOrder */ pool?: Record<string, number> };
+   *  many logos split them into groups). Filled by programForOrder */ pool?: Record<string, number>;
+  /** the customer's logos (by id): their brand and whether they're still in use, so a price's standard-logo list
+   *  (match.designs) keeps working when the logos are re-made or archived (Oct 31: MEI's list still named the five logos
+   *  replaced by D-10313…, Armstrong's named two logos archived Oct 30, so their prices quietly stopped applying) */
+  designs?: Record<string, { brand: string | null; live: boolean }> };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCtx): { item?: DesignPrice; under?: DesignPrice } {
   const ids = new Set((g.imprints || []).map((x) => x.design_id).filter(Boolean));
@@ -169,8 +176,21 @@ export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCt
     const standard = (it: DesignPrice) => (!it.match?.maxColors || imps.every((x) => (+(x as { colors?: number }).colors! || 1) <= it.match!.maxColors!))
       && (!it.match?.maxPrints || imps.length <= it.match.maxPrints) && (!it.match?.minPrints || imps.length >= it.match.minPrints);
     const art = imps.map((x) => x.design_id).filter(Boolean) as string[];
-    const standardArt = (it: DesignPrice) => !it.match?.designs?.length || !art.length || art.every((id) => it.match!.designs!.includes(id));
-    hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length) && standardArt(it)
+    const standardArt = (it: DesignPrice) => {
+      const list = it.match?.designs || [];
+      if (!list.length || !art.length) return true;
+      const info = d.designs;
+      if (!info) return art.every((id) => list.includes(id));
+      // the logos the list names that are still in use; none left = the list is stale (re-made or archived logos) and
+      // can't tell a standard print from a special one, so the price's other rules decide (its words, notArt, colors)
+      const live = list.filter((id) => info[id]?.live);
+      if (!live.length) return true;
+      // a logo of the same brand as a listed one is a standard logo too (a new version of it, its stacked layout…)
+      const brands = new Set(live.map((id) => info[id]?.brand).filter(Boolean));
+      return art.every((id) => list.includes(id) || (!!info[id]?.brand && brands.has(info[id]!.brand)));
+    };
+    // a price may be picked by its all-of words alone (Oct 31: "Cart" = any Cedar store's cart, a store opened tomorrow too)
+    hits = d.items.filter((it) => it.active && tiersOf(it).length && (it.match?.who?.length || it.match?.what?.length || it.match?.allOf?.length) && standardArt(it)
       && (!it.match?.who?.length || has(who, it.match.who)) && (!it.match?.what?.length || has(what, it.match.what))
       && (it.match?.allOf || []).every((x) => has(who, [x]))
       && !(it.match?.not?.length && has(who, it.match.not)) && !(it.match?.notArt?.length && has(sing(d.art || ""), it.match.notArt)) && sameMethod(it) && standard(it));
@@ -182,7 +202,7 @@ export function designPrice(g: Pick<Group, "imprints">, qty: number, d: DesignCt
     hits = hits.filter((it) => fit(it) === best);
   }
   if (!hits.length) {
-    const named = d.items.filter((it) => it.active && tiersOf(it).length && !(it.match?.who?.length || it.match?.what?.length) && norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `));
+    const named = d.items.filter((it) => it.active && tiersOf(it).length && !(it.match?.who?.length || it.match?.what?.length || it.match?.allOf?.length) && norm(it.name).length >= 3 && text.includes(` ${norm(it.name)} `));
     // the most specific name wins: "Rice Life Totes" over "Rice Life", "SPICY Deep Shit Pizza" over "Deep Shit Pizza"
     hits = named.filter((it) => !named.some((o) => o !== it && norm(o.name).length > norm(it.name).length && ` ${norm(o.name)} `.includes(` ${norm(it.name)} `)));
   }
