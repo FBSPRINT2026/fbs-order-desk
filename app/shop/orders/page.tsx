@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import { STATUSES } from "@/lib/pricing";
 import { custLabel, daysUntil, money } from "@/lib/format";
 import { summaryLine, useShopData } from "@/lib/shopData";
-import { Due, Pill, pvStatusOf } from "@/components/bits";
+import { Due, Pill, pvStatusOf, PaidMark } from "@/components/bits";
 import AssistantStrip from "@/components/AssistantStrip";
 import DraftRecovery from "@/components/DraftRecovery";
 import SearchInput from "@/components/SearchInput";
@@ -239,12 +239,3 @@ export default function OrdersPage() {
   );
 }
 
-/** on a phone the Balance column is left off (Nov 1, Nick: "instead of listing the dollar amounts twice… a little $ sign
- *  when it is paid… blank if it's unpaid"; then "put it on the left near the number"): a green $ beside the Inv tag when it's paid in full, an outlined one when
- *  part is paid (the amount still due in its tooltip), nothing when nothing is paid */
-function PaidMark({ total, balance }: { total: number; balance: number }) {
-  if (!(total > 0)) return null;
-  if (balance <= 0.004) return <span className="ol-paid" title="Paid in full" aria-label="Paid">$</span>;
-  if (balance < total - 0.004) return <span className="ol-paid part" title={`Part paid · ${money(balance)} still due`} aria-label="Part paid">$</span>;
-  return null;
-}

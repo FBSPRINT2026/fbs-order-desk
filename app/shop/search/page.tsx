@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchInput from "@/components/SearchInput";
 import { useShopData } from "@/lib/shopData";
-import { Due, Pill, pvStatusOf } from "@/components/bits";
+import { Due, PaidMark, Pill, pvStatusOf } from "@/components/bits";
 import { money, testFound } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { quickJump } from "@/app/shop/search-actions";
@@ -252,18 +252,18 @@ function SearchInner() {
           <h3>Orders <span className="faint">{rows.length} · newest first · ours and Printavo&apos;s together</span></h3>
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only">Balance</th></tr></thead>
+              <thead><tr><th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only ol-bal">Balance</th></tr></thead>
               <tbody>
                 {shownRows.map((r) => (
                   <tr className="rl" key={r.key}>
-                    <td><RowLink href={r.href} /><span className="ordno">{r.number}</span> <span className={"tag " + (r.quote ? "q" : "i")}>{r.quote ? "Quote" : "Inv"}</span></td>
+                    <td><RowLink href={r.href} /><span className="ordno">{r.number}</span> <span className="ol-tags"><span className={"tag " + (r.quote ? "q" : "i")}>{r.quote ? "Quote" : "Inv"}</span>{!r.quote && <PaidMark total={r.total} balance={r.balance} />}</span>{r.archived && <span className="ol-pv">Printavo</span>}</td>
                     <td><div className="sx-job"><span className="sx-th">{thumbs[r.key] ? <img src={thumbs[r.key]} alt="" /> : null}</span><span>{r.name}{r.archived && <span className="aa-arch">Printavo</span>}</span></div></td>
                     <td>{r.customer}</td>
                     <td>{r.archived ? <span className="pv-dot" style={{ ["--sc" as string]: r.color }}>{r.label}</span> : <Pill status={r.status} pv={r.pv} />}</td>
                     <td>{r.due ? <Due date={r.due} status={r.archived ? "completed" : r.status} /> : <span className="faint">No date</span>}</td>
                     <td className="r">{r.pcs}</td>
                     <td className="r money-only">{money(r.total)}</td>
-                    <td className="r money-only"><span className={"bal" + (r.balance > 0.004 ? "" : " paid")}>{r.quote ? "" : r.balance > 0.004 ? money(r.balance) : "Paid"}</span></td>
+                    <td className="r money-only ol-bal"><span className={"bal" + (r.balance > 0.004 ? "" : " paid")}>{r.quote ? "" : r.balance > 0.004 ? money(r.balance) : "Paid"}</span></td>
                   </tr>
                 ))}
               </tbody>

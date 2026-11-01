@@ -18,7 +18,7 @@ import RecordPayment from "@/components/RecordPayment";
 import type { PayFilter } from "@/lib/paySelect";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
-import { Pill } from "@/components/bits";
+import { PaidMark, Pill } from "@/components/bits";
 import { StarOrder } from "@/components/PortalDashBits";
 import PortalSwitch from "@/components/PortalSwitch";
 import { heldFiles } from "@/lib/heldFiles";
@@ -508,17 +508,17 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         </div>
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Date</th><th>Due</th><th className="r">Pcs</th>{showBal && <th className="r money-only">Balance</th>}<th className="r money-only">Total</th></tr></thead>
+            <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Date</th><th>Due</th><th className="r">Pcs</th>{showBal && <th className="r money-only ol-bal">Balance</th>}<th className="r money-only">Total</th></tr></thead>
             <tbody>
               {P.items.map((o) => (
                 <tr className="rl" key={o.id}>
-                  <td><RowLink href={orderHref(o.id)} /><span className="ordno">{o.number}</span> <span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{o.archived && <PrintavoMark />}</td>
+                  <td><RowLink href={orderHref(o.id)} /><span className="ordno">{o.number}</span> <span className="ol-tags"><span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{showBal && o.type !== "quote" && <PaidMark total={o.total} balance={o.archived ? 0 : o.balance} />}{o.archived && <PrintavoMark />}</span></td>
                   <td><div>{o.nickname || "Untitled Job"}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
                   <td>{o.archived ? <span className="pv-dot" style={{ ["--sc" as string]: o.statusColor || "#888" }}>{o.statusLabel || "Archived"}</span> : <Pill status={o.status} pv={o.pv} />}</td>
                   <td>{when(dayOf(o)) || "—"}</td>
                   <td>{when(o.due_date) || <span className="faint">No date</span>}</td>
                   <td className="r">{o.qty}</td>
-                  {showBal && <td className="r money-only"><span className={"bal" + (o.archived || o.balance <= 0.004 ? " paid" : "")}>{!o.archived && o.balance > 0.004 ? money(o.balance) : "Paid"}</span></td>}
+                  {showBal && <td className="r money-only ol-bal"><span className={"bal" + (o.archived || o.balance <= 0.004 ? " paid" : "")}>{!o.archived && o.balance > 0.004 ? money(o.balance) : "Paid"}</span></td>}
                   <td className="r money-only">{money(o.total)}</td>
                 </tr>
               ))}
