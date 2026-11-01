@@ -19,7 +19,7 @@ import { refetchAttachments } from "@/lib/mail/imap";
 import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
-import { finishingList, fitLocation, lineQty, LOCATIONS, priceList, type PriceType, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type Order, type Settings } from "@/lib/pricing";
+import { finishingList, fitLocation, lineQty, LOCATIONS, priceList, type PriceType, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type PersEntry, type Order, type Settings } from "@/lib/pricing";
 import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
@@ -436,7 +436,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-31u";
+export const READER_REV = "2026-11-01a";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -1024,24 +1024,44 @@ ${staffSays}` : ""}`;
   for (const g of groups) for (const im of g.imprints || []) { const was = im.location; im.location = fitLocation(im.location, g.lines); if (was !== im.location && g.name === was && g.imprints.length === 1) g.name = im.location; }
   const wholesale = cust?.price_type === "wholesale";
   const supplied = p.garments_supplied_by === "customer" || (wholesale && p.garments_supplied_by !== "shop");
-  // personalized pieces read into their own group (rule 7b) become the order's own personalization (GLine.pers, what
-  // "Add personalization" on the order makes): one piece per name on the line, charged per name, not per group
+  // personalized pieces read into their own group (rule 7b) become the order's own personalization: the line's
+  // persList, what "Add personalization" on the order makes (Nov 1, Nick on #40345 All My Sons Rhode Island: the names
+  // were left as line notes and $5 was folded into each piece's price "instead of using the add personalization tool").
+  // Each name its piece's size (the "(X-LARGE)" after it, else the next piece without a name), charged per name on top
+  // of the line, the line's own price untouched; pieces left without a name are asked about, never guessed
+  const persAsk: string[] = [];
   {
     const persIds = new Set(finAll.filter((f) => /personali[sz]/i.test(`${f.id} ${f.name}`)).map((f) => f.id));
     for (const g of groups) {
-      if (!(g.finishing || []).some((id) => persIds.has(id))) continue;
-      const out: typeof g.lines = [];
-      let all = true;
+      if (!(g.finishing || []).some((id) => persIds.has(id)) && !(g.lines || []).some((l) => /^personali[sz]ation:/i.test(l.note || ""))) continue;
       for (const l of g.lines) {
-        const names = (l.note || "").replace(/^personali[sz]ation:\s*/i, "").split(/\s*[;\n]\s*/).map((n) => n.replace(/\s*\((?:[A-Z0-9]{1,4}|OSFA|OS)\)\s*$/i, "").trim()).filter(Boolean);
-        const sized = Object.entries(l.sizes || {}).flatMap(([z, q]) => Array.from({ length: +(q || 0) }, () => z));
-        if (!names.length || names.length !== sized.length) { all = false; out.push(l); continue; }
-        sized.forEach((z, k) => out.push({ ...l, id: k ? uid() : l.id, sizes: { [z]: 1 }, pers: names[k], note: `Personalization: ${names[k]}` }));
+        const raw = (l.note || "").replace(/^personali[sz]ation:\s*/i, "").split(/\s*[;\n]\s*/).map((n) => n.trim()).filter(Boolean);
+        if (!raw.length) continue;
+        const left = Object.entries(l.sizes || {}).flatMap(([z, q]) => Array.from({ length: +(q || 0) }, () => z));
+        const list = raw.map((n) => {
+          const m = n.match(/\s*\(([^)]{1,16})\)\s*$/);
+          const z = m ? normSize(m[1]) : null;
+          const text = (m && z ? n.slice(0, m.index) : n).trim();
+          const size = (z && left.includes(z) ? z : left[0] || z || "") as PersEntry["size"];
+          const at = left.indexOf(size as string); if (at >= 0) left.splice(at, 1);
+          return { id: uid(), text, size, qty: 1 };
+        }).filter((e) => e.text);
+        if (!list.length) continue;
+        l.persList = list;
+        delete l.pers;
+        delete l.note;
+        if (left.length) persAsk.push(`${[l.style, l.color].filter(Boolean).join(" ")}: ${left.length} personalized piece${left.length === 1 ? "" : "s"} (${left.join(", ")}) ${left.length === 1 ? "has" : "have"} no name on the paperwork I could read. Which name goes on ${left.length === 1 ? "it" : "them"}?`);
       }
-      g.lines = out;
-      // the name needs no print of its own (Nick: "we don't need a proof or anything. Our team will know what to do")
-      if (all) { g.finishing = (g.finishing || []).filter((id) => !persIds.has(id)); g.imprints = (g.imprints || []).filter((d) => !/personali[sz]|\bname\b/i.test(`${d.notes || ""} ${d.location === "Right Chest" && g.imprints.length > 1 ? "name" : ""}`)); }
+      // charged per name on each line (persList), so not again as the group's finishing; and the name needs no print of
+      // its own (Nick: "we don't need a proof or anything. Our team will know what to do")
+      g.finishing = (g.finishing || []).filter((id) => !persIds.has(id));
+      if ((g.imprints || []).length > 1) g.imprints = (g.imprints || []).filter((d) => !/personali[sz]|\bname\b/i.test(d.notes || "") && !(d.location === "Right Chest" && /name/i.test(`${d.notes || ""} ${g.name || ""}`)));
     }
+    // the names counted against the paperwork (Nov 1, #40345: three PERSONALIZATION rows, CINCO, ICEN and KEITH, read
+    // as two names): a PO table with more PERSONALIZATION rows than names read is asked about, never left short
+    const rowsOnPaper = Math.max(0, ...fileWords.map((w) => (w.match(/(?<![\w/])PERSONALI[SZ]ATION(?!S)\b/g) || []).length));
+    const namesRead = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + (l.persList || []).length, 0), 0);
+    if (namesRead && rowsOnPaper > namesRead) persAsk.push(`The paperwork has ${rowsOnPaper} personalized pieces but I read ${namesRead} name${namesRead === 1 ? "" : "s"}: which name is missing, and on which garment and size?`);
   }
   const draft: EODraft = {
     v: 2, kind: job ? "reorder" : "new", summary: (p.summary || "").slice(0, 400), confidence: p.confidence || "medium",
@@ -1060,7 +1080,7 @@ ${staffSays}` : ""}`;
     check: ((p as { check_with_staff?: { question?: string; guess?: string; about?: string; choices?: { label?: string; file?: number | null }[] }[] }).check_with_staff || []).map((c) => {
       const choices = (c.choices || []).map((x) => { const f = x.file ? files[x.file - 1] : undefined; return { label: String(x.label || f?.name || "").slice(0, 60), ...(f && f.role !== "signature" ? { path: f.path, name: f.name } : {}) }; }).filter((x) => x.label).slice(0, 4);
       return { q: String(c.question || "").slice(0, 300), guess: String(c.guess || "").slice(0, 200), ...(c.about ? { about: String(c.about).slice(0, 80) } : {}), ...(choices.length >= 2 ? { choices } : {}) };
-    }).filter((c) => c.q).slice(0, 8),
+    }).filter((c) => c.q).concat(persAsk.map((q) => ({ q, guess: "" }))).slice(0, 8),
     // the page that pictures each group's print (a work order's page per variation), shown beside the art at the check
     // a product sheet: where each group's photo and logo are, cut out at Create order (rule 4d)
     cuts: (p.groups || []).map((pg, gi) => { const cf = (pg as { cut_from?: { file?: number; page?: number; photo?: number[]; logo?: number[] } | null }).cut_from; const f = cf?.file ? files[cf.file - 1] : undefined; const bx = (b?: number[]) => (Array.isArray(b) && b.length === 4 && b.every((n) => Number.isFinite(+n)) ? b.map((n) => Math.min(1, Math.max(0, +n))) : undefined); if (mergedAway.has(gi)) return null; return f && /pdf/i.test(`${f.type} ${f.name}`) && (bx(cf!.logo) || bx(cf!.photo)) ? { about: String(pg.name || `#${gi + 1}`), gi: mergedFrom ? mergedFrom[gi] ?? gi : gi, path: f.path, name: f.name, page: Math.max(1, Math.min(40, Math.round(+(cf!.page || 1)))), photo: bx(cf!.photo), logo: bx(cf!.logo) } : null; }).filter((x): x is NonNullable<typeof x> => !!x),
