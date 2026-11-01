@@ -9,6 +9,7 @@ import { notFound, redirect } from "next/navigation";
 import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ImprintSpecs from "@/components/ImprintSpecs";
+import PortalArtView from "@/components/PortalArtView";
 import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
@@ -205,7 +206,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                   <tbody>
                     {orderGroups(o).map((g, gi) => [
                       // the group's mockup above its garments (Oct 24, Nick: "Can't see the art"; not tied to one garment)
-                      ...(() => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return pics.length ? [<tr key={g.id + "-art"} className="po-grp-art"><td colSpan={4}><div className="po-item-pics">{pics.slice(0, 4).map((x) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><img src={mkUrls[x]} alt="Mockup" loading="lazy" /></a>)}</div></td></tr>] : []; })(),
+                      ...(() => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return pics.length ? [<tr key={g.id + "-art"} className="po-grp-art"><td colSpan={4}><PortalArtView pics={pics.slice(0, 8).map((x) => mkUrls[x])} /></td></tr>] : []; })(),
                       ...g.lines.map((l, li) => {
                       const lc = c.groups[gi]?.lines[li];
                       return (
