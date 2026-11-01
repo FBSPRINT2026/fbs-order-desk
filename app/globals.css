@@ -16204,6 +16204,37 @@ table.tbl.jc tr.jc-sec i{display:inline-block;width:8px;height:8px;border-radius
 table.tbl.jc tbody tr.jc-sec,table.tbl.jc tbody tr.jc-more{cursor:default}
 table.tbl.jc tr.jc-more td,table.tbl.jc tr.jc-sec td{text-align:left}
 .jc-list .toolbar .jc-search{margin-left:auto}
+/* the Job Center on a phone (Nov 1, Nick: "don't like how the job center is in mobile view"): the header's buttons share
+   one full row, the department chips wrap instead of scrolling sideways, the search fills its row, and each job is a
+   compact card (the job and its due date on top, its department and what it needs under it, no column labels) instead of
+   the table stacked with a label in front of every value */
+@media (max-width:640px){
+  .jc-hd-r{flex:1 1 100%;justify-content:stretch;flex-wrap:nowrap}
+  .jc-hd-r > .chip{flex:none}
+  html body main.main .jc-hd-r > .chips{flex:1 1 auto;display:grid!important;grid-template-columns:1fr 1fr;overflow:visible!important;width:auto!important}
+  html body main.main .jc-hd-r > .chips > .chip{justify-content:center}
+  .jc-list .toolbar{flex-wrap:wrap;gap:8px;overflow:visible}
+  html body main.main .jc-list .toolbar > .chips{flex-wrap:wrap!important;overflow:visible!important;max-width:100%}
+  .jc-list .toolbar .jc-search{margin-left:0;flex:1 1 100%;min-width:0}
+  .jc-list .toolbar .jc-search > *{width:100%}
+  .jc-list .tbl-wrap{overflow:visible;border:0}
+  table.tbl.jc,table.tbl.jc tbody{display:block;width:100%}
+  table.tbl.jc thead{display:none}
+  table.tbl.jc tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:6px;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r);margin-bottom:8px;background:var(--surface)}
+  table.tbl.jc tbody td{display:block;padding:0;border:0;min-width:0;text-align:left}
+  table.tbl.jc tbody tr > td:first-child{grid-column:1;grid-row:1}
+  table.tbl.jc tbody tr > td:last-child{grid-column:2;grid-row:1;text-align:right;font-size:12.5px;color:var(--ink-2)}
+  table.tbl.jc tbody tr > td:not(:first-child):not(:last-child){grid-column:1 / -1}
+  table.tbl.jc tbody tr > td:nth-child(2):not(:last-child){display:flex;flex-wrap:wrap;gap:4px}
+  table.tbl.jc tbody tr > td:empty,table.tbl.jc tbody tr > td:has(> .jc-tags:empty){display:none}
+  table.tbl.jc td:first-child .sub{max-width:none;white-space:normal}
+  table.tbl.jc .pill .pill-t{white-space:normal;overflow:visible;text-overflow:clip}
+  table.tbl.jc tbody tr.on td{background:none}
+  table.tbl.jc tbody tr.on{border-color:var(--accent);background:var(--accent-soft)}
+  table.tbl.jc tbody tr.on td:first-child{box-shadow:none}
+  table.tbl.jc tbody tr.jc-sec,table.tbl.jc tbody tr.jc-more{display:block;border:0;background:none;padding:6px 2px;margin:4px 0}
+  table.tbl.jc tbody tr.jc-sec td,table.tbl.jc tbody tr.jc-more td{background:none;padding:0}
+}
 .pfl-sub-ok{font-size:13px;font-weight:700;color:var(--ink);text-align:center;margin-top:-2px}
 .pfl-big.btn{text-transform:none}
 /* the customer's order page: the right side follows what they did (sent back → grayed with what they asked; approved →
