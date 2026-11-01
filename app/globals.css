@@ -17180,3 +17180,7 @@ table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label="
   html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Pcs"]{text-align:right!important}
   html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Total"]{overflow:visible!important}
 }
+/* a group with no mockup yet: its print details are hidden (not a grayed form under a cover) until a mockup is made
+   or "Manually enter info" is picked (components/GroupEditor.tsx, Nov 1) */
+.mk-lock.hide > .mk-body{display:none}
+.mk-manual{padding:6px 2px 2px;font-size:13px}

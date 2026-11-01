@@ -1185,7 +1185,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
               <button className="btn sm ghost" type="button" onClick={() => setAskSkip(false)}>Cancel</button>
             </div>
           )}
-          <div className={"mk-lock" + (locked ? " on" : "") + (locked && needMockup ? " need" : "")}>
+          <div className={"mk-lock" + (locked ? " on" : "") + (locked && needMockup ? " need" : "") + (locked && !needMockup ? " hide" : "")}>
           {locked && (needMockup
             // the customer's builder: a small grayed-out outline of the prints, not the whole form under a cover (Oct 24,
             // Nick: "this grayed out area, it shouldn't even be that big… just a grayed out version of that")
@@ -1193,7 +1193,9 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {g.imprints.map((d, di) => <div key={d.id} className="mk-need-row"><b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, methodLabel(d), d.method === "screen" ? `${d.colors >= 11 ? "Full color" : `${d.colors || 1} color${(d.colors || 1) > 1 ? "s" : ""}`}` : ""].filter(Boolean).join(" · ")}</span><span>Logo</span><span>Size</span></div>)}
                 <small>{needMockup}</small>
               </div>
-            : <button type="button" className="mk-cover" aria-label="Imprints are locked until a mockup is created" onClick={() => setAskSkip(true)}><span>Create a mockup — or click here to manually enter info</span></button>)}
+            // no mockup yet: the print details stay out of sight until there's a mockup or someone picks entering them by
+            // hand (Nov 1, Nick: "this details panel looks weird. Probably should be hidden till you add mockup")
+            : !askSkip && <div className="mk-manual"><button type="button" className="linkbtn" onClick={() => setAskSkip(true)}>No mockup? Enter the prints by hand</button></div>)}
           <div inert={locked || fixed || printsFixed || undefined} className="mk-body">
           {brandOnly && <div className="imp-brand-ed">{editBrand ? <button type="button" className="linkbtn" onClick={() => setEditBrand(false)}>Done editing</button> : <button type="button" className="linkbtn" onClick={() => setEditBrand(true)}>Edit the print details</button>}</div>}
           {/* each print as a card beside the mockup (Oct 15, Nick: "rework how this is organized now that you have more
