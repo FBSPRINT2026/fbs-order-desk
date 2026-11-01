@@ -20,7 +20,7 @@ import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import ColorChange, { versionOfColor, versionsOf } from "@/components/ColorChange";
 import LocationChange from "@/components/LocationChange";
-import { hasSpotChange, spotKey, spotLines, spotOf, spotsOf } from "@/lib/spotChange";
+import { hasSpotChange, spotKey, spotLines, spotOf, spotsOf, needsSettle, settleSpots } from "@/lib/spotChange";
 import { colorChanges } from "@/lib/pricing";
 import FinishingPicker from "@/components/FinishingPicker";
 import { isRelabel } from "@/components/NeckLabelPick";
@@ -131,6 +131,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const gar = catalog.find((x) => x.style.toLowerCase() === l.style.trim().toLowerCase());
     return !!gar && specialtyText(gar.description || "");
   }).map((x) => x.i) : [];
+  // a print sewn at a spot none of the group's garments use (Nov 1, #40345: "Cuff" from the beanies' mockup on two
+  // jackets, the jackets a location change B): the spot they do use becomes the print's own (lib/spotChange.ts)
+  const unsettled = g.imprints.some((d) => needsSettle(d, g.lines));
+  useEffect(() => { if (unsettled && !fixed) update((x) => { for (const d of x.imprints) settleSpots(d, x.lines); }); }, [unsettled]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (specFromCatalog.length) update((x) => { for (const i of specFromCatalog) if (x.lines[i]) x.lines[i].specialty = true; }); }, [specFromCatalog.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   const [askSkip, setAskSkip] = useState(false);
   // "Already digitized?" open for one print (components/DigitizedFinder.tsx)

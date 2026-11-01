@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { uid, type Group, type Imprint } from "@/lib/pricing";
 import type { EODraft } from "@/lib/emailOrderShared";
 import type { ProgramItem } from "@/lib/programs";
-import { spotKey, spotOf } from "@/lib/spotChange";
+import { spotKey, spotOf, settleSpots } from "@/lib/spotChange";
 
 /**
  * Master mockups: the program's prices name the saved mockups that ARE them (Program & training on the customer, Oct 30,
@@ -162,5 +162,8 @@ export function applyMasters(d: EODraft, ms: Masters, about: string): string[] {
     }
   }
   d.check = (d.check || []).filter((c) => !(settled.has(norm(c.about)) && (ART_Q.test(c.q) || c.choices?.some((x) => x.path))));
+  // a master's print sewn at a spot none of this order's garments use (the beanies' Cuff on an order of jackets) takes
+  // the spot its garments do use (lib/spotChange.ts settleSpots)
+  for (const g of d.groups) for (const im of g.imprints || []) settleSpots(im, g.lines || []);
   return did;
 }
