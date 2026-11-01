@@ -402,7 +402,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wo-pc .inks.two{display:grid;grid-template-columns:1fr 1fr;gap:1px 10px}
 /* a thread or ink name is never cut short ("1 Madeira 1800 …"): one a line when two don't fit */
 .pdoc .wo-pc .inks.two{grid-template-columns:repeat(auto-fill,minmax(1.55in,1fr))}
-.pdoc .wo-pc .inks span{white-space:normal}
+.pdoc .wo-pc .inks>span{white-space:normal}
 .pdoc .wo-pc .sw{width:10px;height:10px;margin-right:4px;vertical-align:-1px}
 .pdoc .wo-pc .warn{padding:0 10px 6px;font-size:8.5pt}
 .pdoc .wo-plist{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;margin-top:8px;font-size:10pt}
@@ -589,7 +589,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .w2-hero .wo-mks{margin-top:0;min-height:0;flex:none;height:100%}
 .pdoc .w2-prints{display:flex;flex-direction:column;gap:6px;min-width:0;overflow:hidden}
 .pdoc .w2-prints .wo-pc .kv{grid-template-columns:.58in minmax(0,1fr);font-size:9.5pt}
-.pdoc .w2-prints .wo-pc .inks span,.pdoc .w2-prints .wo-pc .w2-th>span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdoc .w2-prints .wo-pc .inks>span,.pdoc .w2-prints .wo-pc .w2-th>span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pdoc .w2-prints .wo-pc .kv>*{min-width:0}
 .pdoc .w2-way{display:flex;flex-direction:column;gap:1px}
 .pdoc .w2-way .w2-file{font-size:8.5pt;color:var(--ink3)}
