@@ -139,3 +139,30 @@ async function suggestStyles(admin: SupabaseClient, customerId: string | null, g
     f.say = `${f.say.replace(/\.$/, "")}; ${how === "their past orders" ? "their past orders put it on" : "the catalog's match is"} ${st}${title.get(st) ? ` (${title.get(st)})` : ""}.`;
   });
 }
+
+/**
+ * A garment the paperwork has decorated another way than its group (Oct 31, #40334: an embroidered polo in the heat
+ * transfer group), moved at the reading to the group that prints the same logo at the same spot that way. Returns the
+ * prints it went into, so the reading fills them again for the garments they have now (their colors' versions).
+ */
+export function applyMethodFixes(groups: Group[], findings: SrcFinding[]): { groups: Group[]; did: string[]; touched: string[] } {
+  const did: string[] = [], touched: string[] = [];
+  let out = groups.map((g) => ({ ...g, lines: [...(g.lines || [])], imprints: [...(g.imprints || [])] }));
+  const norm = (x?: string) => (x || "").trim().toLowerCase();
+  for (const f of findings) {
+    if (f.kind !== "method" || !f.fix) continue;
+    const from = out[f.group];
+    if (!from) continue;
+    const logos = from.imprints.filter((im) => im.design_id);
+    const to = out.find((g, i) => i !== f.group && g.imprints.length === logos.length && logos.every((im) => g.imprints.some((x) => x.design_id === im.design_id && norm(x.location) === norm(im.location) && x.method === f.fix)));
+    if (!to) continue;
+    const moving = from.lines.filter((l) => f.lineIds.includes(l.id));
+    if (!moving.length) continue;
+    from.lines = from.lines.filter((l) => !f.lineIds.includes(l.id));
+    to.lines.push(...moving);
+    touched.push(...to.imprints.map((im) => im.id));
+    did.push(`${f.what}: ${f.fix === "dtf" ? "heat transfer" : f.fix}, with the others done that way`);
+  }
+  out = out.filter((g) => g.lines.length || !(groups.find((x) => x.id === g.id)?.lines || []).length);
+  return { groups: out, did, touched };
+}

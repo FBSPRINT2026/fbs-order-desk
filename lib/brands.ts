@@ -151,7 +151,13 @@ export function goodsFor(brand: Pick<Brand, "rules"> | null | undefined, color: 
   if (goods[c]) return goods[c];
   const k = (x: string) => x.toLowerCase().replace(/grey/g, "gray").replace(/[^a-z0-9]+/g, " ").trim();
   const want = k(c);
-  return want ? Object.entries(goods).find(([x]) => k(x) === want)?.[1] : undefined;
+  if (!want) return undefined;
+  const same = Object.entries(goods).find(([x]) => k(x) === want)?.[1];
+  if (same) return same;
+  // a maker's own prefix on a color it learned: "TNF Dark Gray Heather" is the "dark gray heather" (Oct 31, #40334): the
+  // longest learned color the name ends with, two words or more
+  const end = Object.entries(goods).map(([x, v]) => [k(x), v] as const).filter(([x]) => x.includes(" ") && want.endsWith(` ${x}`)).sort((a, b) => b[0].length - a[0].length)[0];
+  return end?.[1];
 }
 export function brandDark(brand: Pick<Brand, "rules"> | null | undefined, l: Pick<GLine, "color"> & { hex?: string | null }): boolean {
   const g = goodsFor(brand, l.color || "");

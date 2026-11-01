@@ -26,7 +26,7 @@ import { isShortFor } from "@/lib/colorMatch";
 export type SrcCatalog = Record<string, { title: string; brand: string; colors: string[] }>;
 export type SrcLogo = { id: string; name: string; brand?: string | null; colorways: string[]; /** how many orders staff said are right print it: when the words fit two logos the same ("Stacked" fits Secondary (stacked) and SMM (stacked)), the one the shop uses */ uses?: number };
 export type SrcFinding = {
-  kind: "location" | "color" | "sizes" | "style" | "logo" | "colorway";
+  kind: "location" | "color" | "sizes" | "style" | "logo" | "colorway" | "method";
   /** the group (index) and lines it's about */ group: number; lineIds: string[];
   /** the garment, as staff know it: "Nike 400099 Starlight Blue" */ what: string;
   paper: string; order: string;
@@ -289,6 +289,14 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
         const logoSpots = locs.filter((x) => !pers.some((p) => locKey(p) === locKey(x)));
         out.push({ kind: "location", group: gi, lineIds: ids, what, paper: locs.join(" + "), order: [...mine].filter(Boolean).join(" + ") || "nowhere", ...(logoSpots.length === 1 ? { fix: logoSpots[0] } : {}), say: `${what}: the paperwork puts it on the ${locs.join(" + ")}, the order has the ${[...mine].filter(Boolean).join(" + ") || "no spot"}.` });
       }
+    }
+    // the way it's decorated (Oct 31, #40334: the cart's "Coto Performance Polo, Left Chest Embroidery" went in with the
+    // heat transfers): the paperwork names one, and no print of its group is done that way
+    {
+      const ws = ` ${S.slice(w.from, w.colorAt >= 0 ? w.colorAt : w.to).map((t) => t.w).join(" ")} `;
+      const said = / embroider(y|ed)? /.test(ws) ? "embroidery" : / (heat transfers?|heat press(ed)?|dtf) /.test(ws) ? "dtf" : / screen print(ed)? /.test(ws) ? "screen" : "";
+      const ms = new Set((groups[gi].imprints || []).map((im) => im.method));
+      if (said && ms.size && !ms.has(said as never)) out.push({ kind: "method", group: gi, lineIds: ids, what, paper: said, order: [...ms].join(" + "), fix: said, say: `${what}: the paperwork says ${said === "dtf" ? "heat transfer" : said}, the order has it as ${[...ms].map((m) => (m === "dtf" ? "heat transfer" : m)).join(" + ")}.` });
     }
     // the logo and its version, for prints of the customer's logos
     const W = new Set(S.slice(w.from, w.to).map((t) => t.w));

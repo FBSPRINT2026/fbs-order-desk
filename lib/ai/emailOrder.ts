@@ -14,7 +14,7 @@ import { applySheetSizes, sheetBreakdown } from "@/lib/sheetSizes";
 import { confirmMeta, supplierConfirms } from "@/lib/supplierConfirm";
 import { pdfTextServer } from "@/lib/pdfTextServer";
 import { applyLocationFixes, sourceCheck } from "@/lib/sourceCheck";
-import { applyColorwayFixes, applyLogoFixes, sourceCtx } from "@/lib/ai/sourceCheckRun";
+import { applyColorwayFixes, applyLogoFixes, applyMethodFixes, sourceCtx } from "@/lib/ai/sourceCheckRun";
 import { refetchAttachments } from "@/lib/mail/imap";
 import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
@@ -436,7 +436,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-31s";
+export const READER_REV = "2026-10-31t";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -1106,6 +1106,14 @@ ${staffSays}` : ""}`;
   try {
     const paper = [...convo.map((e) => `${e.subject || ""}\n${String(e.body || "")}`), ...fileWords].join("\n\n").slice(0, 60000);
     const ctx = await sourceCtx(admin, draft.groups);
+    // a garment decorated another way than its group: into the group done that way, its prints filled again for it
+    const moved = applyMethodFixes(draft.groups, sourceCheck(paper, draft.groups, ctx));
+    draft.groups = moved.groups;
+    if (moved.touched.length && onFile) for (const g of draft.groups) for (const im of g.imprints || []) {
+      if (!moved.touched.includes(im.id) || !im.design_id) continue;
+      const d = onFile.designs.find((x) => x.id === im.design_id);
+      if (d) { delete im.colorwayBy; delete im.inkBy; fillFromLogo(im, { design: d, brands: onFile.brands, lines: g.lines }); }
+    }
     const fixed = applyLocationFixes(draft.groups, sourceCheck(paper, draft.groups, ctx), { split: false });
     draft.groups = fixed.groups;
     // the logo the paperwork names, then the version it names ("Stacked Logo All White"): its sew file and threads
@@ -1115,7 +1123,7 @@ ${staffSays}` : ""}`;
     const cwFixed = applyColorwayFixes(draft.groups, sourceCheck(paper, draft.groups, ctx), ctx.designs);
     draft.groups = cwFixed.groups;
     const left = sourceCheck(paper, draft.groups, ctx);
-    const didAll = [...fixed.did, ...logoFixed.did, ...cwFixed.did];
+    const didAll = [...moved.did, ...fixed.did, ...logoFixed.did, ...cwFixed.did];
     if (didAll.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}From the paperwork: ${didAll.join("; ")}.`.slice(0, 1800);
     for (const f of left.slice(0, 6)) {
       const want = f.fix || f.paper;
