@@ -48,7 +48,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   const router = useRouter();
   const searchParams = useSearchParams();
   const isNew = searchParams.get("new") === "1";
-  const { orders, customers, settings, loading, reload: reloadShop } = useShopData();
+  const { orders, customers, settings, loading, reload: reloadShop } = useShopData({ customerId: id });
   const [c, setC] = useState<Customer | null>(null);
   const [state, setState] = useState("");
   const [armed, setArmed] = useState(false);

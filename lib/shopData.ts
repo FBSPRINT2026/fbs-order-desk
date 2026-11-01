@@ -11,8 +11,11 @@ export type OrderRow = Pick<Order, "id" | "number" | "nickname" | "status" | "ty
   unread: number;
 };
 
-/** Loads the list-level data the shop pages share. */
-export function useShopData() {
+/** Loads the list-level data the shop pages share. A page that needs one customer's orders (`customerId`) or none
+ *  (`orders: false`) says so, instead of reading every order the shop has ever had with its groups (Nov 1: that list
+ *  grows by the day; the Projects page read all of it for the customer names). */
+export function useShopData(opts?: { orders?: boolean; customerId?: string }) {
+  const want = opts?.orders !== false, only = opts?.customerId || "";
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [customers, setCustomers] = useState<Record<string, Customer>>({});
   const [settings, setSettings] = useState<Settings>(mergeSettings({}));
@@ -22,9 +25,9 @@ export function useShopData() {
   const load = useCallback(async () => {
     const sb = createClient();
     const [o, c, p, m, s] = await Promise.all([
-      allRows((a, b) => sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type,submitted_at,approved_at,sent_at,completed_at,project_id,printavo_id,pv_status:printavo_state->>status").eq("draft", false).is("discarded_at", null).order("number", { ascending: false }).order("id").range(a, b)),
+      !want ? Promise.resolve({ data: [] as never[], error: null }) : allRows((a, b) => { const q = sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type,submitted_at,approved_at,sent_at,completed_at,project_id,printavo_id,pv_status:printavo_state->>status").eq("draft", false).is("discarded_at", null); return (only ? q.eq("customer_id", only) : q).order("number", { ascending: false }).order("id").range(a, b); }),
       allRows((a, b) => sb.from("customers").select("*").order("id").range(a, b)),
-      allRows((a, b) => sb.from("payments").select("order_id,amount").order("id").range(a, b)),
+      want ? allRows((a, b) => sb.from("payments").select("order_id,amount").order("id").range(a, b)) : Promise.resolve({ data: [] as never[], error: null }),
       sb.from("messages").select("order_id").eq("author_type", "customer").is("read_at", null),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
@@ -40,7 +43,7 @@ export function useShopData() {
     setCustomers(Object.fromEntries(cs.map((x) => [x.id, x])));
     setSettings(mergeSettings(s.data?.data));
     setLoading(false);
-  }, []);
+  }, [want, only]);
 
   useEffect(() => { load(); }, [load]);
   return { orders, setOrders, customers, settings, loading, error, reload: load };

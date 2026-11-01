@@ -8,7 +8,7 @@ import { createProjectAsStaff, loadSummaries } from "@/lib/projectsClient";
 
 /** Staff: every customer's projects, upcoming first. */
 export default function ProjectsPage() {
-  const { customers, loading } = useShopData();
+  const { customers, loading } = useShopData({ orders: false });
   const [list, setList] = useState<ProjectSummary[] | null>(null);
   const [reload, setReload] = useState(0);
   useEffect(() => { loadSummaries().then(setList); }, [reload]);
