@@ -21,7 +21,7 @@ import CustomerPick from "@/components/CustomerPick";
  * order, ticked "In Printavo" in ClickUp, or marked "Not an order". Making the order ticks "In Printavo" in ClickUp.
  */
 
-type Tab = "new" | "made" | "printavo" | "not" | "boards";
+type Tab = "new" | "noorder" | "made" | "printavo" | "not" | "boards";
 type Data = { connected: boolean; tokens: number; state: ClickUpState | null; teams: ClickUpTeamRow[]; tasks: ClickUpTask[]; known: Record<string, ClickUpKnown>; customers: { id: string; label: string }[] };
 /** a task's files as an email's attachments (stored copies open in the portal; until then, in ClickUp) */
 const asMail = (files: CuFile[]): MailFile[] => files.map((f) => ({ key: f.id, name: f.name, size: f.size, type: f.type,
@@ -230,6 +230,10 @@ export default function ClickUpJobs() {
   const groups = useMemo(() => ({
     new: all.filter((t) => t.waiting),
     made: all.filter((t) => t.order_id).sort((a, b) => (b.synced_at || "").localeCompare(a.synced_at || "")),
+    // In Printavo ✓ in ClickUp but no order anywhere: not made here, and no Printavo job found for it (Nov 1, Nick: "if
+    // it's marked in Printavo or in our system, it should have a corresponding invoice… make sure everything that says
+    // that has an order"). Open jobs only; make the order (Process) or mark it Not an order
+    noorder: all.filter((t) => t.in_printavo && !t.order_id && !t.pv_number && !t.dismissed_at && !/^(closed|done)$/i.test(t.status_type) && !data?.known[t.id]?.pv && !data?.known[t.id]?.ours),
     printavo: all.filter((t) => (t.in_printavo || t.pv_number) && !t.order_id && !t.dismissed_at),
     not: all.filter((t) => t.dismissed_at && !t.order_id),
   }), [all]);
@@ -461,7 +465,7 @@ export default function ClickUpJobs() {
       })() : <>
       <div className={"toolbar" + (pin ? " cu-pinned" : "")} ref={tbRef}>
         <div className="chips">
-          {([["new", "New", groups.new.length], ["made", "Made into orders", groups.made.length], ["printavo", "In Printavo", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
+          {([["new", "New", groups.new.length], ...(groups.noorder.length ? [["noorder", "Ticked, no order", groups.noorder.length]] : []), ["made", "Made into orders", groups.made.length], ["printavo", "In Printavo", groups.printavo.length], ["not", "Not orders", groups.not.length], ["boards", "Workspaces", (data?.teams || []).length]] as [Tab, string, number][])
             .map(([k, l, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>{l}{n > 0 && <span className="chip-n">{n}</span>}</button>)}
         </div>
         {tab !== "boards" && <CustomerPick compact value={team || null} label={team ? (() => { const t = (data?.teams || []).find((x) => x.id === team); return t ? custName.get(t.customer_id || "") || t.name : ""; })() : undefined} placeholder="Every customer: type one" ariaLabel="Customer"
