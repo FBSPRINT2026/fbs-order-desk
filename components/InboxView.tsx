@@ -918,6 +918,9 @@ export default function InboxView({ mode }: { mode: Mode }) {
         <PhoneNav.Provider value={nav}>
         {mode === "mail" && view.kind === "folder" ? (fSel ? <FolderMail key={`${fSel.folder}:${fSel.uid}`} row={fSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
             onGone={() => { const rs = fRows || [], i = rs.findIndex((y) => y.uid === fSel.uid && y.folder === fSel.folder), nx = rs[i + 1] || rs[i - 1] || null; setFRows(rs.filter((_, j) => j !== i)); if (nx) pickFolderRow(nx); else setFSel(null); }} /> : <section className="ibx2-empty"><b>{fRows ? "Pick an email" : "Loading…"}</b></section>)
+          // a conversation of one email opens as that email, with everything one email's view has (Nov 1, Nick)
+          : mode === "mail" && view.kind === "search" && cSel && cSel.msgs.length === 1 && cSel.msgs[0].folder !== "(moved)" ? <FolderMail key={`${cSel.msgs[0].folder}:${cSel.msgs[0].uid}`} row={cSel.msgs[0]} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
+            onGone={() => setCSel((c) => (c ? { ...c, msgs: c.msgs.map((y) => ({ ...y, folder: "(moved)" })) } : c))} />
           : mode === "mail" && view.kind === "search" ? (cSel ? <ThreadView key={cSel.key} c={cSel} folders={folders} listOpen={listOpen} toggleList={() => setListOpen(!listOpen)} back={() => setPicked(false)} flash={flash}
             onMoved={(m) => setCSel((c) => (c ? { ...c, msgs: c.msgs.map((y) => (y.uid === m.uid && y.folder === m.folder ? { ...y, folder: "(moved)" } : y)) } : c))} /> : <section className="ibx2-empty"><b>{convos ? "Pick a conversation" : "Searching…"}</b><span>Each one shows what they sent and what you sent, oldest first.</span></section>)
           : briefOn && ol === null ? <section className="ibx2-empty"><b>Loading…</b></section>

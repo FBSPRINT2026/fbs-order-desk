@@ -993,7 +993,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   const lastIn = [...c.msgs].reverse().find((m) => !m.sent) || last;
   // a customer's email in this conversation (stored when it came in): Create order / reorder from it, from here too
   // (Oct 12, Nick: replied "got it, thanks" and couldn't make the order from the conversation)
-  const [orderAct, setOrderAct] = useState<{ id: string; reorder: boolean } | null>(null);
+  const [orderAct, setOrderAct] = useState<{ id: string; reorder: boolean; summary: string } | null>(null);
   useEffect(() => {
     const ids = [...new Set(c.msgs.map((m) => m.messageId).filter(Boolean))];
     if (!ids.length) return;
@@ -1001,9 +1001,9 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
     let live = true;
     void createClient().from("activities").select("id, direction, customer_id, occurred_at, meta").eq("kind", "email").in("external_id", variants).order("occurred_at", { ascending: false }).then(({ data }) => {
       if (!live) return;
-      const rows = (data || []) as { id: string; direction: string; customer_id: string | null; meta: { triage?: { intent?: string } } | null }[];
+      const rows = (data || []) as { id: string; direction: string; customer_id: string | null; meta: { triage?: { intent?: string; summary?: string } } | null }[];
       const hit = rows.find((r) => r.direction === "in" && r.customer_id);
-      setOrderAct(hit ? { id: hit.id, reorder: rows.some((r) => r.meta?.triage?.intent === "reorder") } : null);
+      setOrderAct(hit ? { id: hit.id, reorder: rows.some((r) => r.meta?.triage?.intent === "reorder"), summary: String(hit.meta?.triage?.summary || "") } : null);
     });
     return () => { live = false; };
   }, [c.key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1012,19 +1012,24 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
   const orderLabel = orderAct?.reorder ? "Create reorder" : "Create order";
   const [cOrdering, setCOrdering] = useState(false), [cErr, setCErr] = useState("");
   const alertErr = (t: string) => setCErr(t);
-  const replyLast = () => { const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } };
+  const [repAll, setRepAll] = useState(false);
+  const replyLast = (all = false) => { setRepAll(all); const k = `${lastIn.folder}:${lastIn.uid}`; const f = full[k]; if (f && f !== "err") setRep(f); else { load(lastIn); box<FullMsg>({ do: "message", path: lastIn.folder, uid: lastIn.uid }).then(setRep); } };
+  // the newest email's Move / Archive / Black Hole up top, like one email's view (Nov 1, Nick: a search result "doesn't
+  // have all the normal stuff at the top and all the buttons")
+  const [mvBusy, setMvBusy] = useState(false);
+  const moveLast = async (to: string, label: string) => { setMvBusy(true); try { await boxPost({ do: "move", path: last.folder, uid: last.uid, to }); flash(label); onMoved(last); } catch (e) { setCErr(e instanceof Error ? e.message : String(e)); } setMvBusy(false); };
   return (
     <div className="ibx2-work ibx2-solo">
       <section className="ibx2-mail" aria-label="Conversation">
         <MailHead listOpen={listOpen} toggleList={toggleList} back={back} subject={c.subject} fromName={c.people.join(", ")} fromEmail="" date={`${c.count} email${c.count === 1 ? "" : "s"}`}
-          tags={orderAct ? <a className="eh-tag order" href={orderHref}>＋ {orderLabel}</a> : undefined}
-          phone={{ reply: replyLast, more: (close) => <>
+          summary={orderAct?.summary || undefined}
+          phone={{ reply: () => replyLast(), move: moveLast, here: last.folder, folders, busy: mvBusy, more: (close) => <>
             <PSec label="Actions">{orderAct && <PTile icon={TbIcon.order} label={orderLabel} kind="primary" href={orderHref} onClick={close} />}<PTile icon={TbIcon.person} label="Add to customer" onClick={() => { close(); openAddToCustomer(lastIn.sent ? { email: lastIn.to[0] || "", name: lastIn.toNames?.[0] || "" } : { email: lastIn.from, name: lastIn.fromName }); }} /></PSec>
           </>, ask: { id: `box:${lastIn.uid}:${lastIn.folder}`, who: lastIn.fromName || lastIn.from, onDraft: (d) => { setRepStart(d.body); setRepCc(d.cc || []); replyLast(); } } }}
           toolbar={<Toolbar>
-            <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={replyLast} /></TbGroup>
+            <TbGroup label="Email"><TbBtn icon={TbIcon.reply} label="Reply" kind="primary" onClick={() => replyLast()} /><TbBtn icon={TbIcon.replyAll} label="Reply all" onClick={() => replyLast(true)} /></TbGroup>
             <TbGroup label="Actions">{!lastIn.sent && <TbBtn icon={TbIcon.order} label={cOrdering ? "Opening…" : orderLabel} disabled={cOrdering} title="Make an order from their latest email here, the same way as from the Inbox" onClick={async () => { if (orderHref) { window.location.href = orderHref; return; } setCOrdering(true); const k = await keepFolderEmail({ folder: lastIn.folder, uid: lastIn.uid, messageId: lastIn.messageId }); if (!k.ok) { setCOrdering(false); alertErr(k.error); return; } window.location.href = `/shop/conversations?open=${k.activityId}&order=1`; }} />}<TbBtn icon={TbIcon.person} label="Add to customer" title="Add this person as a contact at a customer (or make them a new customer)" onClick={() => openAddToCustomer(lastIn.sent ? { email: lastIn.to[0] || "", name: lastIn.toNames?.[0] || "" } : { email: lastIn.from, name: lastIn.fromName })} /></TbGroup>
-            <span className="faint mf-hint">Oldest at the top, newest at the bottom. Click an email to open or fold it.</span>
+            {last.folder !== "(moved)" && <MoveBar folders={folders} busy={mvBusy} onMove={moveLast} here={last.folder} />}
           </Toolbar>} />
         {cErr && <div className="pv-err eh-err">{cErr}</div>}
         <div className="ibx2-read mf-thread">
@@ -1056,7 +1061,7 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
           })}
           <div ref={endRef} />
         </div>
-        {rep && <ReplyBox key={repStart} m={rep} start={repStart} startCc={repCc} onClose={() => { setRep(null); setRepStart(""); }} onSent={(to) => { setRep(null); setRepStart(""); flash(`Sent to ${to}. It shows in the conversation next time you search.`); }} />}
+        {rep && <ReplyBox key={repStart} m={rep} all={repAll} start={repStart} startCc={repCc} onClose={() => { setRep(null); setRepStart(""); }} onSent={(to) => { setRep(null); setRepStart(""); flash(`Sent to ${to}. It shows in the conversation next time you search.`); }} />}
       </section>
     </div>
   );
