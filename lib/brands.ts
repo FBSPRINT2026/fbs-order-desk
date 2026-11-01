@@ -444,6 +444,18 @@ export function withSewFile<T extends Pick<Imprint, "method" | "emb" | "size" | 
   return { ...im, emb: { ...(im.emb || {}), file: f, stitchesFrom: "file" }, stitches: f.stitches || im.stitches };
 }
 
+/**
+ * An embroidered print whose threads were only written as plain colors ("Black, Green, White", Oct 31: All My Sons
+ * orders made before their logo's sew file came back) shows the threads its sew file actually sews ("Madeira 1800
+ * Black, Madeira 1902 Hunter Green…"). Any thread named by a number stays as it is: it was picked on purpose.
+ */
+export function withSewThreads<T extends Pick<Imprint, "method" | "emb" | "inks">>(im: T): T {
+  if (im.method !== "embroidery" || /\d/.test(im.inks || "")) return im;
+  const file = im.emb?.file as SewFile | undefined;
+  const t = file?.ws?.threads?.length ? sewThreads(file) : [];
+  return t.length ? { ...im, inks: t.join(", ") } : im;
+}
+
 /** the kind of sew file a group's goods take (caps, bags, fleece; else flat) */
 export function sewKindOf(lines: Pick<GLine, "garment" | "style" | "brand">[]): SewKind {
   const t = lines.map((l) => `${l.garment || ""} ${l.style || ""} ${l.brand || ""}`).join(" ").toLowerCase();
