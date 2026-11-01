@@ -5,7 +5,7 @@ import { simpleParser, type ParsedMail, type AddressObject } from "mailparser";
 import { cfgOf, type MailAccount, type MailCfg } from "./config";
 import { handleIncoming, handleSent, saveAttachments, saveBody, type MailMsg, type Outcome } from "./process";
 import { accountById } from "./config";
-import { addInboxEws, mirrorInbox } from "./mirror";
+import { addInboxEws, mirrorInbox, mirrorInboxEws } from "./mirror";
 
 /**
  * A connection to the mailbox. Its errors (a socket timeout, the server dropping it) are caught here: an "error" event
@@ -63,7 +63,10 @@ export async function syncAccount(admin: SupabaseClient, acct: MailAccount, dead
         let last = Number(st[vKey]) === validity && st[uKey] != null ? Number(st[uKey]) : null;
         // the Outlook Inbox list first (it's what the Email page shows), with up to half the time; then new mail
         if (kind === "inbox") {
-          try { const r = await mirrorInbox(admin, client, acct, validity, Math.min(deadline, Date.now() + Math.max(8000, (deadline - Date.now()) / 2))); if (r.gone) tally.inbox_archived = r.gone; if (r.sorted) tally.inbox_sorted = r.sorted; if (r.added) tally.inbox_listed = r.added; if (!r.inbox) { const n = await addInboxEws(admin, acct).catch(() => 0); if (n) tally.inbox_listed_ews = n; } }
+          // a mailbox EWS works on: the Inbox list through EWS (HTTPS, no connection limit); else the IMAP read
+          const ew = await mirrorInboxEws(admin, acct, client, Math.min(deadline, Date.now() + Math.max(8000, (deadline - Date.now()) / 2)));
+          if (ew) { if (ew.added) tally.inbox_listed_ews = ew.added; if (ew.gone) tally.inbox_archived = ew.gone; if (ew.sorted) tally.inbox_sorted = ew.sorted; }
+          else try { const r = await mirrorInbox(admin, client, acct, validity, Math.min(deadline, Date.now() + Math.max(8000, (deadline - Date.now()) / 2))); if (r.gone) tally.inbox_archived = r.gone; if (r.sorted) tally.inbox_sorted = r.sorted; if (r.added) tally.inbox_listed = r.added; if (!r.inbox) { const n = await addInboxEws(admin, acct).catch(() => 0); if (n) tally.inbox_listed_ews = n; } }
           catch (e) {
             tally.inbox_mirror_error = 1;
             const m = e instanceof Error ? e.message : String(e);

@@ -148,6 +148,25 @@ export async function mirrorInbox(admin: SupabaseClient, client: ImapFlow, acct:
 export const ARCHIVED = "Archived in Outlook";
 
 /**
+ * The Inbox list through Exchange's web service, for a mailbox EWS works on (Nov 1, Nick: "it's quite a bit behind…
+ * 10 minutes ago I marked things… Black Hole"): the mail check's IMAP read of the Inbox failed 668 times that day
+ * ("Connection not available": Intermedia allows a couple of IMAP connections and Outlook, the phone and the portal
+ * share them). New mail, read / flagged, moved out and moved back, all over HTTPS; then the waiting emails are sorted.
+ * Returns null when EWS can't (the IMAP read runs instead).
+ */
+export async function mirrorInboxEws(admin: SupabaseClient, acct: MailAccount, client: ImapFlow | null, deadline: number) {
+  const { ewsReady } = await import("./ewsBox");
+  if (!(await ewsReady(admin, acct).catch(() => false))) return null;
+  try {
+    ewsAdded.delete(acct.id);
+    const added = await addInboxEws(admin, acct);
+    const gone = await pruneInboxEws(admin, acct, true);
+    const sorted = await sortPending(admin, client, acct, deadline).catch(() => 0);
+    return { added, gone, sorted };
+  } catch (e) { console.warn("mirrorInboxEws", acct.email, e instanceof Error ? e.message : e); return null; }
+}
+
+/**
  * Between mail checks (and while IMAP is refusing connections), the Inbox list can still show an email SaneBox or
  * Outlook already moved out; opening it then says it isn't there (Oct 14, Nick: the Pizza Hut email). For a mailbox
  * EWS works on, what's in the Inbox is read in under a second each time the list loads, and anything no longer there
@@ -166,12 +185,14 @@ export async function addInboxEws(admin: SupabaseClient, acct: MailAccount) {
   ewsAdded.set(k, Date.now());
   const { ewsReady, ewsList } = await import("./ewsBox");
   if (!(await ewsReady(admin, acct))) return 0;
+  const t0 = new Date().toISOString();
   const { rows } = await ewsList(admin, acct, lc(acct.email), "INBOX");
   const ids = [...new Set(rows.map((r) => r.messageId).filter(Boolean))];
   if (!ids.length) return 0;
-  const { data: have } = await admin.from("mail_inbox").select("id, message_id, gone_at, unread, flagged").eq("account_id", acct.id).in("message_id", ids);
-  const byMsg = new Map<string, { id: string; gone_at: string | null; unread: boolean; flagged: boolean }[]>();
-  for (const h of (have || []) as { id: string; message_id: string; gone_at: string | null; unread: boolean; flagged: boolean }[]) (byMsg.get(h.message_id) || byMsg.set(h.message_id, []).get(h.message_id)!).push(h);
+  const { data: have } = await admin.from("mail_inbox").select("id, message_id, gone_at, unread, flagged, activity_id").eq("account_id", acct.id).in("message_id", ids);
+  type H = { id: string; message_id: string; gone_at: string | null; unread: boolean; flagged: boolean; activity_id: string | null };
+  const byMsg = new Map<string, H[]>();
+  for (const h of (have || []) as H[]) (byMsg.get(h.message_id) || byMsg.set(h.message_id, []).get(h.message_id)!).push(h);
   const { data: acts } = await admin.from("activities").select("id, external_id").eq("kind", "email").in("external_id", ids.flatMap((x) => [x, `<${x}>`]));
   const actOf = new Map(((acts || []) as { id: string; external_id: string }[]).map((a) => [mid(a.external_id), a.id]));
   let added = 0;
@@ -180,7 +201,17 @@ export async function addInboxEws(admin: SupabaseClient, acct: MailAccount) {
     const h = byMsg.get(r.messageId);
     const live = h?.find((x) => !x.gone_at);
     if (live) { if (live.unread !== !r.seen || live.flagged !== r.flagged) await admin.from("mail_inbox").update({ unread: !r.seen, flagged: r.flagged }).eq("id", live.id); continue; }
-    if (h?.length) continue; // was in the list and taken off (archived): the IMAP mirror decides about moved-back mail
+    if (h?.length) {
+      // moved back into the Inbox in Outlook: the same row comes back and the to-dos archiving closed open again (one
+      // taken off after this read started, an Archive pressed here a moment ago, stays gone)
+      const was = [...h].sort((a, b) => String(b.gone_at).localeCompare(String(a.gone_at)))[0];
+      if (!was.gone_at || was.gone_at >= t0) continue;
+      await admin.from("mail_inbox").update({ gone_at: null, done_by: null, unread: !r.seen, flagged: !!r.flagged }).eq("id", was.id);
+      await admin.from("tasks").update({ status: "open", done_at: null, done_by: null }).eq("mail_inbox_id", was.id).eq("status", "done").eq("done_by", ARCHIVED);
+      if (was.activity_id) { const { data: a } = await admin.from("activities").select("meta").eq("id", was.activity_id).maybeSingle(); const m = (a?.meta || {}) as Record<string, unknown>; if (m.outlook_archived) { const { outlook_archived: _d, ...rest } = m; void _d; await admin.from("activities").update({ meta: { ...rest, back_in_inbox_at: new Date().toISOString() } }).eq("id", was.activity_id); } }
+      added++;
+      continue;
+    }
     const { error } = await admin.from("mail_inbox").insert({
       account_id: acct.id, uid: r.uid, uidvalidity: 0, message_id: r.messageId, from_email: r.from, from_name: r.fromName,
       subject: (r.subject || "").slice(0, 300), received_at: r.date || null, cc_only: false, unread: !r.seen, flagged: !!r.flagged, has_attachments: false, activity_id: actOf.get(r.messageId) || null,
@@ -194,18 +225,21 @@ export async function pruneInboxEws(admin: SupabaseClient, acct: MailAccount, fo
   const k = acct.id;
   if (!force && Date.now() - (pruned.get(k) || 0) < 6000) return 0;
   pruned.set(k, Date.now());
-  const { ewsReady, ewsInboxMessageIds } = await import("./ewsBox");
+  const { ewsReady, ewsInboxRead } = await import("./ewsBox");
   if (!(await ewsReady(admin, acct))) return 0;
   const t0 = new Date(Date.now() - 60000).toISOString();
-  const ids = await ewsInboxMessageIds(acct);
-  if (!ids) return 0;
+  const read = await ewsInboxRead(acct);
+  if (!read) return 0;
+  const ids = read.ids;
   // only emails the mirror had before this read (a brand-new one may not be listed yet)
   const { data: cur } = await allRows((r0, r1) => admin.from("mail_inbox").select("id, message_id, activity_id").eq("account_id", acct.id).is("gone_at", null).lt("first_seen", t0).order("id").range(r0, r1), 2000);
   const curRows = (cur || []) as { id: string; message_id: string | null; activity_id: string | null }[];
   const gone = curRows.filter((r) => r.message_id && !ids.has(r.message_id));
   if (!gone.length) return 0;
-  // an empty or cut-short answer from Exchange never empties the list (see mirrorInbox)
-  if (suspiciousDrop(curRows.length, gone.length, ids.size)) { console.warn("pruneInboxEws: skipped a suspicious read", acct.email, { had: curRows.length, read: ids.size, gone: gone.length }); return 0; }
+  // an empty or cut-short answer from Exchange never empties the list (see mirrorInbox); a complete one (every item
+  // Exchange counts in the Inbox was read) is the truth, however much of the list it takes off
+  const complete = read.total > 0 && read.items === read.total;
+  if (!complete && suspiciousDrop(curRows.length, gone.length, ids.size)) { console.warn("pruneInboxEws: skipped a suspicious read", acct.email, { had: curRows.length, read: ids.size, gone: gone.length, items: read.items, total: read.total }); return 0; }
   const now = new Date().toISOString();
   await admin.from("mail_inbox").update({ gone_at: now }).in("id", gone.map((r) => r.id)).is("gone_at", null);
   await archiveActs(admin, gone.map((r) => r.activity_id).filter(Boolean) as string[], now);

@@ -245,9 +245,20 @@ export async function ewsOpen(admin: SupabaseClient, acct: MailAccount, path: st
 
 /** the Message-IDs of everything sitting in the Inbox right now, or null if the list didn't come back whole */
 export async function ewsInboxMessageIds(acct: MailAccount): Promise<Set<string> | null> {
+  return (await ewsInboxRead(acct))?.ids ?? null;
+}
+/**
+ * The whole Inbox as Exchange lists it: each email's Message-ID, how many items were read, and Exchange's own count of
+ * the Inbox. `items === total` means the read is complete (nothing cut short), so it can be trusted even when most of
+ * the list is gone (Nov 1: 174 of Nick's 210 had been archived in Outlook; a "most of it vanished" safety check kept
+ * them on the portal for days).
+ */
+export async function ewsInboxRead(acct: MailAccount): Promise<{ ids: Set<string>; items: number; total: number } | null> {
   const x = await call(acct, `<m:FindItem Traversal="Shallow"><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties><t:FieldURI FieldURI="message:InternetMessageId"/></t:AdditionalProperties></m:ItemShape><m:IndexedPageItemView MaxEntriesReturned="1000" Offset="0" BasePoint="Beginning"/><m:ParentFolderIds><t:DistinguishedFolderId Id="inbox"/></m:ParentFolderIds></m:FindItem>`, 8000);
-  if (attr(all(x, "RootFolder")[0]?.attrs || "", "IncludesLastItemInRange") !== "true") return null;
-  return new Set(all(x, "InternetMessageId").map((m) => mid(unesc(m.inner))).filter(Boolean));
+  const root = all(x, "RootFolder")[0]?.attrs || "";
+  if (attr(root, "IncludesLastItemInRange") !== "true") return null;
+  const total = Number(attr(root, "TotalItemsInView"));
+  return { ids: new Set(all(x, "InternetMessageId").map((m) => mid(unesc(m.inner))).filter(Boolean)), items: all(x, "ItemId").length, total: Number.isFinite(total) ? total : -1 };
 }
 
 /** an Inbox email's raw message (MIME), found by its Message-ID, for keeping it in the portal */
