@@ -17183,17 +17183,40 @@ table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label="
   html body .ord .pr .pr-scr > .pr-scr-l{flex:1 1 100%!important;min-width:0!important;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:0!important}
   html body .ord .pr .pr-scr > .pr-scr-v{flex:1 1 0!important;min-width:0}
 }
-/* Orders list on a phone: the total once, with a $ mark when it's paid (components in app/shop/orders/page.tsx PaidMark) */
-.ol-paid{display:none}
+/* Orders list on a phone (Nov 1, Nick: "lines aren't lining up… the dollar sign… put it on the left near the number…
+   rethink this view"). Three lines that line up on both sides:
+     34507   Velvet Hammer Gradient Shirts      $637.50
+     INV $   Peticolas Brewing                   50 pcs
+     PRINTAVO ● Job Completed                Oct 9, 2026
+   the number, its Quote/Inv tag with the paid $ beside it, and "Printavo" for an old Printavo job down the left; the job
+   (wrapping when long) with its total level with the number on top; the customer and pieces; the status and the date.
+   The total shows once (no Balance column); the $ is green when paid, outlined when part paid, nothing when unpaid */
+.ol-paid,.ol-pv{display:none}
+.ol-tags{display:inline-flex;align-items:center;gap:6px}
 @media (max-width:640px){
   .tbl :is(th,td).ol-bal{display:none!important}
-  .ol-paid{display:inline-grid;place-items:center;width:18px;height:18px;margin-left:6px;border-radius:50%;background:var(--ok);color:#fff;font-size:11.5px;font-weight:800;line-height:1;vertical-align:1px}
+  .ol-paid{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--ok);color:#fff;font-size:11.5px;font-weight:800;line-height:1}
   .ol-paid.part{background:none;color:var(--ok);box-shadow:inset 0 0 0 1.5px var(--ok)}
-  /* the order card without its Balance: the pieces move into the balance's spot, on the right under the total */
-  html body main.main table.m-card tr:has(> td[data-label="Job"]):has(> td.ol-bal){grid-template-areas:"num job job tot" "num cust cust pcs" "num stat stat due"}
-  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Pcs"]{text-align:right!important}
+  .ol-pv{display:block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+  html body main.main table.m-card tr:has(> td[data-label="Job"]):has(> td.ol-bal){grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"num job tot" "num cust pcs" "num stat due";gap:4px 14px;align-items:center}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td:is([data-label="#"],[data-label="Job"],[data-label="Total"]){align-self:start;font-size:14px;line-height:1.35}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="#"]{gap:6px}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Job"] .aa-arch{display:none}
   html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Total"]{overflow:visible!important}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td:is([data-label="Pcs"],[data-label="Due"]){text-align:right!important}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Status"]{min-width:0}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Status"] > :is(.pill,.pv-dot){max-width:100%;overflow:hidden}
 }
+/* A card row (a table on a phone, or one TableFit stacked) is shaded as one card when pointed at or tapped, not cell by
+   cell with gaps between (Nov 1: the orders list showed patchy blocks on a tapped row) */
+html body table:is(.m-card,.tbl-stack) tbody tr:hover > td{background:transparent!important}
+html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2)}
+/* Status pills in dark mode: the status color lightened for the words, not darkened (dark blue "Job Completed" on a dark
+   card couldn't be read). Every .pill and Printavo .pv-dot on every shop page */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) main.main :is(.pill,.pv-dot){color:color-mix(in srgb,var(--sc) 45%,#fff);background:color-mix(in srgb,var(--sc) 24%,transparent)}
+}
+:root[data-theme="dark"] main.main :is(.pill,.pv-dot){color:color-mix(in srgb,var(--sc) 45%,#fff);background:color-mix(in srgb,var(--sc) 24%,transparent)}
 /* a group with no mockup yet: its print details are hidden (not a grayed form under a cover) until a mockup is made
    or "Manually enter info" is picked (components/GroupEditor.tsx, Nov 1) */
 .mk-lock.hide > .mk-body{display:none}
