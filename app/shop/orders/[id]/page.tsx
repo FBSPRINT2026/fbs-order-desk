@@ -1406,14 +1406,25 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
-          {/* phone only: Ask AI, Documents, Production, QuickBooks, Send to Printavo and More behind one button */}
+          {/* phone only: Documents, Production, Ask AI and More behind one button (the next step stays showing under it) */}
           <button type="button" className="btn ed-acts-tog" aria-expanded={actsOpen} onClick={() => setActsOpen((v) => !v)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>
             {actsOpen ? "Close" : "Actions"}
           </button>
           <span className="ed-br" aria-hidden />
-          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} onChat={async () => { await save(); openOrderCheck(o.id); }}
-            onDigitize={orderGroups(o).some((g) => g.imprints.some((d) => d.method === "embroidery" && d.design_id)) ? async () => { await save(); setDigitize(""); } : undefined} />
+          {/* the next step first (Nov 1, Nick: "send to customer first… rethink it"): Send to customer, Convert to
+              invoice, Send to Printavo; then the menus: Documents, Production, Ask AI, More. On a phone the next steps are
+              full-width buttons and the menus sit two by two under them */}
+          <span className="ed-main">
+          {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
+          {o.status === "quote" && <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send to customer" before={beforeSend} onDone={afterSend} />}
+          {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
+          {/* a draft too (Oct 27, Nick: "we lost the send to Printavo button"): sending saves it first, which gives it its
+              40,000-series number */}
+          {(o.draft || (o.number >= 40000 && o.number < 50000)) && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
+            <SendToPrintavo orderId={o.id} onSaved={o.draft ? commitDraft : save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
+          </span>
+          <span className="ed-menus">
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">Documents ▾</summary>
             <div className="ot-menu">
@@ -1431,13 +1442,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)"><MenuItem icon="phone" tone="blue" title="Phone menu" sub="What scanning the QR code opens" /></a>
             </div>
           </details>
-          {/* a draft too (Oct 27, Nick: "we lost the send to Printavo button"): sending saves it first, which gives it its
-              40,000-series number */}
-          {(o.draft || (o.number >= 40000 && o.number < 50000)) && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
-            <SendToPrintavo orderId={o.id} onSaved={o.draft ? commitDraft : save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
-          {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
-          {o.status === "quote" && <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send to customer" before={beforeSend} onDone={afterSend} />}
-          {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
+          <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} onChat={async () => { await save(); openOrderCheck(o.id); }}
+            onDigitize={orderGroups(o).some((g) => g.imprints.some((d) => d.method === "embroidery" && d.design_id)) ? async () => { await save(); setDigitize(""); } : undefined} />
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">More ▾</summary>
             <div className="ot-menu">
@@ -1445,6 +1451,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <button type="button" className="danger" onClick={del}><MenuItem icon="trash" tone="danger" title="Delete order" sub="Asks first, with what goes with it" /></button>
             </div>
           </details>
+          </span>
           {/* only while saving or when a save failed (Oct 21, Nick: "I really don't like that invoice saved created button") */}
           {(/…/.test(saveState) || /failed/i.test(saveState)) && <span className={"save-state" + (/failed/i.test(saveState) ? " bad" : "")} title={saveState}>{/failed/i.test(saveState) ? "Not saved" : saveState}</span>}
         </div>
