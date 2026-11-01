@@ -76,8 +76,9 @@ export function applyColorwayFixes(groups: Group[], findings: SrcFinding[], desi
  * as the SMM stacked logo, a look-alike with no sew files): the print takes that logo, in the same version when it has
  * one (its sew file, threads, inks). Only where every garment of the group names it; otherwise it's asked.
  */
-export function applyLogoFixes(groups: Group[], findings: SrcFinding[], designs: Map<string, Design>): { groups: Group[]; did: string[] } {
-  const did: string[] = [];
+export function applyLogoFixes(groups: Group[], findings: SrcFinding[], designs: Map<string, Design>): { groups: Group[]; did: string[]; touched: string[] } {
+  const did: string[] = [], touched: string[] = [];
+  const norm = (x?: string) => (x || "").trim().toLowerCase();
   const key = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
   const out = groups.map((g) => ({ ...g, imprints: [...(g.imprints || [])] }));
   const by = new Map<string, SrcFinding>();
@@ -91,7 +92,20 @@ export function applyLogoFixes(groups: Group[], findings: SrcFinding[], designs:
     if (!g || !d2) continue;
     const k = g.imprints.findIndex((im) => (f.printId ? im.id === f.printId : im.design_id === f.designId));
     const lines = (g.lines || []).filter((l) => lineQty(l) > 0);
-    if (k < 0 || !lines.length || !lines.every((l) => f.lineIds.includes(l.id))) continue;
+    if (k < 0 || !lines.length) continue;
+    // only some of the group's garments name the other logo (Oct 31, #40335: a white Cutter & Buck that asked for the
+    // Primary logo went in with the Stacked ones): they go to the group printing that logo at the same spot that way
+    if (!lines.every((l) => f.lineIds.includes(l.id))) {
+      const im0 = g.imprints[k];
+      const to = out.find((x) => x !== g && x.imprints.length === g.imprints.length && x.imprints.some((y) => y.design_id === f.toDesign && norm(y.location) === norm(im0.location) && y.method === im0.method));
+      const moving = (g.lines || []).filter((l) => f.lineIds.includes(l.id));
+      if (!to || !moving.length) continue;
+      g.lines = (g.lines || []).filter((l) => !f.lineIds.includes(l.id));
+      to.lines = [...(to.lines || []), ...moving];
+      touched.push(...to.imprints.map((y) => y.id));
+      did.push(`${f.what}: with the ${d2.name} logo`);
+      continue;
+    }
     const im = g.imprints[k];
     const x = { ...im, design_id: d2.id, emb: im.emb ? { ...im.emb, file: undefined } : im.emb } as typeof im;
     delete x.shownArt; delete x.inkMap;
@@ -99,7 +113,7 @@ export function applyLogoFixes(groups: Group[], findings: SrcFinding[], designs:
     g.imprints[k] = cw ? applyColorway(x, d2, cw, sewKindOf(lines)) : x;
     did.push(`${f.what}: the ${d2.name} logo`);
   }
-  return { groups: out, did };
+  return { groups: out, did, touched };
 }
 
 /** an order checked against what it was made from (its email or ClickUp task and their files' words) */

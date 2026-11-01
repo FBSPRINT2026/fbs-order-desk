@@ -90,6 +90,48 @@ export async function suppliedLikeBefore(admin: SupabaseClient, customerId: stri
   return todo.length;
 }
 
+/**
+ * Group names the way staff name them (Oct 31, Nick on #40335: "I don't love the group names"; the reading named them
+ * for their spot, "Left Chest" three times). A group of a brand's logos takes the name staff gave the same logos, done
+ * the same way in the same version on the same kind of goods, on this customer's orders marked right ("MEI Embroidery -
+ * Stacked All White"); when there's none yet, one put together the same way: the brand, how it's done, the logo, and its
+ * version ("Full Color" for the brand's light or dark pair). Only a group named for its spot, or not named, is renamed.
+ */
+export async function groupNamesLikeBefore(admin: SupabaseClient, customerId: string, groups: Group[], o: { designs: { id: string; name: string; brand_id?: string | null }[]; brands: { id: string; name: string; rules?: { light?: string; dark?: string } | null }[] }): Promise<number> {
+  const { ALL_LOCATIONS, METHODS } = await import("@/lib/pricing");
+  const { sewKindOf } = await import("@/lib/brands");
+  const k = (x?: string) => (x || "").trim().toLowerCase();
+  const isSpot = (n?: string) => !k(n) || ALL_LOCATIONS.some((l) => k(l) === k(n)) || /^group \d+$/i.test(n || "");
+  const kindOf = (g: Group) => { const x = sewKindOf(g.lines || []); return x === "cap" || x === "bag" ? x : ""; };
+  const keyOf = (g: Group) => (g.imprints || []).filter((im) => im.design_id).map((im) => `${im.design_id}@${im.method}#${k(im.colorway)}`).sort().join("|") + `^${kindOf(g)}`;
+  const todo = groups.filter((g) => isSpot(g.name) && (g.imprints || []).length && (g.imprints || []).every((im) => im.design_id && im.fromBrand));
+  if (!todo.length) return 0;
+  const { data: ex } = await admin.from("order_examples").select("order_id, confirmed_at").eq("customer_id", customerId).eq("active", true).order("confirmed_at", { ascending: false }).limit(30);
+  const ids = ((ex || []) as { order_id: string }[]).map((e) => e.order_id);
+  const { data: os } = ids.length ? await admin.from("orders").select("id, groups").in("id", ids) : { data: [] };
+  const learned = new Map<string, string>();
+  for (const id of ids) for (const g of orderGroups((os || []).find((x) => (x as { id: string }).id === id) as Order || { groups: [] } as unknown as Order)) {
+    const key = keyOf(g);
+    if (!learned.has(key) && !isSpot(g.name)) learned.set(key, String(g.name).trim());
+  }
+  let n = 0;
+  for (const g of todo) {
+    const got = learned.get(keyOf(g));
+    if (got) { g.name = got; n++; continue; }
+    // none yet: the brand, how, the logo, the version
+    const im = g.imprints[0], d = o.designs.find((x) => x.id === im.design_id), b = o.brands.find((x) => x.name === im.fromBrand || x.id === d?.brand_id);
+    if (!d) continue;
+    const logo = (d.name || "").replace(new RegExp(`^${(b?.name || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "").replace(/\s*\(.*?\)\s*/g, " ").trim() || d.name;
+    const pair = [b?.rules?.light, b?.rules?.dark].map(k);
+    const ver = !im.colorway ? "" : pair.includes(k(im.colorway)) || (im.colorwayBy && Object.values(im.colorwayBy).some((v) => pair.includes(k(v)))) ? "Full Color" : im.colorway;
+    const how = im.method === "embroidery" ? "Embroidery" : im.method === "dtf" ? (im.patch ? "Patch" : "Heat Transfer") : METHODS[im.method] || im.method;
+    const what = kindOf(g) === "cap" ? " - Hats" : kindOf(g) === "bag" ? " - Bag" : "";
+    g.name = `${b?.name ? `${b.name} ` : ""}${how}${what || ` - ${logo}${ver ? ` ${ver}` : ""}`}`.slice(0, 80);
+    n++;
+  }
+  return n;
+}
+
 /** the order's source email: the reading it was made from, else an email filed on it */
 export async function sourceActivity(admin: SupabaseClient, orderId: string): Promise<{ activity: string | null; reading: { groups?: Group[] } | null }> {
   const { data: s } = await admin.from("ai_suggestions").select("activity_id, payload").in("kind", ["draft_order", "draft_order_part"]).eq("order_id", orderId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
