@@ -34,7 +34,7 @@ const WHAT: { k: string; label: string; art?: string }[] = [
 ];
 const KIND_OF: Record<string, string> = { mockup: "old_mockup", order_sheet: "order_sheet", supplier_order: "supplier_order", other: "other" };
 const href = (f: { path: string; name: string }) => `/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}`;
-const money = (n: number) => `$${n.toFixed(2)}`;
+const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 type Data = { job: { visual: string; nickname: string; date: string; qty: number; total: number }; customer: { id: string; company: string | null; name: string | null; moved_at: string | null } | null;
   lines: { style: string; brand: string; color: string; garment: string; qty: number; price: number; sizes: string }[]; files: ReorderFile[] };
