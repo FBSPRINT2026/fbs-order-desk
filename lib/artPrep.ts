@@ -118,6 +118,36 @@ export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean; ma
   const far = (p: number) => Math.hypot(d[p * 4] - bg[0], d[p * 4 + 1] - bg[1], d[p * 4 + 2] - bg[2]);
   const same = border.filter((p) => far(p) <= 40).length / border.length;
   if (same < 0.85) return null; // busy edges: probably a photo, keep it as is
+  // a filled picture in a plain margin (a flag, a badge on its own box, a photo with a white border): the art's own edge
+  // runs solid along its top and bottom and fills its corners, so the margin color inside it is part of the art (Oct 31, Nick: the American flag's
+  // white stripes and stars came out red / gone "even though I uncheck it"). Just the margin is cut off; nothing goes
+  // see-through. A logo on a background is the other way: its outline runs mostly through background (between letters).
+  if (!opts.full) {
+    const isBg = (p: number) => far(p) <= 40;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let Y = 0; Y < h; Y++) for (let X = 0; X < w; X++) if (!isBg(Y * w + X)) { if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y; }
+    if (x1 > x0 + 4 && y1 > y0 + 4) {
+      // a couple of pixels in from the art's edge, past any soft anti-aliasing
+      const ix0 = Math.min(x1, x0 + 2), ix1 = Math.max(x0, x1 - 2), iy0 = Math.min(y1, y0 + 2), iy1 = Math.max(y0, y1 - 2);
+      // how much of each side of the art is art: a flag's or a box's top and bottom (or sides) run solid; a word's don't
+      const side = (pts: [number, number][]) => pts.filter(([X, Y]) => !isBg(Y * w + X)).length / Math.max(1, pts.length);
+      const along = (a: number, b: number) => { const out: number[] = []; for (let v = a; v <= b; v += Math.max(1, Math.floor((b - a) / 300))) out.push(v); return out; };
+      const top = side(along(ix0, ix1).map((X) => [X, iy0])), bottom = side(along(ix0, ix1).map((X) => [X, iy1]));
+      // and filled to its corners (a flag, a box): a logo's corners are background
+      const corner = (X: number, Y: number) => !isBg(Y * w + X);
+      const filled = corner(ix0, iy0) && corner(ix1, iy0) && corner(ix0, iy1) && corner(ix1, iy1);
+      // solid along its top and bottom (a word never is: there's background between the letters); a vertical band flag
+      // reads like a word, so its background stays the staff's call (Design.specs.bg)
+      if (filled && top >= 0.97 && bottom >= 0.97) {
+        const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+        if (bw >= w * 0.97 && bh >= h * 0.97) return null;
+        const out = document.createElement("canvas");
+        out.width = bw; out.height = bh;
+        out.getContext("2d")!.drawImage(c, x0, y0, bw, bh, 0, 0, bw, bh);
+        return { url: out.toDataURL("image/png"), bg: "", w: bw, h: bh, box: { x: Math.round(x0 / k), y: Math.round(y0 / k), w: Math.min(W, Math.round(bw / k)), h: Math.min(H, Math.round(bh / k)) }, of: { w: W, h: H } };
+      }
+    }
+  }
   // how far each channel can move away from the background (to black or to white), for un-mixing
   const room = bg.map((v) => Math.max(v, 255 - v) || 1);
   const smooth = (e0: number, e1: number, v: number) => { const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
