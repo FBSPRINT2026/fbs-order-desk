@@ -17140,3 +17140,32 @@ table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label="
   .msc-nums{grid-template-columns:repeat(2,minmax(0,1fr))}
   .msc-nums b{font-size:20px}
 }
+/* The order's Imprints on a phone (Nov 1, Nick: "artwork should be larger to fill the page or make the buttons fall
+   underneath… the embroidery details look like a mess"):
+   - the mockup fills the width, its buttons (Edit mockup, Add logo, Saved mockup, Saved logo) two by two under it,
+     then Remove mockup and the M-number on one line;
+   - each print reads top to bottom: where and how (and its price), its close-ups big side by side (Group A ⇄ Group B),
+     then its details, each label over its value instead of a narrow label column squeezing the values */
+@media (max-width:760px){
+  html body .ord .imp-wrap .imp-mock{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px;align-items:stretch}
+  html body .ord .imp-wrap .imp-mock > :is(.mk-big,.mk-pref,.mk-none,.ink-warn){grid-column:1 / -1!important;width:100%!important}
+  html body .ord .imp-wrap .imp-mock > .mk-more{grid-column:1 / -1!important;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+  html body .ord .imp-wrap .imp-mock > .mk-tiles{display:contents!important}
+  html body .ord .imp-wrap .imp-mock > :is(.btn.mk-edit,.mk-tiles > .mk-tile){grid-column:auto!important;flex-direction:row!important;gap:8px!important;min-height:48px!important;padding:8px 10px!important;justify-content:flex-start!important;text-align:left}
+  html body .ord .imp-wrap .imp-mock > .btn.danger{grid-column:1!important;justify-self:start}
+  html body .ord .imp-wrap .imp-mock > .mk-when{grid-column:2!important;justify-self:end;align-self:center}
+  html body .ord .pr{display:grid!important;grid-template-columns:minmax(0,1fr)!important;row-gap:10px!important;align-items:start!important}
+  html body .ord .pr > .pr-main{display:contents!important}
+  html body .ord .pr .pr-top{order:-2;grid-column:1 / -1!important}
+  html body .ord .pr > :is(.pr-tiles,.pr-logo){order:-1;grid-column:1 / -1!important}
+  html body .ord .pr > .pr-tiles{flex-direction:row!important;justify-content:center;align-items:flex-start!important;gap:10px!important}
+  html body .ord .pr > .pr-tiles .pr-tw{flex:1 1 0;min-width:0;max-width:200px}
+  html body .ord .pr > .pr-tiles .pr-tw .pr-cc{order:0!important;margin:0!important}
+  html body .ord .pr > .pr-tiles .pr-logo{width:100%!important;height:auto!important;aspect-ratio:1}
+  html body .ord .pr > .pr-tiles .pr-tc{max-width:none!important}
+  html body .ord .pr > .pr-logo{width:100%!important;height:auto!important;aspect-ratio:2 / 1;max-height:200px}
+  html body .ord .pr > .pr-main > :not(.pr-top){grid-column:1 / -1!important}
+  html body .ord .pr .pr-scr{flex-wrap:wrap!important;align-items:baseline!important;gap:4px 8px!important}
+  html body .ord .pr .pr-scr > .pr-scr-l{flex:1 1 100%!important;min-width:0!important;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:0!important}
+  html body .ord .pr .pr-scr > .pr-scr-v{flex:1 1 0!important;min-width:0}
+}
