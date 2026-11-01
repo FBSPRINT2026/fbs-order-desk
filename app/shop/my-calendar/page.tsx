@@ -82,6 +82,9 @@ function TodayCounts({ today, tab, setAppts, setJobs }: { today: string; tab: Ta
 
 function Appointments({ tabs, today, adding, setAdding, onToday }: { tabs: React.ReactNode; today: string; adding: { day: string; start?: string; end?: string } | null; setAdding: (a: { day: string; start?: string; end?: string } | null) => void; onToday: (n: number) => void }) {
   const [view, setView] = useSticky<View>("calendar.view", "work");
+  // a phone starts on Day (Nov 1: five days across a phone left each appointment a one-letter sliver); a view picked on
+  // this phone is kept as usual
+  useEffect(() => { try { if (localStorage.getItem("fbs:calendar.view") == null && window.matchMedia("(max-width:640px)").matches) setView("day"); } catch { /* blocked */ } }, [setView]);
   const [anchor, setAnchor] = useState(today);
   const [evs, setEvs] = useState<CalEvent[]>([]), [sel, setSel] = useState<string | null>(null), [err, setErr] = useState("");
   const days = useMemo(() => {
