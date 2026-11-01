@@ -1,5 +1,6 @@
 import { fitLocation, LOCATIONS, lineQty, persOf, SIZES, uid, type GLine, type Group } from "@/lib/pricing";
 import { spotKey, spotOf } from "@/lib/spotChange";
+import { isShortFor } from "@/lib/colorMatch";
 
 /**
  * The order checked against the paperwork it came from, item by item (Oct 31, Nick after eight MEI store carts: "check
@@ -45,7 +46,11 @@ function toks(s: string): Tok[] {
 const words = (s: string) => toks(s).map((t) => t.w);
 const STOP = new Set(["the", "and", "with", "for", "of", "a", "an", "by", "in", "on"]);
 /** words that say what kind of garment, not which one (they don't tell a Crowley from an Eddie Bauer) */
-const GENERIC = new Set(["jacket", "jac", "jacke", "shirt", "tee", "polo", "sweatshirt", "hoodie", "hooded", "hood", "soft", "shell", "vest", "long", "sleeve", "short", "pocket", "full", "zip", "quarter", "half", "fleece", "men", "mens", "women", "womens", "ladies", "youth", "heavyweight", "midweight", "lightweight", "performance", "cotton", "crew", "neck", "crewneck", "pullover", "sweater", "cap", "hat", "backpack", "bag", "large", "small", "cover", "up", "textured", "stretch", "knit", "flat", "core", "active", "duck", "lined", "thermal", "dri", "fit"]);
+const GENERIC = new Set(["jacket", "jac", "jacke", "shirt", "tee", "polo", "sweatshirt", "hoodie", "hooded", "hood", "soft", "shell", "vest", "long", "sleeve", "short", "pocket", "full", "zip", "quarter", "half", "fleece", "men", "mens", "women", "womens", "ladies", "youth", "heavyweight", "midweight", "lightweight", "performance", "cotton", "crew", "neck", "crewneck", "pullover", "sweater", "cap", "hat", "backpack", "bag", "large", "small", "cover", "up", "textured", "stretch", "knit", "flat", "core", "active", "duck", "lined", "thermal", "dri", "fit",
+  // who it's cut for and what it's called in general: the cart's "Unisex CVC T-Shirt" is SanMar's "Adult CVC Tee"
+  "unisex", "adult", "adults", "kids", "kid", "toddler", "infant", "girls", "boys", "tall", "tshirt", "tees",
+  // how it was made, which makers word differently: the cart's "Garment-Dyed Heavyweight T-Shirt" is the 1717 "Heavyweight Ring Spun Tee"
+  "garment", "dyed", "ring", "spun", "ringspun"]);
 
 /** the spots words can name, longest first; a sleeve by any name is a sleeve */
 const LOC_PHRASES: { w: string[]; loc: string }[] = [
@@ -74,7 +79,24 @@ const tokSet = (s: string) => new Set(words(s).filter((w) => !STOP.has(w)));
 export function sameColor(a: string, b: string): boolean {
   const x = tokSet(a), y = tokSet(b);
   if (!x.size || !y.size) return true;
-  return [...x].every((w) => y.has(w)) || [...y].every((w) => x.has(w));
+  // or the maker's short name for it ("HthrGrey" = Heather Gray, "MilGreen" = Military Green)
+  return [...x].every((w) => y.has(w)) || [...y].every((w) => x.has(w)) || isShortFor(a, b) || isShortFor(b, a);
+}
+
+/**
+ * Does a style's catalog entry name the garment the paperwork names (Oct 31, #40329: "TravisMathew Sunnyvale Polo" was
+ * put on TM1MW451, SanMar's Auckland Slub Polo; "Eddie Bauer Men's Full-Zip Fleece Vest" on F228, a Port Authority)?
+ * Off when the catalog's brand isn't the line's, or the name's own words (not its brand, not "polo", "men's", "unisex")
+ * mostly aren't in the catalog's name. Used by this check and by the reading's style finder (lib/ai/stylesFromHistory.ts).
+ */
+export function styleFits(name: string, brand: string, c: { title: string; brand: string }): { brandOff: boolean; nameOff: boolean } {
+  const cb = tokSet(c.brand), lb = tokSet(brand || "");
+  const brandOff = !!(cb.size && lb.size && ![...cb].some((x) => lb.has(x)));
+  const ct = tokSet(c.title);
+  const gw = [...new Set(words(name).filter((w) => w.length > 1 && !STOP.has(w)))];
+  const distinct = gw.filter((x) => x.length >= 4 && !GENERIC.has(x) && !/^\d+$/.test(x) && !cb.has(x) && !lb.has(x));
+  const nameOff = distinct.length > 0 && distinct.filter((x) => ct.has(x)).length < Math.ceil(distinct.length / 2);
+  return { brandOff, nameOff };
 }
 
 type Item = { lines: { l: GLine; gi: number }[]; garment: string[]; color: string; style: string };
@@ -208,8 +230,12 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
       const maker = cat(it.style)?.colors.find((c) => sameColor(c, w.color) && tokSet(c).size);
       out.push({ kind: "color", group: gi, lineIds: ids, what, paper: w.color, order: it.color, fix: maker || w.color, say: `${what}: the paperwork's color is ${w.color}${maker && maker.toLowerCase() !== w.color.toLowerCase() ? ` (${it.style}'s ${maker})` : ""}, the order has ${it.color}.` });
     }
+    // the garment: a style number whose catalog brand or name isn't the paperwork's (then its colors say nothing)
+    const c = cat(it.style);
+    const off = c && first.l.brand ? styleFits((first.l.garment || "").trim() || c.title, first.l.brand, c) : { brandOff: false, nameOff: false };
+    if (c && (off.brandOff || off.nameOff)) out.push({ kind: "style", group: gi, lineIds: ids, what, paper: (first.l.garment || "").trim() || first.l.brand || "", order: `${it.style} (${c.title.replace(/\.\s*\S+$/, "")})`, say: `${what}: ${it.style} is ${c.title.replace(/\.\s*\S+$/, "")}${off.brandOff ? ` (${c.brand})` : ""}, but the paperwork's garment is ${(first.l.garment || "").trim() || first.l.brand}.` });
     // a color the maker doesn't have for that style (the cart's "Iron Gray" is SanMar's NKAH6266 "Dark Grey")
-    const cc = cat(it.style)?.colors || [];
+    const cc = off.brandOff || off.nameOff ? [] : cat(it.style)?.colors || [];
     const flat = (x: string) => words(x).join("");
     if (it.color && cc.length && !out.some((f) => f.kind === "color" && f.lineIds[0] === ids[0]) && !cc.some((c) => sameColor(c, it.color) || flat(it.color).startsWith(flat(c)) || flat(c).startsWith(flat(it.color)))) {
       const near = w.color ? cc.find((c) => sameColor(c, w.color)) : undefined;
@@ -239,16 +265,6 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
         const logoSpots = locs.filter((x) => !pers.some((p) => locKey(p) === locKey(x)));
         out.push({ kind: "location", group: gi, lineIds: ids, what, paper: locs.join(" + "), order: [...mine].filter(Boolean).join(" + ") || "nowhere", ...(logoSpots.length === 1 ? { fix: logoSpots[0] } : {}), say: `${what}: the paperwork puts it on the ${locs.join(" + ")}, the order has the ${[...mine].filter(Boolean).join(" + ") || "no spot"}.` });
       }
-    }
-    // the garment: a style number whose catalog brand or name isn't the paperwork's
-    const c = cat(it.style);
-    if (c && first.l.brand) {
-      const cb = tokSet(c.brand), lb = tokSet(first.l.brand);
-      const brandOff = cb.size && lb.size && ![...cb].some((x) => lb.has(x));
-      const ct = tokSet(c.title);
-      const distinct = it.garment.filter((x) => x.length >= 4 && !GENERIC.has(x) && !/^\d+$/.test(x) && !cb.has(x) && !lb.has(x));
-      const nameOff = distinct.length > 0 && distinct.filter((x) => ct.has(x)).length < Math.ceil(distinct.length / 2);
-      if (brandOff || nameOff) out.push({ kind: "style", group: gi, lineIds: ids, what, paper: (first.l.garment || "").trim() || first.l.brand, order: `${it.style} (${c.title.replace(/\.\s*\S+$/, "")})`, say: `${what}: ${it.style} is ${c.title.replace(/\.\s*\S+$/, "")}${brandOff ? ` (${c.brand})` : ""}, but the paperwork's garment is ${(first.l.garment || "").trim() || first.l.brand}.` });
     }
     // the logo and its version, for prints of the customer's logos
     const W = new Set(S.slice(w.from, w.to).map((t) => t.w));

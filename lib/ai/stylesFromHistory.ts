@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EODraft } from "@/lib/emailOrderShared";
+import { styleFits } from "@/lib/sourceCheck";
 
 /**
  * A garment named by its product name but no style number (Oct 31, Nick on MEI's cart orders: "Nike Dri-FIT Micro Pique
@@ -31,6 +32,37 @@ const hasWord = (set: Set<string>, w: string) => set.has(w) || (w.length >= 3 &&
 type Known = { style: string; brand: string; name: Set<string>; kind: string; n: number };
 
 export async function stylesFromHistory(admin: SupabaseClient, customerId: string, draft: EODraft): Promise<string[]> {
+  // what SanMar calls each style, so a style can be held against the name it's given (lib/sourceCheck.ts styleFits)
+  const catOf = new Map<string, { title: string; brand: string } | null>();
+  const loadCat = async (styles: string[]) => {
+    const need = [...new Set(styles.map((s) => s.trim().toUpperCase()).filter((s) => s && !catOf.has(s)))];
+    for (let i = 0; i < need.length; i += 200) {
+      const part = need.slice(i, i + 200);
+      const { data } = await admin.from("sanmar_styles").select("style, title, brand").in("style", part);
+      for (const s of part) catOf.set(s, null);
+      for (const r of (data || []) as { style: string; title: string | null; brand: string | null }[]) catOf.set(r.style.toUpperCase(), { title: r.title || "", brand: r.brand || "" });
+    }
+  };
+  /** the style is another product than the name says (another brand, or none of the name's own words) */
+  const misfit = (style: string, said: string, brand: string) => {
+    const c = catOf.get(style.trim().toUpperCase());
+    if (!c || !said.trim()) return false;
+    const f = styleFits(said, brand || c.brand, c);
+    return f.brandOff || f.nameOff;
+  };
+  // a style the reading gave a garment the paperwork names by product, that is another product (Oct 31, #40327 and
+  // #40329: "TravisMathew Sunnyvale Polo" on TM1MW451, the Auckland Slub Polo, copied from one order to the next): found
+  // again like a garment with no style; when nothing better is found it keeps the one it had and Create order asks
+  const styled = draft.groups.flatMap((g) => g.lines).filter((l) => (l.style || "").trim() && (l.garment || "").trim() && (l.brand || "").trim());
+  await loadCat(styled.map((l) => l.style!));
+  const had = new Map<(typeof styled)[number], string>();
+  for (const l of styled) {
+    const said = l.garment!.trim();
+    // only a name that names a garment of that brand ("TravisMathew Sunnyvale Polo"), not a logo's option name
+    const bw = norm(l.brand!).split(" ").filter((w) => w.length > 1);
+    if (!bw.some((w) => norm(said).split(" ").includes(w))) continue;
+    if (misfit(l.style!, said, l.brand!)) { had.set(l, l.style!); l.style = ""; }
+  }
   const todo = draft.groups.flatMap((g) => g.lines).filter((l) => !(l.style || "").trim() && ((l as { called?: string }).called || l.garment || "").trim());
   if (!todo.length) return [];
   const [{ data: pv }, { data: os }] = await Promise.all([
@@ -69,7 +101,7 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
     const named = known.filter((c) => want.has(c.style.toLowerCase())).sort((a, b) => b.n - a.n)[0];
     if (want.size < 2) continue;
     const kind = KIND(want);
-    const pick = (list: Known[]) => {
+    const pick = (list: Known[]): Known | null => {
       let best: Known | null = null, bestScore = 0, bestExtra = 0, second = 0;
       for (const c of list) {
         if (c.kind !== kind) continue;
@@ -91,7 +123,19 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
       if (best && bestExtra > 0 && second >= bestScore - 1) return null;
       return best;
     };
-    let hit: Known | null = named || pick(known), from = "their past orders";
+    // a past order's style that is another product than this name (an order that was wrong) never teaches it
+    let past: Known | null = named;
+    if (!past) {
+      let pool = known;
+      for (let tries = 0; tries < 5; tries++) {
+        const p = pick(pool);
+        if (!p) break;
+        await loadCat([p.style]);
+        if (!misfit(p.style, said, l.brand || p.brand)) { past = p; break; }
+        pool = pool.filter((k) => k.style !== p.style);
+      }
+    }
+    let hit: Known | null = past, from = "their past orders";
     if (!hit) {
       // our garment list and SanMar's whole style list (its titles end with the style: "… 1/2-Zip NKDX6720"), searched
       // for this name's two longest words: a list read whole stops at 1,000 rows, so most of it was never looked at
@@ -109,13 +153,17 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
       }
       hit = pick(catalog.get(ck) || []); from = "our garment catalog";
     }
+    if (hit) { await loadCat([hit.style]); if (misfit(hit.style, said, l.brand || hit.brand)) hit = null; }
+    const was = had.get(l);
     if (!hit) continue;
     l.style = hit.style;
     if (!(l.brand || "").trim()) l.brand = hit.brand;
     if (!(l.garment || "").trim() || l.garment === (l as { called?: string }).called) l.garment = said;
     delete (l as { called?: string }).called;
-    done.push(`${said} = ${hit.style} (${from})`);
+    done.push(was && was !== hit.style ? `${said} = ${hit.style}, not ${was} (${from})` : `${said} = ${hit.style} (${from})`);
   }
+  // nothing better found: the style it had stays (the paperwork check asks about it)
+  for (const [l, st] of had) if (!(l.style || "").trim()) l.style = st;
   return done;
 }
 

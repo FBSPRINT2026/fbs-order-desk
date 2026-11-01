@@ -11,6 +11,19 @@ const key = (s: string) => words(s).join(" ");
 /** printing-trade names suppliers spell differently: rust / burnt orange are the Next Level "Redwood" family */
 const ALIAS: Record<string, string> = { rust: "redwood", "burnt orange": "redwood", forest: "forest green", wine: "maroon", burgundy: "maroon", "vintage black": "black" };
 
+/**
+ * A maker's short color name for a full one (Oct 31, #40329: SanMar lists the CT105294 in "HthrGrey" and the NL6210 in
+ * "MilGreen", so "Heather Gray" and "Military Green" read as colors the style doesn't come in). The short name is run
+ * together or cut ("DkGyHthr", "BlNightsHt", "Char Hthr/Blk"): each piece is the next word of the full name, starting
+ * with its first letter, with letters left out. A one-piece name is never a short name ("Black" isn't "Blackberry").
+ */
+export function isShortFor(short: string, full: string): boolean {
+  const split = (s: string) => s.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/grey/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
+  const ps = split(short), ws = split(full);
+  if (ps.length < 2 || ps.length !== ws.length) return false;
+  return ps.every((p, i) => { const w = ws[i]; if (p[0] !== w[0]) return false; let j = 0; for (const ch of w) if (ch === p[j]) j++; return j === p.length; });
+}
+
 export function matchColor(asked: string, options: string[]): { color: string; sure: boolean } | null {
   const parts = asked.split(/\s*\/\s*/).filter(Boolean);
   // a two-tone color is one color (Oct 31, Nick: a Richardson 112 "Black/White" came in as Black, with "Black/ White"

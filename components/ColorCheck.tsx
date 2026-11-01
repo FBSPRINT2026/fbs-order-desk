@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { matchColor } from "@/lib/colorMatch";
+import { isShortFor, matchColor } from "@/lib/colorMatch";
 import type { Group } from "@/lib/pricing";
 
 /**
@@ -25,7 +25,10 @@ export async function checkColors(groups: Group[], /** a customer's usual colors
     // (gray)": the style's Red, Ice Blue, Athletic Heather): no question, just its real name
     // "Black/White" = "Black/ White" = "Black - White" (a slash or dash spaced any way)
     const plain = (x: string) => x.replace(/\(.*?\)/g, " ").replace(/^\s*the\s+/i, "").replace(/gr[ae]y/gi, "gray").replace(/[\s/&+-]+/g, " ").trim().toLowerCase();
-    const same = l.color ? gm.colors.find((c) => plain(c) === plain(l.color)) : undefined;
+    // the maker's short name for what they wrote ("BlkHthr" for Black Heather, "MilGreen" for Military Green) is the same
+    // color too: no question, and the full name they wrote stays on the order (Oct 31)
+    const short = l.color && !gm.colors.some((c) => plain(c) === plain(l.color)) && gm.colors.filter((c) => isShortFor(c, l.color)).length === 1 ? l.color : undefined;
+    const same = l.color ? gm.colors.find((c) => plain(c) === plain(l.color)) || short : undefined;
     const exact = !!same;
     const words = (x: string) => x.toLowerCase().replace(/^the\s+/, "").replace(/gr[ae]y/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
     const theirs = (usual[String(gm.style).toUpperCase()] || []).filter((c) => gm.colors.includes(c)).find((c) => l.color && words(l.color).every((w) => words(c).includes(w)));

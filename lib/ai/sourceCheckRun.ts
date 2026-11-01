@@ -43,5 +43,33 @@ export async function checkOrderSource(admin: SupabaseClient, o: Order): Promise
   if (!src.activity) return { findings: [], source: "" };
   const { text } = await sourceOf(admin, src.activity);
   const groups = orderGroups(o);
-  return { findings: sourceCheck(text, groups, await sourceCtx(admin, groups)), source: text };
+  const findings = sourceCheck(text, groups, await sourceCtx(admin, groups));
+  await suggestStyles(admin, (o as { customer_id?: string | null }).customer_id || null, groups, findings).catch((e) => console.warn("suggestStyles", e));
+  return { findings, source: text };
+}
+
+/**
+ * A garment on another product's style gets the style it should be, found the way the reading finds one (this
+ * customer's past orders, else our garment list and SanMar's, never a past order that made the same mistake): "TM1MW451
+ * is the Auckland Slub Polo, but the paperwork's garment is TravisMathew Sunnyvale Polo; their past orders put it on
+ * TM1MAA369 (TravisMathew Sunnyvale Polo)".
+ */
+async function suggestStyles(admin: SupabaseClient, customerId: string | null, groups: Group[], findings: SrcFinding[]) {
+  const off = findings.filter((f) => f.kind === "style");
+  if (!off.length || !customerId) return;
+  const { stylesFromHistory } = await import("@/lib/ai/stylesFromHistory");
+  const copies = off.map((f) => { const l = groups[f.group]?.lines?.find((x) => x.id === f.lineIds[0]); return l ? { ...l } : null; });
+  const was = copies.map((l) => l?.style || "");
+  const done = await stylesFromHistory(admin, customerId, { groups: [{ lines: copies.filter(Boolean) }] } as never);
+  const now = copies.map((l, i) => (l?.style && l.style !== was[i] ? l.style : ""));
+  const want = [...new Set(now.filter(Boolean))];
+  const { data } = want.length ? await admin.from("sanmar_styles").select("style, title").in("style", want) : { data: [] };
+  const title = new Map(((data || []) as { style: string; title: string | null }[]).map((r) => [r.style.toUpperCase(), (r.title || "").replace(/\.?\s*\S+$/, "")]));
+  off.forEach((f, i) => {
+    const st = now[i];
+    if (!st) return;
+    const how = done.find((d) => d.includes(`= ${st}`))?.match(/\(([^)]+)\)$/)?.[1] || "their past orders";
+    f.fix = st;
+    f.say = `${f.say.replace(/\.$/, "")}; ${how === "their past orders" ? "their past orders put it on" : "the catalog's match is"} ${st}${title.get(st) ? ` (${title.get(st)})` : ""}.`;
+  });
 }
