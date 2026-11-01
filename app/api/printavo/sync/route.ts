@@ -148,7 +148,7 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
   // a 40,000+ number in Printavo that we didn't send means Printavo's own counter reached our range: not imported,
   // but listed as a problem on the import page so it isn't missed
   const strays = orders.filter((o) => !ours.has(o.id) && +o.visualId >= 40000 && !known.has(o.id));
-  if (strays.length) await admin.from("printavo_index").upsert(strays.map((o) => ({ printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "error", error: `Printavo #${o.visualId} is in the 40,000 range but wasn't sent from the new system, so it wasn't imported. Printavo's numbering may have jumped: check its next order number.`, seen_sweep: pass || currentPass })), { onConflict: "printavo_id" });
+  if (strays.length) await admin.from("printavo_index").upsert(strays.map((o) => ({ printavo_id: o.id, visual_id: o.visualId, kind: o.kind, customer_pid: o.customerId, created_at: o.createdAt || null, fingerprint: o.fingerprint, status: "error", error: `Printavo #${o.visualId} is in the 40,000 range but isn't linked to any order here. Most likely it was made here, sent to Printavo, then deleted here (Oct 28: #40201, #40202). Delete it in Printavo, or make it again here.`, seen_sweep: pass || currentPass })), { onConflict: "printavo_id" });
   const back: string[] = [];
   const rows = orders.flatMap((o) => {
     if (ours.has(o.id) || +o.visualId >= 40000) return [];

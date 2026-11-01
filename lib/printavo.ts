@@ -299,6 +299,21 @@ const n = (x: unknown) => (typeof x === "number" && isFinite(x) ? x : +s(x) || 0
 const instant = (x: unknown) => { const t = Date.parse(s(x)); return isNaN(t) ? s(x) : new Date(t).toISOString(); };
 const file = (m: Raw): PvFile => ({ id: s(m.id), full: s(m.fullImageUrl || m.fileUrl), thumb: s(m.thumbnailUrl), mime: s(m.mimeType), name: m.name ? s(m.name) : undefined });
 
+/**
+ * Is this order still in Printavo? A read only. `null` when Printavo says it's gone. Used before an order is deleted
+ * here (Nov 1: #40201 and #40202 were sent to Printavo, then deleted here, and stayed in Printavo where nobody here
+ * could see them): an order that's still there can't be deleted here until it's deleted in Printavo.
+ */
+export async function printavoOrderStill(id: string): Promise<{ visualId: string; url: string } | null> {
+  try {
+    const d = await pv<{ order: Raw | null }>(`query($id:ID!){ order(id:$id){ ${typed("visualId url")} } }`, { id });
+    return d.order ? { visualId: s(d.order.visualId), url: s(d.order.url) } : null;
+  } catch (e) {
+    if (/not ?found|could not find|couldn't find|does not exist|doesn't exist|no order/i.test(e instanceof Error ? e.message : String(e))) return null;
+    throw e;
+  }
+}
+
 /** Reads one invoice or quote with everything on it. Parts that fail are listed in `warnings` instead of stopping the import. */
 export async function getOrder(id: string): Promise<PvOrder> {
   const warnings: string[] = [];

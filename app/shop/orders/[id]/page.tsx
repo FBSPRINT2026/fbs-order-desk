@@ -68,6 +68,7 @@ import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
 import { archiveOrderArt, draftArtCount, keepOrderArt, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
 import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
+import { printavoDeleteCheck } from "@/app/shop/orders/delete-actions";
 import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 import { mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
@@ -1084,7 +1085,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // in QuickBooks: asked before deleting (Oct 24, Nick: "this order has already been synced… would you like me to void the
   // order in QuickBooks?"); qbVoid = the yes
   type QbState = { synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string; issue?: string; pending?: boolean };
-  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean }>(null);
+  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean; /** still in Printavo: not deleted here */ pv?: { visualId: string; url: string } | null; pvErr?: string }>(null);
   // the small QB ✓ beside the status: is this order's invoice in QuickBooks
   const [qbSt, setQbSt] = useState<QbState | null>(null);
   // an invoice also asks QuickBooks itself, so one sent before orders kept their link (TEST-40135) is found and linked
@@ -1116,12 +1117,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   async function del() {
     if (!o) return;
     setDelAsk({ loading: true, logos: [], mockups: [], pick: new Set() });
-    const [r, cu, qs] = await Promise.all([orderArtForDelete(o.id), clickUpJobOfOrder(o.id, o.number).catch(() => null), qboOrderState(o.id, true).catch(() => null)]);
+    const [r, cu, qs, pvc] = await Promise.all([orderArtForDelete(o.id), clickUpJobOfOrder(o.id, o.number).catch(() => null), qboOrderState(o.id, true).catch(() => null), printavoDeleteCheck(o.id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }))]);
+    // still in Printavo: it can't be deleted here until it's deleted there (app/shop/orders/delete-actions.ts)
+    const pvAsk = pvc.ok ? { pv: pvc.still } : { pvErr: pvc.error };
     const qb: QbState | null = qs && qs.ok ? qs : null;
     const qbVoid = !!qb?.synced && !qb.voided && (qb.source === "created" || qb.source === "test");
-    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: true, qb, qbVoid });
+    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: true, qb, qbVoid, ...pvAsk });
     const pick = new Set<string>([...r.logos.filter((l) => l.draft && !l.elsewhere).map((l) => l.id), ...r.mockups.map((m) => m.id)]);
-    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: true, qb, qbVoid });
+    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: true, qb, qbVoid, ...pvAsk });
   }
   async function confirmDel() {
     if (!o || !delAsk) return;
@@ -1472,7 +1475,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Delete order" onClick={() => !delAsk.busy && setDelAsk(null)} onKeyDown={(e) => { if (e.key === "Escape" && !delAsk.busy) setDelAsk(null); }}>
           <div className="dla" onClick={(e) => e.stopPropagation()}>
             <h3>Delete order #{o.number}?</h3>
-            {delAsk.loading ? <p className="faint">Looking at the order&apos;s art…</p> : delAsk.error && !delAsk.logos.length && !delAsk.mockups.length ? <p className="err">{delAsk.error}</p> : (
+            {!delAsk.loading && delAsk.pv ? (
+              <div className="dla-pv">
+                <b>This order is in Printavo as #{delAsk.pv.visualId}.</b>
+                <span>Deleting it here would leave it running in Printavo where nobody here can see it. Delete it in Printavo first, then delete it here.</span>
+                {delAsk.pv.url && <a href={delAsk.pv.url} target="_blank" rel="noreferrer">Open #{delAsk.pv.visualId} in Printavo</a>}
+              </div>
+            ) : !delAsk.loading && delAsk.pvErr ? <p className="err">{delAsk.pvErr}</p>
+            : delAsk.loading ? <p className="faint">Looking at the order&apos;s art…</p> : delAsk.error && !delAsk.logos.length && !delAsk.mockups.length ? <p className="err">{delAsk.error}</p> : (
               <>
                 {delAsk.logos.length + delAsk.mockups.length > 0 ? <p className="dla-sub">Also take off the art that goes with it? Ticked items are archived (they can be put back).</p> : <p className="dla-sub">This order has no art to take off.</p>}
                 {[{ t: "Logos", list: delAsk.logos }, { t: "Mockups", list: delAsk.mockups }].filter((x) => x.list.length).map((x) => (
@@ -1515,7 +1525,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="dla-acts">
               {delAsk.gone ? <button type="button" className="btn primary" onClick={() => { setDelAsk(null); leave(); }}>OK</button> : <>
               <button type="button" className="btn ghost" disabled={delAsk.busy} onClick={() => setDelAsk(null)}>Cancel</button>
-              <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.busy ? "Deleting…" : (() => { const n = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).length + delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).length; return n ? `Delete order and ${n} item${n === 1 ? "" : "s"}` : "Delete order"; })()}</button></>}
+              {!delAsk.pv && !delAsk.pvErr && <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.busy ? "Deleting…" : (() => { const n = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).length + delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).length; return n ? `Delete order and ${n} item${n === 1 ? "" : "s"}` : "Delete order"; })()}</button>}</>}
             </div>
           </div>
         </div>
