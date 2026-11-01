@@ -17296,3 +17296,6 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
   html body .ord .line-h > .btn{order:2;flex:none;padding-left:8px;padding-right:8px}
   html body .ord .line-h > .grp-desc-in{order:3;flex:1 1 100%;min-width:0}
 }
+/* reordering a group's garments by dragging (components/GroupEditor.tsx, Nov 1): a blue line where it will land */
+.line .gl.gl-slot-b{box-shadow:inset 0 3px 0 var(--accent)}
+.line .gl.gl-slot-a{box-shadow:inset 0 -3px 0 var(--accent)}

@@ -145,6 +145,15 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const [blockMsg, setBlockMsg] = useState("");
   const [moveMenu, setMoveMenu] = useState("");
   const [dropOn, setDropOn] = useState("");
+  // reordering this group's garments (Nov 1, Nick: "instead of dragging it between groups, you can just rearrange it…
+  // put the helper tees first"): the line being dragged lands before or after the row it's dropped on
+  const [slot, setSlot] = useState<{ id: string; after: boolean } | null>(null);
+  const reorder = (lineId: string, toId: string, after: boolean) => update((x) => {
+    const from = x.lines.findIndex((y) => y.id === lineId); if (from < 0 || lineId === toId) return;
+    const [ln] = x.lines.splice(from, 1);
+    const at = x.lines.findIndex((y) => y.id === toId); if (at < 0) { x.lines.splice(from, 0, ln); return; }
+    x.lines.splice(after ? at + 1 : at, 0, ln);
+  });
   const gLabel = g.name?.trim() || `Group ${gi + 1}`;
   useEffect(() => {
     if (!moveMenu) return;
@@ -905,7 +914,11 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />Location change</span></div>}
                 <div className="gl-ver"><span className={"gl-vt" + (spLetter(l).startsWith("A") ? "" : " lt")} style={{ background: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" }}>{spLetter(l)}</span><b>{spLabel(l)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
               </>); })()}
-              <div className={"gl" + (same && !vHead && !sHead ? " same" : "") + (ccShow || spShow ? " ver" : "")} style={ccShow ? { ["--ver" as string]: verHex(l.color) } : spShow ? { ["--ver" as string]: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" } : undefined}>
+              <div className={"gl" + (same && !vHead && !sHead ? " same" : "") + (ccShow || spShow ? " ver" : "") + (slot?.id === l.id ? (slot.after ? " gl-slot-a" : " gl-slot-b") : "")}
+                onDragOver={onMoveLine && !fixed ? (e) => { if (!dragging || dragging.from !== g.id || dragging.lineId === l.id) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; const r = e.currentTarget.getBoundingClientRect(); const after = e.clientY > r.top + r.height / 2; if (slot?.id !== l.id || slot.after !== after) setSlot({ id: l.id, after }); } : undefined}
+                onDragLeave={onMoveLine && !fixed ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && slot?.id === l.id) setSlot(null); } : undefined}
+                onDrop={onMoveLine && !fixed ? (e) => { const d = dragging; if (!d || d.from !== g.id) return; e.preventDefault(); e.stopPropagation(); const after = slot?.id === l.id ? slot.after : false; setSlot(null); dragging = null; reorder(d.lineId, l.id, after); } : undefined}
+                style={ccShow ? { ["--ver" as string]: verHex(l.color) } : spShow ? { ["--ver" as string]: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" } : undefined}>
                 {(!same || vHead || sHead) && <div className="gl-sty" inert={fixed || undefined}>
                   <div className="a-st">
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
@@ -972,13 +985,15 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                       return (
                         <span className="gl-move-wrap">
                           <button className="btn icon ghost gl-move" type="button" tabIndex={-1} draggable aria-label="Move this garment to another group" aria-expanded={moveMenu === l.id}
-                            title="Drag onto another group, or click to pick where it goes"
+                            title="Drag up or down to put it in another spot, drag onto another group to move it there, or click for the choices"
                             onDragStart={(e) => { dragging = { from: g.id, lineId: l.id, label }; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("application/x-fbs-line", l.id); const row = (e.currentTarget as HTMLElement).closest(".gl"); if (row) e.dataTransfer.setDragImage(row, 24, 18); setMoveMenu(""); }}
-                            onDragEnd={() => { dragging = null; }}
+                            onDragEnd={() => { dragging = null; setSlot(null); }}
                             onClick={() => setMoveMenu(moveMenu === l.id ? "" : l.id)}><MoveIcon /></button>
                           {moveMenu === l.id && (
                             <span className="gl-move-menu" role="menu">
                               <span className="gl-move-k">Move {label} to</span>
+                              {li > 0 && <button type="button" role="menuitem" onClick={() => { setMoveMenu(""); reorder(l.id, g.lines[li - 1].id, false); }}>Up one</button>}
+                              {li < g.lines.length - 1 && <button type="button" role="menuitem" onClick={() => { setMoveMenu(""); reorder(l.id, g.lines[li + 1].id, true); }}>Down one</button>}
                               {(moveTo || []).map((t) => <button key={t.id} type="button" role="menuitem" onClick={() => { setMoveMenu(""); onMoveLine(l.id, g.id, t.id); }}>{t.label}</button>)}
                               {g.lines.length > 1 && <button type="button" role="menuitem" onClick={() => { setMoveMenu(""); onMoveLine(l.id, g.id, "new"); }}>A new group of its own</button>}
                             </span>
