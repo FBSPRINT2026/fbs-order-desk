@@ -127,6 +127,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const details = detailsBySide[side] || 0;
   const [mailNew, setMailNew] = useState(0); // unread email in my Inbox
   const slowAt = useRef(0); // when the slower badges (email, Printavo) were last counted
+  const fastAt = useRef(0); // when the menu's counts were last read (Nov 1: not again on every page change)
   // the menu folds to a strip of icons (a label pops up beside the one you point at); the arrow at the top opens it
   // back up to the full menu and folds it again
   const [miniSet, setMini] = useSticky<boolean>("nav.mini", true);
@@ -233,6 +234,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
 
   useEffect(() => {
     const sb = createClient();
+    // the menu's counts at most every 15 seconds: clicking through pages read them all again on each page (Nov 1, speed)
+    if (Date.now() - fastAt.current > 15_000) {
+    fastAt.current = Date.now();
     sb.from("messages").select("id", { count: "exact", head: true }).eq("author_type", "customer").is("read_at", null)
       .then(({ count }) => setUnread(count || 0));
     sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
@@ -248,6 +252,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       }
       setDetailsBySide(n);
     }, () => null);
+    }
     // the slower badges at most once a minute, and after the page's own loading has had its turn (Oct 16: speed)
     const now = Date.now();
     if (now - slowAt.current < 60_000) return;
