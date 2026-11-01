@@ -17366,3 +17366,19 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .oh-mic.on{background:var(--danger);border-color:var(--danger);color:#fff}
 .oh-listen{font-size:12.5px;color:var(--danger);padding:6px 2px 0}
 .oh-listen.err{color:var(--ink-3)}
+/* Create reorder, sizes first (Nov 1): same / from a file / clear; the file's sizes old → new before they're used */
+.rop-modes{flex-wrap:wrap;margin:8px 0 6px}
+.rop-drop{display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;padding:14px 10px;border:1.5px dashed var(--accent);border-radius:var(--r);background:color-mix(in srgb,var(--accent) 6%,var(--surface));color:var(--accent);font:inherit;cursor:pointer;text-align:center}
+.rop-drop.over{background:color-mix(in srgb,var(--accent) 14%,var(--surface))}
+.rop-drop b{font-size:13.5px}
+.rop-drop span{font-size:12px;color:var(--ink-3)}
+.rop-read{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.rop-read.ok{border-color:var(--ok)}
+.rop-read-h{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-size:13px;padding-bottom:4px;border-bottom:1px solid var(--line)}
+.rop-read-h .faint{white-space:nowrap;font-size:12px}
+.rop-cmp{padding:6px 0;border-bottom:1px solid var(--line-2,var(--line))}
+.rop-cmp .rop-n b{color:var(--accent)}
+.rop-chk{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.rop-read-go{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px}
+.rop-read-go .faint{font-size:12px}
+.rop-all{font-size:12.5px;white-space:nowrap}

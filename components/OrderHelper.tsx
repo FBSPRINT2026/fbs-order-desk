@@ -176,8 +176,8 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
                   {m.text && <div className="oh-text">{m.text}</div>}
                   {m.done && m.done.length > 0 && <ul className="oh-done">{m.done.map((d, k) => <li key={k}>{d}</li>)}</ul>}
                   {/* a question: one tap to answer it (yes, or which group) */}
-                  {i === msgs.length - 1 && !busy && !m.error && !m.done?.length && /\?\s*$/.test(m.text || "") && (() => { const o = snapshot(); const gs = (o?.groups || []).map((g, k) => g.name || `Group ${k + 1}`); return (
-                    <div className="oh-quick">{["Yes, do it", ...(gs.length > 1 ? gs.map((g) => `Put them on ${g}`) : []), ...(gs.length ? ["Make a new group"] : [])].map((q) => <button key={q} type="button" className="chip" onClick={() => void send({ message: q, pics: [] })}>{q}</button>)}</div>); })()}
+                  {i === msgs.length - 1 && !busy && !m.error && !m.done?.length && /\?/.test(m.text || "") && (() => { const o = snapshot(); const gs = (o?.groups || []).filter((g) => g.lines.length).map((g, k) => g.name || `Group ${k + 1}`); return (
+                    <div className="oh-quick">{["Yes, do it", ...gs.map((g) => `Put them on ${g}`), gs.length ? "Make a new group" : "All in one new group", ...(gs.length ? [] : ["A group for each"])].map((q) => <button key={q} type="button" className="chip" onClick={() => void send({ message: q, pics: [] })}>{q}</button>)}</div>); })()}
                   {m.undo && <div className="oh-acts"><button type="button" className="btn sm" onClick={() => { if (undo()) setMsgs((ms) => ms.map((x, k) => (k === i ? { ...x, undo: false, done: [...(x.done || []), "Undone: the order is back the way it was"] } : x))); }}>Undo</button></div>}
                 </div>
               ))}
