@@ -70,7 +70,7 @@ export const BEANIE_LOCATIONS = ["Cuff"];
 export type Headwear = "hat" | "visor" | "beanie";
 export function headwearOf(x: { style?: string; brand?: string; garment?: string; description?: string } | null | undefined): Headwear | null {
   const t = `${x?.garment || ""} ${x?.description || ""} ${x?.style || ""}`.toLowerCase();
-  if (/\bbeanie|\bknit (cap|hat)|\btoque|\bpom\b|cuffed knit/.test(t)) return "beanie";
+  if (/\bbeanie|\bknit (skull )?(cap|hat)|\bskull ?cap|\btoque|\bpom\b|cuffed knit/.test(t)) return "beanie";
   if (/\bvisor/.test(t)) return "visor";
   if (/\b(cap|caps|hat|hats|trucker|snapback|snap ?back|dad hat|flexfit|fitted|5-panel|6-panel|bucket)\b/.test(t) || HEADWEAR_BRAND.test(String(x?.brand || "").trim())) return "hat";
   return null;
