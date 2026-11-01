@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Customer } from "@/lib/pricing";
+import { readAll } from "@/lib/readAll";
 
 export const PRIVATE_KEYS = ["notes", "tags", "next_follow_up", "owner_email", "account_owner", "last_contact_at", "order_training", "order_training_name", "order_training_when"] as const;
 type Priv = { customer_id: string; notes: string; tags: string[]; next_follow_up: string | null; owner_email: string; account_owner: string; last_contact_at: string | null; order_training?: string; order_training_name?: string; order_training_when?: string };
@@ -14,11 +15,16 @@ export async function withPrivate<T extends Customer>(sb: SupabaseClient<any, an
   if (!customers.length) return customers;
   const rows: Priv[] = [];
   const ids = customers.map((c) => c.id);
-  const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
-  // all the batches at once (one after another, 650 customers took four round trips in a row)
-  for (const { data } of await Promise.all(chunks.map((c) => sb.from("customer_private").select("*").in("customer_id", c))))
-    rows.push(...((data || []) as Priv[]));
+  if (ids.length > 200) {
+    // most of the customers (a picker's whole list): every private row in one read, not one per 200 ids (Oct 31: an order
+    // page opened with eight of these)
+    rows.push(...await readAll<Priv>((a, b) => sb.from("customer_private").select("*").order("customer_id").range(a, b)));
+  } else {
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
+    for (const { data } of await Promise.all(chunks.map((c) => sb.from("customer_private").select("*").in("customer_id", c))))
+      rows.push(...((data || []) as Priv[]));
+  }
   const m = new Map(rows.map((r) => [r.customer_id, r]));
   return customers.map((c) => {
     const p = m.get(c.id);

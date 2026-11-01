@@ -78,6 +78,17 @@ const SHORT: Record<string, string> = { "ClickUp Jobs": "ClickUp", "Printavo Syn
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
 
+/**
+ * A menu link that loads its page when the pointer reaches it, not as soon as it's on screen (Oct 31: every shop page
+ * fetched all 25+ menu pages in the background as it opened, each a trip to the server, alongside its own data).
+ */
+function NavLink(props: React.ComponentProps<typeof Link>) {
+  const router = useRouter();
+  const href = typeof props.href === "string" ? props.href : "";
+  const warm = () => { if (href) router.prefetch(href); };
+  return <Link {...props} prefetch={false} onMouseEnter={(e) => { warm(); props.onMouseEnter?.(e); }} onFocus={(e) => { warm(); props.onFocus?.(e); }} />;
+}
+
 export default function ShopNav({ email, firstName, fullName = "", brand, shortcuts, people = [] }: { email: string; firstName: string; /** whose menu it is (the person viewed as, when viewing as someone) */ fullName?: string; brand: { sideLogoUrl: string; sideLogoWidth: number; sideTagline: string }; shortcuts: Shortcut[]; people?: { email: string; name: string; role: string }[] }) {
   const path = usePathname();
   // breadcrumbs (Oct 14): every page visited in this tab, with its address as you left it, for the "←" links
@@ -278,7 +289,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   // a tool someone doesn't have isn't in their menu at all (Oct 22, Nick: Claudia "is not going to see… the time clock
   // tool… employees… separations")
   const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? null : (
-    <Link key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={href === "/shop/time" && timeCount > 0 ? `${label}: ${timeCount} to fix` : label} aria-label={label}
+    <NavLink key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={href === "/shop/time" && timeCount > 0 ? `${label}: ${timeCount} to fix` : label} aria-label={label}
       >
       {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
@@ -291,7 +302,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       {href === "/shop/jobs" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
       {href === "/shop/support" && support > 0 && <span className="badge" title={`${support} open support report${support === 1 ? "" : "s"}`}>{support}</span>}
       {href === "/shop" && unread > 0 && <span className="badge" title={`${unread} unread customer message${unread === 1 ? "" : "s"}`}>{unread}</span>}
-    </Link>
+    </NavLink>
   );
 
   // View as: binoculars, the list opens from the icon (Oct 16, Nick). In my own view it's in Admin Tools; while viewing
@@ -344,12 +355,12 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       {/* drawn on the page itself (not inside the menu), so nothing on the page can cover it */}
       {tip && tip.text && typeof document !== "undefined" && createPortal(<div className="side-tip" role="tooltip" style={{ top: tip.top, left: tip.left }}>{tip.text}</div>, document.body)}
       <div className={sdClass(fit.l)} ref={inRef} style={fit.h ? { zoom: fit.z, minHeight: fit.h / fit.z } : undefined}>
-      <Link href="/shop" className="brand brand-logo" title="Home">
+      <NavLink href="/shop" className="brand brand-logo" title="Home">
         {brand.sideLogoUrl ? <img src={brand.sideLogoUrl} alt="FBS" style={{ width: brand.sideLogoWidth || 64 }} /> : <b>FBS</b>}
         {brand.sideTagline && <span className="tag-desk">{brand.sideTagline}</span>}
         {/* phones: "On the go", moving (Oct 15, Nick) */}
         <span className="tag-go" aria-hidden><span className="tag-k" data-notranslate>{[...(brand.sideTagline || "Shop Management")].map((ch, i) => <span key={i}>{ch === " " ? "\u00a0" : ch}</span>)}</span><i className="go-lines"><b /><b /><b /></i><em>On the go</em></span>
-      </Link>
+      </NavLink>
       <button type="button" className="side-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen((x) => !x)}>
         {open ? <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg> : <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>}
       </button>
@@ -403,7 +414,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
             <div key={i} className="nav-mine-i">
               {/^https?:/i.test(m.href)
                 ? <a href={m.href} target="_blank" rel="noreferrer" title={m.href}><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6" /></svg><span className="lbl-t">{m.label}</span></a>
-                : <Link href={m.href} className={path === m.href.split("?")[0] ? "on" : ""} title={m.href}><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /></svg><span className="lbl-t">{m.label}</span></Link>}
+                : <NavLink href={m.href} className={path === m.href.split("?")[0] ? "on" : ""} title={m.href}><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z" /></svg><span className="lbl-t">{m.label}</span></NavLink>}
               {editing && <span className="nav-mine-x">
                 <button type="button" title="Move up" disabled={!i} onClick={() => { const n = [...mine]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; store(n); }}>↑</button>
                 <button type="button" title="Rename" onClick={() => { const l = prompt("Name for this shortcut", m.label); if (l && l.trim()) store(mine.map((x, j) => (j === i ? { ...x, label: l.trim() } : x))); }}>✎</button>
@@ -439,7 +450,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
           // option E (Oct 16, Nick): one small pill, your initials and a gear
           const inner = <><b className="side-who-c">{ini}</b><svg className="side-gear" viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg></>;
           return canOpen("/shop/settings", perms)
-            ? <Link href="/shop/settings" className={"side-who" + (active("/shop/settings") ? " on" : "")} title={`${full} · ${email}: Settings`} aria-label={`Settings (signed in as ${full})`}>{inner}</Link>
+            ? <NavLink href="/shop/settings" className={"side-who" + (active("/shop/settings") ? " on" : "")} title={`${full} · ${email}: Settings`} aria-label={`Settings (signed in as ${full})`}>{inner}</NavLink>
             : <span className="side-who solo" title={`${full} · ${email}`} aria-label={`Signed in as ${full}`}><b className="side-who-c">{ini}</b></span>;
         })()}
         <div className="side-user-r">
