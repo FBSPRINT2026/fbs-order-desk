@@ -3264,11 +3264,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null }[] : [];
       // Add logo: one picture per thread (the lines whose color changes the same way share it), not one per garment
       const threadKey = (l: Line) => imprints.map((im) => JSON.stringify(Object.entries(im.inkBy || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1] || {})).join("|");
-      // the print's own version first (its garments have no color change), so the group's main picture is version A, the
-      // one its prints show (Oct 31, #40336: the B picture, Maroon / Off White on black, led a Maroon / Black group)
-      const own = (l: Line) => imprints.every((im) => !Object.keys(im.inkBy || {}).some((k) => colorKey(k) === colorKey(l.color)));
+      // in the order of their versions' letters (A, B…), as the order and the work order list them, so the group's main
+      // picture is version A (Oct 31, #40336: the B picture, Maroon / Off White on black, led the group)
+      const letterOf = (l: Line) => { for (const im of imprints) { const d = designs.find((x) => x.id === im.design_id); if (!d) continue; const name = Object.entries(im.colorwayBy || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1] || im.colorway; const i = name ? colorwaysOf(d).findIndex((c) => c.name.toLowerCase().replace(/[^a-z0-9]/g, "") === name.toLowerCase().replace(/[^a-z0-9]/g, "")) : -1; if (i >= 0) return i; } return 99; };
       const toSave = lines.filter((z) => z.style || z.color).filter((l, i, all) => !logoOnly || all.findIndex((y) => threadKey(y) === threadKey(l)) === i)
-        .map((l, i) => ({ l, i })).sort((a, b) => Number(own(b.l)) - Number(own(a.l)) || a.i - b.i).map((x) => x.l);
+        .map((l, i) => ({ l, i })).sort((a, b) => letterOf(a.l) - letterOf(b.l) || a.i - b.i).map((x) => x.l);
       for (const l of toSave) {
         const blob = await render(l);
         const title = `${groupName || "Mockup"} — ${logoOnly ? `Logo · ${inkListFor(l)}` : `${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`}`.trim();
