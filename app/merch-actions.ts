@@ -14,7 +14,7 @@ const now = () => new Date().toISOString();
 
 /* ------------------------------------------------------------------ list + create */
 
-export type StoreRow = Store & { customer: string; orders: number; pcs: number; sales: number; giveback: number };
+export type StoreRow = Omit<Store, "giveback"> & { customer: string; orders: number; pcs: number; sales: number; giveback: number; /** the give-back goal set on the store (Store.giveback.goal) */ giveback_goal: number };
 
 export async function listStores(): Promise<R<{ stores: StoreRow[]; staff: boolean; customers: { id: string; name: string }[] }>> {
   try {
@@ -34,7 +34,7 @@ export async function listStores(): Promise<R<{ stores: StoreRow[]; staff: boole
     const cname = new Map(((cs || []) as { id: string; company: string; name: string }[]).map((c) => [c.id, c.company || c.name]));
     const rows: StoreRow[] = stores.map((s) => {
       const mine = live.filter((o) => o.store_id === s.id);
-      return { ...s, customer: cname.get(s.customer_id || "") || "", orders: mine.length, pcs: mine.reduce((x, o) => x + (pcsBy.get(o.id) || 0), 0), sales: r2(mine.reduce((x, o) => x + +o.total, 0)), giveback: r2(mine.reduce((x, o) => x + +o.giveback, 0)) };
+      return { ...s, customer: cname.get(s.customer_id || "") || "", orders: mine.length, pcs: mine.reduce((x, o) => x + (pcsBy.get(o.id) || 0), 0), sales: r2(mine.reduce((x, o) => x + +o.total, 0)), giveback: r2(mine.reduce((x, o) => x + +o.giveback, 0)), giveback_goal: +(s.giveback?.goal || 0) };
     });
     let customers: { id: string; name: string }[] = [];
     if (a.staff) {

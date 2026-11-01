@@ -3,9 +3,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createStore, listStores, type StoreRow } from "@/app/merch-actions";
-import { fmtDate, stepOf } from "@/lib/merch";
+import { fmtDate, SHOPPER_STEPS, stepIndex, stepOf, storeImg } from "@/lib/merch";
 import { useSticky } from "@/lib/useSticky";
-import RowLink from "@/components/RowLink";
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const TONE: Record<string, string> = { draft: "#7C8799", review: "#6477D6", open: "#1E9D5B", closed: "#C98A0C", ordered: "#C98A0C", production: "#E0582E", packing: "#A152C9", ready: "#0A8FC0", delivered: "#6B7688" };
@@ -34,21 +33,48 @@ export default function StoreList({ base }: { base: string }) {
         <div className="chips">{(["active", "done", "all"] as const).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "active" ? "In progress" : k === "done" ? "Delivered" : "All"}</button>)}</div>
       </div>
       {!list.length ? <div className="empty">{rows.length ? "Nothing here." : "No stores yet. Make the first one: pick the school, add their designs on a few shirts, set the close date."}</div> : (
-        <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Store</th>{staff && <th>Customer</th>}<th>Status</th><th>Closes</th><th className="r">Orders</th><th className="r">Pieces</th><th className="r">Sales</th><th className="r">Give-back</th></tr></thead>
-          <tbody>{list.map((s) => (
-            <tr className="rl" key={s.id}>
-              <td><RowLink href={`${base}/${s.id}`} /><Link href={`${base}/${s.id}`} onClick={(e) => e.stopPropagation()}><b>{s.name}</b></Link><div className="faint" style={{ fontSize: 12 }}>/s/{s.slug}</div></td>
-              {staff && <td>{s.customer || "—"}</td>}
-              <td><span className="pill" style={{ ["--sc" as string]: TONE[s.status] || "#7C8799" }}>{stepOf(s.status).label}</span></td>
-              <td>{s.closes_at ? fmtDate(s.closes_at, false) : "—"}</td>
-              <td className="r">{s.orders}</td><td className="r">{s.pcs}</td><td className="r">{money(s.sales)}</td><td className="r">{money(s.giveback)}</td>
-            </tr>
-          ))}</tbody>
-        </table></div>
+        // a few stores at a time (Nov 1, Nick: "merch stores will never have more than a few at a time… just larger cards"):
+        // each store is a card with where it is, its dates and its numbers
+        <div className="msc-grid">{list.map((s) => <StoreCard key={s.id} s={s} href={`${base}/${s.id}`} staff={staff} />)}</div>
       )}
       {making && <NewStore customers={customers} staff={staff} stores={rows} onClose={() => setMaking(false)} onMade={(id) => router.push(`${base}/${id}`)} />}
     </>
+  );
+}
+
+/** one store, big: its look, where it is on the way to delivery, its dates and its numbers */
+function StoreCard({ s, href, staff }: { s: StoreRow; href: string; staff: boolean }) {
+  const tone = TONE[s.status] || "#7C8799", at = stepIndex(s.status), before = ["draft", "review"].includes(s.status);
+  const goal = +(s.giveback_goal || 0);
+  const date = (d: string | null) => (d ? fmtDate(d, false) : "—");
+  return (
+    <Link href={href} className="msc" style={{ ["--msc" as string]: s.brand?.primary || tone }}>
+      <div className="msc-top">
+        {s.brand?.logo ? <img className="msc-logo" src={storeImg(s.brand.logo)} alt="" /> : <span className="msc-logo msc-mono" aria-hidden>{(s.brand?.school || s.name).slice(0, 1)}</span>}
+        <div className="msc-name">
+          <b>{s.name}</b>
+          <span>{[staff ? s.customer : "", `/s/${s.slug}`].filter(Boolean).join(" · ")}</span>
+        </div>
+        <span className="pill" style={{ ["--sc" as string]: tone }}>{stepOf(s.status).label}</span>
+      </div>
+      {before ? <div className="msc-next">{stepOf(s.status).hint}</div> : (
+        <ol className="msc-steps" aria-label="Where it is">
+          {SHOPPER_STEPS.map((k, i) => <li key={k} className={i < at ? "done" : i === at ? "now" : ""}><i aria-hidden /><span>{stepOf(k).label}</span></li>)}
+        </ol>
+      )}
+      <div className="msc-dates">
+        <div><span>Opens</span><b>{date(s.opens_at)}</b></div>
+        <div><span>Closes</span><b>{date(s.closes_at)}</b></div>
+        <div><span>Deliver by</span><b>{date(s.deliver_by)}</b></div>
+      </div>
+      <div className="msc-nums">
+        <div><b>{s.orders}</b><span>Orders</span></div>
+        <div><b>{s.pcs}</b><span>Pieces</span></div>
+        <div><b>{money(s.sales)}</b><span>Sales</span></div>
+        <div><b>{money(s.giveback)}</b><span>Give-back{goal > 0 ? ` of ${money(goal)}` : ""}</span>{goal > 0 && <em className="msc-bar" aria-hidden><em style={{ width: `${Math.min(100, (s.giveback / goal) * 100)}%` }} /></em>}</div>
+      </div>
+      {!before && <div className="msc-next">{stepOf(s.status).hint}</div>}
+    </Link>
   );
 }
 

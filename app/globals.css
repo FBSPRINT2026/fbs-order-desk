@@ -17102,3 +17102,41 @@ table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label="
 .imp-sup-note{font-size:12.5px;margin-top:4px}
 /* the Patch button on a heat press print in the Mockup Creator (the Patch Application fee) */
 .mk-patch{display:inline-flex;margin-left:10px;font-size:13px}
+
+/* Merch Stores: a few stores at a time, each a big card (components/merch/StoreList.tsx; Nov 1, Nick: "never more than a
+   few at a time… just larger cards"): the store's look, where it is on the way to delivery, its dates and numbers */
+.msc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,460px),1fr));gap:14px}
+.msc{display:flex;flex-direction:column;gap:14px;padding:16px 18px;border:1px solid var(--line);border-top:4px solid var(--msc);border-radius:var(--r);background:var(--surface);color:var(--ink);text-decoration:none}
+.msc:hover{border-color:var(--accent);border-top-color:var(--msc)}
+.msc-top{display:flex;align-items:center;gap:12px;min-width:0}
+.msc-logo{width:52px;height:52px;flex:none;border-radius:10px;object-fit:contain;background:#fff;border:1px solid var(--line)}
+.msc-mono{display:grid;place-items:center;background:var(--msc);color:#fff;font-family:var(--display);font-weight:700;font-size:24px;border:0}
+.msc-name{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.msc-name b{font-family:var(--display);font-stretch:85%;font-size:19px;line-height:1.2;color:var(--ink)}
+.msc-name span{font-size:12.5px;color:var(--ink-3);overflow-wrap:anywhere}
+.msc-top .pill{flex:none}
+.msc-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+.msc-steps li{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;font-size:11.5px;line-height:1.2;color:var(--ink-3);position:relative}
+.msc-steps li i{width:12px;height:12px;border-radius:50%;border:2px solid var(--line);background:var(--surface);position:relative;z-index:1}
+.msc-steps li::before{content:"";position:absolute;top:5px;right:50%;width:100%;height:2px;background:var(--line)}
+.msc-steps li:first-child::before{display:none}
+.msc-steps li.done i,.msc-steps li.now i{background:var(--msc);border-color:var(--msc)}
+.msc-steps li.done::before,.msc-steps li.now::before{background:var(--msc)}
+.msc-steps li.now span{color:var(--ink);font-weight:700}
+.msc-steps li.now i{box-shadow:0 0 0 3px color-mix(in srgb,var(--msc) 30%,transparent)}
+.msc-dates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.msc-dates div,.msc-nums div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.msc-dates span,.msc-nums span{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.msc-dates b{font-size:14px;color:var(--ink);white-space:nowrap}
+.msc-nums{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.msc-nums div{background:var(--surface-2);padding:10px 12px;flex-direction:column-reverse;justify-content:flex-end}
+.msc-nums b{font-family:var(--display);font-stretch:85%;font-size:22px;font-weight:700;color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.msc-bar{display:block;height:4px;border-radius:2px;background:var(--line);margin-top:4px;overflow:hidden;order:-1}
+.msc-bar em{display:block;height:100%;background:var(--msc)}
+.msc-next{font-size:13px;color:var(--ink-2)}
+@media (max-width:640px){
+  .msc{padding:14px}
+  .msc-steps span{font-size:10.5px}
+  .msc-nums{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .msc-nums b{font-size:20px}
+}
