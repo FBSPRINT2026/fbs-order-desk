@@ -9,6 +9,8 @@ import PricingTabs from "@/app/portal/pricing/tabs";
  * of the portal"). Read live from the wholesale list in Settings → Pricing (the FBS Contract Pricing List), so it always
  * matches what their orders are priced at.
  */
+/** a price in a grid cell: the $ is dropped on a phone so eight columns fit (the section says prices are in dollars) */
+function Money({ n }: { n: number }) { const t = m(n); return <><span className="pl-dol">$</span>{t.slice(1)}</>; }
 const m = (n: number) => (n < 1 ? `$${n.toFixed(2).replace(/^0/, "")}` : `$${n.toFixed(2)}`);
 const ranges = (t: number[]) => t.map((q, i) => (i < t.length - 1 ? `${q.toLocaleString()}–${(t[i + 1] - 1).toLocaleString()}` : `${q.toLocaleString()}+`));
 
@@ -40,11 +42,12 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
         <PricingTabs tabs={[
           { k: "screen", label: "Screen printing", body: <>
         <section className="panel pl-sec">
-          <div className="panel-h"><h2>Screen printing</h2><span className="faint">Per location, per piece, by the number of ink colors</span></div>
+          <div className="panel-h"><h2>Screen printing</h2><span className="faint">Per location, per piece, in dollars, by the number of ink colors</span></div>
           <div className="panel-b">
-            <div className="pl-wrap"><table className="pl-tbl">
-              <thead><tr><th>Pieces</th>{Array.from({ length: colors }, (_, i) => <th key={i}>{i + 1} color{i ? "s" : ""}</th>)}</tr></thead>
-              <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row">{r}</th>{Array.from({ length: colors }, (_, c) => <td key={c}>{pl.screen?.[i]?.[c] != null ? m(+pl.screen[i][c]) : "—"}</td>)}</tr>)}</tbody>
+            <div className="pl-wrap"><table className="pl-tbl pl-grid" data-nofit>
+              {/* a phone keeps the grid (Nov 1, Nick: "still needs the grid"): the headers shorten to the number of colors */}
+              <thead><tr><th>Pieces</th>{Array.from({ length: colors }, (_, i) => <th key={i}><span className="pl-long">{i + 1} color{i ? "s" : ""}</span><span className="pl-short" aria-hidden>{i + 1}</span></th>)}</tr></thead>
+              <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row">{r}</th>{Array.from({ length: colors }, (_, c) => <td key={c}>{pl.screen?.[i]?.[c] != null ? <Money n={+pl.screen[i][c]} /> : "—"}</td>)}</tr>)}</tbody>
             </table></div>
             <ul className="pl-rules">
               {pl.darkAddsColor && <li><b>Dark garments</b> need a white underbase, which counts as one more color{light ? ` (${light} print without one)` : ""}.</li>}
@@ -87,8 +90,8 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
         <section className="panel pl-sec">
           <div className="panel-h"><h2>Embroidery</h2><span className="faint">Per location, per piece, up to {(pl.embStitches || 0).toLocaleString()} stitches</span></div>
           <div className="panel-b">
-            <div className="pl-wrap"><table className="pl-tbl pl-narrow">
-              <thead><tr><th>Pieces</th><th>Price</th>{pl.embSpecialty?.length ? <th>Hats, bags, fleece &amp; jackets</th> : null}</tr></thead>
+            <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>
+              <thead><tr><th>Pieces</th><th>Price</th>{pl.embSpecialty?.length ? <th><span className="pl-long">Hats, bags, fleece &amp; jackets</span><span className="pl-short" aria-hidden>Hats, bags &amp; fleece</span></th> : null}</tr></thead>
               <tbody>{ranges(embT).map((r, i) => <tr key={r}><th scope="row">{r}</th><td>{pl.embroidery?.[i] != null ? m(+pl.embroidery[i]) : "—"}</td>{pl.embSpecialty?.length ? <td>{pl.embSpecialty[i] != null ? `${m((+pl.embroidery[i] || 0) + (+pl.embSpecialty[i] || 0))}` : "—"}<small> (+{m(+pl.embSpecialty[i] || 0)})</small></td> : null}</tr>)}</tbody>
             </table></div>
             <ul className="pl-rules">
@@ -104,7 +107,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
         <section className="panel pl-sec">
             <div className="panel-h"><h2>DTF heat transfers</h2><span className="faint">Full color, per location, per piece</span></div>
             <div className="panel-b">
-              <div className="pl-wrap"><table className="pl-tbl pl-narrow">
+              <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>
                 <thead><tr><th>Pieces</th><th>Price</th></tr></thead>
                 <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row">{r}</th><td>{pl.dtf?.[i] != null ? m(+pl.dtf[i]) : "—"}</td></tr>)}</tbody>
               </table></div>
