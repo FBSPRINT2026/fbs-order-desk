@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { inflateRawSync } from "node:zlib";
 import { Canva, CanvaError, NO_ACCESS_MSG, canvaConnected, designIdFrom } from "@/lib/canva/client";
 import { exportBoth, fileTitle } from "@/lib/canva/save";
 
@@ -14,12 +15,13 @@ import { exportBoth, fileTitle } from "@/lib/canva/save";
  *    Canva (it joins the account), then Get the design from Canva again. Not connected: Canva's own public preview of
  *    the shared design (oEmbed thumbnail, else the page's preview image), a picture for mockups and quoting, NOT
  *    print-ready art.
- *  - Dropbox / Google Drive / a direct file link: the file itself when it's art (picture, PDF, AI, EPS, SVG, ZIP).
+ *  - Dropbox / Google Drive / a direct file link: every file behind it (filesFromLink: a shared folder's files one by
+ *    one; art, PDFs, Office files, CSVs).
  * What's found is saved with the email like an attachment ({ from_link, source }), so Create order, the Assistant and
  * the Mockup Creator use it the same way.
  */
 export type LinkFile = { name: string; path: string; type: string; size: number; from_link: string; source: "canva-preview" | "canva-export" | "download"; note?: string };
-type Found = { url: string; final: string; kind: "canva" | "dropbox" | "drive" | "file" | "other"; saved?: LinkFile; /** the Canva export's second file (PDF + PNG) */ also?: LinkFile; error?: string };
+type Found = { url: string; final: string; kind: "canva" | "dropbox" | "drive" | "file" | "other"; saved?: LinkFile; /** the Canva export's second file (PDF + PNG) */ also?: LinkFile; /** the rest of a shared folder's files */ more?: LinkFile[]; error?: string };
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 const ART_TYPE = /^(image\/|application\/(pdf|postscript|illustrator|zip|x-zip|octet-stream)|image\/svg)/i;
@@ -135,27 +137,105 @@ export async function resolveLink(url: string): Promise<string> {
   return u;
 }
 
+export const linkKind = (u: string): Found["kind"] => {
+  return kindOf(u);
+};
 const kindOf = (u: string): Found["kind"] => {
   try {
     const h = new URL(u).hostname;
     if (/(^|\.)canva\.com$/i.test(h) && /\/design\//i.test(u)) return "canva";
     if (/(^|\.)dropbox(usercontent)?\.com$/i.test(h)) return "dropbox";
     if (/drive\.google\.com|docs\.google\.com/i.test(h)) return "drive";
-    if (/\.(png|jpe?g|gif|webp|svg|pdf|ai|eps|zip|tiff?)(\?|$)/i.test(new URL(u).pathname)) return "file";
+    if (/\.(png|jpe?g|gif|webp|svg|pdf|ai|eps|zip|tiff?|xlsx|xlsm|docx|pptx|csv)(\?|$)/i.test(new URL(u).pathname)) return "file";
   } catch { /* skip */ }
   return "other";
 };
 
-async function download(u: string): Promise<{ buf: Buffer; type: string; name: string } | null> {
-  const r = await fetch(u, { headers: { "user-agent": UA }, redirect: "follow", signal: AbortSignal.timeout(30_000) }).catch(() => null);
+/** what's kept from a link: art, a PDF, an Office file or a CSV (a PO in Excel), or a zip (a shared folder) */
+const KEEP_TYPE = /^(image\/|text\/(csv|plain|tab-separated)|application\/(pdf|postscript|illustrator|zip|x-zip|x-zip-compressed|octet-stream|vnd\.openxmlformats|vnd\.ms-excel|msword|binary))/i;
+async function download(u: string, max = MAX, type = ART_TYPE): Promise<{ buf: Buffer; type: string; name: string } | null> {
+  const r = await fetch(u, { headers: { "user-agent": UA }, redirect: "follow", signal: AbortSignal.timeout(max > MAX ? 55_000 : 30_000) }).catch(() => null);
   if (!r || !r.ok) return null;
-  const type = (r.headers.get("content-type") || "").split(";")[0].trim();
-  if (!ART_TYPE.test(type)) return null;
-  const len = +(r.headers.get("content-length") || 0); if (len > MAX) return null;
-  const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > MAX || buf.length < 200) return null;
+  const t = (r.headers.get("content-type") || "").split(";")[0].trim();
+  if (!type.test(t)) return null;
+  const len = +(r.headers.get("content-length") || 0); if (len > max) return null;
+  const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > max || buf.length < 200) return null;
   const cd = r.headers.get("content-disposition") || "";
-  const name = (cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i)?.[1] || new URL(r.url || u).pathname.split("/").pop() || "art").slice(-100);
-  return { buf, type, name: decodeURIComponent(name) };
+  const star = cd.match(/filename\*=(?:UTF-8'')?([^;]+)/i)?.[1], plain = cd.match(/filename=["']?([^"';]+)/i)?.[1];
+  let name = (star || plain || new URL(r.url || u).pathname.split("/").pop() || "file").trim().replace(/^["']|["']$/g, "");
+  try { name = decodeURIComponent(name); } catch { /* as it is */ }
+  return { buf, type: t, name: name.slice(-120) };
+}
+
+/* a zip's files (a shared folder comes down as one): node's zlib, no library */
+const JUNK = /(^|\/)(__MACOSX|\.DS_Store|Thumbs\.db|desktop\.ini|\._[^/]*)$|(^|\/)__MACOSX\//i;
+const EXT_TYPE: Record<string, string> = { pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", ai: "application/postscript", eps: "application/postscript", psd: "image/vnd.adobe.photoshop", tif: "image/tiff", tiff: "image/tiff",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xlsm: "application/vnd.ms-excel.sheet.macroEnabled.12", xls: "application/vnd.ms-excel", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", doc: "application/msword",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation", csv: "text/csv", txt: "text/plain", dst: "application/octet-stream", emb: "application/octet-stream", cdr: "application/octet-stream", zip: "application/zip" };
+export const typeByName = (n: string) => EXT_TYPE[(n.split(".").pop() || "").toLowerCase()] || "application/octet-stream";
+function unzipAll(buf: Buffer, o: { files: number; each: number }): { name: string; buf: Buffer; type: string }[] {
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) return [];
+  const count = buf.readUInt16LE(eocd + 10);
+  let p = buf.readUInt32LE(eocd + 16);
+  const out: { name: string; buf: Buffer; type: string }[] = [], seen = new Map<string, number>();
+  for (let n = 0; n < count && p + 46 <= buf.length && out.length < o.files; n++) {
+    if (buf.readUInt32LE(p) !== 0x02014b50) break;
+    const method = buf.readUInt16LE(p + 10), csize = buf.readUInt32LE(p + 20), usize = buf.readUInt32LE(p + 24);
+    const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), commentLen = buf.readUInt16LE(p + 32), local = buf.readUInt32LE(p + 42);
+    const full = buf.toString("utf8", p + 46, p + 46 + nameLen);
+    p += 46 + nameLen + extraLen + commentLen;
+    if (full.endsWith("/") || JUNK.test(full) || csize === 0xffffffff || usize > o.each || (method !== 0 && method !== 8)) continue;
+    try {
+      const ln = buf.readUInt16LE(local + 26), le = buf.readUInt16LE(local + 28);
+      const data = buf.subarray(local + 30 + ln + le, local + 30 + ln + le + csize);
+      const b = method === 8 ? inflateRawSync(data) : Buffer.from(data);
+      if (b.length < 1) continue;
+      // the file's own name; one with the same name in another folder keeps its folder in front
+      let name = full.split("/").pop() || "file";
+      if (seen.has(name)) name = full.split("/").slice(-2).join(" - ");
+      seen.set(name, 1);
+      out.push({ name, buf: b, type: typeByName(name) });
+    } catch { /* a damaged entry: skipped */ }
+  }
+  return out;
+}
+const isZip = (f: { buf: Buffer; type: string; name: string }) => f.buf.length > 4 && f.buf.readUInt32LE(0) === 0x04034b50 && (/zip/i.test(f.type) || /\.zip$/i.test(f.name) || /octet-stream|binary/i.test(f.type));
+
+/**
+ * Every file behind a share link (Nov 1, Nick: Tiger Blue "just links the Dropbox… treat them as if they're
+ * attachments… automatically just bring them into our system"): a Dropbox file or FOLDER (Dropbox sends a folder as
+ * one zip: it's opened and each file kept on its own), a Google Drive file, a Google Sheet / Doc / Slides (as Excel /
+ * Word / PDF), or a direct link to a file. Art, PDFs, Office files and CSVs; a folder up to 40 files and 120 MB.
+ * A link that needs a sign-in (or a Drive folder, which Google only lists to signed-in apps) gives an error to show.
+ */
+export async function filesFromLink(final: string): Promise<{ files: { name: string; buf: Buffer; type: string }[]; error?: string; folder?: boolean }> {
+  const kind = kindOf(final);
+  let got: { buf: Buffer; type: string; name: string } | null = null;
+  const BIG = 120 * 1024 * 1024;
+  try {
+    if (kind === "dropbox") {
+      const x = new URL(final); x.searchParams.set("dl", "1"); got = await download(x.toString(), BIG, KEEP_TYPE);
+    } else if (kind === "drive") {
+      const u = new URL(final), id = final.match(/\/d\/([\w-]{20,})/)?.[1] || u.searchParams.get("id");
+      if (/\/drive\/(u\/\d+\/)?folders\//.test(u.pathname)) return { files: [], error: "A Google Drive folder can't be opened without signing in to Google. Ask for a Dropbox link, or open it and add the files." };
+      if (!id) return { files: [], error: "Couldn't read the Google Drive file from that link." };
+      const sub = /docs\.google\.com/i.test(u.hostname) ? u.pathname.split("/")[1] : "";
+      got = sub === "spreadsheets" ? await download(`https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`, MAX, KEEP_TYPE)
+        : sub === "document" ? await download(`https://docs.google.com/document/d/${id}/export?format=docx`, MAX, KEEP_TYPE)
+        : sub === "presentation" ? await download(`https://docs.google.com/presentation/d/${id}/export/pdf`, MAX, KEEP_TYPE)
+        : await download(`https://drive.google.com/uc?export=download&id=${id}`, MAX, KEEP_TYPE);
+    } else if (kind === "file") got = await download(final, MAX, KEEP_TYPE);
+    else return { files: [] };
+  } catch (e) { return { files: [], error: e instanceof Error ? e.message : String(e) }; }
+  if (!got) return { files: [], error: "Nothing downloadable at that link (it may need a sign-in, or it's over 120 MB)." };
+  if (isZip(got)) {
+    const files = unzipAll(got.buf, { files: 40, each: 40 * 1024 * 1024 });
+    return files.length ? { files, folder: true } : { files: [], error: "The folder came down empty." };
+  }
+  if (/octet-stream|binary/i.test(got.type)) got.type = typeByName(got.name);
+  return { files: [got] };
 }
 
 /** Canva: the shared design's preview picture (Canva's oEmbed, else the page's og:image) */
@@ -234,25 +314,32 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
     }
     if (have.has(final)) { if (kind === "canva") f.error = "The preview picture is saved. Connect Canva (Settings → Canva) to get the design itself."; continue; }
     try {
-      let got: { buf: Buffer; type: string; name: string } | null = null, source: LinkFile["source"] = "download", note: string | undefined;
-      if (kind === "canva") {
-        got = await canvaPreview(final); source = "canva-preview";
-        note = "A preview picture of the Canva design (fine for the mockup, not for printing). For print art: the Canva connection's vector PDF, or ask the customer to download it as PDF Print / SVG.";
-      } else if (kind === "dropbox") {
-        const x = new URL(final); x.searchParams.set("dl", "1"); got = await download(x.toString());
-      } else if (kind === "drive") {
-        const id = final.match(/\/d\/([\w-]{20,})/)?.[1] || new URL(final).searchParams.get("id");
-        if (id) got = await download(`https://drive.google.com/uc?export=download&id=${id}`);
-      } else got = await download(final);
+      if (kind !== "canva") {
+        // a Dropbox / Google Drive file or folder, or a direct file link: every file behind it (lib filesFromLink)
+        const r = await filesFromLink(final);
+        if (!r.files.length) { f.error = r.error || "Nothing downloadable at that link (it may need a sign-in)."; continue; }
+        const saved: LinkFile[] = [];
+        for (const [k, g] of r.files.entries()) {
+          const safe = g.name.replace(/[^\w.\- ()]+/g, "_").slice(-120);
+          const path = `emails/${a.customer_id || "leads"}/${Date.now().toString(36)}${k ? `-${k}` : ""}-${safe}`;
+          const { error } = await admin.storage.from("proofs").upload(path, g.buf, { contentType: g.type, upsert: false });
+          if (error) { f.error = error.message; continue; }
+          saved.push({ name: g.name, path, type: g.type, size: g.buf.length, from_link: final, source: "download", ...(r.folder ? { note: "From the shared folder the link opens." } : {}) });
+        }
+        if (saved.length) { f.saved = saved[0]; f.more = saved.slice(1); }
+        continue;
+      }
+      const got = await canvaPreview(final);
+      const note = "A preview picture of the Canva design (fine for the mockup, not for printing). For print art: the Canva connection's vector PDF, or ask the customer to download it as PDF Print / SVG.";
       if (!got) { f.error = "Nothing downloadable at that link (it may need a sign-in)."; continue; }
       const safe = got.name.replace(/[^\w.\- ()]+/g, "_").slice(-120);
       const path = `emails/${a.customer_id || "leads"}/${Date.now().toString(36)}-${safe}`;
       const { error } = await admin.storage.from("proofs").upload(path, got.buf, { contentType: got.type, upsert: false });
       if (error) { f.error = error.message; continue; }
-      f.saved = { name: got.name, path, type: got.type, size: got.buf.length, from_link: final, source, ...(note ? { note } : {}) };
+      f.saved = { name: got.name, path, type: got.type, size: got.buf.length, from_link: final, source: "canva-preview", note };
     } catch (e) { f.error = e instanceof Error ? e.message : String(e); }
   }
-  const add = found.flatMap((f) => [f.saved, f.also]).filter(Boolean) as LinkFile[];
+  const add = found.flatMap((f) => [f.saved, f.also, ...(f.more || [])]).filter(Boolean) as LinkFile[];
   const links = found.filter((f) => f.kind !== "other").map((f) => ({ url: f.final, kind: f.kind, ok: !!f.saved, error: f.error }));
   await admin.from("activities").update({ meta: { ...meta, attachments: [...(meta.attachments || []), ...add], link_art_at: new Date().toISOString(), ...(links.length ? { links } : {}) } }).eq("id", activityId);
   return { ok: true, found };

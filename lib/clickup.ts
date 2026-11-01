@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
+import { filesFromLink, linkKind } from "@/lib/linkArt";
 
 /**
  * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
@@ -51,7 +52,7 @@ type CuUser = { id?: number; username?: string | null; email?: string | null };
 type CuField = { id: string; name: string; type: string; value?: unknown; type_config?: { options?: { id: string; name?: string; label?: string; orderindex?: number }[] } };
 type CuAtt = { id: string; title?: string; url?: string; size?: number | string; extension?: string; mimetype?: string; deleted?: boolean; hidden?: boolean; is_folder?: boolean | null };
 type CuTask = {
-  id: string; name: string; text_content?: string | null; description?: string | null; status?: { status?: string; type?: string; color?: string };
+  id: string; name: string; text_content?: string | null; description?: string | null; markdown_description?: string | null; status?: { status?: string; type?: string; color?: string };
   date_created?: string; date_updated?: string; due_date?: string | null; creator?: CuUser; url?: string; parent?: string | null;
   list?: { id: string; name?: string }; folder?: { name?: string; hidden?: boolean }; space?: { id: string };
   custom_fields?: CuField[]; attachments?: CuAtt[]; priority?: { priority?: string } | null;
@@ -59,7 +60,9 @@ type CuTask = {
 type CuComment = { id: string; comment_text?: string; user?: CuUser; date?: string };
 type Team = { id: string; name: string; members?: { user?: CuUser }[] };
 /** a file on the task; `path` once it's copied into storage (proofs/clickup/…), so it opens like an email's attachment */
-export type CuFile = { id: string; name: string; url: string; size: number; ext: string; type: string; path?: string };
+export type CuFile = { id: string; name: string; url: string; size: number; ext: string; type: string; path?: string;
+  /** a file from a share link on the task (a Dropbox folder, a Google Drive file), not attached in ClickUp: the link */ link?: string;
+  /** a link that couldn't be brought in: why, and when it was tried */ note?: string; tried?: string };
 export type CuNote = { who: string; email: string; at: string; text: string };
 export type ClickUpTaskRow = {
   id: string; team_id: string; where_text: string; name: string; url: string; parent: string | null; status: string; status_type: string; status_color: string;
@@ -131,12 +134,35 @@ function rowOf(t: CuTask, teamId: string, comments: CuComment[], myEmail: string
     fields, printavo_field: box?.id || null,
     field_ids: Object.fromEntries((t.custom_fields || []).filter((f) => f.type === "checkbox").map((f) => [f.name.trim(), f.id])), in_printavo: !!box && (box.value === true || box.value === "true"),
     attachments: (t.attachments || []).filter((a) => a.id && a.url && !a.deleted && !a.hidden && !a.is_folder).slice(0, 30)
-      .map((a): CuFile => ({ id: a.id, name: String(a.title || `file${a.extension ? "." + a.extension : ""}`), url: String(a.url), size: Number(a.size) || 0, ext: String(a.extension || "").toLowerCase(), type: String(a.mimetype || "") })),
+      .map((a): CuFile => ({ id: a.id, name: String(a.title || `file${a.extension ? "." + a.extension : ""}`), url: String(a.url), size: Number(a.size) || 0, ext: String(a.extension || "").toLowerCase(), type: String(a.mimetype || "") }))
+      .concat(sharedLinks(t, comments)),
     comments: comments.filter((c) => String(c.comment_text || "").trim()).sort((a, b) => ms(a.date) - ms(b.date)).slice(-30)
       .map((c) => ({ who: String(c.user?.username || c.user?.email || "Someone"), email: String(c.user?.email || "").toLowerCase(), at: iso(ms(c.date)) || "", text: String(c.comment_text || "").trim().slice(0, 4000), mine: String(c.user?.email || "").toLowerCase() === myEmail })),
     synced_at: new Date().toISOString(),
   };
 }
+/**
+ * Files shared by LINK on a task instead of attached (Nov 1, Nick: Tiger Blue "just links the Dropbox… treat them as
+ * if they're attachments… automatically just bring them into our system"): every Dropbox / Google Drive / file link in
+ * the task's notes (the markdown, where "#2848 SV Sponsors 2026" keeps the Dropbox address it links to) and comments,
+ * as a file waiting to be brought in (saveFiles opens the link and keeps every file behind it, lib/linkArt).
+ */
+const hashOf = (s: string) => { let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+const LINK_LABEL: Record<string, string> = { dropbox: "Dropbox link", drive: "Google Drive link", file: "Linked file" };
+function sharedLinks(t: CuTask, comments: CuComment[]): CuFile[] {
+  const text = [t.markdown_description, t.description, t.text_content, ...comments.map((c) => JSON.stringify(c))].filter(Boolean).join("\n");
+  const out = new Map<string, CuFile>();
+  for (const m of text.matchAll(/https?:\/\/[^\s<>"'()\]\\]+/gi)) {
+    const u = m[0].replace(/[.,;:!?*_]+$/, "");
+    const kind = linkKind(u);
+    if (!LINK_LABEL[kind] || out.size >= 4) continue;
+    const id = `link-${hashOf(u.replace(/[?&](st|dl)=[^&]*/g, ""))}`;
+    if ([...out.values()].some((f) => f.id === id)) continue;
+    out.set(u, { id, name: LINK_LABEL[kind], url: u, size: 0, ext: "", type: "", link: u });
+  }
+  return [...out.values()];
+}
+
 /**
  * A new job to process. Not: a subtask, done, ticked In Printavo or matched to a Printavo job, made into an order, marked
  * not an order, in a "Personal List" (ClickUp's own scratch list: McKenna's "test" / "tbd" from Mar 2024), or made more
@@ -169,7 +195,11 @@ async function guessCustomer(admin: SupabaseClient, name: string, members: strin
 }
 
 /** keep the storage copies of files already brought in (a task read again lists its files without them) */
-const keepPaths = (files: CuFile[], old: CuFile[] | null | undefined) => files.map((f) => ({ ...f, ...(old || []).find((o) => o.id === f.id && o.path) ? { path: (old || []).find((o) => o.id === f.id)!.path } : {} }));
+const keepPaths = (files: CuFile[], old: CuFile[] | null | undefined) => files.flatMap((f): CuFile[] => {
+  // a share link: the files already brought in from it (or why it couldn't be)
+  if (f.link) { const got = (old || []).filter((o) => o.link === f.link && o.path); if (got.length) return got; const prev = (old || []).find((o) => o.id === f.id); return [prev?.tried ? { ...f, note: prev.note, tried: prev.tried } : f]; }
+  return [{ ...f, ...(old || []).find((o) => o.id === f.id && o.path) ? { path: (old || []).find((o) => o.id === f.id)!.path } : {} }];
+});
 
 /** read one task in full (and its comments) and save it; returns the row */
 export async function readClickUpTask(admin: SupabaseClient, id: string): Promise<ClickUpTaskRow | null> {
@@ -197,6 +227,25 @@ async function saveFiles(admin: SupabaseClient, taskId: string, files: CuFile[],
   const out: CuFile[] = [];
   for (const f of files) {
     if (f.path || f.size > 40 * 1024 * 1024 || left <= 0 || Date.now() > o.deadline) { out.push(f); continue; }
+    if (f.link) {
+      // a share link: every file behind it, kept on the task like an attachment (one that failed is tried again in 6 hours)
+      if (f.tried && Date.now() - Date.parse(f.tried) < 6 * 3600e3) { out.push(f); continue; }
+      if (Date.now() > o.deadline - 55_000) { out.push(f); continue; } // a shared folder can take most of a minute
+      const r = await filesFromLink(f.link).catch((e) => ({ files: [] as { name: string; buf: Buffer; type: string }[], error: String(e) }));
+      const got: CuFile[] = [];
+      for (const [k, g] of r.files.entries()) {
+        if (left - g.buf.length < -40 * 1024 * 1024) break;
+        const path = `clickup/${taskId}/${f.id}-${k}-${safe(g.name)}`;
+        const up = await admin.storage.from("proofs").upload(path, g.buf, { contentType: g.type || "application/octet-stream", upsert: true });
+        if (up.error) continue;
+        left -= g.buf.length;
+        got.push({ id: `${f.id}-${k}`, name: g.name, url: f.link, size: g.buf.length, ext: (g.name.split(".").pop() || "").toLowerCase(), type: g.type, path, link: f.link });
+      }
+      changed = true;
+      if (got.length) out.push(...got);
+      else out.push({ ...f, note: (r as { error?: string }).error || "Nothing downloadable at that link.", tried: new Date().toISOString() });
+      continue;
+    }
     const buf = await grab(f.url, tok);
     if (!buf) { out.push(f); continue; }
     const path = `clickup/${taskId}/${f.id}-${safe(f.name)}`;
@@ -212,9 +261,11 @@ async function saveFiles(admin: SupabaseClient, taskId: string, files: CuFile[],
 export async function ensureClickUpFiles(admin: SupabaseClient, id: string): Promise<ClickUpTaskRow | null> {
   const { data: t } = await admin.from("clickup_tasks").select("*").eq("id", id).maybeSingle();
   if (!t) return null;
-  const row = t as ClickUpTaskRow;
+  let row = t as ClickUpTaskRow;
+  // no files on file: read the task again, for share links in its notes (kept from Nov 1)
+  if (!row.attachments.length) row = (await readClickUpTask(admin, id).catch(() => null)) || row;
   if (!row.attachments.some((f) => !f.path)) return row;
-  const r = await saveFiles(admin, id, row.attachments, await tokenFor(admin, row.team_id), { bytes: 120 * 1024 * 1024, deadline: Date.now() + 45_000 });
+  const r = await saveFiles(admin, id, row.attachments, await tokenFor(admin, row.team_id), { bytes: 120 * 1024 * 1024, deadline: Date.now() + 100_000 });
   if (r.changed) await admin.from("clickup_tasks").update({ attachments: r.files }).eq("id", id);
   return { ...row, attachments: r.files };
 }
@@ -315,7 +366,7 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
       // tasks changed since the last run (the first time: every open task)
       const tasks: CuTask[] = [];
       for (let page = 0; page < 10; page++) {
-        const qs = new URLSearchParams({ page: String(page), subtasks: "true", include_closed: since ? "true" : "false", order_by: "updated" });
+        const qs = new URLSearchParams({ page: String(page), subtasks: "true", include_closed: since ? "true" : "false", order_by: "updated", include_markdown_description: "true" });
         if (since) qs.set("date_updated_gt", String(since));
         const r = await cu<{ tasks: CuTask[]; last_page?: boolean }>(tok, `/team/${team.id}/task?${qs}`);
         tasks.push(...(r.tasks || []));
@@ -457,12 +508,12 @@ export async function importClickUpTask(admin: SupabaseClient, id: string, by: s
   // the files: the storage copies (made by the reader, or now)
   const { data: act } = t.activity_id ? await admin.from("activities").select("id, meta").eq("id", t.activity_id).maybeSingle() : { data: null };
   if (t.attachments.some((f) => !f.path)) {
-    const r = await saveFiles(admin, t.id, t.attachments, await tokenFor(admin, t.team_id), { bytes: 150 * 1024 * 1024, deadline: Date.now() + 60_000 });
+    const r = await saveFiles(admin, t.id, t.attachments, await tokenFor(admin, t.team_id), { bytes: 150 * 1024 * 1024, deadline: Date.now() + 100_000 });
     if (r.changed) await admin.from("clickup_tasks").update({ attachments: r.files }).eq("id", t.id);
     t = { ...t, attachments: r.files };
   }
-  const atts = t.attachments.filter((f) => f.path).slice(0, 12).map((f) => ({ name: f.name, path: f.path!, type: f.type || MIME[f.ext] || "application/octet-stream", size: f.size, clickup_id: f.id }));
-  const missing = t.attachments.filter((f) => !f.path).map((f) => `${f.name} (${f.size > 40 * 1024 * 1024 ? "too big to bring in" : "couldn't be downloaded"}; open it in ClickUp)`);
+  const atts = t.attachments.filter((f) => f.path).slice(0, 12).map((f) => ({ name: f.name, path: f.path!, type: f.type || MIME[f.ext] || "application/octet-stream", size: f.size, clickup_id: f.id, ...(f.link ? { from_link: f.link } : {}) }));
+  const missing = t.attachments.filter((f) => !f.path).map((f) => (f.link ? `The files at ${f.link} (${f.note || "not brought in yet"})` : `${f.name} (${f.size > 40 * 1024 * 1024 ? "too big to bring in" : "couldn't be downloaded"}; open it in ClickUp)`));
   const theirComments = t.comments.filter((c) => !ours(c.email) && !(c as { mine?: boolean }).mine);
   const body = [
     `This job came from ${team.name}'s ClickUp board (their job list${t.where_text ? `: ${t.where_text}` : ""}), not an email. The task's name is the job: "${t.name}".`,
