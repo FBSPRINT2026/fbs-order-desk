@@ -32,6 +32,7 @@ export type SrcFinding = {
   paper: string; order: string;
   /** one plain sentence for staff */ say: string;
   /** what to put on the order: the location, the color (the maker's name when known) */ fix?: string;
+  /** the logo it's about (a logo's version named in the paperwork) */ designId?: string;
 };
 
 type Tok = { w: string; at: number; end: number };
@@ -284,7 +285,7 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
       }
       const named = [...mineL.colorways].sort((x, y) => y.length - x.length).find((cw) => { const cwW = words(cw).join(" "); return cwW && ` ${WS} `.includes(` ${cwW} `); });
       const now = Object.entries(im.colorwayBy || {}).find(([k]) => k.trim().toLowerCase() === it.color.trim().toLowerCase())?.[1] || im.colorway || "";
-      if (named && now && words(named).join(" ") !== words(now).join(" ")) out.push({ kind: "colorway", group: gi, lineIds: ids, what, paper: named, order: now, say: `${what}: the paperwork asks for the ${mineL.name} logo in ${named}, the order has ${now}.` });
+      if (named && now && words(named).join(" ") !== words(now).join(" ")) out.push({ kind: "colorway", group: gi, lineIds: ids, what, paper: named, order: now, designId: mineL.id, say: `${what}: the paperwork asks for the ${mineL.name} logo in ${named}, the order has ${now}.` });
     }
   });
   return out;

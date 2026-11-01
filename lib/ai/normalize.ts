@@ -139,7 +139,7 @@ export function proposalToGroups(p: ProposedOrder): Group[] {
       if (im.method === "screen" && /\bpuff/i.test(`${im.notes} ${im.inks}`)) im.puff = true;
       // the customer's own heat transfers (rule 4f): pressed where their placement reference shows, not priced
       if (d.patch) { im.method = "dtf"; im.patch = {}; }
-      if (d.supplied_transfers && im.method === "dtf" && !im.patch) { im.supplied = { by: String(d.supplied_transfers.by || "").trim().slice(0, 60), ref: String(d.supplied_transfers.order || "").trim().slice(0, 60) }; im.location = ""; im.size = ""; }
+      if (d.supplied_transfers && im.method === "dtf" && !im.patch) { im.supplied = { by: String(d.supplied_transfers.by || "").trim().slice(0, 60), ref: String(d.supplied_transfers.order || "").trim().slice(0, 60) }; im.size = ""; }
       return im;
     });
     if (!lines.length && !imprints.length) continue;

@@ -204,7 +204,9 @@ export async function describeFromStyles(admin: SupabaseClient, customerId: stri
     const said = (l.garment || "").trim();
     const mine = [...words(said, l.brand || known.brand)].filter((w) => !KINDS.has(w));
     const theirs = words(known.name, known.brand);
-    if (said && mine.some((w) => theirs.has(w))) continue;
+    // it describes this garment: a word in common, and its own words aren't mostly another thing's (Oct 31, #40330: "MEI
+    // Embroidery - Stacked All White (Nike LS Polo)", a logo's option name, shares only "polo" with the Nike's name)
+    if (said && mine.some((w) => theirs.has(w)) && !styleFits(said, l.brand || known.brand, { title: known.name, brand: known.brand }).nameOff) continue;
     l.garment = known.name.replace(/[\s.\-–—]+$/, "");
     done.push(said ? `${st}: "${said}" → "${known.name}"` : `${st}: ${known.name}`);
   }

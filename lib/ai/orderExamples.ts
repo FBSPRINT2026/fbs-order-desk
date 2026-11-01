@@ -74,6 +74,22 @@ export async function sourceOf(admin: SupabaseClient, activityId: string): Promi
   return { text: parts.join("\n\n"), subject: String(a.subject || "") };
 }
 
+/**
+ * Their own heat transfers, learned from what staff marked right (Oct 31, #40330: MEI's cart heat transfers are always
+ * the customer's own, #40328 and #40329 were marked right that way, and the next reading made it ours). The latest two
+ * orders of this customer staff said are right that have a heat transfer: when every heat transfer on both was customer
+ * supplied, this reading's heat transfers are too (a patch isn't a transfer). Returns how many prints it marked.
+ */
+export async function suppliedLikeBefore(admin: SupabaseClient, customerId: string, groups: Group[]): Promise<number> {
+  const todo = groups.flatMap((g) => g.imprints || []).filter((im) => im.method === "dtf" && !im.patch && !im.supplied);
+  if (!todo.length) return 0;
+  const { data } = await admin.from("order_examples").select("order_text").eq("customer_id", customerId).eq("active", true).order("confirmed_at", { ascending: false }).limit(12);
+  const withDtf = ((data || []) as { order_text: string }[]).map((e) => (e.order_text.match(/^\s*print: [^\n]*· dtf\b[^\n]*$/gm) || [])).filter((xs) => xs.length).slice(0, 2);
+  if (withDtf.length < 2 || !withDtf.every((xs) => xs.every((x) => /customer supplied transfers/.test(x)))) return 0;
+  for (const im of todo) im.supplied = { by: "", ref: "" };
+  return todo.length;
+}
+
 /** the order's source email: the reading it was made from, else an email filed on it */
 export async function sourceActivity(admin: SupabaseClient, orderId: string): Promise<{ activity: string | null; reading: { groups?: Group[] } | null }> {
   const { data: s } = await admin.from("ai_suggestions").select("activity_id, payload").in("kind", ["draft_order", "draft_order_part"]).eq("order_id", orderId).order("updated_at", { ascending: false }).limit(1).maybeSingle();

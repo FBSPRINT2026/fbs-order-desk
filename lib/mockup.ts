@@ -867,8 +867,12 @@ export const guessHex = (color: string): string => {
   const c = (color || "").toLowerCase().trim().replace(/([a-z])([A-Z])/g, "$1 $2");
   const spaced = (color || "").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().trim();
   return NAMED[c] || NAMED[spaced] || NAMED[spaced.replace(/\s*\(.*\)|heather\s*/g, "").trim()]
-    || NAMED[NAMED_LONGEST().find((k) => new RegExp(`(^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|\\s)`).test(spaced)) || ""] || "#9aa1ab";
+    || NAMED[NAMED_LONGEST().find((k) => new RegExp(`(^|\\s)${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|\\s)`).test(spaced)) || ""]
+    // a maker's one-word name that starts with a color word (Oct 31, #40330: OGIO's "Blacktop" bag read as light gray, so
+    // it got the light-goods logo): that color
+    || NAMED[ONE_WORD().find((k) => spaced.split(/\s+/).some((w) => w.length > k.length + 1 && w.startsWith(k))) || ""] || "#9aa1ab";
 };
+const ONE_WORD = () => NAMED_LONGEST().filter((k) => !/\s/.test(k) && k.length >= 4);
 /**
  * A garment color's color: the supplier's code, unless it plainly isn't the color its name says (Oct 23, Peticolas: S&S
  * gives Bella+Canvas 3719/3739 "Heather Navy" as #E2B484, a tan; the photos are navy but the chips and close-ups were

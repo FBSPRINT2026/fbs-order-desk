@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { orderGroups, type Group, type Order } from "@/lib/pricing";
-import { colorwaysOf } from "@/lib/brands";
+import { lineQty, orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
+import { applyColorway, applyColorwayChange, colorwaysOf, sewKindOf } from "@/lib/brands";
 import { sourceCheck, type SrcCatalog, type SrcFinding, type SrcLogo } from "@/lib/sourceCheck";
 
 /**
@@ -10,7 +10,7 @@ import { sourceCheck, type SrcCatalog, type SrcFinding, type SrcLogo } from "@/l
  * "Primary" vs "Stacked" and "All White" can be told. Used at the reading (lib/ai/emailOrder.ts), in the order check
  * (lib/ai/orderFix.ts) and before an order is kept as a worked example (app/shop/ai-actions.ts markOrderChecked).
  */
-export async function sourceCtx(admin: SupabaseClient, groups: Group[]): Promise<{ catalog: SrcCatalog; logos: SrcLogo[] }> {
+export async function sourceCtx(admin: SupabaseClient, groups: Group[]): Promise<{ catalog: SrcCatalog; logos: SrcLogo[]; designs: Map<string, Design> }> {
   const styles = [...new Set(groups.flatMap((g) => (g.lines || []).map((l) => (l.style || "").trim().toUpperCase())).filter((s) => s.length >= 3))];
   const ids = [...new Set(groups.flatMap((g) => (g.imprints || []).map((im) => im.design_id)).filter(Boolean) as string[])];
   const [{ data: st }, { data: ds }] = await Promise.all([
@@ -33,7 +33,34 @@ export async function sourceCtx(admin: SupabaseClient, groups: Group[]): Promise
     for (const n of (nums || []) as { id: string; number: number }[]) uses.set(n.id, (text.match(new RegExp(`logo D-${n.number}\\b`, "g")) || []).length);
   }
   const logos: SrcLogo[] = rows.map((d) => ({ id: d.id, name: d.name || "", brand: d.brand_id, colorways: colorwaysOf({ specs: d.specs } as never).map((c) => c.name).filter(Boolean), uses: uses.get(d.id) || 0 }));
-  return { catalog, logos };
+  return { catalog, logos, designs: new Map(rows.map((d) => [d.id, d as unknown as Design])) };
+}
+
+/**
+ * A logo's version the paperwork names, put on the order at the reading (Oct 31, #40330: the cart said "MEI Stacked Logo
+ * All White" on four garments and "Icon Only (M) All Black" on one; the reading recolored the thread but kept the Full
+ * Color version and its sew file). The whole print takes that version (its sew file, threads, picture) when every garment
+ * of the group asked for it; else those garment colors get it as a colorway change. Any logo, any version, any method.
+ */
+export function applyColorwayFixes(groups: Group[], findings: SrcFinding[], designs: Map<string, Design>): { groups: Group[]; did: string[] } {
+  const did: string[] = [];
+  const key = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const out = groups.map((g) => ({ ...g, imprints: [...(g.imprints || [])] }));
+  for (const f of findings) {
+    if (f.kind !== "colorway" || !f.designId) continue;
+    const g = out[f.group], d = designs.get(f.designId);
+    if (!g || !d) continue;
+    const k = g.imprints.findIndex((im) => im.design_id === f.designId);
+    const cw = colorwaysOf(d).find((c) => key(c.name) === key(f.paper));
+    if (k < 0 || !cw) continue;
+    const lines = (g.lines || []).filter((l) => lineQty(l) > 0), mine = lines.filter((l) => f.lineIds.includes(l.id));
+    if (!mine.length) continue;
+    const im = g.imprints[k];
+    if (mine.length === lines.length) g.imprints[k] = applyColorway({ ...im, colorwayBy: undefined, inkBy: undefined }, d, cw, sewKindOf(lines));
+    else g.imprints[k] = applyColorwayChange(im, d, { ...(im.colorwayBy || {}), ...Object.fromEntries(mine.map((l) => [l.color || "", cw.name])) });
+    did.push(`${f.what}: ${d.name} in ${cw.name}`);
+  }
+  return { groups: out, did };
 }
 
 /** an order checked against what it was made from (its email or ClickUp task and their files' words) */
