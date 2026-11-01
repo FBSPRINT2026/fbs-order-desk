@@ -11,27 +11,50 @@ const orderLabel = (o: PendingShipment["orders"][number]) => `${o.printavo ? "Pr
 /** every line id behind a row (a row can cover several boxes) */
 const idsOf = (rowId: string) => rowId.split(",").filter(Boolean);
 
+/** a carrier's all-caps place ("DELIVERED · RICHARDSON, TX") in normal letters, without the word the status already says */
+function trackDetail(detail: string, delivered: boolean): string {
+  let t = (detail || "").trim();
+  if (delivered) t = t.replace(/^\s*delivered\s*[·:,-]?\s*/i, "");
+  if (t && t === t.toUpperCase() && /[A-Z]/.test(t)) t = t.toLowerCase().replace(/\b[a-z]/g, (m) => m.toUpperCase()).replace(/, ([a-z]{2})\b/gi, (_m, st: string) => `, ${st.toUpperCase()}`).replace(/\b(Ups|Usps|Dhl)\b/g, (m) => m.toUpperCase());
+  return t;
+}
+
+/**
+ * A shipment that isn't on an order yet (Nov 1, Nick on the goods area on a phone: "I don't like that either"). Laid out
+ * to read at a glance, the same in the shop and the portal:
+ *   [Arrived]  SanMar SO-167328962                      1 box · 2 pcs
+ *   PO PeterARNING96729403 · shipped Wed, Oct 28 · 18000
+ *   UPS 1Z1Y796R0359453968                               [Arrived]
+ *     Richardson, TX
+ * one badge that says where it is (the "not linked to an order" is said once, by the list), the numbers on the right,
+ * each box's tracking on its own row with its status on the right and the carrier's place under it in normal letters.
+ */
 function Head({ g, staff }: { g: PendingShipment; staff: boolean }) {
   const arrived = g.tracking.length > 0 && g.tracking.every((t) => t.delivered);
+  const some = !arrived && g.tracking.some((t) => t.delivered);
   return (
     <div className="in-h">
       <div className="in-t">
-        <span className={"in-badge" + (arrived ? " here" : "")}>{arrived ? "Arrived · not linked to an order" : "Incoming · not linked to an order"}</span>
-        {staff && <b>{g.us ? "FBS (our blanks)" : g.customer?.name || g.customer_name}</b>}
-        {staff && !g.us && g.customer && g.customer.name.toLowerCase() !== g.customer_name.toLowerCase() && <span className="faint">on the manifest as {g.customer_name}{g.customer_account ? ` (account ${g.customer_account})` : ""}</span>}
+        <span className={"in-badge" + (arrived ? " here" : "")} title="Not linked to an order yet">{arrived ? "Arrived" : some ? "Partly arrived" : "On the way"}</span>
+        <span className="in-so">{supName(g.supplier)} <b>{g.supplier_order || "—"}</b></span>
+        <span className="in-pcs">{g.boxes} box{g.boxes === 1 ? "" : "es"} · {g.pcs} pcs</span>
       </div>
+      {staff && <div className="in-who"><b>{g.us ? "FBS (our blanks)" : g.customer?.name || g.customer_name}</b>
+        {!g.us && g.customer && g.customer.name.toLowerCase() !== g.customer_name.toLowerCase() && <span className="faint"> · on the manifest as {g.customer_name}{g.customer_account ? ` (account ${g.customer_account})` : ""}</span>}</div>}
       <div className="in-m">
-        {supName(g.supplier)} order <b>{g.supplier_order || "—"}</b> · PO <b>{g.customer_po || "none"}</b>{g.ship_date ? ` · shipped ${day(g.ship_date)}` : ""} · {g.boxes} box{g.boxes === 1 ? "" : "es"} · {g.pcs} pcs · {g.styles}
+        PO <b>{g.customer_po || "none"}</b>{g.ship_date ? ` · shipped ${day(g.ship_date)}` : ""}{g.styles ? ` · ${g.styles}` : ""}
       </div>
       {g.tracking.length > 0 && (
-        <ul className="in-trk">{g.tracking.map((t) => (
-          <li key={t.tracking || "local"}>
-            {t.tracking ? <a href={trackingUrl(t.carrier, t.tracking)} target="_blank" rel="noreferrer">{t.carrier} {t.tracking}</a> : <span>{t.carrier} · {t.detail}</span>}
-            <span className="rv-st" title={TRACK[t.status] || ""}> {trackWord(t.status)}</span>
-            {t.eta && !t.delivered && <span className="faint"> · arrives {day(t.eta)}</span>}
-            {t.tracking && t.detail && <span className="faint"> · {t.detail}</span>}
-          </li>
-        ))}</ul>
+        <ul className="in-trk">{g.tracking.map((t) => {
+          const det = t.tracking ? trackDetail(t.detail || "", !!t.delivered) : "";
+          return (
+            <li key={t.tracking || "local"}>
+              <span className="in-trk-n">{t.tracking ? <a href={trackingUrl(t.carrier, t.tracking)} target="_blank" rel="noreferrer">{t.carrier} {t.tracking}</a> : <span>{t.carrier} · {t.detail}</span>}</span>
+              <span className={"rv-st" + (t.delivered ? " ok" : "")} title={TRACK[t.status] || ""}>{trackWord(t.status)}</span>
+              {(det || (t.eta && !t.delivered)) && <span className="in-trk-d">{t.eta && !t.delivered ? `Arrives ${day(t.eta)}${det ? " · " : ""}` : ""}{det}</span>}
+            </li>
+          );
+        })}</ul>
       )}
     </div>
   );

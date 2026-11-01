@@ -50,14 +50,14 @@ export default async function Statement({ searchParams }: { searchParams: Promis
             <div><span>Terms</span><b>{PAY_TERMS[acct?.payment_terms || "receipt"]}</b></div>
             <div className="st-due"><span>Amount due</span><b>{money(total)}</b></div>
           </div>
-          <table className="st-tbl">
+          <table className="st-tbl" data-nofit>
             <thead><tr><th>Invoice</th><th>Date</th><th>Job</th><th>PO</th><th>Payment due</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th></tr></thead>
             <tbody>
               {open.map((o) => { const a = age(o.pay_due); return (
-                <tr key={o.id} className={a !== null && a > 0 ? "late" : ""}>
-                  <td className="num">#{o.number}</td><td>{fmtDateLong(o.created_at.slice(0, 10))}</td><td>{o.nickname || "Order"}</td><td>{o.po_number || ""}</td>
-                  <td>{o.pay_due ? `${fmtDateLong(o.pay_due)}${a !== null && a > 0 ? ` (${a}d late)` : ""}` : "When done"}</td>
-                  <td className="r num">{money(o.total)}</td><td className="r num">{money(o.paid)}</td><td className="r num b">{money(o.balance)}</td>
+                <tr key={o.id} className={[a !== null && a > 0 ? "late" : "", o.paid > 0.004 ? "part" : ""].filter(Boolean).join(" ") || undefined}>
+                  <td className="num st-n">#{o.number}</td><td className="st-d">{fmtDateLong(o.created_at.slice(0, 10))}</td><td className="st-j">{o.nickname || "Order"}</td><td className="st-po">{o.po_number ? <><span className="st-ph">PO </span>{o.po_number}</> : ""}</td>
+                  <td className="st-pd"><span className="st-ph">Due </span>{o.pay_due ? `${fmtDateLong(o.pay_due)}${a !== null && a > 0 ? ` (${a}d late)` : ""}` : "When done"}</td>
+                  <td className="r num st-t"><span className="st-ph">of </span>{money(o.total)}</td><td className="r num st-p">{money(o.paid)}</td><td className="r num b st-b">{money(o.balance)}</td>
                 </tr>
               ); })}
               {!open.length && <tr><td colSpan={8} className="st-none">Nothing is owed right now. Thank you!</td></tr>}

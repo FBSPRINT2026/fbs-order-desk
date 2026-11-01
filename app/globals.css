@@ -1595,6 +1595,33 @@ a.as-ai{text-decoration:none}
 .st-aging b{font-size:15px}
 @media (max-width:700px){.st-page{padding:18px}.st-to{grid-template-columns:1fr}.st-aging{grid-template-columns:repeat(2,1fr)}.st-tbl{font-size:12px}.st-tbl th:nth-child(4),.st-tbl td:nth-child(4),.st-tbl th:nth-child(7),.st-tbl td:nth-child(7){display:none}}
 @media print{.no-print,.p-top,.preview-bar,footer{display:none!important}.st-page{border:0;padding:0}.p-main.st{padding:0}}
+/* A statement on a phone (Nov 1, Nick: "you don't need all those headers on the side… invoice, date, job, payment on
+   every line"): each invoice is two lines, no labels:
+     #40182  Embark All Hands Meeting            $482.50
+     Oct 27, 2026 · PO 123 · Due when done     (of $600.00)
+   the balance on the right; "of" the total only when part is paid; late ones in red. The printed page keeps the table */
+.st-ph{display:none}
+@media screen and (max-width:640px){
+  html body .st-tbl thead{display:none}
+  html body .st-tbl,html body .st-tbl tbody,html body .st-tbl tfoot{display:block;width:100%}
+  html body .st-tbl tbody tr{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px;row-gap:3px;padding:10px 0;border-bottom:1px solid #eef1f4}
+  html body .st-tbl tbody tr::after{content:"";order:4;flex-basis:100%;height:0}
+  html body .st-tbl tbody td{display:block;padding:0!important;border:0!important;font-size:13.5px;min-width:0}
+  html body .st-tbl tbody td.st-n{order:1;font-weight:700;white-space:nowrap;margin-right:4px}
+  html body .st-tbl tbody td.st-j{order:2;flex:1 1 0;font-weight:600}
+  html body .st-tbl tbody td.st-b{order:3;white-space:nowrap;margin-left:6px}
+  html body .st-tbl tbody td:is(.st-d,.st-po,.st-pd){order:5;font-size:12px;color:#5b6576}
+  html body .st-tbl tbody td:is(.st-po,.st-pd)::before{content:"· "}
+  html body .st-tbl tbody td.st-po:empty{display:none!important}
+  html body .st-tbl tbody td.st-t{order:6;margin-left:auto;font-size:12px;color:#5b6576;white-space:nowrap;display:none}
+  html body .st-tbl tbody tr.part td.st-t{display:block}
+  html body .st-tbl tbody td.st-p{display:none}
+  html body .st-tbl .st-ph{display:inline}
+  html body .st-tbl tbody tr.late td{color:inherit}
+  html body .st-tbl tbody tr.late td:is(.st-pd,.st-b){color:#9b1c1c}
+  html body .st-tbl tfoot tr{display:flex;justify-content:space-between;gap:10px;padding:12px 0 0}
+  html body .st-tbl tfoot td{display:block;padding:0!important;border:0!important}
+}
 .aa-payside .qp{padding:12px}
 .aa-payside .qp-in{flex-wrap:wrap;padding:4px 4px 4px 10px}
 .aa-payside .qp-in input{min-width:150px}
@@ -2005,15 +2032,24 @@ a.as-ai{text-decoration:none}
 .in-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
 .in-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .in-card.sugg{border-left:4px solid var(--accent)}
-.in-h{display:flex;flex-direction:column;gap:3px}
-.in-t{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14.5px}
-.in-t .faint{font-size:12.5px}
-.in-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--warn-soft);color:var(--warn);text-transform:uppercase;letter-spacing:.03em}
+.in-h{display:flex;flex-direction:column;gap:4px;min-width:0}
+.in-t{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:14px}
+.in-t .in-so{min-width:0;overflow-wrap:anywhere}
+.in-t .in-pcs{margin-left:auto;font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.in-who{font-size:14px}
+.in-who .faint{font-size:12.5px}
+.in-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--warn-soft);color:var(--warn);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
 .in-badge.here{background:var(--danger-soft);color:var(--danger)}
-.in-m{font-size:13px;color:var(--ink-2)}
-.in-trk{margin:0;padding-left:18px;font-size:12.5px}
+.in-m{font-size:12.5px;color:var(--ink-3);overflow-wrap:anywhere}
+.in-m b{color:var(--ink-2)}
+.in-trk{list-style:none;margin:4px 0 0;padding:0;font-size:13px;display:flex;flex-direction:column;border-top:1px solid var(--line-2)}
+.in-trk > li{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:1px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-2)}
+.in-trk > li:last-child{border-bottom:0;padding-bottom:0}
+.in-trk-n{min-width:0;overflow-wrap:anywhere}
+.in-trk .rv-st{white-space:nowrap}
+.in-trk-d{grid-column:1 / -1;font-size:12px;color:var(--ink-3)}
 .in-a{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13.5px}
-.in-a input[type=text]{width:240px}
+.in-a input[type=text]{width:min(240px,100%)}
 .in-a select{width:auto;max-width:340px}
 .in-sugg{font-size:13.5px;padding:7px 10px;background:var(--accent-soft);border-radius:8px}
 @media (max-width:900px){.rv-panes{grid-template-columns:1fr}.rv-stages{grid-template-columns:repeat(2,minmax(0,1fr))}.rv-other{grid-template-columns:1fr}.rv-other label.wide{grid-column:auto}}
@@ -16405,15 +16441,14 @@ html body .ord .line-h:hover .grp-desc-in:placeholder-shown::placeholder,html bo
   html body main.main .ord .ed-head .ed-actions > .ed-acts-tog{display:inline-flex;align-items:center;gap:6px;flex:none;order:2;padding:7px 12px;font-size:13.5px}
   html body main.main .ord .ed-head .ed-actions > .save-state{display:inline;order:2}
   /* Nov 1 (Nick: "send to customer first… then messy, rethink it"): the status, the QuickBooks mark and Actions on
-     the first line; the order's next step under them, always showing and full width (Send to customer, else Convert to
-     invoice, else Send to Printavo; the first one is the blue button); Actions opens the four menus two by two, and a
+     the first line; the order's next step under them, always showing (Send to customer, else Convert to invoice, else Send
+     to Printavo): the first one full width and blue, the others side by side under it; Actions opens the four menus two by two, and a
      menu opens in place across the full width instead of floating */
   html body main.main .ord .ed-head .ed-actions > .qb-wrap{display:inline-flex;align-items:center;order:1;flex:none}
-  html body main.main .ord .ed-head .ed-actions > .ed-main{display:flex;flex-direction:column;gap:8px;order:3;flex:1 1 100%}
+  html body main.main .ord .ed-head .ed-actions > .ed-main{display:flex;flex-wrap:wrap;gap:8px;order:3;flex:1 1 100%}
   html body main.main .ord .ed-head .ed-actions > .ed-main:empty{display:none}
-  html body main.main .ord .ed-head .ed-actions > .ed-main > .btn{width:100%;justify-content:center;padding:9px 12px;font-size:14px;min-height:40px}
-  html body main.main .ord .ed-head .ed-actions > .ed-main > .btn:not(.primary){background:var(--surface);border-color:var(--line);color:var(--ink)}
-  html body main.main .ord .ed-head .ed-actions > .ed-main > .btn:first-child{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  html body main.main .ord .ed-head .ed-actions > .ed-main > .btn{flex:1 1 calc(50% - 4px);min-width:0;justify-content:center;padding:9px 12px;font-size:14px;min-height:40px;background:var(--surface);border-color:var(--line);color:var(--ink)}
+  html body main.main .ord .ed-head .ed-actions > .ed-main > .btn:first-child{flex-basis:100%;background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
   html body main.main .ord .ed-head .ed-actions.open{padding-bottom:10px;border-bottom:1px solid var(--line-2)}
   html body main.main .ord .ed-head .ed-actions.open > .ed-menus{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;order:4;flex:1 1 100%}
   html body main.main .ord .ed-head .ed-actions > .ed-menus > *{min-width:0}
@@ -17198,14 +17233,19 @@ table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label="
   .ol-paid{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--ok);color:#fff;font-size:11.5px;font-weight:800;line-height:1}
   .ol-paid.part{background:none;color:var(--ok);box-shadow:inset 0 0 0 1.5px var(--ok)}
   .ol-pv{display:block;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
-  html body main.main table.m-card tr:has(> td[data-label="Job"]):has(> td.ol-bal){grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"num job tot" "num cust pcs" "num stat due";gap:4px 14px;align-items:center}
+  html body main.main table.m-card tr:has(> td[data-label="Job"]):has(> td.ol-bal){grid-template-columns:58px minmax(0,1fr) auto;grid-template-areas:"num job tot" "num cust pcs" "num stat due";gap:4px 14px;align-items:center}
   html body main.main table.m-card tr:has(> td.ol-bal) > td:is([data-label="#"],[data-label="Job"],[data-label="Total"]){align-self:start;font-size:14px;line-height:1.35}
-  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="#"]{gap:6px}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="#"]{gap:6px;overflow:visible!important}
+  /* the same left column on every card (a paid $ or a 6-digit number doesn't push one job name over) */
   html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Job"] .aa-arch{display:none}
   html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Total"]{overflow:visible!important}
   html body main.main table.m-card tr:has(> td.ol-bal) > td:is([data-label="Pcs"],[data-label="Due"]){text-align:right!important}
   html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Status"]{min-width:0}
   html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Status"] > :is(.pill,.pv-dot){max-width:100%;overflow:hidden}
+  /* a long status or customer ends in "…" instead of being cut mid-letter */
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Status"] > .pv-dot{display:inline-block;text-overflow:ellipsis;white-space:nowrap;vertical-align:top}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Status"] > .pv-dot::before{display:inline-block;margin-right:6px;vertical-align:1px}
+  html body main.main table.m-card tr:has(> td.ol-bal) > td[data-label="Customer"] > div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 /* A card row (a table on a phone, or one TableFit stacked) is shaded as one card when pointed at or tapped, not cell by
    cell with gaps between (Nov 1: the orders list showed patchy blocks on a tapped row) */
