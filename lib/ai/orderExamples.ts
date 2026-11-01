@@ -42,7 +42,9 @@ export function orderText(o: Partial<Order> & { groups: Group[] }, ctx: { design
     }
     for (const im of g.imprints || []) {
       const d = im.design_id ? ctx.designs[im.design_id] : null;
-      out.push(`  print: ${im.location || "?"} · ${im.method}${d ? ` · logo D-${d.number} "${d.name}"` : ""}${im.size ? ` · ${im.size}` : ""}${im.inks ? ` · ${im.method === "embroidery" ? "threads" : "inks"}: ${im.inks}` : ""}${im.colors ? ` · ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}`);
+      // a patch and their own transfers are said, so the next order like it is made the same way (Oct 31, #40328)
+      const how = im.patch ? "heat press patch (patch: Patch Application fee)" : im.supplied ? `dtf · customer supplied transfers${im.supplied.by ? ` by ${im.supplied.by}` : ""}${im.supplied.ref ? `, their order ${im.supplied.ref}` : ""}` : im.method;
+      out.push(`  print: ${im.location || "?"} · ${how}${d ? ` · logo D-${d.number} "${d.name}"` : ""}${im.colorway ? ` · version ${im.colorway}` : ""}${im.size ? ` · ${im.size}` : ""}${im.inks && !im.patch ? ` · ${im.method === "embroidery" ? "threads" : "inks"}: ${im.inks}` : ""}${im.colors && !im.patch ? ` · ${im.colors} color${im.colors === 1 ? "" : "s"}` : ""}`);
       if (hasSpotChange(im, g.lines || [])) out.push(`    location change: ${spotLines(im, g.lines || []).map((x) => `${x.letter} ${x.spot}: ${x.what}`).join("; ")}`);
     }
     const fin = (g.finishing || []).map((f) => ctx.finNames[f] || f);
