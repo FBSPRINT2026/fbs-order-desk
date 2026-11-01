@@ -5,6 +5,7 @@ import { pullOffMockup } from "@/lib/mockupPull";
 import { artFromArtPdf, artShape, filmFor, measureFilm, type ArtPiece, type FilmPiece } from "@/lib/printavoArt";
 import type { EODraft } from "@/lib/emailOrderShared";
 import { bodyOf, REF_BODY } from "@/lib/garmentBody";
+import { newImprint } from "@/lib/pricing";
 
 /**
  * A reorder of an old Printavo job (from the Inbox or the archive's Reorder), its art in this order:
@@ -72,13 +73,33 @@ export async function pullReorderArt(x: EODraft, o: { customerId: string; jobLab
         if (art) arts.push({ f, art, score: await artScore(art) });
       }
       arts.sort((a, b) => b.score - a.score);
-      for (const { f, art } of arts) {
+      const usedArt = new Set<number>();
+      for (const [ai, { f, art }] of arts.entries()) {
         if (!open.length) break;
+        usedArt.add(ai);
         const im = open.shift()!, job = f.name.replace(/ mockup\.\w+$/i, "");
         const dsg = await uploadDesign(sb, { draft: true, file: art.file, customer_id: o.customerId, name: y.nickname || "Art", colors: im.colors || 1, inks: im.inks || "", notes: `The original art from ${job}`, method: im.method });
         im.design_id = dsg.id;
         im.notes = [im.notes, `Art: the original from ${job}`].filter(Boolean).join(". ").slice(0, 300);
         im.confirm = { size: true, ink: true, why: `Reorder of ${job}: the art is the original; no size or ink on file` };
+        pulled.push({ imId: im.id, widthIn: 1, heightIn: art.ratio, sizeKnown: false });
+      }
+      // every piece of art on the old job is a print (Nov 1, #34448 Count Joy: a front film and a back film on the line,
+      // and Printavo listed one print): art left over becomes the next print, the back first, for production to confirm
+      const sides = ["Full Back", "Left Sleeve", "Right Sleeve"];
+      for (const { f, art } of arts.filter((_, ai) => !usedArt.has(ai)).slice(0, 2)) {
+        if (open.length) break;
+        const loc = sides.find((x) => !g.imprints.some((im) => im.location === x));
+        if (!loc) break;
+        const like = g.imprints.find((im) => im.method) || null;
+        const im = newImprint(loc);
+        im.method = like?.method || "screen"; im.colors = 1;
+        const job = f.name.replace(/ mockup\.\w+$/i, "");
+        const dsg = await uploadDesign(sb, { draft: true, file: art.file, customer_id: o.customerId, name: `${y.nickname || "Art"} ${loc.toLowerCase()}`, colors: 1, inks: "", notes: `The original art from ${job}`, method: im.method });
+        im.design_id = dsg.id;
+        im.notes = `Art: another film on ${job}; placed on the ${loc.toLowerCase()} as a guess`;
+        im.confirm = { size: true, ink: true, why: `Reorder of ${job}: this art was on the old job beside the front; where it goes, its size and ink aren't on file` };
+        g.imprints.push(im);
         pulled.push({ imId: im.id, widthIn: 1, heightIn: art.ratio, sizeKnown: false });
       }
       if (g.imprints.some((im) => !im.design_id && !/sleeve/i.test(im.location))) notes.push("The old job's PDF has no art that could be pulled out of it.");

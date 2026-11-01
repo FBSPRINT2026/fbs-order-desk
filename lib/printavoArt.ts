@@ -821,6 +821,20 @@ export async function artShape(blob: Blob): Promise<{ ratio: number } | null> {
 }
 
 /**
+ * A page of paperwork (an order confirmation, invoice, packing list, size sheet, PO), not art: lots of words with the
+ * words paperwork uses (order, qty, total, ship to, item, size, price…) or several money amounts. Art with a lot of
+ * live text (a sponsor back with 60 names) has neither, so it stays art.
+ */
+export async function isPaperworkPage(page: unknown): Promise<boolean> {
+  const tc = await (page as { getTextContent: () => Promise<{ items: { str?: string }[] }> }).getTextContent();
+  const text = tc.items.map((i) => i.str || "").join(" ");
+  const words = text.split(/\s+/).filter((w) => /[a-z0-9]/i.test(w)).length;
+  const vocab = (text.match(/\b(order|orders|invoice|qty|quantity|total|subtotal|shipping|ship to|bill to|sold to|purchase|confirmation|item|items|style|price|unit|tax|date|page \d|sku|description|customer|account|payment|balance|due)\b/gi) || []).length;
+  const money = (text.match(/\$\s?\d[\d,]*\.\d{2}/g) || []).length;
+  return (words >= 40 && vocab >= 6) || money >= 3;
+}
+
+/**
  * An old job's PDF that is the art itself, not a mockup sheet (the customer's Illustrator file: "LA Shakers Final.pdf",
  * the logo on an empty page, no shirt photos). The first page, drawn on a clear background at about 3000 px and cropped
  * to the art. Null when the PDF has shirt photos (a mockup) or nothing on a clear background.
@@ -832,6 +846,9 @@ export async function artFromArtPdf(buf: ArrayBuffer, name = "art"): Promise<{ f
   const page = await doc.getPage(1);
   const vp1 = page.getViewport({ scale: 1 });
   if (Math.max(vp1.width, vp1.height) < 300 && doc.numPages > 2) return null;
+  // paperwork is never the print art (Nov 1, Nick on the Count Joy reorder: Printavo #34448's "mockups" were the
+  // customer's S&S order confirmations, and one became the logo, drawn on both shirts)
+  if (await isPaperworkPage(page).catch(() => false)) return null;
   const scale = Math.min(3000 / Math.max(vp1.width, vp1.height), 8);
   // vector art with a texture laid over it (Peticolas' logos with their scratched mask, Oct 22): the art clean, and the
   // texture apart as its distress

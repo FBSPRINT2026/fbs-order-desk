@@ -61,7 +61,7 @@ const qtyOf = (gs: Group[]) => gs.reduce((a, g) => a + g.lines.reduce((b, l) => 
 // ---------- the customer's past jobs (what a reorder copies) ----------
 
 type PvRow = { id: string; visual_id: string | number | null; nickname: string | null; qty: number | null; status_name: string; order_date: string | null; files: Record<string, string> | null;
-  data: { groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; description?: string; items?: number | null; category?: string | null; sizes?: Record<string, number>; mockups?: { full?: string; mime?: string }[] }[] | null; imprints?: { column?: string; details?: string; typeOfWork?: string }[] | null }[] } | null };
+  data: { files?: { full?: string; mime?: string; name?: string }[] | null; groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; description?: string; items?: number | null; category?: string | null; sizes?: Record<string, number>; mockups?: { full?: string; mime?: string }[] }[] | null; imprints?: { column?: string; details?: string; typeOfWork?: string }[] | null }[] } | null };
 
 /** a Printavo invoice's groups in the portal's order format: garments, sizes, print locations and colors, mockups */
 export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
@@ -112,7 +112,17 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
       im.confirm = { size: true, ink: true, why: `Reorder of Printavo #${row.visual_id}, which has no size or ink on file` };
       return im;
     });
-    out.push({ id: uid(), lines, imprints, ...(mockups.length ? { pvRef: [...new Map(mockups.map((x) => [x.path, x])).values()].slice(0, 6) } : {}), ...(pdfs.length ? { pvArt: [...new Map(pdfs.map((x) => [x.path, x])).values()].slice(0, 3) } : {}) });
+    // the job's own files (not on a line): the first group, and any group with none of its own (Nov 1: Count Joy's
+    // mockups "Count It All Joy Pull - Adult.png" were job files, and its line "mockups" were S&S paperwork)
+    if (!out.length || (!mockups.length && !pdfs.length)) {
+      for (const f of row.data?.files || []) {
+        const p = f.full ? row.files?.[f.full] : "";
+        const nm = String(f.name || "").trim();
+        if (p && /\.(png|jpe?g|gif|webp)$/i.test(p)) mockups.push({ path: p, name: nm || `Printavo #${row.visual_id} file${p.match(/\.[a-z]+$/i)?.[0] || ".png"}` });
+        else if (p && /\.pdf$/i.test(p)) pdfs.push({ path: p, name: nm || `Printavo #${row.visual_id} file.pdf` });
+      }
+    }
+    out.push({ id: uid(), lines, imprints, ...(mockups.length ? { pvRef: [...new Map(mockups.map((x) => [x.path, x])).values()].slice(0, 6) } : {}), ...(pdfs.length ? { pvArt: [...new Map(pdfs.map((x) => [x.path, x])).values()].slice(0, 5) } : {}) });
   }
   return out;
 }

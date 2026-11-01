@@ -207,7 +207,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
               <tr key={l.id}>
                 {show.category && <td>{l.category}</td>}{show.itemNumber && <td className="nowrap">{l.itemNumber}</td>}{show.color && <td>{l.color}</td>}
                 <td className="desc">
-                  <div className="pv-desc">{l.mockups.slice(0, 2).map((m) => thumb(m, "pv-thumb sm"))}<div>{l.brand && !l.description.toLowerCase().includes(l.brand.toLowerCase()) && <span className="faint">{l.brand} </span>}<span className="pv-pre">{plain(l.description)}</span>
+                  <div className="pv-desc">{l.mockups.length > 0 && <span className="pv-lthumbs">{l.mockups.map((m) => thumb(m, "pv-thumb sm"))}</span>}<div>{l.brand && !l.description.toLowerCase().includes(l.brand.toLowerCase()) && <span className="faint">{l.brand} </span>}<span className="pv-pre">{plain(l.description)}</span>
                     {l.status && <div><span className="pv-chip">{TASK_STATUS[l.status] || l.status}</span></div>}
                     {l.personalizations.length > 0 && <div className="pv-pers">{l.personalizations.map((p, i) => <span key={i}>{[p.name, p.value].filter(Boolean).join(": ")}</span>)}</div>}</div></div>
                 </td>
