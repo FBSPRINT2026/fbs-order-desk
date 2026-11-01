@@ -9923,7 +9923,8 @@ button.eh-ai-l{border:0;background:none;cursor:pointer;font:inherit;padding:0}
 .tk-done{display:flex;gap:10px;align-items:center;margin:10px 0 0 38px;color:var(--ok);font-weight:600;font-size:13.5px}
 
 /* the issues on Today */
-.tk-sec-h{display:flex;align-items:center;gap:10px;margin:16px 0 8px}
+.tk-sec-h{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;margin:16px 0 8px}
+.tk-sec-h h3{flex:none;white-space:nowrap}
 .tk-sec-h h3{margin:0;font-family:var(--display);font-size:17px}
 .tk-issues{border:1px solid color-mix(in srgb,var(--danger) 30%,var(--line));background:color-mix(in srgb,var(--danger-soft) 45%,var(--surface));border-radius:14px;padding:4px 14px 10px;margin-bottom:6px}
 .tk-issues .tk-sec-h{margin:10px 0 4px}
@@ -17277,4 +17278,11 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
    off to the right in a ragged stack (Nov 1, Receiving's three buttons) */
 @media (max-width:640px){
   html body main.main .page-head > div:not(:first-child) .row,html body main.main .page-head > .row:not(:first-child){justify-content:flex-start!important;flex-wrap:wrap}
+}
+/* "Tell the time clock what to fix" on a phone: the words get the whole line, the mic, language and Fix it sit under it on
+   the right (Nov 1: the box was squeezed to a sliver beside three buttons) */
+@media (max-width:640px){
+  .tk-bar{flex-wrap:wrap}
+  .tk-bar textarea{flex:1 1 calc(100% - 40px)}
+  .tk-bar textarea + *{margin-left:auto}
 }
