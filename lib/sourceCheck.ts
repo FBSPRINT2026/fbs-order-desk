@@ -194,15 +194,22 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
   const S = toks(text);
   if (!S.length) return [];
   const cat = (st?: string) => (st ? ctx.catalog?.[st.toUpperCase()] || ctx.catalog?.[st] : undefined);
-  // one item per garment and color (a personalized piece split off its line is the same item)
-  const items: Item[] = [];
-  groups.forEach((g, gi) => (g.lines || []).forEach((l) => {
-    if (!lineQty(l)) return;
-    const gw = garmentWords(l, cat(l.style));
-    const key = `${gw.join(" ")}|${(l.style || "").toLowerCase()}|${words(l.color || "").join(" ")}`;
-    const it = items.find((x) => `${x.garment.join(" ")}|${x.style.toLowerCase()}|${words(x.color).join(" ")}` === key);
-    if (it) it.lines.push({ l, gi }); else items.push({ lines: [{ l, gi }], garment: gw, color: l.color || "", style: l.style || "" });
-  }));
+  // one item per garment, color and logos (a personalized piece split off its line is the same item; the same polo in
+  // the same color with another logo is another item: Oct 31, #40330's Black Heather Sunnyvale was on the cart twice,
+  // a Stacked M and an Icon L, and the two read as one "M 1, L 1")
+  const items: (Item & { key: string })[] = [];
+  groups.forEach((g, gi) => {
+    const logos = [...new Set((g.imprints || []).map((im) => im.design_id || "").filter(Boolean))].sort().join(",");
+    (g.lines || []).forEach((l) => {
+      if (!lineQty(l)) return;
+      const gw = garmentWords(l, cat(l.style));
+      const key = `${gw.join(" ")}|${(l.style || "").toLowerCase()}|${words(l.color || "").join(" ")}|${logos}`;
+      const it = items.find((x) => x.key === key);
+      if (it) it.lines.push({ l, gi }); else items.push({ key, lines: [{ l, gi }], garment: gw, color: l.color || "", style: l.style || "" });
+    });
+  });
+  const runOf = (r: Record<string, number>) => SIZES.filter((z) => r[z]).map((z) => `${z} ${r[z]}`).join(", ");
+  const haveOf = (it: Item) => { const h: Record<string, number> = {}; for (const { l } of it.lines) for (const z of SIZES) { const q = +(l.sizes?.[z] || 0); if (q > 0) h[z] = (h[z] || 0) + q; } return h; };
   const cands = items.map((it) => anchorsFor(S, it.garment, it.style));
   // where an item's words end: the next item's name, or the shipping block
   const ends = [...new Set(cands.flat().map((a) => a.i))];
@@ -212,7 +219,13 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
   const winOf = (a: Anchor) => { const k = `${a.i}`; if (!win.has(k)) win.set(k, windowAt(text, S, a, ends)); return win.get(k)!; };
   // each item its own place in the paperwork: its color settles a garment listed twice (a black and a dark gray polo)
   const used = new Set<number>(), at: (Anchor | null)[] = items.map(() => null);
-  items.forEach((it, n) => { const a = cands[n].find((c) => !used.has(c.i) && winOf(c).color && sameColor(winOf(c).color, it.color)); if (a) { at[n] = a; used.add(a.i); } });
+  // the same garment and color listed more than once: the place whose sizes are this item's
+  const sizesAt = (c: Anchor) => { const w = winOf(c); return runOf(sizesIn(S, w.colorAt >= 0 ? w.afterColor : w.from, w.to)); };
+  items.forEach((it, n) => {
+    const fit = cands[n].filter((c) => !used.has(c.i) && winOf(c).color && sameColor(winOf(c).color, it.color));
+    const a = fit.find((c) => sizesAt(c) === runOf(haveOf(it))) || fit[0];
+    if (a) { at[n] = a; used.add(a.i); }
+  });
   items.forEach((it, n) => {
     if (at[n]) return;
     const claimed = (c: Anchor) => items.some((o, m) => m !== n && o.garment.join(" ") === it.garment.join(" ") && winOf(c).color && sameColor(winOf(c).color, o.color));
