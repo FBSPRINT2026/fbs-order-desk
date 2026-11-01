@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { brandDark, colorwayFor, colorwaysOf, goodsColorway, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand } from "@/lib/brands";
+import { applyColorwayChange, brandDark, colorwayFor, colorwaysOf, goodsColorway, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand } from "@/lib/brands";
 import type { Design, GLine, Group, Imprint } from "@/lib/pricing";
 
 /**
@@ -92,12 +92,25 @@ export function fillFromLogo(im: Imprint, o: { design: Design & { brand_id?: str
   // the garments in another thread or ink: one color change per garment color (Imprint.inkBy)
   const from = (im.inks || "").split(/\s*,\s*/)[0] || "";
   const inkBy: NonNullable<Imprint["inkBy"]> = {};
+  const cwBy: Record<string, string> = {};
+  // a change that is one of the logo's versions (All White's one thread for a two-thread Full Color): that whole version
+  // on those garments (Imprint.colorwayBy), never one thread swapped and the other left (Oct 31, #40329: "White + Cream")
+  const kk = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const files = sewFilesOf(d, brand);
+  const versionOf = (to: string) => colorwaysOf(d).find((c) => { const f = c.sew ? files.find((x) => x.code === c.sew) : null; const th = f ? sewThreads(f) : c.inks; return th.length > 0 && th.map(kk).join("|") === to.split(/\s*,\s*/).map(kk).join("|"); });
   for (const ch of o.changes || []) {
     const to = String(ch.inks || "").trim();
     if (!to || !from || to.toLowerCase() === from.toLowerCase()) continue;
-    for (const c of ch.garment_colors || []) { const lc = lineColor(lines, c); if (lc) inkBy[lc.trim().toLowerCase()] = { [from]: to }; }
+    const v = versionOf(to);
+    const nFrom = (im.inks || "").split(/\s*,\s*/).filter(Boolean).length, nTo = to.split(/\s*,\s*/).filter(Boolean).length;
+    for (const c of ch.garment_colors || []) {
+      const lc = lineColor(lines, c); if (!lc) continue;
+      if (v) cwBy[lc.trim().toLowerCase()] = v.name;
+      else if (nFrom === nTo || nFrom === 1) inkBy[lc.trim().toLowerCase()] = { [from]: to };
+    }
   }
   if (Object.keys(inkBy).length) im.inkBy = inkBy;
+  if (Object.keys(cwBy).length) Object.assign(im, applyColorwayChange(im, d, { ...(im.colorwayBy || {}), ...cwBy }));
   return im;
 }
 
@@ -147,6 +160,10 @@ export function mergeLogoGroups(groups: Group[], brands: Brand[] = []): { groups
           per.push({ color: l.color, inks, n: 1 });
         }
       }
+      // two versions of the logo by name (Full Color and All White: Oct 31, MEI #40329) are two groups, never a thread
+      // swapped inside one: a cart that names the version per garment groups by it
+      const cws = new Set(set.map((x) => ck2(x.imprints.find((y) => keyOf(y) === k)?.colorway || "")).filter(Boolean));
+      if (cws.size > 1) { clash = true; break; }
       // the same garment color can't get two threads in one group: leave these apart
       const seen = new Map<string, string>();
       for (const p of per) { const was = seen.get(ck2(p.color)); if (was != null && ck2(was) !== ck2(p.inks)) clash = true; seen.set(ck2(p.color), p.inks); }
@@ -157,6 +174,9 @@ export function mergeLogoGroups(groups: Group[], brands: Brand[] = []): { groups
       const light = (brand?.embroidery?.light || [])[0] || "";
       const top = [...tally.entries()].sort((a, b) => b[1] - a[1] || Number(ck2(b[0]).includes(ck2(light)) && !!light) - Number(ck2(a[0]).includes(ck2(light)) && !!light));
       const main = top[0]?.[0] || im.inks || "";
+      // a color change swaps thread for thread: a version with another number of threads (two-color vs one) isn't one
+      const nOf = (x: string) => x.split(/\s*,\s*/).filter(Boolean).length;
+      if (per.some((p) => nOf(p.inks) !== nOf(main))) { clash = true; break; }
       im.inks = main;
       im.colors = Math.max(1, main.split(/\s*,\s*/).filter(Boolean).length);
       const from = main.split(/\s*,\s*/);
