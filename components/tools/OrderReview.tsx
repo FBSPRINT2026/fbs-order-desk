@@ -253,11 +253,13 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   }
 
   /** Oct 23 (#40127, Nick: "it made the order, but didn't even make the mock-up"): a print with art and no mockup yet
-   *  gets one. Create order goes to the Mockup Creator by itself; from anywhere else Yes opens it (in a new tab, opened
-   *  first so the browser doesn't block it). */
+   *  gets one. Create order goes to the Mockup Creator by itself; from anywhere else "Make the mockup" opens it in a new
+   *  tab. */
   const needMock = o?.groups.find((g) => g.imprints.some((im) => im.design_id) && !(g.mockupThumbs || []).length) || null;
+  const needMockN = o?.groups.filter((g) => g.imprints.some((im) => im.design_id) && !(g.mockupThumbs || []).length).length || 0;
+  // a missing mockup is its own button (Oct 31, Nick: Yes "shouldn't be asking"): Yes always says the order is right
+  const makeMock = () => { if (needMock) window.open(next && next.includes("/mockup?") ? next : mockHref(needMock), "_blank", "noopener"); };
   async function done() {
-    if (needMock && !onMockupPage) window.open(next && next.includes("/mockup?") ? next : mockHref(needMock), "_blank", "noopener");
     setBusy("Checking it against the paperwork…");
     // checked against its paperwork before it's kept as an example: what differs is said, and Yes again keeps it as it is
     const mk = await markOrderChecked(orderId, heldOnce).catch(() => null);
@@ -287,7 +289,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   const working = rounds.some((r) => r.art.some((a) => a.state === "doing"));
   const lastRule = [...rounds].reverse().find((r) => r.rule)?.rule;
   const send = () => { if (text.trim() && !busy) void ask("change"); };
-  const yesLabel = needMock && !onMockupPage ? "Yes, make the mockup" : changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right";
+  const yesLabel = changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right";
   // like a text thread (Oct 23, Nick: "make it like an iPhone chat"): the order up top, the thread, and the box at the bottom
   return (
     <div className="ap orv chat" role="group" aria-label="Check the order">
@@ -397,7 +399,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
           {res.length > 0 && <button type="button" className="chip orv-rsc-h" onClick={() => setResOpen(true)} title="What came in with the order (their PO, mockup, art), opened in the middle of the screen">Order resources <span className="orv-rsc-n">{res.length}</span></button>}
           <span className="spacer" />
           <button type="button" className="chip" onClick={() => void ask("review")} disabled={!!busy}>{rounds.length ? "Check it again for me" : "Check it for me"}</button>
-          <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working || askNext} title={needMock && !onMockupPage ? "Saves it and makes the mockup in a new tab" : "Saves it and closes"}>{yesLabel}</button>
+          {needMock && !onMockupPage && <button type="button" className="chip" onClick={makeMock} disabled={!!busy} title="Opens the Mockup Creator for the group with no mockup, in a new tab">{needMockN > 1 ? `Make ${needMockN} mockups` : "Make the mockup"}</button>}
+          <button type="button" className="chip ok" onClick={() => void done()} disabled={!!busy || working || askNext} title="Saves it and closes">{yesLabel}</button>
         </div>
       </div>
       {resOpen && res.length > 0 && typeof document !== "undefined" && createPortal(<QuickLook files={res} at={0} strip title="Order resources" onClose={() => setResOpen(false)} />, document.body)}

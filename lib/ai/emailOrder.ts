@@ -436,7 +436,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-10-31r";
+export const READER_REV = "2026-10-31s";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -1089,6 +1089,16 @@ ${staffSays}` : ""}`;
   }
   // each garment's description checked against its style: blank, or naming a logo instead of the garment → the style's name
   await describeFromStyles(admin, (a.customer_id as string) || null, draft).catch((e) => { console.warn("describeFromStyles", e); return [] as string[]; });
+  // an embroidered logo on file with no sew file yet (Oct 31, #40334: a hat's Stacked logo came in with no version, no
+  // file and 11" wide, its print never tied to the logo by number): filled from the logo like any other
+  const fillSew = () => {
+    for (const g of draft.groups) for (const im of g.imprints || []) {
+      if (im.method !== "embroidery" || !im.design_id || im.emb?.file || !onFile) continue;
+      const d = onFile.designs.find((x) => x.id === im.design_id);
+      if (d) { if (!im.colorway) im.inks = ""; fillFromLogo(im, { design: d, brands: onFile.brands, lines: g.lines }); }
+    }
+  };
+  fillSew();
   // the reading checked against the paperwork, item by item (lib/sourceCheck.ts, Oct 31 after the MEI carts: a garment
   // the cart puts on the other chest, a color that isn't the cart's or the maker's, a style that's another brand's): a
   // spot the paperwork names for one garment is put right here (an embroidered one as a location change); the rest is
@@ -1101,6 +1111,7 @@ ${staffSays}` : ""}`;
     // the logo the paperwork names, then the version it names ("Stacked Logo All White"): its sew file and threads
     const logoFixed = applyLogoFixes(draft.groups, sourceCheck(paper, draft.groups, ctx), ctx.designs);
     draft.groups = logoFixed.groups;
+    fillSew();
     const cwFixed = applyColorwayFixes(draft.groups, sourceCheck(paper, draft.groups, ctx), ctx.designs);
     draft.groups = cwFixed.groups;
     const left = sourceCheck(paper, draft.groups, ctx);

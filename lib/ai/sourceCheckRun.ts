@@ -83,13 +83,13 @@ export function applyLogoFixes(groups: Group[], findings: SrcFinding[], designs:
   const by = new Map<string, SrcFinding>();
   for (const f of findings) {
     if (f.kind !== "logo" || !f.designId || !f.toDesign) continue;
-    const k = `${f.group}|${f.designId}|${f.toDesign}`, was = by.get(k);
+    const k = `${f.group}|${f.printId || f.designId}|${f.toDesign}`, was = by.get(k);
     by.set(k, was ? { ...was, lineIds: [...new Set([...was.lineIds, ...f.lineIds])] } : f);
   }
   for (const f of by.values()) {
     const g = out[f.group], d2 = designs.get(f.toDesign!);
     if (!g || !d2) continue;
-    const k = g.imprints.findIndex((im) => im.design_id === f.designId);
+    const k = g.imprints.findIndex((im) => (f.printId ? im.id === f.printId : im.design_id === f.designId));
     const lines = (g.lines || []).filter((l) => lineQty(l) > 0);
     if (k < 0 || !lines.length || !lines.every((l) => f.lineIds.includes(l.id))) continue;
     const im = g.imprints[k];

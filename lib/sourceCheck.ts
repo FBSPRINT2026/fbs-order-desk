@@ -34,6 +34,7 @@ export type SrcFinding = {
   /** what to put on the order: the location, the color (the maker's name when known) */ fix?: string;
   /** the logo it's about (a logo's version named in the paperwork) */ designId?: string;
   /** the logo the paperwork names instead (kind "logo") */ toDesign?: string;
+  /** the print it's about, when the group has more than one of that logo */ printId?: string;
 };
 
 type Tok = { w: string; at: number; end: number };
@@ -309,6 +310,27 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
       const now = Object.entries(im.colorwayBy || {}).find(([k]) => k.trim().toLowerCase() === it.color.trim().toLowerCase())?.[1] || im.colorway || "";
       // (a print with no version at all is off too: Oct 31, #40332's "Stacked Logo All Black" had none)
       if (named && words(named).join(" ") !== words(now).join(" ")) out.push({ kind: "colorway", group: gi, lineIds: ids, what, paper: named, order: now || "no version", designId: mineL.id, say: `${what}: the paperwork asks for the ${mineL.name} logo in ${named}, the order has ${now || "no version"}.` });
+    }
+    // every logo the paperwork names for it is printed (Oct 31, #40334: "MEI Stacked Logo Full Color, Add American Flag"
+    // was read as the Stacked logo twice, the flag patch included): a logo named and not on the group takes the place of a
+    // print that repeats another print's logo (the one done another way first: the patch, not the embroidery)
+    const mine = (groups[gi].imprints || []).filter((im) => im.design_id && ctx.logos?.some((x) => x.id === im.design_id));
+    if (mine.length > 1 && ctx.logos) {
+      const b = ctx.logos.find((x) => x.id === mine[0].design_id)?.brand || "";
+      const peers = ctx.logos.filter((x) => (x.brand || "") === b);
+      const everywhere = new Set([...tokSet(peers[0]?.name || "")].filter((x) => peers.every((p) => tokSet(p.name).has(x))));
+      const byWords = new Map<string, SrcLogo[]>();
+      for (const p of peers) { const hit = [...tokSet(p.name)].filter((x) => !everywhere.has(x) && x.length >= 3 && W.has(x)).sort().join(" "); if (hit) byWords.set(hit, [...(byWords.get(hit) || []), p]); }
+      const named = [...byWords.values()].map((ps) => [...ps].sort((p, q) => (q.uses || 0) - (p.uses || 0))[0]);
+      const printed = new Set(mine.map((im) => im.design_id));
+      const missing = named.filter((p) => !printed.has(p.id));
+      const seen = new Set<string>();
+      const dupes = mine.filter((im) => { if (seen.has(im.design_id!)) return true; seen.add(im.design_id!); return false; })
+        .sort((p, q) => Number(q.method !== mine[0].method || !!q.patch) - Number(p.method !== mine[0].method || !!p.patch));
+      missing.slice(0, dupes.length).forEach((p, k) => {
+        const im = dupes[k], cur = ctx.logos!.find((x) => x.id === im.design_id)!;
+        out.push({ kind: "logo", group: gi, lineIds: ids, what, paper: p.name, order: cur.name, designId: cur.id, toDesign: p.id, printId: im.id, say: `${what}: the paperwork also names the ${p.name} logo; the order prints ${cur.name} twice.` });
+      });
     }
   });
   return out;
