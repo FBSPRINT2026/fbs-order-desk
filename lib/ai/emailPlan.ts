@@ -57,7 +57,11 @@ export async function planEmail(admin: SupabaseClient, activityId: string, by: s
   const real = files.filter((f) => !sigs.has(f.path)).slice(0, 40);
   const [cat, mems] = await Promise.all([cid ? buildCatalog(admin, cid).catch(() => null) : Promise.resolve(null), loadMemories(admin, cid).catch(() => [])]);
   // the customer's designs with their recent orders and what each was printed on
-  const designs = (cat?.designs || []).slice(0, 60);
+  // orders already made from this conversation are not past orders to copy (Nov 1: once #40350 was made from Dear
+  // Heart's "DH Orders 10/26!", every design's reorder pointed at #40350 itself)
+  const { data: madeRows } = await admin.from("activities").select("order_id").in("id", convo.map((e) => e.id)).not("order_id", "is", null);
+  const madeHere = new Set(((madeRows || []) as { order_id: string }[]).map((x) => x.order_id));
+  const designs = (cat?.designs || []).map((d) => ({ ...d, jobs: d.jobs.filter((j) => !(j.src === "portal" && madeHere.has(j.id))) })).filter((d) => d.jobs.length || !madeHere.size).slice(0, 60);
   const designText = designs.map((d, i) => {
     const jobs = d.jobs.slice(0, 5).map((j) => {
       const on = d.versions.filter((v) => v.jobs.some((x) => x.ref === j.ref)).map((v) => [v.style, v.color].filter(Boolean).join(" ")).filter(Boolean);

@@ -61,7 +61,7 @@ const qtyOf = (gs: Group[]) => gs.reduce((a, g) => a + g.lines.reduce((b, l) => 
 // ---------- the customer's past jobs (what a reorder copies) ----------
 
 type PvRow = { id: string; visual_id: string | number | null; nickname: string | null; qty: number | null; status_name: string; order_date: string | null; files: Record<string, string> | null;
-  data: { files?: { full?: string; mime?: string; name?: string }[] | null; groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; description?: string; items?: number | null; category?: string | null; sizes?: Record<string, number>; mockups?: { full?: string; mime?: string }[] }[] | null; imprints?: { column?: string; details?: string; typeOfWork?: string }[] | null }[] } | null };
+  data: { files?: { full?: string; mime?: string; name?: string }[] | null; groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; description?: string; items?: number | null; category?: string | null; sizes?: Record<string, number>; mockups?: { full?: string; mime?: string; thumb?: string }[]; price?: number | null }[] | null; imprints?: { column?: string; details?: string; typeOfWork?: string }[] | null }[] } | null };
 
 /** a Printavo invoice's groups in the portal's order format: garments, sizes, print locations and colors, mockups */
 export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
@@ -90,6 +90,8 @@ export function groupsFromPrintavo(row: PvRow, prodData: unknown): Group[] {
       for (const [k, q] of Object.entries(pl.sizes || {})) { const z = normSize(k); const n = Math.floor(+q || 0); if (z && n > 0) l.sizes[z] = (l.sizes[z] || 0) + n; }
       if (!Object.keys(l.sizes).length && !(pl.items || 0)) continue;
       if (!Object.keys(l.sizes).length && pl.items) { l.sizes.OS = Math.floor(+pl.items); l.oneSize = true; }
+      // last time's price, for a reorder that keeps it (Nov 1, Nick: "if I just copy this in Printavo exactly the way it is")
+      if (+(pl.price || 0) > 0) (l as GLine & { pvPrice?: number }).pvPrice = +(pl.price || 0);
       lines.push(l);
       for (const m of pl.mockups || []) {
         const p = m.full ? row.files?.[m.full] : "";

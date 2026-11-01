@@ -1,4 +1,5 @@
 "use client";
+import { looksLikePaperwork } from "@/lib/paperwork";
 import { COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN } from "@/lib/mockup";
 import { suggestInk } from "@/lib/inkColors";
 
@@ -820,18 +821,10 @@ export async function artShape(blob: Blob): Promise<{ ratio: number } | null> {
   return { ratio: (y1 - y0 + 1) / (x1 - x0 + 1) };
 }
 
-/**
- * A page of paperwork (an order confirmation, invoice, packing list, size sheet, PO), not art: lots of words with the
- * words paperwork uses (order, qty, total, ship to, item, size, price…) or several money amounts. Art with a lot of
- * live text (a sponsor back with 60 names) has neither, so it stays art.
- */
+/** a page of paperwork, not art (lib/paperwork.ts) */
 export async function isPaperworkPage(page: unknown): Promise<boolean> {
   const tc = await (page as { getTextContent: () => Promise<{ items: { str?: string }[] }> }).getTextContent();
-  const text = tc.items.map((i) => i.str || "").join(" ");
-  const words = text.split(/\s+/).filter((w) => /[a-z0-9]/i.test(w)).length;
-  const vocab = (text.match(/\b(order|orders|invoice|qty|quantity|total|subtotal|shipping|ship to|bill to|sold to|purchase|confirmation|item|items|style|price|unit|tax|date|page \d|sku|description|customer|account|payment|balance|due)\b/gi) || []).length;
-  const money = (text.match(/\$\s?\d[\d,]*\.\d{2}/g) || []).length;
-  return (words >= 40 && vocab >= 6) || money >= 3;
+  return looksLikePaperwork(tc.items.map((i) => i.str || "").join(" "));
 }
 
 /**

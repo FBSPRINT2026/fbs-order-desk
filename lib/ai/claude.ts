@@ -1,4 +1,5 @@
 import "server-only";
+import { repairInput } from "@/lib/ai/repairInput";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mergeSettings, type Settings } from "@/lib/pricing";
@@ -118,7 +119,7 @@ export async function askClaude<T>(opts: {
     const use = (j.content || []).find((b: { type: string; name?: string }) => b.type === "tool_use" && b.name === opts.tool.name);
     const runId = await log({ status: use ? "ok" : "error", input_tokens: j.usage?.input_tokens, output_tokens: j.usage?.output_tokens, error: use ? undefined : "No structured answer" });
     if (!use) return { ok: false, error: "The AI didn't return an answer. Try again." };
-    return { ok: true, data: use.input as T, model: j.model || opts.model, runId };
+    return { ok: true, data: repairInput(use.input, opts.tool.input_schema) as T, model: j.model || opts.model, runId };
   } catch (e) {
     const error = e instanceof Error ? (e.name === "AbortError" ? "The AI took too long to answer." : e.message) : "AI request failed.";
     await log({ status: "error", error });
@@ -171,3 +172,4 @@ export async function lookUpFacts(opts: { model: string; note: string; context?:
     return null;
   } finally { clearTimeout(timer); }
 }
+
