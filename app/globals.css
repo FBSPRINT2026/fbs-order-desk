@@ -14390,6 +14390,8 @@ html body .ord .line-b .gl-list .gl.ver{padding-left:16px}
 .po-grp-art .po-item-pics{margin:0}
 /* a group's mockups on the customer's order (components/PortalArtView.tsx): the picked one big, the rest as thumbnails
    under it; tapping the big one opens it full screen (Nov 1, Nick) */
+/* the customer's Design catalog on a phone: every design, no "printed on" chips (Nov 1, Nick) */
+@media (max-width:640px){.portal .pdc .toolbar > .chips.pdc-kinds{display:none!important}}
 .pav{display:grid;gap:8px;max-width:440px;margin:0 0 6px}
 .pav-big{display:block;width:100%;padding:0;border:1px solid var(--line);border-radius:var(--r);background:#fff;cursor:zoom-in;overflow:hidden}
 .pav-big img{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:contain}

@@ -34,7 +34,11 @@ export default function PortalDesignCatalog({ customerId, qs, q: outerQ }: { cus
   }, [customerId]);
   const jobHref = (j: CatalogJob) => (j.src === "printavo" ? `/portal/archive/${j.id}${qs}` : `/portal/orders/${j.id}${qs}`);
   const kindCount = useMemo(() => { const m = new Map<Kind, number>(); for (const d of cat?.designs || []) for (const k of d.kinds) m.set(k, (m.get(k) || 0) + 1); return m; }, [cat]);
-  const kindNow = kind !== "all" && !kindCount.get(kind) ? "all" : kind;
+  // a phone shows every design, no "printed on" chips (Nov 1, Nick: "this secondary toolbar is not necessary… just show
+  // all"): a filter picked on a computer doesn't hide designs behind chips the phone doesn't show
+  const [phone, setPhone] = useState(false);
+  useEffect(() => { const m = window.matchMedia("(max-width: 640px)"); const f = () => setPhone(m.matches); f(); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, []);
+  const kindNow = phone || (kind !== "all" && !kindCount.get(kind)) ? "all" : kind;
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
     const l = (cat?.designs || []).filter((d) => (kindNow === "all" || d.kinds.includes(kindNow)) && (!t || [d.name, ...d.names].some((n) => n.toLowerCase().includes(t))));
@@ -72,7 +76,7 @@ export default function PortalDesignCatalog({ customerId, qs, q: outerQ }: { cus
   return (
     <section className="pdc">
       <div className="toolbar aa-otabs" data-toolbar>
-        <div className="chips" role="tablist" aria-label="What it's printed on">
+        <div className="chips pdc-kinds" role="tablist" aria-label="What it's printed on">
           <button type="button" className={"chip" + (kindNow === "all" ? " on" : "")} onClick={() => setKind("all")}>All<span className="chip-n">{cat.designs.length}</span></button>
           {kindCount.size > 1 && KINDS.filter((t) => kindCount.get(t.k)).map((t) => <button key={t.k} type="button" className={"chip" + (kindNow === t.k ? " on" : "")} onClick={() => setKind(t.k)}>{t.label}<span className="chip-n">{kindCount.get(t.k)}</span></button>)}
         </div>
