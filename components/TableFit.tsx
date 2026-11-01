@@ -52,7 +52,10 @@ function label(t: HTMLTableElement) {
 }
 
 function squished(t: HTMLTableElement, box: HTMLElement): boolean {
-  if (t.scrollWidth > box.clientWidth + 2) return true;
+  // the table's own width (its cells), not scrollWidth: a column's resize grip or a badge poking a few pixels past the edge
+  // isn't the table not fitting (Nov 1: ClickUp Jobs' workspace table stacked full screen on a 3px grip, "another time
+  // we have to fix this")
+  if (t.offsetWidth > box.clientWidth + 2) return true;
   const rows = [...t.querySelectorAll<HTMLTableRowElement>("tbody > tr")].slice(0, 25);
   // a number box too narrow to show its number ("2…" in a price grid on a phone, Oct 31): a long note in a text box can
   // scroll inside its box, but a number has to be read whole

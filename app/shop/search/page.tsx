@@ -29,7 +29,9 @@ type Cust = { id: string; company: string; name: string; email: string; phone: s
 type Msg = { key: string; href: string; who: string; when: string; text: string; kind: string };
 type Ship = { href: string; title: string; sub: string };
 type Proj = { href: string; title: string; sub: string; tag: string };
-type Kind = "all" | "customers" | "orders" | "artwork" | "messages" | "shipments" | "projects";
+type Kind = "all" | "customers" | "orders" | "jobs" | "artwork" | "messages" | "shipments" | "projects";
+/** a customer's ClickUp job (Nov 1, Nick: searching "43148" found nothing while AMS 43148 Rhode Island waited on ClickUp Jobs with no order) */
+type Job = { href: string; ext: boolean; title: string; sub: string; tag: string };
 
 const fmtDay = (d: string | null | undefined) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
 const today = () => new Date().toISOString().slice(0, 10);
@@ -53,6 +55,7 @@ function SearchInner() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [ships, setShips] = useState<Ship[]>([]);
   const [projs, setProjs] = useState<Proj[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(0);
   const [more, setMore] = useState(false);
@@ -76,9 +79,9 @@ function SearchInner() {
   useEffect(() => {
     if (jump !== "none") return;
     searchedFor.current = q0;
-    setCusts([]); setArch([]); setArt([]); setMsgs([]); setShips([]); setProjs([]); setBestArch([]); setOtherStats({}); setMore(false);
+    setCusts([]); setArch([]); setArt([]); setMsgs([]); setShips([]); setProjs([]); setJobs([]); setBestArch([]); setOtherStats({}); setMore(false);
     if (t.length < 2) { setPending(0); return; }
-    setPending(6);
+    setPending(7);
     let live = true;
     const done = () => { if (live) setPending((n) => Math.max(0, n - 1)); };
     const sb = createClient();
@@ -132,6 +135,23 @@ function SearchInner() {
       if (live) setShips(((m.hits || []) as { who: string; supplier: string; supplier_order: string; po: string; ship_date: string | null; boxes: number; pcs: number; order: { number: number; href: string } | null }[]).map((x) => ({ href: x.order?.href || `/shop/receiving`, title: `${x.who} · ${x.supplier === "sanmar" ? "SanMar" : "S&S"} ${x.supplier_order}`, sub: [x.po ? `PO ${x.po}` : "", `${x.boxes} box${x.boxes === 1 ? "" : "es"}, ${x.pcs} pcs`, x.ship_date ? `shipped ${fmtDay(x.ship_date)}` : "", x.order ? `on #${x.order.number}` : "not linked yet"].filter(Boolean).join(" · ") })));
       done();
     });
+    // ClickUp jobs by name (their PO numbers are in the name): an open one opens on ClickUp Jobs, one made into an order
+    // opens the order, a finished one with no order here opens in ClickUp
+    Promise.all([
+      sb.from("clickup_tasks").select("id, team_id, name, status, status_type, order_id, order_number, url, created_at_cu").is("parent", null).ilike("name", like).order("created_at_cu", { ascending: false }).limit(15),
+      sb.from("clickup_teams").select("id, name"),
+    ]).then(([{ data }, { data: tms }]) => {
+      const tn = new Map(((tms || []) as { id: string; name: string }[]).map((x) => [x.id, x.name]));
+      if (live) setJobs(((data || []) as { id: string; team_id: string; name: string; status: string; status_type: string; order_id: string | null; order_number: number | null; url: string; created_at_cu: string | null }[]).map((x) => {
+        const shut = /^(closed|done)$/i.test(x.status_type);
+        return {
+          href: x.order_id ? `/shop/orders/${x.order_id}` : shut ? x.url : `/shop/clickup?job=${encodeURIComponent(x.id)}`, ext: !x.order_id && shut,
+          title: x.name, sub: [tn.get(x.team_id) || "", x.created_at_cu ? fmtDay(x.created_at_cu) : ""].filter(Boolean).join(" · "),
+          tag: x.order_id ? `Order #${x.order_number || ""}` : shut ? "Done in ClickUp" : "No order yet",
+        };
+      }));
+      done();
+    }, () => done());
     sb.from("projects").select("id, name, status, customers(company, name)").ilike("name", like).limit(15).then(({ data }) => {
       if (live) setProjs(((data || []) as unknown as { id: string; name: string; status: string; customers: { company: string; name: string } | null }[]).map((x) => ({ href: `/shop/projects/${x.id}`, title: x.name, sub: custName(x.customers), tag: x.status })));
       done();
@@ -200,8 +220,8 @@ function SearchInner() {
   }, [best, ours, bestArch]);
 
   const others = custs.filter((c) => c.id !== best?.id);
-  const counts: Record<Kind, number> = { all: 0, customers: custs.length, orders: rows.length, artwork: art.length, messages: msgs.length, shipments: ships.length, projects: projs.length };
-  counts.all = counts.customers + counts.orders + counts.artwork + counts.messages + counts.shipments + counts.projects;
+  const counts: Record<Kind, number> = { all: 0, customers: custs.length, orders: rows.length, jobs: jobs.length, artwork: art.length, messages: msgs.length, shipments: ships.length, projects: projs.length };
+  counts.all = counts.customers + counts.orders + counts.jobs + counts.artwork + counts.messages + counts.shipments + counts.projects;
   const show = (k: Kind) => (kind === "all" || kind === k) && counts[k] > 0;
   const shownRows = more ? rows : rows.slice(0, 25);
   const searching = loading || pending > 0;
@@ -216,7 +236,7 @@ function SearchInner() {
       {t.length >= 2 && (
         <div className="toolbar">
           <div className="chips" role="tablist" aria-label="Show">
-            {([["all", "All"], ["customers", "Customers"], ["orders", "Orders"], ["artwork", "Artwork"], ["messages", "Messages"], ["shipments", "Shipments"], ["projects", "Projects"]] as [Kind, string][])
+            {([["all", "All"], ["customers", "Customers"], ["orders", "Orders"], ["jobs", "ClickUp jobs"], ["artwork", "Artwork"], ["messages", "Messages"], ["shipments", "Shipments"], ["projects", "Projects"]] as [Kind, string][])
               .filter(([k]) => k === "all" || counts[k] > 0 || kind === k)
               .map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={kind === k} className={"chip" + (kind === k ? " on" : "")} onClick={() => setKind(k)}>{l}<span className="chip-n">{counts[k]}</span></button>)}
           </div>
@@ -288,6 +308,13 @@ function SearchInner() {
           <div className="tbl-wrap"><table className="tbl"><tbody>
             {msgs.map((m) => <tr className="rl" key={m.key}><td style={{ width: 70 }}><RowLink href={m.href} /><span className="tag">{m.kind}</span></td><td style={{ width: 160 }}><b>{m.who}</b></td><td className="sx-msg">{m.text}</td><td className="r">{fmtDay(m.when)}</td></tr>)}
           </tbody></table></div>
+        </section>
+      )}
+
+      {show("jobs") && (
+        <section className="sx-sec">
+          <h3>ClickUp jobs <span className="faint">{jobs.length}</span></h3>
+          <div className="tbl-wrap"><table className="tbl"><tbody>{jobs.map((j, i) => <tr className="rl" key={i}><td>{j.ext ? <a className="rl-a" href={j.href} target="_blank" rel="noreferrer" aria-label={`Open ${j.title} in ClickUp`} /> : <RowLink href={j.href} />}<b>{j.title}</b></td><td className="faint">{j.sub}</td><td><span className="tag">{j.tag}</span></td></tr>)}</tbody></table></div>
         </section>
       )}
 

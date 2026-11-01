@@ -300,7 +300,16 @@ export default function ClickUpJobs() {
     setFiles({ id, list: t?.attachments || [], busy: !!t?.attachments.some((f) => !f.path) });
     if (t?.attachments.some((f) => !f.path)) void clickUpFiles(id).then((r) => setFiles((cur) => (cur?.id !== id ? cur : r.ok ? { id, list: r.files, busy: false } : { ...cur, busy: false, err: r.error })));
     setTimeout(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-  };
+  };  // opened from a link (Search's ClickUp jobs: /shop/clickup?job=<id>), once the jobs are in
+  const linked = useRef(false);
+  useEffect(() => {
+    if (linked.current || !data) return;
+    const id = new URLSearchParams(window.location.search).get("job");
+    if (!id) return;
+    linked.current = true;
+    if (data.tasks.some((x) => x.id === id)) openJob(id);
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /** one Create order, the same as an email's (Oct 22, Nick: "it should do the exact same thing… the ClickUp notes are
    *  like the body of an email; read the purchase order, the art, find whether it's a new order or a reorder") */
   const createOrder = async () => {
