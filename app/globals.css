@@ -17169,3 +17169,10 @@ table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label="
   html body .ord .pr .pr-scr > .pr-scr-l{flex:1 1 100%!important;min-width:0!important;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:0!important}
   html body .ord .pr .pr-scr > .pr-scr-v{flex:1 1 0!important;min-width:0}
 }
+/* Orders list on a phone: the total once, with a $ mark when it's paid (components in app/shop/orders/page.tsx PaidMark) */
+.ol-paid{display:none}
+@media (max-width:640px){
+  .tbl :is(th,td).ol-bal{display:none!important}
+  .ol-paid{display:inline-grid;place-items:center;width:18px;height:18px;margin-left:6px;border-radius:50%;background:var(--ok);color:#fff;font-size:11.5px;font-weight:800;line-height:1;vertical-align:1px}
+  .ol-paid.part{background:none;color:var(--ok);box-shadow:inset 0 0 0 1.5px var(--ok)}
+}

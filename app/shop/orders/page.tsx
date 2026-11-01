@@ -193,7 +193,7 @@ export default function OrdersPage() {
       {bulkMsg && <div className="banner" role="status" style={{ background: "var(--accent-soft)", color: "var(--ink)" }}>{bulkMsg}</div>}
       <div className="tbl-wrap">
         <table className="tbl">
-          <thead><tr>{picking && <th style={{ width: 34 }} />}<th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only">Balance</th></tr></thead>
+          <thead><tr>{picking && <th style={{ width: 34 }} />}<th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only ol-bal">Balance</th></tr></thead>
           <tbody>
             {loading ? (
               <tr><td colSpan={picking ? 9 : 8}><div className="empty">Loading…</div></td></tr>
@@ -210,8 +210,8 @@ export default function OrdersPage() {
                     <td><Pill status={o.status} pv={pvStatusOf(o as never)} />{orderNeedsDetails(o.groups) && <div className="pdn-tag" title="Production confirms the print size and inks from the old job">Reorder Details Needed</div>}</td>
                     <td><Due date={o.due_date} status={o.status} /></td>
                     <td className="r">{o.qty}</td>
-                    <td className="r money-only">{money(o.total)}</td>
-                    <td className="r money-only"><span className={"bal" + (paid ? " paid" : "")}>{paid ? "Paid" : money(o.balance)}</span></td>
+                    <td className="r money-only">{money(o.total)}<PaidMark total={o.total} balance={o.balance} /></td>
+                    <td className="r money-only ol-bal"><span className={"bal" + (paid ? " paid" : "")}>{paid ? "Paid" : money(o.balance)}</span></td>
                   </tr>
                 );
               }
@@ -225,8 +225,8 @@ export default function OrdersPage() {
                   <td><span className="pv-dot" style={{ ["--sc" as string]: a!.status_color || "#888" }}>{a!.status_name}</span></td>
                   <td>{pvStatus(a!) === "completed" ? (a!.due_date ? fmtDateLong(a!.due_date) : "—") : <Due date={a!.due_date} status="production" />}</td>
                   <td className="r">{a!.qty}</td>
-                  <td className="r money-only">{money(a!.total)}</td>
-                  <td className="r money-only"><span className={"bal" + (+a!.balance <= 0.004 ? " paid" : "")}>{+a!.balance <= 0.004 ? "Paid" : money(a!.balance)}</span></td>
+                  <td className="r money-only">{money(a!.total)}<PaidMark total={+a!.total} balance={+a!.balance} /></td>
+                  <td className="r money-only ol-bal"><span className={"bal" + (+a!.balance <= 0.004 ? " paid" : "")}>{+a!.balance <= 0.004 ? "Paid" : money(a!.balance)}</span></td>
                 </tr>
               );
             }) : (
@@ -237,4 +237,14 @@ export default function OrdersPage() {
       </div>
     </>
   );
+}
+
+/** on a phone the Balance column is left off (Nov 1, Nick: "instead of listing the dollar amounts twice… a little $ sign
+ *  when it is paid… blank if it's unpaid"): a green $ beside the total when it's paid in full, an outlined one when
+ *  part is paid (the amount still due in its tooltip), nothing when nothing is paid */
+function PaidMark({ total, balance }: { total: number; balance: number }) {
+  if (!(total > 0)) return null;
+  if (balance <= 0.004) return <span className="ol-paid" title="Paid in full" aria-label="Paid">$</span>;
+  if (balance < total - 0.004) return <span className="ol-paid part" title={`Part paid · ${money(balance)} still due`} aria-label="Part paid">$</span>;
+  return null;
 }
