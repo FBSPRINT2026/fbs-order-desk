@@ -102,18 +102,22 @@ export async function jobChatThread(key: string, markRead = true) {
  * Reply from the Job Center. It shows in the customer's portal Messages (and live on their order page). No email for now
  * (Nov 2, Nick: "all email notifications are off for just now"); the order page's message box still emails as before.
  */
-export async function jobChatSend(key: string, body: string) {
+export async function jobChatSend(key: string, body: string, files: unknown[] = []) {
   try {
     const { admin, email } = await me();
     const text = String(body || "").trim().slice(0, 5000);
-    if (!text) return { ok: false as const, error: "Write a message first." };
     const { parseKey } = await import("@/lib/jobChats");
     const p = parseKey(key);
+    // files: only ones put in this customer's message folder (lib/messages.ts cleanAttachments)
+    const cid = p.orderId ? String((await admin.from("orders").select("customer_id").eq("id", p.orderId).maybeSingle()).data?.customer_id || "") : p.customerId || "";
+    const { cleanAttachments } = await import("@/lib/messages");
+    const attachments = cid ? cleanAttachments(files, cid) : [];
+    if (!text && !attachments.length) return { ok: false as const, error: "Write a message first." };
     const { mergeSettings } = await import("@/lib/pricing");
     const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const shop = mergeSettings(s?.data).shop.name;
     const row = p.orderId ? { order_id: p.orderId, topic: p.topic } : { customer_id: p.customerId };
-    const { error } = await admin.from("messages").insert({ ...row, author_type: "staff", author_email: email, author_name: shop, body: text });
+    const { error } = await admin.from("messages").insert({ ...row, author_type: "staff", author_email: email, author_name: shop, body: text, attachments });
     if (error) throw new Error(error.message);
     return { ok: true as const };
   } catch (e) { return fail(e); }

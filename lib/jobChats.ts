@@ -15,7 +15,7 @@ export type ChatSummary = {
   last: { body: string; from: "customer" | "staff"; who: string; at: string };
   unread: number; /** the customer wrote last: waiting on us */ waiting: boolean; owner: string;
 };
-export type ChatMsg = { id: string; from: "customer" | "staff"; who: string; body: string; at: string; files: number };
+export type ChatMsg = { id: string; from: "customer" | "staff"; who: string; body: string; at: string; files: { name: string; url: string }[] };
 
 type Row = { id: string; order_id: string | null; customer_id: string | null; project_id: string | null; topic: string | null; author_type: string; author_name: string | null; body: string | null; created_at: string; read_at: string | null; attachments: unknown[] | null };
 
@@ -72,8 +72,12 @@ export async function loadThread(admin: SupabaseClient, key: string): Promise<Ch
   const p = parseKey(key);
   const base = () => { const q = admin.from("messages").select("id, author_type, author_name, body, created_at, attachments"); return p.orderId ? q.eq("order_id", p.orderId).eq("topic", p.topic) : q.is("order_id", null).eq("customer_id", p.customerId || ""); };
   const { data } = await allRows((r0, r1) => base().order("created_at").order("id").range(r0, r1), 2000);
-  return ((data || []) as { id: string; author_type: string; author_name: string | null; body: string | null; created_at: string; attachments: unknown[] | null }[])
-    .map((m) => ({ id: m.id, from: m.author_type === "customer" ? "customer" as const : "staff" as const, who: m.author_name || "", body: m.body || "", at: m.created_at, files: (m.attachments || []).length }));
+  const rows = (data || []) as { id: string; author_type: string; author_name: string | null; body: string | null; created_at: string; attachments: { path?: string; name?: string }[] | null }[];
+  const paths = rows.flatMap((m) => (m.attachments || []).map((a) => a.path || "").filter(Boolean));
+  const signed = paths.length ? (await admin.storage.from("proofs").createSignedUrls(paths, 3600)).data || [] : [];
+  const url = new Map(paths.map((pp, i) => [pp, signed[i]?.signedUrl || ""]));
+  return rows.map((m) => ({ id: m.id, from: m.author_type === "customer" ? "customer" as const : "staff" as const, who: m.author_name || "", body: m.body || "", at: m.created_at,
+    files: (m.attachments || []).map((a) => ({ name: a.name || "file", url: url.get(a.path || "") || "" })) }));
 }
 
 /** staff opened it: the customer's messages in it are read */

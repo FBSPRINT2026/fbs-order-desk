@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSticky } from "@/lib/useSticky";
 import SearchInput from "@/components/SearchInput";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
@@ -7,7 +7,7 @@ import { ST } from "@/lib/pricing";
 import type { Dept, JobItem, Step, Track } from "@/lib/jobCenter";
 import { loadJobChats, loadJobs, notAJob, undoDeclined } from "./actions";
 import JobPanel from "./JobPanel";
-import JobChats from "./JobChats";
+import { ChatLine, ChatThread, whoOf } from "./JobChats";
 import type { ChatSummary } from "@/lib/jobChats";
 import { useUrlSearch } from "@/lib/useUrlSearch";
 
@@ -80,6 +80,12 @@ export default function JobCenter() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [chat, setChat] = useState<string | null>(null);
   const [cn, setCn] = useState(0);
+  // the message board (Nov 2, Nick): "Line up" puts each job's messages on the job's own line; off, every message
+  const [lineup, setLineup] = useSticky<boolean>("jobs.lineup", true);
+  const [mq, setMq] = useState("");
+  const [rowsM, setRowsM] = useState<{ h: number; job: string; kind: string }[]>([]);
+  const [padTop, setPadTop] = useState(0);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   // a link straight to a step (the old Incoming Orders and Proof Center pages open here), or to a conversation (the
   // live message pop-up's Open chat)
@@ -151,6 +157,32 @@ export default function JobCenter() {
   };
   const unreadOf = (orderId?: string) => (orderId ? chats.filter((c) => c.orderId === orderId).reduce((a, c) => a + c.unread, 0) : 0);
   const chatOrder = chat ? chats.find((c) => c.key === chat)?.orderId || null : null;
+  const curChat = chat ? chats.find((c) => c.key === chat) || null : null;
+  const mWant = mq.trim().toLowerCase();
+  const boardChats = myChats.filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
+  const chatOfJob = (orderId: string) => boardChats.find((c) => c.orderId === orderId) || null;
+  const colorOfChat = (c: ChatSummary) => tagOf(c).c;
+  const shownIds = new Set(shown.map((it) => it.orderId).filter(Boolean));
+  const offTab = boardChats.filter((c) => !c.orderId || !shownIds.has(c.orderId));
+  const chatHere = !!curChat && !!curChat.orderId && shownIds.has(curChat.orderId);
+  // line the board's rows up with the job table's rows: measured after every draw
+  useLayoutEffect(() => {
+    if (!lineup) return;
+    const measure = () => {
+      const t = document.querySelector(".jct-body table.jc"), L = listRef.current;
+      if (!t || !L) { setRowsM((p) => (p.length ? [] : p)); return; }
+      const trs = [...t.querySelectorAll("thead tr, tbody tr")] as HTMLTableRowElement[];
+      const next = trs.map((tr) => ({ h: Math.round(tr.getBoundingClientRect().height * 10) / 10, job: tr.dataset.job || "", kind: tr.closest("thead") ? "head" : tr.dataset.kind || "row" }));
+      const top = trs[0] ? trs[0].getBoundingClientRect().top - L.getBoundingClientRect().top + L.scrollTop - parseFloat(getComputedStyle(L).paddingTop || "0") : 0;
+      setPadTop((p) => (Math.abs(p - top) > 0.5 ? Math.max(0, top) : p));
+      setRowsM((p) => (JSON.stringify(p) === JSON.stringify(next) ? p : next));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    const b = document.querySelector(".jct-body"); if (b) ro.observe(b);
+    addEventListener("resize", measure);
+    return () => { ro.disconnect(); removeEventListener("resize", measure); };
+  });
 
   return (
     <>
@@ -167,7 +199,7 @@ export default function JobCenter() {
       <div className="jcx">
       {/* Messages as its own tab, level with the stages, its panel beside the jobs' (Nov 2, Nick: "the messages tab should
           just extend all the way up to even with incoming… then the messages should start even with the panel on the right") */}
-      <div className="jcx-mtab"><b>Messages</b>{myChats.reduce((a0, c) => a0 + c.unread, 0) > 0 ? <span className="jcm-n">{myChats.reduce((a0, c) => a0 + c.unread, 0)} new</span> : <span className="faint">All customers</span>}<small>Click one to find its job</small></div>
+      <div className="jcx-mtab"><b>Message board{myChats.reduce((a0, c) => a0 + c.unread, 0) > 0 && <span className="jct-new">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</span>}</b><span>{lineup ? "Lined up with the jobs" : "All customers"}</span></div>
       <div className="jct" role="tablist" aria-label="Steps">
         {GROUPS.map((g) => { const on = curG?.t === g.t; const nm = newIn(g); return (
           <div key={g.t} role="tab" aria-selected={on} className={"jct-tab jc-g" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
@@ -183,10 +215,29 @@ export default function JobCenter() {
           </div>
         ); })}
       </div>
-      <JobChats chats={myChats} open={chat} onOpen={openChat} color="var(--fbs-blue)" label="All" onSent={() => setCn((x) => x + 1)} tagOf={tagOf} bare />
+      {/* the message board: its search and Line up level with the jobs' toolbar, its rows level with the jobs' rows */}
+      <div className={"jmb" + (lineup ? " lined" : "")}>
+        <div className="jmb-tb">
+          <input className="jmb-s" value={mq} onChange={(e) => setMq(e.target.value)} placeholder="Search messages" aria-label="Search messages" />
+          <label className="jmb-tg" title="Each job's messages on the job's own line"><input type="checkbox" checked={lineup} onChange={(e) => setLineup(e.target.checked)} /><span aria-hidden /> Line up</label>
+        </div>
+        <div className="jmb-list" ref={listRef} style={lineup ? { paddingTop: padTop } : undefined}>
+          {lineup ? <>
+            {rowsM.map((r, i) => {
+              if (r.kind === "head") return <div key={i} className="jmb-head" style={{ height: r.h }}>Messages</div>;
+              if (r.kind === "chat") return <div key={i} className="jmb-gap" style={{ height: r.h }}><span>Open →</span></div>;
+              const c = r.job ? chatOfJob(r.job) : null;
+              return <div key={i} className="jmb-cell" style={{ height: r.h }}>{c && <ChatLine c={c} color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />}</div>;
+            })}
+            {offTab.length > 0 && <div className="jmb-off"><div className="jmb-off-h">Not on this tab · {offTab.length}</div>{offTab.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}</div>}
+          </> : (!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : "No customer messages."}</div>
+            : boardChats.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />))}
+        </div>
+      </div>
       <div className={"jc-body jct-body" + (picked ? " has-pick" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
         <section className="panel jc-list">
           <div className="panel-b stack" style={{ gap: 12 }}>
+            {curChat && !chatHere && <div className="jmb-top"><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></div>}
             <div className="toolbar" data-toolbar>
               {(all || step !== "leads") && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? (all ? base.filter((it) => !it.steps.every((x) => x === "leads") && (k === "all" || it.depts.includes(k))).length : deptCount(k)) : "…"}</span></button>)}</div>}
               <div className="chips">
@@ -209,7 +260,11 @@ export default function JobCenter() {
                 <thead><tr>{step === "leads" ? <><th>Lead</th><th>Came in</th><th /></>
                   : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
                   : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></>}</tr></thead>
-                <tbody>{shown.map((it) => <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => { setPick(pick === it.key ? null : it.key); const c = it.orderId ? chats.find((x) => x.orderId === it.orderId) : null; if (c) setChat(c.key); }} after={after} onLead={() => setLead(it)} />)}</tbody>
+                <tbody>{shown.flatMap((it) => { const c0 = it.orderId ? chatOfJob(it.orderId) : null; return [
+                  <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} mc={c0 ? colorOfChat(c0) : undefined} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />,
+                  // the conversation opens on the next line, in the big panel (Nov 2, Nick)
+                  ...(curChat && chatHere && curChat.orderId === it.orderId ? [<tr key={it.key + ":chat"} className="jc-chatrow" data-kind="chat" data-job=""><td colSpan={5}><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></td></tr>] : []),
+                ]; })}</tbody>
               </table></div>
             )}
           </div>
@@ -225,14 +280,14 @@ export default function JobCenter() {
   );
 }
 
-function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false }: { it: JobItem; step: Step; /** View all: every row in the same five columns */ wide?: boolean; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void; /** new customer messages on it */ msgs?: number; /** its conversation is open */ hl?: boolean }) {
+function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, mc }: { it: JobItem; step: Step; /** View all: every row in the same five columns */ wide?: boolean; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void; /** new customer messages on it */ msgs?: number; /** its conversation is open */ hl?: boolean; /** it has a conversation: the color it has on the message board */ mc?: string }) {
   const [busy, setBusy] = useState(false);
   const here = it.tracks.filter((t) => forStep(step, t)), also = it.tracks.filter((t) => !forStep(step, t));
   const tag = (t: Track, i: number) => <span key={i} className="pill" style={{ ["--sc" as string]: TONE[t.state] }}><span className="pill-t">{t.label}</span></span>;
-  const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b>{msgs > 0 && <span className="jc-msgn" title={`${msgs} new message${msgs === 1 ? "" : "s"}`}>💬 {msgs}</span>}<div className="sub">{it.title}</div></>;
+  const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b>{mc && <span className={"jc-msgn" + (msgs ? " new" : "")} style={{ ["--mc" as string]: mc }} title={msgs ? `${msgs} new message${msgs === 1 ? "" : "s"}` : "Has messages"}>💬{msgs ? ` ${msgs}` : ""}</span>}<div className="sub">{it.title}</div></>;
   const keys = { tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(); } }, "aria-selected": on };
   if (it.type === "lead") return (
-    <tr className={on ? "on" : ""} onClick={onPick} {...keys}>
+    <tr className={on ? "on" : ""} onClick={onPick} {...keys} data-job="">
       <td><b>{it.title}</b><div className="sub">{it.customer ? `${it.customer} · ` : ""}{it.sub}{it.tracks.length ? " · has questions to answer" : ""}</div></td>
       <td className="nowrap">{ago(it.at)}</td>
       <td className="nowrap" onClick={(e) => e.stopPropagation()}>
@@ -244,7 +299,7 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false }
     ? <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td><td><span className="pill" style={{ ["--sc" as string]: "var(--ink-3)" }}><span className="pill-t">Declined</span></span>{it.declined && <div className="sub">{it.declined}</div>}</td><td /><td className="nowrap">{day(it.at)}</td></tr>
     : <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td>{it.declined || <span className="faint">No reason given</span>}</td><td className="nowrap">{day(it.at)}</td></tr>;
   return (
-    <tr className={(on ? "on" : "") + (hl ? " jc-hl" : "")} onClick={onPick} {...keys}>
+    <tr className={(on ? "on" : "") + (hl ? " jc-hl" : "")} onClick={onPick} {...keys} data-job={it.orderId || ""}>
       <td>{who}</td>
       <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
       <td>{step === "requests" ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
