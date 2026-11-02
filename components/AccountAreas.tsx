@@ -295,14 +295,14 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
           <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" />{mode !== "portal" && <col className="c-m" />}<col className="c-m" /></>}<col className="c-m" />{mode === "portal" && <col className="c-star" />}</colgroup>
           <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && mode !== "portal" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
           <tbody>
-            {rows.map((o) => { const late = !o.archived && o.balance > 0.004 && !!payDue(o) && (payDue(o) as string) < today() && cols !== "quote"; return (
+            {rows.map((o) => { return (
               <tr key={o.id} onClick={() => router.push(orderHref(o.id))}>
                 <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link>{o.archived && <PrintavoMark />}</td>
                 {/* All: what it is, in its own column (Oct 24, Nick: "don't have it impact the job name") */}
                 {all && <td data-l="Type"><span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span></td>}
                 <td className="m"><div className="aa-t aa-t1"><span className="aa-tn" title={o.nickname || undefined}>{o.nickname || (cols === "quote" ? "Quote" : "Order")}</span></div></td>
-                {/* one simple line per order (Nov 2, Nick); a late payment says so in the status, not a pink row ("why is this one pink?") */}
-                <td>{late ? <span className="aa-pill" title={`${ST[o.status]?.portal || ST[o.status]?.label || ""} · payment was due ${when(payDue(o) as string)}`} style={{ ["--sc" as string]: "var(--danger)" }}>Past due</span> : pill(o)}</td>
+                {/* one simple line per order, its own status (Nov 2, Nick: no pink row, and no "Past due" here either) */}
+                <td>{pill(o)}</td>
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
                 {/* customers see only the balance and total (Nov 2, Nick: "you don't need paid… more room for the order description") */}
                 {cols !== "quote" && mode !== "portal" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
@@ -330,7 +330,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
                 </div>
                 <div className="aa-oc-sub">#{o.number}{o.qty ? ` · ${o.qty.toLocaleString("en-US")} pcs` : ""}{dt ? ` · ${cols === "quote" ? "Created" : "In hands"} ${dt}` : ""}</div>
                 <div className="aa-oc-bot">
-                  {owes && payDue(o) && (payDue(o) as string) < today() ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--danger)" }}>Past due</span> : pill(o)}
+                  {pill(o)}
                   {all && kindOf(o) !== "Order" && <span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span>}
                   <span className="aa-oc-amt">{owes ? <><b className="aa-due">{money(o.balance)}</b><small>due</small></> : <><b>{money(o.total)}</b><small>{cols === "quote" || o.type !== "invoice" ? "total" : o.balance <= 0.004 ? "paid" : "total"}</small></>}</span>
                 </div>
