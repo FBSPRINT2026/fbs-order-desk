@@ -52,7 +52,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
       <td className="st-d">{r.date ? fmtDateLong(r.date).replace(/, \d{4}$/, "") : ""}</td>
       <td className="st-j">{r.job}</td>
       <td className="st-po">{r.po ? <span className="stx-po" title={r.po}><span className="st-ph">PO </span>{r.po}</span> : ""}</td>
-      <td className={"st-pd" + (a !== null && a > 7 ? " st-late" : "")}><span className="st-ph">Due </span>{r.due ? fmtDateLong(r.due).replace(/, \d{4}$/, "") : "—"}</td>
+      <td className={"r st-pd" + (a !== null && a > 7 ? " st-late" : "")}><span className="st-ph">Due </span>{r.due ? fmtDateLong(r.due).replace(/, \d{4}$/, "") : "—"}</td>
       <td className="r num st-t"><span className="st-ph">of </span>{money(r.total)}</td><td className="r num st-p">{money(r.paid)}</td><td className="r num b st-b">{money(r.balance)}</td>
     </tr>); };
   const pay = ctx.settings.pay;
@@ -82,7 +82,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
           </div>
           <div className="stx-age">{buckets.map((b) => <div key={b.k}><span>{b.k}</span><b>{money(b.amt)}</b></div>)}</div>
           <table className="st-tbl stx-tbl" data-nofit>
-            <thead><tr><th>Invoice</th><th>Date</th><th>Job</th><th>PO</th><th>Due date</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th></tr></thead>
+            <thead><tr><th>Invoice</th><th>Date</th><th>Job</th><th>PO</th><th className="r stx-dueh">Due date</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th></tr></thead>
             <tbody>
               {ready.length > 0 && <tr className="stx-grp"><td colSpan={8}>Ready to pay</td></tr>}
               {ready.map(line)}

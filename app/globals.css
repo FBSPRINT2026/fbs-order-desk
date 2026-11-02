@@ -17977,3 +17977,7 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .stx-age{margin-top:16px}
 .stx .stx-tbl{margin-top:18px}
 @media (max-width:700px){.stx-po{max-width:100%}}
+/* the statement's money side (Nov 2, Nick): Due date, Total, Paid and Balance all right-aligned on one line, with room between */
+.stx-tbl th.r,.stx-tbl td.r{text-align:right;white-space:nowrap;padding-left:22px}
+.stx-tbl th.r{letter-spacing:.06em;margin-right:-.06em}
+.stx-tbl .stx-dueh,.stx-tbl td.st-pd{padding-left:28px}
