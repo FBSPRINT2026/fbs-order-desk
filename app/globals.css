@@ -17411,7 +17411,8 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .mkpa{display:flex;flex-direction:column;gap:12px}
 .mkpa-pic{height:120px;border-radius:var(--r);background:var(--surface-2);display:grid;place-items:center;padding:10px}
 .mkpa-pic.dark{background:var(--ink-2)}
-.mkpa-pic img{max-width:100%;max-height:100%;object-fit:contain}
+.mkpa-pic{overflow:hidden}
+.mkpa-pic img{display:block;width:auto;height:auto;max-width:100%;max-height:100px;object-fit:contain}
 .mkpa-g{display:flex;flex-direction:column;gap:6px}
 .mkpa-k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
 .mkpa-locs{display:flex;flex-wrap:wrap;gap:6px}
