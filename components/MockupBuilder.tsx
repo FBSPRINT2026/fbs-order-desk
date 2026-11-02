@@ -5241,7 +5241,13 @@ function LogoColors({ rows, onPick, onHover, onSplit, onCombine, onMatchAll, bra
   const [open] = useState(""); // (colors don't fold any more)
   const [bsOpen, setBsOpen] = useState(false);
   const key = (r: { hexes: string[] }) => r.hexes.join();
-  const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => { onPick(r.hexes, v); };
+  // a color staff set (typed, picked or a suggestion clicked) folds its Suggested colors away; ↺ brings them back (Nov 1,
+  // Nick: "once you type a color like black or 567… it just should go away… hit the start over and it'll drop back down")
+  const [chosen, setChosen] = useState<Set<string>>(() => new Set());
+  const pick = (r: { hexes: string[] }, v: { name: string; hex: string } | null) => {
+    onPick(r.hexes, v);
+    setChosen((c) => { const n = new Set(c); if (v) n.add(key(r)); else n.delete(key(r)); return n; });
+  };
   const compactRows = rows.filter((r) => r.cur?.name !== "none").length > 4;
   // Combine colors: pick the colors, then how they print from one screen
   const [comb, setComb] = useState<null | { sel: string[]; how: "solid" | "tone"; ink: string; tone: number }>(null);
@@ -5323,7 +5329,7 @@ function LogoColors({ rows, onPick, onHover, onSplit, onCombine, onMatchAll, bra
             </div>
             {r.hexes.length > 1
               ? <div className="mk-united"><span>{r.hexes.length} colors united · prints as one color{r.tones?.length ? ` (${r.tones.map((t) => `${t}% halftone`).join(", ")})` : ""}</span><button type="button" className="btn sm ghost" onClick={onSplit}>Split</button></div>
-              : <Match hex={r.hexes[0]} cur={cur} compact={compactRows} onPick={(v) => pick(r, v)} onHover={(v) => onHover(r.hexes, v)} />}
+              : !(cur && chosen.has(k)) && <Match hex={r.hexes[0]} cur={cur} compact={compactRows} onPick={(v) => pick(r, v)} onHover={(v) => onHover(r.hexes, v)} />}
           </div>
         );
       })}
