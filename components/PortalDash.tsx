@@ -89,7 +89,11 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         {/* Order tracking, under the assistant (Oct 24, Nick: "keep track of all your high priority orders, star to add to this list"… "underneath the panel where the FBS assistant is… the same width") */}
         <section className="pdx-card pdx-track">
           <div className="pdx-h"><h2>Order tracking</h2><span className="faint" style={{ fontSize: 12 }}>Keep track of your high-priority orders. Star one (☆) to add it here.</span></div>
-          {/* more than three: two columns, never a "more" (Oct 24, Nick) */}{tracked.length ? <div className={"pdx-track-list" + (tracked.length > 6 ? " three" : tracked.length > 3 ? " two" : "")}>{tracked.slice(0, 9).map((t) => trackRow(t))}</div> : <p className="pdx-track-none">No orders starred yet. Click the ☆ on any job below to keep an eye on it here: its status, its in-hands date, and whether it&apos;s on time.</p>}
+          {/* more than three: two columns, never a "more" (Oct 24, Nick) */}{tracked.length ? <div className={"pdx-track-list" + (tracked.length > 6 ? " three" : tracked.length > 3 ? " two" : "")}>{tracked.slice(0, 9).map((t) => trackRow(t))}</div> : <div className="pdx-caught">
+            {/* the same look as "You're all caught up" below, with a star (Nov 2, Nick) */}
+            <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--fbs-orange) 16%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--fbs-orange)" /><path d="m28 17.5 3.1 6.4 7 .9-5.1 4.9 1.3 6.9L28 33.3l-6.3 3.3 1.3-6.9-5.1-4.9 7-.9z" fill="#fff" /></svg>
+            <div><b>Star an order to keep track of it</b><span>Click the ☆ on any of your current jobs and it shows here: its status, its in-hands date, and whether it&apos;s on time.</span></div>
+          </div>}
         </section>
         {/* Orders sent to FBS, under tracking (Oct 24, Nick: "move the orders sent to FBS up underneath the order tracking") */}
       <section className="pdx-card pdx-sent">

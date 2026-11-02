@@ -262,7 +262,7 @@ export function exactMatch(ship: { style: string; color: string; size: string; q
   for (const it of want.filter((x) => !x.style && !x.color)) loose.set(sizeKey(it.size), (loose.get(sizeKey(it.size)) || 0) + it.need);
   for (const x of ship) {
     let q = x.qty; const z = sizeKey(x.size);
-    for (const it of named) if (q > 0 && it.left > 0 && it.size === z && (it.style ? styleEq(it.style, x.style) : true) && colorEq(it.color, x.color)) { const t = Math.min(q, it.left); it.left -= t; q -= t; }
+    for (const it of named) if (q > 0 && it.left > 0 && sameSize(it.size, z) && (it.style ? styleEq(it.style, x.style) : true) && colorEq(it.color, x.color)) { const t = Math.min(q, it.left); it.left -= t; q -= t; }
     if (q > 0) { const l = loose.get(z) || 0; if (l < q) return false; loose.set(z, l - q); }
   }
   return named.every((it) => it.left === 0) && [...loose.values()].every((n) => n === 0);
@@ -374,6 +374,12 @@ function poHit(o: Candidate, g: { customer_po: string; supplier_order: string })
 
 const SIZE_ALIAS: Record<string, string> = { xsmall: "XS", xs: "XS", small: "S", s: "S", medium: "M", med: "M", m: "M", large: "L", lg: "L", l: "L", xlarge: "XL", xl: "XL", xxl: "2XL", xxlarge: "2XL", "2xlarge": "2XL", xxxlarge: "3XL", "3xlarge": "3XL", "4xlarge": "4XL", "5xlarge": "5XL", xxsmall: "XS", "2x": "2XL", "2xl": "2XL", xxxl: "3XL", "3x": "3XL", "3xl": "3XL", xxxxl: "4XL", "4x": "4XL", "4xl": "4XL", "5x": "5XL", "5xl": "5XL", osfa: "OS", os: "OS", onesize: "OS", adjustable: "OS", adj: "OS", other: "OS", onesizefitsall: "OS", osfm: "OS", ys: "YS", ym: "YM", yl: "YL", yxs: "YXS", yxl: "YXL", youthsmall: "YS", youthmedium: "YM", youthlarge: "YL", youthxs: "YXS", youthxl: "YXL" };
 export const sizeKey = (z: string) => SIZE_ALIAS[norm(z)] || z.toUpperCase().replace(/\s+/g, "");
+/**
+ * The same size on the same style line (Nov 2: S&S wrote Comfort Colors 9018 and Hanes P360, both youth styles, as
+ * S / M / L / XL while #40357 has them as YS / YM / YL / YXL, so 835 pcs that matched exactly never linked): a youth
+ * size and its letter are one size once the style already matched. Used wherever a shipped size meets an order's size.
+ */
+const sameSize = (a: string, b: string) => { const y = (z: string) => sizeKey(z).replace(/^Y(?=(XS|S|M|L|XL|\dXL)$)/, ""); return sizeKey(a) === sizeKey(b) || y(a) === y(b); };
 const styleEq = (a: string, b: string) => {
   const x = norm(a), y = norm(b);
   if (!x || !y) return false;
@@ -418,7 +424,7 @@ async function openOrders(admin: SupabaseClient, custIds: string[]): Promise<Ope
   const useUp = (items: Open["items"], got: { style: string; color: string; size: string; qty_shipped: number }[]) => {
     for (const h of got) {
       let left = h.qty_shipped;
-      for (const it of items) if (left > 0 && it.need > 0 && styleEq(it.style, h.style) && colorEq(it.color, h.color) && it.size === sizeKey(h.size)) { const t = Math.min(it.need, left); it.need -= t; left -= t; }
+      for (const it of items) if (left > 0 && it.need > 0 && styleEq(it.style, h.style) && colorEq(it.color, h.color) && sameSize(it.size, h.size)) { const t = Math.min(it.need, left); it.need -= t; left -= t; }
     }
     return items;
   };
@@ -447,7 +453,7 @@ function allocate(lines: Line[], orders: Open[]) {
   for (const line of [...lines].sort((a, b) => b.qty_shipped - a.qty_shipped)) {
     const z = sizeKey(line.size);
     // a job line with no style (Printavo jobs often put it in the description) matches on color and size
-    const hits = orders.flatMap((o) => o.items.map((it, i) => ({ o, i, it })).filter(({ it }) => it.size === z && (it.style ? styleEq(it.style, line.style) : !!it.color) && colorEq(it.color, line.color)));
+    const hits = orders.flatMap((o) => o.items.map((it, i) => ({ o, i, it })).filter(({ it }) => sameSize(it.size, z) && (it.style ? styleEq(it.style, line.style) : !!it.color) && colorEq(it.color, line.color)));
     const byOrder = [...new Set(hits.map((h) => h.o.id))];
     if (!byOrder.length) { unplaced.push(line); continue; }
     const left = (id: string) => hits.filter((h) => h.o.id === id).reduce((a, h) => a + (need.get(k(h.o, h.i)) || 0), 0);

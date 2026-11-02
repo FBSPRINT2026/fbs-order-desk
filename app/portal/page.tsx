@@ -162,7 +162,15 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   });
   // wholesale: the garments they send us for their jobs (goods have their own status)
   // supplier shipments on their account that aren't on one of their orders yet
-  const incoming = early ? ((await early.incoming) as Awaited<ReturnType<typeof unmatchedGroups>>).filter((g) => !g.us) : [];
+  // shipments not on an order yet, as the customer sees them: what's on the way or came in the last 10 days. Older ones
+  // that arrived long ago are history (Nov 2, Nick: Dear Heart's list asked about goods for jobs already printed); the
+  // shop's goods-receiving page still has every one
+  const fresh = (g: Awaited<ReturnType<typeof unmatchedGroups>>[number]) => {
+    if (!g.tracking.length || g.tracking.some((t) => !t.delivered)) return true;
+    const last = g.tracking.map((t) => t.delivered_at || "").filter(Boolean).sort().pop() || (g.ship_date ? `${g.ship_date}T12:00:00Z` : "");
+    return !last || Date.now() - Date.parse(last) < 10 * 86400000;
+  };
+  const incoming = early ? ((await early.incoming) as Awaited<ReturnType<typeof unmatchedGroups>>).filter((g) => !g.us && fresh(g)) : [];
   const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale") || incoming.length > 0;
   // the Goods tab lists every order with goods until it's done (Nov 2, Nick: "organized by orders"); what they're asked
   // about (the dashboard's to-dos) stays the orders still waiting on them

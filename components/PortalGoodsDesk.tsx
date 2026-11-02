@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CARRIERS, carrierOf, GOODS, shipGroups, trackedGoods, trackingUrl, trackWord, type GoodsItem, type GoodsStatus } from "@/lib/goods";
 import type { PendingShipment } from "@/lib/manifest";
-import type { TrackingInput } from "@/app/portal/goods-actions";
+import { readShipmentPaper, type TrackingInput } from "@/app/portal/goods-actions";
+import { portalAttachUrl } from "@/app/portal/message-actions";
+import { createClient } from "@/lib/supabase/client";
 import { fmtDateLong } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 
@@ -48,37 +50,61 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
   const hereWeek = rows.flatMap((r) => r.it.shipments).filter((s) => s.delivered_at && s.delivered_at >= weekAgo).reduce((a, s) => a + (s.boxes || 1), 0);
 
+  // a shipment dragged onto an order links it there (Nov 2, Nick: "drag it up to… the orders to make it go there")
+  const [drag, setDrag] = useState<string | null>(null), [over, setOver] = useState<string | null>(null), [dropMsg, setDropMsg] = useState("");
+  const linkTo = async (g: PendingShipment, orderId: string) => { const ids = g.lines.flatMap((l) => l.id.split(",")).filter(Boolean); const r = await linkIncoming(ids.map((lineId) => ({ lineId, orderId }))); if (r.ok) router.refresh(); return r; };
+  const dropOn = async (orderId: string) => {
+    const g = incoming.find((x) => x.key === drag); setDrag(null); setOver(null);
+    if (!g) return;
+    if (!canAct) { setDropMsg("This is a preview: customers link shipments from their own login."); return; }
+    const r = await linkTo(g, orderId);
+    setDropMsg(r.ok ? "" : r.error || "Couldn't link it.");
+  };
+  const [tell, setTell] = useState(false);
+
   return (
     <div className="gdk">
       <div className="stats gdk-stats">
         <button type="button" className="stat" onClick={() => setF("waiting")}><span className="k">On the way</span><span className="v">{boxesOf(onWayBoxes)}</span><small>{onWay.length ? "Tracked for you" : "Nothing in transit"}</small></button>
         <button type="button" className="stat" onClick={() => setF("here")}><span className="k">Arrived this week</span><span className="v">{boxesOf(hereWeek)}</span><small>Checked in at FBS</small></button>
         <button type="button" className="stat" onClick={() => setF("waiting")}><span className="k">Orders waiting on goods</span><span className="v">{waiting.length}</span><small>{waiting.filter((r) => r.here > 0).length ? `${waiting.filter((r) => r.here > 0).length} partly here` : "None partly here"}</small></button>
-        <button type="button" className="stat" onClick={() => document.querySelector(".gdk-help")?.scrollIntoView({ behavior: "smooth" })}><span className="k">Which order?</span><span className={"v" + (incoming.length ? " alert" : "")}>{incoming.length}</span><small>{incoming.length ? "shipments to match" : "Everything's matched"}</small></button>
+        <button type="button" className="stat" onClick={() => document.querySelector(".gdk-help")?.scrollIntoView({ behavior: "smooth" })}><span className="k">Not linked</span><span className="v">{incoming.length}</span><small>{incoming.length ? "shipments to put on an order" : "Everything's on an order"}</small></button>
       </div>
 
       <div className="gdk-grid">
+        {/* the left-hand rail (Nov 2, Nick: "waiting on goods, all here, arrived… a left-hand panel"): what's listed, then the
+            shipments not on an order, then "shipping us something?" */}
+        <nav className="gdk-rail" aria-label="Goods">
+          {([["waiting", "Waiting on goods", waiting.length], ["here", "All here", done.length], ["all", "All orders", rows.length]] as const).map(([k, t, n]) => (
+            <button key={k} type="button" className={f === k ? "on" : ""} aria-pressed={f === k} onClick={() => setF(k)}><span>{t}</span><b>{n}</b></button>
+          ))}
+          <button type="button" className={"gdk-rail-nl" + (incoming.length ? " has" : "")} onClick={() => document.querySelector(".gdk-help")?.scrollIntoView({ behavior: "smooth" })}><span>Not linked</span><b>{incoming.length}</b></button>
+          <div className="gdk-rail-sep" />
+          <button type="button" className="gdk-rail-add" onClick={() => setTell(!tell)}>{tell ? "Close" : "+ Shipping us something?"}</button>
+          <div className="gdk-auto">S&amp;S and SanMar shipments show up here by themselves.</div>
+        </nav>
+
         <div className="gdk-main">
-          {incoming.length > 0 && (
-            <section className="gdk-help">
-              <div className="gdk-help-h"><b>Which order are these for?</b><span>Your supplier shipped them to us, but we couldn&apos;t tell. Pick the order and we&apos;ll track them there.</span></div>
-              {incoming.map((g) => <Unmatched key={g.key} g={g} canAct={canAct} link={async (orderId) => { const ids = g.lines.flatMap((l) => l.id.split(",")).filter(Boolean); const r = await linkIncoming(ids.map((lineId) => ({ lineId, orderId }))); if (r.ok) router.refresh(); return r; }} />)}
+          {tell && (
+            <section className="aa-card gdk-tellcard">
+              <div className="gdk-tell-h"><b>Shipping us something?</b><span>From anywhere other than S&amp;S or SanMar: tell us and we&apos;ll watch for it.</span></div>
+              {canAct && rows.length ? <TellUs orders={(waiting.length ? waiting : rows).map((r) => ({ id: r.it.order.id, label: `#${r.it.order.number} ${r.it.order.nickname}` }))} add={addTracking} onDone={() => { setTell(false); router.refresh(); }} />
+                : <div className="gdk-sm">{canAct ? "No open orders to send goods for." : "Customers add shipments from their own login."}</div>}
             </section>
           )}
 
           <div className="aa-card gdk-list">
             <div className="toolbar gdk-bar">
-              <div className="chips">
-                <button type="button" className={"chip" + (f === "waiting" ? " on" : "")} onClick={() => setF("waiting")}>Waiting on goods<span className="chip-n">{waiting.length}</span></button>
-                <button type="button" className={"chip" + (f === "here" ? " on" : "")} onClick={() => setF("here")}>All here<span className="chip-n">{done.length}</span></button>
-                <button type="button" className={"chip" + (f === "all" ? " on" : "")} onClick={() => setF("all")}>All<span className="chip-n">{rows.length}</span></button>
-              </div>
+              <b className="gdk-list-t">{f === "waiting" ? "Waiting on goods" : f === "here" ? "All here" : "All orders"}</b>
               <label className="aa-search gdk-search"><input type="search" placeholder="Search order, PO or tracking" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search goods" /></label>
             </div>
+            {drag && <div className="gdk-dragtip">Drop it on the order it&apos;s for.</div>}
+            {dropMsg && <div className="gdk-dragtip bad">{dropMsg}</div>}
             {list.map((r) => {
               const o = r.it.order, groups = shipGroups(r.it.shipments);
               return (
-                <article key={o.id} className="gdk-ord">
+                <article key={o.id} className={"gdk-ord" + (drag ? " drop" : "") + (over === o.id ? " over" : "")}
+                  onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(o.id); } }} onDragLeave={() => setOver((x) => (x === o.id ? null : x))} onDrop={(e) => { e.preventDefault(); void dropOn(o.id); }}>
                   <header className="gdk-oh">
                     <Link className="gdk-on" href={o.href}>#{o.number}</Link>
                     <b className="gdk-nm">{o.nickname || "Order"}</b>
@@ -101,15 +127,14 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
             })}
             {!list.length && <div className="aa-empty">{f === "waiting" ? "No orders are waiting on goods right now." : w ? `Nothing matches “${q}”.` : "Nothing here yet."}</div>}
           </div>
-        </div>
 
-        <aside className="gdk-side">
-          <h3>Shipping us something?</h3>
-          <p>From anywhere other than S&amp;S or SanMar: tell us and we&apos;ll watch for it.</p>
-          {canAct && waiting.length ? <TellUs orders={waiting.map((r) => ({ id: r.it.order.id, label: `#${r.it.order.number} ${r.it.order.nickname}` }))} add={addTracking} onDone={() => router.refresh()} />
-            : <div className="gdk-sm">{canAct ? "No orders are waiting on goods right now." : "Customers add shipments from their own login."}</div>}
-          <div className="gdk-auto">✓ S&amp;S and SanMar shipments show up here by themselves when your PO is on the order.</div>
-        </aside>
+          {incoming.length > 0 && (
+            <section className="gdk-help">
+              <div className="gdk-help-h"><b>Shipments not linked</b><span>Your supplier shipped these to us, but we couldn&apos;t tell which order they&apos;re for. Drag one onto its order above, or pick it here.</span></div>
+              {incoming.map((g) => <Unmatched key={g.key} g={g} canAct={canAct} onDrag={(on) => { setDrag(on ? g.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkTo(g, orderId)} />)}
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -142,23 +167,24 @@ function ShipLine({ g }: { g: ReturnType<typeof shipGroups>[number] }) {
 }
 
 /** A supplier shipment we couldn't match: one line and a "Pick an order" box. */
-function Unmatched({ g, canAct, link }: { g: PendingShipment; canAct: boolean; link: (orderId: string) => Promise<R> }) {
+function Unmatched({ g, canAct, link, onDrag }: { g: PendingShipment; canAct: boolean; link: (orderId: string) => Promise<R>; onDrag: (on: boolean) => void }) {
   const [pick, setPick] = useState(g.lines.find((l) => l.suggest)?.suggest || "");
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const here = g.tracking.length > 0 && g.tracking.every((t) => t.delivered);
   const eta = g.tracking.filter((t) => !t.delivered).map((t) => t.eta).filter(Boolean).sort()[0];
   return (
-    <div className="gdk-um">
+    <div className="gdk-um" draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", g.key); e.dataTransfer.effectAllowed = "move"; onDrag(true); }} onDragEnd={() => onDrag(false)} title="Drag onto its order">
       <div className="gdk-um-t">
         <div><b>{g.supplier === "sanmar" ? "SanMar" : g.supplier === "ss" ? "S&S" : g.supplier} {g.supplier_order}</b>{g.customer_po ? <span className="gdk-sm"> · PO {g.customer_po}</span> : null} <span className={"gdk-st" + (here ? " in" : " way")}>{here ? "Arrived" : eta ? `On the way · ${when(eta)}` : "On the way"}</span></div>
         <div className="gdk-sm">{boxesOf(g.boxes)} · {pcsOf(g.pcs)}{g.styles ? ` · ${g.styles}` : ""}</div>
       </div>
       <div className="gdk-um-pick">
-        <select value={pick} disabled={!canAct || busy} onChange={(e) => setPick(e.target.value)} aria-label="Which order">
+        <span className="gdk-grip" aria-hidden>⋮⋮</span>
+        <select value={pick} disabled={busy} onChange={(e) => setPick(e.target.value)} aria-label="Which order">
           <option value="">Pick an order…</option>
           {g.orders.map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname}{o.po ? ` · PO ${o.po}` : ""}</option>)}
         </select>
-        <button type="button" className="btn primary" disabled={!canAct || !pick || busy} onClick={async () => { setBusy(true); setErr(""); const r = await link(pick); setBusy(false); if (!r.ok) setErr(r.error || "Couldn't save."); }}>{busy ? "Saving…" : "Save"}</button>
+        <button type="button" className="btn primary" disabled={!canAct || !pick || busy} title={canAct ? undefined : "Turned off in preview"} onClick={async () => { setBusy(true); setErr(""); const r = await link(pick); setBusy(false); if (!r.ok) setErr(r.error || "Couldn't save."); }}>{busy ? "Saving…" : "Save"}</button>
       </div>
       {err && <div className="gdk-err">{err}</div>}
     </div>
@@ -171,6 +197,32 @@ function TellUs({ orders, fixed, add, onDone }: { orders: { id: string; label: s
   const [carrier, setCarrier] = useState("UPS");
   const [trk, setTrk] = useState(""), [boxes, setBoxes] = useState(""), [note, setNote] = useState("");
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState("");
+  // their paperwork read into the form (Nov 2, Nick: "drag and drop… a One Stop order or Peter Millar order… read it")
+  const [reading, setReading] = useState(""), [readNote, setReadNote] = useState(""), [over, setOver] = useState(false);
+  async function readIt(input: { file?: File; text?: string }) {
+    setMsg(""); setReadNote(""); setReading(input.file ? `Reading ${input.file.name}…` : "Reading it…");
+    try {
+      let up: { path?: string; name?: string; type?: string } = {};
+      if (input.file) {
+        const t = await portalAttachUrl(input.file.name);
+        if (!t.ok || !t.path || !t.token) throw new Error(t.error || "Couldn't take that file.");
+        const u = await createClient().storage.from("proofs").uploadToSignedUrl(t.path, t.token, input.file, { contentType: input.file.type || undefined });
+        if (u.error) throw new Error(u.error.message);
+        up = { path: t.path, name: input.file.name, type: input.file.type };
+      }
+      const r = await readShipmentPaper({ ...up, text: input.text, orders });
+      if (!r.ok || !r.read) throw new Error(r.error || "Couldn't read it.");
+      const x = r.read;
+      if (x.orderId && !fixed) setOrderId(x.orderId);
+      if (x.carrier) setCarrier(CARRIERS.find((c) => c.toLowerCase() === x.carrier.toLowerCase()) || (carrierOf(x.tracking[0] || "") || "Other"));
+      if (x.tracking.length) setTrk(x.tracking.join("\n"));
+      if (x.boxes) setBoxes(String(x.boxes));
+      setNote([[x.vendor, x.orderNo].filter(Boolean).join(" "), x.what, x.eta ? `arrives ${x.eta}` : ""].filter(Boolean).join(" · ").slice(0, 300));
+      const o = orders.find((z) => z.id === (x.orderId || orderId));
+      setReadNote(`Read it${x.vendor ? `: ${x.vendor}${x.orderNo ? ` ${x.orderNo}` : ""}` : ""}${x.orderId && o ? `, for ${o.label}${x.why ? ` (${x.why})` : ""}` : ""}. Check it, then press Tell us it's coming.`);
+    } catch (e) { setMsg(e instanceof Error ? e.message : "Couldn't read it."); }
+    setReading("");
+  }
   async function send() {
     const nums = trk.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
     if (!orderId) return setMsg("Pick the order.");
@@ -186,6 +238,14 @@ function TellUs({ orders, fixed, add, onDone }: { orders: { id: string; label: s
   }
   return (
     <div className="gdk-tell">
+      <label className={"gdk-drop" + (over ? " over" : "")} onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setOver(true); } }} onDragLeave={() => setOver(false)}
+        onDrop={(e) => { const f = e.dataTransfer.files[0]; if (!f) return; e.preventDefault(); e.stopPropagation(); setOver(false); void readIt({ file: f }); }}
+        onPaste={(e) => { const f = e.clipboardData.files[0]; const t = e.clipboardData.getData("text"); if (f) { e.preventDefault(); void readIt({ file: f }); } else if (t.trim().length > 20) { e.preventDefault(); void readIt({ text: t }); } }} tabIndex={0}>
+        <b>{reading || "Drop the order confirmation or shipping email"}</b>
+        {!reading && <span>A PDF or a picture, or paste the email here. We read it and fill this in.</span>}
+        <input type="file" hidden accept="application/pdf,.pdf,image/*" onChange={(e) => { const f = e.target.files?.[0]; if (f) void readIt({ file: f }); e.target.value = ""; }} />
+      </label>
+      {readNote && <div className="gdk-readnote">{readNote}</div>}
       {!fixed && <label className="gdk-f"><span>For order</span><select value={orderId} onChange={(e) => setOrderId(e.target.value)}>{orders.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select></label>}
       <label className="gdk-f"><span>Carrier</span><select value={carrier} onChange={(e) => setCarrier(e.target.value)}>{CARRIERS.map((c) => <option key={c}>{c}</option>)}</select></label>
       <label className="gdk-f"><span>Tracking numbers</span><textarea rows={2} placeholder="Paste one or many" value={trk} onChange={(e) => setTrk(e.target.value)} /></label>

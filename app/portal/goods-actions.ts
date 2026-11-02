@@ -91,3 +91,57 @@ export async function linkIncoming(pick: { lineId: string; orderId: string }[]):
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+export type ShipmentRead = { vendor: string; orderNo: string; carrier: string; tracking: string[]; boxes: number | null; eta: string; what: string; orderId: string; why: string };
+/**
+ * "Shipping us something?": a dropped or pasted order confirmation / shipping email from any vendor (One Stop, Peter
+ * Millar, a store…) read into the form (Nov 2, Nick: "drag and drop… read it and say, hey, this is coming… tell me what
+ * order it is"): the vendor and its order number, carrier and tracking, boxes, when it comes, what's in it, and which of
+ * their open orders it's for (by PO, name or the garments). Nothing is saved: they check it and press Tell us.
+ * The file was put in storage first with portalAttachUrl (messages/<their customer id>/…).
+ */
+export async function readShipmentPaper(input: { path?: string; name?: string; type?: string; text?: string; orders: { id: string; label: string }[] }): Promise<{ ok: boolean; error?: string; read?: ShipmentRead }> {
+  try {
+    const ctx = await getPortalCtx();
+    if (ctx.isStaff || ctx.preview) return { ok: false, error: "This is a preview." };
+    const admin = createAdminClient();
+    const text = String(input.text || "").trim().slice(0, 8000);
+    const path = String(input.path || "");
+    if (path && !ctx.customerIds.some((id) => path.startsWith(`messages/${id}/`))) return { ok: false, error: "We couldn't open that file." };
+    if (!path && text.length < 5) return { ok: false, error: "Drop a file or paste the email." };
+    const { aiState, askClaude } = await import("@/lib/ai/claude");
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false, error: "We couldn't read it here. Fill in what you can and we'll take it from there." };
+    const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string }[] = [], documents: { data: string }[] = [];
+    if (path) {
+      const { data: blob } = await admin.storage.from("proofs").download(path);
+      if (!blob) return { ok: false, error: "We couldn't open that file." };
+      const buf = Buffer.from(await blob.arrayBuffer());
+      if (buf.length > 15 * 1024 * 1024) return { ok: false, error: "That file is too big to read here." };
+      const t = (input.type || blob.type || "").toLowerCase(), nm = String(input.name || path);
+      if (/pdf/.test(t) || /\.pdf$/i.test(nm)) documents.push({ data: buf.toString("base64") });
+      else if (/^image\/(jpeg|png|gif|webp)/.test(t)) images.push({ media_type: t.replace("jpg", "jpeg") as "image/jpeg", data: buf.toString("base64") });
+      else return { ok: false, error: "Drop a PDF or a picture (or paste the email's words)." };
+    }
+    const orders = (input.orders || []).slice(0, 60);
+    const mine = new Set(orders.map((o) => o.id));
+    const r = await askClaude<{ vendor: string; order_no: string; carrier: string; tracking: string[]; boxes: number | null; eta: string; what: string; order_id: string; why: string }>({
+      task: "goods_paper_portal", model: st.settings.assistant.ai.fastModel || st.settings.assistant.ai.model, maxTokens: 600, admin, ctx: { by: ctx.email || "customer", customer_id: ctx.customerIds[0] }, timeoutMs: 40_000, images, documents,
+      tool: { name: "shipment", description: "What this paperwork says about goods on their way to the print shop.", input_schema: { type: "object", required: ["vendor", "order_no", "carrier", "tracking", "boxes", "eta", "what", "order_id", "why"], properties: {
+        vendor: { type: "string", description: "Who is shipping or selling the goods: One Stop, Peter Millar, SanMar, a store… Empty when not said." },
+        order_no: { type: "string", description: "The vendor's order or confirmation number, or the PO on it. Empty when none." },
+        carrier: { type: "string", description: "UPS, FedEx, USPS, DHL, a freight line… Empty when not said." },
+        tracking: { type: "array", items: { type: "string" }, description: "Every tracking (or PRO) number, no spaces. Empty when none yet." },
+        boxes: { type: ["integer", "null"], description: "How many boxes / cartons, when said." },
+        eta: { type: "string", description: "Expected delivery date YYYY-MM-DD, or empty." },
+        what: { type: "string", description: "What's in it in a few words: quantity, style, color (\"300 Bella 3001 Black, 120 Richardson 112\")." },
+        order_id: { type: "string", description: "The id of the order below these goods are for, by its PO, name or garments. Empty when you can't tell." },
+        why: { type: "string", description: "In a few words, why that order (\"PO DH-JLY on it\", \"same garments\"). Empty when no order." } } } },
+      system: `A customer of FBS Print (a print shop) is telling the shop that goods (blank garments, hats…) are on their way. Read their paperwork and pull out only what it says; never invent numbers. Their open orders at the shop:\n${orders.map((o) => `- id ${o.id}: ${o.label}`).join("\n") || "(none)"}\nToday is ${new Date().toISOString().slice(0, 10)}.`,
+      prompt: text || "Read the attached paperwork.",
+    });
+    if (!r.ok) return { ok: false, error: "We couldn't read it. Fill in what you can and we'll take it from there." };
+    const d = r.data;
+    return { ok: true, read: { vendor: d.vendor || "", orderNo: d.order_no || "", carrier: d.carrier || "", tracking: (d.tracking || []).map((x) => String(x).replace(/\s+/g, "")).filter(Boolean).slice(0, 40), boxes: d.boxes && d.boxes > 0 ? Math.round(d.boxes) : null, eta: /^\d{4}-\d{2}-\d{2}$/.test(d.eta || "") ? d.eta : "", what: d.what || "", orderId: mine.has(d.order_id) ? d.order_id : "", why: d.why || "" } };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't read it." }; }
+}
