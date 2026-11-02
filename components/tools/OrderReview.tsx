@@ -224,9 +224,14 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   }, [rounds, lesson, didKept, orderId]);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [rounds.length, busy, askNext]);
 
+  const [gone, setGone] = useState(false);
+  const [loadErr, setLoadErr] = useState("");
   const load = useCallback(async () => {
-    const { data } = await sb.from("orders").select("id, number, nickname, customer_id, groups, due_date, firm, customers(name, company)").eq("id", orderId).maybeSingle();
-    if (data) setO(data as unknown as O);
+    const { data, error } = await sb.from("orders").select("id, number, nickname, customer_id, groups, due_date, firm, customers(name, company)").eq("id", orderId).maybeSingle();
+    setLoadErr(error ? error.message : "");
+    if (data) { setO(data as unknown as O); setGone(false); }
+    // not there (Nov 1, Nick: a draft saved or thrown away while its helper was open sat on "Opening the order…")
+    else if (!error) setGone(true);
   }, [sb, orderId]);
   // the mockup is made on another page or tab: its pictures show here when it's saved
   useEffect(() => { void load(); const t = setInterval(() => { if (document.visibilityState === "visible") void load(); }, 6000); const f = () => void load(); window.addEventListener("focus", f); return () => { clearInterval(t); window.removeEventListener("focus", f); }; }, [load]);
@@ -380,7 +385,9 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
     onClose();
   }
 
-  if (!o) return <div className="ap orv"><p className="faint">Opening the order…</p></div>;
+  if (!o) return <div className="ap orv">{gone
+    ? <><p>This order isn&apos;t here anymore: a draft that was saved as an order or thrown away. Open the order and press ✦ AI to talk about it.</p><button type="button" className="btn sm" onClick={onClose}>Close</button></>
+    : <><p className="faint">Opening the order…</p>{loadErr && <p className="err">Couldn&apos;t open it: {loadErr}. It tries again every few seconds.</p>}</>}</div>;
   const working = rounds.some((r) => r.art.some((a) => a.state === "doing"));
   const lastRule = [...rounds].reverse().find((r) => r.rule)?.rule;
   const send = () => { if ((text.trim() || drop.pics.length) && !busy) void ask("change"); };

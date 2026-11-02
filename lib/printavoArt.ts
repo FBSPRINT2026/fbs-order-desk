@@ -22,10 +22,17 @@ type Page = { getViewport: (o: { scale: number }) => Vp; render: (o: Record<stri
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 
 type Doc = { numPages: number; getPage: (n: number) => Promise<Page> };
+/** a file read from one page (artboard) picked by staff (Nov 1, Nick: "where are we starting? …this artboard?"): every
+ *  reader here then sees just that page, as its only one. The file isn't split (splitting an Illustrator file can break
+ *  its pictures), the page is only looked up. Mark each copy of the bytes handed to a reader. */
+const PICKED = new WeakMap<ArrayBuffer, number>();
+export function onPage(buf: ArrayBuffer, page: number): ArrayBuffer { if (page > 1) PICKED.set(buf, page); return buf; }
 async function openDoc(buf: ArrayBuffer): Promise<Doc> {
+  const page = PICKED.get(buf);
   const pdfjs = (await import(/* webpackIgnore: true */ PDFJS)) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<Doc> } };
   pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-  return pdfjs.getDocument({ data: buf }).promise;
+  const doc = await pdfjs.getDocument({ data: buf }).promise;
+  return page ? { numPages: 1, getPage: () => doc.getPage(Math.min(page, doc.numPages)) } : doc;
 }
 const openPage = async (buf: ArrayBuffer) => (await openDoc(buf)).getPage(1);
 /** how many pages (artboards, for an Illustrator file) a PDF has */
@@ -166,14 +173,19 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
   const photos: Rect[] = [];
   let texPx = 0;
   const noop = () => {};
+  // a shirt photo left out still HIDES what was drawn under it (Nov 1, Sugar & Sage: the mockup stacked four times, each
+  // copy a little off; with the photos gone, every copy's art showed through, smeared): its spot is cleared, exactly
+  // where it would have painted (its clip and its own edges kept), so only what's on top of the photo is art
+  const hide = (t: CanvasRenderingContext2D, a: unknown[]) => { t.save(); t.globalCompositeOperation = "destination-out"; try { (t.drawImage as (...x: unknown[]) => void).apply(t, a); } catch { /* */ } t.restore(); };
   const proxy = new Proxy(ctx, {
     get(t, p) {
       // textures only: the shapes aren't painted (pictures, and pdf.js's own layer copies, still are)
       if (mode === "textures" && (p === "fill" || p === "stroke" || p === "fillRect" || p === "strokeRect" || p === "fillText" || p === "strokeText")) return noop;
       if (p === "drawImage") return (...a: unknown[]) => {
         const src = a[0] as { width: number; height: number };
-        // a picture in the file is painted with 9 arguments; pdf.js's own layer copies (groups, masks) with 3
-        if (mode === "vector" && a.length >= 5) return;
+        // a picture in the file is painted with 9 arguments; pdf.js's own layer copies (groups, masks) with 3. "vector"
+        // leaves the pictures out (below), a shirt photo still hiding what's under it
+        const pic = a.length >= 5;
         // textures only: a layer copy holds shapes drawn elsewhere (Mambo's grouped art), not a texture
         if (mode === "textures" && a.length < 5) return;
         const [dx, dy, dw, dh] = a.length >= 9 ? (a.slice(5, 9) as number[]) : a.length >= 5 ? (a.slice(1, 5) as number[]) : [a[1] as number, a[2] as number, src.width, src.height];
@@ -195,12 +207,14 @@ async function drawWithoutPhotos(page: Page, scale: number, crop?: Rect, known?:
             const tol = 0.03 * (q.x1 - q.x0);
             return Math.abs(q.x0 - r.x0) < tol && Math.abs(q.x1 - r.x1) < tol && Math.abs(q.y0 - r.y0) < tol && Math.abs(q.y1 - r.y1) < tol;
           });
-          if (same) return;
+          if (same) return hide(t, a);
+          if (mode === "vector" && pic) return;
           if (mode === "textures" && a.length >= 5 && r.x1 > r.x0) texPx = Math.max(texPx, src.width / (r.x1 - r.x0));
           return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
         }
         // a shirt photo is solid; a big picture with see-through parts is a texture over the art (Peticolas' mask)
-        if (mode !== "textures" && r.x1 - r.x0 > fullW * 0.3 && src.width < fullW * 0.9 && src.width < 4000 && !hasClear(src)) { photos.push(r); return; }
+        if (mode !== "textures" && r.x1 - r.x0 > fullW * 0.3 && src.width < fullW * 0.9 && src.width < 4000 && !hasClear(src)) { photos.push(r); return hide(t, a); }
+        if (mode === "vector" && pic) return;
         if (mode === "textures" && a.length >= 5 && r.x1 > r.x0) texPx = Math.max(texPx, src.width / (r.x1 - r.x0));
         return (t.drawImage as (...x: unknown[]) => void).apply(t, a);
       };
@@ -359,7 +373,12 @@ export async function artFromMockupPdf(buf: ArrayBuffer, name = "art", opt: { /*
   // 1. a quick look: where the photos and the art are
   const s1 = 3;
   const look = await drawWithoutPhotos(page, s1);
-  const photos = look.photos.sort((a, b) => a.x0 - b.x0);
+  // copies of the same photo stacked in one spot (a mockup duplicated in the file) are one shirt
+  const photos: Rect[] = [];
+  for (const p of [...look.photos].sort((a, b) => a.x0 - b.x0)) {
+    const q = photos.find((x) => { const ix = Math.min(x.x1, p.x1) - Math.max(x.x0, p.x0), iy = Math.min(x.y1, p.y1) - Math.max(x.y0, p.y0); return ix > 0 && iy > 0 && ix * iy > 0.5 * Math.min((x.x1 - x.x0) * (x.y1 - x.y0), (p.x1 - p.x0) * (p.y1 - p.y0)); });
+    if (q) { q.x0 = Math.min(q.x0, p.x0); q.y0 = Math.min(q.y0, p.y0); q.x1 = Math.max(q.x1, p.x1); q.y1 = Math.max(q.y1, p.y1); } else photos.push({ ...p });
+  }
   if (!photos.length) return [];
   let found = pieces(look.canvas, 0.12 * 72 * s1).filter((r) => (r.x1 - r.x0) * (r.y1 - r.y0) > 64);
   if (opt.mergeIn) {

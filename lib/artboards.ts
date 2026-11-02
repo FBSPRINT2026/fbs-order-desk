@@ -18,8 +18,7 @@ const isPdfLike = (f: File) => /pdf|illustrator|postscript/i.test(f.type) || /\.
 const isPs = (head: string) => head.startsWith("%!PS") || head.charCodeAt(0) === 0xc5; // an EPS (plain, or with a preview header)
 
 /** the file to save: the one artboard picked, or the file as it is. Throws "Upload canceled." when they close it. */
-export async function pickArtboard(file: File, words: AskWords & { /** only real pages: no splitting art lying off the page */ pagesOnly?: boolean } = {}): Promise<File> {
-  const { pagesOnly, ...say } = words;
+export async function pickArtboard(file: File, say: AskWords = {}): Promise<File> {
   const unit = say.unit || (/\.pdf$/i.test(file.name) || /pdf/i.test(file.type) ? "Page" : "Artboard");
   if (!listeners.size || !isPdfLike(file)) return file;
   let pages: string[] = [];
@@ -27,12 +26,12 @@ export async function pickArtboard(file: File, words: AskWords & { /** only real
   const text = new TextDecoder("latin1").decode(new Uint8Array(buf));
   // how many artboards Illustrator says the document has (its XMP: xmpTPg:NPages)
   const boards = +(text.match(/<xmpTPg:NPages>\s*(\d+)\s*</)?.[1] || 0);
-  if (isPs(text.slice(0, 4))) return pagesOnly ? file : pickFromArt(file, text, boards);
+  if (isPs(text.slice(0, 4))) return pickFromArt(file, text, boards);
   try {
     const { pdfPicture, pdfPageCount } = await import("@/lib/printavoArt");
     const n = await pdfPageCount(buf.slice(0));
     // one page, but Illustrator says several artboards: the others may be art lying off the page
-    if (n < 2) return boards > 1 && !pagesOnly ? pickFromArt(file, buf, boards) : file;
+    if (n < 2) return boards > 1 ? pickFromArt(file, buf, boards) : file;
     for (let i = 1; i <= Math.min(n, 12); i++) {
       try { pages.push((await pdfPicture(buf.slice(0), 360, i)).toDataURL("image/png")); } catch { pages.push(""); }
     }
@@ -42,6 +41,24 @@ export async function pickArtboard(file: File, words: AskWords & { /** only real
   pages = [];
   if (page == null) throw new Error("Upload canceled.");
   return onePage(file, buf, page);
+}
+
+/** which page (artboard) to start from, asked in the same pop-up: 1 for a file with one page. The file isn't changed (the
+ *  readers look up the page: printavoArt's onPage). Throws "Canceled." when they close it. */
+export async function askPage(file: File, words: AskWords = {}): Promise<number> {
+  if (!listeners.size || !(/pdf|illustrator/i.test(file.type) || /\.(pdf|ai)$/i.test(file.name))) return 1;
+  const buf = await file.arrayBuffer();
+  const pages: string[] = [];
+  try {
+    const { pdfPicture, pdfPageCount } = await import("@/lib/printavoArt");
+    const n = await pdfPageCount(buf.slice(0));
+    if (n < 2) return 1;
+    for (let i = 1; i <= Math.min(n, 12); i++) { try { pages.push((await pdfPicture(buf.slice(0), 360, i)).toDataURL("image/png")); } catch { pages.push(""); } }
+  } catch { return 1; }
+  const unit = words.unit || (/\.pdf$/i.test(file.name) ? "Page" : "Artboard");
+  const page = await new Promise<number | null>((resolve) => { listeners.forEach((f) => f({ fileName: file.name, pages, resolve, ...words, unit })); });
+  if (page == null) throw new Error("Canceled.");
+  return page;
 }
 
 type Shape = import("@/lib/svgVector").VShape;

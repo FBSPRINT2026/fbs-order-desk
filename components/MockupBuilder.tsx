@@ -1,6 +1,6 @@
 "use client";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
-import { pickArtboard } from "@/lib/artboards";
+import { askPage } from "@/lib/artboards";
 import { pastedSvg, pastedWidths, type PastedSvg } from "@/lib/pastedSvg";
 import BackLink from "@/components/BackLink";
 import { allRows } from "@/lib/readAll";
@@ -37,7 +37,7 @@ import { mySheetBrand } from "@/app/portal/settings-actions";
 import { garmentPhotoUploadUrl, garmentPhotoUrls } from "@/app/garment-photo-actions";
 import CustomerPick from "@/components/CustomerPick";
 import { registerMasks, type Reg } from "@/lib/mockupRegister";
-import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, pdfPicture, pmsOnPage, proofNotes } from "@/lib/printavoArt";
+import { artFromArtPdf, artFromDrawnMockup, artFromMockupPdf, knockColor, onPage, pdfPicture, pmsOnPage, proofNotes } from "@/lib/printavoArt";
 import { detectCenter } from "@/lib/visualCenter";
 import { tintBase, tintPhoto } from "@/lib/tintPhoto";
 import { applyDistress } from "@/lib/distress";
@@ -491,6 +491,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
   const [helpOver, setHelpOver] = useState(false);
+  /** the location asked about removing (Delete on its logo) */
+  const [delAsk, setDelAsk] = useState<string | null>(null);
   // art copied in Illustrator and pasted anywhere on the page but a box (helperPaste)
   const pasteRef = useRef<(p: PastedSvg) => void>(() => {});
   useEffect(() => {
@@ -2278,6 +2280,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
   }
   pasteRef.current = (p) => void helperPaste(p);
+  /** the Paste from Illustrator button: the clipboard read (the browser asks once to allow it) */
+  async function pasteBtn() {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const it of items) {
+        for (const t of ["image/svg+xml", "text/plain"]) if (it.types.includes(t)) { const p = pastedSvg(await (await it.getType(t)).text()); if (p) return void helperPaste(p); }
+      }
+      setMsg(items.some((it) => it.types.some((t) => /^image\//.test(t))) ? "That came in from Illustrator as a picture, not art. In Illustrator turn on Preferences → File Handling → Clipboard → Copy As: SVG Code, then copy it again." : "Nothing to paste: copy the art in Illustrator first.");
+    } catch { setMsg("Allow this page to see the clipboard (the browser asks), or press Ctrl+V on the page."); }
+  }
   /** dragged onto the Helper from anywhere (Nov 1, Nick: "from my email, from ClickUp, from whatever"): a file, an
    *  Outlook email's attachment, or a file off another site's page; the PDF or Illustrator file first, else a picture */
   async function helperDrop(dt: DataTransfer) {
@@ -2294,9 +2306,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // a file with several pages or artboards (Nov 1, Nick: "where are we starting? Are we starting on this page? …this
     // artboard? Like a little pop-up so that you can see it"): picked in the same pop-up as a logo upload's, and that page
     // alone is read
-    let f = f0;
-    if (/\.(pdf|ai)$/i.test(f0.name) || /pdf|postscript|illustrator/i.test(f0.type)) {
-      try { f = await pickArtboard(f0, { title: "Where are we starting?", sub: "Pick the one to pull the art and the shirts from.", pagesOnly: true }); }
+    const f = f0;
+    let page = 1;
+    if (/\.(pdf|ai)$/i.test(f0.name) || /pdf|illustrator/i.test(f0.type)) {
+      try { page = await askPage(f0, { title: "Where are we starting?", sub: "Pick the one to pull the art and the shirts from." }); }
       catch { return; }
     }
     // a picture (a photo of the garment, a screenshot): the art is flattened into it, but the garments on it are read and
@@ -2316,22 +2329,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setHelper({ name: f.name, busy: "Reading the file…", rows: [], pms: [], inkOpts: [], file: f0, keepFile: true }); // their whole file is kept, not just the page picked
     try {
       const buf = await f.arrayBuffer();
+      const at = () => onPage(buf.slice(0), page);
       const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ");
-      const pms = await pmsOnPage(buf.slice(0));
+      const pms = await pmsOnPage(at());
       // what garments the sheet shows (Oct 27, Nick: "pull art off and then draw blank"): read by the AI from a picture of
       // the page while the art is pulled; shown as "The garments on this sheet" with Draw this blank
       if (!portal) void (async () => {
-        try { const c = await pdfPicture(buf.slice(0), 1400); await readGarments(f.name, c.toDataURL("image/jpeg", 0.82)); }
+        try { const c = await pdfPicture(at(), 1400); await readGarments(f.name, c.toDataURL("image/jpeg", 0.82)); }
         catch { setHelper((h) => h && { ...h, gBusy: false }); }
       })();
       setHelper((h) => h && { ...h, busy: "Looking for the shirts and the art on them…" });
       type P = { side: "front" | "back"; file: File; widthIn: number; heightIn: number; dropIn: number; offIn: number; mask?: File; maskPpi?: number; shirtHex?: string };
       let kind: "photos" | "drawn" | "art" = "photos";
-      let got: P[] = await artFromMockupPdf(buf.slice(0), base, { mergeIn: 1 }).catch(() => []);
-      if (!got.length) { kind = "drawn"; got = await artFromDrawnMockup(buf.slice(0), base).catch(() => []); }
+      let got: P[] = await artFromMockupPdf(at(), base, { mergeIn: 1 }).catch(() => []);
+      if (!got.length) { kind = "drawn"; got = await artFromDrawnMockup(at(), base).catch(() => []); }
       if (!got.length) {
         kind = "art";
-        const a = await artFromArtPdf(buf.slice(0), base).catch(() => null);
+        const a = await artFromArtPdf(at(), base).catch(() => null);
         if (a) got = [{ side: "front", file: a.file, widthIn: 10, heightIn: Math.round(10 * a.ratio * 4) / 4, dropIn: 3, offIn: 0, ...(a.mask ? { mask: a.mask } : {}) }];
       }
       if (!got.length) { setHelper((h) => ({ name: f.name, busy: "", rows: [], pms, inkOpts: pms, err: "I couldn't find any art on it. If it's an Illustrator file, save it with \"Create PDF Compatible File\" on.", ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr, file: h.file, keepFile: h.keepFile } : {}) })); return; }
@@ -2380,7 +2394,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         rows.push(row);
         taken.add(location);
       }
-      const notes = await proofNotes(buf.slice(0)).catch(() => []);
+      const notes = await proofNotes(at()).catch(() => []);
       setHelper((h) => ({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes, ...(shirt ? { shirtHex: shirt } : {}), knocked, ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr, file: h.file, keepFile: h.keepFile } : {}) }));
     } catch (e) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't read it: " + (e instanceof Error ? e.message : String(e)) }); }
   }
@@ -3756,6 +3770,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   sigNowRef.current = () => sigNow.current; dirtyRefOut.current = () => dirtyRef.current;
   return (
     <BrandCtx.Provider value={brand}>
+      {delAsk && (() => { const im = imprints.find((x) => x.id === delAsk); if (!im) return null; const done = (yes: boolean) => { if (yes) setImprints((xs) => xs.filter((x) => x.id !== im.id)); setDelAsk(null); }; return (
+        <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="del-t" onClick={() => done(false)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); done(true); } if (e.key === "Escape") done(false); }}>
+          <div className="mk-modal" onClick={(e) => e.stopPropagation()}>
+            <h2 id="del-t">Remove the {im.location}?</h2>
+            <p>The location and its art come off this mockup.</p>
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <button type="button" className="btn ghost" onClick={() => done(false)}>Keep it</button>
+              <button type="button" className="btn danger" autoFocus onClick={() => done(true)}>Yes, remove location</button>
+            </div>
+          </div>
+        </div>
+      ); })()}
       {leave && (
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="lv-t">
           <div className="mk-modal">
@@ -4121,7 +4148,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                 // location (Oct 22, Nick: "when I move the logo on the shirt, it just snaps it back")
                 onEnd={() => {}}
                 onPick={pickColor}
-                onSelect={showImprint} />
+                onSelect={showImprint}
+                onDelete={(id) => setDelAsk(id)} />
             ))}
             {neckSet && line && (
               <div className="mk-neck-card" title="Private Label: the maker's tag cut out and their label printed inside the neck">
@@ -4715,6 +4743,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     ))}
                   </ul>
                   <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
+                  <button type="button" className="btn sm" title="Copy the art in Illustrator first (with Copy As: SVG Code on), or press Ctrl+V on this page" onClick={() => void pasteBtn()}>Paste from Illustrator</button>
                   <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drag a PDF, AI or picture here (from your email, ClickUp or anywhere), or copy art in Illustrator and paste it"}</span>
                 </>}
                 <datalist id="mk-ink-names">{[...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX)].slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist>
@@ -4858,7 +4887,7 @@ let tipSeen = false;
 const tipWasSeen = () => { if (tipSeen) return true; try { tipSeen = localStorage.getItem("mk-tip-seen") === "1"; } catch { /* private window */ } return tipSeen; };
 const markTipSeen = () => { tipSeen = true; try { localStorage.setItem("mk-tip-seen", "1"); } catch { /* private window */ } };
 
-function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, onSelect, areaEdit, onArea, areaNote, neckLine, onCustomArea }: {
+function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMove, onResize, onEnd, onPick, onSelect, onDelete, areaEdit, onArea, areaNote, neckLine, onCustomArea }: {
   /** a custom spot's dashed box pulled by a corner (photo pixels); dragging the box itself moves its logo (onMove) */
   onCustomArea?: (id: string, corner: string, dx: number, dy: number) => void;
   /** the bottom of the sewn neckline on this photo (shown with the print areas; drag it to fix it, saved for this photo) */
@@ -4873,6 +4902,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
   onResize: (id: string, newW: number) => void;
   onPick: (id: string, relX: number, relY: number, clientX: number, clientY: number) => void;
   /** a logo was clicked: the Imprints panel shows it */ onSelect?: (id: string) => void;
+  /** Delete (or Backspace) with a logo picked: ask to remove its location */ onDelete?: (id: string) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; y: number; sx: number; sy: number; mode: "move" | "size" | "area" | "areaSize" | "neck" | "cArea" | "cCorner"; w: number; el?: HTMLElement; c?: string } | null>(null);
@@ -4891,8 +4921,17 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
     if (!sel) return;
     const off = (e: PointerEvent) => { if (pts.current.size > 0 || pinch.current) return; if (!(e.target as HTMLElement).closest?.(".mk-art")) setSel(""); };
     document.addEventListener("pointerdown", off);
-    return () => document.removeEventListener("pointerdown", off);
-  }, [sel]);
+    // Delete with a logo picked (Nov 1, Nick: "when you click on something and you click delete, that should delete the
+    // location… pop up and say, yes, remove location"); never while typing in a box
+    const del = (e: KeyboardEvent) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("input, textarea, select, [contenteditable='true']") || document.querySelector("[aria-modal='true']")) return;
+      if (onDelete) { e.preventDefault(); onDelete(sel); }
+    };
+    document.addEventListener("keydown", del);
+    return () => { document.removeEventListener("pointerdown", off); document.removeEventListener("keydown", del); };
+  }, [sel, onDelete]);
   const z = norm?.z || 1;
   const k = () => (box.current ? box.current.clientWidth / PHOTO_W : 0.42) * z;
   const s = 100 / PHOTO_W, sy = 100 / PHOTO_H;
