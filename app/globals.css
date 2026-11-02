@@ -17859,3 +17859,4 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .gdk-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
 .gdk-go{justify-content:center;width:100%}
 @media (max-width:900px){.gdk-grid{grid-template-columns:minmax(0,1fr)}.gdk-side{position:static}.gdk-um{grid-template-columns:minmax(0,1fr)}}
+.pyl-tbl .pyl-ok{color:var(--ok);font-weight:700}

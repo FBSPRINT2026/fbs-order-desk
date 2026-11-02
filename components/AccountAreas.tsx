@@ -696,14 +696,20 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     // one list (Nov 2, Nick: "probably don't need to separate new portal orders from old… just use the little P"): every
     // open invoice and quote, the ones that can be paid first (oldest due first), then the ones still being made
     const dueOn = (o: AOrder) => (o.type === "quote" ? null : payDue(o));
-    const isLate = (o: AOrder) => { const d = dueOn(o); return !!d && d < today(); };
+    // no "past due" (Nov 2, Nick: due on receipt goes straight from "can't pay yet" to "past due"… "just get rid of the
+    // idea of past due or due"): a finished order is "Ready to pay" (green) for a week after its payment date, and only
+    // shows red once it's been open longer than that
+    const GRACE = 7;
+    const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+    const isLate = (o: AOrder) => { const d = dueOn(o); return !!d && addDays(d, GRACE) < today(); };
     const isLater = (o: AOrder) => !o.archived && o.type !== "quote" && o.payCan === "none";
     const allOpen = [...open, ...oldOpen, ...waitingQuotes];
     const sumOf = (l: AOrder[]) => l.reduce((a, o) => a + Math.max(0, o.balance), 0);
     const lateL = allOpen.filter((o) => o.type !== "quote" && isLate(o)), laterL = allOpen.filter(isLater);
     const listAll = (payF === "late" ? lateL : payF === "later" ? laterL : allOpen).slice().sort((a, b) =>
       Number(isLater(a)) - Number(isLater(b)) || (dueOn(a) || "9999").localeCompare(dueOn(b) || "9999") || a.number - b.number);
-    const listShown = showOldOwed ? listAll : listAll.slice(0, 15);
+    // every open invoice, however many (Nov 2, Nick: "this is the one time I do want you to just show… a huge long list")
+    const listShown = listAll;
     const paidYear = payments.filter((p) => (p.paid_on || p.created_at || "").slice(0, 4) === today().slice(0, 4)).reduce((a, p) => a + p.amount + (+(p.fee || 0)), 0);
     const dueText = (o: AOrder) => {
       if (o.type === "quote") return <span className="pyl-soon">Quote · paying approves it</span>;
@@ -711,7 +717,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       if (o.archived && mode === "portal" && !o.payHere) return o.payUrl ? <a className="pyl-ext" href={o.payUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Pay on its invoice ↗</a> : <span className="pyl-soon">From our old system</span>;
       if (o.payCan === "deposit") return <span>Deposit now ({money(amtOf(o))})</span>;
       const d = dueOn(o);
-      return d ? (d < today() ? <span className="pyl-late">Past due · {when(d)}</span> : <span>Due {when(d)}</span>) : <span className="pyl-soon">Due when it&apos;s done</span>;
+      return d ? (isLate(o) ? <span className="pyl-late">Open since {when(d)}</span> : d <= today() ? <span className="pyl-ok">Ready to pay · {when(d)}</span> : <span>Pay by {when(d)}</span>) : <span className="pyl-soon">When it&apos;s done</span>;
     };
     const searchBox = search("Search payments");
     body = <>
@@ -729,7 +735,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       {/* the numbers in one summary card (Nov 2, Nick: "it looks busy") */}
       <div className="stats pyl-stats">
         <button type="button" className="stat" onClick={() => setPayF("open")}><span className="k">Balance due</span><span className="v">{money(due)}</span><small>{owed.length} invoice{owed.length === 1 ? "" : "s"}</small></button>
-        <button type="button" className="stat" onClick={() => setPayF("late")}><span className="k">Past due</span><span className={"v" + (sumOf(lateL) > 0.004 ? " alert" : "")}>{money(sumOf(lateL))}</span><small>{lateL.length} invoice{lateL.length === 1 ? "" : "s"}</small></button>
+        <button type="button" className="stat" onClick={() => setPayF("late")}><span className="k">Open over a week</span><span className={"v" + (sumOf(lateL) > 0.004 ? " alert" : "")}>{money(sumOf(lateL))}</span><small>{lateL.length} invoice{lateL.length === 1 ? "" : "s"}</small></button>
         <button type="button" className="stat" onClick={() => setPayF("later")}><span className="k">Not due yet</span><span className="v">{money(sumOf(laterL))}</span><small>{laterL.length ? `${laterL.length} still being made` : "Nothing in the works"}</small></button>
         <button type="button" className="stat" onClick={() => document.querySelector(".aa-ph-card")?.scrollIntoView({ behavior: "smooth" })}><span className="k">Paid this year</span><span className="v">{money(paidYear)}</span><small>{terms ? `Terms: ${terms}` : "Payment history below"}</small></button>
       </div>
@@ -737,7 +743,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         <div className="toolbar pyl-bar">
           <div className="chips">
             <button type="button" className={"chip" + (payF === "open" ? " on" : "")} onClick={() => setPayF("open")}>Open<span className="chip-n">{allOpen.length}</span></button>
-            <button type="button" className={"chip" + (payF === "late" ? " on" : "")} onClick={() => setPayF("late")}>Past due<span className="chip-n">{lateL.length}</span></button>
+            <button type="button" className={"chip" + (payF === "late" ? " on" : "")} onClick={() => setPayF("late")}>Over a week<span className="chip-n">{lateL.length}</span></button>
             <button type="button" className={"chip" + (payF === "later" ? " on" : "")} onClick={() => setPayF("later")}>Not due yet<span className="chip-n">{laterL.length}</span></button>
           </div>
           {canPay && searchBox}
@@ -776,7 +782,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
           const w = hq.trim().toLowerCase().replace(/[$,]/g, "").replace(/^#/, "");
           const hit = (g: (typeof all)[number]) => !w || [g.total.toFixed(2), money(g.total), (g.total + g.fee).toFixed(2), when(g.date), g.method, ...g.lines.flatMap((l) => [String(l.number), l.amount.toFixed(2)])].some((x) => String(x).toLowerCase().replace(/[$,]/g, "").includes(w));
           const list = all.filter(hit);
-          const PERH = 10, pages = Math.max(1, Math.ceil(list.length / PERH)), pg = Math.min(hp, pages - 1);
+          const PERH = 5, pages = Math.max(1, Math.ceil(list.length / PERH)), pg = Math.min(hp, pages - 1);
           const shown = list.slice(pg * PERH, pg * PERH + PERH);
           return (<>
             <div className="aa-sec-h ph-h"><h3>Payment history</h3>
