@@ -95,9 +95,11 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, qs
           <div className="gdk-sm">{[o.due_date ? `In hands ${when(o.due_date)}` : "", o.qty ? pcsOf(o.qty) : ""].filter(Boolean).join(" · ")}</div></div>
         <div className="gdk-c2">{groups.length ? groups.map((g, k) => <div key={k}><b>{g.supplier ? `${g.supplier.replace(/ Activewear$/, "")} ${g.order}` : "Your shipment"}</b>{!g.supplier && g.ships[0]?.added_by === "customer" ? <> {youTold}</> : null}{g.ships[0]?.note && g.supplier ? <span className="gdk-sm"> · {g.ships[0].note.split(" · ").slice(2).join(" · ") || ""}</span> : g.ships[0]?.note ? <span className="gdk-sm"> · {g.ships[0].note}</span> : null}</div>)
           : <span className="gdk-sm">No shipment yet{canAct ? <> · <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>Tell us what&apos;s coming</button></> : null}</span>}</div>
-        <div className="gdk-c3">{r.boxes ? <span className={r.done ? "gdk-ok" : ""}>{r.done ? `All ${r.boxes} here` : r.short && r.here >= r.boxes ? `${r.boxes} here · ${pcsOf(r.short)} not shipped yet` : `${r.here} of ${r.boxes} here`}{r.short && r.here < r.boxes ? <span className="gdk-sm"> · {pcsOf(r.short)} not shipped yet</span> : null}{!r.done && r.eta ? <span className="gdk-sm"> · {when(r.eta)}</span> : null}</span> : <span className="gdk-sm">—</span>}</div>
+        <div className="gdk-c3">{r.boxes ? <span className={r.done ? "gdk-ok" : ""}>{r.done ? `All ${r.boxes} here` : r.here >= r.boxes ? `All ${r.boxes} linked here` : `${r.here} of ${r.boxes} here`}{r.short ? <span className="gdk-sm gdk-c3-sub">{pcsOf(r.short)} not shipped yet</span> : null}{!r.done && r.eta ? <span className="gdk-sm"> · {when(r.eta)}</span> : null}</span> : <span className="gdk-sm">—</span>}</div>
         <div className="gdk-c4">
-          {trk.length > 0 && <button type="button" className="gdk-trk" aria-expanded={trkOpen === o.id} onClick={() => setTrkOpen(trkOpen === o.id ? null : o.id)}>{trk.length} tracking {trkOpen === o.id ? "▴" : "▾"}</button>}
+          {trk.length > 0 ? <button type="button" className="gdk-trk" aria-expanded={trkOpen === o.id} onClick={() => setTrkOpen(trkOpen === o.id ? null : o.id)}>{trk.length} tracking {trkOpen === o.id ? "▴" : "▾"}</button> : <span className="gdk-sm">—</span>}
+        </div>
+        <div className="gdk-c5">
           <Link className="gdk-msg" href={chatHref(o.id)} title="Message us about these goods" aria-label="Message us about these goods"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></Link>
         </div>
         {trkOpen === o.id && (
@@ -133,7 +135,7 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, qs
         {GROUPS.filter((g) => g.list.length).map((g) => (
           <section key={g.k} className={"gdk-grp g-" + g.k} aria-label={g.label}>
             <div className="gdk-vbar"><span>{g.label} · {g.list.length}</span></div>
-            <div className="gdk-grp-b"><div className="gdk-row gdk-head" aria-hidden><span>Order</span><span>Shipment</span><span>Boxes</span><span /></div>{g.list.map(card)}</div>
+            <div className="gdk-grp-b"><div className="gdk-row gdk-head" aria-hidden><span>Order</span><span>Shipment</span><span>Boxes</span><span>Tracking</span><span /></div>{g.list.map(card)}</div>
           </section>
         ))}
         {!shown.length && !notLinked && <div className="aa-empty">{w ? `Nothing matches “${q}”.` : "No orders with goods right now."}</div>}
