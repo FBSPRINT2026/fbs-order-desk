@@ -17733,3 +17733,9 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .pv-ro{font-size:12px;color:var(--ink-3);margin-top:2px}
 .pv-gone{margin:6px 0;padding:10px 14px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-weight:600;font-size:13px}
 @media (max-width:1000px){.pv-shop{grid-template-columns:minmax(0,1fr)}.pv-shop-side{position:static}}
+/* embroidery and DTF price tables: pieces on the left, the prices in fixed columns on the right (Nov 2, Nick) */
+.pl-tbl.pl-narrow{table-layout:fixed}
+.pl-tbl col.pl-c-p{width:160px}
+.pl-tbl col.pl-c-sp{width:220px}
+.pl-tbl thead th .pl-th-sub{display:block;margin-top:2px;font-size:11.5px;letter-spacing:0;text-transform:none;font-weight:500;color:var(--ink-3);white-space:normal}
+@media (max-width:640px){.pl-tbl col.pl-c-p{width:96px}.pl-tbl col.pl-c-sp{width:120px}}

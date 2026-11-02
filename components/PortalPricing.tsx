@@ -91,8 +91,10 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
           <div className="panel-h"><h2>Embroidery</h2><span className="faint">Per location, per piece, up to {(pl.embStitches || 0).toLocaleString()} stitches</span></div>
           <div className="panel-b">
             <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>
-              <thead><tr><th>Pieces</th><th>Price</th>{pl.embSpecialty?.length ? <th><span className="pl-long">Hats, bags, fleece &amp; jackets</span><span className="pl-short" aria-hidden>Hats, bags &amp; fleece</span></th> : null}</tr></thead>
-              <tbody>{ranges(embT).map((r, i) => <tr key={r}><th scope="row">{r}</th><td>{pl.embroidery?.[i] != null ? m(+pl.embroidery[i]) : "—"}</td>{pl.embSpecialty?.length ? <td>{pl.embSpecialty[i] != null ? `${m((+pl.embroidery[i] || 0) + (+pl.embSpecialty[i] || 0))}` : "—"}<small> (+{m(+pl.embSpecialty[i] || 0)})</small></td> : null}</tr>)}</tbody>
+              {/* prices on the right, specialty items in their own column with what counts as one under its name (Nov 2, Nick) */}
+              <colgroup><col />{pl.embSpecialty?.length ? <><col className="pl-c-p" /><col className="pl-c-sp" /></> : <col className="pl-c-p" />}</colgroup>
+              <thead><tr><th>Pieces</th><th>Price</th>{pl.embSpecialty?.length ? <th>Specialty items<span className="pl-th-sub">Hats, bags, fleece &amp; jackets</span></th> : null}</tr></thead>
+              <tbody>{ranges(embT).map((r, i) => <tr key={r}><th scope="row">{r}</th><td>{pl.embroidery?.[i] != null ? m(+pl.embroidery[i]) : "—"}</td>{pl.embSpecialty?.length ? <td>{pl.embSpecialty[i] != null ? m((+pl.embroidery[i] || 0) + (+pl.embSpecialty[i] || 0)) : "—"}</td> : null}</tr>)}</tbody>
             </table></div>
             <ul className="pl-rules">
               {pl.embPer1k ? <li><b>Over {(pl.embStitches || 0).toLocaleString()} stitches:</b> add {m(pl.embPer1k)} per 1,000.</li> : null}
@@ -108,6 +110,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             <div className="panel-h"><h2>DTF heat transfers</h2><span className="faint">Full color, per location, per piece</span></div>
             <div className="panel-b">
               <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>
+                <colgroup><col /><col className="pl-c-p" /></colgroup>
                 <thead><tr><th>Pieces</th><th>Price</th></tr></thead>
                 <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row">{r}</th><td>{pl.dtf?.[i] != null ? m(+pl.dtf[i]) : "—"}</td></tr>)}</tbody>
               </table></div>
