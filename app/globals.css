@@ -18642,3 +18642,13 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .orl-end.e{left:100%;margin-left:-10px}
 .orl-end svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .orl-lb li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the customer dashboard's cards: a navy bar across the top with the title in white, and the FBS rainbow as the seam where
+   the navy meets the white (Nov 2, Nick: "over the rainbow bar thing underneath… a navy header… the rainbow line… the
+   transition between the white and the navy"); headers inside a card (artwork / mockups) just lose the underline */
+.pdx-h h2::after{content:none}
+.pdx-h h2{padding-bottom:0}
+.pdx-card>.pdx-h:first-child{margin:-16px -18px 14px;padding:11px 18px;background:var(--side,#141D2B);border-radius:13px 13px 0 0;border-bottom:3px solid transparent;border-image:var(--fbs-fade) 1;border-image-slice:0 0 1 0}
+.pdx-card>.pdx-h:first-child h2{color:#fff}
+.pdx-card>.pdx-h:first-child h2 .pdx-count{color:#C9D3E0}
+.pdx-card>.pdx-h:first-child .faint{color:#C9D3E0}
+.pdx-card>.pdx-h:first-child .pd-link{color:#7fd0f2}
