@@ -12,7 +12,9 @@ export type Project = {
 };
 export type ProjectTask = { id: string; project_id: string; title: string; due_date: string | null; who: "shop" | "customer"; shop_only: boolean; done_at: string | null; done_by: string; position: number };
 export type ProjectOrder = { id: string; number: number; nickname: string; statusLabel: string; statusColor?: string; type: string; total: number; balance: number; due_date: string | null; href: string; archived?: boolean };
-export type ProjectSummary = Project & { company?: string; orders: number; total: number; openTasks: number; nextTask?: { title: string; due_date: string | null } | null };
+export type ProjectSummary = Project & { company?: string; orders: number; total: number; openTasks: number; nextTask?: { title: string; due_date: string | null } | null;
+  /** the orders, quotes and invoices on it, for the customer's Projects page (Nov 2) */ items?: { id: string; number: number; nickname: string; status: string; total: number; due_date: string | null }[];
+  /** its checklist (the customer's tasks) */ tasks?: { title: string; due_date: string | null; done: boolean }[] };
 
 /** Days from today to a date (negative = past). */
 export function daysTo(d?: string | null): number | null {

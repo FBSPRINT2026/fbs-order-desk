@@ -13,7 +13,8 @@ type NewProject = { name: string; event_date: string | null; in_hands_date: stri
  * Projects as cards: upcoming first (by event date, with a countdown), then in progress, then done.
  * "New project" opens a short form (the shop also picks the customer).
  */
-export default function ProjectList({ mode, projects, hrefOf, onCreate, customers, canAct = true, compact = false }: {
+export default function ProjectList({ mode, projects, hrefOf, onCreate, customers, canAct = true, compact = false, orderHref }: {
+  /** portal: each project's orders, quotes and checklist on its card (Nov 2) */ orderHref?: (id: string) => string;
   mode: "portal" | "shop"; projects: ProjectSummary[]; hrefOf: (id: string) => string;
   onCreate?: (p: NewProject) => Promise<{ ok: boolean; error?: string; id?: string }>;
   /** shop: who the new project is for */
@@ -59,6 +60,31 @@ export default function ProjectList({ mode, projects, hrefOf, onCreate, customer
       <div className={"pj-cards" + (compact ? " compact" : "")}>
         {list.map((p) => {
           const d = p.event_date || p.in_hands_date, n = daysTo(d), st = PROJECT_STATUS[p.status];
+          // the customer's card, fleshed out (Nov 2, Nick: "assign orders, quotes and invoices to projects… flesh this out"):
+          // its dates and countdown, how far the checklist is, the orders on it with where each is, the checklist itself
+          if (orderHref && mode === "portal") {
+            const tasks = p.tasks || [], doneN = tasks.filter((t) => t.done).length;
+            return (
+              <article key={p.id} className="pj-card pj-rich" style={{ ["--pc" as string]: st.c }}>
+                <div className="pj-top"><span className="pj-st">{st.label}</span>{d && <span className={"pj-cd" + (n !== null && n >= 0 && n <= 14 ? " soon" : "")}>{countdown(d)}</span>}</div>
+                <Link className="pj-name" href={hrefOf(p.id)}>{p.name}</Link>
+                <div className="pj-dates">
+                  {p.event_date && <span>📅 Event {fmtDateLong(p.event_date)}</span>}
+                  {p.in_hands_date && <span>📦 Needed by {fmtDateLong(p.in_hands_date)}</span>}
+                </div>
+                {tasks.length > 0 && <div className="pj-prog" title={`${doneN} of ${tasks.length} done`}><i style={{ width: `${Math.round((doneN / tasks.length) * 100)}%` }} /></div>}
+                <div className="pj-cols">
+                  <div><small className="pj-lbl">Orders, quotes and invoices</small>
+                    {(p.items || []).length ? <ul className="pj-ol">{(p.items || []).map((o) => <li key={o.id}><Link href={orderHref(o.id)}><b>#{o.number}</b> {o.nickname}</Link><span className="pj-os">{o.status}</span></li>)}</ul>
+                      : <span className="faint pj-empty">We&apos;ll add the orders for this project here.</span>}</div>
+                  <div><small className="pj-lbl">Checklist</small>
+                    {tasks.length ? <ul className="pj-ck">{tasks.map((t, k) => <li key={k} className={t.done ? "done" : ""}><i aria-hidden />{t.title}{t.due_date && !t.done ? <small> · {fmtDateLong(t.due_date)}</small> : null}</li>)}</ul>
+                      : <span className="faint pj-empty">Nothing to do yet.</span>}</div>
+                </div>
+                <div className="pj-foot"><span>{p.orders} order{p.orders === 1 ? "" : "s"}{p.total ? ` · ${money(p.total)}` : ""}</span><Link href={hrefOf(p.id)}>Open project ›</Link></div>
+              </article>
+            );
+          }
           return (
             <Link key={p.id} href={hrefOf(p.id)} className="pj-card" style={{ ["--pc" as string]: st.c }}>
               <div className="pj-top"><span className="pj-st">{st.label}</span>{d && <span className={"pj-cd" + (n !== null && n >= 0 && n <= 14 ? " soon" : "")}>{countdown(d)}</span>}</div>
