@@ -1062,7 +1062,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     </>;
   } else if (area === "receive" && goodsPanel) {
     body = <>
-      <div className="aa-bar"><div className="aa-bar-l"><h2>{mode === "shop" ? "Customer supplied goods" : "Customer supplied goods"}</h2><span className="aa-sum">{mode === "shop" ? "Garments this customer sends us for their jobs" : "The garments you send us for your jobs: add tracking, see when they're checked in, and message us about them"}</span></div></div>
+      <div className="aa-bar"><div className="aa-bar-l"><h2>{mode === "shop" ? "Customer supplied goods" : "Goods"}</h2><span className="aa-sum">{mode === "shop" ? "Garments this customer sends us for their jobs" : "The garments you send us, by order. S&S and SanMar shipments show up here by themselves."}</span></div></div>
       {goodsPanel}
     </>;
   } else if (area === "receive") {

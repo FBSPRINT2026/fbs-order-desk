@@ -17803,3 +17803,59 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .mkv-acts{display:flex;flex-direction:column;gap:6px;margin-top:auto}
 .mkv-acts .btn{justify-content:center;width:100%}
 @media (max-width:860px){.mkv{grid-template-columns:minmax(0,1fr);max-height:none}.mkv-side{border-left:0;border-top:1px solid var(--line)}.mkv-crop{max-height:none}}
+/* the portal's Goods tab (components/PortalGoodsDesk.tsx, Nov 2, Nick: "organized by orders") */
+.gdk{display:flex;flex-direction:column;gap:12px}
+.gdk-stats{margin-bottom:0}
+.gdk-grid{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:14px;align-items:start}
+.gdk-main{display:flex;flex-direction:column;gap:12px;min-width:0}
+.gdk-help{border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 7%,var(--surface));border-radius:var(--r);overflow:hidden}
+.gdk-help-h{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:11px 14px}
+.gdk-help-h span{font-size:12.5px;color:var(--ink-3)}
+.gdk-um{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:6px 12px;align-items:center;padding:10px 14px;border-top:1px solid color-mix(in srgb,var(--warn) 25%,transparent)}
+.gdk-um-t{min-width:0}
+.gdk-um-pick{display:flex;gap:6px}
+.gdk-um-pick select{flex:1;min-width:0;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);color:var(--ink);background:var(--surface)}
+.gdk-err{grid-column:1/-1;color:var(--danger);font-size:12.5px}
+.gdk-list{padding:0;overflow:hidden}
+.gdk-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.gdk-bar .chips{flex:1 1 auto}
+.gdk-search input{height:34px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);min-width:0;width:240px;max-width:100%}
+.gdk-ord{padding:12px 14px;border-bottom:1px solid var(--line)}
+.gdk-ord:last-of-type{border-bottom:0}
+.gdk-oh{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.gdk-on{font-weight:800;color:var(--accent);white-space:nowrap}
+.gdk-nm{font-size:14px;min-width:0}
+.gdk-pill{font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap;color:var(--gc);background:color-mix(in srgb,var(--gc) 12%,transparent)}
+.gdk-sp{flex:1}
+.gdk-due{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.gdk-bar2{height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:10px}
+.gdk-bar2 i{display:block;height:100%;background:linear-gradient(90deg,var(--fbs-blue),var(--ok))}
+.gdk-bt{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;font-size:12px;color:var(--ink-3);margin-top:5px}
+.gdk-none{font-size:12.5px;color:var(--ink-3);margin-top:8px}
+.gdk-sh{border-top:1px solid var(--line-2,var(--line));margin-top:8px;padding-top:8px}
+.gdk-sh-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px}
+.gdk-sh-who{flex:1 1 260px;min-width:0;font-size:13px}
+.gdk-st{font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:99px;white-space:nowrap;background:var(--surface-2);color:var(--ink-3)}
+.gdk-st.in{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.gdk-st.part{background:var(--accent-soft);color:var(--accent)}
+.gdk-st.way{background:color-mix(in srgb,var(--warn) 14%,transparent);color:color-mix(in srgb,var(--warn) 80%,var(--ink))}
+.gdk-trk{border:0;background:none;color:var(--accent);font:600 12.5px var(--body);cursor:pointer;white-space:nowrap}
+.gdk-trks{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.gdk-trks li{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:12.5px}
+.gdk-trks a{white-space:nowrap}
+.gdk-sm{font-size:12px;color:var(--ink-3)}
+.gdk-acts{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px;font-size:12.5px}
+.gdk-side{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px;position:sticky;top:12px}
+.gdk-side h3{margin:0;font-family:var(--display);font-size:15px}
+.gdk-side p{margin:0;font-size:12.5px;color:var(--ink-3)}
+.gdk-auto{background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:9px 11px;font-size:12px}
+.gdk-tell{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.gdk-ord .gdk-tell{background:var(--surface-2);border-radius:8px;padding:10px}
+.gdk-f{display:flex;flex-direction:column;gap:3px;min-width:0}
+.gdk-f>span{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.gdk-f :is(input,select,textarea){border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);background:var(--surface);padding:0 10px;min-width:0}
+.gdk-f :is(input,select){height:36px}
+.gdk-f textarea{padding:8px 10px;resize:vertical}
+.gdk-two{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.gdk-go{justify-content:center;width:100%}
+@media (max-width:900px){.gdk-grid{grid-template-columns:minmax(0,1fr)}.gdk-side{position:static}.gdk-um{grid-template-columns:minmax(0,1fr)}}
