@@ -163,6 +163,7 @@ export default function JobCenter() {
   const colorOfChat = (c: ChatSummary) => tagOf(c).c;
   const shownIds = new Set(shown.map((it) => it.orderId).filter(Boolean));
   const chatHere = !!curChat && !!curChat.orderId && shownIds.has(curChat.orderId);
+  const solo = !!curChat && !chatHere;
   // the Messages heading level with the jobs' heading: the space above it is measured from the table's own heading,
   // again when anything above the table changes size (filters wrapping, a narrower window)
   useLayoutEffect(() => {
@@ -217,7 +218,7 @@ export default function JobCenter() {
         <i className="jmc-strip" aria-hidden />
       </div>
       <div className="jct" role="tablist" aria-label="Steps">
-        {GROUPS.map((g) => { const on = curG?.t === g.t; const nm = newIn(g); return (
+        {GROUPS.map((g) => { const on = !solo && curG?.t === g.t; const nm = newIn(g); return (
           <div key={g.t} role="tab" aria-selected={on} className={"jct-tab jc-g" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
             <button type="button" className="jc-gh jct-hbtn" onClick={() => go(g.steps[0][0])}><b>{g.t}{nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}</b><span>{g.line}</span></button>
             <div className="jc-st">
@@ -245,7 +246,14 @@ export default function JobCenter() {
       <div className={"jc-body jct-body" + (picked ? " has-pick" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
         <section className="panel jc-list">
           <div className="panel-b stack" style={{ gap: 12 }}>
-            {curChat && !chatHere && <div className="jmb-solo"><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></div>}
+            {/* a message with no job in the Job Center (a general question, or an order past it) opens on its own, as a general
+                inquiry, with no tab picked (Nov 2, Nick: "it should go back as a general inquiry and not go to a tab") */}
+            {solo && curChat ? <div className="jmb-gen">
+              <div className="jmb-gen-h"><b>{byOrder.has(curChat.orderId || "") ? "Its job is hidden by the filters" : "General inquiry"}</b>
+                <span className="faint">{curChat.number ? `#${curChat.number}${curChat.nickname ? ` ${curChat.nickname}` : ""}${ST[curChat.status]?.label ? ` · ${ST[curChat.status]!.label}` : ""}` : "Not about an order"}{curChat.customer ? ` · ${curChat.customer}` : ""}</span>
+                <button type="button" className="btn sm" onClick={() => setChat(null)}>Back to the jobs</button></div>
+              <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} />
+            </div> : <>
             <div className="toolbar" data-toolbar>
               {(all || step !== "leads") && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? (all ? base.filter((it) => !it.steps.every((x) => x === "leads") && (k === "all" || it.depts.includes(k))).length : deptCount(k)) : "…"}</span></button>)}</div>}
               <div className="chips">
@@ -275,6 +283,7 @@ export default function JobCenter() {
                 ]; })}</tbody>
               </table></div>
             )}
+            </>}
           </div>
         </section>
         {picked && <aside className="jc-side" aria-label="The job">

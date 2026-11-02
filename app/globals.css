@@ -18567,3 +18567,10 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jcx>.jmb .jmb-s{flex:none;width:100%;box-sizing:border-box}
 .jcx>.jmb .jmb-head{height:40px;flex:none}
 .jcx>.jmb .jmb-list{padding-top:8px;max-height:calc(100vh - 140px);overflow-y:auto;overflow-x:hidden}
+/* a message with no job on the board: a general inquiry in the jobs' panel (Nov 2) */
+.jmb-gen{display:grid;gap:10px}
+.jmb-gen-h{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.jmb-gen-h b{font-family:var(--display);font-size:16px;color:var(--ink)}
+.jmb-gen-h .faint{font-size:12.5px;color:var(--ink-3)}
+.jmb-gen-h .btn{margin-left:auto}
+.jmb-gen .jmb-t{border:1px solid var(--line);border-left:4px solid var(--mc);border-radius:var(--r)}
