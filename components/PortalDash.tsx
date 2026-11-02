@@ -110,7 +110,7 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
             {/* just the balance (Nov 2, Nick: "take the past due off… take red off"): no aging boxes, no red */}
             <div className={"pdx-stmt-due" + (pay.due > 0.004 ? " owe" : " ok")}>
               <small>Balance</small><b>{money(pay.due)}</b>
-              <span>{pay.due <= 0.004 ? "All paid up. Thank you!" : "Pay one, several or all of them on Payments."}</span>
+              {pay.due <= 0.004 && <span>All paid up. Thank you!</span>}
             </div>
             <div className="pdx-stmt-acts">{pay.due > 0.004 && <Link className="btn primary" href={pay.href}>Pay now</Link>}<a className="btn" href={pay.statementHref}>Statement</a></div>
           </div>

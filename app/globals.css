@@ -18626,3 +18626,10 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pdx-hl-job:hover b{color:var(--accent)}
 .pdx-hl-do{flex:none;height:32px;display:inline-flex;align-items:center;padding:0 12px;border-radius:6px;background:var(--hk);color:#fff;font:600 13px var(--body);text-decoration:none;white-space:nowrap}
 .pdx-hl-do:hover{filter:brightness(1.08)}
+/* the assistant's shortcuts take turns inside the box, fading in and out, instead of a row of bubbles (Nov 2, Nick) */
+.pa-field{position:relative;flex:1;min-width:0;display:flex}
+.pa-field input{flex:1;width:100%}
+.pa-roll{position:absolute;left:0;top:50%;transform:translateY(-50%);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;color:var(--ink-3);font-size:15px;animation:pa-roll 3s ease-in-out both}
+@keyframes pa-roll{0%{opacity:0;transform:translateY(-20%)}12%{opacity:1;transform:translateY(-50%)}85%{opacity:1;transform:translateY(-50%)}100%{opacity:0;transform:translateY(-80%)}}
+@media (prefers-reduced-motion:reduce){.pa-roll{animation:none}}
+.pa-ideas.pa-ideas-quiet{justify-content:flex-end}

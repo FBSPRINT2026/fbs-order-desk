@@ -76,17 +76,29 @@ export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: id
   }
 
   const ideas = ideas0?.length ? ideas0 : wholesale ? [...IDEAS, "Where are my goods?"] : IDEAS;
+  // the shortcuts take turns inside the box instead of a row of bubbles (Nov 2, Nick: "rotate those in there… like 3 seconds
+  // go by… little things that pop in and out… I don't like the bubbles"); Ask with the box empty asks the one showing
+  const [idea, setIdea] = useState(0);
+  useEffect(() => {
+    if (turns.length || q || ideas.length < 2) return;
+    const t = setInterval(() => setIdea((i) => (i + 1) % ideas.length), 3000);
+    return () => clearInterval(t);
+  }, [turns.length, q, ideas.length]);
+  const shownIdea = !turns.length && !q ? ideas[idea % Math.max(1, ideas.length)] || "" : "";
   return (
     <section className={"pa" + (bare ? " pa-bare" : "")} aria-label="Help">
       {!bare && <h2 className="pa-hello">{hello}</h2>}
-      <form className="pa-in" onSubmit={(e) => { e.preventDefault(); ask(q); }}>
+      <form className="pa-in" onSubmit={(e) => { e.preventDefault(); ask(q.trim() ? q : shownIdea); }}>
         <span className="pa-spark" aria-hidden="true">✨</span>
-        <input ref={inRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={bare ? "Ask about an order, a reorder, a payment, your art…" : "What can I help you with today?"} aria-label="Ask the assistant" autoComplete="off" />
+        <span className="pa-field">
+          <input ref={inRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={shownIdea ? "" : bare ? "Ask about an order, a reorder, a payment, your art…" : "What can I help you with today?"} aria-label="Ask the assistant" autoComplete="off" />
+          {shownIdea && <span key={idea} className="pa-roll" aria-hidden>Try “{shownIdea}”</span>}
+        </span>
         {/* talk to it (Oct 24, Nick: "a microphone button in there so they can just talk to it"): what's said is asked */}
         <MicButton target={() => inRef.current} label="Ask by voice" className="pa-mic" onDone={(t) => { if (t.trim()) ask(t.trim()); }} />
-        <button type="submit" className="btn primary" disabled={busy || !q.trim()}>{busy ? "Thinking…" : "Ask"}</button>
+        <button type="submit" className="btn primary" disabled={busy || (!q.trim() && !shownIdea)}>{busy ? "Thinking…" : "Ask"}</button>
       </form>
-      {!turns.length && <div className="pa-ideas">{ideas.map((s) => <button key={s} type="button" onClick={() => ask(s)}>{s}</button>)}{personHref && <a className="pa-person" href={personHref}>Talk to a person →</a>}</div>}
+      {!turns.length && personHref && <div className="pa-ideas pa-ideas-quiet"><a className="pa-person" href={personHref}>Talk to a person →</a></div>}
       {turns.length > 0 && (
         <div className="pa-talk" ref={box}>
           {turns.map((t, i) => (
