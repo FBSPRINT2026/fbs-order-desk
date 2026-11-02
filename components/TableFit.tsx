@@ -37,6 +37,9 @@ function label(t: HTMLTableElement) {
   const names: string[] = [];
   heads.forEach((h) => { const n = (h.innerText || h.getAttribute("aria-label") || "").trim(); for (let k = 0; k < (h as HTMLTableCellElement).colSpan; k++) names.push(n); });
   // a cell spanning rows (a customer's name beside all of its jobs) takes its column in the rows under it too
+  // many columns (an order's lines with a column per size): stacked, its cells sit side by side in a grid of label-over-
+  // value boxes, not one long column of rows (Nov 2, Nick: the old order's lines ran a screen tall beside Create reorder)
+  t.classList.toggle("tbl-stack-many", names.length >= 6);
   let carry: number[] = [];
   t.querySelectorAll<HTMLTableRowElement>("tbody > tr").forEach((tr) => {
     let col = 0;
@@ -44,6 +47,8 @@ function label(t: HTMLTableElement) {
     for (const c of [...tr.cells]) {
       while ((carry[col] || 0) > 0) col++;
       if (!c.hasAttribute("data-label") || c.dataset.autolabel) { c.setAttribute("data-label", c.colSpan > 1 ? "" : names[col] || ""); c.dataset.autolabel = "1"; }
+      // stacked in a grid (a table of many columns), a cell with a sentence in it takes the whole line
+      if ((c.innerText || "").trim().length > 32 || c.colSpan > 1) c.dataset.wide = "1"; else delete c.dataset.wide;
       if (c.rowSpan > 1) for (let k = 0; k < c.colSpan; k++) next[col + k] = c.rowSpan - 1;
       col += c.colSpan;
     }
