@@ -70,7 +70,7 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
 
   return (
     <section className="panel ph-panel">
-      <div className="panel-h"><h2>Proof history</h2><span className="faint">{versions.length ? `${versions.length} version${versions.length === 1 ? "" : "s"} sent` : "what the customer was sent"}</span></div>
+      <div className="panel-h"><h2>Sent to the customer</h2><span className="faint">{versions.length ? `${versions.length} version${versions.length === 1 ? "" : "s"}` : "nothing sent yet"}</span></div>
       <div className="panel-b ph-list">
         {err && <div className="err">{err}</div>}
         {!versions.length && <p className="faint" style={{ margin: 0 }}>Nothing sent to the customer yet. Save a mockup in the Mockup Creator, then send it from Mockup history.</p>}

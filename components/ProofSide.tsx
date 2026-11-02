@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fmtStamp } from "@/lib/format";
-import { approveArtAnotherWay, remindProof, restoreVersion, sendProofVersion } from "@/app/shop/proof-actions";
+import { approveArtAnotherWay, remindProof, restoreVersion, sendProofVersion, unapproveArt } from "@/app/shop/proof-actions";
 import { PROOF_COLS, versionState, type ProofRow } from "@/components/ProofHistory";
 import SendProofTool from "@/components/tools/SendProofTool";
 
@@ -81,7 +81,7 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
   return (
     <>
       <section className="panel mkh-panel">
-        <div className="panel-h"><h2>Mockup history</h2><span className="faint">every save</span><a className="btn sm" style={{ marginLeft: "auto" }} href={`/print/${orderId}?proof=1`} target="_blank" rel="noreferrer" title="The art proof as a PDF: every mockup big, each print up close with its size and inks, and a box to approve">Proof PDF</a></div>
+        <div className="panel-h"><h2>Mockup saves</h2><span className="faint">newest first</span><a className="btn sm" style={{ marginLeft: "auto" }} href={`/print/${orderId}?proof=1`} target="_blank" rel="noreferrer" title="The art proof as a PDF: every mockup big, each print up close with its size and inks, and a box to approve">Proof PDF</a></div>
         <div className="panel-b">
           {!mocks.length && <p className="faint" style={{ margin: 0 }}>No mockups saved yet. Make one in the Mockup Creator.</p>}
           {groups.slice(0, showAll ? groups.length : 2).map((gr) => {
@@ -127,13 +127,20 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
                 {st.reminded && <div><span>Reminded</span><b>{fmtStamp(st.reminded)}</b></div>}
                 <div><span>Decision</span><b className={st.tone}>{st.tone === "wait" ? "Waiting" : st.text}</b></div>
               </div>
-              {st.tone === "ok" && <div className="ca-call ok">{st.staff ? "Approved another way" : "Approved"} by <b>{st.dec?.decided_name || "the customer"}</b>{st.dec?.decided_at ? `, ${fmtStamp(st.dec.decided_at)}` : ""}.{unsentCurrent ? " A newer mockup is saved; send it if the customer should see it." : ""}</div>}
+              {st.tone === "ok" && <div className="ca-call ok">Version {liveV} {st.staff ? "approved another way" : "approved"} by <b>{st.dec?.decided_name || "the customer"}</b>{st.dec?.decided_at ? `, ${fmtStamp(st.dec.decided_at)}` : ""}.</div>}
+              {/* the art changed after it was approved, said plainly (Nov 2, Nick: "this screen doesn't clearly show what's going on") */}
+              {st.tone === "ok" && unsentCurrent && <div className="ca-call wait ca-changed"><b>The mockup changed after Version {liveV} was approved.</b> {[...new Set(current.map((m) => (m.snapshot?.imprints || []).map((im) => [im.location, im.size].filter(Boolean).join(" ")).join(", ")).filter(Boolean))].join(" · ") || "The newest save"} isn&apos;t approved yet. Send it as Version {nextV} (Mockup history), or mark it approved after the customer OKs it.</div>}
               {st.tone === "bad" && <div className="ca-call bad">{first} asked for changes. Make them in the Mockup Creator, then send the next version.</div>}
               {st.tone === "wait" && <div className="ca-call wait">{st.viewed ? `${first} opened the proof ${ago(st.last || st.viewed)} but hasn't answered yet.` : `${first} hasn't opened the proof link yet (sent ${st.sent ? ago(st.sent) : ""}).`}</div>}
             </>
           ) : <div className="ca-call">{current.length ? "No proof sent to the customer yet." : "No mockup yet."}</div>}
 
           <div className="ca-acts">
+            {/* undo an approval made by mistake */}
+            {st?.tone === "ok" && (ask === "unapprove"
+              ? <div className="ca-confirm"><div>Mark Version {liveV} unapproved? It goes back to waiting on the customer. Separations already made stay.</div>
+                  <div className="row"><button type="button" className="btn sm" disabled={!!busy} onClick={() => act("unapprove", () => unapproveArt(orderId), () => "Marked unapproved.")}>{busy === "unapprove" ? "Saving…" : "Yes, mark unapproved"}</button><button type="button" className="btn sm ghost" onClick={() => setAsk("")}>Cancel</button></div></div>
+              : <button type="button" className="btn" onClick={() => setAsk("unapprove")}>Mark unapproved</button>)}
             {st?.tone === "wait" && <div className="row" style={{ gap: 6, flexWrap: "wrap" }}><span className="faint" style={{ fontSize: 12.5 }}>Their proof link:</span><SendProofTool target={{ kind: "art", orderId, live: true }} mode="copy" onDone={setMsg} /></div>}
             {st?.tone === "wait" && (ask === "remind"
               ? <div className="ca-confirm"><div>Email <b>{email}</b> “Reminder: your artwork proof” with the link to review Version {liveV}?</div>

@@ -70,10 +70,10 @@ export default function SepRequest({ orderId, onChange }: { orderId: string; onC
         <ul className="srq-l">{g.items.map((x) => {
           const st = x.sep ? STAGE[x.sep.stage] : null;
           return (
-            <li key={x.imprintId}>
+            <li key={x.key}>
               <span className="srq-what"><b>{x.location}</b><small>{[x.colors ? `${x.colors} color${x.colors === 1 ? "" : "s"}` : "", x.design, x.garments.join(", ")].filter(Boolean).join(" · ")}</small>{!x.sep && x.problem && <small className="srq-prob">{x.problem}</small>}</span>
               {x.sep ? <><span className="pill" style={{ ["--sc" as string]: st!.c }}>S-{x.sep.number} · {st!.label}</span><Link className="btn sm" href={`/shop/separations/${x.sep.id}`}>Open</Link></>
-                : g.ok && !x.problem ? <button type="button" className="btn sm" disabled={!!busy} onClick={() => request([x.imprintId])}>{busy === x.imprintId ? "Sending…" : "Request"}</button> : null}
+                : g.ok && !x.problem ? <button type="button" className="btn sm" disabled={!!busy} onClick={() => request([x.key])}>{busy === x.key ? "Sending…" : "Request"}</button> : null}
             </li>
           );
         })}</ul>

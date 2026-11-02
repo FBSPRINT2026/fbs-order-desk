@@ -145,6 +145,19 @@ export async function approveAnotherWay(admin: SupabaseClient, orderId: string, 
   return { ok: true as const };
 }
 
+/**
+ * Undo an approval (Nov 2, Nick: "she… accidentally approved… just say unapproved"): the live proof goes back to waiting
+ * on the customer and the order history says who undid it and when. Separations already made stay; a new request waits
+ * for the next approval.
+ */
+export async function unapproveArt(admin: SupabaseClient, orderId: string, me: Staff) {
+  const { live } = await liveProofs(admin, orderId);
+  const ok = live.filter((p) => p.status === "approved");
+  if (ok.length) await admin.from("proofs").update({ status: "pending", approved_via: null, decided_at: null, decided_name: null }).in("id", ok.map((p) => p.id));
+  await admin.from("order_events").insert({ order_id: orderId, kind: "art_unapproved", detail: `${me.name}: marked unapproved`, actor: me.email });
+  return { ok: true as const };
+}
+
 /** The customer opened their proof (portal order page or review page): first time, last time, how many times. */
 export async function proofViewed(admin: SupabaseClient, orderId: string, proofId?: string) {
   let q = admin.from("proofs").select("id, viewed_at, view_count").eq("order_id", orderId).not("version", "is", null).is("archived_at", null);

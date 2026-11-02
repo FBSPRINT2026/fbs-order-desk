@@ -19,6 +19,7 @@ import { orderGroups, ST, type Order } from "@/lib/pricing";
  */
 export type SepStage = "working" | "printed" | "archived";
 export type SepItem = {
+  /** the imprint, plus ":youth" for its youth set */ key: string;
   groupId: string; group: string; imprintId: string; location: string; colors: number; garments: string[]; widthIn?: number;
   designId: string | null; design: string; problem: string;
   sep: { id: string; number: number; stage: SepStage } | null;
@@ -38,8 +39,8 @@ export async function artGate(admin: SupabaseClient, orderId: string): Promise<{
   const order = o as Order;
   const [{ data: proofs }, { data: marks }, { data: seps }] = await Promise.all([
     admin.from("proofs").select("id, title, status, created_at, decided_at, decided_name").eq("order_id", orderId).is("archived_at", null).order("created_at"),
-    admin.from("order_events").select("detail, actor, created_at").eq("order_id", orderId).eq("kind", "art_approved").order("created_at", { ascending: false }).limit(1),
-    admin.from("separations").select("id, number, status, imprint_id").eq("order_id", orderId).neq("status", "cancelled"),
+    admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", ["art_approved", "art_unapproved"]).order("created_at", { ascending: false }).limit(1),
+    admin.from("separations").select("id, number, status, imprint_id, location").eq("order_id", orderId).neq("status", "cancelled"),
   ]);
   const reasons: string[] = [];
 
@@ -50,7 +51,8 @@ export async function artGate(admin: SupabaseClient, orderId: string): Promise<{
   const ps = (proofs || []) as { id: string; title: string; status: string; created_at: string; decided_at: string | null; decided_name: string | null }[];
   const lastProof = ps.length ? ps[ps.length - 1].created_at : "";
   const mark = (marks || [])[0] as { detail: string; actor: string; created_at: string } | undefined;
-  const staffOk = !!mark && mark.created_at > lastProof;
+  // "Mark unapproved" (Nov 2, Nick: "accidentally approved, like just say unapproved") is newer than the approval: not approved
+  const staffOk = !!mark && (mark as { kind?: string }).kind !== "art_unapproved" && mark.created_at > lastProof;
   const pending = ps.filter((p) => p.status === "pending");
   const changes = ps.filter((p) => p.status === "changes" && !ps.some((q) => q.created_at > p.created_at));
   const yes = ps.filter((p) => p.status === "approved");
@@ -71,14 +73,24 @@ export async function artGate(admin: SupabaseClient, orderId: string): Promise<{
   const ids = [...new Set(screen.map((x) => x.im.design_id).filter((x): x is string => !!x && !x.startsWith("qt-")))];
   const { data: ds } = ids.length ? await admin.from("designs").select("id, number, name, file_path, archived_at").in("id", ids) : { data: [] };
   const dmap = new Map(((ds || []) as { id: string; number: number; name: string; file_path: string; archived_at: string | null }[]).map((d) => [d.id, d]));
-  const sepRows = (seps || []) as { id: string; number: number; status: string; imprint_id: string | null }[];
-  const items: SepItem[] = screen.map(({ g, im }, i) => {
+  const inch = (x?: string) => parseFloat(String(x || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || undefined;
+  const isYouthSet = (loc: string) => /\(youth\)\s*$/i.test(loc);
+  // a print with its own youth size gets its own youth set of films (Nov 2, Nick: "11 on an adult and 9 on a youth…
+  // isn't there two sets of separation?"): a separate film at the youth width, for the youth shirts in the group
+  const hasYouth = (g: (typeof groups)[number]) => g.lines.some((l) => Object.entries(l.sizes || {}).some(([z, q]) => +(q || 0) > 0 && /^Y/.test(z)) || /\d+B$|youth/i.test(`${l.style || ""} ${l.garment || ""}`));
+  const sepRows0 = (seps || []) as { id: string; number: number; status: string; imprint_id: string | null; location?: string }[];
+  const items: SepItem[] = screen.flatMap(({ g, im }, i) => {
+    const yw = inch((im as { youth?: { size?: string } }).youth?.size), aw = inch(im.size);
+    const two = !!yw && yw !== aw && hasYouth(g);
+    return two ? [{ g, im, i, youth: false }, { g, im, i, youth: true }] : [{ g, im, i, youth: false }];
+  }).map(({ g, im, i, youth }) => {
     const d = im.design_id ? dmap.get(im.design_id) : undefined;
-    const s = sepRows.find((x) => x.imprint_id === im.id);
+    const s = sepRows0.find((x) => x.imprint_id === im.id && isYouthSet(x.location || "") === youth);
     const problem = !im.design_id ? "No artwork on this location yet." : im.design_id.startsWith("qt-") ? "The text on this location was never saved as a design." : !d ? "Its design can't be found." : d.archived_at ? `D-${d.number} is archived.` : !d.file_path ? `D-${d.number} has no art file.` : "";
     return {
-      groupId: g.id, group: g.name || `Group ${groups.indexOf(g) + 1}`, imprintId: im.id, location: im.location || `Imprint ${i + 1}`, colors: im.colors || 0,
-      widthIn: parseFloat(String(im.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || undefined,
+      key: youth ? `${im.id}:youth` : im.id,
+      groupId: g.id, group: g.name || `Group ${groups.indexOf(g) + 1}`, imprintId: im.id, location: `${im.location || `Imprint ${i + 1}`}${youth ? " (youth)" : ""}`, colors: im.colors || 0,
+      widthIn: youth ? inch((im as { youth?: { size?: string } }).youth?.size) : inch(im.size),
       garments: [...new Set(g.lines.map((l) => l.color).filter(Boolean))], designId: d?.id || null, design: d ? `D-${d.number}${d.name ? " " + d.name : ""}` : "", problem,
       sep: s ? { id: s.id, number: s.number, stage: stageOf(s.status) } : null,
     };
@@ -93,7 +105,7 @@ export async function requestSeparations(admin: SupabaseClient, orderId: string,
   const { order, gate } = await artGate(admin, orderId);
   if (!order) return { ok: false as const, error: "That order doesn't exist.", gate };
   if (!gate.ok) return { ok: false as const, error: gate.reasons[0], gate };
-  const want = gate.items.filter((x) => !x.sep && (!only || only.includes(x.imprintId)));
+  const want = gate.items.filter((x) => !x.sep && (!only || only.includes(x.key) || only.includes(x.imprintId)));
   const blocked = want.filter((x) => x.problem);
   const go = want.filter((x) => !x.problem);
   if (!go.length) return { ok: false as const, error: blocked[0] ? `${blocked[0].location}: ${blocked[0].problem}` : "Every location already has a separation.", gate };

@@ -18429,3 +18429,5 @@ table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
 .jcx>.jct-body.has-pick{grid-template-columns:minmax(0,1fr) 400px}
 @media (max-width:1180px){.jcx{grid-template-columns:250px minmax(0,1fr)}.jcx>.jct-body.has-pick{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:900px){.jcx{grid-template-columns:minmax(0,1fr)}.jcx>*{grid-column:1!important;grid-row:auto!important}.jcx>.jcm{height:auto;max-height:70vh;position:static;border-radius:0 0 12px 12px;margin-bottom:12px}}
+.ca-call.ca-changed{margin-top:8px;line-height:1.45}
+.ca-call.ca-changed b{display:block;margin-bottom:2px}

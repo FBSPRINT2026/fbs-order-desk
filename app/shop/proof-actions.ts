@@ -3,7 +3,7 @@ import { mockupHref } from "@/lib/mockupFresh";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, type GLine, type Imprint, type Order } from "@/lib/pricing";
-import { approveAnotherWay, remindProofs, sendProofs } from "@/lib/proofs";
+import { approveAnotherWay, remindProofs, sendProofs, unapproveArt as unapproveArtLib } from "@/lib/proofs";
 
 /**
  * Going back in time on a group's mockups (Oct 15, Nick: "if the customer makes their own changes… have the history
@@ -83,3 +83,4 @@ export async function sendProofVersion(orderId: string, note = "") { return run(
 export async function remindProof(orderId: string) { return run(async () => remindProofs(createAdminClient(), orderId, await me())); }
 /** The customer approved another way: overrides every other approval. */
 export async function approveArtAnotherWay(orderId: string, note: string) { return run(async () => approveAnotherWay(createAdminClient(), orderId, await me(), note)); }
+export async function unapproveArt(orderId: string) { return run(async () => unapproveArtLib(createAdminClient(), orderId, await me())); }
