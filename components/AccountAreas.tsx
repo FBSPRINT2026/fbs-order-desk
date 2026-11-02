@@ -712,13 +712,12 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     // every open invoice, however many (Nov 2, Nick: "this is the one time I do want you to just show… a huge long list")
     const listShown = listAll;
     const paidYear = payments.filter((p) => (p.paid_on || p.created_at || "").slice(0, 4) === today().slice(0, 4)).reduce((a, p) => a + p.amount + (+(p.fee || 0)), 0);
+    // just the date (Nov 2, Nick: "just put the date… just green. If it goes more than a week past due… red. Don't put
+    // open since or ready to pay or anything like that"); no date yet (still being made, a quote): a dash
     const dueText = (o: AOrder) => {
-      if (o.type === "quote") return <span className="pyl-soon">Quote · paying approves it</span>;
-      if (isLater(o)) return <span className="pyl-soon">When it&apos;s done · {ST[o.status]?.portal || ST[o.status]?.label || "being made"}</span>;
-      if (o.archived && mode === "portal" && !o.payHere) return o.payUrl ? <a className="pyl-ext" href={o.payUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Pay on its invoice ↗</a> : <span className="pyl-soon">From our old system</span>;
-      if (o.payCan === "deposit") return <span>Deposit now ({money(amtOf(o))})</span>;
-      const d = dueOn(o);
-      return d ? (isLate(o) ? <span className="pyl-late">Open since {when(d)}</span> : d <= today() ? <span className="pyl-ok">Ready to pay · {when(d)}</span> : <span>Pay by {when(d)}</span>) : <span className="pyl-soon">When it&apos;s done</span>;
+      if (o.archived && mode === "portal" && !o.payHere) return o.payUrl ? <a className="pyl-ext" href={o.payUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>Pay on its invoice ↗</a> : <span className="pyl-soon">—</span>;
+      const d = o.type === "quote" || isLater(o) ? null : dueOn(o);
+      return d ? <span className={isLate(o) ? "pyl-late" : "pyl-ok"}>{when(d)}</span> : <span className="pyl-soon">—</span>;
     };
     const searchBox = search("Search payments");
     body = <>
@@ -750,7 +749,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
           {canPay && searchBox}
         </div>
         <table className="aa-tbl pyl-tbl">
-          <thead><tr>{canPay && <th className="pyl-ck"><input type="checkbox" aria-label="Check all" checked={listAll.filter(payable).length > 0 && listAll.filter(payable).every((o) => paySel.includes(o.id))} onChange={(e) => listAll.filter(payable).forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>#</th><th>Order</th><th>Due</th><th className="r">Balance</th></tr></thead>
+          <thead><tr>{canPay && <th className="pyl-ck"><input type="checkbox" aria-label="Check all" checked={listAll.filter(payable).length > 0 && listAll.filter(payable).every((o) => paySel.includes(o.id))} onChange={(e) => listAll.filter(payable).forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>#</th><th>Order</th><th>Due date</th><th className="r">Balance</th></tr></thead>
           <tbody>
             {listShown.map((o) => {
               const can = canPay && payable(o), on = can && paySel.includes(o.id);
