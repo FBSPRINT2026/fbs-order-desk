@@ -17405,3 +17405,5 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .airp-s span{white-space:nowrap}
 .airp-q{font-weight:600}
 .orv-box .orv-att svg{width:16px;height:16px}
+/* a drop box with something dragged over it (lib/dropFiles.ts: the AI order helper, the Mockup Creator's Helper) */
+.dropx-over{outline:2px dashed var(--accent);outline-offset:-4px;background:var(--accent-soft)}

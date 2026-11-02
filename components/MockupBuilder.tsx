@@ -1,4 +1,5 @@
 "use client";
+import { canDrop, filesFromDrop } from "@/lib/dropFiles";
 import BackLink from "@/components/BackLink";
 import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
@@ -486,6 +487,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     /** the customer's file itself, and whether it goes on the order as a production file when it's put on (Oct 27, Nick) */ file?: File; keepFile?: boolean; pms: string[]; inkOpts: string[]; err?: string; notes?: { where: string; w?: number; h?: number; colors: string[] }[];
     /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
+  const [helpOver, setHelpOver] = useState(false);
   // opened as the Mockup Helper tool (AI Workbench → Tools, lib/aiTools.ts): the Helper open and in view
   useEffect(() => {
     if (sp.get("helper") !== "1") return;
@@ -2232,6 +2234,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setHelper((h) => h && h.name === name ? { ...h, gDraw: { ...(h.gDraw || {}), [gi]: r.draw ? { draw: r.draw, what: r.what } : { err: r.error } } } : h);
     const lid = gLine.current[`${name}|${gi}`];
     if (r.draw && lid) setLines((ls) => ls.map((x) => (x.id === lid ? { ...x, look: { ...(x.look || {}), draw: r.draw } } : x)));
+  }
+  /** dragged onto the Helper from anywhere (Nov 1, Nick: "from my email, from ClickUp, from whatever"): a file, an
+   *  Outlook email's attachment, or a file off another site's page; the PDF or Illustrator file first, else a picture */
+  async function helperDrop(dt: DataTransfer) {
+    setHelpOpen(true);
+    const hasFiles = dt.files.length > 0;
+    if (!hasFiles) setHelper({ name: "Getting the file…", busy: "Getting the file…", rows: [], pms: [], inkOpts: [], err: "" });
+    const { files, error } = await filesFromDrop(dt, { openEmails: true });
+    const art = (f: File) => /\.(pdf|ai)$/i.test(f.name) || /pdf|postscript|illustrator/i.test(f.type);
+    const f = files.find(art) || files.find((x) => /\.(jpe?g|png|webp)$/i.test(x.name) || /^image\//.test(x.type)) || files[0];
+    if (!f) { setHelper(error ? { name: "Dropped file", busy: "", rows: [], pms: [], inkOpts: [], err: error } : null); return; }
+    void helperRead(f);
   }
   async function helperRead(f: File) {
     // a picture (a photo of the garment, a screenshot): the art is flattened into it, but the garments on it are read and
@@ -4635,9 +4649,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           </section>
           {/* the Helper at the bottom, under Need more than a logo (Oct 22, Nick) */}
           {!portal && (
-            <section className={"panel mk-help" + (helpOpen ? "" : " closed")}
-              onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) e.preventDefault(); }}
-              onDrop={(e) => { const f = e.dataTransfer.files?.[0]; if (f) { e.preventDefault(); void helperRead(f); } }}>
+            <section className={"panel mk-help" + (helpOpen ? "" : " closed") + (helpOver ? " dropx-over" : "")}
+              onDragOver={(e) => { if (canDrop(e.dataTransfer)) { e.preventDefault(); if (!helpOver) setHelpOver(true); } }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHelpOver(false); }}
+              onDrop={(e) => { e.preventDefault(); setHelpOver(false); void helperDrop(e.dataTransfer); }}>
               <div className="panel-h"><h2>Helper</h2><button type="button" className="lc-link" onClick={() => setHelpOpen(!helpOpen)}>{helpOpen ? "Hide" : "Show"}</button></div>
               {helpOpen && <div className="panel-b">
                 {!helper && <>
@@ -4649,7 +4664,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     ))}
                   </ul>
                   <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
-                  <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drop a PDF, AI or picture here"}</span>
+                  <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drag a PDF, AI or picture here (from your email, ClickUp or anywhere)"}</span>
                 </>}
                 <datalist id="mk-ink-names">{[...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX)].slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist>
                 <input ref={helpIn} type="file" accept={portal ? ".pdf,.ai,application/pdf,application/postscript,application/illustrator" : ".pdf,.ai,.jpg,.jpeg,.png,.webp,application/pdf,application/postscript,application/illustrator,image/jpeg,image/png,image/webp"} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />

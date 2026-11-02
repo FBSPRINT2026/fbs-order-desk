@@ -15,6 +15,7 @@ import type { EOPart } from "@/lib/emailOrderShared";
 import { doneOf, partialStep, type PartialCtx, type PartKind } from "@/components/tools/PartialOrder";
 import { readDrop, type DropPic } from "@/lib/dropRead";
 import AiReply from "@/components/AiReply";
+import { canDrop, filesFromLinks, msgFiles } from "@/lib/dropFiles";
 
 /**
  * THE order check after it's made (Oct 23, Nick: "the right panel opens. That never closes until I say, yes, we've got
@@ -103,7 +104,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
     for (const f of fs) {
       const nm = (f as File).name || "Snip.png";
       if (/\.msg$/i.test(nm) || /ms-outlook/i.test(f.type)) {
-        try { const { readMsg } = await import("@/lib/outlookMsg"); for (const a of readMsg(await f.arrayBuffer()).attachments) if (!(a.data.length < 15_000 && /image0\d+|outlook|logo/i.test(a.name))) files.push({ name: a.name, blob: new Blob([a.data as BlobPart], { type: a.type }) }); } catch { /* read below */ }
+        try { for (const a of await msgFiles(f as File)) files.push({ name: a.name, blob: a }); } catch { /* read below */ }
       } else files.push({ name: nm, blob: f });
     }
     let n = 0;
@@ -119,21 +120,10 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   }
   /** a file dragged from another site's page (ClickUp's attachments, Dropbox): it comes as its link; fetched here */
   async function dropLinks(dt: DataTransfer) {
-    const html = dt.getData("text/html"), list = dt.getData("text/uri-list") || dt.getData("text/plain");
-    const urls = [...new Set([...(list.match(/https:\/\/[^\s"'<>]+/g) || []), ...[...html.matchAll(/(?:href|src)=["'](https:\/\/[^"']+)["']/g)].map((m) => m[1].replace(/&amp;/g, "&"))])]
-      .sort((a, b) => Number(/clickup-attachments/.test(b)) - Number(/clickup-attachments/.test(a))).slice(0, 3);
-    if (!urls.length) return;
     setBusy("Getting the file…");
-    const got: File[] = [];
-    for (const u of urls) {
-      const r = await fetch("/api/files/from-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: u }) }).catch(() => null);
-      if (!r || !r.ok) { if (!got.length && u === urls[urls.length - 1]) { const j = r ? await r.json().catch(() => ({})) as { error?: string } : {}; setErr(j.error || "Couldn't get that file. Download it and drop it in."); } continue; }
-      const name = decodeURIComponent(r.headers.get("X-File-Name") || "file");
-      got.push(new File([await r.blob()], name, { type: r.headers.get("Content-Type") || "" }));
-      break;
-    }
+    const { files, error } = await filesFromLinks(dt);
     setBusy("");
-    if (got.length) void addDrop(got);
+    if (files.length) void addDrop(files); else if (error) setErr(error);
   }
   /** drops that go together (Nov 1, Nick: "I dragged in three separate attachments from three different emails… it should
    *  formulate them as one response"): files dropped one after another with nothing said in between are ONE ask. Each
@@ -397,8 +387,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   const yesLabel = changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right";
   // like a text thread (Oct 23, Nick: "make it like an iPhone chat"): the order up top, the thread, and the box at the bottom
   return (
-    <div className={"ap orv chat" + (over ? " orv-over" : "")} role="group" aria-label="AI order helper"
-      onDragOver={(e) => { const t = e.dataTransfer.types; if (t.includes("Files") || t.includes("text/uri-list") || t.includes("text/html")) { e.preventDefault(); if (!over) setOver(true); } }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
+    <div className={"ap orv chat" + (over ? " dropx-over" : "")} role="group" aria-label="AI order helper"
+      onDragOver={(e) => { if (canDrop(e.dataTransfer)) { e.preventDefault(); if (!over) setOver(true); } }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
       onDrop={(e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files.length) void addDrop([...e.dataTransfer.files]); else void dropLinks(e.dataTransfer); }}
       onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addDrop(fs); } }}>
       <div className="orv-top">
