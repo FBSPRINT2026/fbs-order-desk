@@ -38,8 +38,10 @@ export async function portalMessages(as?: string): Promise<{ ok: boolean; error?
   try {
     const { admin, customers } = await who(as);
     const ids = customers.map((c) => c.id);
-    const { data: os } = await admin.from("orders").select("id").in("customer_id", ids).neq("status", "quote");
-    const oids = (os || []).map((o) => o.id);
+    // the same orders the page reads (app/portal/page.tsx: no quotes, nothing discarded, no unsent drafts), so a refresh after
+    // sending shows the same list the page opened with (Nov 2, Nick: "it looks different… after you type in it")
+    const { data: os } = await admin.from("orders").select("id, draft").in("customer_id", ids).neq("status", "quote").is("discarded_at", null);
+    const oids = ((os || []) as { id: string; draft?: boolean | null }[]).filter((o) => !o.draft).map((o) => o.id);
     const { data } = await allRows((ra, rb) => admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
       .or(`customer_id.in.(${ids.join(",")})${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").order("id").range(ra, rb));
     return { ok: true, messages: await withFiles(data || [], sign(admin)) };
