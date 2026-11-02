@@ -18411,3 +18411,9 @@ table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
 /* the job list sits flat in the panel */
 .jct-body .jc-list .tbl-wrap{border:1px solid var(--line-2);border-radius:var(--r)}
 .jc-also{font-size:12.5px;color:var(--ink-3)}
+/* the portal jobs' toolbar groups keep their picked tab inside their rounded box (Nov 2, Nick: "still overflows the box") */
+.pdx .pjt>.chips{overflow:hidden!important;border-radius:999px}
+/* On hold tab: the reason, in full, right under the steps; no second box (Nov 2, Nick: "I don't love how these look") */
+.pjr-now.hold.full{font-size:13px;line-height:1.45;max-width:46ch;margin-left:auto;margin-right:auto}
+.pjr-ask{font-size:12.5px;color:var(--accent);text-align:center;text-decoration:none}
+.pjr-ask:hover{text-decoration:underline}

@@ -90,7 +90,7 @@ function JobRow({ j, canAct, detail = false }: { j: PortalJob; canAct: boolean; 
       <div className={"pjr-mid" + (j.hold ? " held" : "")}>
         <OrderRail steps={j.steps} done={j.done} />
         {j.hold
-          ? <div className="pjr-now hold"><b>On hold:</b> {j.hold.title}.{!detail && <> <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></>}</div>
+          ? <div className={"pjr-now hold" + (detail ? " full" : "")}><b>On hold:</b> {detail ? j.hold.reason || j.hold.title : <>{j.hold.title}. <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></>}</div>
           : (j.nowK || j.nowT) && <div className="pjr-now"><b>{j.nowK}</b> {j.nowT}</div>}
       </div>
       <div className="pjr-act">
@@ -100,15 +100,9 @@ function JobRow({ j, canAct, detail = false }: { j: PortalJob; canAct: boolean; 
           : <Link className={"btn pjr-btn " + a.tone} href={a.href}>{a.label}</Link>)}
         {a?.sub && <span className="pjr-sub">{a.sub}</span>}
         {j.owe && (j.owe.external ? <a className="pjr-owe" href={j.owe.href} target="_blank" rel="noreferrer">{j.owe.text} · Pay</a> : <Link className="pjr-owe" href={j.owe.href}>{j.owe.text} · Pay</Link>)}
+        {detail && j.hold && j.hold.fixLabel !== "Reply" && <Link className="pjr-ask" href={`${j.href}#messages`}>Ask us about it</Link>}
         {j.newMsgs > 0 && j.lastMsg && <Link className="pjr-msg" href={j.lastMsg.href}>💬 {j.newMsgs} new message{j.newMsgs === 1 ? "" : "s"} · Read</Link>}
       </div>
-      {detail && j.hold && (
-        <div className="pjr-holdd">
-          <b>Why it&apos;s on hold: {j.hold.title}</b>
-          <ul>{j.hold.reason.split(/(?<=[.!?])\s+(?=[A-Z0-9(])/).map((t) => t.trim()).filter(Boolean).map((t, i) => <li key={i}>{t}</li>)}</ul>
-          <div className="pjr-holdd-a"><Link className="btn sm" href={j.hold.href}>{j.hold.fixLabel}</Link>{j.hold.fixLabel !== "Reply" && <Link className="btn sm" href={`${j.href}#messages`}>Ask us</Link>}</div>
-        </div>
-      )}
     </div>
   );
 }
