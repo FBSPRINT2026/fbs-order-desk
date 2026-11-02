@@ -7,13 +7,20 @@ import { fmtDateLong, money } from "@/lib/format";
 import { PAY_TERMS } from "@/lib/pricing";
 import PrintButton from "./print";
 import { fmtPhone } from "@/lib/phone";
+import { allRows } from "@/lib/readAll";
 
 /** A statement: every open invoice with what's still owed, aging, and one button to pay it all. Printable. */
 export default async function Statement({ searchParams }: { searchParams: Promise<{ as?: string }> }) {
   const { as } = await searchParams;
   const ctx = await getPortalCtx(as, "/portal/statement");
   const qs = ctx.preview ? `?as=${ctx.preview.id}` : "";
-  const open = await openInvoices(createAdminClient(), ctx.customerIds);
+  const admin = createAdminClient();
+  const open = await openInvoices(admin, ctx.customerIds);
+  // invoices from our old system still owed (Nov 2 portal check: the dashboard's balance counted them, the statement
+  // didn't, so the two disagreed): listed under their own heading, each paid through its own link
+  type Old = { id: string; visual_id: string; nickname: string | null; order_date: string | null; due_date: string | null; total: number; paid: number; balance: number; pay: string | null };
+  const { data: oldRows } = ctx.customerIds.length ? await allRows<Old>((ra, rb) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, due_date, total, paid, balance, pay:data->urls->>publicUrl").in("customer_id", ctx.customerIds).eq("kind", "invoice").gt("balance", 0.004).order("order_date").order("id").range(ra, rb)) : { data: [] as Old[] };
+  const old = (oldRows || []) as Old[];
   const acct = ctx.customers[0];
   const shop = ctx.settings.shop;
   const today = new Date().toISOString().slice(0, 10);
@@ -24,8 +31,9 @@ export default async function Statement({ searchParams }: { searchParams: Promis
     { k: "31–60 days", f: (n: number | null) => n !== null && n > 30 && n <= 60 },
     { k: "61–90 days", f: (n: number | null) => n !== null && n > 60 && n <= 90 },
     { k: "Over 90 days", f: (n: number | null) => n !== null && n > 90 },
-  ].map((b) => ({ ...b, amt: open.filter((o) => b.f(age(o.pay_due))).reduce((a, o) => a + o.balance, 0) }));
+  ].map((b) => ({ ...b, amt: open.filter((o) => b.f(age(o.pay_due))).reduce((a, o) => a + o.balance, 0) + old.filter((o) => b.f(age(o.due_date ? o.due_date.slice(0, 10) : null))).reduce((a, o) => a + (+o.balance || 0), 0) }));
   const total = open.reduce((a, o) => a + o.balance, 0);
+  const oldTotal = old.reduce((a, o) => a + (+o.balance || 0), 0);
   const payHref = `/portal${qs ? qs + "&" : "?"}area=payments&pay=all`;
   return (
     <>
@@ -48,7 +56,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
           <div className="st-to">
             <div><span>Account</span><b>{acct?.company || acct?.name}</b>{acct?.company && acct?.name && <div>{acct.name}</div>}{acct?.address && <div style={{ whiteSpace: "pre-line" }}>{acct.address}</div>}</div>
             <div><span>Terms</span><b>{PAY_TERMS[acct?.payment_terms || "receipt"]}</b></div>
-            <div className="st-due"><span>Amount due</span><b>{money(total)}</b></div>
+            <div className="st-due"><span>Amount due</span><b>{money(total + oldTotal)}</b>{oldTotal > 0.004 && <div className="st-small">{money(total)} here · {money(oldTotal)} from our old system</div>}</div>
           </div>
           <table className="st-tbl" data-nofit>
             <thead><tr><th>Invoice</th><th>Date</th><th>Job</th><th>PO</th><th>Payment due</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th></tr></thead>
@@ -64,6 +72,23 @@ export default async function Statement({ searchParams }: { searchParams: Promis
             </tbody>
             {open.length > 0 && <tfoot><tr><td colSpan={7}>Total due · {open.length} invoice{open.length === 1 ? "" : "s"}</td><td className="r num b">{money(total)}</td></tr></tfoot>}
           </table>
+          {old.length > 0 && <>
+            <h2 className="st-old-h">From our old system</h2>
+            <p className="st-small">These invoices are from before this portal. Pay each one with its Pay link.</p>
+            <table className="st-tbl" data-nofit>
+              <thead><tr><th>Invoice</th><th>Date</th><th>Job</th><th>Payment due</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th></tr></thead>
+              <tbody>
+                {old.map((o) => { const due = o.due_date ? o.due_date.slice(0, 10) : null; const a = age(due); return (
+                  <tr key={o.id} className={[a !== null && a > 0 ? "late" : "", +o.paid > 0.004 ? "part" : ""].filter(Boolean).join(" ") || undefined}>
+                    <td className="num st-n"><Link href={`/portal/archive/${o.id}${qs}`}>#{o.visual_id}</Link></td><td className="st-d">{o.order_date ? fmtDateLong(o.order_date.slice(0, 10)) : ""}</td><td className="st-j">{o.nickname || "Order"}{o.pay ? <> · <a className="no-print" href={o.pay} target="_blank" rel="noreferrer">Pay</a></> : null}</td>
+                    <td className="st-pd"><span className="st-ph">Due: </span>{due ? `${fmtDateLong(due)}${a !== null && a > 0 ? ` (${a}d late)` : ""}` : ""}</td>
+                    <td className="r num st-t"><span className="st-ph">of </span>{money(+o.total || 0)}</td><td className="r num st-p">{money(+o.paid || 0)}</td><td className="r num b st-b">{money(+o.balance || 0)}</td>
+                  </tr>
+                ); })}
+              </tbody>
+              <tfoot><tr><td colSpan={6}>Total from our old system · {old.length} invoice{old.length === 1 ? "" : "s"}</td><td className="r num b">{money(oldTotal)}</td></tr></tfoot>
+            </table>
+          </>}
           <div className="st-aging">{buckets.map((b) => <div key={b.k} className={b.amt > 0.004 && b.k !== "Current" ? "late" : ""}><span>{b.k}</span><b>{money(b.amt)}</b></div>)}</div>
           <p className="st-small">Pay online in your portal ({open.length ? "Payments → Pay this statement" : "Payments"}), by card or bank transfer (ACH, no card fee){ctx.settings.pay.zelle ? `, or Zelle to ${ctx.settings.pay.zelle}` : ""}{ctx.settings.pay.venmo ? `, or Venmo ${ctx.settings.pay.venmo}` : ""}. Questions? Message us in your portal.</p>
         </section>
