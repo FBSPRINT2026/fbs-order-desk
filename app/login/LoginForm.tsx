@@ -3,6 +3,7 @@ import { SITE_URL } from "@/lib/config";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { emailOnFile } from "@/app/login/actions";
 
 export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, linkError }: { shopName: string; logoUrl: string; /** the light logo for a dark bar, the same as the portal's top bar */ sideLogoUrl?: string; next: string; linkError: boolean }) {
   const supabase = createClient();
@@ -26,6 +27,12 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
       setBusy(false);
       if (error) setErr(error.message.includes("rate") ? "Too many tries. Wait a minute, then try again." : "That email and password didn't match. No password yet? Leave it empty and we'll email you a code.");
       else { router.replace(safeNext); router.refresh(); }
+      return;
+    }
+    // an email we don't have says so, instead of "check your email" for a code that can't let them in (Nov 2, Nick)
+    if (!(await emailOnFile(email).catch(() => true))) {
+      setBusy(false);
+      setErr(`We don't have ${email.trim()} on file. Check it for a typo, or contact ${shopName} to get set up.`);
       return;
     }
     const site = SITE_URL || window.location.origin;
