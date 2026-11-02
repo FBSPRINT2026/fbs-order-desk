@@ -12,7 +12,7 @@ const when = (d?: string | null) => (d ? fmtDateLong(d.slice(0, 10)).replace(/, 
  * or whether we're working the issue… an easy tool… for S&S… on this order, we received this… we were short here"),
  * the same piece for the shop (Goods & Receiving) and the customer (their Goods tab). Each issue: what's wrong and what's
  * still owed, its steps (Found → Reported → Replacement coming → Closed), who works it, and the email to the rep written
- * out, sent from their own email (Open in my email / Copy). Only shows when there are issues.
+ * out, sent from their own email (Open in my email / Copy). With none, it says so with a green check.
  */
 export default function GoodsIssues({ as, customerId, href }: { /** the customer's portal (preview id when staff) */ as?: string; /** the shop: one customer's */ customerId?: string; href?: (i: GoodsIssue) => string }) {
   const [d, setD] = useState<IssueCtx | null>(null);
@@ -23,7 +23,13 @@ export default function GoodsIssues({ as, customerId, href }: { /** the customer
   const portal = as !== undefined || !d.staff;
   const list = d.issues;
   const live = list.filter((i) => !i.closed_at);
-  if (!list.length) return null;
+  // always there: nothing wrong says so (Nov 2, Nick: "the issues box always there… no issues, all good to go right now")
+  if (!list.length) return (
+    <section className="gis gis-none" aria-label="Goods issues">
+      <span className="gis-ok" aria-hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg></span>
+      <b>No issues</b><span className="gis-sum">All good to go right now. Anything short, damaged or stuck in shipping shows up here.</span>
+    </section>
+  );
   const needYou = live.filter((i) => i.owner === "customer").length, ours = live.length - needYou;
   return (
     <section className="gis" aria-label="Goods issues">
