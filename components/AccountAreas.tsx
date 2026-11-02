@@ -613,19 +613,9 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
     const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...invoices].sort((x, y) => y.number - x.number);
     const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
-    // the orders they starred, on top (Oct 24, Nick: "if you star it, there should be a little favorite section… like the
-    // artwork page… maybe a top area"); the same 9 the dashboard tracks
-    const starredList = [...quotes, ...invoices].filter((o) => o.starred && !o.archived && !["completed", "void", "canceled"].includes(o.status)).sort((x, y) => y.number - x.number).slice(0, 9);
+    // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
+    // following will just be on the main page")
     body = <>
-      {starredList.length > 0 && <div className="aa-starred">
-        <div className="aa-sec-h"><h3>Orders I&apos;m following</h3><span className="faint">The same ones followed on your dashboard. Click the ☆ on up to 9.</span></div>
-        <div className="aa-starred-g">{starredList.map((o) => (
-          <div key={o.id} className="aa-star-t">
-            <StarOrder id={o.id} on canAct={canAct} />
-            <Link href={orderHref(o.id)} className="aa-star-n"><b><span className="onum">#{o.number}</span>{o.nickname ? ` ${o.nickname}` : ""}</b><small>{o.qty} pcs{o.due_date ? ` · In hands ${when(o.due_date)}` : ""}</small></Link>
-            {pill(o)}
-          </div>))}</div>
-      </div>}
       <div className="toolbar aa-otabs" data-toolbar>
         <div className="chips">
           {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}
