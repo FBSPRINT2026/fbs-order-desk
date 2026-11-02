@@ -17971,3 +17971,9 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .rop-q{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}
 .rop-qf{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid var(--line);border-radius:6px;padding:4px 4px 4px 9px;font-size:12.5px;background:var(--surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rop-qf button{border:0;background:none;font-size:15px;line-height:1;color:var(--ink-3);cursor:pointer;padding:0 4px}
+/* the statement (Nov 2, Nick): the title's color bar stays inside the paper; a PO is one line, cut with … */
+.stx-title h1::after{width:100%!important;min-width:0!important;max-width:100%}
+.stx-po{display:block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stx-age{margin-top:16px}
+.stx .stx-tbl{margin-top:18px}
+@media (max-width:700px){.stx-po{max-width:100%}}

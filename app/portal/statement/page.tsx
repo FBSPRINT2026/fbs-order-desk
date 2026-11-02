@@ -51,7 +51,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
       <td className="num st-n"><Link href={r.href}>{r.num}</Link>{r.old && <PrintavoMark />}</td>
       <td className="st-d">{r.date ? fmtDateLong(r.date).replace(/, \d{4}$/, "") : ""}</td>
       <td className="st-j">{r.job}</td>
-      <td className="st-po">{r.po ? <><span className="st-ph">PO </span>{r.po}</> : ""}</td>
+      <td className="st-po">{r.po ? <span className="stx-po" title={r.po}><span className="st-ph">PO </span>{r.po}</span> : ""}</td>
       <td className={"st-pd" + (a !== null && a > 7 ? " st-late" : "")}><span className="st-ph">Due </span>{r.due ? fmtDateLong(r.due).replace(/, \d{4}$/, "") : "—"}</td>
       <td className="r num st-t"><span className="st-ph">of </span>{money(r.total)}</td><td className="r num st-p">{money(r.paid)}</td><td className="r num b st-b">{money(r.balance)}</td>
     </tr>); };
@@ -61,7 +61,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s statement.</div>}
       <main className="p-main st">
         <div className="st-bar no-print">
-          <BackLink href={`/portal${qs}${qs ? "&" : "?"}area=payments`} label="Payments" trail={false} />
+          <BackLink href={`/portal${qs}${qs ? "&" : "?"}area=payments`} label="Payments" trail={false} here />
           <span className="spacer" />
           <PrintButton />
           {rows.length > 0 && <Link className="btn primary" href={payHref}>Pay this statement ({money(total)})</Link>}
@@ -80,6 +80,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
             <div><span className="stx-lb">Summary</span><div>Open invoices <b>{rows.length}</b></div>{lastPay?.[0] && <div>Last payment <b>{fmtDateLong(String(lastPay[0].paid_on || "").slice(0, 10))} · {money(+lastPay[0].amount)}</b></div>}</div>
             <div className="stx-due"><span className="stx-lb">Amount due</span><b>{money(total)}</b>{sum(making) > 0.004 && <small>{money(sum(making))} of it is still being made</small>}</div>
           </div>
+          <div className="stx-age">{buckets.map((b) => <div key={b.k}><span>{b.k}</span><b>{money(b.amt)}</b></div>)}</div>
           <table className="st-tbl stx-tbl" data-nofit>
             <thead><tr><th>Invoice</th><th>Date</th><th>Job</th><th>PO</th><th>Due date</th><th className="r">Total</th><th className="r">Paid</th><th className="r">Balance</th></tr></thead>
             <tbody>
@@ -94,7 +95,6 @@ export default async function Statement({ searchParams }: { searchParams: Promis
             {rows.length > 0 && <tfoot><tr className="stx-tot"><td colSpan={7}>Total due · {rows.length} invoice{rows.length === 1 ? "" : "s"}</td><td className="r num">{money(total)}</td></tr></tfoot>}
           </table>
           {old.length > 0 && <p className="stx-note"><PrintavoMark /> an invoice from our old system. A due date in red is more than a week past.</p>}
-          <div className="stx-age">{buckets.map((b) => <div key={b.k}><span>{b.k}</span><b>{money(b.amt)}</b></div>)}</div>
           <div className="stx-pay">
             <div><span className="stx-lb">Pay online</span>Your portal → Payments, by card or bank (ACH, no card fee).{rows.length > 0 && <> <Link className="no-print" href={payHref}>Pay this statement</Link></>}</div>
             {(pay.zelle || pay.venmo) && <div><span className="stx-lb">{pay.zelle && pay.venmo ? "Zelle / Venmo" : pay.zelle ? "Zelle" : "Venmo"}</span>{pay.zelle && <div>Zelle {pay.zelle}</div>}{pay.venmo && <div>Venmo {pay.venmo}</div>}<div>Put the invoice numbers in the note.</div></div>}

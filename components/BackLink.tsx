@@ -16,8 +16,8 @@ import { previousStep, type TrailStep } from "@/lib/navTrail";
  * Drop it anywhere in a page: it puts itself in front of the page's title (the first h1 in <main>), even when the title
  * is drawn by a component further down; a page with no title (not found) shows it where it was placed.
  */
-export default function BackLink({ href, label, go, saves, hard, trail = true }: {
-  href: string; label: string; go?: () => void | Promise<void>; saves?: boolean; hard?: boolean; trail?: boolean;
+export default function BackLink({ href, label, go, saves, hard, trail = true, here = false }: {
+  href: string; label: string; go?: () => void | Promise<void>; saves?: boolean; hard?: boolean; trail?: boolean; here?: boolean;
 }) {
   const [prev, setPrev] = useState<TrailStep | null>(null);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -28,6 +28,7 @@ export default function BackLink({ href, label, go, saves, hard, trail = true }:
   // find the title and keep the arrow in front of it: React rewrites a title's text by replacing its contents, and a
   // page can redraw its title, so a watcher puts the arrow back whenever it's knocked out
   useEffect(() => {
+    if (here) return;
     const el = document.createElement("span");
     el.className = "back-slot";
     holder.current = el;
@@ -61,6 +62,7 @@ export default function BackLink({ href, label, go, saves, hard, trail = true }:
     : <Link className="back-ic" href={to.url} title={tip} aria-label={tip}>{icon}</Link>;
 
   // the arrow stays inside its holder while the watcher moves the holder back in front of the title
+  if (here) return btn;
   if (slot) return createPortal(btn, slot);
   if (inPlace) return <div className="back-row">{btn}</div>;
   return null;
