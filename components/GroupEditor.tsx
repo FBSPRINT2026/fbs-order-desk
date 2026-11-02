@@ -1,4 +1,5 @@
 "use client";
+import NoCharge from "@/components/NoCharge";
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
@@ -805,7 +806,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       const l = g.lines.find((x) => ck(x.color) === ck(k));
       for (const [a, b] of Object.entries(m || {})) if (b && b.trim().toLowerCase() !== a.trim().toLowerCase()) (changes[a.trim().toLowerCase()] ||= []).push({ to: b.trim(), on: l?.color || k });
     }
-    const sharedNote = shared.length ? <>{shared.map((k) => <span key={k} className="pr-scr-tag" title="The same PMS on another print of this order: one matching fee">{k}: same as {firstOn(k) || "another garment"}, no charge</span>)}</> : null;
+    const sharedNote = shared.length ? <>{shared.map((k) => <span key={k} className="pr-scr-tag nc" title={`No charge: the same PMS as the ${firstOn(k) || "another print"} (one matching fee per order)`}>{k.replace(/^PMS\s+/i, "").replace(/\s+[CU]$/i, "")}<NoCharge title={`No charge: matched for the ${firstOn(k) || "another print"}`} /></span>)}</> : null;
     return (
       <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} changes={changes} groups={ccShow && versionsOf(d).length ? versionsOf(d).map((v) => v.to) : undefined} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
         summary={pms.length || typed || toPms.length || shared.length ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}

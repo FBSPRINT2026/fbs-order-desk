@@ -2309,7 +2309,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (sp) w = Math.min(w, sp.maxW, sp.maxH / (k || 1));
     const widthIn = Math.max(0.5, Math.round(w * 4) / 4);
     setPasteAsk(null);
-    await helperApply({ name: "Art pasted from Illustrator", kind: "art", rows: [{ ...a.row, location: loc, side: sideOf(loc), widthIn, heightIn: Math.round(widthIn * k * 100) / 100 }] });
+    // named like any logo (Nov 1, Nick: "get rid of this art pasted by Illustrator front"): the job and the spot
+    const job = (order?.nickname || groupName || (() => { const cu = customers.find((c) => c.id === customerId); return cu ? custLabel(cu) : ""; })() || "Logo").trim();
+    await helperApply({ name: "pasted art", kind: "art", plain: true, logoName: () => `${job} ${loc}`, rows: [{ ...a.row, location: loc, side: sideOf(loc), widthIn, heightIn: Math.round(widthIn * k * 100) / 100 }] });
   }
   pasteRef.current = (p) => void helperPaste(p);
   /** the Paste from Illustrator button: the clipboard read (the browser asks once to allow it) */
@@ -2482,7 +2484,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setMsg("Saved as the customer's distress mask (Brand standards). Every logo of theirs can use it now.");
   }
   /** Helper → Put on the mockup: each checked print saved to the customer's logos and put at its location */
-  async function helperApply(given?: { name: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[] }) {
+  async function helperApply(given?: { name: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[]; /** the logo's own name, and no "From …" notes (pasted art) */ logoName?: (r: HelpRow) => string; plain?: boolean }) {
     // the Helper's checked prints, or art put on straight from a paste (pasteAsk)
     const H = given ? { ...given, file: undefined as File | undefined, keepFile: false } : helper;
     if (!H) return;
@@ -2501,8 +2503,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the mask itself is kept with the logo, so the separation can stack it for the film (the customer's, or this file's)
         let maskPath = r.distress === "brand" ? brandMask?.path : "";
         if (dz && r.distress === "file" && r.mask) { const mp = `masks/${customerId}/${Date.now().toString(36)}-${r.key}.png`; const up = await sb.storage.from("proofs").upload(mp, r.mask, { contentType: "image/png" }); if (!up.error) maskPath = mp; }
-        const d = await uploadDesign(sb, { draft: true, file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: maskPath || undefined, layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, fit: r.distress === "brand" ? "cover" : "stretch", note: how } } : {}), customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${H.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
-        made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: `From ${H.name}: ${r.widthIn}" × ${r.heightIn}"${H.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
+        const d = await uploadDesign(sb, { draft: true, file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: maskPath || undefined, layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, fit: r.distress === "brand" ? "cover" : "stretch", note: how } } : {}), customer_id: customerId, name: given?.logoName ? given.logoName(r) : `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: given?.plain ? "" : `Pulled from ${H.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
+        made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: given?.plain ? "" : `From ${H.name}: ${r.widthIn}" × ${r.heightIn}"${H.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
       }
       setDesigns((x) => [...made.map((m) => m.d), ...x]);
       setUrls({ ...urls, ...(await previewUrls(sb, made.map((m) => m.d))) });
