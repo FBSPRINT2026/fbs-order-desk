@@ -4099,7 +4099,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               const pickStyle = (ids: string[], gg: { style: string; brand: string; description: string; colors?: string[] }) => setStyle(ids, (x) => ({ ...x, style: gg.style, brand: gg.brand, garment: gg.description, color: gg.colors?.includes(x.color) ? x.color : "" }));
               const removeLine = (i: number) => { setLines((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : [{ ...ls[0], color: "" }])); setActive((a) => (a >= i && a > 0 ? a - 1 : a)); };
               return (
-                <div className="mk-f mk-gar"><span className="mk-gar-h"><span>Garments</span><span>Color</span></span>
+                <div className="mk-f mk-gar"><span className="mk-gar-h"><span>Garments</span>
+                  {/* the two helpers on the label line, at the right (Nov 2, Nick: option C; they were floating under the row) */}
+                  <span className="mk-gar-hc"><span className="mk-gar-hc-t">Color</span>
+                    <button type="button" className="mk-gar-link" onClick={() => setPopOpen(true)}>Help me pick</button>
+                    <button type="button" className="mk-gar-link" onClick={() => setOwnUp({ name: "", color: "", front: null, back: null })} title="A garment we don't carry: upload its photos">Upload my own</button>
+                  </span></span>
                   {groups.map((gr) => {
                     const l0 = lines[gr.idx[0]], g = garmentFor(l0), ids = gr.idx.map((i) => lines[i].id);
                     const have = gr.idx.map((i) => lines[i].color).filter(Boolean);
@@ -4142,17 +4147,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     );
                   })}
                   {/* the next style is an empty box under the last one, like the empty Color box (Nov 2, Nick: option B) */}
-                  <div className="mk-gar-more"><button type="button" className="mk-gar-new" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Another style</button></div>
-                  <div className="mk-help-row"><button type="button" className="btn sm mk-help-pick" onClick={() => setPopOpen(true)}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden><path d="M8 4l-4 3 2 4 2-1v10h8V10l2 1 2-4-4-3c-1 2-3 2-4 2s-3 0-4-2z" /></svg>Need help picking garments?</button></div>
+                  {lines.every((x) => x.style.trim() || x.own) && <div className="mk-gar-more"><button type="button" className="mk-gar-new" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Another style</button></div>}
                   {popOpen && <PopularGarments askHref={portal ? `/portal?area=messages${asId ? `&as=${asId}` : ""}` : undefined} onClose={() => setPopOpen(false)} onPick={(g) => {
                     setPopOpen(false);
                     setLines((ls) => { const blank = ls.find((x) => !x.style.trim()); const ln = { style: g.style, brand: g.brand, color: "", garment: g.garment }; return blank ? ls.map((x) => (x.id === blank.id ? { ...x, ...ln } : x)) : [...ls, { id: uid(), ...ln }]; });
                   }} />}
-                  <div className="row mk-add-row" style={{ gap: 8 }}>
-                    {/* a garment the suppliers don't carry (Oct 24, Nick: "images not in catalog, upload my own images") */}
-                    <button className="btn sm ghost mk-add mk-own-up" type="button" onClick={() => setOwnUp({ name: "", color: "", front: null, back: null })}>Not in the catalog? Upload photos</button>
-                  </div>
                 </div>
               );
             })()}

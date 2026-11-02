@@ -18001,3 +18001,10 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .mk-gar-new{grid-column:1;height:36px;box-sizing:border-box;border:1px dashed var(--line);border-radius:6px;background:var(--surface);color:var(--ink-3);font:14px var(--body);text-align:left;padding:0 11px;cursor:pointer}
 .mk-gar-new:hover,.mk-gar-new:focus-visible{border-color:var(--accent);color:var(--accent)}
 @media (max-width:700px){.mk-gar-more{grid-template-columns:minmax(0,1fr);margin-top:-8px}}
+/* Mockup Creator: Help me pick and Upload my own on the Garments label line, at the right (Nov 2, Nick: option C) */
+.mk-gar-hc{display:flex;align-items:baseline;gap:16px;min-width:0}
+.mk-gar-hc-t{flex:1 1 auto}
+.mk-gar-h .mk-gar-link{border:0;background:none;padding:0;cursor:pointer;font:600 12.5px var(--body);text-transform:none;letter-spacing:0;color:var(--accent);white-space:nowrap}
+.mk-gar-h .mk-gar-link:hover{text-decoration:underline}
+.mk-gar-h>.mk-gar-hc{grid-column:2/-1}
+@media (max-width:700px){.mk-gar-h>span.mk-gar-hc{display:flex}.mk-gar-hc-t{visibility:hidden}}
