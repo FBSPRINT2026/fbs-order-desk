@@ -3,7 +3,7 @@ import { openOrderCheck } from "@/components/tools/OrderReview";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { uploadDesign } from "@/lib/designs";
-import { newGLine, newImprint, type GLine } from "@/lib/pricing";
+import { newGLine, newImprint, SIZES, type GLine } from "@/lib/pricing";
 import type { EODraft } from "@/lib/emailOrderShared";
 import type { ReorderFile } from "@/app/api/archive/reorder/route";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
@@ -46,7 +46,8 @@ const styleKey = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 const colorKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const sameColor = (a: string, b: string) => { const x = colorKey(a), y = colorKey(b); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
 const pcs = (z: Record<string, number>) => Object.values(z).reduce((s, n) => s + (+n || 0), 0);
-const sizeText = (z: Record<string, number>) => Object.entries(z).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}`).join(" · ");
+/** the sizes in the usual order (youth, then S M L XL…), only the ones ordered: "S 50 · M 75 · L 50" */
+const sizeText = (z: Record<string, number>) => Object.entries(z).filter(([, n]) => n > 0).sort(([a], [b]) => { const i = (SIZES as readonly string[]).indexOf(a), j = (SIZES as readonly string[]).indexOf(b); return (i < 0 ? 999 : i) - (j < 0 ? 999 : j); }).map(([k, n]) => `${k} ${n}`).join(" · ");
 /** "L 225 · M 225 · S 175" → { L: 225, … } */
 const sizesOf = (t: string) => Object.fromEntries(t.split("·").map((x) => x.trim().split(/\s+/)).filter((p) => p.length === 2 && +p[1] > 0).map(([k, n]) => [k, +n]));
 type Read = { source: string; pieces: number; lines: { style: string; color: string; sizes: Record<string, number> }[]; exact?: boolean };
@@ -324,14 +325,16 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
                 <div className="rop-read-h"><b data-notranslate>{read.source}</b><span className="faint">{read.pieces.toLocaleString("en-US")} pcs</span></div>
                 {d.lines.map((l, i) => { const m = match.old[i], now = m.k >= 0 ? read.lines[m.k].sizes : null; return (
                   <div key={i} className="rop-cmp">
-                    <div className="rop-l1"><b data-notranslate>{l.style}</b> <span>{l.color}</span><span className="spacer" />{now ? <span className="rop-n">{pcs(m.was).toLocaleString("en-US")} → <b>{pcs(now).toLocaleString("en-US")}</b></span> : null}</div>
-                    {now ? <div className="faint rop-l2" data-notranslate>{Object.keys({ ...m.was, ...now }).map((z) => `${z} ${m.was[z] || 0}${(m.was[z] || 0) !== (now[z] || 0) ? `→${now[z] || 0}` : ""}`).join(" · ")}</div>
+                    <div className="rop-l1"><b data-notranslate>{l.style}</b> <span>{l.color}</span><span className="spacer" />{now ? <span className="rop-n"><b>{pcs(now).toLocaleString("en-US")} pcs</b> <span className="faint">(last time {pcs(m.was).toLocaleString("en-US")})</span></span> : null}</div>
+                    {/* the new order's sizes as they are, not old → new (Nov 2, Nick: "just say what they are… it's confusing") */}
+                    {now ? <div className="rop-l2" data-notranslate>{sizeText(now) || "None this time"}</div>
                       : <label className="rop-chk"><input type="checkbox" checked={offOld[i] !== false} onChange={(e) => setOffOld((o) => ({ ...o, [i]: e.target.checked }))} /> Not on this file: leave it off this time</label>}
                   </div>); })}
                 {match.extra.map(({ r, i }) => (
                   <div key={`n${i}`} className="rop-cmp">
-                    <div className="rop-l1"><b data-notranslate>{r.style}</b> <span>{r.color}</span><span className="spacer" /><span className="rop-n">new · {pcs(r.sizes).toLocaleString("en-US")}</span></div>
-                    <label className="rop-chk"><input type="checkbox" checked={addNew[i] !== false} onChange={(e) => setAddNew((o) => ({ ...o, [i]: e.target.checked }))} /> Not on last time&apos;s job: add it ({sizeText(r.sizes)})</label>
+                    <div className="rop-l1"><b data-notranslate>{r.style}</b> <span>{r.color}</span><span className="spacer" /><span className="rop-n"><b>{pcs(r.sizes).toLocaleString("en-US")} pcs</b> <span className="faint">(new)</span></span></div>
+                    <div className="rop-l2" data-notranslate>{sizeText(r.sizes)}</div>
+                    <label className="rop-chk"><input type="checkbox" checked={addNew[i] !== false} onChange={(e) => setAddNew((o) => ({ ...o, [i]: e.target.checked }))} /> Not on last time&apos;s job: add it</label>
                   </div>
                 ))}
                 <div className="rop-read-go">
