@@ -18791,3 +18791,6 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aa-ptop{align-items:center;margin:8px 0 -6px}
 .aa-ptop .aa-ptitle{height:auto;display:block;align-self:center;font-size:25px;line-height:1.1;padding-bottom:7px;margin:0 0 0 8px}
 .aa-ptop-r{align-items:center}
+/* the spacing Nick liked on Messages (Nov 2): a little gap above the title line, closer to the page below */
+.aa-ptop{margin:-2px 0 -10px}
+.aa-ptop .aa-ptitle{font-size:26px}
