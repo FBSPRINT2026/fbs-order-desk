@@ -5,24 +5,8 @@ import type { Message, Proof } from "@/lib/pricing";
 import { fmtStamp } from "@/lib/format";
 import PayPanel, { type PayItem } from "@/components/PayPanel";
 import { approveQuote, archiveMyQuote, customerMessage, requestCancellation, requestQuoteChanges, startCheckout, withdrawSentRequest } from "../../actions";
-import { reorderRequest } from "../../request-actions";
 
 /** "Reorder": copies this order into a new request the customer can change and send in. */
-export function ReorderButton({ orderId, disabled }: { orderId: string; disabled: boolean }) {
-  const router = useRouter();
-  const [err, setErr] = useState("");
-  const [pending, start] = useTransition();
-  return (
-    <>
-      <button className="btn" type="button" disabled={disabled || pending} title={disabled ? PREVIEW : "Start a new order with the same garments, sizes and logos"}
-        onClick={() => start(async () => { setErr(""); const r = await reorderRequest(orderId); if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else setErr(r.error || "Couldn't start the reorder."); })}>
-        {pending ? "Starting…" : "Reorder"}
-      </button>
-      {err && <span className="err">{err}</span>}
-    </>
-  );
-}
-
 const PREVIEW = "Turned off in preview";
 
 export function QuoteApproval({ orderId, total, terms, disabled }: { orderId: string; total: string; terms: string; disabled: boolean; defaultName: string }) {

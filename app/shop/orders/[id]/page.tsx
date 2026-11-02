@@ -1343,19 +1343,21 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       {(o as Order & { simple_order?: { reorder?: unknown } | null }).simple_order?.reorder && o.status === "request" && (() => {
         // a customer's reorder of an old-system job (the portal's simple reorder form): their sizes, art and words are in,
         // the rest is the Create reorder tool on the old job, filling in this order
-        const re = (o as Order & { simple_order: { reorder: { archived_id: string; visual: string; art?: string; changes?: string; off?: string[] } } }).simple_order.reorder;
+        const re = (o as Order & { simple_order: { reorder: { archived_id?: string; order_id?: string; own?: boolean; visual: string; art?: string; changes?: string; off?: string[] } } }).simple_order.reorder;
         const pcs = orderGroups(o).reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
         return (
           <div className="draft-bar" role="status">
-            <span><b>Customer reorder of old job #{re.visual}.</b> They sent {pcs ? `${pcs} pcs in sizes` : "their sizes in a file"}, {re.art === "new" ? "new art" : "the same art"}{re.off?.length ? `, left off ${re.off.length}` : ""}{re.changes ? `, and changes: “${re.changes.slice(0, 120)}”` : ""}. Price it and send it back for their OK.</span>
+            <span><b>Customer reorder of {re.own ? "" : "old job "}#{re.visual}.</b> They sent {pcs ? `${pcs} pcs in sizes` : "their sizes in a file"}, {re.art === "new" ? "new art" : "the same art"}{re.off?.length ? `, left off ${re.off.length}` : ""}{re.changes ? `, and changes: “${re.changes.slice(0, 120)}”` : ""}. Price it and send it back for their OK.</span>
             <span className="spacer" />
-            <button type="button" className="btn primary" onClick={() => setPvReorder(true)}>Make the reorder</button>
+            {/* their order in the new system came over whole (art, prints, mockups): it's priced here like any order */}
+            {re.archived_id && <button type="button" className="btn primary" onClick={() => setPvReorder(true)}>Make the reorder</button>}
           </div>
         );
       })()}
       {ownReorder && <ReorderPick orderId={o.id} onClose={() => setOwnReorder(false)} />}
       {pvReorder && (() => {
-        const re = (o as Order & { simple_order: { reorder: { archived_id: string; visual: string } } }).simple_order.reorder;
+        const re = (o as Order & { simple_order: { reorder: { archived_id?: string; visual: string } } }).simple_order.reorder;
+        if (!re.archived_id) return null;
         const lines = orderGroups(o).flatMap((g) => g.lines.map((l) => ({ style: l.style, color: l.color, sizes: Object.fromEntries(Object.entries(l.sizes || {}).filter(([, v]) => +v! > 0).map(([z, v]) => [z, +v!])) })));
         return <ReorderPick archivedId={re.archived_id} into={o.id} given={lines.some((l) => Object.keys(l.sizes).length) ? { source: "the customer's reorder", lines } : undefined} onClose={() => setPvReorder(false)} />;
       })()}

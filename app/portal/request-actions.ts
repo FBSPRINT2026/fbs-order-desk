@@ -768,7 +768,7 @@ export async function bringOldJobFile(requestId: string, groupId: string, archiv
 
 export type OldReorderKind = "adult" | "youth" | "toddler" | "baby" | "waist" | "one";
 export type OldReorderRow = { gi: number; li: number; style: string; brand: string; color: string; garment: string; kind: OldReorderKind; run: string[]; last: Record<string, number> };
-export type OldReorderStart = { id: string; number: string; name: string; date: string; rows: OldReorderRow[]; prints: string[] };
+export type OldReorderStart = { id: string; number: string; name: string; date: string; rows: OldReorderRow[]; prints: string[]; /** one of their orders in the new system (Nov 2) */ own?: boolean };
 const KIND_RUN: Record<OldReorderKind, readonly string[]> = { adult: ADULT_SIZES.slice(0, 7), youth: YOUTH_SIZES, toddler: TODDLER_SIZES, baby: BABY_SIZES, waist: ["30", "32", "34", "36", "38", "40"], one: [ONE_SIZE] };
 const kindOfSize = (z: string): OldReorderKind => ((YOUTH_SIZES as readonly string[]).includes(z) ? "youth" : (TODDLER_SIZES as readonly string[]).includes(z) ? "toddler" : (BABY_SIZES as readonly string[]).includes(z) ? "baby" : (WAIST_SIZES as readonly string[]).includes(z) ? "waist" : z === ONE_SIZE ? "one" : "adult");
 
@@ -779,13 +779,27 @@ export async function startOldReorder(archivedId: string, as?: string): Promise<
     const v = await getViewer();
     const preview = !!(v.user && v.isStaff);
     const { admin, cust } = preview ? await readMe(as) : await me();
-    const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").is("removed_at", null).eq("id", archivedId).eq("customer_id", cust.id).maybeSingle();
-    if (!r) return { ok: false, error: "We couldn't find that order." };
-    const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
-    const groups = groupsFromPrintavo(r as never, (st?.data as { production?: unknown } | null)?.production).map((g) => ({
-      ...g, id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
-      customerMockups: [], mockupSkipped: true, reprintOf: `#${r.visual_id}`,
-    })) as Group[];
+    // "o:<id>": one of their orders in the new system (Nov 2, Nick: "the same reorder helper… just now we have it in our
+    // system"): its groups as they are (art, prints, mockups), the sizes asked again; else an old-system (Printavo) job
+    const own = archivedId.startsWith("o:");
+    let r: { id: string; visual_id: string | number; nickname: string | null; order_date: string | null } | null = null;
+    let groups: Group[] = [];
+    if (own) {
+      const { data: o } = await admin.from("orders").select("*").eq("id", archivedId.slice(2)).eq("customer_id", cust.id).maybeSingle();
+      if (!o) return { ok: false, error: "We couldn't find that order." };
+      r = { id: o.id, visual_id: o.number, nickname: o.nickname, order_date: String(o.created_at || "").slice(0, 10) };
+      groups = orderGroups(o as Order).map((g) => ({ ...JSON.parse(JSON.stringify(g)), id: uid(), fromGroup: g.id,
+        lines: g.lines.map((l) => ({ ...l, id: uid(), priceOverride: null })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })), reprintOf: `#${o.number}` })) as Group[];
+    } else {
+      const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").is("removed_at", null).eq("id", archivedId).eq("customer_id", cust.id).maybeSingle();
+      if (!a) return { ok: false, error: "We couldn't find that order." };
+      r = a;
+      const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+      groups = groupsFromPrintavo(a as never, (st?.data as { production?: unknown } | null)?.production).map((g) => ({
+        ...g, id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
+        customerMockups: [], mockupSkipped: true, reprintOf: `#${a.visual_id}`,
+      })) as Group[];
+    }
     if (!groups.length) return { ok: false, error: "That order has no garments to copy. Send us a message and we'll set it up." };
     // the sizes each style comes in (our catalog), else the usual run for its kind
     const styles = [...new Set(groups.flatMap((g) => g.lines.map((l) => String(l.style || "").trim().toUpperCase())).filter(Boolean))];
@@ -804,14 +818,15 @@ export async function startOldReorder(archivedId: string, as?: string): Promise<
       rows.push({ gi, li, style: String(l.style || ""), brand: String(l.brand || ""), color: String(l.color || ""), garment: String(l.garment || ""), kind, run, last });
     }));
     const prints = [...new Set(groups.flatMap((g) => g.imprints.map((d) => [d.location, d.method === "embroidery" ? "embroidered" : ""].filter(Boolean).join(", "))).filter(Boolean))];
+    if (!r) return { ok: false, error: "We couldn't find that order." };
     const label = `#${r.visual_id}`, nick = String(r.nickname || "");
-    const start0 = { number: String(r.visual_id || ""), name: nick, date: String(r.order_date || "").slice(0, 10), rows, prints };
+    const start0 = { number: String(r.visual_id || ""), name: nick, date: String(r.order_date || "").slice(0, 10), rows, prints, own };
     if (preview) return { ok: true, start: { id: "", ...start0 } };
     const { data, error } = await admin.from("orders").insert({
       customer_id: cust.id, status: "request", type: "quote", source: "portal", draft: true,
       price_type: cust.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups, total: 0,
       nickname: `${nick || `Order ${label}`} (reorder)`.slice(0, 120), notes: `Reorder of ${label}${nick ? ` (${nick})` : ""}.`,
-      simple_order: { about: "", reorder: { archived_id: r.id, visual: String(r.visual_id || "") } },
+      simple_order: { about: "", reorder: own ? { order_id: r.id, visual: String(r.visual_id || ""), own: true } : { archived_id: r.id, visual: String(r.visual_id || "") } },
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
     return { ok: true, id: data.id, start: { id: data.id, ...start0 } };
@@ -847,8 +862,9 @@ export type OldReorderSend = { rows: { gi: number; li: number; sizes: Record<str
 export async function sendOldReorder(orderId: string, s: OldReorderSend): Promise<Result & { number?: number }> {
   try {
     const { admin, order: o0, cust, email, supabase } = await myDraft(orderId);
-    const re = (o0 as Order & { simple_order?: { reorder?: { archived_id?: string; visual?: string } } | null }).simple_order?.reorder;
-    if (!re?.archived_id) return { ok: false, error: "This isn't a reorder." };
+    const re = (o0 as Order & { simple_order?: { reorder?: { archived_id?: string; order_id?: string; own?: boolean; visual?: string } } | null }).simple_order?.reorder;
+    if (!re?.archived_id && !re?.order_id) return { ok: false, error: "This isn't a reorder." };
+    const where = re.own ? "" : " (our old system)";
     const groups = orderGroups(o0).map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, sizes: {} as typeof l.sizes })) }));
     const offNames: string[] = [];
     const drop = new Set<string>();
@@ -868,7 +884,7 @@ export async function sendOldReorder(orderId: string, s: OldReorderSend): Promis
     await keepFiles(admin, orderId, files);
     const due = s.due && /^\d{4}-\d{2}-\d{2}$/.test(s.due) ? s.due : null;
     const about = [
-      `Reorder of #${re.visual} (our old system).`,
+      `Reorder of #${re.visual}${where}.`,
       art === "same" ? "Same art as last time." : "New art: see their files.",
       offNames.length ? `Not reordering: ${offNames.join("; ")}.` : "",
       changes ? `Changes: ${changes}` : "",
@@ -885,13 +901,21 @@ export async function sendOldReorder(orderId: string, s: OldReorderSend): Promis
     const number = Number(num) || o0.number;
     const { error } = await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", orderId);
     if (error) return { ok: false, error: error.message };
+    // their order in the new system: its mockups come with it, so the reorder shows the same shirts
+    if (re.own && re.order_id) {
+      const { data: olds } = await admin.from("mockups").select("customer_id, group_id, title, file_path, design_ids, snapshot, created_by").eq("order_id", re.order_id).is("archived_at", null).order("created_at", { ascending: false });
+      for (const g of kept as (Group & { fromGroup?: string })[]) {
+        const m = (olds || []).find((x) => x.group_id === g.fromGroup);
+        if (m) await admin.from("mockups").insert({ customer_id: m.customer_id, order_id: orderId, group_id: g.id, proof_id: null, title: m.title, file_path: m.file_path, design_ids: m.design_ids || [], created_by: m.created_by || email, snapshot: m.snapshot });
+      }
+    }
     await admin.from("order_events").insert({ order_id: orderId, kind: "request_submitted", detail: `Reorder of #${re.visual}: ${qty} pcs${offNames.length ? `, ${offNames.length} left off` : ""}${art === "new" ? ", new art" : ""}`, actor: email });
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const settings = mergeSettings(st?.data);
     if (SHOP_NOTIFY_EMAIL) await sendEmail({
       to: SHOP_NOTIFY_EMAIL,
-      subject: `Reorder #${number} from ${cust.company || cust.name} (old job #${re.visual})`,
-      html: emailLayout(settings.shop.name, `Reorder #${number}`, `${cust.company || cust.name} reordered #${re.visual} from our old system (${qty} pcs${art === "new" ? ", new art" : ", same art"}). Finish it with Make the reorder on the order page.`, "Open it", `${siteUrl()}/shop/orders/${orderId}`),
+      subject: `Reorder #${number} from ${cust.company || cust.name} (${re.own ? "" : "old job "}#${re.visual})`,
+      html: emailLayout(settings.shop.name, `Reorder #${number}`, re.own ? `${cust.company || cust.name} reordered #${re.visual} (${qty} pcs${art === "new" ? ", new art" : ", same art"}). Price it and send it back for their OK.` : `${cust.company || cust.name} reordered #${re.visual} from our old system (${qty} pcs${art === "new" ? ", new art" : ", same art"}). Finish it with Make the reorder on the order page.`, "Open it", `${siteUrl()}/shop/orders/${orderId}`),
     });
     revalidatePath("/portal");
     return { ok: true, number };

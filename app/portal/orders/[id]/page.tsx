@@ -15,7 +15,8 @@ import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
-import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval, ReorderButton } from "./client";
+import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval } from "./client";
+import { OldReorderButton } from "@/components/PortalOldReorder";
 import { fmtPhone } from "@/lib/phone";
 import { orderSteps } from "@/lib/customerSend";
 
@@ -132,7 +133,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <div className="row">
             {cs ? <span className="pill" title={cs.text}>{cs.label}</span> : <Pill status={o.status} portal />}
             {!["completed", "void"].includes(o.status) && <StarOrder id={o.id} on={!!(o as typeof o & { customer_starred_at?: string | null }).customer_starred_at} canAct={!preview} label />}
-            {o.type === "invoice" && <ReorderButton orderId={o.id} disabled={preview} />}
+            {/* the same Reorder pop-up as an old-system order (Nov 2, Nick): sizes, art, notes; we price it and send it back */}
+            {o.type === "invoice" && <OldReorderButton archivedId={`o:${o.id}`} as={preview ? ctx.preview!.id : undefined} primary={false} />}
             {(() => { const x = o as typeof o & { submitted_at?: string | null; staff_seen_at?: string | null; customer_archived_at?: string | null; cancel_requested_at?: string | null };
               const kind = x.status === "request" ? (x.staff_seen_at ? "seen" : "unseen") : x.type === "quote" ? "quote" : x.status === "completed" ? null : "order";
               return kind ? <OrderActions orderId={x.id} kind={kind} archived={!!x.customer_archived_at} cancelAsked={!!x.cancel_requested_at} disabled={preview} /> : null; })()}
