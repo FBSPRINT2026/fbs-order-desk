@@ -60,7 +60,7 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
         <form onSubmit={sendCode} className="stack">
           <div>
             <h1>Sign In</h1>
-            <p className="muted" style={{ margin: "6px 0 0" }}>Enter the email we have on file for you. {staff ? "Type your password, or leave it empty and we'll email you a code." : <>We&apos;ll send a sign-in link and a 6-digit code. No password needed.</>}</p>
+            <p className="muted" style={{ margin: "6px 0 0" }}>Enter the email we have on file for you. {staff ? "Type your password, or leave it empty and we'll email you a code." : <>We&apos;ll email you a sign-in link and a code. No password needed.</>}</p>
           </div>
           <div className="field">
             <label htmlFor="email">Email</label>
@@ -82,8 +82,8 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
             <p className="muted" style={{ margin: "6px 0 0" }}>We sent a code to <b>{email}</b>. Type the code here{typeof window !== "undefined" && (window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone) ? " (the link in the email opens Safari, not this app)" : ", or click the link in the email"}. Use one or the other: each email works once.</p>
           </div>
           <div className="field">
-            <label htmlFor="code">6-digit code</label>
-            <input id="code" className="code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={8} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
+            <label htmlFor="code">Code from the email</label>
+            <input id="code" className="code-input" inputMode="numeric" autoComplete="one-time-code" maxLength={10} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} />
           </div>
           {err && <div className="err">{err}</div>}
           <button className="btn primary" disabled={busy || code.length < 6} type="submit">{busy ? "Checking…" : "Sign in"}</button>
