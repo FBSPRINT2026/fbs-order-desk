@@ -18026,3 +18026,23 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .gdk-sg-g small{font-size:12px;color:var(--ink-3)}
 .gdk-sg-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 @media (max-width:560px){.gdk-sg-g{grid-template-columns:minmax(0,1fr)}}
+/* Delete order: what happens to its art, said plainly (Nov 2, Nick) */
+.odl-ok{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:8px;font-size:13.5px;color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,var(--surface));margin:4px 0 6px}
+.odl-ok svg{flex:none;margin-top:1px}
+.odl-ok span{color:var(--ink)}
+.odl-list{display:flex;flex-direction:column;margin:2px 0 4px}
+.odl-it{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line-2,var(--line))}
+.odl-it:first-child{border-top:0}
+.odl-th{width:44px;height:44px;border-radius:6px;background:var(--surface-2);overflow:hidden;display:grid;place-items:center}
+.odl-th img{max-width:100%;max-height:100%;object-fit:contain}
+.odl-t{display:flex;flex-direction:column;min-width:0;font-size:13.5px}
+.odl-t b{font-weight:700;color:var(--ink)}
+.odl-t small{font-size:12px;color:var(--ink-3)}
+.odl-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden;height:32px}
+.odl-seg button{border:0;background:var(--surface);padding:0 12px;font:600 13px var(--body);color:var(--ink-2);cursor:pointer}
+.odl-seg button+button{border-left:1px solid var(--line)}
+.odl-seg button.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent)}
+.odl-seg button.on.del{background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger)}
+.odl-shared{opacity:.75}
+.odl-stays{font-size:12.5px;font-weight:600;color:var(--ok);white-space:nowrap}
+.odl-note{font-size:12px;color:var(--ink-3);margin:2px 0 0}

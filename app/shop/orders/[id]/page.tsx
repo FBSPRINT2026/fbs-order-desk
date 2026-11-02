@@ -1133,7 +1133,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const qb: QbState | null = qs && qs.ok ? qs : null;
     const qbVoid = !!qb?.synced && !qb.voided && (qb.source === "created" || qb.source === "test");
     if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: true, qb, qbVoid, ...pvAsk });
-    const pick = new Set<string>([...r.logos.filter((l) => l.draft && !l.elsewhere).map((l) => l.id), ...r.mockups.map((m) => m.id)]);
+    // a copy of another order's mockup goes with it (nothing is lost); art made only on this order starts as Keep (Nov 2, Nick)
+    const pick = new Set<string>(r.mockups.filter((m) => m.copyOf).map((m) => m.id));
     setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: true, qb, qbVoid, ...pvAsk });
   }
   async function confirmDel() {
@@ -1503,26 +1504,45 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             ) : !delAsk.loading && delAsk.pvErr ? <p className="err">{delAsk.pvErr}</p>
             : delAsk.loading ? <p className="faint">Looking at the order&apos;s art…</p> : delAsk.error && !delAsk.logos.length && !delAsk.mockups.length ? <p className="err">{delAsk.error}</p> : (
               <>
-                {/* say plainly what goes (Nov 2, Nick: "it's not intuitive what you're actually deleting… is it only on this order?") */}
-                {delAsk.logos.length + delAsk.mockups.length > 0 ? <p className="dla-sub">Only this order is deleted. Ticked art goes with it (archived, and it can be put back). Anything another order uses stays on that order.</p> : <p className="dla-sub">Only this order is deleted. It has no art of its own to take off.</p>}
-                {[{ t: "Logos", list: delAsk.logos }, { t: "Mockups", list: delAsk.mockups }].filter((x) => x.list.length).map((x) => (
-                  <div key={x.t} className="dla-sec">
-                    <div className="dla-h">{x.t}</div>
-                    <div className="dla-grid">
-                      {x.list.map((a) => {
-                        const on = delAsk.pick.has(a.id) && !a.elsewhere;
-                        return (
-                          <label key={a.id} className={"dla-it" + (on ? " on" : "") + (a.elsewhere ? " off" : "")} title={a.elsewhere ? `Used on ${a.also || "another order"}: it stays` : a.copyOf ? `Only this order's copy is taken off; ${a.copyOf}'s mockup stays` : a.label}>
-                            <input type="checkbox" checked={on} disabled={!!a.elsewhere || delAsk.busy} onChange={() => setDelAsk((d) => { if (!d) return d; const p = new Set(d.pick); if (p.has(a.id)) p.delete(a.id); else p.add(a.id); return { ...d, pick: p }; })} />
-                            <span className="dla-pic">{a.url ? <img src={a.url} alt="" /> : null}</span>
-                            <span className="dla-t">{a.label}</span>
-                            <small>{a.elsewhere ? `Also on ${a.also || "another order"}: stays` : a.copyOf ? `This order's copy · ${a.copyOf} keeps its own` : a.draft ? "Made for this order" : "In their library"}</small>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                {/* what deleting it does to its art, said plainly (Nov 2, Nick: "if you're copying an order and you go to delete
+                    it, you don't even need to ask… unless it's unique… if… it's originally made [here]… would you like me to
+                    save it"): art another order also has stays, said in one line; art made only here is asked, Keep or Delete */}
+                {(() => {
+                  const shared = [...delAsk.logos.filter((l) => l.elsewhere), ...delAsk.mockups.filter((m) => m.copyOf)];
+                  const own = [...delAsk.logos.filter((l) => !l.elsewhere).map((a) => ({ a, kind: "Logo" })), ...delAsk.mockups.filter((m) => !m.copyOf).map((a) => ({ a, kind: "Mockup" }))];
+                  const others = [...new Set(shared.map((x) => x.also || x.copyOf).filter(Boolean))].join(", ") || "another order";
+                  const who = cust?.company || cust?.name || "the customer";
+                  if (!own.length) return <div className="odl-ok"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" /></svg>
+                    <span>{shared.length ? <>All its art is also on {others}. Nothing will be lost; {others} keeps everything.</> : "It has no art of its own. Nothing else is changed."}</span></div>;
+                  return (
+                    <>
+                      <p className="dla-sub">{shared.length ? <>Some of its art is also on {others} and stays there. This was made on this order:</> : <>This art was made on this order. Keep it in {who}&apos;s art library, or delete it with the order?</>}</p>
+                      <div className="odl-list">
+                        {own.map(({ a, kind }) => {
+                          const del = delAsk.pick.has(a.id);
+                          return (
+                            <div key={a.id} className="odl-it">
+                              <span className="odl-th">{a.url ? <img src={a.url} alt="" /> : null}</span>
+                              <span className="odl-t"><b>{kind}: {a.label}</b><small>only on this order</small></span>
+                              <span className="odl-seg" role="radiogroup" aria-label={`${a.label}: keep or delete`}>
+                                {(["keep", "delete"] as const).map((k) => <button key={k} type="button" role="radio" aria-checked={(k === "delete") === del} className={(k === "delete") === del ? "on" + (k === "delete" ? " del" : "") : ""} disabled={delAsk.busy}
+                                  onClick={() => setDelAsk((d) => { if (!d) return d; const p = new Set(d.pick); if (k === "delete") p.add(a.id); else p.delete(a.id); return { ...d, pick: p }; })}>{k === "keep" ? "Keep" : "Delete"}</button>)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                        {shared.filter((x) => delAsk.logos.includes(x)).map((a) => (
+                          <div key={a.id} className="odl-it odl-shared">
+                            <span className="odl-th">{a.url ? <img src={a.url} alt="" /> : null}</span>
+                            <span className="odl-t"><b>Logo: {a.label}</b><small>also on {a.also || "another order"}: stays either way</small></span>
+                            <span className="odl-stays">Stays</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="odl-note">Deleted art is archived: it can be put back.</p>
+                    </>
+                  );
+                })()}
                 {delAsk.qb?.synced && (
                   <div className="dla-qb">
                     <b><QbMark /> This order is already in QuickBooks{delAsk.qb.docNumber ? ` (invoice ${delAsk.qb.docNumber})` : ""}.</b>
@@ -1545,7 +1565,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="dla-acts">
               {delAsk.gone ? <button type="button" className="btn primary" onClick={() => { setDelAsk(null); leave(); }}>OK</button> : <>
               <button type="button" className="btn ghost" disabled={delAsk.busy} onClick={() => setDelAsk(null)}>Cancel</button>
-              {!delAsk.pv && !delAsk.pvErr && <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.busy ? "Deleting…" : (() => { const n = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).length + delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).length; return n ? `Delete order and ${n} item${n === 1 ? "" : "s"}` : "Delete order"; })()}</button>}</>}
+              {!delAsk.pv && !delAsk.pvErr && <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.busy ? "Deleting…" : "Delete order"}</button>}</>}
             </div>
           </div>
         </div>
