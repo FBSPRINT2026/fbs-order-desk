@@ -86,7 +86,6 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             <div className={"pvt-big" + (o.amountOutstanding > 0.004 ? " pvt-due" : "")}><span>Amount outstanding</span><b>{money(o.amountOutstanding)}</b></div>
             <div className="faint" style={{ fontSize: 12 }}>{o.totalQuantity} item{o.totalQuantity === 1 ? "" : "s"}{o.paidInFull ? " · Paid in full" : ""}</div>
           </div>;
-  const totalsPanel = <section className="panel pv-tot-panel"><div className="panel-h"><h2>Fees &amp; Totals</h2></div><div className="panel-b">{totalsCard}</div></section>;
 
   return (
     <div className="pv">
@@ -98,8 +97,10 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         <button type="button" className="btn sm" onClick={() => window.print()}>Print</button>
       </div>
 
-      <div className="ed-grid pva-grid">
-        <div className="pv-main">
+      {/* one column, full width, like the invoice in Printavo (Nov 2, Nick: "very narrow and compact… remove the right
+          panel… brings everything up"): the job, then payments beside the totals, then messages (when there are any) and
+          the rest */}
+      <div className="pv-one">
         <header className="pv-head">
           {back && <span className="pv-back">{back}</span>}
           <div className="pv-head-t">
@@ -141,28 +142,23 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         {o.groups.map((g, gi) => group(g, gi + 1))}
         {!o.groups.length && <div className="pv-card faint" style={{ padding: 18 }}>No line items on this {label.toLowerCase()}.</div>}
 
-        <div className={"pv-bottom" + (audience === "shop" ? " solo" : "")}>
-          <div className="pv-stack">
+        <div className="pv-sum">
+          <div className="pv-sum-l">
+            {paymentsCard}
             {plain(o.customerNote) && (
               <div className="pv-card"><h3>{audience === "shop" ? "Customer note" : "Note"}</h3><p className="pv-pre">{plain(o.customerNote)}</p></div>
             )}
           </div>
-          {audience !== "shop" && totalsCard}
+          <div className="pv-sum-r">{totalsCard}</div>
         </div>
-        {/* phones, tablets and print: fees & totals and payments right after the job, before production (Oct 15, Nick) */}
-        {audience === "shop" && <div className="pv-narrow">{totalsPanel}{paymentsCard}</div>}
-        <div className="pv-extra">
+
+        {audience !== "shop" && (o.messages.length > 0 || o.approvals.length > 0) && <History o={o} fileUrl={fileUrl} dl={dl} paths={paths} audience={audience} />}
+
         {audience === "shop" && (
           <ProductionPanel note={plain(o.productionNote)}
             files={o.files.map((f) => ({ id: f.id, name: nameOf(f), url: fileUrl(f.full) || undefined, thumb: (f.thumb && fileUrl(f.thumb)) || undefined, mime: f.mime }))}>{production}</ProductionPanel>
         )}
         {below}
-        </div>
-        </div>
-        <aside className="ed-aside pv-aside">
-        {audience === "shop" && <div className="pv-wide">{totalsPanel}</div>}
-        {audience === "shop" ? <div className="pv-wide">{paymentsCard}</div> : paymentsCard}
-        {audience !== "shop" && <History o={o} fileUrl={fileUrl} dl={dl} paths={paths} audience={audience} />}
 
         {o.tasks.length > 0 && (
           <section className="panel"><div className="panel-h"><h2>Tasks</h2></div><div className="panel-b">
@@ -179,7 +175,6 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         )}
 
         {audience === "shop" && o.warnings?.length ? <div className="pv-card faint" style={{ fontSize: 12.5 }}>Some parts couldn&apos;t be read from Printavo: {o.warnings.join(" · ")}</div> : null}
-        </aside>
       </div>
 
       {lookAt != null && looks[lookAt] && <QuickLook files={looks} at={lookAt} strip title={`#${o.visualId || ""}`.trim()} onClose={() => setLookAt(null)} />}
@@ -206,21 +201,25 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
     const sizes = used.sort(sizeOrder);
     const show = { category: g.columns ? g.columns.category : g.lines.some((l) => l.category), itemNumber: g.columns ? g.columns.itemNumber : true, color: g.columns ? g.columns.color : true, markup: !!g.columns?.markup && g.lines.some((l) => l.markup != null) };
     const qty = g.lines.reduce((a, l) => a + l.items, 0), tot = g.lines.reduce((a, l) => a + l.items * l.price, 0);
+    // the line's pictures in their own column, first (Nov 2, Nick: "artwork on the left and then the tab", like Printavo)
+    const arts = g.lines.some((l) => l.mockups.length > 0);
     return (
       <section key={g.id} className="pv-card pv-group">
         {o.groups.length > 1 && <div className="pv-gno">Line item group {n}</div>}
         <div className="pv-scroll">
           <table className="pv-tbl pv-items">
             <thead><tr>
+              {arts && <th className="pv-artc">Artwork</th>}
               {show.category && <th>Category</th>}{show.itemNumber && <th>Item #</th>}{show.color && <th>Color</th>}<th className="desc">Description</th>
               {sizes.map((s) => <th key={s} className="c sz">{sizeLabel(s)}</th>)}
               <th className="c">Items</th>{cash && <>{show.markup && <th className="r">Markup</th>}<th className="r">Price</th><th className="c">Taxed</th><th className="r">Total</th></>}
             </tr></thead>
             <tbody>{g.lines.map((l) => (
               <tr key={l.id}>
+                {arts && <td className="pv-artc">{l.mockups.length ? <span className="pv-arts">{l.mockups.map((m) => thumb(m, "pv-thumb md"))}</span> : <span className="pv-art-none" aria-hidden />}</td>}
                 {show.category && <td>{l.category}</td>}{show.itemNumber && <td className="nowrap">{l.itemNumber}</td>}{show.color && <td>{l.color}</td>}
                 <td className="desc">
-                  <div className="pv-desc">{l.mockups.length > 0 && <span className="pv-lthumbs">{l.mockups.map((m) => thumb(m, "pv-thumb sm"))}</span>}<div>{l.brand && !l.description.toLowerCase().includes(l.brand.toLowerCase()) && <span className="faint">{l.brand} </span>}<span className="pv-pre">{plain(l.description)}</span>
+                  <div className="pv-desc"><div>{l.brand && !l.description.toLowerCase().includes(l.brand.toLowerCase()) && <span className="faint">{l.brand} </span>}<span className="pv-pre">{plain(l.description)}</span>
                     {l.status && <div><span className="pv-chip">{TASK_STATUS[l.status] || l.status}</span></div>}
                     {l.personalizations.length > 0 && <div className="pv-pers">{l.personalizations.map((p, i) => <span key={i}>{[p.name, p.value].filter(Boolean).join(": ")}</span>)}</div>}</div></div>
                 </td>
@@ -229,7 +228,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
                 <td className="r num">{money(l.price)}</td><td className="c">{l.taxed ? "✓" : ""}</td><td className="r num b">{money(l.items * l.price)}</td></>}
               </tr>
             ))}</tbody>
-            {g.lines.length > 1 && <tfoot><tr><td colSpan={(show.category ? 1 : 0) + (show.itemNumber ? 1 : 0) + (show.color ? 1 : 0) + 1 + sizes.length} className="r faint">Group total</td><td className="c num b">{qty}</td>{cash && <>{show.markup && <td />}<td /><td /><td className="r num b">{money(tot)}</td></>}</tr></tfoot>}
+            {g.lines.length > 1 && <tfoot><tr><td colSpan={(arts ? 1 : 0) + (show.category ? 1 : 0) + (show.itemNumber ? 1 : 0) + (show.color ? 1 : 0) + 1 + sizes.length} className="r faint">Group total</td><td className="c num b">{qty}</td>{cash && <>{show.markup && <td />}<td /><td /><td className="r num b">{money(tot)}</td></>}</tr></tfoot>}
           </table>
         </div>
         {g.imprints.map((im) => (
