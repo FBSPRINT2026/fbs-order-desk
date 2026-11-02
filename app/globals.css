@@ -17382,3 +17382,9 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .rop-read-go{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px}
 .rop-read-go .faint{font-size:12px}
 .rop-all{font-size:12.5px;white-space:nowrap}
+/* +Q (new quote) and +C (new customer) on the version's line, at the left (Nov 1, Nick); folded menu: one above the other */
+.nav-quick{position:absolute;left:10px;bottom:100%;margin-bottom:2px;display:flex;gap:4px;pointer-events:auto;line-height:1}
+.nav-qk{font:700 11px var(--body);line-height:1;padding:4px 7px;border:0;border-radius:6px;background:var(--fbs-blue);color:#fff;cursor:pointer;white-space:nowrap}
+.nav-qk:hover{filter:brightness(1.08)}
+.nav-qk:disabled{opacity:.6;cursor:default}
+.side.mini .nav-quick{position:static;flex-direction:column;align-items:center;margin:0 0 6px}

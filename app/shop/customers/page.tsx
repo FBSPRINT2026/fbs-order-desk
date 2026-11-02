@@ -1,4 +1,5 @@
 "use client";
+import { newCustomer } from "@/lib/quickNew";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -55,10 +56,8 @@ export default function CustomersPage() {
 
   async function add() {
     setBusy(true);
-    const { data, error } = await createClient().from("customers").insert({}).select("id").single();
+    try { await newCustomer((h) => router.push(h)); } catch (e) { alert(e instanceof Error ? e.message : String(e)); }
     setBusy(false);
-    if (data) router.push(`/shop/customers/${data.id}?new=1`);
-    else if (error) alert(error.message);
   }
 
   return (

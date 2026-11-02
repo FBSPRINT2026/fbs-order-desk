@@ -15,6 +15,7 @@ import DraftRecovery from "@/components/DraftRecovery";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
+import { newQuote } from "@/lib/quickNew";
 import { bulkDeleteOrders } from "@/app/shop/bulk-delete-actions";
 import RowLink from "@/components/RowLink";
 
@@ -156,9 +157,8 @@ export default function OrdersPage() {
         </div>
         {canQuote && <button className="btn primary" type="button" disabled={creating} onClick={async () => {
           setCreating(true);
-          const { data, error } = await createClient().from("orders").insert({ lines: [], status: "quote", type: "quote", draft: true }).select("id").single();
+          try { await newQuote((h) => router.push(h)); } catch (e) { alert(e instanceof Error ? e.message : String(e)); }
           setCreating(false);
-          if (!error && data) router.push(`/shop/orders/${data.id}?new=1`); else alert("Couldn't create the quote: " + (error?.message || ""));
         }}>{creating ? "Creating…" : "+ New quote"}</button>}
       </div>
       {error && <div className="banner">Couldn&apos;t load orders: {error}</div>}

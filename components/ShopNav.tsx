@@ -1,5 +1,6 @@
 "use client";
 import VersionTag from "@/components/VersionTag";
+import { newCustomer, newQuote } from "@/lib/quickNew";
 import { allRows } from "@/lib/readAll";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -113,6 +114,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const [side, setSide, sideLocked] = useProdSide();
   const crew = !perms.money;
   const router = useRouter();
+  const [quick, setQuick] = useState("");
   const [unread, setUnread] = useState(0);
   const [incoming, setIncoming] = useState(0);
   const [clickup, setClickup] = useState(0); // new jobs on the customers' ClickUp boards (ClickUp Jobs)
@@ -448,6 +450,14 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
             owner has it on the Admin Tools line. */}
         {/* everyone, me included (Oct 24, Nick: "move the version… to where it is for everybody else") */}
         <span className="nav-ver-all"><VersionTag /></span>
+        {/* +Q and +C (Nov 1, Nick: "a small plus sign with a quote so that I can just create a quote from the toolbar…
+            plus quote plus customer"): on the version's line, at the left; folded, one above the other */}
+        {(perms.quotes || canOpen("/shop/customers", perms)) && (
+          <span className="nav-quick">
+            {perms.quotes && <button type="button" className="nav-qk" title="New quote" aria-label="New quote" disabled={!!quick} onClick={() => { setQuick("q"); newQuote((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ Q</button>}
+            {canOpen("/shop/customers", perms) && <button type="button" className="nav-qk" title="New customer" aria-label="New customer" disabled={!!quick} onClick={() => { setQuick("c"); newCustomer((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ C</button>}
+          </span>
+        )}
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {/* you: your initials, and Settings under them; clicking opens Settings (Oct 16, Nick) */}
         {(() => {
