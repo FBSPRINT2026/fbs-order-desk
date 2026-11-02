@@ -474,6 +474,15 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
   return out;
 }
 
+/** a file on ClickUp dragged into the portal (Nov 1: ClickUp's web page beside the AI order helper): each workspace's
+ *  token is tried, then none; only ClickUp's own hosts */
+export async function clickupFileByUrl(url: string): Promise<Buffer | null> {
+  let host = ""; try { host = new URL(url).hostname; } catch { return null; }
+  if (!/(^|\.)clickup(-attachments)?\.com$/i.test(host)) return null;
+  for (const t of [...clickupTokens().map((x) => x.token), ""]) { const b = await grab(url, t); if (b) return b; }
+  return null;
+}
+
 /** a file from ClickUp (the token is only ever sent to ClickUp's own hosts) */
 async function grab(url: string, tok: string): Promise<Buffer | null> {
   let host = "";

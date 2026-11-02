@@ -2,6 +2,7 @@
 import { mockupHref, remakeMockup } from "@/lib/mockupFresh";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Group } from "@/lib/pricing";
 import { guessHex, lineColor } from "@/lib/mockup";
@@ -93,9 +94,50 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   const [drop, setDrop] = useState<{ pics: DropPic[]; names: string[] }>({ pics: [], names: [] });
   const [over, setOver] = useState(false);
   const fileIn = useRef<HTMLInputElement>(null);
+  /** what's dropped in is attached to the order too (Nov 1, Nick: "drag those attachments in and attach them to an
+   *  order"): each file in Production files, labeled by its name; an Outlook email's attachments, not the email */
+  async function keepOnOrder(fs: (File | Blob)[]) {
+    const { guessProdKind } = await import("@/lib/productionFileKinds");
+    const files: { name: string; blob: Blob }[] = [];
+    for (const f of fs) {
+      const nm = (f as File).name || "Snip.png";
+      if (/\.msg$/i.test(nm) || /ms-outlook/i.test(f.type)) {
+        try { const { readMsg } = await import("@/lib/outlookMsg"); for (const a of readMsg(await f.arrayBuffer()).attachments) if (!(a.data.length < 15_000 && /image0\d+|outlook|logo/i.test(a.name))) files.push({ name: a.name, blob: new Blob([a.data as BlobPart], { type: a.type }) }); } catch { /* read below */ }
+      } else files.push({ name: nm, blob: f });
+    }
+    let n = 0;
+    for (const f of files.slice(0, 12)) {
+      const path = `art/${orderId}/${Date.now().toString(36)}${n}-${f.name.replace(/[^\w.\-]+/g, "_").slice(-100)}`;
+      const up = await sb.storage.from("proofs").upload(path, f.blob, { contentType: f.blob.type || undefined, upsert: false });
+      if (up.error) continue;
+      await sb.from("art_files").insert({ order_id: orderId, name: f.name, file_path: path, file_type: f.blob.type || "", category: guessProdKind(f.name) || null, note: "Dropped in the AI order helper" });
+      n++;
+    }
+    if (n) { pageReloads(orderId); setResN((x) => x + 1); }
+    return n;
+  }
+  /** a file dragged from another site's page (ClickUp's attachments, Dropbox): it comes as its link; fetched here */
+  async function dropLinks(dt: DataTransfer) {
+    const html = dt.getData("text/html"), list = dt.getData("text/uri-list") || dt.getData("text/plain");
+    const urls = [...new Set([...(list.match(/https:\/\/[^\s"'<>]+/g) || []), ...[...html.matchAll(/(?:href|src)=["'](https:\/\/[^"']+)["']/g)].map((m) => m[1].replace(/&amp;/g, "&"))])]
+      .sort((a, b) => Number(/clickup-attachments/.test(b)) - Number(/clickup-attachments/.test(a))).slice(0, 3);
+    if (!urls.length) return;
+    setBusy("Getting the file…");
+    const got: File[] = [];
+    for (const u of urls) {
+      const r = await fetch("/api/files/from-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: u }) }).catch(() => null);
+      if (!r || !r.ok) { if (!got.length && u === urls[urls.length - 1]) { const j = r ? await r.json().catch(() => ({})) as { error?: string } : {}; setErr(j.error || "Couldn't get that file. Download it and drop it in."); } continue; }
+      const name = decodeURIComponent(r.headers.get("X-File-Name") || "file");
+      got.push(new File([await r.blob()], name, { type: r.headers.get("Content-Type") || "" }));
+      break;
+    }
+    setBusy("");
+    if (got.length) void addDrop(got);
+  }
   async function addDrop(fs: (File | Blob)[]) {
     if (!fs.length || busy) return;
     setErr("");
+    void keepOnOrder(fs);
     let d;
     try { d = await readDrop(fs); } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't read that."); return; }
     if (d.text) { void ask("change", { message: d.text, label: d.label, pics: d.pics }); return; }
@@ -108,13 +150,14 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   // what the customer sent (their PO, mockup, art), then our work order, quote and proof, opened right here
   const [resOpen, setResOpen] = useState(false);
   const [res, setRes] = useState<MailFile[]>([]);
+  const [resN, setResN] = useState(0);
   useEffect(() => {
     void sb.from("art_files").select("id, name, category, file_path").eq("order_id", orderId).order("created_at").then(({ data }) => {
       setRes((data || []).map((f) => ({ key: f.id as string, name: f.name as string, label: `${RES_LABEL[(f.category as string) || ""] || "File"}: ${f.name}`,
         href: `/api/files/open?${new URLSearchParams({ p: f.file_path as string, n: f.name as string })}`, rank: RES_RANK.indexOf((f.category as string) || "") + 1 || 9 }))
         .filter(canQuickLook).sort((a, b) => a.rank - b.rank).map(({ rank: _r, ...x }) => x)); // eslint-disable-line @typescript-eslint/no-unused-vars
     });
-  }, [sb, orderId]);
+  }, [sb, orderId, resN]);
   const endRef = useRef<HTMLDivElement>(null);
 
   // one of several orders in the email (Oct 23, Nick: "when you're done, you'll say, do you want to go ahead and make the
@@ -315,8 +358,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   // like a text thread (Oct 23, Nick: "make it like an iPhone chat"): the order up top, the thread, and the box at the bottom
   return (
     <div className={"ap orv chat" + (over ? " orv-over" : "")} role="group" aria-label="AI order helper"
-      onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); if (!over) setOver(true); } }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
-      onDrop={(e) => { if (!e.dataTransfer.files.length) return; e.preventDefault(); setOver(false); void addDrop([...e.dataTransfer.files]); }}
+      onDragOver={(e) => { const t = e.dataTransfer.types; if (t.includes("Files") || t.includes("text/uri-list") || t.includes("text/html")) { e.preventDefault(); if (!over) setOver(true); } }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
+      onDrop={(e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files.length) void addDrop([...e.dataTransfer.files]); else void dropLinks(e.dataTransfer); }}
       onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addDrop(fs); } }}>
       <div className="orv-top">
         <div className="orv-top-h"><b>#{o.number}</b><span className="faint">{o.nickname}</span><span className="orv-name">✦ AI order helper</span><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back from ✦ AI on the order, with everything said">Close for now</button></div>
@@ -440,47 +483,66 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   );
 }
 
-/** the order check, open on the right of every shop page until it's closed (the end of Create order, an order's
- *  Ask AI → "AI order helper"): which order is kept for this tab, so going to the Mockup Creator and back keeps it open */
+/** the AI order helper on the right, open on the pages of ITS order (Nov 1, Nick: "if you navigate away from an order,
+ *  the AI order helper should close… don't lose your status. Next time you open that order back up, it should pop up
+ *  where you were"): the order's page and anything opened for it (the Mockup Creator with ?order=, a page with ?chat=).
+ *  Elsewhere it's put away, not closed: each order's open helper is kept for this tab (and its conversation with the
+ *  order), so opening that order again brings it back as it was. Close for now / Yes, it's right put it away for good. */
 const DOCK_KEY = "fbs:orderCheck";
 /** the next steps of an order made a part at a time (Create order → Other options): how to read the job again, what's in */
 export type NextSteps = { ctx: PartialCtx; done: PartKind[] };
 type DockState = { orderId: string; did?: string[]; /** made from one of several orders in this email */ from?: { activity: string }; steps?: NextSteps };
+const dockKey = (id: string) => `${DOCK_KEY}:${id}`;
+const readDock = (id: string): DockState | null => { try { const x = sessionStorage.getItem(dockKey(id)); return x ? (JSON.parse(x) as DockState) : null; } catch { return null; } };
 export function openOrderCheck(orderId: string, did?: string[], from?: { activity: string }, steps?: NextSteps) {
   const st: DockState = { orderId, did, ...(from ? { from } : {}), ...(steps ? { steps } : {}) };
-  try { sessionStorage.setItem(DOCK_KEY, JSON.stringify(st)); } catch { /* */ }
+  try { sessionStorage.setItem(dockKey(orderId), JSON.stringify(st)); } catch { /* */ }
   window.dispatchEvent(new CustomEvent("fbs:order-check", { detail: st }));
+}
+/** the order a page is about: /shop/orders/<id>…, or ?order= / ?chat= (the Mockup Creator, Create order's full form) */
+function orderHere(path: string) {
+  const m = /^\/shop\/orders\/([0-9a-f-]{36})/i.exec(path || "");
+  if (m) return m[1];
+  try { const q = new URLSearchParams(window.location.search), id = q.get("order") || q.get("chat") || ""; return /^[0-9a-f-]{36}$/i.test(id) ? id : null; } catch { return null; }
 }
 
 export function OrderCheckDock() {
+  const path = usePathname();
   const [st, setSt] = useState<DockState | null>(null);
+  // asked for just now (Create order, the AI menu): shown on the page it was asked on, even before that page is the order's
+  const askedOn = useRef<string | null>(null);
   useEffect(() => {
     if (window.self !== window.top) return; // the Mockup Creator made out of sight (remakeMockups): no second check in it
-    try { const x = sessionStorage.getItem(DOCK_KEY); if (x) setSt(JSON.parse(x) as DockState); } catch { /* */ }
     // opened in a new tab by Create order's full form (?chat=<order>): the AI order helper comes up there too (Oct 27, Nick:
     // "anytime we go through the create orders tool… I still want to leave that panel open so we can talk to it")
     try {
       const q = new URLSearchParams(window.location.search), id = q.get("chat") || "", em = q.get("email") || "";
-      if (/^[0-9a-f-]{36}$/i.test(id)) {
-        const st0: DockState = { orderId: id, ...(/^[0-9a-f-]{36}$/i.test(em) ? { from: { activity: em } } : {}) };
-        sessionStorage.setItem(DOCK_KEY, JSON.stringify(st0)); setSt(st0);
-      }
+      if (/^[0-9a-f-]{36}$/i.test(id) && !readDock(id)) sessionStorage.setItem(dockKey(id), JSON.stringify({ orderId: id, ...(/^[0-9a-f-]{36}$/i.test(em) ? { from: { activity: em } } : {}) }));
     } catch { /* */ }
-    const on = (e: Event) => setSt((e as CustomEvent<DockState | null>).detail);
+    const on = (e: Event) => { const d = (e as CustomEvent<DockState | null>).detail; askedOn.current = d ? window.location.pathname : null; setSt(d); };
     window.addEventListener("fbs:order-check", on);
     return () => window.removeEventListener("fbs:order-check", on);
   }, []);
+  // each page: the helper of the order it's about, if one was open for it; any other page puts it away (kept)
+  useEffect(() => {
+    if (window.self !== window.top) return;
+    const id = orderHere(path || "");
+    const d = id ? readDock(id) : null;
+    if (d) { setSt(d); return; }
+    if (askedOn.current && askedOn.current === path) return;
+    askedOn.current = null;
+    setSt(null);
+  }, [path]);
   useEffect(() => {
     if (!st) return;
     window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: true } }));
     return () => { window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: false } })); };
   }, [st]);
   if (!st) return null;
-  const close = () => { try { sessionStorage.removeItem(DOCK_KEY); } catch { /* */ } setSt(null); };
+  const close = () => { try { sessionStorage.removeItem(dockKey(st.orderId)); } catch { /* */ } askedOn.current = null; setSt(null); };
   return (
-    <div className="dla-bg dock wide" role="dialog" aria-label="Check the order">
+    <div className="dla-bg dock wide" role="dialog" aria-label="AI order helper">
       <div className="dla qo wide"><OrderReview key={st.orderId} orderId={st.orderId} did={st.did} from={st.from} steps={st.steps} onClose={close} /></div>
     </div>
   );
 }
-
