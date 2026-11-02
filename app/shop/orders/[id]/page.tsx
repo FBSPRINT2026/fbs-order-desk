@@ -1624,6 +1624,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                         <span className="cu-av" aria-hidden>{custLabel(cust).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}</span>
                         <div className="cu-who">
                           <div className="cu-co">{custLabel(cust)}<Link className="cu-pen" href={`/shop/customers/${cust.id}`} title="Edit customer" aria-label="Edit customer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg></Link>
+                            {/* change the customer: beside their name, not off on the right by Pricing (Nov 2, Nick) */}
+                            <button type="button" className="linkbtn cu-chg" onClick={() => setPickCust(true)}>Change</button>
                             {/* tax and terms as two small symbols: set once for a customer, rarely looked at */}
                             <span className="cu-sym money-only">
                               {o.tax_exempt && <span className="cu-ic" title="Tax exempt on this order"><span>Exempt</span></span>}
@@ -1667,7 +1669,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       </div>
                     </div>
                         {o.use_program && prog && <button type="button" className="pt-applied" onClick={() => setProgOpen(!progOpen)} aria-expanded={progOpen} title={progOpen ? "Hide the program pricing details" : "Show how the program prices this order"}><span className="pt-dot" aria-hidden />Applied<span className="pt-car" aria-hidden>{progOpen ? "▴" : "▾"}</span></button>}
-                        <button type="button" className="linkbtn cu-chg" onClick={() => setPickCust(true)}>Change</button>
                         {/* phone only: the name alone; this opens the contact, address, pricing and Change */}
                         <button type="button" className="cu-tog" aria-expanded={cuOpen} aria-label={cuOpen ? "Hide customer details" : "Show customer details"} onClick={() => setCuOpen((v) => !v)}>
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 9l6 6l6-6" /></svg>

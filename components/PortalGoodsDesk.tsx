@@ -68,28 +68,30 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
   };
   const [tell, setTell] = useState(false);
 
+  // one plain row per order (Nov 2, Nick: "it's a hard to read section"): the order, its shipments, boxes here, tracking
+  const [trkOpen, setTrkOpen] = useState<string | null>(null);
   const card = (r: (typeof rows)[number]) => {
-    const o = r.it.order, groups = shipGroups(r.it.shipments);
+    const o = r.it.order, groups = shipGroups(r.it.shipments), trk = r.it.shipments.filter((s) => s.tracking);
+    const hereNow = (s: { track_status?: string; delivered_at?: string | null }) => s.track_status === "delivered" || !!s.delivered_at;
     return (
-      <article key={o.id} className={"gdk-ord" + (drag ? " drop" : "") + (over === o.id ? " over" : "")}
+      <article key={o.id} className={"gdk-row" + (drag ? " drop" : "") + (over === o.id ? " over" : "")}
         onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(o.id); } }} onDragLeave={() => setOver((x) => (x === o.id ? null : x))} onDrop={(e) => { e.preventDefault(); void dropOn(o.id); }}>
-        <header className="gdk-oh">
-          <Link className="gdk-on" href={o.href}>#{o.number}</Link>
-          <b className="gdk-nm">{o.nickname || "Order"}</b>
-          {r.st !== "waiting" && r.st !== "on_way" && r.st !== "received" && <span className="gdk-pill" style={{ ["--gc" as string]: GOODS[r.st]?.c || "var(--ink-3)" }}>{GOODS[r.st]?.portal || r.st}</span>}
-          <span className="gdk-sp" />
-          {o.due_date && <span className="gdk-due">In hands {when(o.due_date)}</span>}
-        </header>
-        {r.boxes > 0 ? <div className="gdk-one">
-          <span className="gdk-mini"><i style={{ width: `${Math.min(100, Math.round((r.here / r.boxes) * 100))}%` }} /></span>
-          <span>{r.here >= r.boxes ? `All ${boxesOf(r.boxes)} here` : `${r.here} of ${boxesOf(r.boxes)} here${r.eta ? ` · arrives ${when(r.eta)}` : ""}`}{o.qty ? ` · ${pcsOf(o.qty)} on the order` : ""}</span>
-        </div> : <div className="gdk-none">We haven&apos;t seen a shipment for this order yet{o.qty ? ` · ${pcsOf(o.qty)} on the order` : ""}.</div>}
-        {groups.map((g, k) => <ShipLine key={k} g={g} />)}
-        <div className="gdk-acts">
-          {canAct && <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>{addFor === o.id ? "Close" : r.boxes ? "+ Tell us about another shipment" : "+ Tell us what's coming"}</button>}
-          <Link className="linkbtn" href={chatHref(o.id)}>Message us about these goods</Link>
+        <div className="gdk-c1"><Link className="gdk-on" href={o.href}>#{o.number}</Link> <b>{o.nickname || "Order"}</b>
+          <div className="gdk-sm">{[o.due_date ? `In hands ${when(o.due_date)}` : "", o.qty ? pcsOf(o.qty) : ""].filter(Boolean).join(" · ")}</div></div>
+        <div className="gdk-c2">{groups.length ? groups.map((g, k) => <div key={k}><b>{g.supplier ? `${g.supplier.replace(/ Activewear$/, "")} ${g.order}` : "Your shipment"}</b>{g.ships[0]?.note && g.supplier ? <span className="gdk-sm"> · {g.ships[0].note.split(" · ").slice(2).join(" · ") || ""}</span> : g.ships[0]?.note ? <span className="gdk-sm"> · {g.ships[0].note}</span> : null}</div>)
+          : <span className="gdk-sm">No shipment yet{canAct ? <> · <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>Tell us what&apos;s coming</button></> : null}</span>}</div>
+        <div className="gdk-c3">{r.boxes ? <span className={r.done ? "gdk-ok" : ""}>{r.done ? `All ${r.boxes} here` : `${r.here} of ${r.boxes} here`}{!r.done && r.eta ? <span className="gdk-sm"> · {when(r.eta)}</span> : null}</span> : <span className="gdk-sm">—</span>}</div>
+        <div className="gdk-c4">
+          {trk.length > 0 && <button type="button" className="gdk-trk" aria-expanded={trkOpen === o.id} onClick={() => setTrkOpen(trkOpen === o.id ? null : o.id)}>{trk.length} tracking {trkOpen === o.id ? "▴" : "▾"}</button>}
+          <Link className="gdk-msg" href={chatHref(o.id)} title="Message us about these goods" aria-label="Message us about these goods"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></Link>
         </div>
-        {addFor === o.id && <TellUs orders={[{ id: o.id, label: `#${o.number} ${o.nickname}` }]} fixed add={addTracking} onDone={() => { setAddFor(null); router.refresh(); }} />}
+        {trkOpen === o.id && (
+          <ul className="gdk-trks gdk-full">
+            {trk.map((x) => <li key={x.id}><a href={trackingUrl(x.carrier, x.tracking)} target="_blank" rel="noreferrer">{x.carrier} {x.tracking}</a><span className="gdk-sm">{hereNow(x) ? `Arrived ${when(x.delivered_at)}` : `${trackWord(x.track_status)}${x.est_delivery ? ` · ${when(x.est_delivery)}` : ""}`}</span></li>)}
+            {canAct && <li><button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>+ Tell us about another shipment</button></li>}
+          </ul>
+        )}
+        {addFor === o.id && <div className="gdk-full"><TellUs orders={[{ id: o.id, label: `#${o.number} ${o.nickname}` }]} fixed add={addTracking} onDone={() => { setAddFor(null); router.refresh(); }} /></div>}
       </article>
     );
   };
@@ -123,7 +125,7 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
         {GROUPS.filter((g) => g.list.length).map((g) => (
           <section key={g.k} className={"gdk-grp g-" + g.k} aria-label={g.label}>
             <div className="gdk-vbar"><span>{g.label} · {g.list.length}</span></div>
-            <div className="gdk-grp-b">{g.list.map(card)}</div>
+            <div className="gdk-grp-b"><div className="gdk-row gdk-head" aria-hidden><span>Order</span><span>Shipment</span><span>Boxes</span><span /></div>{g.list.map(card)}</div>
           </section>
         ))}
         {incoming.length > 0 && (
