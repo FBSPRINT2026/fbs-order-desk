@@ -269,10 +269,11 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     { id: "home", label: "Dashboard", icon: I.home },
     { id: "quotes", label: "Quotes", icon: I.quotes, n: quotes.length, show: (mode as string) === "shop" },
     { id: "orders", label: "Orders", icon: I.orders, n: mode === "portal" ? inWork.length + quotes.filter((o) => !o.archived && o.status === "quote_sent").length : inWork.length },
-    { id: "projects", label: "Projects", icon: I.projects, n: projectsCount, show: !!projectsPanel },
     // program pricing and the design catalog are tabs inside Pricing and Artwork (Oct 24, Nick: the main bar stays the same)
     { id: "payments", label: "Payments", icon: I.payments },
     { id: "artwork", label: "Artwork", icon: I.artwork },
+    // after Artwork, before Messages (Nov 2, Nick)
+    { id: "projects", label: "Projects", icon: I.projects, n: projectsCount, show: !!projectsPanel },
     { id: "messages", label: "Messages", icon: I.messages, n: messages.length },
     { id: "texts", label: "Texts", icon: I.texts, n: textsCount, show: (mode as string) === "shop" && !!textsPanel },
     { id: "receive", label: goodsPanel ? ((mode as string) === "shop" ? "Customer goods" : "Goods") : (mode as string) === "shop" ? "To receive" : "Garments to send", icon: I.receive, n: goodsPanel ? goodsCount : receive.length, show: !!goodsPanel || receive.length > 0 },
