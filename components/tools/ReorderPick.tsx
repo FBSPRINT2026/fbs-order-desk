@@ -254,8 +254,13 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
             <div className="rop-h"><b>Goods</b><span className="faint">{d.job.qty ? `${d.job.qty.toLocaleString("en-US")} pcs last time` : ""}</span></div>
             <div className="rop-modes" role="group" aria-label="Sizes">
               {/* three equal parts on one line, short words (Nov 1, Nick: the toolbar "showing two lines and collapsing weird") */}
-              {([["same", "Same sizes", "The same sizes as last time"], ["file", "From a file", "New sizes from a confirmation, PO or size sheet"], ["clear", "I'll type", "Clear the sizes and type them"]] as const).map(([k, t, tip]) => <button key={k} type="button" title={tip} className={sizeMode === k ? "on" : ""} aria-pressed={sizeMode === k} onClick={() => { setSizeMode(k); if (k !== "file") setReadOk(false); }}>{t}</button>)}
+              {([["same", "Same sizes", "The same sizes as last time"], ["file", "From a file", "New sizes from a confirmation, PO or size sheet"], ["clear", "I'll type", "Clear the sizes and type them"]] as const).map(([k, t, tip]) => <button key={k} type="button" title={tip} className={sizeMode === k ? "on" : ""} aria-pressed={sizeMode === k} onClick={() => { setSizeMode(k); if (k !== "file") setReadOk(false); setPrice(k === "same" ? "last" : "today"); }}>{t}</button>)}
             </div>
+            {/* new sizes: the price asked about, recalculated unless unticked (Nov 1, Nick: "do you want me to recalculate the
+                price and or keep the price the same as before?… by default… checked, recalculate price") */}
+            {sizeMode !== "same" && (
+              <label className="check rop-reprice"><input type="checkbox" checked={price === "today"} onChange={(e) => setPrice(e.target.checked ? "today" : "last")} />Recalculate the price for the new sizes<span className="faint">{price === "today" ? "today's price list" : `keeps last time's prices${lastTotal ? ` (${money(lastTotal)})` : ""}`}</span></label>
+            )}
             {sizeMode === "file" && !read && (
               <button type="button" className={"rop-drop" + (dropOver ? " over" : "")} onClick={() => sizeFile.current?.click()} disabled={!!readBusy}
                 onDragOver={(e) => { e.preventDefault(); setDropOver(true); }} onDragLeave={() => setDropOver(false)} onDrop={(e) => { e.preventDefault(); setDropOver(false); void readSizes([...e.dataTransfer.files]); }}>
