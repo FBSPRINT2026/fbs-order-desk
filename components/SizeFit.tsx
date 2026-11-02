@@ -30,7 +30,7 @@ export async function checkSizeFit(groups: Group[]): Promise<{ rows: FitRow[]; a
     const [gi, li] = x.key.split(":").map(Number);
     const l = groups[gi]?.lines[li];
     return {
-      gi, li, style: x.style, brand: x.brand, color: l?.color || "", run: x.run, youth: x.youth, asYouth: x.youth ? null : false,
+      gi, li, style: x.style, brand: x.brand, color: l?.color || "", run: x.run, youth: x.youth, asYouth: x.youth ? true : false, // a youth-only style: its youth sizes picked to start (the usual answer), one click to change
       moves: x.moves.map((m) => { const s = m.guesses.find((g) => g.sure); return { ...m, pick: s && !x.youth ? { style: s.style, brand: s.brand, title: s.title, how: "sure" as const } : null }; }),
     };
   }).filter((x) => groups[x.gi]?.lines[x.li]);

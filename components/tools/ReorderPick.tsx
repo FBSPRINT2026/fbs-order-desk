@@ -142,17 +142,9 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
       if (!r.ok || !j.draft) throw new Error(j.error || "Couldn't copy the job.");
       // only what you chose comes along: the files you sorted (below), the notes you ticked
       let x: EODraft = { ...j.draft, filesChosen: true, carry: (["production", "customer"] as const).filter((k) => d.notes?.[k] && keepNote[k]) };
-      // sizes a style doesn't come in, and shirt colors that aren't the style's exact name: asked, as everywhere
-      setStep("Checking the sizes each style comes in…");
-      const sf = await checkSizeFit(x.groups).catch(() => ({ rows: [] as FitRow[], ask: [] as FitRow[] }));
-      if (sf.ask.length) { const p = await new Promise<FitRow[] | null>((done) => setFitAsk({ rows: sf.rows, done })); setFitAsk(null); if (!p) { setStep(""); return; } sf.rows = p; }
-      if (sf.rows.length) x = { ...x, groups: applySizeFit(x.groups, sf.rows).groups };
-      setStep("Checking the shirt colors…");
-      const cc = await checkColors(x.groups).catch(() => ({ rows: [] as ColorRow[], ask: [] as ColorRow[] }));
-      let rows = cc.rows;
-      if (cc.ask.length) { const p = await new Promise<ColorRow[] | null>((done) => setAsk({ rows: cc.rows, done })); setAsk(null); if (!p) { setStep(""); return; } rows = p; }
-      if (rows.length) x = { ...x, groups: applyColors(x.groups, rows) };
-      // the sizes: last time's, the file's (when you said Update to these), or none to type in
+      // the sizes first: last time's, the file's (when you said Update to these), or none to type in. Then they're
+      // checked against the styles, so a youth style's S–XL become YS–YXL whichever sizes they are (Nov 1, Nick: from a
+      // file, "It made them all adult": the check ran on last time's sizes, then the file's were laid over it)
       if (sizeMode === "clear") for (const g of x.groups) for (const l of g.lines) l.sizes = {};
       if (sizeMode === "file" && read && match && readOk) {
         const lineOf = (st: string, co: string) => { for (const g of x.groups) for (const l of g.lines) if (styleKey(l.style) === styleKey(st) && sameColor(l.color, co)) return l; return null; };
@@ -170,6 +162,16 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
         }
         x.groups = x.groups.filter((g) => g.lines.length);
       }
+      // sizes a style doesn't come in, and shirt colors that aren't the style's exact name: asked, as everywhere
+      setStep("Checking the sizes each style comes in…");
+      const sf = await checkSizeFit(x.groups).catch(() => ({ rows: [] as FitRow[], ask: [] as FitRow[] }));
+      if (sf.ask.length) { const p = await new Promise<FitRow[] | null>((done) => setFitAsk({ rows: sf.rows, done })); setFitAsk(null); if (!p) { setStep(""); return; } sf.rows = p; }
+      if (sf.rows.length) x = { ...x, groups: applySizeFit(x.groups, sf.rows).groups };
+      setStep("Checking the shirt colors…");
+      const cc = await checkColors(x.groups).catch(() => ({ rows: [] as ColorRow[], ask: [] as ColorRow[] }));
+      let rows = cc.rows;
+      if (cc.ask.length) { const p = await new Promise<ColorRow[] | null>((done) => setAsk({ rows: cc.rows, done })); setAsk(null); if (!p) { setStep(""); return; } rows = p; }
+      if (rows.length) x = { ...x, groups: applyColors(x.groups, rows) };
       // last time's price, or today's list
       for (const g of x.groups) for (const l of g.lines) {
         const pv = (l as { pvPrice?: number }).pvPrice;
@@ -331,7 +333,7 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
         </>}
         {fitAsk && <SizeFitAsk inline rows={fitAsk.rows} onDone={(r) => fitAsk.done(r)} onCancel={() => fitAsk.done(null)} />}
         {ask && <ColorCheck inline rows={ask.rows} onDone={(r) => ask.done(r)} onCancel={() => ask.done(null)} />}
-        <div className="dla-acts">{step && <span className="faint rop-step">{step}</span>}<span className="spacer" /><button type="button" className="btn ghost" onClick={onClose} disabled={!!step}>Cancel</button><button type="button" className="btn primary" disabled={!d || !!step || (sizeMode === "file" && !readOk)} title={sizeMode === "file" && !readOk ? "Drop the file with the new sizes and press Update to these first" : undefined} onClick={() => void make()}>Make the reorder</button></div>
+        <div className="dla-acts">{step && <span className="faint rop-step">{step}</span>}<span className="spacer" />{/* a question open above has its own buttons: one set at a time */}{!fitAsk && !ask && <><button type="button" className="btn ghost" onClick={onClose} disabled={!!step}>Cancel</button><button type="button" className="btn primary" disabled={!d || !!step || (sizeMode === "file" && !readOk)} title={sizeMode === "file" && !readOk ? "Drop the file with the new sizes and press Update to these first" : undefined} onClick={() => void make()}>Make the reorder</button></>}</div>
       </div>
       {look != null && looks[look] && <QuickLook files={looks} at={look} strip title={label} onClose={() => setLook(null)} />}
     </div>
