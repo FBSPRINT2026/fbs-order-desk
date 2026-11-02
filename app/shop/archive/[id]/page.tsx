@@ -50,8 +50,9 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
   if (!row) return <><BackLink href="/shop/customers" label="Customers" /><div className="empty">This archived order doesn&apos;t exist.</div></>;
   return (
     <>
-      <BackLink href={`/shop/customers/${row.customer_id}?area=orders`} label={`${company || "Customer"} · Orders`} />
+      {/* the back arrow at the start of the button row, not on a row of its own (Nov 2, Nick) */}
       <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "6px 0 4px" }}>
+        <BackLink href={`/shop/customers/${row.customer_id}?area=orders`} label={`${company || "Customer"} · Orders`} here />
         {row.kind === "invoice" && <ArchiveReorder archivedId={row.id} />}
         <a className="btn" href={`/print/job/${row.visual_id}`} target="_blank" rel="noreferrer" title="A sheet with the job's QR code, for the press">Job ticket (QR)</a>
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
