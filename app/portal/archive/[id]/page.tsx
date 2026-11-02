@@ -42,8 +42,7 @@ export default async function PortalArchivedOrder({ params, searchParams }: { pa
     <>
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s portal.</div>}
       <main className="p-main">
-        <BackLink href={`/portal?area=orders${ctx.preview ? `&as=${ctx.preview.id}` : ""}`} label="Your orders" trail={false} />
-        <ArchivedPortalView o={o} urls={urls} names={names} paths={paths} importedAt={data.imported_at} actions={<>
+        <ArchivedPortalView back={<BackLink href={`/portal?area=orders${ctx.preview ? `&as=${ctx.preview.id}` : ""}`} label="Your orders" trail={false} />} o={o} urls={urls} names={names} paths={paths} importedAt={data.imported_at} actions={<>
           {/* still owed (Nov 2 portal check: the old order showed its balance with no way to pay it): paid through its own link */}
           {payUrl && +bal > 0.004 && <a className="btn primary" href={payUrl} target="_blank" rel="noreferrer">Pay {money(+bal)}</a>}
           <OldReorderButton archivedId={data.id} as={ctx.preview?.id} primary={!(payUrl && +bal > 0.004)} />

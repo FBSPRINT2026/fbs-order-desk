@@ -7,6 +7,7 @@ import { useSeesMoney } from "@/components/RoleContext";
 import { downloadUrl, pvFileName } from "@/lib/printavoNames";
 import { fmtPhone } from "@/lib/phone";
 import { QuickLook, type MailFile } from "@/components/MailFolders";
+import PrintavoMark from "@/components/PrintavoMark";
 
 const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "—");
 const stamp = (x?: string | null) => (x ? new Date(x).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -21,7 +22,7 @@ const inkOn = (hex: string) => { const m = hex.replace("#", "").match(/^([0-9a-f
  * header with status, customer and dates, line item groups with size columns and their imprints and mockups,
  * then totals, payments, notes, files, tasks and messages.
  */
-export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop", actions, names, paths, production, below }: { /** inside the Production notes & files panel (the job's notes & photos) */ production?: ReactNode; /** under it, the same width (labor, the emails & texts) */ below?: ReactNode; o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer"; /** buttons next to Print (the shop's Reorder) */ actions?: ReactNode;
+export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref, audience = "shop", actions, names, paths, production, below, back }: { /** the way back, beside the title (Nov 2, Nick: not a button hanging by itself on top) */ back?: ReactNode; /** inside the Production notes & files panel (the job's notes & photos) */ production?: ReactNode; /** under it, the same width (labor, the emails & texts) */ below?: ReactNode; o: PvOrder; fileUrl: (u: string) => string; importedAt: string; customerHref?: string; /** "customer": the portal view (no internal details) */ audience?: "shop" | "customer"; /** buttons next to Print (the shop's Reorder) */ actions?: ReactNode;
   /** the files' original names (Filestack handle → name, printavo_file_names) and our copies' paths (Printavo link → path) */ names?: Record<string, string>; paths?: Record<string, string> }) {
   const [zoom, setZoom] = useState<PvFile | null>(null);
   // a file's original name, and a link that saves it under that name
@@ -91,7 +92,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
     <div className="pv">
       <div className="pv-note">
         <span className="pv-arch">Archived order</span>
-        <span>{audience === "shop" ? <>Read-only, as it was in Printavo. Stored on our own servers (imported {stamp(importedAt)}).</> : <>This is a past order from our records.</>}</span>
+        <span>{audience === "shop" ? <>Read-only, as it was in Printavo. Stored on our own servers (imported {stamp(importedAt)}).</> : <>This is an order from our old system. On your Orders screen these are marked with <PrintavoMark className="pv-note-mark" /></>}</span>
         <span className="spacer" />
         {actions}
         <button type="button" className="btn sm" onClick={() => window.print()}>Print</button>
@@ -100,7 +101,8 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
       <div className="ed-grid pva-grid">
         <div className="pv-main">
         <header className="pv-head">
-          <div>
+          {back && <span className="pv-back">{back}</span>}
+          <div className="pv-head-t">
             <div className="pv-kind">{label} <span>#{o.visualId}</span></div>
             {o.nickname && <div className="pv-nick">{o.nickname}</div>}
             {o.tags.length > 0 && <div className="pv-tags">{o.tags.map((t) => <span key={t}>{t}</span>)}</div>}

@@ -17686,3 +17686,17 @@ html body .pr .pr-scr.pr-sup > .faint{flex:1 1 180px;min-width:0}
 .sxr-more{display:block;width:100%;text-align:left;border:0;border-top:1px solid var(--line-2);background:none;padding:9px 14px;font:inherit;font-size:13px;color:var(--accent);cursor:pointer}
 .sxr-more:hover{background:var(--surface-2)}
 @media (max-width:640px){.sxr-r{flex-wrap:wrap;row-gap:6px}.sxr-m{flex-basis:calc(100% - 52px)}.sxr-st{margin-left:52px}.sxr-a{margin-left:auto}}
+/* an old order's note: the same white box as the panels under it, the Printavo P in the words (Nov 2, Nick: "it
+   shouldn't be like a yellow line… same box color as the ones below") */
+.pv-note{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:13.5px;color:var(--ink-2)}
+.pv-note .pv-note-mark{display:inline-flex;vertical-align:-4px;margin-left:4px}
+/* the way back sits beside the title (Nov 2, Nick: "this hanging return button on the top left") */
+.pv-head .pv-back{flex:none;align-self:flex-start;margin-top:4px}
+.pv-head .pv-back .back,.pv-head .pv-back a{margin:0}
+.pv-head > .pv-head-t{flex:1 1 220px;min-width:0}
+/* the price lists fill their box, and a row doesn't light up under the mouse (Nov 2, Nick: "halfway on the screen…
+   a little blue highlighter for hovering… doesn't make any sense") */
+.pl-tbl.pl-narrow{max-width:none;width:100%}
+.pl-tbl tbody tr:hover td,.pl-tbl tbody tr:hover th{background:var(--surface)}
+.pl-tbl tbody tr:nth-child(even):hover td,.pl-tbl tbody tr:nth-child(even):hover th{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
+.pl-narrow{max-width:none}
