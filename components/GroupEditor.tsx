@@ -1655,20 +1655,23 @@ export function ColorPicker({ value, colors, onChange }: { value: string; colors
   const q = value.trim();
   // forgiving: "white royal", "white - royal", "white-royal" all find "White/ Royal" (rankColors, Oct 20)
   const list = typed && q ? rankColors(q, colors) : colors;
-  const pick = (c: string) => { onChange(c); setOpen(false); setTyped(false); };
+  const moved = useRef(false); // walked the list with the arrow keys
+  const pick = (c: string) => { onChange(c); setOpen(false); setTyped(false); moved.current = false; };
   return (
     <div className="style-pick">
       <input type="text" aria-label="Color" placeholder="Color" value={value} autoComplete="off"
-        onChange={(e) => { onChange(e.target.value); setTyped(true); setOpen(true); setActive(0); }}
-        onFocus={() => { setTyped(false); setOpen(true); setActive(Math.max(0, colors.indexOf(value))); }}
+        onChange={(e) => { onChange(e.target.value); setTyped(true); setOpen(true); setActive(0); moved.current = false; }}
+        onFocus={() => { setTyped(false); setOpen(true); setActive(Math.max(0, colors.indexOf(value))); moved.current = colors.includes(value); }}
         onClick={() => { if (!open) { setTyped(false); setOpen(true); } }}
         // typed and walked away: snap to the color it plainly means (the best match), so the line gets the real color name
         onBlur={() => setTimeout(() => { const m = typed && q && !colors.includes(value) ? plainlyMeans(q, colors) : null; if (m) onChange(m); setOpen(false); setTyped(false); }, 150)}
         onKeyDown={(e) => {
           if (!open || !list.length) return;
-          if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(list.length - 1, a + 1)); }
-          else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
-          else if (e.key === "Enter") { e.preventDefault(); pick(list[active]); }
+          if (e.key === "ArrowDown") { e.preventDefault(); moved.current = true; setActive((a) => Math.min(list.length - 1, a + 1)); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); moved.current = true; setActive((a) => Math.max(0, a - 1)); }
+          // Enter on an empty box closes the list: it doesn't add the first color (Nov 2 portal check: typing "Navy" in the
+          // Mockup Creator added Navy, then Enter added Antique Cherry Red, the top of the list)
+          else if (e.key === "Enter") { e.preventDefault(); if (q || moved.current) pick(list[active]); else setOpen(false); }
           else if (e.key === "Escape") setOpen(false);
         }} />
       {open && list.length > 0 && (
