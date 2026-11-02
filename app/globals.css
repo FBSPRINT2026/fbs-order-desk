@@ -18685,3 +18685,17 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pdx-card>.pdx-h:first-child .pd-link,.pdx-thumbs .pdx-h .pd-link{color:color-mix(in srgb,var(--hc) 55%,var(--ink))}
 /* just a touch of the card's color at the right end of the gray (Nov 2, Nick: "a little more subtle… a touch of color") */
 .pdx-card>.pdx-h:first-child,.pdx-thumbs .pdx-h{background:linear-gradient(90deg,var(--surface-2) 70%,color-mix(in srgb,var(--hc) 14%,var(--surface-2)))}
+/* every customer portal page opens with its name: the same spot, font and rainbow on each, a little in from the edge
+   (Nov 2, Nick: "all the pages in the customer portal should have the exact same look as payments… just slightly in");
+   each area's own copy of its name steps aside */
+.aa-ptitle{margin:6px 0 14px 8px;font-family:var(--display);font-size:22px;font-weight:700;line-height:1.15;color:var(--ink);position:relative;padding-bottom:6px;width:fit-content}
+.aa-ptitle::after{content:"";position:absolute;left:0;bottom:0;height:4px;border-radius:4px;width:calc(100% + 36px);min-width:72px;background:var(--fbs-fade)}
+.aa:not(.aa-shop) .aa-areat{display:none}
+.aa:not(.aa-shop) .aa-bar-l:not(:has(> :not(.aa-areat))){display:none}
+/* the customer's Settings panels get the dashboard's header: soft gray with a touch of color at the right, the rainbow seam */
+.ps .panel{--hc:var(--fbs-blue)}
+.ps .panel:nth-of-type(4n+2){--hc:var(--ok)}
+.ps .panel:nth-of-type(4n+3){--hc:var(--fbs-orange)}
+.ps .panel:nth-of-type(4n){--hc:var(--fbs-violet)}
+.ps .panel>.panel-h{background:linear-gradient(90deg,var(--surface-2) 70%,color-mix(in srgb,var(--hc) 14%,var(--surface-2)));border-bottom:3px solid transparent;border-image:var(--fbs-fade) 1;border-image-slice:0 0 1 0}
+.ps .panel>.panel-h h2::after{content:none}

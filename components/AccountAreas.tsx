@@ -596,7 +596,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         </div>
       </>
     );
-  } else if (area === "quotes") body = <>{tableHead(<h2>Quotes</h2>, "Search quotes")}{orderTable(quotes, "quote")}</>;
+  } else if (area === "quotes") body = <>{tableHead(<h2 className="aa-areat">Quotes</h2>, "Search quotes")}{orderTable(quotes, "quote")}</>;
   else if ((area === "orders" || area === "invoices") && mode === "portal") {
     // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
@@ -670,7 +670,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       </>}
     </>;
   } else if (area === "orders" || area === "invoices") body = <>
-    {tableHead(<><h2>Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={mode === "shop" && due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders")}
+    {tableHead(<><h2 className="aa-areat">Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={mode === "shop" && due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders")}
     {orderTable(invoices, "invoice")}</>;
   else if (area === "payments") {
     const open = liveInvoices.filter((o) => o.balance > 0.004 && has(q, o.number, o.nickname));
@@ -721,7 +721,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     };
     const searchBox = search("Search payments");
     body = <>
-      <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2></div>
+      <div className="aa-bar"><div className="aa-bar-l"><h2 className="aa-areat">Payments</h2></div>
       {/* the statement buttons on the title's line, at the right (Nov 2, Nick: "so that can collapse down some") */}
       {(!canPay || statementHref || onEmailStatement) && <div className="aa-stmt">
           {!canPay && searchBox}
@@ -963,7 +963,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       <div className="aa-home">
       <div className="aa-home-main stack">
       {/* Active / Archive at the top (Oct 24, Nick: "archive should be like a toggle on the top where it says archive") */}
-      {!dcOn ? tableHead(<h2>{showArch ? "Archived artwork" : "Artwork"}</h2>, showArch ? "Search archived" : "Search logos") : showArch ? <div className="aa-sec-h"><h3>Archived artwork</h3></div> : null}
+      {!dcOn ? tableHead(<h2 className={showArch ? "" : "aa-areat"}>{showArch ? "Archived artwork" : "Artwork"}</h2>, showArch ? "Search archived" : "Search logos") : showArch ? <div className="aa-sec-h"><h3>Archived artwork</h3></div> : null}
       {/* brand standards (Oct 16, Nick): the exact inks we always print for them, grouped by their clients when needed */}
       {mode !== "portal" && brandCardEl}
       {mode === "shop" && !showArch && brandsPanel}
@@ -1063,7 +1063,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
   } else if (area === "messages") {
     const rows = messages.filter((m) => has(q, m.body, m.author_name, m.number)).slice().reverse();
     body = <>
-      {tableHead(<h2>Messages</h2>, "Search messages")}
+      {tableHead(<h2 className="aa-areat">Messages</h2>, "Search messages")}
       {onSend && <SendBox canAct={canAct} mode={mode} onSend={onSend} />}
       <div className="aa-msgs">
         {rows.map((m) => (
@@ -1077,7 +1077,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     </>;
   } else if (area === "receive" && goodsPanel) {
     body = <>
-      <div className="aa-bar"><div className="aa-bar-l"><h2>{mode === "shop" ? "Customer supplied goods" : "Goods"}</h2>{mode === "shop" ? <span className="aa-sum">Garments this customer sends us for their jobs</span> : null}</div></div>
+      <div className="aa-bar"><div className="aa-bar-l"><h2 className="aa-areat">{mode === "shop" ? "Customer supplied goods" : "Goods"}</h2>{mode === "shop" ? <span className="aa-sum">Garments this customer sends us for their jobs</span> : null}</div></div>
       {goodsPanel}
     </>;
   } else if (area === "receive") {
@@ -1086,7 +1086,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       {orderTable(receive, "work")}</>;
   } else if (area === "details") body = details;
   else if (area === "projects" && projectsPanel) body = <>
-    <div className="aa-bar"><div className="aa-bar-l"><h2>Projects</h2><span className="aa-sum">{mode === "shop" ? "Events and bigger efforts with several orders" : "Planning an event, a season or a launch with several orders? Keep the dates, orders, to-dos and messages together."}</span></div></div>
+    <div className="aa-bar"><div className="aa-bar-l"><h2 className="aa-areat">Projects</h2><span className="aa-sum">{mode === "shop" ? "Events and bigger efforts with several orders" : "Planning an event, a season or a launch with several orders? Keep the dates, orders, to-dos and messages together."}</span></div></div>
     {projectsPanel}</>;
   else if (area === "program" && programPanel) body = programPanel;
   else if (area === "pricing" && (pricingPanel || (programPanel && hasProgram))) {
@@ -1148,6 +1148,9 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         {mode === "portal" && settingsHref && <Link className="aa-tab aa-tab-end" href={settingsHref}><Ico d={I.settings} /><span>Settings</span></Link>}
       </nav>
       )}
+      {/* every portal page opens with its name in one place, one font, one rainbow (Nov 2, Nick: "all the pages in the
+          customer portal should have the exact same look as payments… just slightly in"); the areas' own titles step aside */}
+      {mode === "portal" && <h1 className="aa-ptitle">{AREAS.find((a) => a.id === area)?.label || ""}</h1>}
       <section className="aa-body">{body}</section>
     </div>
   );
