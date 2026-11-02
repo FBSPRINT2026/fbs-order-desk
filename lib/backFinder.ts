@@ -179,7 +179,7 @@ const TOOL = {
 };
 
 /** the whole search: pages → their pictures → the pairs Claude sees, best first */
-export async function findWebBacks(ai: Ai, g: { brand: string; style: string; title?: string; color: string; front?: { buf: Buffer; type: "image/jpeg" | "image/png" | "image/gif" | "image/webp" } | null }, opts: { /** a page staff found (a known link): only it, looked at deeper */ pages?: string[] } = {}): Promise<{ found: WebBack[]; searched: string[]; looked?: number; picked?: number }> {
+export async function findWebBacks(ai: Ai, g: { brand: string; style: string; title?: string; color: string; front?: { buf: Buffer; type: "image/jpeg" | "image/png" | "image/gif" | "image/webp" } | null }, opts: { /** a page staff found (a known link): only it, looked at deeper */ pages?: string[] } = {}): Promise<{ found: WebBack[]; searched: string[]; looked?: number; picked?: number; raw?: string[] }> {
   const what = `${g.brand} ${g.style}${g.title ? ` (${g.title})` : ""} in the color "${g.color}"`;
   const pages = opts.pages?.length ? opts.pages : await findPages(ai, what);
   if (!pages.length) return { found: [], searched: [] };
@@ -215,5 +215,7 @@ export async function findWebBacks(ai: Ai, g: { brand: string; style: string; ti
   }
   // a matching pair from one site first, then the best backs alone
   found.sort((a, b) => (b.score + (b.front ? 15 : 0)) - (a.score + (a.front ? 15 : 0)));
-  return { found: found.filter((x) => x.score >= 40).slice(0, 6), searched: pages, looked: ok.length, picked: (res.data.pairs || []).length };
+  return { found: found.filter((x) => x.score >= 40).slice(0, 6), searched: pages, looked: ok.length, picked: (res.data.pairs || []).length,
+    // what the AI said about each, kept with the search so a miss can be looked into
+    raw: (res.data.pairs || []).map((p) => `${p.back}${p.front ? `+${p.front}` : ""} ${p.score}${p.person ? " person" : ""} ${String(p.note || "").slice(0, 60)} ${(ok[p.back - 1]?.url || "").replace(/[?#].*/, "").slice(-60)}`) };
 }
