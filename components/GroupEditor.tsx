@@ -449,8 +449,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const what = r.show === "name" ? "names" : r.show === "number" ? "numbers" : "names & numbers";
     // its charge: each name and each number digit (calcGroup's rosters)
     const c = gc.rosters?.find((x) => x.imprintId === d.id);
-    const price = !hidePrices && c && c.amount ? [c.names ? `${c.names} name${c.names === 1 ? "" : "s"} × ${money(c.nameEach)}` : "", c.digits ? `${c.digits} digit${c.digits === 1 ? "" : "s"} × ${money(c.digitEach)}` : ""].filter(Boolean).join(" + ") + ` = ${money(c.amount)}` : "";
-    return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Names &amp; numbers</span><span className="pr-scr-v">{r.rows.length} shirt{r.rows.length === 1 ? "" : "s"} · {what} · {r.font}{price ? <> · <span className="nowrap">{price}</span></> : null}{orderId ? <> · <a className="linkbtn" href={`/shop/gang-sheet/builder?order=${orderId}`} title="Every shirt's name and number on a DTF gang sheet">Make the gang sheet</a></> : null}</span></div>;
+    // each part on one line, the parts free to wrap (Nov 1 sweep: the whole sum on one line ran out of a narrow print card)
+    const parts = !hidePrices && c && c.amount ? [c.names ? `${c.names} name${c.names === 1 ? "" : "s"} × ${money(c.nameEach)}` : "", c.digits ? `${c.digits} digit${c.digits === 1 ? "" : "s"} × ${money(c.digitEach)}` : ""].filter(Boolean) : [];
+    const price = parts.length ? <>{parts.map((t, i) => <span key={i} className="nowrap">{i ? "+ " : ""}{t}</span>)}<span className="nowrap">= {money(c!.amount)}</span></> : null;
+    return <div className="pr-scr pr-ccrow"><span className="pr-scr-l">Names &amp; numbers</span><span className="pr-scr-v">{r.rows.length} shirt{r.rows.length === 1 ? "" : "s"} · {what} · {r.font}{price ? <> · {price}</> : null}{orderId ? <> · <a className="linkbtn" href={`/shop/gang-sheet/builder?order=${orderId}`} title="Every shirt's name and number on a DTF gang sheet">Make the gang sheet</a></> : null}</span></div>;
   };
   const redrawSoon = () => { if (g.mockupAt && !g.mockupSkipped) setTimeout(() => window.dispatchEvent(new CustomEvent("fbs:redraw-mockup", { detail: { groupId: g.id } })), 400); };
   /** an embroidery print's location change and its Change button (read-out and form), like the color change */

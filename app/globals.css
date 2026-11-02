@@ -17642,3 +17642,8 @@ body:has(.mk-modal-back, .cc-back) .pr-vis-stamp{z-index:0}
 }
 /* a statement's dates and amounts stay on one line (Nov 1 sweep: "Oct 27, 2026" wrapped a word per line on a tablet) */
 .st-tbl td:is(.st-d,.st-n,.st-b,.st-t,.st-pd){white-space:nowrap}
+/* a heat press print's Patch / Customer supplied transfers row is a row of checkboxes, not the label · value grid
+   (Nov 1 sweep: on a narrow print card the note ran over "Customer supplied transfers") */
+html body .pr .pr-scr.pr-sup{display:flex!important;flex-wrap:wrap;align-items:center!important;gap:4px 12px!important}
+html body .pr .pr-scr.pr-sup > .check{white-space:nowrap}
+html body .pr .pr-scr.pr-sup > .faint{flex:1 1 180px;min-width:0}
