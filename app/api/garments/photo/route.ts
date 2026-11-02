@@ -52,7 +52,8 @@ export async function POST(req: Request) {
       // a flat back is used as is; SanMar's back on a model is offered with the others (lib/garmentBacks.ts)
       const b = await sanmarBack(admin, g, color);
       if (b.flat) {
-        const entry: Ci = { ...ci, back: b.flat, back_from: "sanmar" };
+        // both sides from SanMar, never their back with our supplier's front (framed and lit differently)
+        const entry: Ci = { ...ci, ...(b.front ? { front: b.front, from: "sanmar" } : {}), back: b.flat, back_from: "sanmar" };
         await admin.from("garments").update({ color_images: { ...imgs, [name]: entry } }).eq("id", g.id);
         return NextResponse.json({ name, ...entry });
       }

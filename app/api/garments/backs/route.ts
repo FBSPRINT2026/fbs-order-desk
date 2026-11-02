@@ -37,13 +37,14 @@ export async function POST() {
   const t0 = Date.now();
   for (const { g, name } of out) {
     if (Date.now() - t0 > 270_000) break;
-    const b = await sanmarBack(admin, g, name).catch(() => ({} as { flat?: string; model?: string }));
+    const b = await sanmarBack(admin, g, name).catch(() => ({} as { flat?: string; front?: string; model?: string }));
     // read again right before writing: other colors of the garment may have changed meanwhile
     const { data: cur } = await admin.from("garments").select("color_images").eq("id", g.id).maybeSingle();
     const imgs = (cur?.color_images || {}) as Record<string, Ci>, ci = imgs[name];
     if (!ci || ci.back) continue;
     const label = `${g.brand} ${g.style} ${name}`;
-    if (b.flat) { imgs[name] = { ...ci, back: b.flat, back_from: "sanmar" }; filled.push(label); }
+    // both sides from SanMar's listing, never their back with our supplier's front
+    if (b.flat && b.front) { imgs[name] = { ...ci, front: b.front, from: "sanmar", back: b.flat, back_from: "sanmar" }; filled.push(label); }
     else { imgs[name] = { ...ci, back_checked: new Date().toISOString() }; (b.model ? model : none).push(label); }
     await admin.from("garments").update({ color_images: imgs }).eq("id", g.id);
   }
