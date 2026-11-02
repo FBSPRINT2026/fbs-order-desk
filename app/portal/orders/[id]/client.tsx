@@ -191,13 +191,13 @@ export function OrderActions({ orderId, kind, archived, cancelAsked, disabled }:
  * Pay this order (Oct 24, Nick: "get rid of that payment tab the way it is… exactly the same panel and button that's on the
  * payment screen"): what's owed and one Pay button; the pay window opens over the page, same as the Payments tab.
  */
-export function PayButton({ item, pay, staxToken, canAct, receiptEmail }: { item: PayItem; pay: { cardFeePct: number; zelle: string; venmo: string }; staxToken: string; canAct: boolean; receiptEmail: string }) {
+export function PayButton({ item, pay, staxToken, canAct, receiptEmail, due = true }: { item: PayItem; pay: { cardFeePct: number; zelle: string; venmo: string }; staxToken: string; canAct: boolean; receiptEmail: string; /** show "Balance due" above the button (off where the balance is already shown) */ due?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <div className="pb-due"><span>Balance due</span><b className="num">{fmtMoney(item.balance)}</b></div>
+      {due && <div className="pb-due"><span>Balance due</span><b className="num">{fmtMoney(item.balance)}</b></div>}
       {item.deposit && item.deposit < item.balance - 0.004 ? <div className="faint" style={{ fontSize: 12.5 }}>Deposit to get started: {fmtMoney(item.deposit)}</div> : null}
-      <button type="button" className="btn primary pb-go" disabled={!canAct} title={canAct ? undefined : PREVIEW} onClick={() => setOpen(true)}>Pay now</button>
+      <button type="button" className="btn primary pb-go" disabled={!canAct} title={canAct ? undefined : PREVIEW} onClick={() => setOpen(true)}>{due ? "Pay now" : `Pay ${fmtMoney(item.balance)}`}</button>
       {open && <PayPanel modal receiptEmail={receiptEmail} items={[item]} pay={pay} staxToken={staxToken} canAct={canAct} onClose={() => setOpen(false)} />}
     </>
   );

@@ -7,17 +7,25 @@ import PicZoom from "@/components/PicZoom";
  * additional art thumbnails below. Then you can click on the thumbnails and it switches to be the large art"). The picked
  * one is shown big; the others sit under it as thumbnails; tapping the big one opens it full screen (PicZoom).
  */
-export default function PortalArtView({ pics }: { pics: string[] }) {
+export default function PortalArtView({ pics, open }: { pics: string[]; /** the big picture opens this (the full proof) instead of the zoom (Nov 2, Nick: "when you click here, this should be a full proof") */ open?: string }) {
   const [at, setAt] = useState(0);
   const [zoom, setZoom] = useState<number | null>(null);
   if (!pics.length) return null;
   const i = Math.min(at, pics.length - 1);
   return (
     <div className="pav">
-      <button type="button" className="pav-big" onClick={() => setZoom(i)} aria-label="Open the mockup full size">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={pics[i]} alt="Mockup" />
-      </button>
+      {open ? (
+        <a className="pav-big pav-open" href={open} aria-label="Open the full proof">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={pics[i]} alt="Mockup" />
+          <span className="pav-cap">View proof</span>
+        </a>
+      ) : (
+        <button type="button" className="pav-big" onClick={() => setZoom(i)} aria-label="Open the mockup full size">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={pics[i]} alt="Mockup" />
+        </button>
+      )}
       {pics.length > 1 && (
         <div className="pav-thumbs">
           {pics.map((u, k) => (

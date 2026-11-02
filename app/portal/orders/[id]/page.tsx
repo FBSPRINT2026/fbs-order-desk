@@ -13,7 +13,7 @@ import { needsDetails } from "@/lib/productionDetails";
 import PortalArtView from "@/components/PortalArtView";
 import { calcOrder, FULL_COLOR, inkNames, methodLabel, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, money } from "@/lib/format";
-import { Pill, pvStatusOf } from "@/components/bits";
+import { pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
 import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval } from "./client";
@@ -97,6 +97,23 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const canPay = c.balance > 0.004 && ps.can !== "none" && (o.type === "invoice" || o.status === "quote_sent");
 
   const qsAs = preview ? `?as=${ctx.preview!.id}` : "";
+  // where the order is, in plain words (Nov 2, Nick, option C: "done, now, next"; no bubbles): one cell per stage, the
+  // ones done with a ✓, the one it's at filled in, the rest gray. The ready stage says how it leaves (pickup, ship,
+  // delivery), and every order ends "Completed"
+  const readyWord = o.delivery_method === "ship" ? "Ready to ship" : o.delivery_method === "deliver" ? "Ready for delivery" : "Ready for pickup";
+  const stageAt: Record<string, number> = { request: 0, quote: 0, quote_sent: 0, approved: 1, art: 1, blanks: 2, production: 3, ready: 4, completed: 5 };
+  const at = stageAt[o.status] ?? 3;
+  const rail = [
+    { next: "Quote", done: "Quote approved", now: o.status === "request" ? "Sent to FBS" : o.status === "quote" ? "Quote in progress" : "Quote ready" },
+    { next: "Proof", done: "Proof approved", now: proofs.length ? "Proof ready" : "Making your proof" },
+    { next: "Garments", done: "Garments in", now: "Getting garments" },
+    { next: "Production", done: "Production done", now: "In production" },
+    { next: readyWord, done: cs?.key === "shipped" || cs?.key === "delivered" ? cs.label : readyWord, now: cs && ["ready", "shipped", "delivered"].includes(cs.key) ? cs.label : readyWord },
+    { next: "Completed", done: "Completed", now: "Completed" },
+  ];
+  // the full proof, the page they approve from (Nov 2, Nick: "almost like what the customer sees when they approve")
+  const latestProof = proofs[0];
+  const proofHref = olk?.id ? `/proof/${olk.id}` : latestProof ? `/portal/orders/${o.id}/review/${latestProof.id}${qsAs}` : "";
   const cust = ctx.customers.find((x) => x.id === o.customer_id);
   const approvedProof = proofs.find((x) => x.status === "approved");
   // the garments for this order, in one line (Nov 2, Nick: "add the goods there"): ours or theirs, the same goods record
@@ -126,7 +143,6 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <div>
             <h1>{o.nickname || "Your Order"}</h1>
             <div className="eyebrow pod-eb">
-              {cs ? <span className="pill" title={cs.text}>{cs.label}</span> : <Pill status={o.status} portal />}
               <span>{o.type === "quote" ? "Quote" : "Order"} #{o.number}{o.due_date ? ` · in hands ${fmtDateLong(o.due_date)}` : ""}</span>
             </div>
           </div>
@@ -140,6 +156,14 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             <a className="btn" href={`/print/${o.id}${qsAs}`} target="_blank" rel="noreferrer">Print or save PDF</a>
           </div>
         </div>
+
+        {String(o.status) !== "void" && <ol className={"pod-rail" + (hold ? " held" : "")} aria-label="Where your order is">
+          {rail.map((r, k) => {
+            const done = k < at || o.status === "completed";
+            const now = k === at && o.status !== "completed";
+            return <li key={k} className={done ? "done" : now ? "now" : ""} aria-current={now ? "step" : undefined}>{done ? <>✓ {r.done}</> : now ? (hold ? <>On hold<small>{r.now}</small></> : r.now) : r.next}</li>;
+          })}
+        </ol>}
 
         {/* the numbers in one summary card, like the shop's pages: what it costs, what's paid, what's left */}
         {!isReq && <div className="stats pod-stats">
@@ -204,10 +228,10 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               const gq = g.lines.reduce((a, _l, li) => a + (cg?.lines[li]?.qty || 0), 0);
               return (
                 <section key={g.id} className="panel pod-grp">
-                  <div className="panel-h"><h2>{g.name || (orderGroups(o).length > 1 ? `Job ${gi + 1}` : o.nickname || "Your order")}</h2><span className="faint">{gq.toLocaleString("en-US")} pieces{cg?.wholesale ? " · your garments" : ""}</span></div>
+                  <div className="panel-h"><h2>{g.name || (orderGroups(o).length > 1 ? `Job ${gi + 1}` : o.nickname || "Your order")}</h2><span className="faint">{gq.toLocaleString("en-US")} pieces{cg?.wholesale ? " · your garments" : ""}</span>{proofHref && <a className="btn sm pod-proof" href={proofHref}>View proof</a>}</div>
                   {g.description && <div className="panel-b pod-desc">{g.description}</div>}
                   <div className="panel-b pod-g">
-                    {pics.length > 0 && <div className="pod-art"><PortalArtView pics={pics.slice(0, 8).map((x) => mkUrls[x])} /></div>}
+                    {pics.length > 0 && <div className="pod-art"><PortalArtView pics={pics.slice(0, 8).map((x) => mkUrls[x])} open={proofHref || undefined} /></div>}
                     <div className="pod-spec">
                       {g.imprints.length > 0 ? (
                         <table className="tbl pod-prints">
@@ -316,18 +340,20 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <section className="panel" id="pay">
                 <div className="panel-h"><h2>Payment</h2></div>
                 <div className="panel-b stack">
-                  <div className="totals">
-                    <div className="tr"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
-                    {c.discount ? <div className="tr"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
-                    <div className="tr"><span>Tax{o.tax_exempt ? " (exempt)" : ""}</span><span>{money(c.tax)}</span></div>
-                    <div className="tr big"><span>Total</span><span>{money(c.total)}</span></div>
-                    {payments.map((x) => <div key={x.id} className="tr pod-paid"><span>Paid {fmtDate(x.paid_on)} · {x.method}</span><span>−{money(+x.amount)}</span></div>)}
-                    <div className="tr bal"><span>Balance</span><span style={{ color: c.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(c.balance)}</span></div>
+                  {/* plain rows in the page's own type, like the rest of the shop (Nov 2, Nick: "hard to read, the dollar
+                      amounts… doesn't look like the rest of our system"): each payment under the total, then what's left */}
+                  <div className="pod-pay">
+                    <div className="pod-row"><span>Subtotal</span><b>{money(c.items + c.setup + c.materials + c.fees)}</b></div>
+                    {c.discount ? <div className="pod-row"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><b>−{money(c.discount)}</b></div> : null}
+                    <div className="pod-row"><span>Tax{o.tax_exempt ? " (exempt)" : ""}</span><b>{money(c.tax)}</b></div>
+                    <div className="pod-row pod-tot"><span>Total</span><b>{money(c.total)}</b></div>
+                    {payments.map((x) => <div key={x.id} className="pod-row pod-pd"><span>Paid {fmtDate(x.paid_on)} · {x.method}</span><b>−{money(+x.amount)}</b></div>)}
+                    <div className={"pod-row pod-tot" + (c.balance <= 0.004 && c.total > 0 ? " pod-zero" : "")}><span>Balance</span><b>{money(Math.max(0, c.balance))}</b></div>
+                    {(() => { const d = o.type === "invoice" ? payDueDate(o, terms) : null; return <div className="pod-row pod-terms"><span>Terms</span><b>{PAY_TERMS[terms]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
                   </div>
-                  {(() => { const d = o.type === "invoice" ? payDueDate(o, terms) : null; return <div className="aa-terms"><span>Payment terms</span><b>{PAY_TERMS[terms]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
                   {canPay ? (
                     <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: o.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note }}
-                      pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : cust?.email || ctx.email} />
+                      pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : cust?.email || ctx.email} due={false} />
                   ) : c.balance > 0.004 && String(o.status) !== "void" ? (
                     <div className="pay-notready"><b>Not ready to pay yet</b><span>{o.type === "quote" && o.status !== "quote_sent" ? "You can pay once we send your quote." : ps.why}</span></div>
                   ) : o.type === "quote" ? (

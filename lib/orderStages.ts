@@ -104,7 +104,7 @@ export function customerStatus(o: { status: string; flags?: Flag[] | null; deliv
     if (extra.delivered) return say("delivered", "Delivered", "Delivered.");
     if (extra.shipped || flag("partial")) return say("shipped", flag("partial") ? "Partly shipped" : "Shipped", flag("partial") ? "Part of your order shipped." : "Your order shipped.");
     if (o.delivery_method === "ship") return say("ready", "Ready to ship", "Your order is packed and ready to ship.");
-    if (o.delivery_method === "deliver") return say("ready", "Out for delivery", "Your order is ready and on its way to you.");
+    if (o.delivery_method === "deliver") return say("ready", "Ready for delivery", "Your order is ready. We'll bring it to you.");
     return say("ready", "Ready for pickup", "Your order is ready to pick up.");
   }
   if (o.status === "approved") return say("approved", "Approved", "Approved, thank you.");
