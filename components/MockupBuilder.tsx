@@ -71,7 +71,7 @@ import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
 import { registerAreas, isCustomSpot, setHeadwearSpots, LOCATION_SPOTS } from "@/lib/mockup";
 import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, measureCap, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
-import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
+import { fillRun, bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage } from "@/lib/imagePdf";
 import { planPrint, pxOfImage, type PrintPlan } from "@/lib/printPlan";
@@ -1864,7 +1864,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const st = (l.style || "").trim().toLowerCase();
     const mine = [...new Set(lines.filter((x) => (x.style || "").trim().toLowerCase() === st).flatMap((x) => orderedBy[x.id] || []))];
     // never a size the style isn't made in (the catalog's sizes, when it has them)
-    const made = garmentFor(l)?.sizes;
+    const made0 = garmentFor(l)?.sizes, made = made0?.length ? fillRun(made0) : made0; // a gap in the supplier's list isn't a size it doesn't make
     const list = mine.length ? mine : Object.keys(orderedBy).length ? [] : ordered;
     const kept = made?.length ? list.filter((z) => made.some((m) => m.toUpperCase() === z.toUpperCase())) : list;
     return sortSizes(kept.length ? kept : list);
@@ -2193,7 +2193,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const line = lines[active] || lines[0];
   // pixels per inch on the photo: S&S shoots every size to fill the frame, so a smaller body means more pixels per inch
   const scale = scaleOf(body);
-  const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? "an adult Large" : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
+  // the size it's really shown on (Nov 2: it said "an adult Large" while showing an XL)
+  const SZW: Record<string, string> = { XS: "X-Small", S: "Small", M: "Medium", L: "Large", XL: "XL" };
+  const shownOn = body.cap ? body.cap.label : body.kind === "adult" ? `an adult ${SZW[body.size] || body.size}` : body.size === "YL" ? "a youth Large" : `a ${body.size}`;
   // a logo mockup's background is staff's (Oct 29, Nick: "you should never edit the background… just the thread colors"):
   // the color picked, else the one it was saved with, and only the first time it's made the garment's color
   const shirtHex = (l?: Line) => { if (!l) return "#9aa1ab"; if (logoOnly && mockBg && l.id === lines[0]?.id) return mockBg; if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) return l.hex; if (logoOnly && l.shade && /^#[0-9a-f]{6}$/i.test(l.shade)) return l.shade; if (l.look?.hex && !garmentFor(l) && /^#[0-9a-f]{6}$/i.test(l.look.hex)) return l.look.hex; if (l.own) return fits[photo(l, "front")]?.hex || guessHex(l.color); if (/\//.test(l.color || "")) return guessHex(l.color); /* two-tone (White/ Royal): the body color */ const g = garmentFor(l); const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1]; return (ci?.hex && /^#?[0-9a-f]{6}$/i.test(ci.hex) ? garmentHex(ci.hex, l.color) : "") || fits[photo(l, "front")]?.hex || guessHex(l.color); /* the garment's own color (its code, its photo) before what its name says: "Regatta Blue" is a natural tote's trim */ };

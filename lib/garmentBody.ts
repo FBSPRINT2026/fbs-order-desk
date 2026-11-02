@@ -26,6 +26,23 @@ const ORDER = Object.keys(TYPICAL);
 export const sortSizes = (zs: string[]) => ORDER.filter((z) => zs.includes(z));
 
 /**
+ * A garment's size run with its gaps filled (Nov 2, Nick on the JERZEES 562MR: S&S listed S, XL, 2XL, 3XL, 4XL with no M
+ * or L, so the mockup was shown on a 2XL and a 12" back print looked small): every size between its smallest and
+ * largest of the same kind (S…4XL takes M and L) is part of the run. Anything not a standard size is kept as is.
+ */
+export function fillRun(zs: string[]): string[] {
+  const known = sortSizes(zs), other = zs.filter((z) => !ORDER.includes(z));
+  const out = new Set<string>(known);
+  for (const k of ["infant", "toddler", "youth", "adult"] as const) {
+    const mine = known.filter((z) => kindOf(z) === k);
+    if (mine.length < 2) continue;
+    const a = ORDER.indexOf(mine[0]), b = ORDER.indexOf(mine[mine.length - 1]);
+    for (let i = a; i <= b; i++) out.add(ORDER[i]);
+  }
+  return [...sortSizes([...out]), ...other];
+}
+
+/**
  * The size a garment is shown in: Large for adult runs, youth Large for youth runs, otherwise the middle of the run
  * (the lower middle when it's even: 2T-5T → 3T, 6M-24M → 12M).
  */
@@ -59,12 +76,21 @@ const specOf = (g: { specs?: GarmentSpecs | null } | null | undefined, size: str
   if (!all) return undefined;
   if (all[size]) return all[size];
   const key = Object.keys(all).find((k) => (ALIAS[size] || []).some((a) => a.toLowerCase() === k.toLowerCase().replace(/\s+/g, "")));
-  return key ? all[key] : undefined;
+  if (key) return all[key];
+  // a size the chart skips (562MR: S and XL, no M or L): worked out from the sizes either side of it, of the same kind
+  const i = ORDER.indexOf(size);
+  if (i < 0) return undefined;
+  const has = (z: string) => kindOf(z) === kindOf(size) && (all[z]?.width || 0) > 0;
+  let lo = i - 1; while (lo >= 0 && !has(ORDER[lo])) lo--;
+  let hi = i + 1; while (hi < ORDER.length && !has(ORDER[hi])) hi++;
+  if (lo < 0 || hi >= ORDER.length) return undefined;
+  const A = all[ORDER[lo]], B = all[ORDER[hi]], t = (i - lo) / (hi - lo), mix = (x?: number, y?: number) => (x && y ? Math.round((x + (y - x) * t) * 4) / 4 : undefined);
+  return { width: mix(A.width, B.width), length: mix(A.length, B.length) };
 };
 
 /** the body a garment is shown on: its middle size, measured from its size chart or typical numbers */
 export function bodyOf(g: { sizes?: string[] | null; specs?: GarmentSpecs | null } | null | undefined, fallbackRun: string[] = []): Body {
-  const run = (g?.sizes?.length ? g.sizes : fallbackRun).filter((z) => z !== "OS");
+  const run = fillRun(g?.sizes?.length ? g.sizes : fallbackRun).filter((z) => z !== "OS");
   const size = middleSize(run);
   const sp = specOf(g, size);
   const t = TYPICAL[size] || TYPICAL.L;
