@@ -18389,3 +18389,25 @@ table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
 @media (prefers-reduced-motion:reduce){.cpg-card{animation:none}}
 /* On hold looks like every other tab; only its count is red (Nov 2, Nick: "this toolbar looks weird") */
 .pdx .pjt .chip-n.pjt-hn,main .pdx .pjt .chip.on .chip-n.pjt-hn{background:var(--danger)!important;color:#fff!important}
+
+/* Job Center tabs and messages, tidied after looking at it (Nov 2, Nick: "doesn't flow right… statuses are weird") */
+.jct .jc-gh{display:flex;flex-direction:column;align-items:center;text-align:center;line-height:1.25;gap:1px}
+.jct .jc-gh b{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink)}
+.jct .jc-gh>span{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.jct-new{position:static;min-width:0;height:18px;padding:0 6px;font-size:11px}
+.jct-new::before{font-size:9px}
+.jct-tab,.jct-all{filter:none;opacity:1;background:color-mix(in srgb,var(--surface-2) 70%,var(--line-2))}
+.jct-tab:not(.on) .dgz-ring,.jct-all:not(.on) .jct-big{opacity:.75}
+.jct-tab:not(.on):hover,.jct-all:not(.on):hover{background:var(--surface-2)}
+.jct-tab.on,.jct-all.on{background:var(--surface);box-shadow:0 -2px 8px rgba(20,29,43,.06)}
+.jct-all .jct-big{width:44px;height:44px;font-size:16px}
+.jct-all{gap:6px}
+/* the messages column: the full height of the panel, the list scrolls, the open chat at its foot */
+.jcm{border-top:1px solid var(--line);height:calc(100vh - 250px);min-height:440px;max-height:none}
+.jcm-list{flex:1 1 auto;max-height:none}
+.jcm-t{flex:0 0 auto;max-height:55%}
+.jcm-msgs{max-height:none;flex:1 1 auto;min-height:60px}
+.jcm-h{background:color-mix(in srgb,var(--c) 7%,var(--surface))}
+/* the job list sits flat in the panel */
+.jct-body .jc-list .tbl-wrap{border:1px solid var(--line-2);border-radius:var(--r)}
+.jc-also{font-size:12.5px;color:var(--ink-3)}

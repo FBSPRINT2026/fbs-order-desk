@@ -157,14 +157,12 @@ export default function JobCenter() {
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
       <div className="jct" role="tablist" aria-label="Steps">
         <button type="button" role="tab" aria-selected={all} className={"jct-tab jct-all" + (all ? " on" : "")} onClick={() => { setAll(true); setPick(null); setDept("all"); setCameBack(false); }}>
-          <span className="jc-gh"><b>All</b><span>Every job and message</span></span>
+          <span className="jc-gh"><b>All{newIn(null) > 0 && <span className="jct-new" title={`${newIn(null)} new message${newIn(null) === 1 ? "" : "s"}`}>{newIn(null)}</span>}</b><span>Every job</span></span>
           <span className="jct-big">{items ? allCount : "…"}</span>
-          {newIn(null) > 0 && <span className="jct-new" title={`${newIn(null)} new message${newIn(null) === 1 ? "" : "s"}`}>{newIn(null)}</span>}
         </button>
         {GROUPS.map((g) => { const on = curG?.t === g.t; const nm = newIn(g); return (
           <div key={g.t} role="tab" aria-selected={on} className={"jct-tab jc-g" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
-            <button type="button" className="jc-gh jct-hbtn" onClick={() => go(g.steps[0][0])}><b>{g.t}</b><span>{g.line}</span></button>
-            {nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}
+            <button type="button" className="jc-gh jct-hbtn" onClick={() => go(g.steps[0][0])}><b>{g.t}{nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}</b><span>{g.line}</span></button>
             <div className="jc-st">
               {g.steps.length > 1 && <div className="dgz-rail" aria-hidden />}
               {g.steps.map(([k, l, icon]) => { const nn = count(k); const c = colorOf(k); return (
@@ -241,7 +239,8 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false }
       <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
       <td>{step === "requests" ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
         : <div className="jc-tags">{here.map(tag)}</div>}</td>
-      <td><div className="jc-tags sm">{(step === "approved" ? [] : also).map(tag)}{it.revised && step !== "changes" && <span className="faint jc-back">came back once</span>}</div></td>
+      {/* what else is going on, in quiet words (Nov 2, Nick: "statuses are weird"): one colored status per job, in Where it is */}
+      <td><span className="jc-also">{[...(step === "approved" ? [] : also).map((t) => t.label), it.revised && step !== "changes" ? "came back once" : ""].filter(Boolean).join(" · ")}</span></td>
       <td className="nowrap">{step === "requests" ? day(it.at) : it.due ? day(it.due) : <span className="faint">No date</span>}</td>
     </tr>
   );

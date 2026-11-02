@@ -54,7 +54,7 @@ export default function JobChats({ chats, open, onOpen, color, label, onSent, ta
             <span className="jcm-m">
               <span className="jcm-top"><b>{c.last.from === "customer" ? c.last.who || c.customer : c.customer}</b><small>{ago(c.last.at)}</small></span>
               <span className="jcm-q">{c.last.from === "staff" ? "You: " : ""}{c.last.body}</span>
-              <small className="jcm-j">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General"}{c.topic === "goods" ? " · goods" : ""}{tg ? <> · <span className="jcm-tag">{tg.t}</span></> : null}</small>
+              <small className="jcm-j">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General"}{c.topic === "goods" ? " · goods" : ""}{tg && tg.t !== "General" ? <> · <span className="jcm-tag">{tg.t}</span></> : null}</small>
             </span>
             {c.unread > 0 && <span className="jcm-dot" aria-label={`${c.unread} new`} />}
           </button>
