@@ -17416,3 +17416,27 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .mkpa-g{display:flex;flex-direction:column;gap:6px}
 .mkpa-k{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
 .mkpa-locs{display:flex;flex-wrap:wrap;gap:6px}
+/* Order type: production confirms, laid out top to bottom (components/OrderTypeRow.tsx) */
+.otp{flex-basis:100%;display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.otp-k{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.otp-all{text-transform:none;letter-spacing:0;font-weight:600;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.otp-all button{all:unset;cursor:pointer;color:var(--accent)}
+.otp-all button:hover{text-decoration:underline}
+.otp-seg{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.otp-seg button{all:unset;cursor:pointer;text-align:center;font-size:13px;padding:7px 4px;color:var(--ink-2)}
+.otp-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700;box-shadow:inset 0 -2px var(--accent)}
+.otp-list{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:2px 0}
+.otp-g + .otp-g{border-top:1px solid var(--line-2,var(--line))}
+.otp-gh{font-size:12px;color:var(--ink-3);padding:7px 10px 1px}
+.otp-r{display:flex;align-items:center;gap:8px;padding:5px 10px;font-size:14px;color:var(--ink);cursor:pointer}
+.otp-n{min-width:0}
+.otp-s{margin-left:auto;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.otp-note{font-size:12px;color:var(--ink-3)}
+.otp-what{display:flex;flex-wrap:wrap;gap:6px}
+.otp-what button{all:unset;cursor:pointer;height:30px;display:inline-flex;align-items:center;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:13px;color:var(--ink-2)}
+.otp-what button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.otp-done{display:flex;justify-content:flex-end;margin-top:6px}
+.otp-sum{flex-basis:100%;display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.otp-arrow{all:unset;cursor:pointer;flex:none;width:26px;height:26px;display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--accent);font-size:13px;margin-left:auto}
+.otp-arrow:hover{border-color:var(--accent)}
+.otp-seg button:focus-visible,.otp-what button:focus-visible,.otp-arrow:focus-visible,.otp-all button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}

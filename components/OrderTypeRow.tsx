@@ -1,6 +1,7 @@
 "use client";
 import { isReorder } from "@/components/ReorderPanel";
 import type { Imprint, Order } from "@/lib/pricing";
+import { useSticky } from "@/lib/useSticky";
 
 /**
  * The order's type and whether production confirms the details (Oct 24, Nick: "another button on the top row of an order
@@ -56,6 +57,13 @@ export default function OrderTypeRow({ o, patch, bare }: { o: O; patch: (fn: (d:
     each((im) => { if (on(im) && !im.confirmed && im.confirm) im.confirm[k] = v; });
   };
   const label = (im: Imprint) => im.location || "Print";
+  // laid out to read top to bottom (Nov 1, Nick: "this reorder panel just looks weird… with multiple things"): the same
+  // small heading on each part, the prints by group with their size, what's checked as two buttons; Done folds it to one
+  // line, the arrow opens it again
+  const [open1, setOpen1] = useSticky("order.confirmPanel", true);
+  const all = (v: boolean) => each((im) => setOn(im, v, pictureOnly, t));
+  const nOn = prints.filter((im) => !!im.confirmed || on(im)).length;
+  const say = `Production checks ${nOn === prints.length ? (prints.length === 1 ? "the print" : `all ${prints.length} prints`) : `${nOn} of ${prints.length} prints`}: ${[chkInk && "colors & inks", chkSize && "size"].filter(Boolean).join(", ")}. Customer sees ${pictureOnly ? "a picture only" : "the mockup with details"}.`;
   return (
     <div className={"pt-row ot-row" + (bare ? " ot-bare" : "")}>
       <span className="pt-l">Order type</span>
@@ -67,30 +75,44 @@ export default function OrderTypeRow({ o, patch, bare }: { o: O; patch: (fn: (d:
       {prints.length > 0 && (
         <>
           <label className="check ot-conf" title="Our colors, inks and size stay the best guess until production saves what they'll print">
-            <input type="checkbox" checked={anyOn} onChange={(e) => each((im) => setOn(im, e.target.checked, pictureOnly, t))} />Production confirms details
+            <input type="checkbox" checked={anyOn} onChange={(e) => { const v = e.target.checked; each((im) => setOn(im, v, pictureOnly, t)); if (v) setOpen1(true); }} />Production confirms details
           </label>
-          {anyOn && (
-            <>
-              <span className="pt-l">Customer sees</span>
-              <div className="chips">
-                <button type="button" className={"chip" + (!pictureOnly ? " on" : "")} onClick={() => each((im) => { if (on(im) && !im.confirmed) delete im.visualOnly; })}>Mockup with details</button>
-                <button type="button" className={"chip" + (pictureOnly ? " on" : "")} title="A visual mockup: no sizes, inks or placement on the proof" onClick={() => each((im) => { if (on(im) && !im.confirmed) im.visualOnly = true; })}>Picture only</button>
+          {anyOn && !open1 && (
+            <div className="otp-sum">
+              <span>{say}</span>
+              <button type="button" className="otp-arrow" aria-label="Open the details" title="Open the details" onClick={() => setOpen1(true)}>▾</button>
+            </div>
+          )}
+          {anyOn && open1 && (
+            <div className="otp">
+              <div className="otp-k">Customer sees</div>
+              <div className="otp-seg" role="group" aria-label="Customer sees">
+                <button type="button" className={!pictureOnly ? "on" : ""} onClick={() => each((im) => { if (on(im) && !im.confirmed) delete im.visualOnly; })}>Mockup with details</button>
+                <button type="button" className={pictureOnly ? "on" : ""} title="A visual mockup: no sizes, inks or placement on the proof" onClick={() => each((im) => { if (on(im) && !im.confirmed) im.visualOnly = true; })}>Picture only</button>
               </div>
-              <div className="ot-prints">
-                <span className="faint">Production confirms{t === "reorder_changes" ? " (untick what you changed)" : ""}:</span>
-                {prints.map((im, i) => (
-                  <label key={im.id} className="check" title={im.confirmed ? `Confirmed by ${im.confirmed.by}` : undefined}>
-                    <input type="checkbox" disabled={!!im.confirmed} checked={!!im.confirmed || on(im)} onChange={(e) => patch((d) => { const x = d.groups.flatMap((g) => g.imprints).find((y) => y.id === im.id); if (x) setOn(x, e.target.checked, pictureOnly, t); })} />
-                    {prints.length > 1 ? `${i + 1} ` : ""}{label(im)}{im.confirmed ? " (confirmed)" : ""}
-                  </label>
+              <div className="otp-k">Prints production checks{prints.length > 1 && <span className="otp-all"><button type="button" onClick={() => all(true)}>All</button> · <button type="button" onClick={() => all(false)}>None</button></span>}</div>
+              <div className="otp-list">
+                {o.groups.map((g, gi) => g.imprints.length > 0 && (
+                  <div key={g.id} className="otp-g">
+                    {o.groups.filter((x) => x.imprints.length).length > 1 && <div className="otp-gh">{g.name || `Group ${gi + 1}`}{(() => { const cs = [...new Set(g.lines.map((l) => String(l.color || "").trim()).filter(Boolean))]; return cs.length ? ` · ${cs.join(", ")}` : ""; })()}</div>}
+                    {g.imprints.map((im) => (
+                      <label key={im.id} className="otp-r" title={im.confirmed ? `Confirmed by ${im.confirmed.by}` : undefined}>
+                        <input type="checkbox" disabled={!!im.confirmed} checked={!!im.confirmed || on(im)} onChange={(e) => patch((d) => { const x = d.groups.flatMap((gg) => gg.imprints).find((y) => y.id === im.id); if (x) setOn(x, e.target.checked, pictureOnly, t); })} />
+                        <span className="otp-n">{label(im)}</span>
+                        <span className="otp-s">{im.confirmed ? "confirmed" : !on(im) && t === "reorder_changes" ? "changed" : im.size || ""}</span>
+                      </label>
+                    ))}
+                  </div>
                 ))}
               </div>
-              <div className="ot-prints">
-                <span className="faint">What to check:</span>
-                <label className="check"><input type="checkbox" checked={chkInk} onChange={(e) => setWhat("ink", e.target.checked)} />Colors and inks</label>
-                <label className="check"><input type="checkbox" checked={chkSize} onChange={(e) => setWhat("size", e.target.checked)} />Size</label>
+              {t === "reorder_changes" && <div className="otp-note">Untick the prints you changed.</div>}
+              <div className="otp-k">What they check</div>
+              <div className="otp-what">
+                <button type="button" className={chkInk ? "on" : ""} aria-pressed={chkInk} onClick={() => setWhat("ink", !chkInk)}>{chkInk ? "✓ " : ""}Colors &amp; inks</button>
+                <button type="button" className={chkSize ? "on" : ""} aria-pressed={chkSize} onClick={() => setWhat("size", !chkSize)}>{chkSize ? "✓ " : ""}Size</button>
               </div>
-            </>
+              <div className="otp-done"><button type="button" className="btn sm primary" onClick={() => setOpen1(false)}>Done</button></div>
+            </div>
           )}
         </>
       )}
