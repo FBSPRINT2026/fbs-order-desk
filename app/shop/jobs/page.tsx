@@ -80,16 +80,11 @@ export default function JobCenter() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [chat, setChat] = useState<string | null>(null);
   const [cn, setCn] = useState(0);
-  // the message board (Nov 2, Nick): "Line up" puts each job's messages on the job's own line; off, every message
-  const [lineup, setLineup] = useSticky<boolean>("jobs.lineup", true);
+  // the Message Center (Nov 2, Nick: "just have the message center… search and then have it say messages… that should
+  // exactly line up with the word job"): its Messages heading sits level with the job table's heading
   const [mq, setMq] = useState("");
-  const [rowsM, setRowsM] = useState<{ h: number; job: string; kind: string }[]>([]);
-  const [padTop, setPadTop] = useState(0);
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const jcxRef = useRef<HTMLDivElement | null>(null);
-  const leftChatRef = useRef<HTMLDivElement | null>(null);
-  const [chatH, setChatH] = useState(0);
-  const [bridge, setBridge] = useState<{ top: number; h: number; left: number; w: number } | null>(null);
+  const padRef = useRef<HTMLDivElement | null>(null);
+  const [lvl, setLvl] = useState<{ pad: number; h: number }>({ pad: 0, h: 0 });
 
   // a link straight to a step (the old Incoming Orders and Proof Center pages open here), or to a conversation (the
   // live message pop-up's Open chat)
@@ -164,48 +159,29 @@ export default function JobCenter() {
   const curChat = chat ? chats.find((c) => c.key === chat) || null : null;
   const mWant = mq.trim().toLowerCase();
   const boardChats = myChats.filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
-  const chatOfJob = (orderId: string) => boardChats.find((c) => c.orderId === orderId) || null;
+  const chatOfJob = (orderId: string) => myChats.find((c) => c.orderId === orderId) || null;
   const colorOfChat = (c: ChatSummary) => tagOf(c).c;
   const shownIds = new Set(shown.map((it) => it.orderId).filter(Boolean));
-  const offTab = boardChats.filter((c) => !c.orderId || !shownIds.has(c.orderId));
   const chatHere = !!curChat && !!curChat.orderId && shownIds.has(curChat.orderId);
-  // line the board's rows up with the job table's rows: measured when the table changes or resizes, at most once a
-  // frame (Nov 2: measuring after every draw looped, React error #185)
+  // the Messages heading level with the jobs' heading: the space above it is measured from the table's own heading,
+  // again when anything above the table changes size (filters wrapping, a narrower window)
   useLayoutEffect(() => {
-    if (!lineup) return;
     let raf = 0;
     const measure = () => {
       raf = 0;
-      const t = document.querySelector(".jct-body table.jc"), L = listRef.current;
-      if (!t || !L) { setRowsM((p) => (p.length ? [] : p)); return; }
-      const trs = [...t.querySelectorAll("thead tr, tbody tr")] as HTMLTableRowElement[];
-      const next = trs.map((tr) => ({ h: Math.round(tr.getBoundingClientRect().height), job: tr.dataset.job || "", kind: tr.closest("thead") ? "head" : tr.dataset.kind || "row" }));
-      const top = trs[0] ? Math.round(trs[0].getBoundingClientRect().top - L.getBoundingClientRect().top - (parseFloat(getComputedStyle(L).paddingTop || "0") || 0)) : 0;
-      setPadTop((p) => (Math.abs(p - top) > 1 ? Math.max(0, top) : p));
-      setRowsM((p) => (p.length === next.length && p.every((x, i) => x.h === next[i].h && x.job === next[i].job && x.kind === next[i].kind) ? p : next));
-      // the band that physically joins the open message to its job, across the gap between the panels
-      const X = jcxRef.current, linked = t.querySelector("tr.jc-linked") as HTMLElement | null, lp = document.querySelector(".jcx>.jmb") as HTMLElement | null, rp = document.querySelector(".jcx>.jct-body") as HTMLElement | null;
-      if (X && linked && lp && rp) {
-        const xr = X.getBoundingClientRect(), r0 = linked.getBoundingClientRect(), a = lp.getBoundingClientRect(), b = rp.getBoundingClientRect();
-        const nb = { top: Math.round(r0.top - xr.top), h: Math.round(r0.height), left: Math.round(a.right - xr.left - 12), w: Math.round(b.left - a.right + 24) };
-        setBridge((p) => (p && p.top === nb.top && p.h === nb.h && p.left === nb.left && p.w === nb.w ? p : nb));
-      } else setBridge((p) => (p ? null : p));
+      const sp = padRef.current, th = document.querySelector(".jct-body table.jc thead tr") as HTMLElement | null;
+      if (!sp) return;
+      const nx = th ? { pad: Math.max(0, Math.round(th.getBoundingClientRect().top - sp.getBoundingClientRect().top)), h: Math.round(th.getBoundingClientRect().height) } : { pad: 0, h: 0 };
+      setLvl((p) => (Math.abs(p.pad - nx.pad) > 1 || Math.abs(p.h - nx.h) > 1 ? nx : p));
     };
     const later = () => { if (!raf) raf = requestAnimationFrame(measure); };
     measure();
     const ro = new ResizeObserver(later);
-    const tb = document.querySelector(".jct-body .jc-list"); if (tb) ro.observe(tb);
+    const pb = document.querySelector(".jct-body .jc-list > .panel-b"); if (pb) ro.observe(pb);
+    const tb = document.querySelector(".jct-body .jc-list .toolbar"); if (tb) ro.observe(tb);
     addEventListener("resize", later);
     return () => { ro.disconnect(); removeEventListener("resize", later); if (raf) cancelAnimationFrame(raf); };
-  }, [lineup, items, step, dept, q, chat, chats, mq, pick, mine, cameBack, chatH]); // eslint-disable-line react-hooks/exhaustive-deps
-  // the open chat on the left, in Line up: its height makes the matching gap under its job on the right
-  useLayoutEffect(() => {
-    const el = leftChatRef.current;
-    if (!el) { setChatH((p) => (p ? 0 : p)); return; }
-    const f = () => setChatH((p) => { const h = Math.round(el.getBoundingClientRect().height); return Math.abs(p - h) > 1 ? h : p; });
-    f(); const ro = new ResizeObserver(f); ro.observe(el);
-    return () => ro.disconnect();
-  }, [chat, lineup, rowsM]);
+  }, [items, step, dept, q, chat, mine, cameBack, artOnly, pick]);
 
   return (
     <>
@@ -219,26 +195,26 @@ export default function JobCenter() {
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
-      <div className="jcx" ref={jcxRef}>
-      {lineup && bridge && curChat && <div className="jmb-bridge" style={{ top: bridge.top, height: bridge.h, left: bridge.left, width: bridge.w, ["--mc" as string]: colorOfChat(curChat) }} aria-hidden />}
-      {/* Messages as its own tab, level with the stages, its panel beside the jobs' (Nov 2, Nick: "the messages tab should
-          just extend all the way up to even with incoming… then the messages should start even with the panel on the right") */}
+      <div className="jcx">
+      {/* the FBS Message Center (Nov 2, Nick picked "3c"): our logo on the navy, a chat bubble sending out the three brand
+          colors in pulses, one after another like "On the go", with how many are waiting on us on the bubble */}
       <div className="jcx-mtab jmc">
-        {/* the FBS Message Center (Nov 2, Nick: "our actual logo and like a communications version of it… two computers
-            linked together, like a telephone… some sort of cool graphic"): our logo between two screens talking */}
-        <svg className="jmc-art" viewBox="0 0 220 64" aria-hidden>
-          <defs><linearGradient id="jmcFade" x1="0" x2="1"><stop offset="0" stopColor="#0e9bd8" /><stop offset=".52" stopColor="#f26660" /><stop offset="1" stopColor="#fcb122" /></linearGradient></defs>
-          <path d="M44 34 C 70 10, 150 10, 176 34" fill="none" stroke="url(#jmcFade)" strokeWidth="2.5" strokeDasharray="4 5" strokeLinecap="round" />
-          <g><rect x="6" y="20" width="40" height="28" rx="4" fill="var(--surface)" stroke="#0e9bd8" strokeWidth="2.5" /><rect x="20" y="49" width="12" height="4" rx="1" fill="#0e9bd8" /><rect x="14" y="53" width="24" height="3" rx="1.5" fill="#0e9bd8" />
-            <path d="M14 28h16a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-9l-5 4v-4h-2a4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4z" fill="#0e9bd8" transform="translate(2 -1) scale(.95)" /></g>
-          <g><rect x="174" y="20" width="40" height="28" rx="4" fill="var(--surface)" stroke="#f26660" strokeWidth="2.5" /><rect x="188" y="49" width="12" height="4" rx="1" fill="#f26660" /><rect x="182" y="53" width="24" height="3" rx="1.5" fill="#f26660" />
-            <path d="M206 28h-16a4 4 0 0 0-4 4v4a4 4 0 0 0 4 4h9l5 4v-4h2a4 4 0 0 0 4-4v-4a4 4 0 0 0-4-4z" fill="#f26660" transform="translate(-2 -1) scale(1)" /></g>
-          <circle cx="110" cy="30" r="24" fill="var(--surface)" stroke="url(#jmcFade)" strokeWidth="3" />
-          <image href="/brand/fbs-logo.svg" x="91" y="11" width="38" height="38" />
-          <g fill="#fcb122"><circle cx="72" cy="17" r="2.5" /><circle cx="148" cy="17" r="2.5" /></g>
-        </svg>
-        <b>FBS Message Center{myChats.reduce((a0, c) => a0 + c.unread, 0) > 0 && <span className="jct-new">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</span>}</b>
-        <span className="jmc-n">{[`${myChats.reduce((a0, c) => a0 + c.unread, 0)} new`, `${myChats.filter((c) => c.waiting).length} waiting on us`].join(" · ")}</span>
+        <div className="jmc-ban">
+          <img className="jmc-logo" src="/brand/fbs-logo-white.svg" alt="FBS" width={34} height={34} />
+          <svg className="jmc-art" viewBox="0 0 120 78" aria-hidden>
+            <g fill="none" strokeWidth="4.5" strokeLinecap="round">
+              <path className="jmc-wv" d="M62 27 a24 24 0 0 1 0 30" stroke="#0e9bd8" />
+              <path className="jmc-wv d1" d="M74 19 a36 36 0 0 1 0 46" stroke="#f26660" />
+              <path className="jmc-wv d2" d="M86 11 a48 48 0 0 1 0 62" stroke="#fcb122" />
+            </g>
+            <rect x="22" y="29" width="34" height="24" rx="8" fill="#fff" /><path d="M30 53 l-3 7 l9 -7z" fill="#fff" />
+            <circle cx="31" cy="41" r="2.4" fill="#141D2B" /><circle cx="39" cy="41" r="2.4" fill="#141D2B" /><circle cx="47" cy="41" r="2.4" fill="#141D2B" />
+            {myChats.some((c) => c.waiting) && <g className="jmc-bdg"><circle cx="56" cy="28" r="9.5" fill="#f26660" stroke="#141D2B" strokeWidth="2.5" /><text x="56" y="32" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{Math.min(99, myChats.filter((c) => c.waiting).length)}</text></g>}
+          </svg>
+          <b>Message Center</b>
+        </div>
+        <div className="jmc-ns"><span><b className="nw">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</b> new</span><span><b className="wt">{myChats.filter((c) => c.waiting).length}</b> waiting on us</span></div>
+        <i className="jmc-strip" aria-hidden />
       </div>
       <div className="jct" role="tablist" aria-label="Steps">
         {GROUPS.map((g) => { const on = curG?.t === g.t; const nm = newIn(g); return (
@@ -255,25 +231,15 @@ export default function JobCenter() {
           </div>
         ); })}
       </div>
-      {/* the message board: its search and Line up level with the jobs' toolbar, its rows level with the jobs' rows */}
-      <div className={"jmb" + (lineup ? " lined" : "")}>
-        <div className="jmb-tb">
-          <input className="jmb-s" value={mq} onChange={(e) => setMq(e.target.value)} placeholder="Search messages" aria-label="Search messages" />
-          <label className="jmb-tg" title="Each job's messages on the job's own line"><input type="checkbox" checked={lineup} onChange={(e) => setLineup(e.target.checked)} /><span aria-hidden /> Line up</label>
-        </div>
-        <div className="jmb-list" ref={listRef} style={lineup ? { paddingTop: padTop } : undefined}>
-          {lineup ? <>
-            {rowsM.map((r, i) => {
-              if (r.kind === "head") return <div key={i} className="jmb-head" style={{ height: r.h }}>Messages</div>;
-              // the open conversation, under its message (Line up): the job table leaves the same gap under the job
-              if (r.kind === "gap") return curChat ? <div key={i} className="jmb-lchat" ref={leftChatRef} style={{ ["--mc" as string]: colorOfChat(curChat) }}><ChatThread c={curChat} color={colorOfChat(curChat)} narrow onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></div> : null;
-              const c = r.job ? chatOfJob(r.job) : null;
-              const lk = !!c && chat === c.key;
-              return <div key={i} className={"jmb-cell" + (lk ? " linked" : "")} style={{ height: r.h, ...(c ? { ["--mc" as string]: colorOfChat(c) } : {}) }}>{c && <ChatLine c={c} color={colorOfChat(c)} on={lk} onClick={() => openChat(lk ? null : c.key)} />}</div>;
-            })}
-            {offTab.length > 0 && <div className="jmb-off"><div className="jmb-off-h">Not on this tab · {offTab.length}</div>{offTab.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}</div>}
-          </> : (!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : "No customer messages."}</div>
-            : boardChats.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />))}
+      {/* the messages: search, then the Messages heading level with Job on the right; picking one brings its job forward on
+          its tab and opens the conversation under it (Nov 2, Nick) */}
+      <div className="jmb">
+        <input className="jmb-s" value={mq} onChange={(e) => setMq(e.target.value)} placeholder="Search messages" aria-label="Search messages" />
+        <div ref={padRef} style={{ height: lvl.pad }} aria-hidden />
+        <div className="jmb-head" style={lvl.h ? { height: lvl.h } : undefined}>Messages</div>
+        <div className="jmb-list">
+          {!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : "No customer messages."}</div>
+            : boardChats.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}
         </div>
       </div>
       <div className={"jc-body jct-body" + (picked ? " has-pick" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
@@ -303,11 +269,9 @@ export default function JobCenter() {
                   : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
                   : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></>}</tr></thead>
                 <tbody>{shown.flatMap((it) => { const c0 = it.orderId ? chatOfJob(it.orderId) : null; return [
-                  <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} mc={c0 ? colorOfChat(c0) : undefined} onChat={c0 ? () => openChat(chat === c0.key ? null : c0.key) : undefined} linked={lineup && !!chatOrder && chatOrder === it.orderId} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />,
+                  <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} mc={c0 ? colorOfChat(c0) : undefined} onChat={c0 ? () => openChat(chat === c0.key ? null : c0.key) : undefined} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />,
                   // the conversation opens on the next line, in the big panel (Nov 2, Nick)
-                  ...(curChat && chatHere && curChat.orderId === it.orderId ? [lineup
-                    ? <tr key={it.key + ":gap"} className="jc-gaprow" data-kind="gap" data-job=""><td colSpan={5} style={{ height: Math.max(chatH, 1) }} /></tr>
-                    : <tr key={it.key + ":chat"} className="jc-chatrow" data-kind="chat" data-job=""><td colSpan={5}><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></td></tr>] : []),
+                  ...(curChat && chatHere && curChat.orderId === it.orderId ? [<tr key={it.key + ":chat"} className="jc-chatrow" data-kind="chat" data-job=""><td colSpan={5}><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></td></tr>] : []),
                 ]; })}</tbody>
               </table></div>
             )}
