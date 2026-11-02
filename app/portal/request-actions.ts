@@ -793,10 +793,13 @@ export async function startOldReorder(archivedId: string, as?: string): Promise<
     const runOf = new Map(((gs || []) as { style: string; sizes: string[] | null }[]).map((x) => [x.style.toUpperCase(), (x.sizes || []).filter((z) => (SIZES as readonly string[]).includes(z))]));
     const rows: OldReorderRow[] = [];
     groups.forEach((g, gi) => g.lines.forEach((l, li) => {
-      const last = Object.fromEntries(Object.entries(l.sizes || {}).filter(([, n]) => +n! > 0).map(([z, n]) => [z, +n!]));
+      let last: Record<string, number> = Object.fromEntries(Object.entries(l.sizes || {}).filter(([, n]) => +n! > 0).map(([z, n]) => [z, +n!]));
       const cat = runOf.get(String(l.style || "").trim().toUpperCase()) || [];
-      const k0 = Object.keys(last)[0] || cat[0] || (g.youth ? "YS" : "M");
+      // the style's own sizes decide (a youth 5000B written in Printavo as S/M/L is its youth sizes), else last time's
+      const youthy = /youth|kids?\b/i.test(`${l.garment || ""}`) || (!!g.youth && !cat.length);
+      const k0 = cat[0] || (youthy ? "YS" : "") || Object.keys(last)[0] || "M";
       const kind = kindOfSize(k0);
+      if (kind === "youth") last = Object.fromEntries(Object.entries(last).map(([z, n]) => [/^(XS|S|M|L|XL)$/.test(z) ? `Y${z}` : z, n]));
       const run = [...new Set([...(cat.filter((z) => kindOfSize(z) === kind).length ? cat.filter((z) => kindOfSize(z) === kind) : KIND_RUN[kind]), ...Object.keys(last)])].sort((a, b) => SIZES.indexOf(a as never) - SIZES.indexOf(b as never));
       rows.push({ gi, li, style: String(l.style || ""), brand: String(l.brand || ""), color: String(l.color || ""), garment: String(l.garment || ""), kind, run, last });
     }));
