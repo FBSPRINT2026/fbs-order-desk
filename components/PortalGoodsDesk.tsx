@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
+import { PageSearchContext, pageHit } from "@/components/ArtSearchContext";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CARRIERS, carrierOf, GOODS, shipGroups, trackedGoods, trackingUrl, trackWord, type GoodsItem, type GoodsStatus } from "@/lib/goods";
@@ -43,7 +44,10 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
 }) {
   const router = useRouter();
   const chatHref = (id: string) => `/portal${qs ? qs + "&" : "?"}area=messages&c=${id}:goods`;
-  const [q, setQ] = useState("");
+  const [q0, setQ] = useState("");
+  // the portal page's own search, at the right of its title (PageSearchContext); else this box's
+  const outerQ = useContext(PageSearchContext);
+  const q = outerQ ?? q0;
   const [addFor, setAddFor] = useState<string | null>(null);
 
   // each order's goods, worked out once: status by its tracking, boxes here of boxes coming
@@ -153,7 +157,7 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
       <div className="aa-card gdk-list">
         <div className="toolbar gdk-bar">
           <b className="gdk-list-t">All orders</b>
-          <label className="aa-search gdk-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" /></svg><input type="search" placeholder="Search order, PO or tracking" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search goods" /></label>
+          {outerQ === null &&           <label className="aa-search gdk-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" /></svg><input type="search" placeholder="Search order, PO or tracking" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search goods" /></label>}
           <button type="button" className="btn primary" onClick={() => setTell(true)}>+ Shipping us something?</button>
         </div>
         {drag && <div className="gdk-dragtip">Drop it on the order it&apos;s for.</div>}
@@ -195,9 +199,9 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
           <section className="gdk-grp g-nl gdk-help" aria-label="Shipments not linked">
             <div className="gdk-vbar"><span>Not linked</span></div>
             <div className="gdk-grp-b">
-              {toldGroups.map((t) => <ToldRow key={t.key} list={t.list} canAct={canLink} orders={rows.filter((r) => !r.done).map((r) => ({ id: r.it.order.id, number: r.it.order.number, nickname: r.it.order.nickname }))}
+              {toldGroups.filter((t) => pageHit(q, ...t.list.flatMap((x) => [x.job_text, x.vendor, x.vendor_order, x.tracking, x.note]))).map((t) => <ToldRow key={t.key} list={t.list} canAct={canLink} orders={rows.filter((r) => !r.done).map((r) => ({ id: r.it.order.id, number: r.it.order.number, nickname: r.it.order.nickname }))}
                 onDrag={(on) => { setDrag(on ? t.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkToldTo(t.list.map((x) => x.id), orderId)} />)}
-              {incoming.map((g) => <Unmatched key={g.key} g={g} canAct={canLink} onDrag={(on) => { setDrag(on ? g.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkTo(g, orderId)} />)}
+              {incoming.filter((g) => pageHit(q, g.customer_po, g.supplier_order, g.supplier, g.styles, ...g.tracking.map((t) => t.tracking))).map((g) => <Unmatched key={g.key} g={g} canAct={canLink} onDrag={(on) => { setDrag(on ? g.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkTo(g, orderId)} />)}
             </div>
           </section>
         </div>

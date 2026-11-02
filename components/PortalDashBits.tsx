@@ -1,6 +1,7 @@
 "use client";
 import OrderRail from "@/components/OrderRail";
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useContext, useEffect, useState, useTransition, type ReactNode } from "react";
+import { PageSearchContext, pageHit } from "@/components/ArtSearchContext";
 import { useRouter } from "next/navigation";
 import { OldReorderButton } from "@/components/PortalOldReorder";
 import { starMyOrder } from "@/app/portal/actions";
@@ -113,12 +114,14 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
   const [stg, setStg] = useSticky("portal.jobsStage", "all");
   const [more, setMore] = useState(0);
   useEffect(() => { const go = () => { setStg("hold"); setMore(0); }; addEventListener(HOLD_EVT, go); return () => removeEventListener(HOLD_EVT, go); }, [setStg]);
-  const sorted = [...jobs].sort((a, b) => ORDER[a.stage] - ORDER[b.stage] || (a.inHandsIso || "9999").localeCompare(b.inHandsIso || "9999") || b.number - a.number);
+  // "Search the dashboard" at the right of the page title filters the jobs (Nov 2, Nick)
+  const pq = useContext(PageSearchContext);
+  const sorted = [...jobs].filter((j) => pageHit(pq, j.number, j.nickname, j.summary, j.kind)).sort((a, b) => ORDER[a.stage] - ORDER[b.stage] || (a.inHandsIso || "9999").localeCompare(b.inHandsIso || "9999") || b.number - a.number);
   const kinds = KIND_TABS.filter((t) => t.k === "all" || jobs.some((j) => t.test(j.kind)));
   const showKinds = kinds.length > 2;
   const curK = showKinds && kinds.some((t) => t.k === tab) ? tab : "all";
   const byKind = sorted.filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind));
-  const doneK = pastJobs.filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind)).map((j) => ({ ...j, stage: "done" as JobStage }));
+  const doneK = pastJobs.filter((j) => pageHit(pq, j.number, j.nickname)).filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind)).map((j) => ({ ...j, stage: "done" as JobStage }));
   const stages = STAGE_TABS;
   const curS = stages.some((t) => t.k === stg) ? stg : "all";
   const list = curS === "done" ? doneK : byKind.filter((j) => STAGE_TABS.find((t) => t.k === curS)!.test(j));

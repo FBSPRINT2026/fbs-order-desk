@@ -3,7 +3,7 @@ import PrintavoMark from "@/components/PrintavoMark";
 import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArtSearchContext } from "@/components/ArtSearchContext";
+import { ArtSearchContext, PageSearchContext } from "@/components/ArtSearchContext";
 import Link from "next/link";
 import { LogoFace, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -783,7 +783,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
             groups.set(k, g);
           }
           const all = [...groups.values()].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-          const w = hq.trim().toLowerCase().replace(/[$,]/g, "").replace(/^#/, "");
+          const w = (mode === "portal" ? q : hq).trim().toLowerCase().replace(/[$,]/g, "").replace(/^#/, "");
           const hit = (g: (typeof all)[number]) => !w || [g.total.toFixed(2), money(g.total), (g.total + g.fee).toFixed(2), when(g.date), g.method, ...g.lines.flatMap((l) => [String(l.number), l.amount.toFixed(2)])].some((x) => String(x).toLowerCase().replace(/[$,]/g, "").includes(w));
           const list = all.filter(hit);
           const PERH = 5, pages = Math.max(1, Math.ceil(list.length / PERH)), pg = Math.min(hp, pages - 1);
@@ -822,7 +822,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
                     ) : null,
                   ];
                 })}
-                {!shown.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No payments match “${hq}”.` : "No payments yet."}</div></td></tr>}
+                {!shown.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No payments match “${mode === "portal" ? q : hq}”.` : "No payments yet."}</div></td></tr>}
               </tbody>
             </table>
             {pages > 1 && (
@@ -1150,8 +1150,12 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       )}
       {/* every portal page opens with its name in one place, one font, one rainbow (Nov 2, Nick: "all the pages in the
           customer portal should have the exact same look as payments… just slightly in"); the areas' own titles step aside */}
-      {mode === "portal" && <h1 className="aa-ptitle">{AREAS.find((a) => a.id === area)?.label || ""}</h1>}
-      <section className="aa-body">{body}</section>
+      {mode === "portal" && <div className="aa-ptop">
+        <h1 className="aa-ptitle">{AREAS.find((a) => a.id === area)?.label || ""}</h1>
+        {/* the page's search, on the title's line at the right; it filters what this page shows */}
+        {area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}
+      </div>}
+      <section className="aa-body">{mode === "portal" ? <PageSearchContext.Provider value={q}>{body}</PageSearchContext.Provider> : body}</section>
     </div>
   );
 }

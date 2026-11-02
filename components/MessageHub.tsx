@@ -1,8 +1,9 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { MAX_ATTACH, type Attachment, type HubMsg, type HubOrder } from "@/lib/messages";
 import SearchInput from "@/components/SearchInput";
+import { PageSearchContext } from "@/components/ArtSearchContext";
 import { heldFiles } from "@/lib/heldFiles";
 
 type Convo = { key: string; orderId: string | null; projectId?: string | null; topic: string; title: string; sub: string; order?: HubOrder; msgs: HubMsg[]; last: HubMsg | null; unread: number };
@@ -97,7 +98,10 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
     return () => window.removeEventListener("mh:open", h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordersById]);
-  const [q, setQ] = useState("");
+  const [q0, setQ] = useState("");
+  // on a portal page, the search at the right of the page title (lib: PageSearchContext); else its own box
+  const outerQ = useContext(PageSearchContext);
+  const q = outerQ ?? q0;
   const [newOpen, setNewOpen] = useState(false);
   const shown = q.trim() ? convos.filter((c) => [c.title, ...c.msgs.map((m) => m.body + " " + m.files.map((f) => f.name).join(" "))].join(" ").toLowerCase().includes(q.trim().toLowerCase())) : convos;
 
@@ -168,7 +172,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
         <div className="mh-list-h">
           <div className="mh-list-top"><h2>Messages{totalUnread ? <span className="mh-badge">{totalUnread}</span> : null}</h2>
             {canAct && !only && <button type="button" className="btn sm primary mh-newbtn" aria-expanded={newOpen} onClick={() => setNewOpen((x) => !x)}>+ New message</button>}</div>
-          <SearchInput placeholder="Search messages" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search messages" />
+          {outerQ === null && <SearchInput placeholder="Search messages" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search messages" />}
         </div>
         {/* a new conversation starts from the top (Nov 2, Nick): a general question, or which order it's about */}
         {newOpen && canAct && <div className="mh-start">

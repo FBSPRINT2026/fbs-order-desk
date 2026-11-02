@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { PageSearchContext, pageHit } from "@/components/ArtSearchContext";
 import Link from "next/link";
 import { PROJECT_STATUS, countdown, daysTo, type ProjectSummary } from "@/lib/projects";
 import { fmtDateLong, money } from "@/lib/format";
@@ -25,7 +26,9 @@ export default function ProjectList({ mode, projects, hrefOf, onCreate, customer
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const open = projects.filter((p) => p.status === "planning" || p.status === "active");
   const done = projects.filter((p) => p.status === "delivered" || p.status === "closed");
-  const list = (tab === "open" ? open : done).slice().sort((a, b) => (a.event_date || a.in_hands_date || "9999").localeCompare(b.event_date || b.in_hands_date || "9999"));
+  // the portal page's search at the right of its title filters the projects (Nov 2, Nick)
+  const pq = useContext(PageSearchContext);
+  const list = (tab === "open" ? open : done).filter((p) => pageHit(pq, p.name, (p as { venue?: string }).venue, (p as { notes?: string }).notes)).slice().sort((a, b) => (a.event_date || a.in_hands_date || "9999").localeCompare(b.event_date || b.in_hands_date || "9999"));
   return (
     <div className="pj">
       <div className="pj-bar">
