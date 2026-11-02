@@ -66,7 +66,7 @@ export default function JobCenter() {
   const [step, setStep] = useSticky<Step>("jobs.step", "mockups");
   const [dept, setDept] = useSticky<Dept | "all">("jobs.dept", "all");
   const [mineOn, setMine] = useSticky<boolean>("jobs.mine", true);
-  const [cameBack, setCameBack] = useSticky<boolean>("jobs.cameBack", false);
+  const cameBack = false; // the "Came back with changes" filter is gone (Nov 2, Nick)
   const [artOnly, setArtOnly] = useSticky<boolean>("jobs.artOnly", false);
   const [q, setQ] = useUrlSearch("q");
   const [pick, setPick] = useState<string | null>(null); // the job open in the right panel
@@ -255,12 +255,13 @@ export default function JobCenter() {
               <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} />
             </div> : <>
             <div className="toolbar" data-toolbar>
-              {(all || step !== "leads") && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? (all ? base.filter((it) => !it.steps.every((x) => x === "leads") && (k === "all" || it.depts.includes(k))).length : deptCount(k)) : "…"}</span></button>)}</div>}
-              <div className="chips">
-                <button type="button" className={"chip" + (cameBack ? " on" : "")} aria-pressed={cameBack} title="Jobs a customer sent back with changes at some point" onClick={() => setCameBack(!cameBack)}>Came back with changes</button>
-                {step === "mockups" && !all && <button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button>}
-              </div>
+              {/* the departments as small SP / EMB / HP buttons beside the search, like the Dept column's tags (Nov 2, Nick: "just
+                  do a small, the SP, EMB, and HP buttons next to the search… get rid of came back with changes"); one picked
+                  shows only its jobs, picked again shows all */}
+              {step === "mockups" && !all && <div className="chips"><button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button></div>}
               <span className="jc-search"><SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} /></span>
+              {(all || step !== "leads") && <div className="jc-dpt" role="group" aria-label="Department">{DEPTS.filter(([k]) => k !== "all").map(([k, l]) => { const nn = items ? deptCount(k) : 0; const on = dept === k; return (
+                <button key={k} type="button" className={"prf-dept " + k + (on ? " on" : "") + (dept !== "all" && !on ? " off" : "") + (items && !nn ? " z" : "")} aria-pressed={on} title={`${l}: ${nn} job${nn === 1 ? "" : "s"}${on ? " (click again for all)" : ""}`} onClick={() => setDept(on ? "all" : k)}>{DEPT_TAG[k as Dept]}</button>); })}</div>}
             </div>
             {!items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
