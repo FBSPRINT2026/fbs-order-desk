@@ -1643,13 +1643,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   }, [fits, lines, anchorLine?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // a hoodie's back: the hood's edge traced (and snapped) by hand, prints go behind the hood (lib/hoodSnap.ts, Oct 23)
   const hoodKey = (l: Line) => { const g = garmentFor(l); return g ? Object.keys(g.color_images || {}).find((c) => colorKey(c) === colorKey(l.color)) || "" : ""; };
-  const hoodOf = (l?: Line) => { if (!l) return null; const g = garmentFor(l), k0 = hoodKey(l); return (k0 && g?.color_images?.[k0]?.hoodBack) || null; };
+  // a hood edge drawn on a color the catalog has no photo entry for (2296 Charcoal, Nov 2: "when I drag it, nothing
+  // happens"), or on a garment that isn't in the catalog: kept here for this visit too, so the drawing always takes
+  const [hoodLocal, setHoodLocal] = useState<Record<string, [number, number][]>>({});
+  const hoodLocalKey = (l: Line) => `${(l.style || "").toLowerCase()}|${colorKey(l.color || "")}`;
+  const hoodOf = (l?: Line) => { if (!l) return null; const g = garmentFor(l), k0 = hoodKey(l); return (k0 && g?.color_images?.[k0]?.hoodBack) || hoodLocal[hoodLocalKey(l)] || null; };
   const isHoodie = (l?: Line) => !!l && /\bhood/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`);
   const [hoodDraw, setHoodDraw] = useState(false);
   const [hoodMasks, setHoodMasks] = useState<Record<string, string>>({});
   const saveHood = async (l: Line, raw: [number, number][] | null) => {
-    const g = garmentFor(l), k0 = hoodKey(l); if (!g || !k0) return;
     const edge = raw && raw.length > 1 ? await snapToEdge(photo(l, "back"), raw).catch(() => raw) : null;
+    // shown right away, whatever happens to the save
+    setHoodLocal((x) => { const n = { ...x }; if (edge) n[hoodLocalKey(l)] = edge; else delete n[hoodLocalKey(l)]; return n; });
+    // remembered on the garment's color for everyone; a color with no entry yet gets one under its name
+    const g = garmentFor(l); if (!g) return;
+    const k0 = hoodKey(l) || (g.colors || []).find((c) => colorKey(c) === colorKey(l.color || "")) || ""; if (!k0) return;
     const ci = { ...(g.color_images || {}) }; const cur = { ...ci[k0] };
     if (edge) cur.hoodBack = edge; else delete cur.hoodBack;
     ci[k0] = cur;
@@ -1659,11 +1667,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   useEffect(() => {
     for (const l of lines) {
       const e = hoodOf(l); if (!e?.length) continue;
-      const u = photo(l, "back"), base = fits[u]?.mask, key = `${u}|${e.length}|${e[0]?.join(",")}|${e[e.length - 1]?.join(",")}`;
+      // no measured outline for this photo yet: the whole picture is the base, so the hood still goes over the print
+      const u = photo(l, "back"), base = fits[u]?.mask || fullMask(), key = `${u}|${e.length}|${e[0]?.join(",")}|${e[e.length - 1]?.join(",")}`;
       if (!base || hoodMasks[key]) continue;
       void maskBehindHood(base, e).then((m) => setHoodMasks((x) => ({ ...x, [key]: m }))).catch(() => null);
     }
-  }, [lines, fits, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lines, fits, catalog, hoodLocal]); // eslint-disable-line react-hooks/exhaustive-deps
   const fitFor = (l: Line | undefined, v: View, measured?: Fit | null): Fit | null => {
     const f = fitFor0(l, v, measured);
     if (!f || !l || v !== "back") return f;
@@ -1671,6 +1680,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const m = hoodMasks[`${photo(l, "back")}|${e.length}|${e[0]?.join(",")}|${e[e.length - 1]?.join(",")}`];
     return m ? { ...f, mask: m } : f;
   };
+  /** the picture's cut-out: the shirt's outline, else (a photo made for a color, with no measured outline) just the hood */
+  const hoodMaskOf = (l: Line) => { const e = hoodOf(l); return e?.length ? hoodMasks[`${photo(l, "back")}|${e.length}|${e[0]?.join(",")}|${e[e.length - 1]?.join(",")}`] : undefined; };
+  const shirtMask = (l: Line | undefined, v: View, f?: Fit | null) => (f !== undefined ? f : fitFor(l, v))?.mask || (l && v === "back" ? hoodMaskOf(l) : undefined);
   const fitFor0 = (l: Line | undefined, v: View, measured?: Fit | null): Fit | null => {
     if (!l) return null;
     const u = photo(l, v);
@@ -2695,8 +2707,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           x.restore();
         }
       }
-      if (fit?.mask) {
-        const m = await loadImg(fit.mask).catch(() => null);
+      const cut = shirtMask(l, v, fit);
+      if (cut) {
+        const m = await loadImg(cut).catch(() => null);
         if (m) { x.globalCompositeOperation = "destination-in"; x.drawImage(m, ox + nm.tx * k, oy + nm.ty * k, pw * nm.z, ph * nm.z); x.globalCompositeOperation = "source-over"; }
       }
       main.save(); main.setTransform(1, 0, 0, 1, 0, 0); main.drawImage(layer, 0, 0); main.restore();
@@ -4366,7 +4379,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     </div>
                   ); })()}
                   {(v === "back" || single) && <div className="mk-corner r"><span className="mk-pill" title={body.cap ? `Max print area ${body.cap.maxW}" × ${body.cap.maxH}" (the bag less 1.5" around)` : `${body.widthIn}" wide × ${body.lengthIn}" long (${body.from === "supplier" ? "the supplier's size chart" : "typical for this size"})`}>Shown on {shownOn}{capBody && !body.cap ? ` · sized for the ${capBody.size}` : ""}</span></div>}
-                </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={fitFor(line, v)?.mask} src={line ? photo(line, v) : stockSvg("tee", v)} label={v}
+                </>} overlay={<>{measure ? measured(v) : null}{v === "back" && hoodDraw && line && isHoodie(line) && <HoodTrace edge={hoodOf(line)} onDone={(pts) => void saveHood(line, pts)} onClear={() => void saveHood(line, null)} />}</>} mask={shirtMask(line, v)} src={line ? photo(line, v) : stockSvg("tee", v)} label={v}
                 items={imprints.filter((im) => viewsFor(im.location).includes(v)).map((im) => ({ id: im.id, p: place(im, v), url: artUrl(im, line || undefined), locked: !!im.visualOnly && !im.confirmed && !adjust, custom: im.area && isCustomSpot(im.location) ? `${im.location} · ${+im.area.w.toFixed(2)}" × ${+im.area.h.toFixed(2)}"` : undefined }))}
                 onMove={(id, dx, dy) => moveOn(v, id, dx, dy)}
                 onCustomArea={(id, c, dx, dy) => sizeArea(v, id, c, dx, dy)}
@@ -5658,6 +5671,16 @@ function AddColor({ colors, onAdd }: { colors: string[]; onAdd: (c: string) => v
  * Trace the hood's edge on a hoodie's back photo (Oct 23, Nick): drag roughly along the bottom edge of the hood; it snaps
  * to the color change there (lib/hoodSnap.ts) and every print on this color's back goes behind it.
  */
+/** a mask that shows the whole picture (white), for a photo whose outline hasn't been measured */
+let fullMaskUrl = "";
+function fullMask(): string {
+  if (fullMaskUrl || typeof document === "undefined") return fullMaskUrl;
+  const c = document.createElement("canvas"); c.width = PHOTO_W; c.height = PHOTO_H;
+  const x = c.getContext("2d"); if (!x) return "";
+  x.fillStyle = "#fff"; x.fillRect(0, 0, PHOTO_W, PHOTO_H);
+  return (fullMaskUrl = c.toDataURL("image/png"));
+}
+
 function HoodTrace({ edge, onDone, onClear }: { edge: [number, number][] | null; onDone: (pts: [number, number][]) => void; onClear: () => void }) {
   const svg = useRef<SVGSVGElement>(null);
   const [cur, setCur] = useState<[number, number][] | null>(null);
