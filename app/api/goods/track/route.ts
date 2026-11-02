@@ -18,10 +18,12 @@ export async function GET(req: Request) {
   const { data: got } = await admin.rpc("printavo_sync_claim", { p_job: "goods-track", p_seconds: 58 });
   if (!got) return NextResponse.json({ busy: true });
   try {
-    const end = Date.now() + 50000;
-    const goods = await goodsCheck(admin, end - 15000);
-    // manifest shipments not on an order yet: link the sure ones, suggest the rest, keep their tracking fresh
-    const links = await resolvePending(admin, end).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    const end = Date.now() + 52000;
+    // manifest shipments not on an order yet first: link the sure ones, suggest the rest, keep their tracking fresh.
+    // (Nov 2: the order goods check ran first and used up the time, so the matching stopped before it started and
+    // Dear Heart's shipments sat unlinked round after round)
+    const links = await resolvePending(admin, Date.now() + 35000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    const goods = await goodsCheck(admin, end - 4000);
     return NextResponse.json({ ...goods, links });
   }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
