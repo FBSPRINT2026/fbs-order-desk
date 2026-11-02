@@ -133,8 +133,20 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const { data: pu } = await admin.from("archived_orders").select("id, pay:data->urls->>publicUrl").is("removed_at", null).in("id", owedArch.slice(i, i + 200));
     ((pu || []) as { id: string; pay: string | null }[]).forEach((r) => { if (r.pay && /^https:\/\//.test(r.pay)) payUrls[r.id] = r.pay; });
   }
-  aOrders.push(...archived.map((a) => ({ ...archiveAsOrder(a, archHref(a.id)), payUrl: payUrls[a.id] })));
-  payments = [...payments, ...archived.flatMap((a) => archivePayments(a, archHref(a.id)))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at));
+  // an account that has moved to the new system pays its old invoices here too (Nov 2, Nick: "they should be able to pay
+  // in our new system only"); the others keep their old invoice's own pay link until they move
+  const movedIds = new Set(ctx.customers.filter((c) => !!(c as { moved_at?: string | null }).moved_at).map((c) => c.id));
+  aOrders.push(...archived.map((a) => ({ ...archiveAsOrder(a, archHref(a.id)), payUrl: payUrls[a.id], payHere: movedIds.has((a as { customer_id?: string }).customer_id || "") })));
+  // what's been paid here on old invoices (migration 260), beside Printavo's own payments
+  const archIds = archived.map((a) => a.id), ours: APayment[] = [];
+  for (let i = 0; i < archIds.length; i += 300) {
+    const { data: op } = await admin.from("payments").select("id, archived_order_id, amount, method, paid_on, created_at, processor_id, note, fee").in("archived_order_id", archIds.slice(i, i + 300));
+    for (const x of (op || []) as { id: string; archived_order_id: string; amount: number; method: string; paid_on: string | null; created_at: string; processor_id: string | null; note: string | null; fee: number | null }[]) {
+      const a = archived.find((r) => r.id === x.archived_order_id);
+      ours.push({ id: x.id, order_id: x.archived_order_id, number: +(a?.visual_id || 0), amount: +x.amount || 0, method: x.method, paid_on: x.paid_on, created_at: x.created_at, href: archHref(x.archived_order_id), processor_id: x.processor_id, note: x.note, fee: x.fee });
+    }
+  }
+  payments = [...payments, ...ours, ...archived.flatMap((a) => archivePayments(a, archHref(a.id)))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at));
 
   // what's waiting on the customer
   const attention: AAttn[] = [];

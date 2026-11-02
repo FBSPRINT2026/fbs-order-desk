@@ -24,18 +24,31 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
   if (!user) throw new Error("Please sign in again.");
   if (isStaff) throw new Error("This is a preview. Customers pay from their own login.");
   if (!items.length) throw new Error("Pick at least one order to pay.");
-  const ids = [...new Set(items.map((i) => i.orderId))];
-  const { data: os } = await supabase.from("orders").select("*").in("id", ids);
+  // "pv:<id>": an invoice from our old system (Printavo), paid here once the account has moved (Nov 2, Nick)
+  const oldIds = [...new Set(items.filter((i) => i.orderId.startsWith("pv:")).map((i) => i.orderId.slice(3)))];
+  const ids = [...new Set(items.filter((i) => !i.orderId.startsWith("pv:")).map((i) => i.orderId))];
+  const { data: os } = ids.length ? await supabase.from("orders").select("*").in("id", ids) : { data: [] };
   const orders = (os || []) as Order[];
   if (orders.length !== ids.length) throw new Error("We couldn't find one of those orders.");
   const admin = createAdminClient();
   const [{ data: pays }, { data: s }, { data: cs }] = await Promise.all([
-    admin.from("payments").select("*").in("order_id", ids),
+    ids.length ? admin.from("payments").select("*").in("order_id", ids) : Promise.resolve({ data: [] }),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
     allRows((ra, rb) => supabase.from("customers").select("*").order("id").range(ra, rb)),
   ]);
   const settings = mergeSettings(s?.data);
-  const lines = items.map((it) => {
+  // old invoices: only their own (row security above lists only their customers), only once the account has moved
+  const mine = ((cs || []) as { id: string; moved_at?: string | null }[]);
+  const { data: olds } = oldIds.length ? await admin.from("archived_orders").select("id, visual_id, nickname, order_date, balance, customer_id, kind").is("removed_at", null).in("id", oldIds) : { data: [] };
+  const oldLines = ((olds || []) as { id: string; visual_id: string; nickname: string | null; order_date: string | null; balance: number; customer_id: string; kind: string }[]).map((a) => {
+    const c = mine.find((x) => x.id === a.customer_id);
+    if (!c) throw new Error("We couldn't find one of those orders.");
+    if (!c.moved_at) throw new Error(`#${a.visual_id} is from our old system: pay it on its own invoice for now.`);
+    if (a.kind !== "invoice" || !(+a.balance > 0.004)) throw new Error(`#${a.visual_id} is already paid.`);
+    return { o: { id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", created_at: a.order_date || "", type: "invoice", total: +a.balance, customer_id: a.customer_id } as unknown as Order, amount: r2(+a.balance), old: true };
+  });
+  if (oldLines.length !== oldIds.length) throw new Error("We couldn't find one of those orders.");
+  const lines0 = items.filter((it) => !it.orderId.startsWith("pv:")).map((it) => {
     const o = orders.find((x) => x.id === it.orderId)!;
     const c = calcOrder(o, settings, ((pays || []) as Payment[]).filter((p) => p.order_id === o.id));
     // only what the shop has opened up for paying (lib/payReady.ts): never the whole balance before it's ready
@@ -47,8 +60,9 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
     const deposit = Math.min(c.balance, r2((c.total * (tPct > 0 && tPct < 100 ? tPct : settings.depositPct)) / 100));
     const amount = r2(ps.can === "deposit" || (it.kind === "deposit" && c.paid < 0.005) ? deposit : c.balance);
     if (amount <= 0.004) throw new Error(`#${o.number} is already paid.`);
-    return { o, amount };
+    return { o, amount, old: false };
   });
+  const lines = [...lines0, ...oldLines];
   // "pay an amount": oldest orders first, the last one partly
   let use = lines;
   if (applyAmount !== undefined) {
@@ -56,7 +70,7 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
     const amt = r2(+applyAmount);
     if (!(amt >= 1)) throw new Error("Enter an amount of at least $1.");
     if (amt > total + 0.004) throw new Error(`That's more than these orders owe (${money(total)}).`);
-    use = allocateOldest(lines.map((l) => ({ ...l, balance: l.amount, created_at: l.o.created_at, number: l.o.number })), amt).map((x) => ({ o: x.item.o, amount: x.amount }));
+    use = allocateOldest(lines.map((l) => ({ ...l, balance: l.amount, created_at: l.o.created_at, number: l.o.number })), amt).map((x) => ({ o: x.item.o, amount: x.amount, old: x.item.old }));
   }
   return { admin, email, settings, lines: use, customer: (cs || [])[0] as { id: string; name: string; company: string; email: string } | undefined };
 }
@@ -127,18 +141,19 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     const rows = lines.map((l, i) => {
       const f = i === lines.length - 1 ? r2(feeLeft) : r2((fee * l.amount) / (sum || 1));
       feeLeft = r2(feeLeft - f);
-      return { order_id: l.o.id, amount: l.amount, method: methodName, paid_on: today, fee: f, processor_id: String(txn.id || ""), note: lines.length > 1 ? `Paid together: ${ref}` : null };
+      return { ...(l.old ? { order_id: null, archived_order_id: l.o.id } : { order_id: l.o.id }), amount: l.amount, method: methodName, paid_on: today, fee: f, processor_id: String(txn.id || ""), note: lines.length > 1 ? `Paid together: ${ref}` : null };
     });
     const { error } = await admin.from("payments").insert(rows);
     // paying a quote approves it (the customer saw "Paying approves the quote and our terms")
-    const quotes = lines.filter((l) => l.o.type === "quote");
+    const quotes = lines.filter((l) => !l.old && l.o.type === "quote");
     if (!error && quotes.length) {
       const who = customer?.name || email;
       await admin.from("orders").update({ type: "invoice", status: "approved", approved_at: new Date().toISOString(), approved_name: `${who} (paid online)` }).in("id", quotes.map((l) => l.o.id));
       await admin.from("order_events").insert(quotes.map((l) => ({ order_id: l.o.id, kind: "status", detail: "approved (paid online)", actor: email })));
     }
     if (error) return { ok: false, error: `Your payment went through, but we couldn't record it (${error.message}). Please contact us so we can mark it paid.` };
-    await admin.from("order_events").insert(lines.map((l) => ({ order_id: l.o.id, kind: "payment", detail: `${money(l.amount)} ${methodName}${fee ? ` + ${money(rows.find((r) => r.order_id === l.o.id)?.fee)} card fee` : ""}`, actor: email })));
+    const newLines = lines.filter((l) => !l.old);
+    if (newLines.length) await admin.from("order_events").insert(newLines.map((l) => ({ order_id: l.o.id, kind: "payment", detail: `${money(l.amount)} ${methodName}${fee ? ` + ${money(rows.find((r) => r.order_id === l.o.id)?.fee)} card fee` : ""}`, actor: email })));
     if (SHOP_NOTIFY_EMAIL) await sendEmail({
       to: SHOP_NOTIFY_EMAIL,
       subject: `Payment received: ${money(total)} for ${ref}`,
@@ -148,19 +163,24 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     const to = (input.receiptTo || "").split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).slice(0, 3);
     let receiptTo = "";
     if (to.length) {
-      const { data: pays2 } = await admin.from("payments").select("order_id, amount").in("order_id", lines.map((l) => l.o.id));
+      const nIds = lines.filter((l) => !l.old).map((l) => l.o.id), oIds = lines.filter((l) => l.old).map((l) => l.o.id);
+      const [{ data: pays2 }, { data: olds2 }] = await Promise.all([
+        nIds.length ? admin.from("payments").select("order_id, amount").in("order_id", nIds) : Promise.resolve({ data: [] }),
+        oIds.length ? admin.from("archived_orders").select("id, balance").in("id", oIds) : Promise.resolve({ data: [] }),
+      ]);
       const paidNow: Record<string, number> = {};
-      (pays2 || []).forEach((p) => { paidNow[p.order_id] = (paidNow[p.order_id] || 0) + (+p.amount || 0); });
+      ((pays2 || []) as { order_id: string; amount: number }[]).forEach((p) => { paidNow[p.order_id] = (paidNow[p.order_id] || 0) + (+p.amount || 0); });
+      const oldLeft = Object.fromEntries(((olds2 || []) as { id: string; balance: number }[]).map((a) => [a.id, +a.balance || 0]));
       const html = receiptHtml({
         shop: settings.shop, customer: customer?.company || customer?.name || email, date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
         method: methodName, txn: String(txn.id || ""), subtotal: sum, fee, total, url: `${siteUrl()}/portal?area=payments`,
-        lines: lines.map((l) => ({ number: l.o.number, nickname: l.o.nickname || "", amount: l.amount, balanceAfter: r2((+l.o.total || 0) - (paidNow[l.o.id] || 0)) })),
+        lines: lines.map((l) => ({ number: l.o.number, nickname: l.o.nickname || "", amount: l.amount, balanceAfter: l.old ? r2(oldLeft[l.o.id] || 0) : r2((+l.o.total || 0) - (paidNow[l.o.id] || 0)) })),
       });
       const sent = await Promise.all(to.map((addr) => sendEmail({ to: addr, replyTo: SHOP_NOTIFY_EMAIL, subject: `Receipt: ${money(total)} paid to ${settings.shop.name}`, html })));
       receiptTo = to.filter((_, i) => sent[i]).join(", ");
     }
     revalidatePath("/portal");
-    lines.forEach((l) => revalidatePath(`/portal/orders/${l.o.id}`));
+    lines.forEach((l) => revalidatePath(l.old ? `/portal/archive/${l.o.id}` : `/portal/orders/${l.o.id}`));
     return { ok: true, paid: total, fee, receiptTo };
   } catch (e) { return fail(e); }
 }
@@ -226,7 +246,8 @@ export async function sentPaymentNotice(input: { items: { orderId: string; kind:
     const ref = lines.map((l) => `#${l.o.number}`).join(", ");
     const { error } = await admin.from("payment_notices").insert({ customer_id: customer?.id || null, order_ids: lines.map((l) => l.o.id), method: input.method, amount: sum, note: input.note.slice(0, 500), created_by: email });
     if (error) return { ok: false, error: error.message };
-    await admin.from("order_events").insert(lines.map((l) => ({ order_id: l.o.id, kind: "payment_notice", detail: `${input.method} ${money(l.amount)} sent (to confirm)`, actor: email })));
+    const nl = lines.filter((l) => !l.old);
+    if (nl.length) await admin.from("order_events").insert(nl.map((l) => ({ order_id: l.o.id, kind: "payment_notice", detail: `${input.method} ${money(l.amount)} sent (to confirm)`, actor: email })));
     if (SHOP_NOTIFY_EMAIL) await sendEmail({
       to: SHOP_NOTIFY_EMAIL,
       subject: `${input.method} payment sent: ${money(sum)} for ${ref}`,

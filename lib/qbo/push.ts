@@ -416,6 +416,13 @@ export class Pusher {
     const { data: pd } = await this.admin.from("payments").select("*").eq("id", row.local_id).maybeSingle();
     const p = pd as OurPayment | null;
     if (!p) return { status: "skipped", reason: "The payment was deleted." };
+    // paid in the portal on an old Printavo invoice (migration 260): Printavo made that invoice in QuickBooks, so the
+    // payment is applied there by hand, never made by us
+    const oldInv = (p as OurPayment & { archived_order_id?: string | null }).archived_order_id;
+    if (oldInv) {
+      const { data: a } = await this.admin.from("archived_orders").select("visual_id").eq("id", oldInv).maybeSingle();
+      return { status: "needs_review", reason: `Paid in the portal on old Printavo invoice #${a?.visual_id || "?"}: record ${r2(+p.amount).toFixed(2)} on that invoice in QuickBooks, then Skip.` };
+    }
     const o = await this.order(p.order_id);
     if (!o) return { status: "skipped", reason: "Its order was deleted." };
     const n = +o.number;
