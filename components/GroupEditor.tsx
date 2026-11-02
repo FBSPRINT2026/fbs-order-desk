@@ -761,8 +761,13 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake), yi = youthInfo(d);
     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
     const cc = +(d.inkChanges || 0);
+    // printed from another print's screens (the same logo at the same spot in another group): says whose, at no charge
+    // (Nov 1, Nick on #40351: "$30 set up on group two and $15 on group three, but it shouldn't show… some sort of
+    // indicator that it's $0")
+    const sharedFrom = (gc as { imprintShared?: string[] }).imprintShared?.[di] || "";
     return (<>
-      <ScreensLine key={d.id} summary={<>{yi?.split ? `${sc.n} adult + ${yi.yn} youth` : `${sc.n} screen${sc.n === 1 ? "" : "s"}`}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0) + (yi?.split ? yi.ySetup || 0 : 0))}</b></>}
+      <ScreensLine key={d.id} summary={<>{sharedFrom && !yi?.split ? <span className="pr-shared">{sharedFrom === g.name || sharedFrom === `Group ${gi + 1}` ? "Same screens as another print here" : `${sharedFrom}'s screen${sc.n === 1 ? "" : "s"}`}{!hidePrices && <> · <b className="num">{money(0)}</b></>}<NoCharge title={`No setup: printed from ${sharedFrom}'s screens. The pieces count together for the price break.`} /></span>
+        : <>{yi?.split ? `${sc.n} adult + ${yi.yn} youth` : `${sc.n} screen${sc.n === 1 ? "" : "s"}`}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0) + (yi?.split ? yi.ySetup || 0 : 0))}</b></>}</>}
         {sc.under && !allLight ? <span className="pr-scr-tag">underbase</span> : null}{d.printStyle === "fashion" ? <span className="pr-scr-tag fashion">fashion hit</span> : null}{d.softHand ? <span className="pr-scr-tag">soft hand</span> : null}{rm ? <span className="pr-scr-tag">remake</span> : null}</>}>
         {/* a fashion hit: no underbase, each color printed, flashed and printed again (Oct 16, Nick); priced the same */}
         <label className="check" title="No underbase: each color printed, flashed and printed again through the same screen. Priced the same as with an underbase (two rounds on press)."><input type="checkbox" checked={d.printStyle === "fashion"} onChange={(e) => update((x) => { x.imprints[di].printStyle = e.target.checked ? "fashion" : undefined; if (e.target.checked) x.imprints[di].underbase = undefined; x.imprints[di].screens = undefined; })} />Fashion hit</label>

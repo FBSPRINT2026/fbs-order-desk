@@ -958,6 +958,8 @@ const screenKey = (d: Imprint, n: number) => (d.method === "screen" && d.design_
 /** the order's screens charged so far, plus the color-change pairs across variations (Imprint.changeOf): print id → pair
  *  key, and the screens the pair's first print paid for */
 export type SeenScreens = Set<string> & { links?: Map<string, string>; linkScreens?: Map<string, number>;
+  /** which group paid for each screen set ("Group 2"), and the group being priced now: a print sharing screens says whose */
+  owner?: Map<string, string>; cur?: string;
   /** pieces carrying each logo across the order ("<method>:<design id>" → pieces): the same logo in several groups is
    *  priced at the break for all of them together (Oct 27, Nick: "if you use it in two separate locations, so like sleeves
    *  and left chest, it's the same logo… he can get the quantity discount") */ designQty?: Map<string, number> };
@@ -1109,8 +1111,8 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       return { ...d, setup: r2(extra * per), shared: true };
     }
     if (!k || !seen) return d;
-    if (seen.has(k)) return { ...d, setup: 0, shared: true };
-    seen.add(k); return d;
+    if (seen.has(k)) return { ...d, setup: 0, shared: true, sharedWith: seen.owner?.get(k) || "" };
+    seen.add(k); (seen.owner ||= new Map()).set(k, seen.cur || ""); return d;
   });
   // a print's own youth screens: a second setup (the same logo at the same spot and size on another order shares it)
   const youthSetups = (g.imprints || []).map((im, i) => {
@@ -1150,7 +1152,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
@@ -1174,7 +1176,7 @@ export function calcOrder(
     for (const k of new Set((g.imprints || []).filter((d) => d.design_id).map((d) => `${d.method}:${d.design_id}`))) dqm.set(k, (dqm.get(k) || 0) + q);
   }
   seen.designQty = dqm;
-  const groups = gs0.map((g) => calcGroup(g, o, s, seen));
+  const groups = gs0.map((g, gi) => { seen.cur = g.name || `Group ${gi + 1}`; return calcGroup(g, o, s, seen); });
   const lines = groups.flatMap((g) => g.lines);
   const items = r2(groups.reduce((a, g) => a + g.sub, 0));
   const setup = r2(groups.reduce((a, g) => a + g.setup, 0));

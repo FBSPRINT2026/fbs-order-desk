@@ -17465,3 +17465,4 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .nochg circle,.nochg line{stroke:var(--ok)}
 .nochg text{fill:var(--ok);font:700 9.5px Arial,sans-serif}
 .pr-scr-tag.nc{display:inline-flex;align-items:center;gap:4px}
+.pr-shared{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
