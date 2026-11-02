@@ -1503,7 +1503,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             ) : !delAsk.loading && delAsk.pvErr ? <p className="err">{delAsk.pvErr}</p>
             : delAsk.loading ? <p className="faint">Looking at the order&apos;s art…</p> : delAsk.error && !delAsk.logos.length && !delAsk.mockups.length ? <p className="err">{delAsk.error}</p> : (
               <>
-                {delAsk.logos.length + delAsk.mockups.length > 0 ? <p className="dla-sub">Also take off the art that goes with it? Ticked items are archived (they can be put back).</p> : <p className="dla-sub">This order has no art to take off.</p>}
+                {/* say plainly what goes (Nov 2, Nick: "it's not intuitive what you're actually deleting… is it only on this order?") */}
+                {delAsk.logos.length + delAsk.mockups.length > 0 ? <p className="dla-sub">Only this order is deleted. Ticked art goes with it (archived, and it can be put back). Anything another order uses stays on that order.</p> : <p className="dla-sub">Only this order is deleted. It has no art of its own to take off.</p>}
                 {[{ t: "Logos", list: delAsk.logos }, { t: "Mockups", list: delAsk.mockups }].filter((x) => x.list.length).map((x) => (
                   <div key={x.t} className="dla-sec">
                     <div className="dla-h">{x.t}</div>
@@ -1511,11 +1512,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       {x.list.map((a) => {
                         const on = delAsk.pick.has(a.id) && !a.elsewhere;
                         return (
-                          <label key={a.id} className={"dla-it" + (on ? " on" : "") + (a.elsewhere ? " off" : "")} title={a.elsewhere ? "Used on another order: it stays" : a.label}>
+                          <label key={a.id} className={"dla-it" + (on ? " on" : "") + (a.elsewhere ? " off" : "")} title={a.elsewhere ? `Used on ${a.also || "another order"}: it stays` : a.copyOf ? `Only this order's copy is taken off; ${a.copyOf}'s mockup stays` : a.label}>
                             <input type="checkbox" checked={on} disabled={!!a.elsewhere || delAsk.busy} onChange={() => setDelAsk((d) => { if (!d) return d; const p = new Set(d.pick); if (p.has(a.id)) p.delete(a.id); else p.add(a.id); return { ...d, pick: p }; })} />
                             <span className="dla-pic">{a.url ? <img src={a.url} alt="" /> : null}</span>
                             <span className="dla-t">{a.label}</span>
-                            <small>{a.elsewhere ? "On another order: stays" : a.draft ? "Made for this order" : "In their library"}</small>
+                            <small>{a.elsewhere ? `Also on ${a.also || "another order"}: stays` : a.copyOf ? `This order's copy · ${a.copyOf} keeps its own` : a.draft ? "Made for this order" : "In their library"}</small>
                           </label>
                         );
                       })}

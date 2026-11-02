@@ -18,7 +18,7 @@ async function staff() {
 type G = { imprints?: { design_id?: string | null }[] }[];
 const designIdsOf = (groups: unknown) => [...new Set(((groups || []) as G).flatMap((g) => (g.imprints || []).map((im) => im.design_id || "")).filter(Boolean))];
 
-export type ArtItem = { id: string; label: string; url: string; draft: boolean; elsewhere: number };
+export type ArtItem = { id: string; label: string; url: string; draft: boolean; elsewhere: number; /** the other order it's on, "#40356" */ also?: string; /** a mockup that's this order's copy of another order's (a reorder): taking it off leaves the other one */ copyOf?: string };
 
 /** what deleting this order could take off with it: its logos (drafts first) and its mockups */
 export async function orderArtForDelete(orderId: string) {
@@ -33,11 +33,16 @@ export async function orderArtForDelete(orderId: string) {
     const logos: ArtItem[] = [];
     for (const d of ds || []) {
       // used on another order (or one of its mockups): never offered checked
-      const { count: n1 } = await admin.from("orders").select("id", { count: "exact", head: true }).neq("id", orderId).contains("groups", JSON.stringify([{ imprints: [{ design_id: d.id }] }]));
+      const { data: on1, count: n1 } = await admin.from("orders").select("number", { count: "exact" }).neq("id", orderId).contains("groups", JSON.stringify([{ imprints: [{ design_id: d.id }] }])).order("number", { ascending: false }).limit(1);
       const { count: n2 } = await admin.from("mockups").select("id", { count: "exact", head: true }).is("archived_at", null).contains("design_ids", [d.id]).or(`order_id.is.null,order_id.neq.${orderId}`);
-      logos.push({ id: d.id, label: `D-${d.number} ${d.name || ""}`.trim(), url: (d.preview_path || d.file_path || "") as string, draft: !!d.draft, elsewhere: (n1 || 0) + (n2 || 0) });
+      logos.push({ id: d.id, label: `D-${d.number} ${d.name || ""}`.trim(), url: (d.preview_path || d.file_path || "") as string, draft: !!d.draft, elsewhere: (n1 || 0) + (n2 || 0), also: on1?.[0]?.number ? `#${on1[0].number}` : undefined });
     }
-    const mockups: ArtItem[] = (ms || []).map((m) => ({ id: m.id, label: m.title || "Mockup", url: m.file_path || "", draft: !!m.draft, elsewhere: 0 }));
+    // a mockup whose picture another order also has (a reorder copies its mockups): this order's copy, the other stays
+    const mpaths = [...new Set((ms || []).map((m) => m.file_path).filter(Boolean))] as string[];
+    const { data: twins } = mpaths.length ? await admin.from("mockups").select("file_path, orders!inner(number)").in("file_path", mpaths).neq("order_id", orderId).is("archived_at", null).limit(200) : { data: [] };
+    const twinOf = new Map<string, string>();
+    for (const t of (twins || []) as unknown as { file_path: string; orders: { number: number } | { number: number }[] }[]) { const n = Array.isArray(t.orders) ? t.orders[0]?.number : t.orders?.number; if (n && !twinOf.has(t.file_path)) twinOf.set(t.file_path, `#${n}`); }
+    const mockups: ArtItem[] = (ms || []).map((m) => ({ id: m.id, label: m.title || "Mockup", url: m.file_path || "", draft: !!m.draft, elsewhere: 0, copyOf: twinOf.get(m.file_path || "") }));
     const paths = [...logos, ...mockups].map((x) => x.url).filter(Boolean);
     const { data: signed } = paths.length ? await admin.storage.from("proofs").createSignedUrls(paths, 1800) : { data: [] };
     const url = new Map((signed || []).map((s, i) => [paths[i], s.signedUrl || ""]));
