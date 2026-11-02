@@ -18930,3 +18930,8 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pj-empty{font-size:12.5px}
 .pj-rich .pj-foot a{color:var(--accent);font-weight:600;text-decoration:none}
 @media (max-width:560px){.pj-cards:has(.pj-rich){grid-template-columns:minmax(0,1fr)}.pj-cols{grid-template-columns:minmax(0,1fr)}}
+/* portal Orders: the card fills the page down to the footer, whatever the list's length (Nov 2, Nick: "there should be a
+   minimum height… it should fill the page the rest of the way"); the older-quotes box sits on the tab bar */
+.aa-ocard{min-height:max(420px,calc(100vh - 330px));display:flex;flex-direction:column}
+.aa-ocard>.aa-otabs{align-items:center}
+.aa-oldq-bar{font-size:13px;color:var(--ink-2);white-space:nowrap}

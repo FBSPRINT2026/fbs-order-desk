@@ -638,6 +638,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
           {tabs.map(([k, t, n]) => <option key={k} value={k}>{t}{n ? ` (${n})` : ""}</option>)}
         </select>
         <span className="spacer" />
+        {/* on the tab bar, at the right (Nov 2, Nick: "causing a spacing issue… move that on the main bar") */}
+        {tab === "quotes" && <label className="check aa-oldq aa-oldq-bar"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}
         <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
       </div>
       {tab === "all" && orderTable(allRows, "invoice", true)}
@@ -669,7 +671,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
       </>}
       {tab === "quotes" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
-          <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label></div>
+          {mode !== "portal" && <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}</div>
         {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
       </>}
       {tab === "orders" && <>
