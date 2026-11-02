@@ -1,4 +1,5 @@
 "use client";
+import { sameColorAs } from "@/lib/colorMatch";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
 import { askPage } from "@/lib/artboards";
 import { pastedSvg, type PastedSvg } from "@/lib/pastedSvg";
@@ -1293,11 +1294,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // a photo of a person wearing it (SanMar has only a model back for some colors: 6030 "Mystic"; Nov 1, Nick: "why
     // on this comfort color shirt do you have this back… with the guy"): the same color's flat photo from the other
     // supplier's listing ("Mystic Blue"), named the same or one name inside the other
-    if (p && ONMODEL.test(p) && g && l.color) {
-      const me = colorKey(l.color);
-      const flat = Object.entries(g.color_images || {}).find(([k, v]) => { const o = colorKey(k); const q = view === "front" ? v.front : v.back; return o !== me && !!q && !ONMODEL.test(q) && (o.startsWith(me) || me.startsWith(o)); });
-      const q = flat ? (view === "front" ? flat[1].front : flat[1].back) : "";
-      if (q) p = q;
+    // and a color filled in from the other supplier, when this garment's own supplier has it under a fuller name: the
+    // supplier's own photos, so the front and back match (lib/colorMatch sameColorAs)
+    if (g && l.color && (!p || ONMODEL.test(p) || (ci as { from?: string } | undefined)?.from === "sanmar")) {
+      const ims = g.color_images || {};
+      const sib = sameColorAs(l.color, Object.keys(ims).filter((k) => colorKey(k) !== colorKey(l.color) && (ims[k] as { from?: string }).from !== "sanmar" && !!ims[k].front && !ONMODEL.test(ims[k].front || "")));
+      const q = sib ? (view === "front" ? ims[sib].front : ims[sib].back) : "";
+      if (q && !ONMODEL.test(q)) p = q;
     }
     if (p) { const u = ssImg(p); return view === "back" ? leveled[u] || u : u; }
     // no photo of this color: the style's own photo dyed to it, once it's made (below), not a drawn tee

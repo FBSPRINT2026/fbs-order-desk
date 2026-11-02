@@ -4,7 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sanmarConfigured, sanmarSkus } from "@/lib/sanmar";
 import { ssConfigured, ssOtherPhotos } from "@/lib/ss";
 import { sanmarStyles } from "@/lib/sanmarStyle";
-import { matchColor } from "@/lib/colorMatch";
+import { matchColor, sameColorAs } from "@/lib/colorMatch";
+import { sanmarBack } from "@/lib/garmentBacks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,18 +49,14 @@ export async function POST(req: Request) {
     const lately = ci.back_checked && Date.now() - new Date(ci.back_checked).getTime() < 30 * 86400000;
     const sanmarModel: { label: string; path: string }[] = [];
     if (!lately && g.supplier !== "sanmar" && sanmarConfigured()) {
-      for (const t of await sanmarStyles(admin, String(g.supplier_style || g.style || "").trim().toUpperCase(), String(g.brand || ""))) {
-        const skus = (await sanmarSkus(t).catch(() => [])).filter((x) => x.backFlat || x.backModel);
-        if (!skus.length) continue;
-        let hit = skus.find((x) => sq(x.color) === sq(color) || sq(x.catalogColor) === sq(color));
-        if (!hit) { const names = [...new Set(skus.flatMap((x) => [x.color, x.catalogColor]).filter(Boolean))]; const m = matchColor(color, names); if (m?.sure) hit = skus.find((x) => x.color === m.color || x.catalogColor === m.color); }
-        if (!hit) continue;
-        // a flat back is used as is; SanMar's back on a model is offered with the others
-        if (!hit.backFlat) { sanmarModel.push({ label: "On a model, back (SanMar)", path: hit.backModel }); break; }
-        const entry: Ci = { ...ci, back: hit.backFlat, back_from: "sanmar" };
+      // a flat back is used as is; SanMar's back on a model is offered with the others (lib/garmentBacks.ts)
+      const b = await sanmarBack(admin, g, color);
+      if (b.flat) {
+        const entry: Ci = { ...ci, back: b.flat, back_from: "sanmar" };
         await admin.from("garments").update({ color_images: { ...imgs, [name]: entry } }).eq("id", g.id);
         return NextResponse.json({ name, ...entry });
       }
+      if (b.model) sanmarModel.push({ label: "On a model, back (SanMar)", path: b.model });
       await admin.from("garments").update({ color_images: { ...imgs, [name]: { ...ci, back_checked: new Date().toISOString() } } }).eq("id", g.id);
     }
     // none: the color's other photos to pick from
@@ -68,6 +65,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ none: true, name, others });
   }
   if (have) return NextResponse.json({ name: have[0], ...have[1] });
+  // the same color under the supplier's fuller name ("Mystic" is S&S's "Mystic Blue"): its own photos, not the other
+  // supplier's (Nov 1: SanMar's 6030 Mystic had only a photo of a man wearing it for the back)
+  const sib = sameColorAs(color, Object.keys(imgs).filter((k) => imgs[k]?.front && imgs[k]?.from !== "sanmar"));
+  if (sib) return NextResponse.json({ name: sib, ...imgs[sib] });
   if (g.supplier === "sanmar" || !sanmarConfigured()) return NextResponse.json({ none: true });
   const st = String(g.supplier_style || g.style || "").trim().toUpperCase();
   // SanMar's number for it (BC3001CVC for 3001CVC, G-numbers for some Gildan: lib/sanmarStyle.ts)

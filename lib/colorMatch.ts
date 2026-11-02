@@ -117,3 +117,16 @@ export function plainlyMeans(typed: string, options: string[]): string | null {
   if (r.length > 1 && r[1].s === r[0].s && r[1].extra === r[0].extra) return null;
   return r[0].o;
 }
+
+/**
+ * The one color in a list that's the same color under a fuller name (Nov 1: SanMar's "Mystic" is S&S's "Mystic Blue"):
+ * every word of the asked name is in it, and only one color in the list is like that ("Blue" matches many: none).
+ * Its exact name wins when it's there.
+ */
+export function sameColorAs(asked: string, names: string[]): string | null {
+  const ws = (s: string) => s.toLowerCase().replace(/grey/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
+  const a = ws(asked); if (!a.length) return null;
+  const exact = names.find((n) => ws(n).join(" ") === a.join(" ")); if (exact) return exact;
+  const hits = names.filter((n) => { const w = ws(n); return a.every((x) => w.includes(x)); });
+  return hits.length === 1 ? hits[0] : null;
+}
