@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import type { OrderStart } from "@/components/OrderStartPick";
 
-/** Create order opened from anywhere (the Order chat's "make the next order from this email"): the one tool
+/** Create order opened from anywhere (the AI order helper's "make the next order from this email"): the one tool
  *  (components/tools/CreateOrderTool.tsx), on the right of every shop page, started where it was asked to */
 export function CreateOrderDock() {
   const [st, setSt] = useState<null | { activity: string; start: OrderStart; n: number }>(null);

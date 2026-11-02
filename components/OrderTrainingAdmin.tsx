@@ -166,7 +166,7 @@ function TrainingEditor({ row, brands, onSaved }: { row: Row; brands: BrandRow[]
       {brands.some((b) => (b.rules?.mockups || []).length || b.rules?.mockup) && (
         <div className="otr-sub"><b>Mockups on new orders</b>{brands.map((b) => <div key={b.id} className="faint">{b.name}: {(b.rules?.mockups || []).length ? `standard ${(b.rules?.mockups || []).map((n) => `M-${n}`).join(", ")} (the same logos at the same spots get it)` : "no standard mockups"}{b.rules?.mockup === "logo" ? "; any other group gets a logo mockup made" : ""}</div>)}</div>
       )}
-      <div className="otr-sub"><b>Worked examples</b><span className="faint"> · saved when an order is marked right in the Order chat or sent to the customer; the closest two are read with each new job</span>
+      <div className="otr-sub"><b>Worked examples</b><span className="faint"> · saved when an order is marked right in the AI order helper or sent to the customer; the closest two are read with each new job</span>
         {ex === null ? <p className="faint">Loading…</p> : !ex.length ? <p className="faint">None yet: the next order of theirs marked right is the first.</p> : (
           <div className="tbl-wrap"><table className="tbl">
             <thead><tr><th>Order</th><th>Saved</th><th>What it made</th><th></th></tr></thead>

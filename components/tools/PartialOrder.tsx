@@ -25,7 +25,7 @@ export const PARTIAL: Record<PartKind, { label: string; sub: string; told: strin
 };
 const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
 
-/** what a partial step needs to read the email again (kept in the Order chat for the next steps) */
+/** what a partial step needs to read the email again (kept in the AI order helper for the next steps) */
 export type PartialCtx = { activity: string; told?: string; note?: string; job?: string | null; jobs?: string[]; include?: string[]; exclude?: string[]; part?: { key: string; told?: string; job?: string | null; pieces?: number; names?: string[]; label?: string } | null; orderType?: string };
 export const ctxOf = (activityId: string, start: OrderStart): PartialCtx => {
   const p = start.parts?.[0] || null;
@@ -40,7 +40,7 @@ export const doneOf = (gs: Group[]): PartKind[] => [
 
 /**
  * One partial step (Oct 24 / Oct 27): read the email for just this part and make the order, or add it to the order made
- * (into). Used by the panel here and by the Order chat's "Next" (components/tools/OrderReview.tsx).
+ * (into). Used by the panel here and by the AI order helper's "Next" (components/tools/OrderReview.tsx).
  */
 export async function partialStep(ctx: PartialCtx, mode: PartKind, into: { id: string; number: number } | null, step: (s: string) => void) {
   const m = PARTIAL[mode], part = ctx.part || null, activityId = ctx.activity;
@@ -87,7 +87,7 @@ export default function PartialOrder({ activityId, start, onClose, onCreated }: 
   const ran = useRef(false);
   const part = start.parts?.[0] || null, first = start.partial, m = PARTIAL[first];
   const step = (s: string) => setSteps((x) => [...x, s]);
-  // the order made: the Order chat opens on the right and stays on every page (Oct 27, Nick: "you're supposed to stay
+  // the order made: the AI order helper opens on the right and stays on every page (Oct 27, Nick: "you're supposed to stay
   // open, ask me what to do next, and then I can talk through the order with AI"); it offers the next step (bring in
   // the art / the sizes, make the mockup) and takes anything said. This page goes to the order.
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function PartialOrder({ activityId, start, onClose, onCreated }: 
         <p className="dla-sub">{part ? `${part.label}. ` : ""}{m.sub}</p>
         <ul className="po-steps">{steps.map((s, i) => <li key={i} className={i === steps.length - 1 && !err ? "on" : "done"}>{s}</li>)}</ul>
         {err && <p className="err">{err}</p>}
-        {!err && <p className="faint">When it&apos;s made, the order opens with the Order chat on the right for the next step.</p>}
+        {!err && <p className="faint">When it&apos;s made, the order opens with the AI order helper on the right for the next step.</p>}
         <div className="dla-acts"><span className="spacer" /><button type="button" className="btn ghost" onClick={onClose}>{err ? "Close" : "Cancel"}</button></div>
       </div>
     </div>

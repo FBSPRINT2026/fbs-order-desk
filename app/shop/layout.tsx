@@ -20,7 +20,7 @@ import MockupFreshener from "@/components/MockupFreshener";
 import DockSizer from "@/components/DockSizer";
 
 export const dynamic = "force-dynamic";
-// the shop's server actions (the Order chat reading a big PDF and making many edits) get up to 5 minutes
+// the shop's server actions (the AI order helper reading a big PDF and making many edits) get up to 5 minutes
 export const maxDuration = 300;
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {

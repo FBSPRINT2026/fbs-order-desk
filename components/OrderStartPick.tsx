@@ -322,7 +322,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
                   {p.changes && <div className="faint osp-card-n">New: {p.changes}</div>}
                   {cardBody(p.key, p)}
                   {jobFor === p.key && <div className="osp-card-jobs">{jobList}</div>}
-                  <div className="osp-card-go"><button type="button" className={"btn" + (otherFor === p.key ? " on" : "")} aria-expanded={otherFor === p.key} onClick={() => setOtherFor(otherFor === p.key ? null : p.key)}>Other options</button><button type="button" className="btn primary" onClick={() => onPick({ parts: [partFor(p)], ...(aiNote.trim() ? { note: aiNote.trim() } : {}) })} title="Makes this one; you check it in the Order chat, then come back for the next">Make this one</button></div>
+                  <div className="osp-card-go"><button type="button" className={"btn" + (otherFor === p.key ? " on" : "")} aria-expanded={otherFor === p.key} onClick={() => setOtherFor(otherFor === p.key ? null : p.key)}>Other options</button><button type="button" className="btn primary" onClick={() => onPick({ parts: [partFor(p)], ...(aiNote.trim() ? { note: aiNote.trim() } : {}) })} title="Makes this one; you check it in the AI order helper, then come back for the next">Make this one</button></div>
                   {otherFor === p.key && otherMenu((k) => onPick({ parts: [partFor(p)], partial: k, orderType: cardOf(p.key, p).type, ...(aiNote.trim() ? { note: aiNote.trim() } : {}) }))}
                 </div>
               ) : (

@@ -25,7 +25,7 @@ export default function CreateOrderTool({ activityId = "", archivedId, text = ""
   onClose: () => void;
   /** each order made */ onCreated?: (id: string, number: number, label: string) => void;
   /** "check every detail first": the page's full form, when it has one */ onReview?: (start: OrderStart) => void;
-  /** already decided (the next order from an email, asked in the Order chat): straight to making it */ begin?: OrderStart;
+  /** already decided (the next order from an email, asked in the AI order helper): straight to making it */ begin?: OrderStart;
 }) {
   const [quick, setQuick] = useState<(OrderStart & { n: number }) | null>(() => (begin ? { ...begin, n: Date.now() } : null));
   // open on the right: the left menu folds to icons while it's open (ShopNav listens), then comes back

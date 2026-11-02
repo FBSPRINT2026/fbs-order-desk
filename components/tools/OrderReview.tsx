@@ -9,9 +9,10 @@ import { fixDesignArt, type ArtAction } from "@/lib/artFix";
 import { MicButton } from "@/components/SearchInput";
 import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders";
 import { aiOrderFix, applyOrderFixChanges, loadOrderThread, markOrderChecked, noteArtChange, saveOrderLesson, saveOrderThread } from "@/app/shop/ai-actions";
-import type { OrderChange } from "@/lib/ai/orderFix";
+import type { FixResult, OrderChange } from "@/lib/ai/orderFix";
 import type { EOPart } from "@/lib/emailOrderShared";
 import { doneOf, partialStep, type PartialCtx, type PartKind } from "@/components/tools/PartialOrder";
+import { readDrop, type DropPic } from "@/lib/dropRead";
 
 /**
  * THE order check after it's made (Oct 23, Nick: "the right panel opens. That never closes until I say, yes, we've got
@@ -62,7 +63,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   // the next step of an order made a part at a time (Oct 27, Nick: "bring in the sizes, put it in there, and then… stay
   // open, ask me what to do next"): what's still to bring in comes from the order itself; a step runs right here
   const [stepRun, setStepRun] = useState<{ log: string[]; err?: string } | null>(null);
-  // opened on an order made from an email or ClickUp job that's still missing its garments or its prints (the Order chat
+  // opened on an order made from an email or ClickUp job that's still missing its garments or its prints (the AI order helper
   // from the order page, #40189): the same next steps, read from that job
   const [found, setFound] = useState<NextSteps | null>(null);
   const steps = steps0 || found;
@@ -87,6 +88,21 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   const [lesson, setLesson] = useState(saved0?.lesson || { on: true, text: "" });
   const [stale, setStale] = useState(false);
   const box = useRef<HTMLTextAreaElement>(null);
+  // dropped or pasted in (Nov 1, Nick: one AI tool for an order, the Quick ask's drops folded in): a PDF, a snip, a
+  // picture or an email from Outlook. Dropped with nothing typed, it goes straight away and the AI says what it sees
+  const [drop, setDrop] = useState<{ pics: DropPic[]; names: string[] }>({ pics: [], names: [] });
+  const [over, setOver] = useState(false);
+  const fileIn = useRef<HTMLInputElement>(null);
+  async function addDrop(fs: (File | Blob)[]) {
+    if (!fs.length || busy) return;
+    setErr("");
+    let d;
+    try { d = await readDrop(fs); } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't read that."); return; }
+    if (d.text) { void ask("change", { message: d.text, label: d.label, pics: d.pics }); return; }
+    if (!d.pics.length) { setErr("Drop a PDF, a picture, a snip or an email from Outlook."); return; }
+    if (!text.trim() && !drop.pics.length) { void ask("change", { message: `Dropped: ${d.names.join(", ")}`, label: `Dropped: ${d.names.join(", ")}`, pics: d.pics }); return; }
+    setDrop((x) => ({ pics: [...x.pics, ...d.pics].slice(0, 6), names: [...x.names, ...d.names] }));
+  }
   // Order resources (Oct 23, Nick: "keep the production documents… at the bottom… pops up and pops down… looking back at
   // the original documents at the same time… call that order resources, like the purchase order, the work order"):
   // what the customer sent (their PO, mockup, art), then our work order, quote and proof, opened right here
@@ -209,22 +225,28 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
     void remakeMockups([...fixedGroups]);
   }
 
-  async function ask(m: "review" | "change") {
-    const said = text.trim();
+  async function ask(m: "review" | "change", given?: { message: string; label?: string; pics?: DropPic[] }) {
+    const pics = given?.pics ?? (m === "change" ? drop.pics : []);
+    const said = given ? given.message : [text.trim(), !given && drop.pics.length ? `(Dropped: ${drop.names.join(", ")})` : ""].filter(Boolean).join(" ");
+    const shown = given?.label || said;
     if (m === "change" && !said) { setErr("Say what to change first."); return; }
-    setBusy(m === "review" ? "Comparing it with what the customer sent…" : "Making the changes…"); setErr("");
-    setPending(m === "review" ? "Check it for me" : said); if (m === "change") setText("");
+    setBusy(m === "review" ? "Comparing it with what the customer sent…" : pics.length ? "Reading it…" : "Making the changes…"); setErr("");
+    setPending(m === "review" ? "Check it for me" : shown); if (m === "change" && !given) { setText(""); setDrop({ pics: [], names: [] }); }
     if (m === "change") await pageSaves(orderId);
-    const r = await aiOrderFix(orderId, m === "change" ? said : "", m, earlier);
+    // with pictures: the chat's route (pictures run past a server action's 2 MB); else the action
+    const r = m === "change" && (pics.length || given) ? await fetch(`/api/orders/${orderId}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: said, earlier, images: pics.map((p) => ({ media_type: p.media_type, data: p.data })) }) })
+      .then(async (x) => { const j = await x.json().catch(() => ({})) as { ok?: boolean; r?: FixResult; error?: string }; return j.ok && j.r ? { ok: true as const, r: j.r } : { ok: false as const, error: j.error || "The AI didn't answer. Try again." }; })
+      .catch(() => ({ ok: false as const, error: "Couldn't reach the AI. Check the connection and try again." }))
+      : await aiOrderFix(orderId, m === "change" ? said : "", m, earlier);
     setBusy(""); setPending(null);
-    if (!r.ok) { setErr(r.error); if (m === "change") setText(said); return; }
+    if (!r.ok) { setErr(r.error); if (m === "change" && !given) setText(text || said); return; }
     const x = r.r;
     const ri = rounds.length;
     if (m === "review") {
       setRounds((rs) => [...rs, { you: "Check it for me", reply: x.reply, applied: [], art: [], suggest: x.changes, rule: x.rule }]);
       setPick(Object.fromEntries(x.changes.map((_, i) => [i, true])));
     } else {
-      setRounds((rs) => [...rs, { you: said, reply: x.reply, applied: x.applied, art: x.art.map((a) => ({ ...a, state: "doing" as const })), suggest: [], rule: x.rule }]);
+      setRounds((rs) => [...rs, { you: shown, reply: x.reply, applied: x.applied, art: x.art.map((a) => ({ ...a, state: "doing" as const })), suggest: [], rule: x.rule }]);
       setText("");
       if (x.applied.length) pageReloads(orderId);
       void runArt(ri, x.art);
@@ -288,13 +310,16 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   if (!o) return <div className="ap orv"><p className="faint">Opening the order…</p></div>;
   const working = rounds.some((r) => r.art.some((a) => a.state === "doing"));
   const lastRule = [...rounds].reverse().find((r) => r.rule)?.rule;
-  const send = () => { if (text.trim() && !busy) void ask("change"); };
+  const send = () => { if ((text.trim() || drop.pics.length) && !busy) void ask("change"); };
   const yesLabel = changed ? "Yes, it\u2019s right now" : "Yes, it\u2019s right";
   // like a text thread (Oct 23, Nick: "make it like an iPhone chat"): the order up top, the thread, and the box at the bottom
   return (
-    <div className="ap orv chat" role="group" aria-label="Check the order">
+    <div className={"ap orv chat" + (over ? " orv-over" : "")} role="group" aria-label="AI order helper"
+      onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); if (!over) setOver(true); } }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false); }}
+      onDrop={(e) => { if (!e.dataTransfer.files.length) return; e.preventDefault(); setOver(false); void addDrop([...e.dataTransfer.files]); }}
+      onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addDrop(fs); } }}>
       <div className="orv-top">
-        <div className="orv-top-h"><b>#{o.number}</b><span className="faint">{o.nickname}</span><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back from Ask AI → Order chat on the order, with everything said">Close for now</button></div>
+        <div className="orv-top-h"><b>#{o.number}</b><span className="faint">{o.nickname}</span><span className="orv-name">✦ AI order helper</span><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back from ✦ AI on the order, with everything said">Close for now</button></div>
         {o.groups.map((g) => (
           <section key={g.id} className="orv-g">
             <div className="orv-pics">
@@ -345,8 +370,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
                 </div>}
               <p className="bub-sub">Or tell me what to change, and I&apos;ll do it. Nothing goes to the customer.</p>
             </>;
-          })() : <p>#{o.number} is made. Did I get everything right?</p>}
-          {!steps && <p className="bub-sub">Click around the order and the mockup. Tell me anything that&apos;s off and I&apos;ll fix it. Nothing goes to the customer.</p>}
+          })() : did?.length ? <p>#{o.number} is made. Did I get everything right?</p> : <p>What can I help with on #{o.number}?</p>}
+          {!steps && <p className="bub-sub">{did?.length ? "Click around the order and the mockup. Tell me anything that's off and I'll fix it." : "Drop in a PDF, a snip or an email from Outlook (their S&S or SanMar confirmation, a PO, a size sheet) and I'll say what I see and ask before adding anything. Or tell me what to change, or press Check it."} Nothing goes to the customer.</p>}
           {didKept && didKept.length > 0 && <details className="orv-did"><summary>What I did ({didKept.length})</summary><ul>{didKept.map((x, i) => <li key={i}>{x}</li>)}</ul></details>}
         </div>
         {rounds.map((r, ri) => {
@@ -364,6 +389,9 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
                   <button type="button" className="btn primary sm" onClick={() => void makeSuggested()} disabled={!!busy}>Make {Object.values(pick).filter(Boolean).length === 1 ? "this change" : "these changes"}</button>
                 </>}
                 {isLast && didSome && !working && <p className="bub-q">Does everything look right now?</p>}
+                {/* a question: one tap to answer it (yes, or which group) */}
+                {isLast && !busy && !didSome && !r.suggest.length && /\?/.test(r.reply || "") && (() => { const gs = o.groups.filter((g) => g.lines.length).map((g, k) => g.name || `Group ${k + 1}`); return (
+                  <div className="orv-ans">{["Yes, do it", ...gs.map((g) => `Put them on ${g}`), gs.length ? "Make a new group" : "All in one new group"].map((q) => <button key={q} type="button" className="chip" onClick={() => void ask("change", { message: q })}>{q}</button>)}</div>); })()}
               </div>
             </div>
           );
@@ -387,6 +415,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
         <div ref={endRef} />
       </div>
 
+      {drop.pics.length > 0 && <div className="orv-pend">{drop.pics.map((p, k) => <img key={k} src={p.url} alt="To send" />)}<button type="button" className="ap-link" onClick={() => setDrop({ pics: [], names: [] })}>Remove</button></div>}
       <div className="orv-compose">
         {/* a group with no mockup yet: said above the box, not another button in the row (Oct 31, Nick) */}
         {needMock && !onMockupPage && <p className="orv-mknote">{needMockN > 1 ? `${needMockN} groups have no mockup.` : "One group has no mockup."} <button type="button" className="orv-mklink" onClick={makeMock} disabled={!!busy} title="Opens the Mockup Creator in a new tab">{needMockN > 1 ? "Make them" : "Make it"}</button></p>}
@@ -394,8 +423,10 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
           <textarea ref={box} rows={1} value={text} onChange={(e) => { setText(e.target.value); setErr(""); const t = e.target; t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 140) + "px"; }}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder={rounds.length ? "Anything else?" : "Tell me what to change"} aria-label="What to change" />
+          <input ref={fileIn} type="file" hidden multiple accept="image/*,application/pdf,.pdf,.msg" onChange={(e) => { void addDrop([...(e.target.files || [])]); e.target.value = ""; }} />
+          <button type="button" className="orv-att" onClick={() => fileIn.current?.click()} disabled={!!busy} aria-label="Add a PDF, a picture or an email" title="Add a PDF, a picture or an email from Outlook (or drop it anywhere on this panel, or paste a snip)">📎</button>
           <MicButton target={() => box.current} append keepListening off={!!busy} label="Say what to change (click again when you're done)" />
-          <button type="button" className="orv-send" onClick={send} disabled={!!busy || !text.trim()} aria-label="Make the changes" title="Make the changes (Enter)">↑</button>
+          <button type="button" className="orv-send" onClick={send} disabled={!!busy || (!text.trim() && !drop.pics.length)} aria-label="Make the changes" title="Make the changes (Enter)">↑</button>
         </div>
         <div className="orv-quick">
           {res.length > 0 && <button type="button" className="chip orv-rsc-h" onClick={() => setResOpen(true)} title="What came in with the order (their PO, mockup, art), opened in the middle of the screen">Resources <span className="orv-rsc-n">{res.length}</span></button>}
@@ -410,7 +441,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
 }
 
 /** the order check, open on the right of every shop page until it's closed (the end of Create order, an order's
- *  Ask AI → "Order chat"): which order is kept for this tab, so going to the Mockup Creator and back keeps it open */
+ *  Ask AI → "AI order helper"): which order is kept for this tab, so going to the Mockup Creator and back keeps it open */
 const DOCK_KEY = "fbs:orderCheck";
 /** the next steps of an order made a part at a time (Create order → Other options): how to read the job again, what's in */
 export type NextSteps = { ctx: PartialCtx; done: PartKind[] };
@@ -426,7 +457,7 @@ export function OrderCheckDock() {
   useEffect(() => {
     if (window.self !== window.top) return; // the Mockup Creator made out of sight (remakeMockups): no second check in it
     try { const x = sessionStorage.getItem(DOCK_KEY); if (x) setSt(JSON.parse(x) as DockState); } catch { /* */ }
-    // opened in a new tab by Create order's full form (?chat=<order>): the Order chat comes up there too (Oct 27, Nick:
+    // opened in a new tab by Create order's full form (?chat=<order>): the AI order helper comes up there too (Oct 27, Nick:
     // "anytime we go through the create orders tool… I still want to leave that panel open so we can talk to it")
     try {
       const q = new URLSearchParams(window.location.search), id = q.get("chat") || "", em = q.get("email") || "";

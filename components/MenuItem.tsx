@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 /**
  * A dropdown item with a tinted icon and a one-line description (Oct 27, Nick: "the Ask AI… looks so plain… do some
  * little thumbnails next to them… just look more dynamic" → option A). Goes inside an `.ot-menu` <a> or <button>:
- *   <button onClick=…><MenuItem icon="chat" tone="blue" title="Order chat" sub="Check the order, say what to change" /></button>
+ *   <button onClick=…><MenuItem icon="chat" tone="blue" title="AI order helper" sub="Check the order, say what to change" /></button>
  */
 export type MenuIcon = "chat" | "bolt" | "shirt" | "needle" | "grid" | "invoice" | "proof" | "clipboard" | "press" | "label" | "phone" | "copy" | "trash";
 export type MenuTone = "blue" | "salmon" | "orange" | "violet" | "green" | "gray" | "danger";

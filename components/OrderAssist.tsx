@@ -148,7 +148,7 @@ function ReorderCheckBox({ orderId, save }: { orderId: string; save: () => Promi
 export const wantsLookup = (t: string) => /\b(look(\s|-)?(it|them|that)?\s*up|pms|pantone|official|online|search|google)\b/i.test(t);
 
 /**
- * Order chat: talk the order through with the AI ("looks good, did you pull the previous sizing from the film?").
+ * AI order helper: talk the order through with the AI ("looks good, did you pull the previous sizing from the film?").
  * Answers from the order, its notes, history and files (the old job, the film, the art, our mockup); fixes apply
  * with a click. The conversation is kept on the order.
  */

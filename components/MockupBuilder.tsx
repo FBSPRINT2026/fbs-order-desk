@@ -713,7 +713,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
       const { data } = await sb.from("designs").select("*").eq("customer_id", customerId).order("number", { ascending: false });
       const list = (data || []) as Design[];
-      // a logo whose picture changed (the Order chat's or Brand standards' art changes: distress, one black…): its cached
+      // a logo whose picture changed (the AI order helper's or Brand standards' art changes: distress, one black…): its cached
       // picture and its painted colors are dropped, so the shirt is drawn from the new file (Oct 23, Nick on #40133: the
       // distress was on the logo, the shirt didn't show it)
       const changed = list.filter((d) => fileOf.current[d.id] && fileOf.current[d.id] !== (d.preview_path || d.file_path)).map((d) => d.id);
@@ -3018,7 +3018,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // production confirmed this print while the builder was open: its confirmed specs win (lib/designSpecs.ts)
       if (saved?.confirmed && !saved.confirm && im.confirm) return { ...saved, ...im, size: saved.size, inks: saved.inks, colors: saved.colors, underbase: saved.underbase, drop: saved.drop, sizeFrom: saved.sizeFrom, remake: saved.remake, notes: saved.notes, confirm: undefined, confirmed: saved.confirmed };
       // only what was changed here goes back: anything else changed on the order meanwhile (production's drop, the
-      // notes, the Order chat) is kept (Oct 23: #40133's cleaned notes and confirmed drops came back from an open
+      // notes, the AI order helper) is kept (Oct 23: #40133's cleaned notes and confirmed drops came back from an open
       // Mockup Creator)
       const was = loadedIms.current[im.id];
       if (!saved || !was) return { ...(saved || {}), ...im };
@@ -3631,7 +3631,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (im.method !== "screen" || !want || want.colors !== 1 || !want.inks || !pt) continue;
       const name = want.inks.split(/[,;\/+]/)[0].trim(), hex = name ? colorHex(name) : null;
       // a mockup made by hand before keeps its picks: a color left out ("none", e.g. the white around the art) stays out
-      // (Oct 24, #40170: the Order chat's remake turned the Left Chest's white into PMS 230 C)
+      // (Oct 24, #40170: the AI order helper's remake turned the Left Chest's white into PMS 230 C)
       const prev = im.inkMap && im.inkMap.design === im.design_id ? im.inkMap.map : null;
       const keep = (h: string) => { const e = prev?.[h] || prev?.[h.toUpperCase()]; return e && (!e.hex || /^none$/i.test(e.name)) ? e : null; };
       if (hex) setInks(im.id, Object.fromEntries(pt.sources.map((x) => [x.hex, keep(x.hex) || { name, hex }])));
@@ -3658,7 +3658,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (im.method !== "screen" || !want || want.colors !== 1 || !pt) continue;
       const name = (want.inks || "").split(/[,;\/+]/)[0].trim(), hex = name ? colorHex(name) : null;
       // a mockup made by hand before keeps its picks: a color left out ("none", e.g. the white around the art) stays out
-      // (Oct 24, #40170: the Order chat's remake turned the Left Chest's white into PMS 230 C)
+      // (Oct 24, #40170: the AI order helper's remake turned the Left Chest's white into PMS 230 C)
       const prev = im.inkMap && im.inkMap.design === im.design_id ? im.inkMap.map : null;
       const keep = (h: string) => { const e = prev?.[h] || prev?.[h.toUpperCase()]; return e && (!e.hex || /^none$/i.test(e.name)) ? e : null; };
       if (hex) setInks(im.id, Object.fromEntries(pt.sources.map((x) => [x.hex, keep(x.hex) || { name, hex }])));
