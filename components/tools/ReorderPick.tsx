@@ -334,8 +334,8 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
                     {now ? <div className="rop-l2" data-notranslate>{sizeText(now) || "None this time"}</div>
                       : <>
                         {/* not on the files dropped: say what last time's sizes were, and what happens either way (Nov 2) */}
-                        <div className="rop-l2" data-notranslate>Last time: {sizeText(m.was) || "no sizes"}</div>
-                        <label className="rop-chk"><input type="checkbox" checked={offOld[i] !== false} onChange={(e) => setOffOld((o) => ({ ...o, [i]: e.target.checked }))} /> Not on the files you dropped: leave it off this time{offOld[i] === false ? " (unticked: last time's sizes go on)" : ""}</label>
+                        <div className="rop-l2"><span data-notranslate>On last time&apos;s order ({sizeText(m.was) || "no sizes"})</span>, but not on the files you dropped.</div>
+                        <label className="rop-chk"><input type="checkbox" checked={offOld[i] !== false} onChange={(e) => setOffOld((o) => ({ ...o, [i]: e.target.checked }))} /> {offOld[i] !== false ? "Leave it off this reorder" : "Leave it off this reorder (unticked: last time's sizes go on)"}</label>
                       </>}
                   </div>); })}
                 {match.extra.map(({ r, i }) => (
