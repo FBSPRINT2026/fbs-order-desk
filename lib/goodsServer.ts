@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { orderGroups, ST, SIZES, type Order } from "@/lib/pricing";
 import { NO_GOODS, type GoodsItem, type GoodsState, type Shipment } from "@/lib/goods";
 import type { Attachment } from "@/lib/messages";
+import { allRows } from "@/lib/readAll";
 
 type O = { id: string; number: number; nickname: string | null; status: string; due_date: string | null; qty: number; groups?: unknown; lines?: unknown };
 
@@ -27,7 +28,7 @@ export async function loadGoodsItems(admin: SupabaseClient, orders: O[], viewer:
     admin.from("order_goods").select("*").in("order_id", ids),
     admin.from("goods_shipments").select("*").in("order_id", ids).order("created_at"),
     admin.from("messages").select("order_id, author_type, author_name, body, created_at, read_at").in("order_id", ids).eq("topic", "goods").order("created_at"),
-    admin.from("supplier_manifest_lines").select("order_id, qty_shipped").in("order_id", ids).eq("kind", "goods").limit(5000),
+    allRows((r0, r1) => admin.from("supplier_manifest_lines").select("order_id, qty_shipped").in("order_id", ids).eq("kind", "goods").order("id").range(r0, r1), 20000),
   ]);
   const pcsOn = new Map<string, number>();
   for (const x of (ml.data || []) as { order_id: string; qty_shipped: number }[]) pcsOn.set(x.order_id, (pcsOn.get(x.order_id) || 0) + (+x.qty_shipped || 0));

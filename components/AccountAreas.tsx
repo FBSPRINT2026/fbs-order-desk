@@ -218,6 +218,8 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
   const [showOldOwed, setShowOldOwed] = useState(false);
   const [viewSet, setViewSet] = useState<AMockup[] | null>(null);
   const [payF, setPayF] = useSticky<"open" | "late" | "later">("portal.payFilter", "open");
+  // the due date's order (Nov 2, Nick: "an up and down so that you can toggle… oldest to newest… newest to oldest")
+  const [dueSort, setDueSort] = useSticky<"asc" | "desc">("payments.dueSort", "asc");
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
   // "Pay this statement" arrives with ?pay=all: everything open is checked
@@ -708,11 +710,12 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     const allOpen = [...open, ...oldOpen, ...waitingQuotes];
     const sumOf = (l: AOrder[]) => l.reduce((a, o) => a + Math.max(0, o.balance), 0);
     const lateL = allOpen.filter((o) => o.type !== "quote" && isLate(o)), laterL = allOpen.filter(isLater);
+    const dir = dueSort === "desc" ? -1 : 1;
     const listAll = (payF === "late" ? lateL : payF === "later" ? laterL : allOpen).slice().sort((a, b) =>
-      Number(isLater(a)) - Number(isLater(b)) || (dueOn(a) || "9999").localeCompare(dueOn(b) || "9999") || a.number - b.number);
+      Number(isLater(a)) - Number(isLater(b)) || dir * ((dueOn(a) || "9999").localeCompare(dueOn(b) || "9999") || a.number - b.number));
+    const readyL = allOpen.filter((o) => !isLater(o) && o.type !== "quote");
     // every open invoice, however many (Nov 2, Nick: "this is the one time I do want you to just show… a huge long list")
     const listShown = listAll;
-    const paidYear = payments.filter((p) => (p.paid_on || p.created_at || "").slice(0, 4) === today().slice(0, 4)).reduce((a, p) => a + p.amount, 0); // what went on invoices, like the history (card fees aside)
     // just the date (Nov 2, Nick: "just put the date… just green. If it goes more than a week past due… red. Don't put
     // open since or ready to pay or anything like that"); no date yet (still being made, a quote): a dash
     const dueText = (o: AOrder) => {
@@ -736,10 +739,13 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       {mode === "shop" && onRecordPayment && recOpen && <RecordPayment record={onRecordPayment} onDone={() => { setRecOpen(false); router.refresh(); }} />}
       {/* the numbers in one summary card (Nov 2, Nick: "it looks busy") */}
       <div className="stats pyl-stats">
-        <button type="button" className="stat" onClick={() => setPayF("open")}><span className="k">Balance due</span><span className="v">{money(due)}</span><small>{owed.length} invoice{owed.length === 1 ? "" : "s"}</small></button>
-        <button type="button" className="stat" onClick={() => setPayF("late")}><span className="k">Open over a week</span><span className={"v" + (sumOf(lateL) > 0.004 ? " alert" : "")}>{money(sumOf(lateL))}</span><small>{lateL.length} invoice{lateL.length === 1 ? "" : "s"}</small></button>
+        {/* Balance due = Not due yet + Ready to pay; over a week (red) last; no paid this year (Nov 2, Nick: "how can your
+            balance due not be what's to be paid… balance due, orders in the works not due yet… ready to be paid… the red
+            thing last… I don't think we need the paid this year") */}
+        <button type="button" className="stat" onClick={() => setPayF("open")}><span className="k">Balance due</span><span className="v">{money(due)}</span><small>{owed.length} invoice{owed.length === 1 ? "" : "s"}{terms ? ` · ${terms}` : ""}</small></button>
         <button type="button" className="stat" onClick={() => setPayF("later")}><span className="k">Not due yet</span><span className="v">{money(sumOf(laterL))}</span><small>{laterL.length ? `${laterL.length} still being made` : "Nothing in the works"}</small></button>
-        <button type="button" className="stat" onClick={() => document.querySelector(".aa-ph-card")?.scrollIntoView({ behavior: "smooth" })}><span className="k">Paid this year</span><span className="v">{money(paidYear)}</span><small>{terms ? `Terms: ${terms}` : "Payment history below"}</small></button>
+        <button type="button" className="stat" onClick={() => setPayF("open")}><span className="k">Ready to pay</span><span className="v">{money(sumOf(readyL))}</span><small>{readyL.length} invoice{readyL.length === 1 ? "" : "s"}</small></button>
+        <button type="button" className="stat" onClick={() => setPayF("late")}><span className="k">Open over a week</span><span className={"v" + (sumOf(lateL) > 0.004 ? " alert" : "")}>{money(sumOf(lateL))}</span><small>{lateL.length} invoice{lateL.length === 1 ? "" : "s"}</small></button>
       </div>
       <div className="aa-card aa-tblcard pyl">
         <div className="toolbar pyl-bar">
@@ -751,7 +757,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
           {canPay && searchBox}
         </div>
         <table className="aa-tbl pyl-tbl">
-          <thead><tr>{canPay && <th className="pyl-ck"><input type="checkbox" aria-label="Check all" checked={listAll.filter(payable).length > 0 && listAll.filter(payable).every((o) => paySel.includes(o.id))} onChange={(e) => listAll.filter(payable).forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>#</th><th>Order</th><th>Due date</th><th className="r">Balance</th></tr></thead>
+          <thead><tr>{canPay && <th className="pyl-ck"><input type="checkbox" aria-label="Check all" checked={listAll.filter(payable).length > 0 && listAll.filter(payable).every((o) => paySel.includes(o.id))} onChange={(e) => listAll.filter(payable).forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>Inv.</th><th>Order</th><th><button type="button" className="pyl-sort" onClick={() => setDueSort(dueSort === "asc" ? "desc" : "asc")} title={dueSort === "asc" ? "Oldest first: press for newest first" : "Newest first: press for oldest first"}>Due date <span aria-hidden>{dueSort === "asc" ? "▲" : "▼"}</span></button></th><th className="r">Balance</th></tr></thead>
           <tbody>
             {listShown.map((o) => {
               const can = canPay && payable(o), on = can && paySel.includes(o.id);

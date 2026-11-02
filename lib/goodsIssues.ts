@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allRows } from "@/lib/readAll";
 import type { CheckinRow } from "@/lib/checkinShared";
 import type { Flag } from "@/lib/orderStages";
 import type { GoodsIssue, IssueItem, IssueOwner } from "@/lib/goodsIssueShared";
@@ -117,8 +118,8 @@ export async function closeIssue(admin: SupabaseClient, id: string, by: string, 
 export async function scanTracking(admin: SupabaseClient, deadline: number) {
   const out = { opened: 0, closed: 0 };
   const since = new Date(Date.now() - 21 * 86400000).toISOString().slice(0, 10);
-  const { data } = await admin.from("supplier_manifest_lines").select("order_id, archived_order_id, customer_id, supplier, supplier_order, customer_po, tracking, track_status, track_detail, ship_date, method, delivered_at, kind")
-    .in("kind", ["goods", "blanks"]).neq("tracking", "").is("delivered_at", null).gte("ship_date", since).limit(3000);
+  const { data } = await allRows((r0, r1) => admin.from("supplier_manifest_lines").select("order_id, archived_order_id, customer_id, supplier, supplier_order, customer_po, tracking, track_status, track_detail, ship_date, method, delivered_at, kind")
+    .in("kind", ["goods", "blanks"]).neq("tracking", "").is("delivered_at", null).gte("ship_date", since).order("id").range(r0, r1), 20000);
   type T = { order_id: string | null; archived_order_id: string | null; customer_id: string | null; supplier: string; supplier_order: string; customer_po: string; tracking: string; track_status: string; track_detail: string; ship_date: string | null; method: string; kind: string };
   const byTrk = new Map<string, T & { boxes: number }>();
   for (const l of (data || []) as T[]) {
