@@ -41,10 +41,10 @@ export async function webImage(url: string, ms = 8000): Promise<{ buf: Buffer; t
 
 const slug = (s: string) => (s || "").toLowerCase().replace(/grey/g, "gray").replace(/[^a-z0-9]+/g, "");
 /** the product pictures on a shop's page, best guesses first (this color, a back view, big) */
-export function pageImages(html: string, base: string, color: string): string[] {
+export function pageImages(html: string, base: string, color: string, extra: { url: string; bonus: number }[] = []): string[] {
   const found = new Map<string, number>();
   const col = slug(color), colWords = color.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
-  const add = (raw: string) => {
+  const add = (raw: string, bonus = 0) => {
     let s = (raw || "").trim().replace(/&amp;/g, "&").replace(/\\u002F/gi, "/").replace(/\\\//g, "/");
     if (!s || s.startsWith("data:")) return;
     if (s.startsWith("//")) s = "https:" + s;
@@ -60,17 +60,60 @@ export function pageImages(html: string, base: string, color: string): string[] 
     if (/(^|[^a-z])(front|fr|fl)([^a-z]|$)|_f\.|-f\./.test(low)) sc += 1;
     if (/thumb|_xs|_sm\b|small|50x|100x|w=\d{2}\b|width=\d{2}\b/.test(low)) sc -= 3;
     if (/model|lifestyle|onmodel|_om_/.test(low)) sc -= 2;
-    found.set(href, Math.max(found.get(href) ?? -99, sc));
+    found.set(href, Math.max(found.get(href) ?? -99, sc + bonus));
   };
   for (const m of html.matchAll(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]*content=["']([^"']+)/gi)) add(m[1]);
   for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
     const tag = m[0];
-    for (const a of tag.matchAll(/\b(?:src|data-src|data-zoom-image|data-large|data-full|data-original|data-image)=["']([^"']+)["']/gi)) add(a[1]);
+    // the picture's own words ("Gildan SF000 Ash back") name its color more often than its file name does
+    const alt = (tag.match(/\b(?:alt|title|data-color|data-variant)=["']([^"']*)["']/i)?.[1] || "").toLowerCase();
+    const bonus = (alt && col && slug(alt).includes(col) ? 4 : 0) + (/\bback\b/.test(alt) ? 3 : 0);
+    for (const a of tag.matchAll(/\b(?:src|data-src|data-zoom-image|data-large|data-full|data-original|data-image)=["']([^"']+)["']/gi)) add(a[1], bonus);
     const ss = tag.match(/\b(?:srcset|data-srcset)=["']([^"']+)["']/i);
-    if (ss) { const parts = ss[1].split(",").map((x) => x.trim().split(/\s+/)[0]); add(parts[parts.length - 1]); }
+    if (ss) { const parts = ss[1].split(",").map((x) => x.trim().split(/\s+/)[0]); add(parts[parts.length - 1], bonus); }
   }
   for (const m of html.matchAll(/https?:(?:\/|\\\/){2}[^"'\s<>()]+?\.(?:jpe?g|png|webp)(?:\?[^"'\s<>()\\]*)?/gi)) add(m[0]);
+  for (const x of extra) add(x.url, x.bonus);
   return [...found.entries()].sort((a, b) => b[1] - a[1]).map(([u]) => u);
+}
+
+/** the same picture at most ~1000px wide where the image host resizes by address (Shopify), so many fit in one look */
+const smaller = (u: string) => { try { const x = new URL(u); if (/cdn\.shopify\.com|\/cdn\/shop\//.test(u)) { x.searchParams.set("width", "1000"); return x.toString(); } } catch { /* as is */ } return u; };
+
+/**
+ * Every product picture on a shop's page, this color's first (Nov 1, Nick: the flat back "was sitting right there next
+ * to" the one picked): the page's own pictures, and on a Shopify shop the product's full picture list with each
+ * picture's color (its alt words, the color option it's shown for), which the page itself only loads when clicked.
+ */
+export async function pagePictures(page: string, color: string): Promise<{ page: string; pics: string[]; hits: number }> {
+  const u = publicUrl(page); if (!u) return { page, pics: [], hits: 0 };
+  const r = await get(u.toString(), 10000, "text/html,application/xhtml+xml");
+  const html = r ? (await r.text().catch(() => "")).slice(0, 4_000_000) : "";
+  const extra: { url: string; bonus: number }[] = [];
+  const col = slug(color);
+  const isColor = (t: string) => !!col && slug(t || "") === col || (!!col && slug(t || "").includes(col));
+  const m = (r?.url || u.toString()).match(/^(https:\/\/[^/]+)(?:\/[a-z]{2}(?:-[a-z]{2})?)?(\/(?:collections\/[^/]+\/)?products\/[^/?#]+)/i);
+  if (m || /Shopify\.shop|cdn\.shopify\.com/.test(html)) {
+    const base = m ? `${m[1]}${m[2].replace(/^\/collections\/[^/]+/, "")}` : "";
+    const j = base ? await get(`${base}.js`, 8000, "application/json").then((x) => x?.json()).catch(() => null) as null | {
+      images?: string[]; media?: { src?: string; alt?: string | null; preview_image?: { src?: string } }[]; options?: (string | { name: string })[];
+      variants?: { options?: string[]; option1?: string; option2?: string; option3?: string; featured_image?: { src?: string; alt?: string } | null; featured_media?: { preview_image?: { src?: string } } | null }[] } : null;
+    if (j) {
+      const colorImgs = new Set<string>();
+      for (const v of j.variants || []) {
+        const opts = v.options || [v.option1, v.option2, v.option3].filter(Boolean) as string[];
+        if (!opts.some(isColor)) continue;
+        const src = v.featured_image?.src || v.featured_media?.preview_image?.src; if (src) colorImgs.add(src);
+      }
+      for (const x of j.media || []) { const src = x.src || x.preview_image?.src || ""; if (src) extra.push({ url: src, bonus: isColor(x.alt || "") || colorImgs.has(src) ? 7 : 0 }); }
+      for (const src of j.images || []) extra.push({ url: src, bonus: colorImgs.has(src) ? 7 : 0 });
+      // the pictures just after the color's own one are usually its other sides (front, back, side)
+      const all = (j.media?.length ? j.media.map((x) => x.src || x.preview_image?.src || "") : j.images || []).filter(Boolean);
+      all.forEach((src, i) => { if (colorImgs.has(src)) for (let k = 1; k <= 4 && all[i + k]; k++) extra.push({ url: all[i + k], bonus: 5 - k }); });
+    }
+  }
+  const pics = html || extra.length ? pageImages(html, r?.url || u.toString(), color, extra).map(smaller) : [];
+  return { page: u.toString(), pics: [...new Set(pics)], hits: extra.filter((x) => x.bonus >= 4).length };
 }
 
 type Ai = { model: string; admin: SupabaseClient; by?: string };
@@ -125,8 +168,9 @@ const TOOL = {
             front: { type: ["integer", "null"], description: "the front view from the SAME page, same color and same style of photo; null when that page has none" },
             score: { type: "integer", description: "0-100: how good a match (right style shape, right color, flat or ghost mannequin, plain white background, whole garment in frame)" },
             note: { type: "string", description: "a few words, e.g. 'flat, white background' or 'color looks lighter'" },
+            person: { type: "boolean", description: "true when a person (or any part of one) is in the back picture" },
           },
-          required: ["back", "front", "score", "note"],
+          required: ["back", "front", "score", "note", "person"],
         },
       },
     },
@@ -135,18 +179,16 @@ const TOOL = {
 };
 
 /** the whole search: pages → their pictures → the pairs Claude sees, best first */
-export async function findWebBacks(ai: Ai, g: { brand: string; style: string; title?: string; color: string; front?: { buf: Buffer; type: "image/jpeg" | "image/png" | "image/gif" | "image/webp" } | null }): Promise<{ found: WebBack[]; searched: string[] }> {
+export async function findWebBacks(ai: Ai, g: { brand: string; style: string; title?: string; color: string; front?: { buf: Buffer; type: "image/jpeg" | "image/png" | "image/gif" | "image/webp" } | null }, opts: { /** a page staff found (a known link): only it, looked at deeper */ pages?: string[] } = {}): Promise<{ found: WebBack[]; searched: string[] }> {
   const what = `${g.brand} ${g.style}${g.title ? ` (${g.title})` : ""} in the color "${g.color}"`;
-  const pages = await findPages(ai, what);
+  const pages = opts.pages?.length ? opts.pages : await findPages(ai, what);
   if (!pages.length) return { found: [], searched: [] };
-  // each page's likeliest product pictures
-  const per = await Promise.all(pages.map(async (p) => {
-    const r = await get(p, 9000, "text/html,application/xhtml+xml");
-    const html = r ? (await r.text().catch(() => "")).slice(0, 3_000_000) : "";
-    return { page: p, imgs: html ? pageImages(html, r!.url || p, g.color).slice(0, 10) : [] };
-  }));
+  // each page's likeliest product pictures: more of them from a page staff gave
+  const each = opts.pages?.length ? 30 : 14;
+  const per = (await Promise.all(pages.map((p) => pagePictures(p, g.color)))).map((x) => ({ page: x.page, imgs: x.pics.slice(0, each) }));
+  // taken in turns from each page (each page's best first), so one big page doesn't crowd out the rest
   const cand: { page: string; url: string }[] = [];
-  for (const x of per) for (const u of x.imgs) cand.push({ page: x.page, url: u });
+  for (let i = 0; i < each; i++) for (const x of per) if (x.imgs[i]) cand.push({ page: x.page, url: x.imgs[i] });
   const got = await Promise.all(cand.map(async (c) => ({ ...c, img: await webImage(c.url, 7000) })));
   // too small to be a product photo
   // too big for the AI to look at (over 3.5 MB, or past ~18 MB in all): left out
@@ -158,15 +200,15 @@ export async function findWebBacks(ai: Ai, g: { brand: string; style: string; ti
     ...(g.front ? [{ media_type: g.front.type, data: g.front.buf.toString("base64"), label: "OUR FRONT PHOTO (reference: the style and color to match)" }] : []),
     ...ok.map((c, i) => ({ media_type: c.img.type, data: c.img.buf.toString("base64"), label: `Picture ${i + 1} (from ${host(c.page)}):` })),
   ];
-  const res = await askClaude<{ pairs: { back: number; front: number | null; score: number; note: string }[] }>({
+  const res = await askClaude<{ pairs: { back: number; front: number | null; score: number; note: string; person?: boolean }[] }>({
     task: "find_back_pick", model: ai.model, admin: ai.admin, ctx: { by: ai.by }, tool: TOOL, images, maxTokens: 1500, timeoutMs: 60_000,
     system: "You pick garment product photos for a screen printing shop's mockups. A good photo shows the whole garment laid flat or on a ghost (invisible) mannequin, no person, on a plain white or near-white background, in the exact color asked. Never pick a photo with a person in it, a close-up, a folded garment, a different color, or a different style.",
-    prompt: `We need the BACK view of ${what}. Look at the numbered pictures. List every picture that is the back of this garment in this color, flat or ghost mannequin. For each, give the front view from the same site in the same color and the same kind of photo (so both sides match), or null. Best first. Leave out anything that isn't a back view of this garment in "${g.color}".`,
+    prompt: `We need the BACK view of ${what}. Look at the numbered pictures. List every picture that is the back of this garment in this color, flat or ghost mannequin, with no person in it (a shop often has a model shot and a flat shot side by side: take the flat one). For each, give the front view from the same site in the same color and the same kind of photo (so both sides match), or null. Best first. Leave out anything that isn't a back view of this garment in "${g.color}".`,
   });
   if (!res.ok) return { found: [], searched: pages };
   const found: WebBack[] = [];
   for (const p of res.data.pairs || []) {
-    const b = ok[p.back - 1]; if (!b) continue;
+    const b = ok[p.back - 1]; if (!b || p.person) continue;
     const f = p.front ? ok[p.front - 1] : undefined;
     if (found.some((x) => x.back === b.url)) continue;
     found.push({ site: host(b.page), page: b.page, back: b.url, ...(f && f.page === b.page && f.url !== b.url ? { front: f.url } : {}), score: Math.max(0, Math.min(100, Math.round(+p.score || 0))), note: String(p.note || "").slice(0, 80) });

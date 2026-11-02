@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState } from "@/lib/ai/claude";
-import { findWebBacks, publicUrl, webImage, type WebBack } from "@/lib/backFinder";
+import { findWebBacks, pagePictures, publicUrl, webImage, type WebBack } from "@/lib/backFinder";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +30,15 @@ async function ourFront(admin: ReturnType<typeof createAdminClient>, path: strin
  */
 export async function POST(req: Request) {
   const v = await getViewer(); if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const { garmentId, color, again } = await req.json().catch(() => ({})) as { garmentId?: string; color?: string; again?: boolean };
+  const { garmentId, color, again, page, pictures } = await req.json().catch(() => ({})) as { garmentId?: string; color?: string; again?: boolean;
+    /** a page staff found (Nov 1, Nick: "I could have copied and pasted this URL… oh, I see, I can go get these"): read it deeper */ page?: string;
+    /** every picture on a page, this color's first, to click through ("it was sitting right there next to it") */ pictures?: string };
+  if (pictures) {
+    if (!publicUrl(pictures)) return NextResponse.json({ error: "That isn't a web page link." }, { status: 400 });
+    const r = await pagePictures(pictures, String(color || ""));
+    return NextResponse.json({ page: r.page, pics: r.pics.slice(0, 60), hits: r.hits });
+  }
+  if (page && !publicUrl(page)) return NextResponse.json({ error: "Paste the page's https link." }, { status: 400 });
   if (!garmentId || !color?.trim()) return NextResponse.json({ error: "Which garment and color?" }, { status: 400 });
   const admin = createAdminClient();
   const { data: g } = await admin.from("garments").select("id, style, brand, description, color_images").eq("id", garmentId).maybeSingle();
@@ -39,12 +47,12 @@ export async function POST(req: Request) {
   const name = Object.keys(imgs).find((k) => sq(k) === sq(color)) || color.trim();
   const ci = imgs[name] || {};
   const kept = ci.web_backs;
-  if (!again && kept && Date.now() - new Date(kept.at).getTime() < 14 * 86400000) return NextResponse.json({ name, ...kept });
+  if (!again && !page && kept && Date.now() - new Date(kept.at).getTime() < 14 * 86400000) return NextResponse.json({ name, ...kept });
   const st = await aiState(admin);
   if (!st.ready) return NextResponse.json({ error: st.reason }, { status: 400 });
   const front = await ourFront(admin, String(ci.front || "")).catch(() => null);
   const r = await findWebBacks({ model: st.settings.assistant.ai.model || "claude-sonnet-5", admin, by: v.user.email || "staff" },
-    { brand: String(g.brand || ""), style: String(g.style || ""), title: String(g.description || "").slice(0, 80), color: name, front });
+    { brand: String(g.brand || ""), style: String(g.style || ""), title: String(g.description || "").slice(0, 80), color: name, front }, page ? { pages: [page] } : {});
   const web_backs = { at: new Date().toISOString(), found: r.found, searched: r.searched };
   // read again just before saving: another color may have been saved meanwhile
   const { data: g2 } = await admin.from("garments").select("color_images").eq("id", g.id).maybeSingle();

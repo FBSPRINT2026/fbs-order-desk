@@ -17562,3 +17562,12 @@ html body .pr .pr-shared{gap:6px}
 .mk-pill.mkwb-again{cursor:pointer;color:var(--accent)}
 .mk-noback .mkwb-x{position:absolute;top:6px;right:8px;border:0;background:none;font-size:20px;line-height:1;color:var(--ink-3);cursor:pointer;padding:2px 4px}
 .mk-noback .mkwb-x:hover{color:var(--ink)}
+.mkwb-all{display:flex;flex-direction:column;gap:6px}
+.mkwb-allgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;max-height:260px;overflow-y:auto}
+.mkwb-pic{position:relative;padding:3px;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:pointer}
+.mkwb-pic:hover{border-color:var(--accent)}
+.mkwb-pic.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.mkwb-pic img{display:block;width:100%;aspect-ratio:4/5;object-fit:contain}
+.mkwb-tag{position:absolute;left:3px;bottom:3px;font-size:11px;font-weight:700;padding:0 5px;border-radius:6px;background:var(--accent);color:var(--accent-ink)}
+.mkwb-linkrow{display:flex;gap:6px;align-items:center}
+.mkwb-linkrow input{flex:1;min-width:0;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:13px;color:var(--ink);background:var(--surface)}

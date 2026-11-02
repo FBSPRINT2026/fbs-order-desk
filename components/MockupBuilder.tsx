@@ -1465,13 +1465,34 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
   // found online (Nov 1, Nick: "you go to a site that has it, then you just bring in the front and the back… that way you
   // know it's formatted similar… if you can't, then you find just the back"): lib/backFinder.ts, searched once per color
-  const [webBack, setWebBack] = useState<Record<string, { busy?: boolean; err?: string; found?: WebBack[]; pick?: number }>>({});
+  type WebAll = { page: string; pics: string[]; back?: string; front?: string; busy?: boolean; err?: string };
+  const [webBack, setWebBack] = useState<Record<string, { busy?: boolean; err?: string; found?: WebBack[]; pick?: number; link?: string; all?: WebAll }>>({});
   const webAsked = useRef(new Set<string>());
-  const findBack = async (k0: string, garmentId: string, color: string, again = false) => {
-    setWebBack((m) => ({ ...m, [k0]: { busy: true } }));
-    const r = await fetch("/api/garments/find-back", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ garmentId, color, again }) }).then((x) => x.json()).catch(() => null) as { found?: WebBack[]; error?: string } | null;
-    setWebBack((m) => ({ ...m, [k0]: r?.found ? { found: r.found, pick: 0 } : { err: r?.error || "Couldn't search online." } }));
+  /** search online; with `page`, read that one page (a known link pasted by staff) deeper */
+  const findBack = async (k0: string, garmentId: string, color: string, again = false, page = "") => {
+    setWebBack((m) => ({ ...m, [k0]: { link: m[k0]?.link, busy: true } }));
+    const r = await fetch("/api/garments/find-back", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ garmentId, color, again, ...(page ? { page } : {}) }) }).then((x) => x.json()).catch(() => null) as { found?: WebBack[]; error?: string } | null;
+    setWebBack((m) => ({ ...m, [k0]: { link: m[k0]?.link, ...(r?.found ? { found: r.found, pick: 0 } : { err: r?.error || "Couldn't search online." }) } }));
+    // a pasted page where nothing was sure: every picture on it, to click
+    if (page && !r?.found?.length) void allPics(k0, color, page);
   };
+  /** every picture on a page, this color's first (Nov 1, Nick: the flat back "was sitting right there next to it"):
+   *  click one for the back, another for its front */
+  const allPics = async (k0: string, color: string, page: string) => {
+    setWebBack((m) => ({ ...m, [k0]: { ...m[k0], all: { page, pics: [], busy: true } } }));
+    const r = await fetch("/api/garments/find-back", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pictures: page, color }) }).then((x) => x.json()).catch(() => null) as { pics?: string[]; error?: string } | null;
+    setWebBack((m) => ({ ...m, [k0]: { ...m[k0], all: { page, pics: r?.pics || [], err: r?.pics?.length ? "" : r?.error || "No pictures could be read off that page. Open it, drag the picture here." } } }));
+  };
+  /** a picture on that page clicked: back, then front, then neither */
+  const tapPic = (k0: string, u: string) => setWebBack((m) => {
+    const a = m[k0]?.all; if (!a) return m;
+    const n = { ...a };
+    if (n.back === u) { n.back = undefined; if (!n.front) n.front = u; }
+    else if (n.front === u) n.front = undefined;
+    else if (!n.back) n.back = u;
+    else n.front = u;
+    return { ...m, [k0]: { ...m[k0], all: n } };
+  });
   useEffect(() => {
     for (const [k0, q] of Object.entries(noBack)) { if (webAsked.current.has(k0)) continue; webAsked.current.add(k0); void findBack(k0, q.garmentId, q.name); }
   }, [noBack]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -4257,8 +4278,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {/* a back that's drawn or stood in for (a model, the side): look for the real one online again */}
                   {v === "back" && line && !line.own && !backAsk(line) && (() => {
                     const gm = garmentFor(line); const ent = gm ? Object.entries(gm.color_images || {}).find(([k]) => colorKey(k) === colorKey(line.color)) : undefined;
-                    if (!gm || !ent || !["drawn", "model", "side", "picked"].includes((ent[1] as { back_from?: string } | undefined)?.back_from || "")) return null;
-                    return <div className="mk-corner tl"><button type="button" className="mk-pill mkwb-again" title="This back is drawn or stands in for the real one: look online for a flat back photo" onClick={() => setNoBack((m) => ({ ...m, [`${gm.id}|${colorKey(line.color)}`]: { garmentId: gm.id, name: ent[0], others: [] } }))}>Find the real back online</button></div>;
+                    const bf = (ent?.[1] as { back_from?: string } | undefined)?.back_from || "";
+                    if (!gm || !ent || !["drawn", "model", "side", "picked", "web", "upload"].includes(bf)) return null;
+                    const real = bf === "web" || bf === "upload";
+                    return <div className="mk-corner tl"><button type="button" className="mk-pill mkwb-again" title={real ? "Pick a different back photo (found online, a link, a picture you drop)" : "This back is drawn or stands in for the real one: look online for a flat back photo"} onClick={() => setNoBack((m) => ({ ...m, [`${gm.id}|${colorKey(line.color)}`]: { garmentId: gm.id, name: ent[0], others: [] } }))}>{real ? "Change the back photo" : "Find the real back online"}</button></div>;
                   })()}
                   {v === "back" && line && backAsk(line) && (() => {
                     const q = backAsk(line)!, gm = garmentFor(line), k0 = `${q.garmentId}|${colorKey(line.color)}`, wb = webBack[k0] || {}, found = wb.found || [], cur = found[wb.pick ?? 0];
@@ -4295,9 +4318,37 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           </div>
                           <div className="mkwb-act">
                             <button type="button" className="btn sm primary" disabled={!!backBusy || !cur} onClick={() => cur && void takeWebBack(line, cur)}>{backBusy === "web" ? "Bringing it in…" : cur?.front ? "Use this front & back" : "Use this back"}</button>
-                            {cur && <a className="mkwb-link" href={cur.page} target="_blank" rel="noreferrer">See the page</a>}
+                            {cur && <button type="button" className="mkwb-link" onClick={() => void allPics(k0, q.name, cur.page)}>All pictures on this page</button>}
+                            {cur && <a className="mkwb-link" href={cur.page} target="_blank" rel="noreferrer">Open the page ↗</a>}
                           </div>
                         </>}
+                        {/* every picture on a page: click the back, then its front */}
+                        {wb.all && (
+                          <div className="mkwb-all">
+                            <span className="mkwb-h">{wb.all.busy ? "Reading the page…" : `${wb.all.pics.length} pictures on ${(() => { try { return new URL(wb.all.page).hostname.replace(/^www\./, ""); } catch { return "the page"; } })()} · click the back, then its front`}</span>
+                            {wb.all.err && <span className="faint">{wb.all.err}</span>}
+                            {wb.all.pics.length > 0 && (
+                              <div className="mkwb-allgrid">
+                                {wb.all.pics.map((u) => { const tag = wb.all!.back === u ? "Back" : wb.all!.front === u ? "Front" : ""; return (
+                                  <button key={u} type="button" className={"mkwb-pic" + (tag ? " on" : "")} aria-pressed={!!tag} onClick={() => tapPic(k0, u)} disabled={!!backBusy}>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={webPic(u)} alt="" loading="lazy" />
+                                    {tag && <span className="mkwb-tag">{tag}</span>}
+                                  </button>
+                                ); })}
+                              </div>
+                            )}
+                            <div className="mkwb-act">
+                              <button type="button" className="btn sm primary" disabled={!!backBusy || !wb.all.back} onClick={() => wb.all?.back && void takeWebBack(line, { site: "", page: wb.all.page, back: wb.all.back, ...(wb.all.front ? { front: wb.all.front } : {}), score: 100, note: "" })}>{backBusy === "web" ? "Bringing it in…" : wb.all.front ? "Use this front & back" : "Use this back"}</button>
+                              <button type="button" className="mkwb-link" onClick={() => setWebBack((m) => ({ ...m, [k0]: { ...m[k0], all: undefined } }))}>Hide</button>
+                            </div>
+                          </div>
+                        )}
+                        {/* a page staff found themselves (Nov 1, Nick: "I could have copied and pasted this URL") */}
+                        <form className="mkwb-linkrow" onSubmit={(e) => { e.preventDefault(); const u = (wb.link || "").trim(); if (/^https:\/\//i.test(u)) void findBack(k0, q.garmentId, q.name, true, u); }}>
+                          <input type="url" value={wb.link || ""} placeholder="Paste a shop's page for this shirt" aria-label="A web page with this shirt's photos" onChange={(e) => { const v = e.target.value; setWebBack((m) => ({ ...m, [k0]: { ...m[k0], link: v } })); }} />
+                          <button type="submit" className="btn sm" disabled={wb.busy || !/^https:\/\//i.test((wb.link || "").trim())}>Look</button>
+                        </form>
                         <div className="mkwb-more">
                           <a className="mkwb-link" href={google} target="_blank" rel="noreferrer">Search Google Images ↗</a>
                           {!wb.busy && <button type="button" className="mkwb-link" onClick={() => void findBack(k0, q.garmentId, q.name, true)}>Search again</button>}
