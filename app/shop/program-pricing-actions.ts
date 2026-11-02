@@ -19,6 +19,17 @@ async function me() {
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 
+/** a program learns how it's used (Nov 1, Nick on Cedar Promos: "most everything is just standard pricing… then he has
+ *  specialty pricing. So that shouldn't be selected by default"): staff taking a new quote off the program it started on
+ *  sets it to Ask, so their next quotes start on standard pricing with an Apply button. Set back on the program's page. */
+export async function programAsk(customerId: string) {
+  try {
+    const { admin } = await me();
+    const { error } = await admin.from("programs").update({ apply_mode: "ask" }).eq("customer_id", customerId).eq("apply_mode", "auto");
+    return error ? { ok: false as const, error: error.message } : { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
 /** the customer's program: the rate card (with the base shirt's S–XL blank cost from the catalog) and the designs'
  *  own prices (program items); null when they have neither */
 export type ProgramCardOpt = { id: string; name: string; match: string[]; card: RateCard; baseCost: number | null };

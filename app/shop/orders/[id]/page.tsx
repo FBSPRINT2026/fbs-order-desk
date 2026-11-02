@@ -63,7 +63,7 @@ import { PAY_TERMS, SIZES, SUPPLIED_PRESS_ID, PATCH_APPLY_ID, patchEach, special
 import OrderHelper from "@/components/OrderHelper";
 import type { HelperAction, HelperOrder } from "@/lib/orderHelperShared";
 import { BIG_SIZES, cardForOrder, finishingIncluded, programForOrder, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
-import { programCard, type ProgramCardOpt } from "@/app/shop/program-pricing-actions";
+import { programAsk, programCard, type ProgramCardOpt } from "@/app/shop/program-pricing-actions";
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
@@ -505,12 +505,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [custId, seesMoney]);
   // a new order for a program customer starts on Program (once per order: switching to Retail / Wholesale stays)
   const autoProg = useRef("");
+  /** this order was put on the program by itself (not by staff), so taking it off teaches the program to ask */
+  const autoOn = useRef(false);
   useEffect(() => {
     if (!o || !prog || autoProg.current === o.id) return;
     autoProg.current = o.id;
     const empty = !o.groups.some((g) => g.lines.some((l) => Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)));
     // "Ask" customers get an Apply button instead (Oct 17)
-    if (!o.use_program && empty && progAll?.applyMode !== "ask" && ["quote", "request"].includes(o.status)) patch((d) => { d.use_program = true; });
+    if (!o.use_program && empty && progAll?.applyMode !== "ask" && ["quote", "request"].includes(o.status)) { autoOn.current = true; patch((d) => { d.use_program = true; }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [o?.id, prog]);
   /** what a group's design is called, for the designs' own program prices: the order's name and its prints' designs */
@@ -1641,6 +1643,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       <div className="cu-pv">
                         <select id="o-pt" className="jl-in" value={o.use_program ? (progAll && progAll.cards.length > 1 && progCard ? `card:${progCard.id}` : "program") : o.price_type === "wholesale" ? "wholesale" : "retail"} onChange={(e) => {
                           const v = e.target.value;
+                          // a new quote that started on the program taken off it: this customer's quotes start on standard
+                          // pricing from now on (programAsk), the Apply button one click away
+                          if (!v.startsWith("card:") && v !== "program" && o.use_program && autoProg.current === o.id && autoOn.current && progAll?.applyMode !== "ask" && custId) {
+                            autoOn.current = false;
+                            void programAsk(custId).then((r) => { if (r.ok) { setProgAll((p) => (p ? { ...p, applyMode: "ask" } : p)); say(`${cust ? custLabel(cust) : "This customer"}'s new quotes will start on standard pricing now. Their program is one click away (Apply).`); } });
+                          }
                           if (v.startsWith("card:")) { setConfirmRetail(false); patch((d) => { d.use_program = true; d.program_card = v.slice(5); }); setProgOpen(true); }
                           else if (v === "program") { setConfirmRetail(false); patch((d) => { d.use_program = true; }); setProgOpen(true); }
                           else if (v === "wholesale") { setConfirmRetail(false); patch((d) => { d.price_type = "wholesale"; d.use_program = false; }); }
