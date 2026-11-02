@@ -1083,32 +1083,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     loadSide();
   }
 
-  // Duplicate = a reorder of this order (Oct 20, Nick: "make a duplicate… a complete copy… keeps all the details",
-  // "it needs to keep that art… that's how we're going to… have it in our system as, oh look, Terrible Toddler, it's
-  // been ordered these 5 times"): every group kept whole, with its designs, our mockups and their history, the same
-  // job name; the sizes and price are updated on the copy. A wholesale copy offers the reprint screen fee.
-  async function duplicate() {
-    if (!o) return;
-    await save();
-    const copyGroup = (g: Group): Group => { const c = JSON.parse(JSON.stringify(g)) as Group; return { ...c, id: uid(), fromGroup: g.id, lines: c.lines.map((l) => ({ ...l, id: uid() })), imprints: c.imprints.map((d) => ({ ...d, id: uid() })) }; };
-    const groups = o.groups.map(copyGroup);
-    const { data, error } = await sb.from("orders").insert({
-      customer_id: o.customer_id, nickname: o.nickname || "Job", groups, fees: o.fees, po_number: "",
-      delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method, third_party: o.third_party || null, price_type: o.price_type,
-      discount_pct: o.discount_pct, discount_amt: o.discount_amt || 0, discount_type: o.discount_type || "pct", tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: false, notes: o.notes, total: o.total, qty: o.qty,
-    }).select("id").single();
-    if (error || !data) return say("Couldn't duplicate: " + error?.message);
-    // our mockups come with it: the latest of each group, so the copy shows them and nothing is made again
-    const { data: olds } = await sb.from("mockups").select("customer_id, group_id, title, file_path, design_ids, snapshot, created_at").eq("order_id", o.id).is("archived_at", null).order("created_at", { ascending: false });
-    const { data: u } = await sb.auth.getUser();
-    for (const g of groups) {
-      const m = (olds || []).find((x) => x.group_id === g.fromGroup);
-      if (m) await sb.from("mockups").insert({ customer_id: m.customer_id, order_id: data.id, group_id: g.id, proof_id: null, title: m.title, file_path: m.file_path, design_ids: m.design_ids || [], created_by: u.user?.email || "", snapshot: m.snapshot });
-    }
-    await sb.from("order_events").insert({ order_id: data.id, kind: "reorder", detail: `Duplicate of #${o.number}`, actor: u.user?.email || "" });
-    const reprint = o.price_type === "wholesale" && groups.some((g) => g.imprints.some((im) => im.method === "screen" && !(im.remake ?? g.remake)));
-    router.push(`/shop/orders/${data.id}${reprint ? "?reprint=1" : ""}`);
-  }
+  // Reorder (Nov 2, Nick: "instead of duplicate, it should just say reorder… the same thing… with the reorder helper"):
+  // the Create reorder pop-up (components/tools/ReorderPick.tsx) on this order; it was "Duplicate" (Oct 20)
+  const [ownReorder, setOwnReorder] = useState(false);
 
   // Delete asks first, showing the art that goes with the order (Oct 17, Nick: "when we delete an order can we delete
   // the art that goes with it"): the drafts made for it and its mockups are ticked, library logos are offered unticked,
@@ -1376,6 +1353,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
         );
       })()}
+      {ownReorder && <ReorderPick orderId={o.id} onClose={() => setOwnReorder(false)} />}
       {pvReorder && (() => {
         const re = (o as Order & { simple_order: { reorder: { archived_id: string; visual: string } } }).simple_order.reorder;
         const lines = orderGroups(o).flatMap((g) => g.lines.map((l) => ({ style: l.style, color: l.color, sizes: Object.fromEntries(Object.entries(l.sizes || {}).filter(([, v]) => +v! > 0).map(([z, v]) => [z, +v!])) })));
@@ -1494,7 +1472,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">More ▾</summary>
             <div className="ot-menu">
-              <button type="button" onClick={duplicate}><MenuItem icon="copy" tone="gray" title="Duplicate" sub="A new order just like this one" /></button>
+              <button type="button" onClick={async () => { await save(); setOwnReorder(true); }}><MenuItem icon="copy" tone="gray" title="Reorder" sub="Same sizes, new sizes from a file, or type them" /></button>
               <button type="button" className="danger" onClick={del}><MenuItem icon="trash" tone="danger" title="Delete order" sub="Asks first, with what goes with it" /></button>
             </div>
           </details>

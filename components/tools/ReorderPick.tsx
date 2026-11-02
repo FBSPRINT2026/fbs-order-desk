@@ -51,10 +51,12 @@ type Read = { source: string; pieces: number; lines: { style: string; color: str
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 type Data = { job: { visual: string; nickname: string; date: string; qty: number; total: number }; customer: { id: string; company: string | null; name: string | null; moved_at: string | null } | null;
-  lines: { style: string; brand: string; color: string; garment: string; qty: number; price: number; sizes: string }[]; files: ReorderFile[];
+  lines: { style: string; brand: string; color: string; garment: string; qty: number; price: number; sizes: string; /** our order's line id */ ref?: string }[]; files: ReorderFile[];
+  /** one of our own orders (app/api/orders/reorder) */ own?: boolean;
   /** last time's production and customer notes (Printavo's) */ notes?: { production: string; customer: string } };
 
-export default function ReorderPick({ archivedId, onClose, onCreated, into, given }: { archivedId: string; onClose: () => void; onCreated?: (id: string, number: number, label: string) => void;
+export default function ReorderPick({ archivedId = "", orderId = "", onClose, onCreated, into, given }: { archivedId?: string; onClose: () => void; onCreated?: (id: string, number: number, label: string) => void;
+  /** one of OUR orders to reorder (Nov 2, Nick: "instead of duplicate… reorder"): the same pop-up, no files to sort */ orderId?: string;
   /** the customer's portal reorder to fill in (keeps its number), and the sizes they gave: shown like a file's, used when you say so (Nov 1) */
   into?: string; given?: { source: string; lines: { style: string; color: string; sizes: Record<string, number> }[] } }) {
   const [d, setD] = useState<Data | null>(null), [err, setErr] = useState(""), [what, setWhat] = useState<Record<string, string>>({});
@@ -119,21 +121,42 @@ export default function ReorderPick({ archivedId, onClose, onCreated, into, give
   }, [d, read]);
   useEffect(() => {
     let live = true;
-    fetch(`/api/archive/reorder?id=${encodeURIComponent(archivedId)}`).then((r) => r.json()).then((j) => {
+    fetch(orderId ? `/api/orders/reorder?id=${encodeURIComponent(orderId)}` : `/api/archive/reorder?id=${encodeURIComponent(archivedId)}`).then((r) => r.json()).then((j) => {
       if (!live) return;
       if (j.error) { setErr(j.error); return; }
       setD(j as Data);
       setWhat(Object.fromEntries((j as Data).files.map((f) => [f.key, f.guess === "supplier_order" || f.guess === "order_sheet" ? "skip" : "production"])));
     }).catch(() => live && setErr("Couldn't read the old job."));
     return () => { live = false; };
-  }, [archivedId]);
+  }, [archivedId, orderId]);
   // last time's notes: brought in unless unticked
   const [keepNote, setKeepNote] = useState<{ production: boolean; customer: boolean }>({ production: true, customer: true });
   const looks: MailFile[] = useMemo(() => (d?.files || []).map((f) => ({ key: f.key, name: f.name, type: f.mime, href: href(f) })), [d]);
   const label = d ? `#${d.job.visual}${d.job.nickname ? ` ${d.job.nickname}` : ""}` : "";
   const lastTotal = d ? d.lines.reduce((s, l) => s + l.qty * l.price, 0) : 0;
 
+  /** our own order: the server copies it with the sizes and price you picked (its art, mockups and files come along) */
+  async function makeOwn() {
+    if (!d) return;
+    setErr(""); setStep("Making the reorder…");
+    try {
+      const sizes: Record<string, Record<string, number>> = {}, drop: string[] = [], add: { style: string; color: string; sizes: Record<string, number> }[] = [];
+      if (sizeMode === "file" && read && match && readOk) {
+        d.lines.forEach((l, i) => { const m = match.old[i]; if (!l.ref) return; if (m.k >= 0) sizes[l.ref] = { ...read.lines[m.k].sizes }; else if (offOld[i] !== false) drop.push(l.ref); });
+        for (const { r, i } of match.extra) if (addNew[i] !== false) add.push({ style: r.style, color: r.color, sizes: { ...r.sizes } });
+      }
+      const c = await fetch("/api/orders/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: orderId, price, mode: sizeMode === "file" && !readOk ? "same" : sizeMode, sizes, drop, add }) });
+      const k = await c.json().catch(() => ({})) as { id?: string; number?: number; pcs?: number; groups?: number; files?: number; reprint?: boolean; error?: string };
+      if (!c.ok || !k.id) throw new Error(k.error || "Couldn't make the reorder.");
+      onCreated?.(k.id, k.number || 0, `Reorder of ${label}`);
+      setStep("Opening it…");
+      openOrderCheck(k.id, [`Made a reorder of ${label}: ${k.groups || 0} group${k.groups === 1 ? "" : "s"}, ${k.pcs || 0} pcs, ${price === "last" ? "last time's prices" : "today's price list"}`, ...(k.files ? [`${k.files} production file${k.files === 1 ? "" : "s"} came with it`] : [])]);
+      location.assign(`/shop/orders/${k.id}${k.reprint ? "?reprint=1" : ""}`);
+    } catch (e) { setStep(""); setErr(e instanceof Error ? e.message : String(e)); }
+  }
+
   async function make() {
+    if (d?.own) return makeOwn();
     if (!d?.customer) return;
     if (!d.customer.moved_at) { setErr("move"); return; }
     setErr("");
@@ -242,7 +265,7 @@ export default function ReorderPick({ archivedId, onClose, onCreated, into, give
         <h3>Create reorder</h3>
         {!d ? <p className="faint">{err || "Reading the old job…"}</p> : <>
           <div className="osp-card open">
-            <div className="osp-card-t"><b>{label}</b><span className="faint">Printavo{d.job.date ? ` · ${new Date(`${d.job.date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}</span></div>
+            <div className="osp-card-t"><b>{label}</b><span className="faint">{d.own ? "Our order" : "Printavo"}{d.job.date ? ` · ${new Date(`${d.job.date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}</span></div>
             <div className="osp-cb-f">
               <div className="field"><label>Order type</label><input value="Reorder" readOnly aria-readonly /></div>
               <div className="field"><label htmlFor="rop-price">Price</label>
@@ -303,6 +326,7 @@ export default function ReorderPick({ archivedId, onClose, onCreated, into, give
             ))}
           </section>
 
+          {d.own ? <section className="rop-sec"><div className="rop-h"><b>Art, mockups and files</b><span className="faint">come with it, as they are on #{d.job.visual}</span></div></section> :
           <section className="rop-sec" aria-label="Files on the old job">
             <div className="rop-h"><b>Everything attached</b>{d.files.length ? <button type="button" className="linkbtn rop-all" onClick={() => setWhat(Object.fromEntries(d.files.map((f) => [f.key, "production"])))}>All to Production files</button> : <span className="faint">No files on the old job</span>}</div>
             {d.files.map((f, i) => (
@@ -319,7 +343,7 @@ export default function ReorderPick({ archivedId, onClose, onCreated, into, give
                 </select>
               </div>
             ))}
-          </section>
+          </section>}
           {(d.notes?.production || d.notes?.customer) && (
             <section className="rop-sec">
               <div className="rop-h"><b>Notes from last time</b><span className="faint">tick what comes along</span></div>
