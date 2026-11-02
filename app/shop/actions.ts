@@ -8,6 +8,7 @@ import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings, orderGroups, ST, type Order } from "@/lib/pricing";
 import { fullColorWaiting } from "@/lib/fullColor";
 import { attachNote, cleanAttachments, withFiles, type Attachment, type HubMsg } from "@/lib/messages";
+import { matchGoodsSoon } from "@/lib/goodsSoon";
 
 async function requireStaff() {
   const v = await getViewer();
@@ -42,6 +43,7 @@ export async function sendToCustomer(orderId: string, note: string) {
   await admin.from("orders").update(patch).eq("id", orderId);
   if (patch.status) await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "quote_sent", actor: staffEmail });
   await admin.from("order_events").insert({ order_id: orderId, kind: "sent", detail: customer.email, actor: staffEmail });
+  matchGoodsSoon(); // sent to the customer: look for its goods now (lib/goodsSoon.ts)
   // sent to the customer: the order teaches Create order (lib/ai/orderExamples.ts)
   { const { saveExample } = await import("@/lib/ai/orderExamples"); await saveExample(admin, orderId, staffEmail).catch((e) => console.warn("saveExample", e)); }
   // the note also starts the message thread the customer sees in their portal
@@ -181,6 +183,7 @@ export async function acceptRequest(orderId: string, note: string, mode: "as_is"
     }
     const { error } = await admin.from("orders").update({ status, type: "invoice", sent_at: now, approved_at: now, approved_name: "Sent in by the customer" }).eq("id", orderId).eq("status", "request");
     if (error) return { ok: false, error: error.message };
+    matchGoodsSoon();
     await admin.from("order_events").insert([
       { order_id: orderId, kind: "accepted", detail: mode === "as_is" ? "Order and art accepted as sent" : "Order accepted; art being changed for a proof", actor: staffEmail },
       { order_id: orderId, kind: "status", detail: status, actor: staffEmail },

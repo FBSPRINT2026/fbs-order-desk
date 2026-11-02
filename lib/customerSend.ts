@@ -8,6 +8,7 @@ import { upFront } from "@/lib/payTerms";
 import { fmtPhone } from "@/lib/phone";
 import { fullColorWaiting } from "@/lib/fullColor";
 import { proofLinkFor, proofUrl } from "@/lib/proofLinks";
+import { matchGoodsSoon } from "@/lib/goodsSoon";
 
 /**
  * Send to customer, all together (Oct 29, Nick, option A: "sometimes we would send a proof without sending an invoice or
@@ -176,6 +177,8 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
     await admin.from("order_events").insert({ order_id: orderId, kind: "sent", detail: email ? to : "link copied", actor: me.email });
     done.push("the quote");
   }
+  // sent to the customer: its goods may already be here or on the way (lib/goodsSoon.ts)
+  matchGoodsSoon();
   // a note starts the message thread they see too (not already said with the proof)
   if (pick.note?.trim() && !pick.proof) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: me.email, author_name: settings.shop.name, body: pick.note.trim().slice(0, 2000) });
   const url = proofUrl(await proofLinkFor(admin, { kind: "order", orderId, to: email ? to : undefined, by: me.email }));
@@ -215,6 +218,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     if (error) return { ok: false as const, error: error.message };
     await admin.from("order_events").insert([{ order_id: orderId, kind: "approved", detail: `Signed "${who}" on their order page`, actor }, { order_id: orderId, kind: "status", detail: "approved", actor }]);
     await shop(`Quote #${o.number} approved`, `${who} approved quote #${o.number}`, `${o.nickname || "Order"} · ${money(o.total || 0)}`);
+    matchGoodsSoon();
     return { ok: true as const };
   }
   if (!why) return { ok: false as const, error: decision === "changes" ? "Tell us what to change." : "Tell us why, so we can fix it." };

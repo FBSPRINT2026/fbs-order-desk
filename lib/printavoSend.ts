@@ -5,6 +5,7 @@ import { CARD, htmlText } from "@/lib/printavoChanges";
 import { calcOrder, FULL_COLOR, imprintLabel, shopNotes, mergeSettings, orderGroups, SIZES, ST, type Group, type Imprint, type Order, type StatusKey, shopPiecesNote, withoutShopPieces } from "@/lib/pricing";
 import { SITE_URL } from "@/lib/config";
 import { parseAddress } from "@/lib/qbo/map";
+import { matchGoodsSoon } from "@/lib/goodsSoon";
 
 /**
  * "Send to Printavo" (the move off Printavo, Oct 7 - Nov 1, 2026): an order entered here in the 40,000 series is made
@@ -271,6 +272,7 @@ export async function sendToPrintavo(admin: SupabaseClient, inp: SendInput) {
   // linked right away, so nothing imports it as a separate order and it can't be sent twice
   const state: Record<string, unknown> = { publicUrl: made.publicUrl, url: made.url, status: made.status?.name || "", sentTotal: made.total, ourTotal: calc.total, by: inp.by, warnings: warn || null };
   await admin.from("orders").update({ printavo_id: made.id, printavo_visual_id: String(made.visualId || ""), printavo_sent_at: new Date().toISOString(), printavo_state: state }).eq("id", inp.orderId);
+  matchGoodsSoon(); // sent to Printavo: look for its goods now (lib/goodsSoon.ts)
   let statusErr = "";
   if (status.name !== made.status?.name) {
     try {

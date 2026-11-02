@@ -403,11 +403,13 @@ const pvSize = (k: string) => sizeKey(k.replace(/^size_/, ""));
  * The customer's open orders with what each still needs (their items minus goods already linked): orders in this
  * system, and (until go-live) their open Printavo orders.
  */
+/** an order goods can go on: anything but a quote nobody has sent yet (to the customer, or to Printavo) */
+export const isLive = (o: { status?: string | null; sent_at?: string | null; printavo_sent_at?: string | null }) => o.status !== "quote" || !!o.sent_at || !!o.printavo_sent_at;
 async function openOrders(admin: SupabaseClient, custIds: string[]): Promise<Open[]> {
   if (!custIds.length) return [];
   const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
   const [{ data: os }, { data: ar }] = await Promise.all([
-    admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, submitted_at, due_date, groups, lines").in("customer_id", custIds).neq("status", "completed"),
+    admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, submitted_at, due_date, groups, lines, sent_at, printavo_sent_at").in("customer_id", custIds).neq("status", "completed"),
     admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data").is("removed_at", null).in("customer_id", custIds).or(`due_date.gte.${since},due_date.is.null`).not("status_name", "ilike", "%job completed%").order("due_date", { ascending: false, nullsFirst: true }).limit(600),
   ]);
   const live = ((os || []) as (Candidate & { submitted_at: string | null; due_date: string | null; groups: unknown; lines: unknown })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
@@ -498,7 +500,9 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   // a quote counts only when the PO names it (Oct 30, Nick on #40284: All My Sons' goods for PO 43146 came in before the
   // order was a job, and the quote never got them): a PO's number is sure enough; nothing looser links goods to a quote
   const all = await openOrders(admin, custIds);
-  const orders = all.filter((o) => o.status !== "quote");
+  // …and a quote counts once it's gone out (Nov 2, Nick: "anytime we send it to the customer for approval, anytime we send
+  // it to Printavo… or we turn it into an invoice"): a reorder starts as a quote, its goods come while it's being OK'd
+  const orders = all.filter((o) => isLive(o));
   if (!all.length) {
     // no open jobs at all (Agape: the job already printed): a recently completed one with the same count in every size
     // (not a current order: a suggestion, never linked on its own)
@@ -1158,7 +1162,7 @@ export type OpenOrderPick = { id: string; number: number; nickname: string; po: 
 export async function openOrdersFor(admin: SupabaseClient, customerId: string, po = ""): Promise<OpenOrderPick[]> {
   const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10), since60 = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
   const [{ data: os }, { data: ar }] = await Promise.all([
-    admin.from("orders").select("id, number, nickname, po_number, due_date, status, submitted_at, groups, lines").eq("customer_id", customerId).not("status", "in", "(quote)").order("number", { ascending: false }).limit(80),
+    admin.from("orders").select("id, number, nickname, po_number, due_date, status, submitted_at, groups, lines, sent_at, printavo_sent_at").eq("customer_id", customerId).neq("status", "completed").order("number", { ascending: false }).limit(80),
     admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, status_name, qty, data").is("removed_at", null).eq("customer_id", customerId).or(`due_date.gte.${since},due_date.is.null`).order("visual_id", { ascending: false }).limit(80),
   ]);
   const g = { customer_po: po, supplier_order: "" };
@@ -1169,7 +1173,7 @@ export async function openOrdersFor(admin: SupabaseClient, customerId: string, p
   };
   const out: OpenOrderPick[] = [];
   for (const o of (os || []) as (Candidate & { due_date: string | null; submitted_at: string | null; groups: unknown; lines: unknown })[]) {
-    if (o.status === "request" && !o.submitted_at) continue;
+    if ((o.status === "request" && !o.submitted_at) || !isLive(o as { status?: string; sent_at?: string | null; printavo_sent_at?: string | null })) continue;
     const ls: { style: string; color: string; n: number }[] = [];
     for (const gr of orderGroups(o as unknown as Order)) for (const l of gr.lines) ls.push({ style: [l.brand, l.style].filter(Boolean).join(" "), color: l.color || "", n: Object.values(l.sizes || {}).reduce((a: number, q) => a + (+(q || 0)), 0) });
     out.push({ id: o.id, number: o.number, nickname: o.nickname || "", po: o.po_number || "", due_date: o.due_date, status: o.status, printavo: false, items: itemsOf(ls), pcs: ls.reduce((a, l) => a + l.n, 0), match: !!po && poHit(o, g) });
