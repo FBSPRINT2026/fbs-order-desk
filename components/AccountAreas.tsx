@@ -294,13 +294,14 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
           <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /><col className="c-m" /></>}<col className="c-m" />{mode === "portal" && <col className="c-star" />}</colgroup>
           <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
           <tbody>
-            {rows.map((o) => (
-              <tr key={o.id} className={!o.archived && o.balance > 0.004 && payDue(o) && (payDue(o) as string) < today() && cols !== "quote" ? "late" : ""} onClick={() => router.push(orderHref(o.id))}>
+            {rows.map((o) => { const late = !o.archived && o.balance > 0.004 && !!payDue(o) && (payDue(o) as string) < today() && cols !== "quote"; return (
+              <tr key={o.id} onClick={() => router.push(orderHref(o.id))}>
                 <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link>{o.archived && <PrintavoMark />}</td>
                 {/* All: what it is, in its own column (Oct 24, Nick: "don't have it impact the job name") */}
                 {all && <td data-l="Type"><span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span></td>}
-                <td className="m"><div className="aa-t aa-t1"><span className="aa-tn" title={o.nickname || undefined}>{o.nickname || (cols === "quote" ? "Quote" : "Order")}</span></div><div className="aa-s">{o.qty} pcs</div></td>
-                <td>{pill(o)}</td>
+                <td className="m"><div className="aa-t aa-t1"><span className="aa-tn" title={o.nickname || undefined}>{o.nickname || (cols === "quote" ? "Quote" : "Order")}</span></div></td>
+                {/* one simple line per order (Nov 2, Nick); a late payment says so in the status, not a pink row ("why is this one pink?") */}
+                <td>{late ? <span className="aa-pill" title={`${ST[o.status]?.portal || ST[o.status]?.label || ""} · payment was due ${when(payDue(o) as string)}`} style={{ ["--sc" as string]: "var(--danger)" }}>Past due</span> : pill(o)}</td>
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
                 {cols !== "quote" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
                 {cols !== "quote" && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : money(Math.max(0, o.balance))}</td>}
@@ -308,7 +309,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
                 {/* the star on the right (Oct 24, Nick) */}
                 {mode === "portal" && <td className="aa-starc" onClick={(e) => e.stopPropagation()}>{!o.archived && <StarOrder id={o.id} on={!!o.starred} canAct={canAct} />}</td>}
               </tr>
-            ))}
+            ); })}
             {!rows.length && <tr><td colSpan={9}><div className="aa-empty">{list.length ? `No matches for “${q}”.` : "Nothing here yet."}</div></td></tr>}
           </tbody>
         </table>
