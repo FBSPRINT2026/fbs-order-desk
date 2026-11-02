@@ -44,8 +44,8 @@ export async function aiPaySelect(text: string): Promise<{ ok: boolean; error?: 
     const ai = await aiState(admin);
     if (!ai.ready) return { ok: false, off: true, error: "Smart selection isn't available right now." };
     // the customer's own open orders (row security), so Claude can match job names
-    const { data: os } = await supabase.from("orders").select("number, nickname, po_number, status, type, total, created_at").neq("status", "quote").eq("type", "invoice").neq("status", "completed").order("number", { ascending: false }).limit(400);
-    const { data: done } = await supabase.from("orders").select("number, nickname, po_number, status, type, total, created_at").eq("status", "completed").order("number", { ascending: false }).limit(200);
+    const { data: os } = await supabase.from("orders").select("number, nickname, po_number, status, type, total, created_at").is("discarded_at", null).neq("status", "quote").eq("type", "invoice").neq("status", "completed").order("number", { ascending: false }).limit(400);
+    const { data: done } = await supabase.from("orders").select("number, nickname, po_number, status, type, total, created_at").is("discarded_at", null).eq("status", "completed").order("number", { ascending: false }).limit(200);
     const list = [...(os || []), ...(done || [])].map((o) => `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.status} | $${(+o.total || 0).toFixed(2)} | ${o.nickname || ""}${o.po_number ? ` | PO ${o.po_number}` : ""}`).join("\n");
     const today = new Date().toISOString().slice(0, 10);
     const r = await askClaude<PayFilter & { explain: string; unclear?: boolean }>({

@@ -18292,3 +18292,22 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .pjr-holdd b{color:var(--ink)}
 .pjr-holdd ul{margin:0;padding-left:18px;color:var(--ink-2)}
 .pjr-holdd-a{display:flex;gap:8px;flex-wrap:wrap}
+/* the On hold panel fills its column, in sections by why (Nov 2, Nick) */
+.pdx-col>.pdx-hs{flex:1 1 auto;display:flex;flex-direction:column}
+.pdx-hs-sec{border-top:1px solid var(--line-2);padding:8px 0}
+.pdx-hs .pdx-h + .pdx-hs-sec{border-top:0;padding-top:2px}
+.pdx-hs-st{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink)}
+.pdx-hs-st i{width:9px;height:9px;border-radius:50%;background:var(--hk)}
+.pdx-hs-st small{font-size:12px;font-weight:600;color:var(--ink-3)}
+.pdx-hs-sec:not(.has) .pdx-hs-st{color:var(--ink-3)}
+.pdx-hs-sec:not(.has) .pdx-hs-st i{background:var(--line)}
+.pdx-hs-none{font-size:12.5px;color:var(--ok);padding:3px 0 0 17px}
+.pdx-hs-sec .pdx-hs-row{padding-left:17px}
+.pdx-hs-sec .pdx-hs-row span{color:color-mix(in srgb,var(--hk) 80%,#000)}
+.pdx-hs-gap{flex:1}
+/* the jobs' toolbar: In progress / Ready / Completed on the left, On hold (big red count) and All on the right */
+.pjt{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.pjt .chips{flex:none}
+.pjt-hold{position:relative;color:var(--danger)!important;font-weight:700}
+.pjt-badge{position:absolute;top:-10px;right:-10px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--danger);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;box-shadow:0 0 0 2px var(--surface)}
+.pjt .chips.pjt-r{overflow:visible}

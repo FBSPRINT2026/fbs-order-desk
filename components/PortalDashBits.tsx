@@ -27,17 +27,16 @@ const KIND_TABS: { k: string; label: string; test: (k: JobKind) => boolean }[] =
   { k: "embroidery", label: "Embroidery", test: (k) => k === "embroidery" || k === "mixed" },
   { k: "dtf", label: "DTF", test: (k) => k === "dtf" || k === "mixed" },
 ];
-const STAGE_TABS: { k: string; label: string; test: (j: PortalJob) => boolean }[] = [
-  { k: "need", label: "Needs you", test: (j) => j.stage === "need" },
-  // every order on hold, each with why and what fixes it (Nov 2, Nick: "there should be an on hold section… a detailed
-  // list of everything and why it's on hold"); the On hold panel at the top opens it
-  { k: "hold", label: "On hold", test: (j) => !!j.hold },
-  { k: "all", label: "All", test: () => true },
-  { k: "work", label: "In progress", test: (j) => j.stage === "work" },
-  { k: "ready", label: "Ready", test: (j) => j.stage === "ready" },
-  { k: "out", label: "On the way", test: (j) => j.stage === "out" },
-  // recently completed, beside Ready (Oct 24, Nick: not a big card under the jobs)
-  { k: "done", label: "Recently completed", test: (j) => j.stage === "done" },
+// the jobs' toolbar (Nov 2, Nick: "on the right… on hold and all… on the left… in progress, ready, and completed"; All
+// picked when the page opens, "Needs you" gone: what needs them is On hold, or the job's own button)
+const STAGE_TABS: { k: string; label: string; side: "l" | "r"; test: (j: PortalJob) => boolean }[] = [
+  { k: "work", label: "In progress", side: "l", test: (j) => j.stage === "need" || j.stage === "work" },
+  { k: "ready", label: "Ready", side: "l", test: (j) => j.stage === "ready" || j.stage === "out" },
+  // recently completed (Oct 24, Nick: not a big card under the jobs)
+  { k: "done", label: "Completed", side: "l", test: (j) => j.stage === "done" },
+  // every order on hold, each with why and what fixes it; the On hold panel at the top opens it
+  { k: "hold", label: "On hold", side: "r", test: (j) => !!j.hold },
+  { k: "all", label: "All", side: "r", test: () => true },
 ];
 /** the On hold panel's links: open Your jobs on its On hold tab and scroll there */
 const HOLD_EVT = "fbs:jobs-hold";
@@ -125,9 +124,8 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
   const curK = showKinds && kinds.some((t) => t.k === tab) ? tab : "all";
   const byKind = sorted.filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind));
   const doneK = pastJobs.filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind)).map((j) => ({ ...j, stage: "done" as JobStage }));
-  const stages = STAGE_TABS.filter((t) => t.k === "all" || (t.k === "done" ? doneK.length > 0 : byKind.some((j) => t.test(j))));
-  const showStages = stages.length > 2 || (stages.length > 1 && doneK.length > 0);
-  const curS = showStages && stages.some((t) => t.k === stg) ? stg : "all";
+  const stages = STAGE_TABS;
+  const curS = stages.some((t) => t.k === stg) ? stg : "all";
   const list = curS === "done" ? doneK : byKind.filter((j) => STAGE_TABS.find((t) => t.k === curS)!.test(j));
   // five on the dashboard (Oct 24, Nick: "cap it at 5 and then say view all orders… we don't want that list to go down and
   // be like 50 things long")
@@ -135,13 +133,19 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
   return (
     <section className="pdx-card" id="your-jobs">
       <div className="pdx-h"><h2>Your jobs{jobs.length ? <span className="pdx-count">{jobs.length} in progress</span> : null}</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
-      {(showStages || showKinds) && (
+      {(jobs.length > 0 || doneK.length > 0) && (
         <div className="pjf">
-          {showStages && <div className="toolbar aa-otabs pdx-stabs" data-toolbar><div className="chips" role="tablist" aria-label="Where the job is">
-            {stages.map((t) => { const n = t.k === "done" ? doneK.length : byKind.filter((j) => t.test(j)).length; return (
-              <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={"chip" + (curS === t.k ? " on" : "") + (t.k === "need" ? " need" : "")} onClick={() => { setStg(t.k); setMore(0); }}>{t.label}{n ? <span className="chip-n">{n}</span> : null}</button>
-            ); })}
-          </div></div>}
+          <div className="toolbar aa-otabs pdx-stabs pjt" data-toolbar>
+            {(["l", "r"] as const).map((side) => (
+              <div key={side} className={"chips pjt-" + side} role="tablist" aria-label={side === "l" ? "Where the job is" : "On hold or all"}>
+                {stages.filter((t) => t.side === side).map((t) => { const n = t.k === "done" ? doneK.length : byKind.filter((j) => t.test(j)).length; return (
+                  <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={"chip" + (curS === t.k ? " on" : "") + (t.k === "hold" ? " pjt-hold" : "")} onClick={() => { setStg(t.k); setMore(0); }}>
+                    {t.label}{t.k === "hold" ? (n ? <span className="pjt-badge">{n}</span> : null) : n ? <span className="chip-n">{n}</span> : null}
+                  </button>
+                ); })}
+              </div>
+            ))}
+          </div>
           {showKinds && <div className="pdx-ktabs" role="tablist" aria-label="Kind of job">
             {kinds.map((t) => { const n = t.k === "all" ? jobs.length : jobs.filter((j) => t.test(j.kind)).length; return (
               <button key={t.k} type="button" role="tab" aria-selected={curK === t.k} className={curK === t.k ? "on" : ""} onClick={() => { setTab(t.k); setMore(0); }}>{t.label}<span>{n}</span></button>

@@ -21,7 +21,15 @@ export type DashTracked = { id: string; href: string; number: number; name: stri
   /** its picture and steps, so a starred order looks like its job below (Nov 2, Nick: "doesn't stand out like the rest") */ pic?: string; steps?: PortalJob["steps"]; done?: boolean };
 
 /** an order on hold, with why (Oct 24, Nick: "there's got to be an on hold panel on the dashboard for the customer") */
-export type DashHeld = { id: string; href: string; number: number; name: string; msgHref: string; hold: { title: string; reason: string; href: string; fixLabel: string } };
+export type DashHeld = { id: string; href: string; number: number; name: string; msgHref: string; hold: { key?: string; title: string; reason: string; href: string; fixLabel: string } };
+
+/** the On hold panel's sections, by the hold's flag (lib/orderStages.ts customerHold) */
+const HOLD_KINDS: { label: string; keys: string[]; c: string; none: string }[] = [
+  { label: "Needs payment", keys: ["hold_payment"], c: "var(--danger)", none: "Nothing waiting on a payment" },
+  { label: "Waiting on you", keys: ["hold_customer"], c: "var(--warn)", none: "Nothing waiting on you" },
+  { label: "Art problem", keys: ["art_problem"], c: "#7F77DD", none: "No art problems" },
+  { label: "Issue with goods", keys: ["goods_wrong"], c: "var(--ink-3)", none: "Nothing wrong with your goods" },
+];
 
 export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
   /** what's owed by how late it is: Current, 1–30, 31–60, 61–90, Over 90 */ aging?: { k: string; amt: number; late: boolean }[] };
@@ -113,10 +121,17 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         <section className={"pdx-card pdx-hs" + (held.length ? " has" : "")}>
           <div className="pdx-h"><h2>On hold</h2>{held.length > 0 && <span className="pdx-hold-n">{held.length}</span>}</div>
           {held.length ? <>
-            <div className="pdx-hs-sum">{Object.entries(held.reduce((m, x) => { m[x.hold.title] = (m[x.hold.title] || 0) + 1; return m; }, {} as Record<string, number>)).map(([t, n]) => `${n} ${t.charAt(0).toLowerCase()}${t.slice(1)}`).join(" · ")}</div>
-            <ul className="pdx-hs-list">{held.map((x) => (
-              <li key={x.id}><HoldJump className="pdx-hs-row"><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b><span>{x.hold.title}</span><i aria-hidden>›</i></HoldJump></li>
-            ))}</ul>
+            {/* by why it's on hold, every kind always shown so the panel fills its column (Nov 2, Nick: "should always fill
+                that space… sections to it too, like needs payment, issue with goods") */}
+            {HOLD_KINDS.map((k) => { const xs = held.filter((x) => (HOLD_KINDS.some((y) => y.keys.includes(x.hold.key || "")) ? k.keys.includes(x.hold.key || "") : k.keys.includes("hold_customer"))); return (
+              <div key={k.label} className={"pdx-hs-sec" + (xs.length ? " has" : "")} style={{ ["--hk" as string]: k.c }}>
+                <div className="pdx-hs-st"><i aria-hidden />{k.label}<small>{xs.length}</small></div>
+                {xs.length ? <ul className="pdx-hs-list">{xs.map((x) => (
+                  <li key={x.id}><HoldJump className="pdx-hs-row"><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b><span>{x.hold.fixLabel}</span><i aria-hidden>›</i></HoldJump></li>
+                ))}</ul> : <div className="pdx-hs-none">✓ {k.none}</div>}
+              </div>
+            ); })}
+            <span className="pdx-hs-gap" />
             <HoldJump className="pd-link pdx-hs-all">See why, in your jobs below</HoldJump>
           </> : <div className="pdx-hold-ok" role="status">
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>

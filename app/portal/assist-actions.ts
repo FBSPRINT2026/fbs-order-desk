@@ -25,7 +25,7 @@ const TOOL = {
   input_schema: {
     type: "object",
     properties: {
-      reply: { type: "string", description: "The direct answer first (yes / no / the number / the date), then only the orders it's about, a few words each. One or two short sentences. Never use the customer's personal name. Use only facts from the account data." },
+      reply: { type: "string", description: "The direct answer first in a few words, then one line per order or item starting with \"• \" (newline-separated), a few words each. Never a paragraph. Never use the customer's personal name. Use only facts from the account data." },
       actions: {
         type: "array", maxItems: 4,
         items: {
@@ -65,7 +65,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, company, price_type, payment_terms").order("id").range(ra, rb));
     const ids = (cs || []).map((c) => c.id);
     if (!ids.length) return { ok: false, error: "We couldn't find your account." };
-    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking, groups, approved_at, flags").neq("status", "quote").order("created_at", { ascending: false }).limit(150);
+    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking, groups, approved_at, flags").neq("status", "quote").is("discarded_at", null).order("created_at", { ascending: false }).limit(150);
     const orders = ((os || []) as (Order & { submitted_at: string | null })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
     const oids = orders.map((o) => o.id);
     const [{ data: pays }, { data: arch }, { data: goods }] = await Promise.all([
@@ -153,7 +153,11 @@ Help this customer with their account: order status, paying, reordering, startin
 Rules:
 - Never use the customer's personal name.
 - Only state facts found in the account data below. If something isn't there, say so and offer to message the shop.
-- Be concise (Nov 2, Nick: "it should have concise answers like, yes, these items, these are on hold"). Lead with the direct answer, then name only the orders it's about with a few words each, like: "Yes, 2 are on hold: #99008 FedEx Safety Week (payment needed to start) and #99007 FedEx Golf Outing (we need the names for the backs)." One or two short sentences. Don't describe orders they didn't ask about, don't recap the account, don't end with a question. No markdown.
+- Be concise, in bullets (Nov 2, Nick: "concise answers like, yes, these items, these are on hold"… "way too like a paragraph… they need to be like bullet points"). First line: the direct answer in a few words ("Yes, 3 are on hold:", "#99006 is in production.", "No, nothing is on hold."). Then, when there's more than one thing, one line per order or item starting with "• ", a few words each, like:
+Yes, 2 are on hold:
+• #99008 FedEx Safety Week: payment needed to start
+• #99007 FedEx Golf Outing: we need the names for the backs
+Separate lines with a newline. Never a paragraph. Don't describe orders they didn't ask about, don't recap the account, don't end with a question. No markdown other than the "• " bullets.
 - "On hold" means the ORDERS lines marked ON HOLD, with the reason given there. None marked: say nothing is on hold.
 - Offer next steps as actions (buttons). Anything that changes something (reorder, new order, sending a message, paying) must be an action the customer presses, never done by you.
 - Reorders: find the order they mean by name, date or number (past orders count too) and offer "reorder" with its number. If several match, list the best 2-3 as separate reorder buttons.
