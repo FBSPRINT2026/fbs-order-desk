@@ -18417,3 +18417,15 @@ table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
 .pjr-now.hold.full{font-size:13px;line-height:1.45;max-width:46ch;margin-left:auto;margin-right:auto}
 .pjr-ask{font-size:12.5px;color:var(--accent);text-align:center;text-decoration:none}
 .pjr-ask:hover{text-decoration:underline}
+/* Messages is its own tab beside the stages, its panel beside the jobs' (Nov 2, Nick) */
+.jcx{display:grid;grid-template-columns:300px minmax(0,1fr);grid-template-rows:auto auto;column-gap:12px;align-items:stretch}
+.jcx>.jcx-mtab{grid-column:1;grid-row:1;align-self:end;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;position:relative;z-index:2;margin-bottom:-1px;padding:12px 14px 12px;min-height:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;border-top:3px solid var(--fbs-blue)}
+.jcx-mtab b{font-family:var(--display);font-size:16px;color:var(--ink)}
+.jcx-mtab small{flex:1 1 100%;font-size:12px;color:var(--ink-3)}
+.jcx>.jct{grid-column:2;grid-row:1}
+.jcx>.jcm{grid-column:1;grid-row:2;border-radius:0 0 12px 12px;border-top:0;height:calc(100vh - 220px);min-height:460px;position:sticky;top:12px}
+.jcm.bare .jcm-list{border-top:1px solid var(--line-2)}
+.jcx>.jct-body{grid-column:2;grid-row:2;grid-template-columns:minmax(0,1fr)}
+.jcx>.jct-body.has-pick{grid-template-columns:minmax(0,1fr) 400px}
+@media (max-width:1180px){.jcx{grid-template-columns:250px minmax(0,1fr)}.jcx>.jct-body.has-pick{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:900px){.jcx{grid-template-columns:minmax(0,1fr)}.jcx>*{grid-column:1!important;grid-row:auto!important}.jcx>.jcm{height:auto;max-height:70vh;position:static;border-radius:0 0 12px 12px;margin-bottom:12px}}

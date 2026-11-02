@@ -17,9 +17,10 @@ const QUICK = ["Thanks!", "Got it, we're on it.", "New proof coming today.", "Tr
  * the conversations in this tab (each with who, which job, the short message and how long ago; unread in blue), and the
  * open one under them with quick replies and Send. Picking one also picks its job in the list.
  */
-export default function JobChats({ chats, open, onOpen, color, label, onSent, tagOf }: {
+export default function JobChats({ chats, open, onOpen, color, label, onSent, tagOf, bare = false }: {
   chats: ChatSummary[]; open: string | null; onOpen: (key: string | null) => void; color: string; label: string;
   onSent: () => void; /** the stage a conversation's job is at, for the All tab */ tagOf?: (c: ChatSummary) => { t: string; c: string } | null;
+  /** its title is the Messages tab above it (the Job Center) */ bare?: boolean;
 }) {
   const cur = chats.find((c) => c.key === open) || null;
   const [msgs, setMsgs] = useState<ChatMsg[] | null>(null);
@@ -44,8 +45,8 @@ export default function JobChats({ chats, open, onOpen, color, label, onSent, ta
   }
   const fresh = chats.reduce((a, c) => a + c.unread, 0);
   return (
-    <div className="jcm" style={{ ["--c" as string]: color }}>
-      <div className="jcm-h"><b>Messages</b>{fresh > 0 ? <span className="jcm-n">{fresh} new</span> : <span className="faint">{label}</span>}</div>
+    <div className={"jcm" + (bare ? " bare" : "")} style={{ ["--c" as string]: color }}>
+      {!bare && <div className="jcm-h"><b>Messages</b>{fresh > 0 ? <span className="jcm-n">{fresh} new</span> : <span className="faint">{label}</span>}</div>}
       <div className="jcm-list">
         {!chats.length && <div className="jcm-none faint">No customer messages here.</div>}
         {chats.map((c) => { const tg = tagOf?.(c); return (

@@ -83,7 +83,7 @@ export default function JobCenter() {
 
   // a link straight to a step (the old Incoming Orders and Proof Center pages open here), or to a conversation (the
   // live message pop-up's Open chat)
-  useEffect(() => { try { const u = new URL(window.location.href).searchParams; const s = u.get("step") as Step | null; if (s && ALL_STEPS.includes(s)) setStep(s); const c = u.get("chat"); if (c) { setAll(true); setChat(c); } } catch { /* */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { try { const u = new URL(window.location.href).searchParams; const s = u.get("step") as Step | null; if (s && ALL_STEPS.includes(s)) setStep(s); const c = u.get("chat"); if (c) setChat(c); } catch { /* */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let live = true;
     const get = () => void loadJobChats().then((r) => { if (live && r.ok) setChats(r.chats); });
@@ -115,6 +115,16 @@ export default function JobCenter() {
   const after = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 6000); setN((x) => x + 1); };
   const picked = (items || []).find((it) => it.key === pick) || null;
   const go = (s: Step, key?: string) => { setStep(s); setAll(false); setPick(key || null); };
+  // the All tab is gone (Nov 2, Nick: "get rid of all jobs"): a step is always picked
+  useEffect(() => { if (all) setAll(false); }, [all, setAll]);
+  // a message picks its job: the tab it's at comes forward and its row lights up (Nov 2, Nick: "when you click on it, it
+  // sorts the job on the right"); picking a job opens its conversation
+  const openChat = (key: string | null) => {
+    setChat(key);
+    const c = key ? chats.find((x) => x.key === key) : null;
+    const it = c?.orderId ? byOrder.get(c.orderId) : null;
+    if (it) { const st = it.steps.find((x) => x !== "leads") || it.steps[0]; if (st && st !== step) setStep(st); setTimeout(() => document.querySelector(".jc-hl")?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 80); }
+  };
   // View all: each job once, in the first step it's at (Requests through Declined; not Leads)
   const sortIn = (s: Step) => (a: JobItem, b: JobItem) => (s === "approved" || s === "declined" || s === "requests" ? (b.at || "").localeCompare(a.at || "") : (a.due || "9999").localeCompare(b.due || "9999") || (a.at || "").localeCompare(b.at || ""));
   const sections = useMemo(() => {
@@ -133,7 +143,6 @@ export default function JobCenter() {
   const byOrder = useMemo(() => new Map((items || []).filter((it) => it.orderId).map((it) => [it.orderId!, it])), [items]);
   const myChats = chats.filter((c) => !mine || !c.owner || c.owner === me);
   const inGroup = (c: ChatSummary, g: G) => { const it = c.orderId ? byOrder.get(c.orderId) : null; return !!it && it.steps.some((s0) => g.steps.some((x) => x[0] === s0)); };
-  const tabChats = curG ? myChats.filter((c) => inGroup(c, curG)) : myChats;
   const newIn = (g: G | null) => (g ? myChats.filter((c) => inGroup(c, g)) : myChats).reduce((a, c) => a + c.unread, 0);
   const tagOf = (c: ChatSummary) => {
     const g = GROUPS.find((x) => inGroup(c, x));
@@ -155,11 +164,11 @@ export default function JobCenter() {
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
+      <div className="jcx">
+      {/* Messages as its own tab, level with the stages, its panel beside the jobs' (Nov 2, Nick: "the messages tab should
+          just extend all the way up to even with incoming… then the messages should start even with the panel on the right") */}
+      <div className="jcx-mtab"><b>Messages</b>{myChats.reduce((a0, c) => a0 + c.unread, 0) > 0 ? <span className="jcm-n">{myChats.reduce((a0, c) => a0 + c.unread, 0)} new</span> : <span className="faint">All customers</span>}<small>Click one to find its job</small></div>
       <div className="jct" role="tablist" aria-label="Steps">
-        <button type="button" role="tab" aria-selected={all} className={"jct-tab jct-all" + (all ? " on" : "")} onClick={() => { setAll(true); setPick(null); setDept("all"); setCameBack(false); }}>
-          <span className="jc-gh"><b>All{newIn(null) > 0 && <span className="jct-new" title={`${newIn(null)} new message${newIn(null) === 1 ? "" : "s"}`}>{newIn(null)}</span>}</b><span>Every job</span></span>
-          <span className="jct-big">{items ? allCount : "…"}</span>
-        </button>
         {GROUPS.map((g) => { const on = curG?.t === g.t; const nm = newIn(g); return (
           <div key={g.t} role="tab" aria-selected={on} className={"jct-tab jc-g" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
             <button type="button" className="jc-gh jct-hbtn" onClick={() => go(g.steps[0][0])}><b>{g.t}{nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}</b><span>{g.line}</span></button>
@@ -174,8 +183,8 @@ export default function JobCenter() {
           </div>
         ); })}
       </div>
-      <div className={"jc-body jct-body" + (picked ? " has-pick" : "") + (all ? " first" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
-        <JobChats chats={tabChats} open={chat} onOpen={setChat} color={curG?.c || "var(--fbs-blue)"} label={curG ? curG.t : "All"} onSent={() => setCn((x) => x + 1)} tagOf={curG ? undefined : tagOf} />
+      <JobChats chats={myChats} open={chat} onOpen={openChat} color="var(--fbs-blue)" label="All" onSent={() => setCn((x) => x + 1)} tagOf={tagOf} bare />
+      <div className={"jc-body jct-body" + (picked ? " has-pick" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
         <section className="panel jc-list">
           <div className="panel-b stack" style={{ gap: 12 }}>
             <div className="toolbar" data-toolbar>
@@ -191,7 +200,7 @@ export default function JobCenter() {
                 <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
                 <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [
                   <tr key={x.g.t} className="jc-sec" style={{ ["--c" as string]: x.g.c }}><td colSpan={5}><i aria-hidden /><b>{x.g.t}</b> · {x.counts.filter(([, n]) => n).map(([k, n]) => `${GROUPS.flatMap((g) => g.steps).find((y) => y[0] === k)![1]} ${n}`).join(" · ")}</td></tr>,
-                  ...(open ? x.rows : x.rows.slice(0, 5)).map(({ it, s: st }) => <Row key={it.key} it={it} step={st} wide msgs={unreadOf(it.orderId)} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />),
+                  ...(open ? x.rows : x.rows.slice(0, 5)).map(({ it, s: st }) => <Row key={it.key} it={it} step={st} wide msgs={unreadOf(it.orderId)} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => { setPick(pick === it.key ? null : it.key); const c = it.orderId ? chats.find((x) => x.orderId === it.orderId) : null; if (c) setChat(c.key); }} after={after} onLead={() => setLead(it)} />),
                   ...(open ? [] : [<tr key={x.g.t + "+"} className="jc-more"><td colSpan={5}><button type="button" className="linkbtn" onClick={() => setMore((m) => ({ ...m, [x.g.t]: true }))}>+ {x.rows.length - 5} more in {x.g.t.toLowerCase()}</button></td></tr>]),
                 ]; })}</tbody>
               </table></div>
@@ -200,7 +209,7 @@ export default function JobCenter() {
                 <thead><tr>{step === "leads" ? <><th>Lead</th><th>Came in</th><th /></>
                   : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
                   : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></>}</tr></thead>
-                <tbody>{shown.map((it) => <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />)}</tbody>
+                <tbody>{shown.map((it) => <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => { setPick(pick === it.key ? null : it.key); const c = it.orderId ? chats.find((x) => x.orderId === it.orderId) : null; if (c) setChat(c.key); }} after={after} onLead={() => setLead(it)} />)}</tbody>
               </table></div>
             )}
           </div>
@@ -208,6 +217,7 @@ export default function JobCenter() {
         {picked && <aside className="jc-side" aria-label="The job">
           <JobPanel key={picked.key + n} it={picked} step={step} after={after} onClose={() => setPick(null)} onLead={() => setLead(picked)} onUndo={() => void undoDeclined(picked.orderId!).then((r) => after(r.ok ? "Back on the Job Center." : r.error))} />
         </aside>}
+      </div>
       </div>
       {/* Make a job: the one Create order tool (components/tools/CreateOrderTool.tsx), the same as on emails and ClickUp jobs */}
       {lead?.activityId && <CreateOrderTool activityId={lead.activityId} text={lead.leadText || lead.title} onClose={() => { setLead(null); setN((x) => x + 1); }} onCreated={(_, num) => after(`Order #${num} made.`)} />}
