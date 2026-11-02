@@ -43,6 +43,10 @@ const href = (f: { path: string; name: string }) => `/api/files/open?${new URLSe
 /** a production file's label from what the file looked like (a film, a mockup, paperwork) */
 const PROD_OF: Record<string, string> = { front: "film", back: "film", left_chest: "embroidery", sleeve: "film", other_art: "film", mockup: "old_mockup", order_sheet: "order_sheet", supplier_order: "supplier_order" };
 const styleKey = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+/** the style numbers in what's written ("JZ360 562MR", "5000 Unisex Heavy Cotton") */
+const styleToks = (s: string) => s.toUpperCase().split(/[^A-Z0-9-]+/).map((x) => x.replace(/[^A-Z0-9]/g, "")).filter((x) => x.length >= 3 && /\d/.test(x));
+/** the same garment: the same style, or last time's style number among the paper's (Nov 2, #40363) */
+const sameStyle = (a: string, b: string) => { if (styleKey(a) === styleKey(b)) return true; const x = styleToks(a), y = styleToks(b); return x.some((t) => y.includes(t)); };
 const colorKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const sameColor = (a: string, b: string) => { const x = colorKey(a), y = colorKey(b); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
 const pcs = (z: Record<string, number>) => Object.values(z).reduce((s, n) => s + (+n || 0), 0);
@@ -50,7 +54,7 @@ const pcs = (z: Record<string, number>) => Object.values(z).reduce((s, n) => s +
 const sizeText = (z: Record<string, number>) => Object.entries(z).filter(([, n]) => n > 0).sort(([a], [b]) => { const i = (SIZES as readonly string[]).indexOf(a), j = (SIZES as readonly string[]).indexOf(b); return (i < 0 ? 999 : i) - (j < 0 ? 999 : j); }).map(([k, n]) => `${k} ${n}`).join(" · ");
 /** "L 225 · M 225 · S 175" → { L: 225, … } */
 const sizesOf = (t: string) => Object.fromEntries(t.split("·").map((x) => x.trim().split(/\s+/)).filter((p) => p.length === 2 && +p[1] > 0).map(([k, n]) => [k, +n]));
-type Read = { source: string; pieces: number; lines: { style: string; color: string; sizes: Record<string, number> }[]; exact?: boolean };
+type Read = { source: string; pieces: number; lines: { style: string; color: string; sizes: Record<string, number>; brand?: string; garment?: string }[]; exact?: boolean };
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 type Data = { job: { visual: string; nickname: string; date: string; qty: number; total: number }; customer: { id: string; company: string | null; name: string | null; moved_at: string | null } | null;
@@ -99,25 +103,28 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
     if (!fs.length) return;
     setSizeMode("file"); setRead(null); setReadOk(false); setErr(""); setReadBusy(fs.length > 1 ? `Reading ${fs.length} files…` : `Reading ${fs[0].name}…`);
     try {
-      const images: { media_type: "image/jpeg"; data: string }[] = [], pdfs: string[] = [];
-      const pic = (c: HTMLCanvasElement) => images.push({ media_type: "image/jpeg", data: c.toDataURL("image/jpeg", 0.85).split(",")[1] });
-      const per = Math.max(1, Math.min(3, Math.floor(10 / fs.length)));
+      // each file on its own (its PDF and its pictures), so a supplier confirmation is read exactly and only the rest by AI
+      const files: { name: string; pdf?: string; images: { media_type: "image/jpeg"; data: string }[] }[] = [];
+      const per = Math.max(1, Math.min(2, Math.floor(8 / fs.length)));
       for (const f of fs) {
+        const one: (typeof files)[number] = { name: f.name, images: [] };
+        const pic = (c: HTMLCanvasElement) => one.images.push({ media_type: "image/jpeg", data: c.toDataURL("image/jpeg", 0.82).split(",")[1] });
         if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) {
           const buf = await f.arrayBuffer();
           let bin = ""; const u8 = new Uint8Array(buf); for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode(...u8.subarray(i, i + 0x8000));
-          pdfs.push(btoa(bin));
+          one.pdf = btoa(bin);
           const { pdfPictures } = await import("@/lib/printavoArt");
-          for (const c of await pdfPictures(buf, 1800, per).catch(() => [] as HTMLCanvasElement[])) pic(c);
+          for (const c of await pdfPictures(buf, 1600, per).catch(() => [] as HTMLCanvasElement[])) pic(c);
         } else {
           const url = URL.createObjectURL(f);
           const img = await new Promise<HTMLImageElement>((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
-          const k = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
+          const k = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement("canvas");
           c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
           const x = c.getContext("2d")!; x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height); pic(c); URL.revokeObjectURL(url);
         }
+        files.push(one);
       }
-      const r = await fetch("/api/archive/reorder/sizes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fs.map((f) => f.name).join(", "), count: fs.length, pdfs, images: images.slice(0, 10) }) });
+      const r = await fetch("/api/archive/reorder/sizes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fs.map((f) => f.name).join(", "), files }) });
       const j = await r.json().catch(() => ({})) as Read & { error?: string };
       if (!r.ok || j.error) throw new Error(j.error || "Couldn't read the sizes.");
       setRead(j); setOffOld({}); setAddNew({}); // the files stay listed: drop one more and Read reads them all again
@@ -129,8 +136,8 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
     if (!d || !read) return null;
     const used = new Set<number>();
     const old = d.lines.map((l) => {
-      let k = read.lines.findIndex((r, i) => !used.has(i) && styleKey(r.style) === styleKey(l.style) && sameColor(r.color, l.color));
-      if (k < 0) k = read.lines.findIndex((r, i) => !used.has(i) && styleKey(r.style) === styleKey(l.style) && read.lines.filter((z) => styleKey(z.style) === styleKey(l.style)).length === 1 && d.lines.filter((z) => styleKey(z.style) === styleKey(l.style)).length === 1);
+      let k = read.lines.findIndex((r, i) => !used.has(i) && sameStyle(r.style, l.style) && sameColor(r.color, l.color));
+      if (k < 0) k = read.lines.findIndex((r, i) => !used.has(i) && sameStyle(r.style, l.style) && read.lines.filter((z) => sameStyle(z.style, l.style)).length === 1 && d.lines.filter((z) => sameStyle(z.style, l.style)).length === 1);
       if (k >= 0) used.add(k);
       return { k, was: sizesOf(l.sizes) };
     });
@@ -158,10 +165,10 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
     if (!d) return;
     setErr(""); setStep("Making the reorder…");
     try {
-      const sizes: Record<string, Record<string, number>> = {}, drop: string[] = [], add: { style: string; color: string; sizes: Record<string, number> }[] = [];
+      const sizes: Record<string, Record<string, number>> = {}, drop: string[] = [], add: { style: string; brand: string; garment: string; color: string; sizes: Record<string, number> }[] = [];
       if (sizeMode === "file" && read && match && readOk) {
         d.lines.forEach((l, i) => { const m = match.old[i]; if (!l.ref) return; if (m.k >= 0) sizes[l.ref] = { ...read.lines[m.k].sizes }; else if (offOld[i] !== false) drop.push(l.ref); });
-        for (const { r, i } of match.extra) if (addNew[i] !== false) add.push({ style: r.style, color: r.color, sizes: { ...r.sizes } });
+        for (const { r, i } of match.extra) if (addNew[i] !== false) add.push({ style: r.style, brand: r.brand || "", garment: r.garment || "", color: r.color, sizes: { ...r.sizes } });
       }
       const c = await fetch("/api/orders/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: orderId, price, mode: sizeMode === "file" && !readOk ? "same" : sizeMode, sizes, drop, add, files: what, carry: (["production", "customer"] as const).filter((k) => d.notes?.[k] && keepNote[k]) }) });
       const k = await c.json().catch(() => ({})) as { id?: string; number?: number; pcs?: number; groups?: number; files?: number; reprint?: boolean; error?: string };
@@ -200,7 +207,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
         const g0 = x.groups.find((g) => g.lines.length) || x.groups[0];
         for (const { r, i } of match.extra) {
           if (addNew[i] === false || !g0) continue;
-          const nl = newGLine(); nl.style = r.style; nl.color = r.color; nl.sizes = { ...r.sizes } as GLine["sizes"];
+          const nl = newGLine(); nl.style = r.style; nl.brand = r.brand || ""; nl.garment = r.garment || ""; nl.color = r.color; nl.sizes = { ...r.sizes } as GLine["sizes"];
           g0.lines.push(nl);
         }
         x.groups = x.groups.filter((g) => g.lines.length);

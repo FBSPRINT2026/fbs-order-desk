@@ -62,7 +62,7 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
   const v = await staff(); if (!v) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const b = await req.json().catch(() => ({})) as { id?: string; price?: "last" | "today"; mode?: "same" | "file" | "clear"; sizes?: Record<string, Record<string, number>>; drop?: string[]; add?: { style: string; color: string; sizes: Record<string, number> }[]; files?: Record<string, string>; carry?: string[] };
+  const b = await req.json().catch(() => ({})) as { id?: string; price?: "last" | "today"; mode?: "same" | "file" | "clear"; sizes?: Record<string, Record<string, number>>; drop?: string[]; add?: { style: string; brand?: string; garment?: string; color: string; sizes: Record<string, number> }[]; files?: Record<string, string>; carry?: string[] };
   const admin = createAdminClient();
   const [{ data: o }, { data: s }] = await Promise.all([admin.from("orders").select("*").eq("id", String(b.id || "")).maybeSingle(), admin.from("settings").select("data").eq("id", 1).maybeSingle()]);
   if (!o) return NextResponse.json({ error: "That order isn't here." }, { status: 404 });
@@ -82,7 +82,7 @@ export async function PUT(req: Request) {
     return { ...c, id: uid(), fromGroup: g.id, lines, imprints: c.imprints.map((d) => ({ ...d, id: uid() })) } as Group;
   }).filter((g) => g.lines.length);
   // styles on the file that weren't on last time's order: added to the first group
-  if (b.mode === "file" && b.add?.length && groups[0]) for (const a of b.add) { const nl = newGLine(); nl.style = a.style; nl.color = a.color; nl.sizes = a.sizes as GLine["sizes"]; groups[0].lines.push(nl); }
+  if (b.mode === "file" && b.add?.length && groups[0]) for (const a of b.add) { const nl = newGLine(); nl.style = a.style; nl.brand = a.brand || ""; nl.garment = a.garment || ""; nl.color = a.color; nl.sizes = a.sizes as GLine["sizes"]; groups[0].lines.push(nl); }
   if (!groups.length) groups = [];
   const qty = groups.reduce((a, g) => a + g.lines.reduce((x, l) => x + Object.values(l.sizes || {}).reduce<number>((y, n) => y + (+(n || 0)), 0), 0), 0);
   const { data: made, error } = await admin.from("orders").insert({
