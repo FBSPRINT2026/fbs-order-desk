@@ -1152,8 +1152,10 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
           customer portal should have the exact same look as payments… just slightly in"); the areas' own titles step aside */}
       {mode === "portal" && <div className="aa-ptop">
         <h1 className="aa-ptitle">{AREAS.find((a) => a.id === area)?.label || ""}</h1>
-        {/* the page's search, on the title's line at the right; it filters what this page shows */}
-        {area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}
+        {/* the page's search, on the title's line at the right; it filters what this page shows. On Payments the statement
+            sits just left of it (Nov 2, Nick) */}
+        <span className="aa-ptop-r">{area === "payments" && statementHref && <a className="btn sm" href={statementHref}>View / print statement</a>}
+        {area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}</span>
       </div>}
       <section className="aa-body">{mode === "portal" ? <PageSearchContext.Provider value={q}>{body}</PageSearchContext.Provider> : body}</section>
     </div>

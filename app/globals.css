@@ -18725,3 +18725,14 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aa-ptop .aa-ptitle{margin:0 0 0 8px}
 .aa-ptop>.aa-search{flex:0 1 320px;min-width:200px;margin-bottom:4px}
 .aa:not(.aa-shop) .aa-body .aa-search{display:none}
+/* the page tops, tightened (Nov 2, Nick: "the search bar… right in line with the header… scoot orders closer down to the
+   toolbar… weird spacing"): the name and the search on one line, centered; closer to the bar above and the page below */
+.aa-ptop{align-items:center;margin:-8px 0 -6px}
+.aa-ptop-r{display:flex;align-items:center;gap:10px;flex:0 1 auto;min-width:0}
+.aa-ptop-r>.aa-search{width:320px;max-width:100%;margin:0}
+.aa:not(.aa-shop) .aa-body .aa-stmt{display:none}
+/* a bar left with nothing to show once its title and search moved up is gone, and the Favorites column starts level with
+   the first card again */
+.aa:not(.aa-shop) .aa-bar:not(:has(> :not(.aa-bar-l, .aa-search))):not(:has(> .aa-bar-l > :not(.aa-areat))){display:none}
+.aa:not(.aa-shop) .aa-home > .aa-favs{margin-top:0}
+@media (max-width:640px){.aa-ptop-r{flex:1 1 100%}.aa-ptop-r>.aa-search{flex:1;width:auto}}
