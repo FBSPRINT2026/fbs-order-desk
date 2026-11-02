@@ -5,7 +5,7 @@ import { groupsFromPrintavo } from "@/lib/ai/emailOrder";
 import { createOrderFromDraft } from "@/lib/emailOrderCreate";
 import { aiState } from "@/lib/ai/claude";
 import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
-import type { EODraft } from "@/lib/emailOrderShared";
+import { oldNoteText, type EODraft } from "@/lib/emailOrderShared";
 import { isSupplierPaperwork, looksLikePaperwork } from "@/lib/paperwork";
 import { pvFileName, pvHandle } from "@/lib/printavoNames";
 
@@ -81,7 +81,11 @@ export async function GET(req: Request) {
   const lines = (d.groups || []).flatMap((g) => (g.lines || []).map((l) => ({ style: l.itemNumber || "", brand: l.brand || "", color: l.color || "", garment: String(l.description || "").split(/\r?\n/)[0], qty: +(l.items || 0), price: +(l.price || 0),
     sizes: Object.entries(l.sizes || {}).filter(([, n]) => +n > 0).map(([k, n]) => `${k.replace(/^size_/, "").toUpperCase()} ${n}`).join(" · ") })));
   const { data: c } = await admin.from("customers").select("id, company, name, moved_at").eq("id", r.customer_id as string).maybeSingle();
-  return NextResponse.json({ job: { visual: r.visual_id, nickname: String(r.nickname || "").trim(), date: r.order_date || "", qty: r.qty, total: r.total }, customer: c, lines, files: out });
+  // last time's notes, for staff to bring in or leave (Nov 1, Nick: "I had these production notes from before. Do you
+  // want me to keep these… these customer notes")
+  const od = (r.data || {}) as { customerNote?: string; productionNote?: string };
+  const notes = { production: oldNoteText(od.productionNote), customer: oldNoteText(od.customerNote) };
+  return NextResponse.json({ job: { visual: r.visual_id, nickname: String(r.nickname || "").trim(), date: r.order_date || "", qty: r.qty, total: r.total }, customer: c, lines, files: out, notes });
 }
 
 export async function POST(req: Request) {

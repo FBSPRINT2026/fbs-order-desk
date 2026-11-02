@@ -329,7 +329,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     }
   }
   // a reorder of an old Printavo job: its mockups (ours) go in Production files for reference
-  for (const g of groups) for (const f of [...(g.pvRef || []), ...(g.pvArt || [])]) {
+  // (not when staff already chose what each old file is: Create reorder puts those on itself)
+  if (!d.filesChosen) for (const g of groups) for (const f of [...(g.pvRef || []), ...(g.pvArt || [])]) {
     const orig = pvNames[f.path];
     const label = orig ? oldJobLabel(orig.visualId || (f.name.match(/#(\d+)/)?.[1] || ""), orig.name) : `From the old Printavo job: ${f.name.replace(/ mockup(?=\.\w+$)/i, "")}`;
     const kind = (f as { kind?: string }).kind || null, fnote = (f as { note?: string }).note || null;

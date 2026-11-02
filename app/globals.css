@@ -17520,3 +17520,6 @@ html body .pr .pr-shared{gap:6px}
 .mkc-h.l{left:-5px}.mkc-h.r{right:-5px}
 .mkc-h.t,.mkc-h.b{left:50%;width:18px;height:7px;margin-left:-9px}
 .mkc-h.t{top:-5px}.mkc-h.b{bottom:-5px}
+.rop-note{display:grid;grid-template-columns:18px minmax(0,1fr);gap:8px;align-items:start;padding:6px 0;border-bottom:1px solid var(--line-2,var(--line));cursor:pointer}
+.rop-note b{display:block;font-size:13.5px;color:var(--ink)}
+.rop-note-t{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:12.5px;color:var(--ink-3);white-space:pre-line}

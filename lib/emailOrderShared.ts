@@ -69,6 +69,9 @@ export type EODraft = {
   prodSuggest?: string;
   /** the old Printavo job's notes to carry over to production (unset: the ones about the print) */
   carry?: CarryKey[];
+  /** staff already chose what each of the old job's files is (Create reorder): only those go on the order, nothing of the
+   *  old job's is added by itself (Nov 1, Nick on #40353: "I told it what to do with everything, it just ignored it") */
+  filesChosen?: boolean;
   /** what staff told the AI before it read the email ("it's a reorder of 31174, art is on the old job") */
   told?: string;
   /** the AI read it as a reorder (even when it couldn't tell which job) */

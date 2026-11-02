@@ -51,7 +51,8 @@ type Read = { source: string; pieces: number; lines: { style: string; color: str
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
 type Data = { job: { visual: string; nickname: string; date: string; qty: number; total: number }; customer: { id: string; company: string | null; name: string | null; moved_at: string | null } | null;
-  lines: { style: string; brand: string; color: string; garment: string; qty: number; price: number; sizes: string }[]; files: ReorderFile[] };
+  lines: { style: string; brand: string; color: string; garment: string; qty: number; price: number; sizes: string }[]; files: ReorderFile[];
+  /** last time's production and customer notes (Printavo's) */ notes?: { production: string; customer: string } };
 
 export default function ReorderPick({ archivedId, onClose, onCreated }: { archivedId: string; onClose: () => void; onCreated?: (id: string, number: number, label: string) => void }) {
   const [d, setD] = useState<Data | null>(null), [err, setErr] = useState(""), [what, setWhat] = useState<Record<string, string>>({});
@@ -124,6 +125,8 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
     }).catch(() => live && setErr("Couldn't read the old job."));
     return () => { live = false; };
   }, [archivedId]);
+  // last time's notes: brought in unless unticked
+  const [keepNote, setKeepNote] = useState<{ production: boolean; customer: boolean }>({ production: true, customer: true });
   const looks: MailFile[] = useMemo(() => (d?.files || []).map((f) => ({ key: f.key, name: f.name, type: f.mime, href: href(f) })), [d]);
   const label = d ? `#${d.job.visual}${d.job.nickname ? ` ${d.job.nickname}` : ""}` : "";
   const lastTotal = d ? d.lines.reduce((s, l) => s + l.qty * l.price, 0) : 0;
@@ -137,7 +140,8 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
       const r = await fetch("/api/archive/reorder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: archivedId }) });
       const j = await r.json().catch(() => ({})) as { draft?: EODraft; error?: string };
       if (!r.ok || !j.draft) throw new Error(j.error || "Couldn't copy the job.");
-      let x = j.draft;
+      // only what you chose comes along: the files you sorted (below), the notes you ticked
+      let x: EODraft = { ...j.draft, filesChosen: true, carry: (["production", "customer"] as const).filter((k) => d.notes?.[k] && keepNote[k]) };
       // sizes a style doesn't come in, and shirt colors that aren't the style's exact name: asked, as everywhere
       setStep("Checking the sizes each style comes in…");
       const sf = await checkSizeFit(x.groups).catch(() => ({ rows: [] as FitRow[], ask: [] as FitRow[] }));
@@ -307,6 +311,17 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
               </div>
             ))}
           </section>
+          {(d.notes?.production || d.notes?.customer) && (
+            <section className="rop-sec">
+              <div className="rop-h"><b>Notes from last time</b><span className="faint">tick what comes along</span></div>
+              {(["production", "customer"] as const).filter((k) => d.notes?.[k]).map((k) => (
+                <label key={k} className="rop-note">
+                  <input type="checkbox" checked={keepNote[k]} onChange={(e) => setKeepNote((n) => ({ ...n, [k]: e.target.checked }))} />
+                  <span><b>{k === "production" ? "Production notes" : "Customer notes"}</b><span className="rop-note-t" data-notranslate>{d.notes![k]}</span></span>
+                </label>
+              ))}
+            </section>
+          )}
           {err && <div className="err">{err === "move" ? <>This customer isn&apos;t in the new system yet. <a href={`/shop/customers/${d.customer?.id}`}>Move them first</a>, then Reorder.</> : err}</div>}
         </>}
         {fitAsk && <SizeFitAsk inline rows={fitAsk.rows} onDone={(r) => fitAsk.done(r)} onCancel={() => fitAsk.done(null)} />}
