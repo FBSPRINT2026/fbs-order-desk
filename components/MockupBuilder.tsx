@@ -42,7 +42,7 @@ import { detectCenter } from "@/lib/visualCenter";
 import { tintBase, tintPhoto } from "@/lib/tintPhoto";
 import { applyDistress } from "@/lib/distress";
 import { PREVIEWABLE_TYPES, KID_SIZES, type GLine } from "@/lib/pricing";
-import DesignSearch from "@/components/DesignSearch";
+import DesignSearch, { type OrderArt } from "@/components/DesignSearch";
 import Match from "@/components/InkMatch";
 import ShirtDesigner from "@/components/ShirtDesigner";
 import { loadDesignerDoc, saveDesignerLogo } from "@/lib/designerSave";
@@ -1931,6 +1931,25 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   /** another logo on a print: the old logo's inks and color count go with it (Oct 22, Nick, #40106: swapped to the
    *  1-color black logo, the print kept "2 colors · Electric Blue, Black, 3 screens"); the new one's are read fresh */
+  /** the order's other groups' prints, as art to pick for this one (their logo loaded with the customer's, draft or not) */
+  const orderArtSrc = useRef<Record<string, Imprint>>({});
+  const orderArt = (im: Imprint): OrderArt[] => {
+    if (!order || !curGroup) return [];
+    const gs = orderGroups(order), out: OrderArt[] = [], seenD = new Set<string>();
+    gs.forEach((g, gi) => {
+      if (g.id === curGroup.id) return;
+      for (const x of g.imprints || []) {
+        const d = x.design_id ? designs.find((y) => y.id === x.design_id) : undefined;
+        if (!d || seenD.has(`${d.id}|${x.location}`) || d.id === im.design_id) continue;
+        seenD.add(`${d.id}|${x.location}`);
+        const key = `${g.id}:${x.id}`;
+        orderArtSrc.current[key] = x;
+        const same = (x.location || "").toLowerCase() === (im.location || "").toLowerCase() && (x.method || "screen") === (im.method || "screen");
+        out.push({ key, d, same, where: `${x.location || "Print"} · ${g.name || `Group ${gi + 1}`}${x.size ? ` · ${String(x.size).replace(/\s*wide$/i, "")}` : ""}` });
+      }
+    });
+    return out.sort((a, b) => Number(!!b.same) - Number(!!a.same));
+  };
   const swapLogo = (x: Imprint, d: Design): Imprint => (x.design_id === d.id ? x : { ...x, design_id: d.id, inks: d.inks && !/^simulated/i.test(d.inks) ? d.inks : "", colors: Math.max(1, Math.round(+(d.colors || 0)) || 1), inkMap: undefined, center: undefined });
   /** how far off its box's middle a print is centered (shares of its width / height): a round badge with a tail is
    *  centered on the circle (Oct 22, Nick: "the circle's in the center, the tail is off to the right") */
@@ -4469,6 +4488,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     })() : (<>
                     <DesignSearch designs={designs.filter((d) => !isQuick(d.id) && (!d.draft || imprints.some((x) => x.design_id === d.id)))} urls={urls} value={im.design_id} placeholder="Pick a logo…"
                       onPick={(d) => { setImprints((xs) => xs.map((x) => (x.id === im.id ? (d ? swapLogo(x, d) : { ...x, design_id: undefined }) : x))); if (d) askRaster(im.id, d); }}
+                      onOrder={orderArt(im)}
+                      onPickOrder={(a) => {
+                        const src = orderArtSrc.current[a.key];
+                        // the same art at the same spot prints from the same screens: its size and inks too, so it's one setup
+                        setImprints((xs) => xs.map((x) => { if (x.id !== im.id) return x; const y = swapLogo(x, a.d); return a.same && src ? { ...y, size: src.size, inks: src.inks, colors: src.colors, inkMap: src.inkMap, ...(src.method ? { method: src.method } : {}) } : y; }));
+                        askRaster(im.id, a.d);
+                      }}
                       onStar={async (d, starred) => {
                         setDesigns((ds) => ds.map((x) => (x.id === d.id ? { ...x, starred } : x)));
                         const { error } = portal ? await starMyDesign(d.id, starred).then((r) => ({ error: r.ok ? null : r.error })) : await sb.rpc("set_design_star", { p_design: d.id, p_starred: starred });

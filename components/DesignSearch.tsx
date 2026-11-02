@@ -15,7 +15,12 @@ export function designMatches(d: Design, q: string) {
  * Pick one of the customer's designs. The list opens on their starred (favorite) logos;
  * typing searches everything on file, so a customer with hundreds of logos stays manageable.
  */
-export default function DesignSearch({ designs, urls, value, onPick, onStar, placeholder = "Choose a logo…" }: {
+/** a print already on the order (another group's), offered as the same art (Nov 1, Nick: "when you drop that down, you
+ *  should be able to see artwork already used in this order and then select it… put them together and give the quantity
+ *  discount"): its logo, where it is, and whether it's at the same spot (one setup) */
+export type OrderArt = { key: string; d: Design; where: string; same?: boolean };
+
+export default function DesignSearch({ designs, urls, value, onPick, onStar, placeholder = "Choose a logo…", onOrder = [], onPickOrder }: {
   designs: Design[];
   urls: Record<string, string>;
   value?: string;
@@ -23,6 +28,9 @@ export default function DesignSearch({ designs, urls, value, onPick, onStar, pla
   /** star / unstar a design right from the list */
   onStar?: (d: Design, starred: boolean) => void;
   placeholder?: string;
+  /** the art already on this order, under the starred logos (draft art too: it isn't in their library yet) */
+  onOrder?: OrderArt[];
+  onPickOrder?: (a: OrderArt) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -62,6 +70,17 @@ export default function DesignSearch({ designs, urls, value, onPick, onStar, pla
               </div>
             ))}
             {!list.length && <div className="ds-empty faint">{q.trim() ? "No logos match." : "No logos yet."}</div>}
+            {onOrder.length > 0 && !q.trim() && <>
+              <div className="ds-sec">Art on this order</div>
+              {onOrder.map((a) => (
+                <div key={a.key} role="option" aria-selected={false} className="ds-item" title={a.same ? "The same art at the same spot: one setup, and the pieces count together for the price break" : "The same art: the pieces count together for the price break"}
+                  onClick={() => { (onPickOrder || ((x: OrderArt) => onPick(x.d)))(a); setOpen(false); }}>
+                  {urls[a.d.id] ? <span className="ds-th"><LogoThumb d={a.d} url={urls[a.d.id]} /></span> : <span className="ds-th" />}
+                  <span className="ds-name">{a.where}</span>
+                  {a.same && <span className="ds-same">same setup</span>}
+                </div>
+              ))}
+            </>}
           </div>
           {value && <button type="button" className="btn sm ghost" style={{ margin: 6 }} onClick={() => { onPick(null); setOpen(false); }}>Clear logo</button>}
         </div>

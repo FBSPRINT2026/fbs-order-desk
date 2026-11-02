@@ -17440,3 +17440,6 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .otp-arrow{all:unset;cursor:pointer;flex:none;width:26px;height:26px;display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--accent);font-size:13px;margin-left:auto}
 .otp-arrow:hover{border-color:var(--accent)}
 .otp-seg button:focus-visible,.otp-what button:focus-visible,.otp-arrow:focus-visible,.otp-all button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+/* the logo picker's "Art on this order" (components/DesignSearch.tsx) */
+.ds-sec{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);padding:10px 6px 4px;margin-top:4px;border-top:1px solid var(--line-2,var(--line))}
+.ds-same{flex:none;font-size:11.5px;font-weight:600;color:var(--accent);white-space:nowrap}
