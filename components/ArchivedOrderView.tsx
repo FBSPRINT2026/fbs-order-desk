@@ -6,6 +6,7 @@ import ProductionPanel from "@/components/ProductionPanel";
 import { useSeesMoney } from "@/components/RoleContext";
 import { downloadUrl, pvFileName } from "@/lib/printavoNames";
 import { fmtPhone } from "@/lib/phone";
+import { QuickLook, type MailFile } from "@/components/MailFolders";
 
 const d = (x?: string | null) => (x ? fmtDateLong(x.slice(0, 10)) : "—");
 const stamp = (x?: string | null) => (x ? new Date(x).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -30,8 +31,17 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
   const cash = useSeesMoney();
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(null); }; addEventListener("keydown", k); return () => removeEventListener("keydown", k); }, []);
 
-  // a picture opens large; any other file (PDF, AI…) shows its preview with its name, Open and Download
-  const open = (f: PvFile) => setZoom(f);
+  // the one quick look (Nov 1, Nick: "the same thing you've been doing everywhere else. I don't like this pop-up"): every
+  // file on the job (its mockups, each line's and print's, its files) with arrows between them, Open in a tab, Download
+  const looks: (MailFile & { full: string })[] = (() => {
+    const seen = new Set<string>(), out: (MailFile & { full: string })[] = [];
+    const add = (f: PvFile) => { const href = fileUrl(f.full); if (!href || seen.has(f.full)) return; seen.add(f.full); out.push({ key: f.full, full: f.full, name: nameOf(f) || "File", type: f.mime || undefined, href }); };
+    for (const g of o.groups) { for (const l of g.lines) l.mockups.forEach(add); for (const im of g.imprints) im.mockups.forEach(add); }
+    o.files.forEach(add);
+    return out;
+  })();
+  const [lookAt, setLookAt] = useState<number | null>(null);
+  const open = (f: PvFile) => { const i = looks.findIndex((x) => x.full === f.full); if (i >= 0) setLookAt(i); else setZoom(f); };
   const thumb = (f: PvFile, cls = "pv-thumb") => {
     const full = fileUrl(f.full), src = (f.thumb && fileUrl(f.thumb)) || (isImg(f) ? full : "");
     if (!full && !src) return null;
@@ -170,6 +180,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         </aside>
       </div>
 
+      {lookAt != null && looks[lookAt] && <QuickLook files={looks} at={lookAt} strip title={`#${o.visualId || ""}`.trim()} onClose={() => setLookAt(null)} />}
       {zoom && (() => {
         const nm = nameOf(zoom), pic = isImg(zoom) ? fileUrl(zoom.full) : (zoom.thumb && fileUrl(zoom.thumb)) || "";
         return (

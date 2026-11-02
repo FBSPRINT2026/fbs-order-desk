@@ -28,7 +28,8 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
   // a PDF, Excel, Word or PowerPoint file opens in the one quick look, right here (Nov 1, Nick: "view the Excel
   // spreadsheet without having to go outside the system"); the rest still opens in a tab
   const [look, setLook] = useState<string | null>(null);
-  const lookable: MailFile[] = files.filter((f) => f.url && !isImg(f)).map((f) => ({ key: f.id, name: f.name, type: f.mime, href: f.url })).filter(canQuickLook);
+  // pictures too (Nov 1, Nick: the same quick look everywhere); a stamped customer mockup keeps its own view (hold to peek)
+  const lookable: MailFile[] = files.filter((f) => f.url && !f.plain).map((f) => ({ key: f.id, name: f.name, type: f.mime, href: f.url })).filter(canQuickLook);
   const input = useRef<HTMLInputElement>(null);
   const edit = !!onNote;
   return (
@@ -49,7 +50,7 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
             onDrop={onUpload ? (e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files?.length) onUpload(e.dataTransfer.files); } : undefined}>
             {files.map((f) => (
               <div key={f.id} className="prod-file">
-                <button type="button" className="prod-thumb" title={f.name} draggable={!!f.url} onDragStart={(e) => dragFile(e, { name: f.fileName || f.name, href: f.url, type: f.mime })} onClick={(e) => (isImg(f) && f.url ? setZoom(f) : lookable.some((x) => x.key === f.id) && !(e.metaKey || e.ctrlKey || e.shiftKey) ? setLook(f.id) : f.url && window.open(f.url, "_blank", "noopener"))}>
+                <button type="button" className="prod-thumb" title={f.name} draggable={!!f.url} onDragStart={(e) => dragFile(e, { name: f.fileName || f.name, href: f.url, type: f.mime })} onClick={(e) => (isImg(f) && f.url && f.plain ? setZoom(f) : lookable.some((x) => x.key === f.id) && !(e.metaKey || e.ctrlKey || e.shiftKey) ? setLook(f.id) : f.url && window.open(f.url, "_blank", "noopener"))}>
                   {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <FileThumb f={f} />}
                 </button>
                 <div className="prod-fname" title={f.name}>{f.name}</div>
