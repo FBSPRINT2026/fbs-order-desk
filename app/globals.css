@@ -18015,3 +18015,14 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .portal .p-main h1::after{height:4px;width:calc(100% + 36px);min-width:72px;margin-top:4px}
 /* the goods search is the portal's one search box: one border, the magnifier, no box inside a box (Nov 2, Nick) */
 .aa-search.gdk-search input{height:auto;border:0;border-radius:0;padding:9px 0;width:auto;flex:1;background:transparent}
+/* Send us goods pop-up and "You told us" (Nov 2, Nick) */
+.gdk-you{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:6px;white-space:nowrap;color:var(--fbs-violet);background:color-mix(in srgb,var(--fbs-violet) 13%,var(--surface));vertical-align:1px}
+.gdk-sg{width:min(560px,100%);position:relative}
+.gdk-sg h3{margin:0 0 2px;font-family:var(--display);font-size:18px}
+.gdk-sg .gdk-drop{margin:12px 0 8px}
+.gdk-sg-g{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;margin-top:8px}
+.gdk-sg-g .gdk-sg-wide{grid-column:1/-1}
+.gdk-sg-g input,.gdk-sg-g textarea{width:100%;box-sizing:border-box}
+.gdk-sg-g small{font-size:12px;color:var(--ink-3)}
+.gdk-sg-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+@media (max-width:560px){.gdk-sg-g{grid-template-columns:minmax(0,1fr)}}

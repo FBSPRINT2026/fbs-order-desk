@@ -92,6 +92,77 @@ export async function linkIncoming(pick: { lineId: string; orderId: string }[]):
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
+export type SendGoods = { orderId: string; job: string; vendor: string; vendorOrder: string; carrier: string; tracking: string[]; boxes: number | null; what: string };
+/**
+ * "Send us goods" (Nov 2, Nick): where it's coming from, which job, what's in it, their order #, boxes, tracking, all
+ * optional. With an order picked it goes on that order (addTracking, one shipment per tracking number). With a job only in
+ * their words (goods sent before we know about the order) it's kept in customer_shipments, tracked, and waits at the top
+ * of "Shipments not linked" marked "You told us" until it's put on an order. Either way the shop gets an email.
+ */
+export async function sendGoods(x: SendGoods): Promise<Result> {
+  try {
+    const ctx = await getPortalCtx();
+    if (ctx.isStaff || ctx.preview) return { ok: false, error: "This is a preview. Customers send this from their own login." };
+    const vendor = String(x.vendor || "").trim().slice(0, 80), vendorOrder = String(x.vendorOrder || "").trim().slice(0, 60);
+    const what = String(x.what || "").trim().slice(0, 600), job = String(x.job || "").trim().slice(0, 200);
+    const nums = [...new Set((x.tracking || []).map((t) => String(t).replace(/\s+/g, "").slice(0, 80)).filter(Boolean))].slice(0, 30);
+    const boxes = x.boxes && x.boxes > 0 ? Math.min(9999, Math.round(x.boxes)) : null;
+    if (!vendor && !vendorOrder && !what && !nums.length && !job) return { ok: false, error: "Tell us something about it: where it's from, what's in it or a tracking number." };
+    const note = [[vendor, vendorOrder].filter(Boolean).join(" "), what].filter(Boolean).join(" · ");
+    if (x.orderId) {
+      for (const t of nums.length ? nums : [""]) {
+        const r = await addTracking(x.orderId, { carrier: carrierOf(t) || x.carrier || "", tracking: t, boxes: nums.length > 1 ? null : boxes, eta: null, note, files: [] });
+        if (!r.ok) return r;
+      }
+      return { ok: true };
+    }
+    const cid = ctx.customerIds[0];
+    if (!cid) return { ok: false, error: "Please sign in again." };
+    const admin = createAdminClient();
+    const who = ctx.customers[0]?.name || ctx.email || "Customer";
+    const rows = (nums.length ? nums : [""]).map((t) => ({ customer_id: cid, job_text: job, vendor, vendor_order: vendorOrder, carrier: (carrierOf(t) || x.carrier || "").slice(0, 40), tracking: t, boxes: nums.length > 1 ? null : boxes, note: what, author_name: who }));
+    const { data: made, error } = await admin.from("customer_shipments").insert(rows).select("id, tracking, carrier");
+    if (error) return { ok: false, error: /customer_shipments/.test(error.message) ? "We can't take shipments without an order just yet. Pick the order, or message us." : error.message };
+    for (const m of (made || []) as { id: string; tracking: string; carrier: string }[]) if (m.tracking) {
+      const f = await startTracker(m.tracking, m.carrier).catch(() => null);
+      if (f) await admin.from("customer_shipments").update(f).eq("id", m.id);
+    }
+    if (SHOP_NOTIFY_EMAIL) {
+      const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+      const co = ctx.customers[0]?.company || who;
+      const lines = [job && `For: ${job} (no order yet)`, vendor && `From: ${vendor}${vendorOrder ? ` ${vendorOrder}` : ""}`, what, boxes ? `Boxes: ${boxes}` : "", nums.length ? `Tracking: ${nums.join(", ")}` : ""].filter(Boolean).join("\n");
+      await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Goods on the way from ${co} (not on an order yet)`, html: emailLayout(mergeSettings(s?.data).shop.name, `${who} is sending goods`, lines, "Open their account", `${siteUrl()}/shop/customers/${cid}`) });
+    }
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
+
+/** A shipment they told us about put on one of their orders: its rows become the order's goods shipments. */
+export async function linkToldShipment(ids: string[], orderId: string): Promise<Result> {
+  try {
+    const ctx = await getPortalCtx();
+    if (ctx.isStaff || ctx.preview) return { ok: false, error: "This is a preview. Customers link goods from their own login." };
+    const admin = createAdminClient();
+    const { data: o } = await admin.from("orders").select("id, customer_id").eq("id", orderId).maybeSingle();
+    if (!o || !ctx.customerIds.includes(o.customer_id)) return { ok: false, error: "We couldn't find that order." };
+    const { data: rs } = await admin.from("customer_shipments").select("*").in("id", ids.slice(0, 50)).in("customer_id", ctx.customerIds).is("linked_order_id", null);
+    const list = (rs || []) as { id: string; job_text: string; vendor: string; vendor_order: string; carrier: string; tracking: string; boxes: number | null; note: string; files: unknown; author_name: string; tracker_id: string | null; track_status: string | null; track_detail: string | null; est_delivery: string | null; delivered_at: string | null; track_updated_at: string | null }[];
+    if (!list.length) return { ok: false, error: "That shipment is already on an order." };
+    for (const r of list) {
+      const note = [[r.vendor, r.vendor_order].filter(Boolean).join(" "), r.note].filter(Boolean).join(" · ");
+      const { error } = await admin.from("goods_shipments").insert({ order_id: orderId, carrier: r.carrier, tracking: r.tracking, boxes: r.boxes, eta: null, note, files: r.files || [], added_by: "customer", author_name: r.author_name,
+        tracker_id: r.tracker_id || "", track_status: r.track_status || "", track_detail: r.track_detail || "", est_delivery: r.est_delivery, delivered_at: r.delivered_at, track_updated_at: r.track_updated_at });
+      if (error) return { ok: false, error: error.message };
+      await admin.from("customer_shipments").update({ linked_order_id: orderId, linked_at: new Date().toISOString() }).eq("id", r.id);
+    }
+    const { data: g } = await admin.from("order_goods").select("status").eq("order_id", orderId).maybeSingle();
+    if (!g || g.status === "waiting") await admin.from("order_goods").upsert({ order_id: orderId, status: "on_way", updated_by: ctx.email || "customer", updated_at: new Date().toISOString() });
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
 export type ShipmentRead = { vendor: string; orderNo: string; carrier: string; tracking: string[]; boxes: number | null; eta: string; what: string; orderId: string; why: string };
 /**
  * "Shipping us something?": a dropped or pasted order confirmation / shipping email from any vendor (One Stop, Peter

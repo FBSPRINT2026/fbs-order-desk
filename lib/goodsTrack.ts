@@ -130,6 +130,19 @@ export async function goodsCheck(admin: SupabaseClient, deadline: number) {
     }
   }
 
+  // goods customers told us about before there was an order (customer_shipments): tracked the same way
+  {
+    const { data: cs } = await admin.from("customer_shipments").select("id, tracking, carrier, tracker_id, track_updated_at").is("linked_order_id", null).is("archived_at", null).neq("tracking", "").is("delivered_at", null).limit(200);
+    for (const x of (cs || []) as { id: string; tracking: string; carrier: string; tracker_id: string | null; track_updated_at: string | null }[]) {
+      if (Date.now() > deadline - 20000) break;
+      if (x.track_updated_at && Date.now() - Date.parse(x.track_updated_at) < 25 * 60000) continue;
+      const f = x.tracker_id ? await readTracker(x.tracker_id) : await startTracker(x.tracking, x.carrier);
+      if (!f) continue;
+      await admin.from("customer_shipments").update(f).eq("id", x.id);
+      done.updated++;
+    }
+  }
+
   // open wholesale jobs and their goods
   const { data: os } = await admin.from("orders").select("id, number, nickname, status, due_date, customer_id, price_type, submitted_at").eq("price_type", "wholesale").neq("status", "completed").limit(500); // quotes too: their goods can ship before the order goes ahead (Oct 30, #40284)
   const orders = ((os || []) as { id: string; number: number; nickname: string; status: string; due_date: string | null; customer_id: string | null; submitted_at: string | null }[]).filter((o) => !(o.status === "request" && !o.submitted_at));

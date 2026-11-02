@@ -22,7 +22,8 @@ import { withFiles, type HubMsg } from "@/lib/messages";
 import PortalMessages from "@/components/PortalMessages";
 import PortalGoods from "@/components/PortalGoods";
 import PortalGoodsDesk from "@/components/PortalGoodsDesk";
-import { addTracking, linkIncoming } from "@/app/portal/goods-actions";
+import { addTracking, linkIncoming, sendGoods, linkToldShipment } from "@/app/portal/goods-actions";
+import type { ToldShipment } from "@/components/PortalGoodsDesk";
 import { unmatchedGroups } from "@/lib/manifest";
 import PortalAssistant from "@/components/PortalAssistant";
 import PortalProjects from "@/components/PortalProjects";
@@ -171,7 +172,11 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     return !last || Date.now() - Date.parse(last) < 10 * 86400000;
   };
   const incoming = early ? ((await early.incoming) as Awaited<ReturnType<typeof unmatchedGroups>>).filter((g) => !g.us && fresh(g)) : [];
-  const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale") || incoming.length > 0;
+  // goods they told us about before there was an order for them (customer_shipments): not on an order yet, on the way or
+  // here within the last 10 days
+  const { data: toldRows } = await admin.from("customer_shipments").select("id, job_text, vendor, vendor_order, carrier, tracking, boxes, note, track_status, est_delivery, delivered_at, created_at").in("customer_id", cids.length ? cids : ["00000000-0000-0000-0000-000000000000"]).is("linked_order_id", null).is("archived_at", null).order("created_at", { ascending: false }).limit(200);
+  const told = ((toldRows || []) as ToldShipment[]).filter((t) => !t.delivered_at || Date.now() - Date.parse(t.delivered_at) < 10 * 86400000);
+  const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale") || incoming.length > 0 || told.length > 0;
   // the Goods tab lists every order with goods until it's done (Nov 2, Nick: "organized by orders"); what they're asked
   // about (the dashboard's to-dos) stays the orders still waiting on them
   const goodsAll = wholesale ? await loadGoodsItems(admin, orders.filter(needsGoods) as never, "customer", (id) => `/portal/orders/${id}${qs}`) : [];
@@ -413,7 +418,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && (programItems.length > 0 || cardHasPrices(program.rate_card))}
             assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
-            goodsPanel={wholesale ? <PortalGoodsDesk items={goodsAll} incoming={incoming} canAct={!ctx.preview} qs={qs} addTracking={addTracking} linkIncoming={linkIncoming} /> : undefined}
+            goodsPanel={wholesale ? <PortalGoodsDesk items={goodsAll} incoming={incoming} told={told} canAct={!ctx.preview} qs={qs} addTracking={addTracking} linkIncoming={linkIncoming} sendGoods={sendGoods} linkTold={linkToldShipment} /> : undefined}
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
             goodsCount={goodsOpen.length + incoming.length}
             onPaySelect={aiPaySelect}
