@@ -711,8 +711,10 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     const sumOf = (l: AOrder[]) => l.reduce((a, o) => a + Math.max(0, o.balance), 0);
     const lateL = allOpen.filter((o) => o.type !== "quote" && isLate(o)), laterL = allOpen.filter(isLater);
     const dir = dueSort === "desc" ? -1 : 1;
+    // oldest first: ready to pay by due date, then what's still being made; newest first: what's still being made on top
+    // (newest invoice first), then the rest newest due first (Nov 2, Nick)
     const listAll = (payF === "late" ? lateL : payF === "later" ? laterL : allOpen).slice().sort((a, b) =>
-      Number(isLater(a)) - Number(isLater(b)) || dir * ((dueOn(a) || "9999").localeCompare(dueOn(b) || "9999") || a.number - b.number));
+      dir * (Number(isLater(a)) - Number(isLater(b))) || (isLater(a) && isLater(b) ? dir * (a.number - b.number) : dir * ((dueOn(a) || "9999").localeCompare(dueOn(b) || "9999") || a.number - b.number)));
     const readyL = allOpen.filter((o) => !isLater(o) && o.type !== "quote");
     // every open invoice, however many (Nov 2, Nick: "this is the one time I do want you to just show… a huge long list")
     const listShown = listAll;
