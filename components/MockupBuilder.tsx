@@ -472,7 +472,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     /** the texture laid over it in the file, and how it's distressed here: none, the file's, or the customer's saved mask */
     mask?: File; maskPpi?: number; distress: "none" | "file" | "brand"; dfile?: File; durl?: string;
     /** turned to square it up (degrees, clockwise) from the art as it was pulled off (`orig`) */ turn?: number; orig?: File; turning?: boolean;
-    /** pasted from Illustrator: its width there, in points (lib/pastedSvg.ts sizes the pasted pieces against each other) */ wPt?: number };
+    /** pasted from Illustrator: its width there, in points (lib/pastedSvg.ts sizes the pasted pieces against each other) */ wPt?: number;
+    /** its size is the art's own (copied from the film at print size): kept exactly, never fitted or snapped */ sizeFrom?: Imprint["sizeFrom"] };
   // the customer's distress mask (brand standards): Peticolas' scratched texture, fitted over every logo of theirs
   const [brandMask, setBrandMask] = useState<{ path: string; url: string; name: string; layers: number } | null>(null);
   const [bsOpen, setBsOpen] = useSticky("mockup.brandStd", false);
@@ -2321,14 +2322,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    *  spot's usual width; never past what the spot can hold */
   async function pastePut(loc: string) {
     const a = pasteAsk; if (!a) return;
-    const sp = LOCATION_SPOTS[loc], k = a.p.hPt / (a.p.wPt || 1), real = a.p.wPt / 72;
-    let w = real >= 1 && real <= 15 ? real : sp?.defW || 10;
-    if (sp) w = Math.min(w, sp.maxW, sp.maxH / (k || 1));
-    const widthIn = Math.max(0.5, Math.round(w * 4) / 4);
+    // copied at print size (an art file or film, 1" to 15" at 72 to the inch): that exact size, kept like a film's (Nov 1,
+    // Nick: "I copied this front at 5.32 inches… it did it at its own size… keep the native size"); else (copied off a
+    // mockup picture) the spot's usual width, within what it holds
+    const sp = LOCATION_SPOTS[loc], k = a.p.hPt / (a.p.wPt || 1), real = a.p.wPt / 72, isReal = real >= 1 && real <= 15;
+    let w = isReal ? real : sp?.defW || 10;
+    if (sp && !isReal) w = Math.min(w, sp.maxW, sp.maxH / (k || 1));
+    const widthIn = isReal ? Math.round(w * 100) / 100 : Math.max(0.5, Math.round(w * 4) / 4);
+    if (isReal && sp && (w > sp.maxW + 0.01 || w * k > sp.maxH + 0.01)) setMsg(`That art is ${widthIn}" wide, more than the ${loc}'s ${sp.maxW}" × ${sp.maxH}". Kept at its own size; pick a bigger spot if it should go elsewhere.`);
     setPasteAsk(null);
     // named like any logo (Nov 1, Nick: "get rid of this art pasted by Illustrator front"): the job and the spot
     const job = (order?.nickname || groupName || (() => { const cu = customers.find((c) => c.id === customerId); return cu ? custLabel(cu) : ""; })() || "Logo").trim();
-    await helperApply({ name: "pasted art", kind: "art", plain: true, logoName: () => `${job} ${loc}`, rows: [{ ...a.row, location: loc, side: sideOf(loc), widthIn, heightIn: Math.round(widthIn * k * 100) / 100 }] });
+    await helperApply({ name: "pasted art", kind: "art", plain: true, logoName: () => `${job} ${loc}`, rows: [{ ...a.row, location: loc, side: sideOf(loc), widthIn, heightIn: Math.round(widthIn * k * 100) / 100, ...(isReal ? { sizeFrom: "film" as const } : {}) }] });
   }
   pasteRef.current = (p) => void helperPaste(p);
   /** the Paste from Illustrator button: the clipboard read (the browser asks once to allow it) */
@@ -2521,7 +2526,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         let maskPath = r.distress === "brand" ? brandMask?.path : "";
         if (dz && r.distress === "file" && r.mask) { const mp = `masks/${customerId}/${Date.now().toString(36)}-${r.key}.png`; const up = await sb.storage.from("proofs").upload(mp, r.mask, { contentType: "image/png" }); if (!up.error) maskPath = mp; }
         const d = await uploadDesign(sb, { draft: true, file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: maskPath || undefined, layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, fit: r.distress === "brand" ? "cover" : "stretch", note: how } } : {}), customer_id: customerId, name: given?.logoName ? given.logoName(r) : `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: given?.plain ? "" : `Pulled from ${H.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
-        made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: given?.plain ? "" : `From ${H.name}: ${r.widthIn}" × ${r.heightIn}"${H.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
+        made.push({ d, im: { ...newImprint(r.location), ...(r.sizeFrom ? { sizeFrom: r.sizeFrom } : {}), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: given?.plain ? "" : `From ${H.name}: ${r.widthIn}" × ${r.heightIn}"${H.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
       }
       setDesigns((x) => [...made.map((m) => m.d), ...x]);
       setUrls({ ...urls, ...(await previewUrls(sb, made.map((m) => m.d))) });
@@ -2530,7 +2535,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         let out = [...xs];
         for (const { im } of made) {
           const same = out.find((x) => x.location === im.location) || out.find((x) => !x.design_id && !qt[x.id] && sideOf(x.location) === sideOf(im.location));
-          out = same ? out.map((x) => (x.id === same.id ? { ...x, design_id: im.design_id, location: im.location, size: im.size, inks: im.inks, colors: im.colors, drop: "", notes: [x.notes, im.notes].filter(Boolean).join(". ").slice(0, 300) } : x)) : [...out, im];
+          out = same ? out.map((x) => (x.id === same.id ? { ...x, design_id: im.design_id, location: im.location, size: im.size, sizeFrom: im.sizeFrom, inks: im.inks, colors: im.colors, drop: "", notes: [x.notes, im.notes].filter(Boolean).join(". ").slice(0, 300) } : x)) : [...out, im];
         }
         return out;
       });
