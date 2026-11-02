@@ -1,6 +1,7 @@
 "use client";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
 import { pickArtboard } from "@/lib/artboards";
+import { pastedSvg, pastedWidths, type PastedSvg } from "@/lib/pastedSvg";
 import BackLink from "@/components/BackLink";
 import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
@@ -467,7 +468,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   type HelpRow = { key: string; file: File; url: string; side: "front" | "back" | "sleeve"; location: string; widthIn: number; heightIn: number; dropIn: number; inks: string[]; use: boolean; light: boolean;
     /** the texture laid over it in the file, and how it's distressed here: none, the file's, or the customer's saved mask */
     mask?: File; maskPpi?: number; distress: "none" | "file" | "brand"; dfile?: File; durl?: string;
-    /** turned to square it up (degrees, clockwise) from the art as it was pulled off (`orig`) */ turn?: number; orig?: File; turning?: boolean };
+    /** turned to square it up (degrees, clockwise) from the art as it was pulled off (`orig`) */ turn?: number; orig?: File; turning?: boolean;
+    /** pasted from Illustrator: its width there, in points (lib/pastedSvg.ts sizes the pasted pieces against each other) */ wPt?: number };
   // the customer's distress mask (brand standards): Peticolas' scratched texture, fitted over every logo of theirs
   const [brandMask, setBrandMask] = useState<{ path: string; url: string; name: string; layers: number } | null>(null);
   const [bsOpen, setBsOpen] = useSticky("mockup.brandStd", false);
@@ -489,6 +491,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
   const [helpOver, setHelpOver] = useState(false);
+  // art copied in Illustrator and pasted anywhere on the page but a box (helperPaste)
+  const pasteRef = useRef<(p: PastedSvg) => void>(() => {});
+  useEffect(() => {
+    if (portal) return;
+    const on = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest("input, textarea, select, [contenteditable='true']"))) return;
+      const p = pastedSvg(e.clipboardData?.getData("image/svg+xml") || e.clipboardData?.getData("text/plain") || "");
+      if (p) { e.preventDefault(); pasteRef.current(p); return; }
+      if ([...(e.clipboardData?.files || [])].some((f) => /^image\//.test(f.type))) setMsg("That came in from Illustrator as a picture, not art. In Illustrator turn on Preferences → File Handling → Clipboard → Copy As: SVG Code, then copy it again and paste here.");
+    };
+    window.addEventListener("paste", on);
+    return () => window.removeEventListener("paste", on);
+  }, [portal]); // eslint-disable-line react-hooks/exhaustive-deps
   // opened as the Mockup Helper tool (AI Workbench → Tools, lib/aiTools.ts): the Helper open and in view
   useEffect(() => {
     if (sp.get("helper") !== "1") return;
@@ -2236,6 +2252,32 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const lid = gLine.current[`${name}|${gi}`];
     if (r.draw && lid) setLines((ls) => ls.map((x) => (x.id === lid ? { ...x, look: { ...(x.look || {}), draw: r.draw } } : x)));
   }
+  /** art copied in Illustrator and pasted (Nov 1, Nick: "copy… and I hit paste into the helper… treat that like a vector
+   *  file… I copy it in one side and then copy another one"): each paste is a print on the Helper, still vector (an SVG),
+   *  its inks read off its colors. The first is the front, the next the back (both can be changed); sizes are read
+   *  against each other (lib/pastedSvg.ts) */
+  async function helperPaste(p: PastedSvg) {
+    setHelpOpen(true);
+    const n = (helper?.rows.filter((r) => r.wPt).length || 0) + 1;
+    const file = new File([p.svg], `Pasted art ${n}.svg`, { type: "image/svg+xml" });
+    const url = URL.createObjectURL(file);
+    const img = await loadImg(url).catch(() => null);
+    const cols = img ? detectColors(img, 6).filter((c) => c.share >= 0.02) : [];
+    const inks = [...new Set(cols.map((c) => { const s0 = suggestInk(c.hex); return s0.rec === "pms" ? s0.pms.name : s0.standard.name; }).filter(Boolean))];
+    const hx = (cols[0]?.hex || "#000000").replace("#", "");
+    const lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
+    setHelper((h) => {
+      const base = h && !h.busy ? h : { name: "Art pasted from Illustrator", busy: "", kind: "art" as const, rows: [], pms: [], inkOpts: [] };
+      const side: HelpRow["side"] = base.rows.some((r) => r.wPt && r.side === "front") && !base.rows.some((r) => r.wPt && r.side === "back") ? "back" : "front";
+      const row: HelpRow = { key: `p${Date.now().toString(36)}`, file, url, side, location: "", widthIn: 10, heightIn: 0, dropIn: side === "back" ? 4 : 3, inks, use: true, light: lum > 0.7, distress: "none", wPt: p.wPt };
+      const rows = [...base.rows, row];
+      const pasted = rows.filter((r) => r.wPt), ws = pastedWidths(pasted.map((r) => r.wPt || 0));
+      const ratio = (r: HelpRow) => { const s0 = r.file === file ? p : null; return s0 ? s0.hPt / s0.wPt : r.heightIn / (r.widthIn || 1); };
+      const sized = rows.map((r) => { const k = pasted.indexOf(r); if (k < 0) return r; const w = ws[k]; return { ...r, widthIn: w, heightIn: Math.round(w * ratio(r) * 100) / 100, location: r.side === "sleeve" ? r.location : locOfPulled(r.side, w, r.dropIn, r.side === "front" && w <= 5 ? 2 : 0) }; });
+      return { ...base, err: "", rows: sized, inkOpts: [...new Set([...base.inkOpts, ...inks])] };
+    });
+  }
+  pasteRef.current = (p) => void helperPaste(p);
   /** dragged onto the Helper from anywhere (Nov 1, Nick: "from my email, from ClickUp, from whatever"): a file, an
    *  Outlook email's attachment, or a file off another site's page; the PDF or Illustrator file first, else a picture */
   async function helperDrop(dt: DataTransfer) {
@@ -4673,7 +4715,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     ))}
                   </ul>
                   <button type="button" className="btn sm" onClick={() => helpIn.current?.click()}>Pull art from a mockup…</button>
-                  <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drag a PDF, AI or picture here (from your email, ClickUp or anywhere)"}</span>
+                  <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drag a PDF, AI or picture here (from your email, ClickUp or anywhere), or copy art in Illustrator and paste it"}</span>
                 </>}
                 <datalist id="mk-ink-names">{[...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX)].slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist>
                 <input ref={helpIn} type="file" accept={portal ? ".pdf,.ai,application/pdf,application/postscript,application/illustrator" : ".pdf,.ai,.jpg,.jpeg,.png,.webp,application/pdf,application/postscript,application/illustrator,image/jpeg,image/png,image/webp"} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
