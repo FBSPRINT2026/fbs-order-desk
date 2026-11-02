@@ -768,6 +768,10 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
           <span className="spacer" />
           <a className="btn sm ghost" href={f.href} target="_blank" rel="noreferrer">Open in a tab</a>
           {/* Oct 26, Nick (ClickUp jobs): "there's no way to download the attachments… put a little download button" */}
+          {/* art Illustrator opens (Nov 1, Nick: "a button next to download that says open in Illustrator… it automatically
+              pops Illustrator up"): saved for Illustrator (a PDF as .ai, which Illustrator opens as art, not Acrobat); with
+              Chrome set once to "Always open files of this type", it opens in Illustrator by itself */}
+          {/\.(pdf|ai|eps|svg)$/i.test(f.name) && <button type="button" className="btn sm" title="Saves it for Illustrator (a PDF as .ai). Once: in Chrome's downloads, pick Always open files of this type, and it opens in Illustrator by itself." onClick={() => void downloadFile(f.href!, f.name.replace(/\.pdf$/i, ".ai"))}>Open in Illustrator</button>}
           <button type="button" className="btn sm" onClick={() => void downloadFile(f.href!, f.name)}>Download</button>
           <button type="button" className="mf-look-x" onClick={onClose} aria-label="Close">×</button>
         </div>
