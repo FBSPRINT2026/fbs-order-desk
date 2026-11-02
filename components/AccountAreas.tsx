@@ -319,7 +319,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
                 {cols !== "quote" && mode !== "portal" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
                 {/* customers: what's left, and what's been paid under it, or "Paid" once it's all paid (Nov 2, Nick: "I can't tell
                     what's been paid, what's not been paid") */}
-                {cols !== "quote" && <td data-l="Balance" className={"r num" + (mode === "shop" && !o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : mode === "portal" && o.total > 0 && o.balance <= 0.004 ? <span className="aa-paidall">Paid</span> : <>{money(Math.max(0, o.balance))}{mode === "portal" && o.paid > 0.004 ? <small className="aa-paidpart">{money(o.paid)} paid</small> : null}</>}</td>}
+                {cols !== "quote" && <td data-l="Balance" className={"r num" + (mode === "shop" && !o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : mode === "portal" && o.total > 0 && o.balance <= 0.004 ? <span className="aa-paidall">Paid</span> : <span className={mode === "portal" && o.paid > 0.004 ? "aa-balpart" : ""} title={mode === "portal" && o.paid > 0.004 ? `${money(o.paid)} paid so far` : undefined}>{money(Math.max(0, o.balance))}</span>}</td>}
                 <td className="r num b" data-l="Total">{money(o.total)}</td>
                 {/* the star on the right (Oct 24, Nick) */}
                 {mode === "portal" && <td className="aa-starc" onClick={(e) => e.stopPropagation()}>{!o.archived && <StarOrder id={o.id} on={!!o.starred} canAct={canAct} />}</td>}
