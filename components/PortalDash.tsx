@@ -2,8 +2,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { money } from "@/lib/format";
 import type { PortalJob } from "@/lib/portalJobs";
-import { DashJobs, DashReorder, HoldJump } from "./PortalDashBits";
-import OrderRail from "@/components/OrderRail";
+import { DashJobs, DashReorder, HoldJump, StarOrder } from "./PortalDashBits";
+import { MiniRail } from "@/components/OrderRail";
 
 /**
  * The customer's dashboard (Oct 15, Nick: "rethink the dashboard… more visual, jobs moving through… the AI assistant
@@ -50,14 +50,15 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
   // lists that never grow the page (Oct 24, Nick: "make that variable… without creating scroll bars… we don't want to create more page"): three show, the rest fold under "more"
   // a starred order: its picture, name, the same rainbow steps as its job, and how it's doing (Nov 2, Nick: "the starred
   // orders doesn't look like it stands out like the rest")
+  // one line each (Nov 2, Nick: "the order hanging by itself… a mini slider… all in line… you should be able to unfollow
+  // from there"): picture, number and name with the in-hands date, the small order line with the step it's on, the star
   const trackRow = (t: DashTracked) => (
-            <div key={t.id} className={"pdx-st1 t-" + t.health.tone}>
-              <Link href={t.href} className="pdx-st1-pic" aria-hidden tabIndex={-1}>{t.pic ? <img src={t.pic} alt="" loading="lazy" /> : <span>#{t.number}</span>}</Link>
-              <div className="pdx-st1-b">
-                <div className="pdx-st1-top"><Link href={t.href} className="pdx-st1-t"><span className="onum">#{t.number}</span> {t.name || "Order"}</Link><span className="pdx-st1-h">{t.health.text}</span></div>
-                {t.steps?.length ? <OrderRail steps={t.steps} done={t.done} /> : <small className="faint">{t.status}</small>}
-                <small className="pdx-st1-d">{t.due ? `In hands ${t.due}` : t.status}{t.action && t.health.tone === "act" ? <> · {t.action.external ? <a href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link href={t.action.href}>{t.action.label}</Link>}</> : null}</small>
-              </div>
+            <div key={t.id} className={"pdx-fo t-" + t.health.tone}>
+              <Link href={t.href} className="pdx-fo-pic" aria-hidden tabIndex={-1}>{t.pic ? <img src={t.pic} alt="" loading="lazy" /> : <span>#{t.number}</span>}</Link>
+              <Link href={t.href} className="pdx-fo-t"><b><span className="onum">#{t.number}</span> {t.name || "Order"}</b>
+                <small>{t.due ? `In hands ${t.due}` : t.status}{t.health.tone === "act" || t.health.tone === "bad" ? <em> · {t.health.text}</em> : null}</small></Link>
+              {t.steps?.length ? <MiniRail steps={t.steps} done={t.done} /> : <small className="faint">{t.status}</small>}
+              <StarOrder id={t.id} on canAct={canAct} />
             </div>
   );
   const sentRow = (x: DashSent) => (

@@ -39,3 +39,20 @@ export default function OrderRail({ steps, done = false }: { steps: JobStep[]; d
     </div>
   );
 }
+
+/**
+ * The order line, small (Nov 2, Nick: "a mini slider… it just says ready with… a little tiny mini version of a slider…
+ * all in line"): the same rainbow filled to the step it's on, and that step's name only. Same steps as OrderRail.
+ */
+export function MiniRail({ steps, done = false }: { steps: JobStep[]; done?: boolean }) {
+  const n = steps.length;
+  const ci = steps.findIndex((s) => s.state === "cur");
+  const at = Math.min(done ? n - 1 : Math.max(0, ci >= 0 ? ci : steps.filter((s) => s.state === "done").length), n - 1);
+  const pct = n > 1 ? (at / (n - 1)) * 100 : 100;
+  return (
+    <span className="orm" title={steps.map((s) => s.label).join(" → ")}>
+      <span className="orm-bar" aria-hidden><i style={{ clipPath: `inset(0 ${100 - pct}% 0 0 round 3px)` }} /><b style={{ left: `${pct}%` }} /></span>
+      <span className="orm-t">{steps[at]?.label || ""}</span>
+    </span>
+  );
+}
