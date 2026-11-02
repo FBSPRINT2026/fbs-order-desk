@@ -878,7 +878,8 @@ function inkL(name: string): number | null {
 /** the inks named on a print ("Black, PMS 186 C + White") */
 export const inkNames = (inks: string) => (inks || "").split(/[,;\/+]|\band\b/i).map((x) => x.trim()).filter((x) => x && !/^(none|removed)$/i.test(x));
 /** an ink named as a PMS / Pantone color ("PMS 186 C", "Pantone 7625", "186C") rather than a house ink */
-export const isPmsInk = (n: string) => /\b(pms|pantone)\b/i.test(n) || /^\d{3,4}\s*-?\s*[cu]?$/i.test(n.trim());
+/** a PMS (or a custom ink mixed by hand to a color, lib/inkColors customInk: matched like a PMS) */
+export const isPmsInk = (n: string) => /\b(pms|pantone)\b/i.test(n) || /^\d{3,4}\s*-?\s*[cu]?$/i.test(n.trim()) || /^custom\b/i.test(n.trim());
 /** each named ink on a print and whether it's charged as a PMS match: PMS inks are, unless marked standard (no charge) */
 export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string; auto: boolean; charge: boolean; set: boolean }[] {
   return inkNames(d.inks).map((name) => {

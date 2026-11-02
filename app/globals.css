@@ -17527,3 +17527,15 @@ html body .pr .pr-shared{gap:6px}
 .rop-note-t{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;font-size:12.5px;color:var(--ink-3);white-space:pre-line}
 .rop-reprice{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:13.5px;margin:2px 0 8px}
 .rop-reprice .faint{font-size:12px}
+/* a custom ink mixed by hand (components/InkSelect.tsx CustomInk): its color, picked off the screen or chosen, and what it is */
+.ink-menu .sm-item i.x.custom{background:conic-gradient(#f87171,#facc15,#4ade80,#60a5fa,#c084fc,#f87171)}
+:where(.mk-color,.mk-color-wrap,.pr-scr-opts):has(> .ink-cu){flex-wrap:wrap}
+.ink-cu{flex:1 1 100%;display:flex;flex-direction:column;gap:6px;margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.ink-cu-h{font-size:13px;font-weight:700;color:var(--ink)}
+.ink-cu-pick{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ink-cu-sw{position:relative;width:36px;height:36px;border-radius:6px;border:1px solid var(--line);cursor:pointer;flex:none}
+.ink-cu-sw input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ink-cu-hex{font-size:12.5px;color:var(--ink-3)}
+.ink-cu-l{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.ink-cu-in{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);min-width:0}
+.ink-cu-n{font-size:12px;color:var(--ink-3)}

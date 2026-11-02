@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, colorHex } from "@/lib/inkColors";
+import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, colorHex, customInk, parseCustom } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { findThreads, threadByName, threadLabel, type Thread } from "@/lib/embroidery";
 
@@ -39,7 +39,7 @@ export function resolveInk(text: string, brand: Brand): { name: string; hex: str
  * (a stock ink, a brand ink, any Pantone by number: "241" → PMS 241 C) or open the list with the one ▾. Each ink shows
  * its swatch. "Keep as uploaded" and "Remove" sit at the top of the list.
  */
-type InkOpt = { name: string; hex: string; sub?: string; act?: "keep" | "none" | "typed" };
+type InkOpt = { name: string; hex: string; sub?: string; act?: "keep" | "none" | "typed" | "custom" };
 export function InkSelect({ value, onChange, adder }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void; /** a picker that adds inks to a list (Logo details): this placeholder, no "Keep as uploaded" / "Remove" */ adder?: string }) {
   const brand = useContext(BrandCtx);
   const box = useRef<HTMLSpanElement>(null);
@@ -59,6 +59,8 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
     const add = (label: string, opts: InkOpt[]) => { const o = opts.filter((x) => !seen.has(x.name) && has(x.name, x.sub)); o.forEach((x) => seen.add(x.name)); if (o.length) out.push({ label, opts: o }); };
     if (hit) { out.push({ label: "", opts: [hit] }); seen.add(hit.name); }
     if (!q && !adder) out.push({ label: "", opts: [{ name: "Keep as uploaded", hex: "", act: "keep" }, { name: "Remove (shirt shows through)", hex: "", act: "none" }] });
+    // a color mixed by hand: picked off the screen or chosen, and described (CustomInk under the field)
+    if (!q || "custom".startsWith(q) || q.startsWith("custom")) out.push({ label: "", opts: [{ name: "Custom color (hand-matched)…", hex: "", act: "custom" }] });
     for (const g of brand.groups) if (g.colors.length) add(g.label, g.colors.map((b) => ({ name: b.ink, hex: b.hex || colorHex(b.ink) || "#888888", sub: b.name !== b.ink ? b.name : undefined })));
     add("Our stock inks (Wilflex RFU)", Object.keys(WILFLEX_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
     add("Our other stock inks (Ink Room)", Object.keys(STOCK_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
@@ -82,6 +84,7 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
   const choose = (o: InkOpt) => {
     if (o.act === "keep") onChange(null);
     else if (o.act === "none") onChange({ name: "none", hex: "" });
+    else if (o.act === "custom") { const h = value?.hex && /^#[0-9a-f]{6}$/i.test(value.hex) ? value.hex : "#888888"; onChange({ name: customInk("", h), hex: h.toUpperCase() }); }
     else onChange({ name: o.name, hex: o.hex });
     close(); inp.current?.blur();
   };
@@ -94,9 +97,10 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   // not on any chart (typed as the customer wrote it): pick the color to show
-  const offChart = !!value && value.name !== "none" && !!value.name && !resolveInk(value.name, brand);
+  const custom = value ? parseCustom(value.name) : null;
+  const offChart = !!value && value.name !== "none" && !!value.name && !resolveInk(value.name, brand) && !custom;
   let n = -1;
-  return (
+  return (<>
     <span className="ink-dd" ref={box}>
       <input ref={inp} type="text" aria-label="Ink color" role="combobox" aria-expanded={open} autoComplete="off" spellCheck={false}
         placeholder={adder || "Keep as uploaded"} value={text ?? shown}
@@ -125,7 +129,7 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
                   <div key={(o.act || "") + o.name} role="option" aria-selected={cur} className={"sm-item" + (i === active ? " on" : "") + (cur ? " cur" : "")}
                     ref={i === active ? (el) => { el?.scrollIntoView({ block: "nearest" }); } : undefined}
                     onMouseDown={(e) => { e.preventDefault(); choose(o); }} onMouseEnter={() => setActive(i)}>
-                    <i className={o.act === "keep" || o.act === "none" ? "x " + o.act : ""} style={o.hex ? { background: o.hex } : undefined} />
+                    <i className={o.act === "keep" || o.act === "none" ? "x " + o.act : o.act === "custom" ? "x custom" : ""} style={o.hex ? { background: o.hex } : undefined} />
                     <b data-notranslate={o.act ? undefined : true}>{o.act === "typed" ? `Use “${o.name}” (not on the chart)` : o.name}</b>
                     {o.sub ? <span data-notranslate>{o.sub}</span> : <span />}
                   </div>
@@ -135,6 +139,30 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
           ))}
           {!flat.length && <div className="ink-menu-g">No ink by that name</div>}
         </div>, document.body)}
+    </span>
+    {custom && <CustomInk desc={custom.desc} hex={custom.hex} onChange={(d, h) => onChange({ name: customInk(d, h), hex: h.toUpperCase() })} />}
+  </>);
+}
+
+/** A custom ink's color and description: picked off the screen anywhere (Chrome's eyedropper: another monitor, an email
+ *  picture, Illustrator), or chosen, and said in words ("pink from before") for whoever mixes it */
+type EyeDropperCtor = new () => { open: () => Promise<{ sRGBHex: string }> };
+function CustomInk({ desc, hex, onChange }: { desc: string; hex: string; onChange: (desc: string, hex: string) => void }) {
+  const [d, setD] = useState(desc);
+  useEffect(() => setD(desc), [desc]);
+  const Eye = typeof window !== "undefined" ? (window as unknown as { EyeDropper?: EyeDropperCtor }).EyeDropper : undefined;
+  const pick = async () => { if (!Eye) return; try { const r = await new Eye().open(); const h = /^#[0-9a-f]{6}$/i.test(r.sRGBHex) ? r.sRGBHex : ""; if (h) onChange(d, h); } catch { /* closed */ } };
+  return (
+    <span className="ink-cu">
+      <span className="ink-cu-h">Custom color · hand-matched</span>
+      <span className="ink-cu-pick">
+        <label className="ink-cu-sw" style={{ background: hex }} title="Choose the color"><input type="color" value={hex.toLowerCase()} onChange={(e) => onChange(d, e.target.value)} aria-label="Custom color" /></label>
+        {Eye && <button type="button" className="btn sm" onClick={() => void pick()} title="Click, then click any color on any screen: the art, an email picture, Illustrator">Pick from the screen</button>}
+        <span className="ink-cu-hex" data-notranslate>{hex}</span>
+      </span>
+      <label className="ink-cu-l" htmlFor={`cu-${hex}`}>Describe it</label>
+      <input id={`cu-${hex}`} className="ink-cu-in" value={d} placeholder="e.g. pink from before" onChange={(e) => setD(e.target.value)} onBlur={() => { if (d !== desc) onChange(d, hex); }} onKeyDown={(e) => { if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur(); }} />
+      <span className="ink-cu-n">Mixed by hand like a PMS: charged as a PMS match.</span>
     </span>
   );
 }

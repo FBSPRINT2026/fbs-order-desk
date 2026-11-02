@@ -73,7 +73,20 @@ export function addFormulaInks(rows: { name: string; hex: string }[]) {
 }
 
 /** Screen color for an ink name: Wilflex RFU, another stock ink, a PMS coated number ("PMS 186 C", "186 C", "PMS 186"), or a #hex. */
+/**
+ * A custom ink, mixed by hand to a color (Nov 1, Nick: "a color that says custom… a picker… a note below it… custom pink
+ * from before… treat that like a PMS color… a hand-matched ink"): its name carries its description and its color, so
+ * every page that shows an ink (the mockup, the order, the work order, the proof) has both: "Custom: pink from before
+ * (#E7A1B6)". Charged as a PMS match (lib/pricing isPmsInk).
+ */
+// (an ink list splits on , ; / + and "and": those are spaced out of the description so it stays one ink)
+export const customInk = (desc: string, hex: string) => `Custom: ${(desc || "").replace(/[,;/+]/g, " ").replace(/\band\b/gi, "&").replace(/\s+/g, " ").trim() || "hand-matched"} (${(hex || "#888888").toUpperCase()})`;
+export const parseCustom = (name: string): { desc: string; hex: string } | null => {
+  const m = /^custom\b:?\s*(.*?)\s*\((#[0-9a-f]{6})\)\s*$/i.exec((name || "").trim());
+  return m ? { desc: m[1] === "hand-matched" ? "" : m[1], hex: m[2].toUpperCase() } : null;
+};
 export const colorHex = (name: string) => {
+  const cu = parseCustom(name); if (cu) return cu.hex;
   if (WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name]) return WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name];
   if (/^#[0-9a-f]{6}$/i.test(name)) return name;
   const m = name.trim().replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "");
