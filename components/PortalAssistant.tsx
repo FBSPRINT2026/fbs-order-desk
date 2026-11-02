@@ -16,7 +16,7 @@ const IDEAS = ["Where's my order?", "Track my shipment", "Pay my bill", "Reorder
  * it answers from their own account and offers buttons. Nothing changes until they press one.
  */
 /** bare: inside the dashboard's assistant card (no greeting of its own); ideas: shortcuts from their own jobs;
- *  personHref: "Talk to a person" opens the message center (a message, not a live chat) */
+ *  personHref: "Go to the FBS Message Center" (Nov 2, Nick) opens the message center (a message, not a live chat) */
 export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: ideas0, personHref }: { qs: string; canAct: boolean; wholesale: boolean; bare?: boolean; ideas?: string[]; personHref?: string }) {
   const router = useRouter();
   const [hello, setHello] = useState("Hello");
@@ -98,7 +98,7 @@ export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: id
         <MicButton target={() => inRef.current} label="Ask by voice" className="pa-mic" onDone={(t) => { if (t.trim()) ask(t.trim()); }} />
         <button type="submit" className="btn primary" disabled={busy || (!q.trim() && !shownIdea)}>{busy ? "Thinking…" : "Ask"}</button>
       </form>
-      {!turns.length && personHref && <div className="pa-ideas pa-ideas-quiet"><a className="pa-person" href={personHref}>Talk to a person →</a></div>}
+      {!turns.length && personHref && <div className="pa-ideas pa-ideas-quiet"><a className="pa-person" href={personHref}>Go to the FBS Message Center →</a></div>}
       {turns.length > 0 && (
         <div className="pa-talk" ref={box}>
           {turns.map((t, i) => (
