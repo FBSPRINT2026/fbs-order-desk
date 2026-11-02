@@ -399,11 +399,56 @@ async function groupFromMockup(supabase: Awaited<ReturnType<typeof me>>["supabas
 }
 
 /**
- * The mockup made from an order they're building (Oct 24, Nick: "if they are making something from scratch, it just should
- * start out by saying create mockup or upload your own existing mockup… in the imprint screen"): its shirts and prints go
- * into that group, keeping the sizes already typed for the same style and color.
+ * The mockup made from an order they're building (Oct 24, Nick): its shirts and prints go into that group.
+ *
+ * It never quietly rewrites the garments (Nov 2, Nick: "I did an order… Gildan 5000 ash, changed the color to forest, and
+ * then it screwed up everything… there has to be some checks"). Each mockup shirt is matched to the order's line it came
+ * from (the line's id, else its style and color): a match takes the new style and color and keeps its sizes. A shirt that
+ * isn't on the order, and an order line the mockup no longer shows, are questions for the customer first
+ * (`mockupLineCheck`), and `attachMockupToRequest` does what they picked: add it as another line, use it in place of a
+ * line (keeping that line's sizes), leave it off; keep or remove a line.
  */
-export async function attachMockupToRequest(orderId: string, groupId: string, mockupId: string): Promise<Result> {
+type MLine = { id: string; style: string; brand: string; color: string; garment: string };
+export type LineCheck = {
+  changed: { id: string; from: string; to: string; pcs: number }[];
+  added: { id: string; label: string }[];
+  removed: { id: string; label: string; pcs: number }[];
+};
+export type LineDecisions = { add?: string[]; replace?: Record<string, string>; remove?: string[]; keepOld?: string[] };
+const lbl = (l: { brand?: string; style?: string; color?: string }) => [[l.brand, l.style].filter(Boolean).join(" "), l.color].filter(Boolean).join(" · ") || "Garment";
+const pcsOf = (l: { sizes?: Record<string, number> }) => Object.values(l.sizes || {}).reduce((a, n) => a + (+n || 0), 0);
+const lkey = (l: { style?: string; color?: string }) => `${l.style || ""}|${l.color || ""}`.toLowerCase();
+
+async function mockupLines(supabase: Awaited<ReturnType<typeof me>>["supabase"], mockupId: string): Promise<MLine[]> {
+  const { data: mk } = await supabase.from("mockups").select("snapshot").eq("id", mockupId).maybeSingle();
+  const ls = ((mk?.snapshot as { lines?: Partial<MLine>[] } | null)?.lines || []).filter((l) => l.style || l.color);
+  return ls.map((l, i) => ({ id: String(l.id || `m${i}`), style: String(l.style || ""), brand: String(l.brand || ""), color: String(l.color || ""), garment: String(l.garment || "") }));
+}
+/** match each mockup shirt to the order line it came from: by id, else by style and color */
+function matchLines(old: Group["lines"], mk: MLine[]) {
+  const used = new Set<string>(), pairs = new Map<string, string>(); // mockup line id → order line id
+  for (const m of mk) { const o = old.find((x) => x.id === m.id && !used.has(x.id)); if (o) { pairs.set(m.id, o.id); used.add(o.id); } }
+  for (const m of mk) { if (pairs.has(m.id)) continue; const o = old.find((x) => !used.has(x.id) && lkey(x) === lkey(m)); if (o) { pairs.set(m.id, o.id); used.add(o.id); } }
+  return { pairs, used };
+}
+
+/** What saving this mockup would change on the order's garments, to ask about first. */
+export async function mockupLineCheck(orderId: string, groupId: string, mockupId: string): Promise<Result & { check?: LineCheck }> {
+  try {
+    const { supabase, order } = await myDraft(orderId);
+    const g = orderGroups(order).find((x) => x.id === groupId);
+    const old = (g?.lines || []).filter((l) => l.style || l.color || pcsOf(l));
+    const mk = await mockupLines(supabase, mockupId);
+    if (!old.length || !mk.length) return { ok: true, check: { changed: [], added: [], removed: [] } };
+    const { pairs, used } = matchLines(old, mk);
+    const changed = mk.filter((m) => pairs.has(m.id)).flatMap((m) => { const o = old.find((x) => x.id === pairs.get(m.id))!; return lkey(o) === lkey(m) ? [] : [{ id: m.id, from: lbl(o), to: lbl(m), pcs: pcsOf(o) }]; });
+    const added = mk.filter((m) => !pairs.has(m.id)).map((m) => ({ id: m.id, label: lbl(m) }));
+    const removed = old.filter((o) => !used.has(o.id)).map((o) => ({ id: o.id, label: lbl(o), pcs: pcsOf(o) }));
+    return { ok: true, check: { changed, added, removed } };
+  } catch (e) { return fail(e); }
+}
+
+export async function attachMockupToRequest(orderId: string, groupId: string, mockupId: string, pick: LineDecisions = {}): Promise<Result> {
   try {
     const { supabase, admin, order } = await myDraft(orderId);
     const m = await groupFromMockup(supabase, admin, mockupId);
@@ -411,9 +456,26 @@ export async function attachMockupToRequest(orderId: string, groupId: string, mo
     const groups = orderGroups(order);
     const i = groups.findIndex((x) => x.id === groupId);
     const old = i >= 0 ? groups[i] : null;
-    const key = (l: { style: string; color: string }) => `${l.style}|${l.color}`.toLowerCase();
-    const g: Group = { ...m.g, id: old?.id || m.g.id, name: old?.name || m.g.name,
-      lines: m.g.lines.map((l) => ({ ...l, sizes: old?.lines.find((x) => key(x) === key(l))?.sizes || l.sizes })) };
+    const mk = await mockupLines(supabase, mockupId);
+    let lines: Group["lines"];
+    if (!old || !old.lines.some((l) => l.style || l.color || pcsOf(l))) lines = m.g.lines; // nothing typed yet: the mockup's shirts
+    else {
+      const { pairs } = matchLines(old.lines, mk);
+      const garm = (m0: MLine) => ({ style: m0.style, brand: m0.brand, color: m0.color, garment: m0.garment });
+      const keepOld = new Set(pick.keepOld || []);
+      // a matched line takes the mockup's style and color and keeps its sizes (unless they said keep the old one too)
+      lines = old.lines.map((l) => { const m0 = mk.find((x) => pairs.get(x.id) === l.id); return m0 && !keepOld.has(m0.id) ? { ...l, ...garm(m0) } : l; });
+      for (const m0 of mk.filter((x) => pairs.has(x.id) && keepOld.has(x.id))) lines.push({ ...newGLine(), ...garm(m0) });
+      // a shirt that wasn't on the order: in place of a line (its sizes stay), as another line, or left off
+      for (const m0 of mk.filter((x) => !pairs.has(x.id))) {
+        const into = pick.replace?.[m0.id];
+        if (into) lines = lines.map((l) => (l.id === into ? { ...l, ...garm(m0) } : l));
+        else if (!pick.add || pick.add.includes(m0.id)) lines.push({ ...newGLine(), ...garm(m0) });
+      }
+      const drop = new Set(pick.remove || []);
+      lines = lines.filter((l) => !drop.has(l.id));
+    }
+    const g: Group = { ...m.g, id: old?.id || m.g.id, name: old?.name || m.g.name, lines };
     if (i >= 0) groups[i] = g; else groups.push(g);
     const { error } = await admin.from("orders").update({ groups }).eq("id", orderId);
     if (error) return { ok: false, error: error.message };

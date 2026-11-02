@@ -18527,3 +18527,17 @@ table.tbl.jc tr.jc-gaprow:hover>td{background:repeating-linear-gradient(135deg,t
 button.jc-msgn{all:unset;cursor:pointer;display:inline-block;margin-left:6px;font-size:11.5px;font-weight:700;border-radius:999px;padding:1px 7px;white-space:nowrap;color:var(--mc,var(--fbs-blue));background:color-mix(in srgb,var(--mc,var(--fbs-blue)) 12%,var(--surface))}
 button.jc-msgn.new{color:#fff;background:var(--mc,var(--fbs-blue))}
 button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Mockup Creator: what saving a mockup changes on an order they're building, asked first (Nov 2) */
+.mla{background:var(--surface);border-radius:var(--r);padding:20px;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow-y:auto;display:grid;gap:12px}
+.mla h2{font-family:var(--display);margin:0;font-size:18px}
+.mla>p{margin:-6px 0 0}
+.mla-row{display:grid;gap:8px;padding:12px 0;border-top:1px solid var(--line)}
+.mla-q{font-size:14px;color:var(--ink)}
+.mla-q small{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.mla-sel{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);padding:0 8px;width:100%}
+.mla-seg{display:grid;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.mla-seg button{height:36px;border:0;background:var(--surface);font:600 13px var(--body);color:var(--ink-2);cursor:pointer}
+.mla-seg button+button{border-left:1px solid var(--line)}
+.mla-seg button.on{background:var(--accent-soft,#e8f1fb);color:var(--accent)}
+.mla-btns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;padding-top:4px}

@@ -30,7 +30,8 @@ import { applyColorway, sewKindOf, withMethod, colorwaysOf, cwLetter, sewFilesOf
 import ColorwaySwap from "@/components/ColorwaySwap";
 import { cropFileToArt, makePreview } from "@/lib/artPrep";
 import PopularGarments from "@/components/PopularGarments";
-import { attachMockupToRequest, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
+import { attachMockupToRequest, mockupLineCheck, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
+import type { LineCheck } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { isVector, knockOut, trimClear, trimSolid, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
@@ -447,6 +448,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const qtDone = useRef<Record<string, string>>({});
   const saveRef = useRef<(force?: boolean) => void>(() => {});
   const [saving, setSaving] = useState(false);
+  // saving a mockup for an order they're building: what it would change on the order's garments, asked first (Nov 2, Nick)
+  const [lineAsk, setLineAsk] = useState<{ mockupId: string; check: LineCheck; add: Record<string, string>; old: Record<string, "keep" | "remove">; keepOld: Record<string, boolean> } | null>(null);
   const [saved, setSaved] = useState<{ title: string; url: string }[]>([]);
   /** the customer's mockup just saved (its number and a picture's id): Order it from here (Oct 24, Nick) */
   const [savedMock, setSavedMock] = useState<{ id: string; num: number } | null>(null);
@@ -3474,6 +3477,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (set && ids[0]) setSavedMock({ id: ids[0], num });
         // made for an order they're building: it goes into that group, then back to the order
         if (requestId && ids[0]) {
+          const ck = await mockupLineCheck(requestId, groupId, ids[0]);
+          if (ck.ok && ck.check && (ck.check.added.length || ck.check.removed.length || ck.check.changed.length)) {
+            const c = ck.check;
+            // a new shirt with one line gone: most likely a swap, so it goes in that line's place (its sizes stay)
+            const swap = c.added.length === 1 && c.removed.length === 1;
+            setLineAsk({ mockupId: ids[0], check: c, add: Object.fromEntries(c.added.map((a) => [a.id, swap ? `replace:${c.removed[0]!.id}` : "add"])), old: Object.fromEntries(c.removed.map((r) => [r.id, "keep"])), keepOld: {} });
+            setMsg(""); setSaving(false);
+            return;
+          }
           const a = await attachMockupToRequest(requestId, groupId, ids[0]);
           if (!a.ok) throw new Error(a.error);
           window.location.href = `/portal/request/${requestId}`;
@@ -3980,6 +3992,61 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         return (
           <div className="bs-overlay" onClick={(e) => { if (e.target === e.currentTarget) setBrandAsk(null); }}>
             <BrandPick modal groups={gs.map((g) => ({ label: g.label, colors: g.colors, go: () => matchBrand(im, g.key) }))} onPick={(g) => { g.go(); setBrandAsk(null); }} onClose={() => setBrandAsk(null)} />
+          </div>
+        );
+      })()}
+      {lineAsk && requestId && (() => {
+        const { check: c } = lineAsk;
+        const replaced = new Set(Object.values(lineAsk.add).filter((v) => v.startsWith("replace:")).map((v) => v.slice(8)));
+        async function apply() {
+          if (!lineAsk || !requestId) return;
+          setSaving(true);
+          const add = Object.entries(lineAsk.add).filter(([, v]) => v === "add").map(([k]) => k);
+          const replace = Object.fromEntries(Object.entries(lineAsk.add).filter(([, v]) => v.startsWith("replace:")).map(([k, v]) => [k, v.slice(8)]));
+          const remove = Object.entries(lineAsk.old).filter(([k, v]) => v === "remove" && !replaced.has(k)).map(([k]) => k);
+          const keepOld = Object.entries(lineAsk.keepOld).filter(([, v]) => v).map(([k]) => k);
+          const a = await attachMockupToRequest(requestId, groupId, lineAsk.mockupId, { add, replace, remove, keepOld });
+          if (!a.ok) { setSaving(false); setMsg("Couldn't update the order: " + a.error); return; }
+          window.location.href = `/portal/request/${requestId}`;
+        }
+        return (
+          <div className="bs-overlay" role="dialog" aria-modal="true" aria-labelledby="mla-h">
+            <div className="mla">
+              <h2 id="mla-h">Your mockup changed the garments</h2>
+              <p className="faint">Check how your order should change before we go back to it.</p>
+              {c.changed.map((x) => (
+                <div key={x.id} className="mla-row">
+                  <div className="mla-q"><b>{x.from}</b> is now <b>{x.to}</b>{x.pcs ? <small>Your {x.pcs} pcs and sizes stay on it.</small> : null}</div>
+                  <div className="mla-seg" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))" }}>
+                    <button type="button" className={!lineAsk.keepOld[x.id] ? "on" : ""} onClick={() => setLineAsk({ ...lineAsk, keepOld: { ...lineAsk.keepOld, [x.id]: false } })}>Change it</button>
+                    <button type="button" className={lineAsk.keepOld[x.id] ? "on" : ""} onClick={() => setLineAsk({ ...lineAsk, keepOld: { ...lineAsk.keepOld, [x.id]: true } })}>Keep both</button>
+                  </div>
+                </div>
+              ))}
+              {c.added.map((x) => (
+                <div key={x.id} className="mla-row">
+                  <div className="mla-q"><b>{x.label}</b> isn&apos;t on your order.<small>Add it as another line with the same print, or use it in place of a garment.</small></div>
+                  <select className="mla-sel" aria-label={`What to do with ${x.label}`} value={lineAsk.add[x.id]} onChange={(e) => setLineAsk({ ...lineAsk, add: { ...lineAsk.add, [x.id]: e.target.value } })}>
+                    <option value="add">Add it as another line</option>
+                    {c.removed.map((r) => <option key={r.id} value={`replace:${r.id}`}>Use it in place of {r.label}{r.pcs ? ` (keeps ${r.pcs} pcs)` : ""}</option>)}
+                    <option value="skip">Leave it off the order</option>
+                  </select>
+                </div>
+              ))}
+              {c.removed.filter((r) => !replaced.has(r.id)).map((r) => (
+                <div key={r.id} className="mla-row">
+                  <div className="mla-q"><b>{r.label}</b> isn&apos;t in your mockup any more.{r.pcs ? <small>It has {r.pcs} pcs on your order.</small> : null}</div>
+                  <div className="mla-seg" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))" }}>
+                    <button type="button" className={lineAsk.old[r.id] !== "remove" ? "on" : ""} onClick={() => setLineAsk({ ...lineAsk, old: { ...lineAsk.old, [r.id]: "keep" } })}>Keep it</button>
+                    <button type="button" className={lineAsk.old[r.id] === "remove" ? "on" : ""} onClick={() => setLineAsk({ ...lineAsk, old: { ...lineAsk.old, [r.id]: "remove" } })}>Remove it</button>
+                  </div>
+                </div>
+              ))}
+              <div className="mla-btns">
+                <button type="button" className="btn" disabled={saving} onClick={() => setLineAsk(null)}>Back to the mockup</button>
+                <button type="button" className="btn primary" disabled={saving} onClick={() => void apply()}>{saving ? "Updating…" : "Update my order"}</button>
+              </div>
+            </div>
           </div>
         );
       })()}
