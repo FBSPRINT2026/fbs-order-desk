@@ -87,8 +87,9 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
   // the same steps on the home page and the order page (components/OrderRail.tsx): the ready step says how it leaves,
   // and every order ends "Completed" (Nov 2, Nick: "ready for pickup, ready to ship, ready for delivery… all jobs will just
   // say completed at the end")
-  const readyWord = shipped ? "Shipped" : o.delivery_method === "ship" ? "Ready to ship" : o.delivery_method === "deliver" ? "Ready for delivery" : o.delivery_method === "pickup" ? "Ready for pickup" : "Ready";
-  const labels = [asked ? "Sent to FBS" : "Quote", "Proof", "Garments", "In production", readyWord, "Completed"];
+  // short words so the line always fits on one row (Nov 2, Nick: "quote, proof, receiving… printing… ready, and then
+  // completed… it just all has to fit on one line"); the sentence under it still says pickup, shipping or delivery
+  const labels = ["Quote", "Proof", "Receiving", "Printing", shipped ? "Shipped" : "Ready", "Completed"];
   void how;
   void kind;
   const keys = ["placed", "art", "goods", "print", "ready", shipped ? "ship" : o.delivery_method === "ship" ? "ship" : o.delivery_method === "pickup" ? "pickup" : "out"];

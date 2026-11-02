@@ -18636,3 +18636,9 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* the goods groups open with the same header bar as Shipments not linked, the color bar down the side under it (Nov 2, Nick) */
 .gdk-grp>.gdk-ghd{grid-column:1/-1}
 .gdk-list .gdk-grp+.gdk-grp{border-top:10px solid var(--surface-2)}
+/* the order line: the quote sign at the start and the check at the end always show; step names stay on one line (Nov 2) */
+.orl-end{position:absolute;top:50%;width:20px;height:20px;margin-top:-10px;border-radius:50%;background:var(--surface);border:2px solid var(--line);display:grid;place-items:center;color:var(--ink-3)}
+.orl-end.s{left:0;margin-left:-10px;border-color:var(--fbs-blue);color:var(--fbs-blue)}
+.orl-end.e{left:100%;margin-left:-10px}
+.orl-end svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.orl-lb li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

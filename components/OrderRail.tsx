@@ -29,6 +29,10 @@ export default function OrderRail({ steps, done = false }: { steps: JobStep[]; d
     <div className="orl" style={{ ["--n" as string]: n, ["--p" as string]: `${pct}%`, ["--mk" as string]: mk }} aria-label={steps.map((s, i) => `${s.label}${i < at || done ? " done" : i === at ? " (now)" : ""}`).join(", ")}>
       <div className="orl-bar" aria-hidden>
         <span className="orl-fill" />
+        {/* the quote sign at the start and the check at the end are always there; the step it's on shows its own sign
+            where it sits (Nov 2, Nick) */}
+        {at > 0 && <span className="orl-end s"><svg viewBox="0 0 24 24"><path d={PATHS.placed} /></svg></span>}
+        {at < n - 1 && <span className="orl-end e"><svg viewBox="0 0 24 24"><path d={PATHS.check} /></svg></span>}
         <span className="orl-mk"><svg viewBox="0 0 24 24"><path d={PATHS[icon] || PATHS.placed} /></svg></span>
       </div>
       <ol className="orl-lb">{steps.map((s, i) => <li key={s.key + i} className={i < at || done ? "done" : i === at ? "cur" : ""} title={s.sub ? `${s.label}: ${s.sub}` : s.label}>{s.label}</li>)}</ol>
