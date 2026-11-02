@@ -59,7 +59,7 @@ import { FillFromText, type StatusLine } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
-import { PAY_TERMS, SIZES, SUPPLIED_PRESS_ID, PATCH_APPLY_ID, patchEach, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
+import { PAY_TERMS, SIZES, SUPPLIED_PRESS_ID, PATCH_APPLY_ID, patchEach, specialLocEach, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
 import OrderHelper from "@/components/OrderHelper";
 import type { HelperAction, HelperOrder } from "@/lib/orderHelperShared";
 import { BIG_SIZES, cardForOrder, finishingIncluded, programForOrder, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
@@ -591,7 +591,11 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         // a patch on this group: its fee on top of the program price (MEI: the hat's price + $2.50 for the flag)
         const pList = priceList(settings, (d.price_type || "retail") as PriceType);
         const patchAdd = Math.round(g.imprints.filter((im) => im.patch).reduce((a, im) => a + patchEach(im, pList), 0) * 100) / 100;
-        const extra = want0 && patchAdd ? { each: Math.round(((extra0?.each || 0) + patchAdd) * 100) / 100, names: [extra0?.each ? extra0.names : "", "Patch application"].filter(Boolean).join(", ") } : extra0;
+        // a special location (a sleeve, a pocket: a left chest on a pocket tee) on top of the program price, like the list
+        // price adds it (Nov 1, Nick on #40352: "I changed it to pocket and it still didn't update"), unless the card prices it
+        const locAdd = want0 && !plans[gi]?.flat && ownX.special_location == null ? specialLocEach(g, pList) : want0 && ownX.special_location != null ? specialLocEach(g, { ...pList, specialLocPrice: +ownX.special_location }) : 0;
+        const adds = [extra0?.each ? { each: extra0.each, name: extra0.names } : null, patchAdd ? { each: patchAdd, name: "Patch application" } : null, locAdd ? { each: locAdd, name: "Special location" } : null].filter(Boolean) as { each: number; name: string }[];
+        const extra = want0 && adds.length ? { each: Math.round(adds.reduce((a, x) => a + x.each, 0) * 100) / 100, names: adds.map((x) => x.name).join(", ") } : extra0;
         const want = want0 && extra && extra.each ? { each: Math.round((want0.each + extra.each) * 100) / 100, note: `${want0.note} + ${extra.names} ${extra.each.toFixed(2)} (not in the program)`, base: want0.each, adds: `${extra.names.replace(/\s*\([^)]*\)/g, "")} ${extra.each.toFixed(2)}` } : want0;
         if (want) {
           const up: GLine["sizeUp"] = {};

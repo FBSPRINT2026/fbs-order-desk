@@ -947,6 +947,19 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
   return { each: 0, setup: 0, inkFee };
 }
 
+/**
+ * The special locations' charge per piece (sleeve, pocket, side; a hat's sides and back): one charge per print at one.
+ * A left chest on a pocket tee prints on the pocket, so it's a pocket print (Nov 1, Nick on #40352, a Comfort Colors 6030
+ * Pocket Tee: "did you add the 25 cents… for the specialty location"). One rule for list prices and program prices.
+ */
+export function specialLocEach(g: Pick<Group, "imprints" | "lines">, pl: PriceList): number {
+  if (!pl.specialLocPrice) return 0;
+  const specLocs = [...(pl.specialLocations || []), ...HAT_SPECIAL_LOCATIONS, ...((pl.specialLocations || []).some((z) => /sleeve/i.test(z)) ? LONG_SLEEVE_LOCATIONS : [])].map((z) => z.toLowerCase());
+  const pocketTee = (g.lines || []).some((l) => billQty(l) > 0 && /\bpocket\b/i.test(`${l.garment || ""} ${(l as { description?: string }).description || ""}`));
+  const onPocket = (d: Imprint) => pocketTee && /^(left|right) chest$/i.test(d.location || "") && specLocs.includes("pocket");
+  return (g.imprints || []).filter((d) => !d.patch && (specLocs.includes((d.location || "").toLowerCase()) || onPocket(d))).length * num(pl.specialLocPrice);
+}
+
 export type LineCalc = { id: string; qty: number; garmentEach: number; printEach: number; light: boolean; calcEach: number; each: number; hasOv: boolean; sub: number; upTotal: number };
 export type GroupCalc = ReturnType<typeof calcGroup>;
 /**
@@ -1041,11 +1054,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const finishEach = r2(finishing.reduce((a, f) => a + num(f.price), 0));
   // contract extras per piece: special locations (sleeve, pocket, side), specialty ink on poly / nylon / dyed garments
   const imps = g.imprints || [];
-  const specLocs = [...(pl.specialLocations || []), ...HAT_SPECIAL_LOCATIONS, ...((pl.specialLocations || []).some((z) => /sleeve/i.test(z)) ? LONG_SLEEVE_LOCATIONS : [])].map((z) => z.toLowerCase());
-  // a left chest on a pocket tee prints on the pocket: a pocket print (Nov 1, Nick on #40352, a Comfort Colors 6030 Pocket
-  // Tee: "did you add the 25 cents… for the specialty location to the front imprint?")
-  const onPocket = (d: Imprint) => /^(left|right) chest$/i.test(d.location || "") && specLocs.includes("pocket") && (g.lines || []).some((l) => billQty(l) > 0 && /\bpocket\b/i.test(`${l.garment || ""} ${(l as { description?: string }).description || ""}`));
-  const locExtra = pl.specialLocPrice ? imps.filter((d) => specLocs.includes((d.location || "").toLowerCase()) || onPocket(d)).length * num(pl.specialLocPrice) : 0;
+  const locExtra = specialLocEach(g, pl);
   // puff ink (Oct 30): each puffed screen print, per piece
   const puffExtra = imps.filter((d) => d.method === "screen" && d.puff).length * puffEach(pl);
   const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
