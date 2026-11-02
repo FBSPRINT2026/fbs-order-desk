@@ -61,21 +61,29 @@ export default function QuickPay({ open, onSelect, ask, onPayAmount, initial }: 
     pick(f2, s, describePay(f2));
   }
 
+  // the ideas take turns inside the box instead of a row of bubbles (Nov 2, Nick: "the same… thing… with the AI search…
+  // get rid of the bubbles"); Select with the box empty picks the one showing
+  const ideas = [...recent.filter((r) => !SUGGEST.some((x) => x.toLowerCase() === r.toLowerCase())), ...SUGGEST].slice(0, 7);
+  const [ri, setRi] = useState(0);
+  useEffect(() => {
+    if (q || result || ideas.length < 2) return;
+    const t = setInterval(() => setRi((i) => (i + 1) % ideas.length), 3000);
+    return () => clearInterval(t);
+  }, [q, result, ideas.length]);
+  const roll = !q && !result ? ideas[ri % Math.max(1, ideas.length)] || "" : "";
   return (
     <div className="qp">
-      <form className="qp-row" onSubmit={(e) => { e.preventDefault(); run(q); }}>
+      <form className="qp-row" onSubmit={(e) => { e.preventDefault(); const t = q.trim() || roll; if (!q.trim() && roll) setQ(roll); run(t === "Everything due" ? "everything" : t); }}>
         <label htmlFor="qp-in" className="qp-l">What do you want to pay?</label>
         <div className="qp-in">
           <span aria-hidden="true">✨</span>
-          <input type="text" id="qp-in" value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. all orders in August · everything under $100 · the Brewery jobs · past due" autoComplete="off" />
-          <button type="submit" className="btn primary" disabled={busy || !q.trim()}>{busy ? "Finding…" : "Select"}</button>
+          <span className="pa-field">
+            <input type="text" id="qp-in" value={q} onChange={(e) => setQ(e.target.value)} placeholder={roll ? "" : "e.g. all orders in August · past due"} autoComplete="off" />
+            {roll && <span key={ri} className="pa-roll" aria-hidden>Try “{roll}”</span>}
+          </span>
+          <button type="submit" className="btn primary" disabled={busy || (!q.trim() && !roll)}>{busy ? "Finding…" : "Select"}</button>
         </div>
       </form>
-      <div className="qp-chips">
-        {[...recent.filter((r) => !SUGGEST.some((s) => s.toLowerCase() === r.toLowerCase())), ...SUGGEST].slice(0, 7).map((s, i) => (
-          <button key={s} type="button" className={"qp-chip" + (i < recent.length && !SUGGEST.includes(s) ? " recent" : "")} onClick={() => { setQ(s); run(s === "Everything due" ? "everything" : s); }}>{s}</button>
-        ))}
-      </div>
       {onPayAmount && open.length > 0 && (
         <div className="qp-amt">
           <label htmlFor="qp-amt">Or pay an amount</label>

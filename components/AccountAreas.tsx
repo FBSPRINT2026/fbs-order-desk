@@ -744,7 +744,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         <button type="button" className="stat" onClick={() => setPayF("late")}><span className="k">Open over a week</span><span className={"v" + (sumOf(lateL) > 0.004 ? " alert" : "")}>{money(sumOf(lateL))}</span><small>{lateL.length} invoice{lateL.length === 1 ? "" : "s"}</small></button>
       </div>
       <div className="aa-card aa-tblcard pyl">
-        <div className="toolbar pyl-bar">
+        <div className="toolbar pyl-bar aa-otabs">
           <div className="chips">
             <button type="button" className={"chip" + (payF === "open" ? " on" : "")} onClick={() => setPayF("open")}>Open<span className="chip-n">{allOpen.length}</span></button>
             <button type="button" className={"chip" + (payF === "late" ? " on" : "")} onClick={() => setPayF("late")}>Over a week<span className="chip-n">{lateL.length}</span></button>
