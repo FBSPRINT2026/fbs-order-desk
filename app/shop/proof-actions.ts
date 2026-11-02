@@ -69,6 +69,51 @@ export async function restoreVersion(proofId: string, which: "ours" | "theirs", 
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
 }
 
+/**
+ * Use a sent version again (Nov 2, Nick: "oh no, I want version one back again"): every mockup of that version becomes the
+ * current mockup again (the newer ones step aside, archived, not deleted), and the order's prints and garments go back to
+ * how they were in it. Nothing is sent: the Versions list shows it as not sent yet, to send as the next version or mark
+ * approved.
+ */
+export async function bringBackVersion(orderId: string, version: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { user, isStaff, email } = await getViewer();
+    if (!user || !isStaff) return { ok: false, error: "Only shop staff can do that." };
+    const admin = createAdminClient();
+    const { data: ps } = await admin.from("proofs").select("id, mockup_id").eq("order_id", orderId).eq("version", version);
+    const mids = [...new Set(((ps || []) as { mockup_id: string | null }[]).map((p) => p.mockup_id).filter(Boolean))] as string[];
+    if (!mids.length) return { ok: false, error: `Version ${version} has no saved mockups to bring back. Its pictures are still here.` };
+    const { data: ms } = await admin.from("mockups").select("*").in("id", mids).order("created_at");
+    const mks = (ms || []) as { id: string; customer_id: string | null; group_id: string | null; title: string; file_path: string; design_ids: string[] | null; snapshot: Snap | null }[];
+    const { data: od } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
+    if (!od) return { ok: false, error: "Order not found." };
+    const o = od as Order;
+    const groups = orderGroups(o);
+    const at = new Date().toISOString();
+    const byGroup = new Map<string, typeof mks>();
+    for (const m of mks) { const gid = m.group_id || (groups.length === 1 ? groups[0].id : ""); if (!gid) continue; byGroup.set(gid, [...(byGroup.get(gid) || []), m]); }
+    if (!byGroup.size) return { ok: false, error: "Couldn't tell which group this version is for." };
+    const all = groups.map((g) => {
+      const list = byGroup.get(g.id);
+      const snap = list?.find((m) => m.snapshot?.imprints)?.snapshot;
+      if (!list || !snap?.imprints) return g;
+      const one = snap.lines.length === 1;
+      const lines = g.lines.map((l, i) => { const x = snap.lines.find((y) => y.id && y.id === l.id) || (l.shopUse ? undefined : one ? snap.lines[0] : snap.lines[i]); return x ? { ...l, style: x.style, brand: x.brand, color: x.color, garment: x.garment } : l; });
+      return { ...g, lines, imprints: snap.imprints.map((d) => ({ ...d })), mockupSize: snap.mockupSize || g.mockupSize, mockupThumbs: list.map((m) => String(m.file_path).replace(/\.png$/, "-thumb.png")), mockupAt: at, mockupArt: undefined };
+    });
+    for (const [gid, list] of byGroup) {
+      const { data: live } = await admin.from("mockups").select("id, proof_id").eq("order_id", orderId).eq("group_id", gid).is("archived_at", null);
+      const rows = (live || []) as { id: string; proof_id: string | null }[];
+      if (rows.length) await admin.from("mockups").update({ archived_at: at }).in("id", rows.map((x) => x.id));
+      await admin.from("mockups").insert(list.map((m) => ({ customer_id: m.customer_id, order_id: orderId, group_id: gid, proof_id: null, title: m.title, file_path: m.file_path, design_ids: m.design_ids || [], created_by: email, snapshot: m.snapshot })));
+    }
+    const { error } = await admin.from("orders").update({ groups: all, updated_at: at }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "proof_restored", detail: `Went back to Version ${version}`, actor: email });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
+
 async function me() {
   const v = await getViewer();
   if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");

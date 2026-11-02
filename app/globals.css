@@ -18431,3 +18431,12 @@ table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
 @media (max-width:900px){.jcx{grid-template-columns:minmax(0,1fr)}.jcx>*{grid-column:1!important;grid-row:auto!important}.jcx>.jcm{height:auto;max-height:70vh;position:static;border-radius:0 0 12px 12px;margin-bottom:12px}}
 .ca-call.ca-changed{margin-top:8px;line-height:1.45}
 .ca-call.ca-changed b{display:block;margin-bottom:2px}
+/* the Versions list (components/ProofHistory.tsx; Nov 2, Nick): the next version not sent yet on top, what was said while
+   each version was out under it, and Use this version again */
+.ph-row.ph-next{border:1px dashed color-mix(in srgb,var(--warn) 55%,var(--line));border-radius:var(--r);padding:10px;background:color-mix(in srgb,var(--warn) 6%,var(--surface))}
+.ph-cur.ph-cur-new{background:color-mix(in srgb,var(--warn) 18%,var(--surface));color:color-mix(in srgb,var(--warn) 70%,#000)}
+.ph-msgs{display:flex;flex-direction:column;gap:4px;margin-top:6px;padding:6px 10px;border-left:3px solid var(--line);background:var(--surface-2);border-radius:0 6px 6px 0}
+.ph-msg{font-size:13px;color:var(--ink-2);line-height:1.4}
+.ph-msg b{color:var(--ink);font-weight:700}
+.ph-msg.c b{color:var(--fbs-blue)}
+.ph-msg small{margin-left:6px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}

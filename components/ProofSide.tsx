@@ -33,6 +33,7 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
   const [err, setErr] = useState("");
   const [n, setN] = useState(0);
   const [showAll, setShowAll] = useState(false);
+  const [savesOpen, setSavesOpen] = useState(false);
   useEffect(() => {
     (async () => {
       const [{ data: ms }, { data: pr }] = await Promise.all([
@@ -81,8 +82,10 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
   return (
     <>
       <section className="panel mkh-panel">
-        <div className="panel-h"><h2>Mockup saves</h2><span className="faint">newest first</span><a className="btn sm" style={{ marginLeft: "auto" }} href={`/print/${orderId}?proof=1`} target="_blank" rel="noreferrer" title="The art proof as a PDF: every mockup big, each print up close with its size and inks, and a box to approve">Proof PDF</a></div>
-        <div className="panel-b">
+        {/* every save, folded away: the Versions list is where versions are sent and brought back (Nov 2, Nick: "you've got
+            this so hard to understand") */}
+        <div className="panel-h"><h2>Every mockup save</h2><button type="button" className="linkbtn" onClick={() => setSavesOpen((x) => !x)}>{savesOpen ? "Hide" : `Show ${groups.length}`}</button><a className="btn sm" style={{ marginLeft: "auto" }} href={`/print/${orderId}?proof=1`} target="_blank" rel="noreferrer" title="The art proof as a PDF: every mockup big, each print up close with its size and inks, and a box to approve">Proof PDF</a></div>
+        {savesOpen && <div className="panel-b">
           {!mocks.length && <p className="faint" style={{ margin: 0 }}>No mockups saved yet. Make one in the Mockup Creator.</p>}
           {groups.slice(0, showAll ? groups.length : 2).map((gr) => {
             const m = gr[0], im = m.snapshot?.imprints?.[0];
@@ -110,8 +113,7 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
           })}
           {groups.length > 2 && <button type="button" className="linkbtn mkh-more" onClick={() => setShowAll((x) => !x)}>{showAll ? "Fewer saves" : `${groups.length - 2} older save${groups.length - 2 === 1 ? "" : "s"}`}</button>}
           {/* sending: the preview, then Send, or copy the link / a button for your own email (components/tools/SendProofTool.tsx) */}
-          {current.length > 0 && unsentCurrent && <div className="mkh-foot"><SendProofTool target={{ kind: "art", orderId }} label={`Send to customer as Version ${nextV}`} onDone={(m) => done(m)} /></div>}
-        </div>
+        </div>}
       </section>
 
       <section className="panel ca-panel">
@@ -129,7 +131,7 @@ export default function ProofSide({ orderId, bump, onChanged, customer, email }:
               </div>
               {st.tone === "ok" && <div className="ca-call ok">Version {liveV} {st.staff ? "approved another way" : "approved"} by <b>{st.dec?.decided_name || "the customer"}</b>{st.dec?.decided_at ? `, ${fmtStamp(st.dec.decided_at)}` : ""}.</div>}
               {/* the art changed after it was approved, said plainly (Nov 2, Nick: "this screen doesn't clearly show what's going on") */}
-              {st.tone === "ok" && unsentCurrent && <div className="ca-call wait ca-changed"><b>The mockup changed after Version {liveV} was approved.</b> {[...new Set(current.map((m) => (m.snapshot?.imprints || []).map((im) => [im.location, im.size].filter(Boolean).join(" ")).join(", ")).filter(Boolean))].join(" · ") || "The newest save"} isn&apos;t approved yet. Send it as Version {nextV} (Mockup history), or mark it approved after the customer OKs it.</div>}
+              {st.tone === "ok" && unsentCurrent && <div className="ca-call wait ca-changed"><b>The mockup changed after Version {liveV} was approved.</b> {[...new Set(current.map((m) => (m.snapshot?.imprints || []).map((im) => [im.location, im.size].filter(Boolean).join(" ")).join(", ")).filter(Boolean))].join(" · ") || "The newest save"} isn&apos;t approved yet. Send it as Version {nextV} from the Versions list, or mark it approved after the customer OKs it.</div>}
               {st.tone === "bad" && <div className="ca-call bad">{first} asked for changes. Make them in the Mockup Creator, then send the next version.</div>}
               {st.tone === "wait" && <div className="ca-call wait">{st.viewed ? `${first} opened the proof ${ago(st.last || st.viewed)} but hasn't answered yet.` : `${first} hasn't opened the proof link yet (sent ${st.sent ? ago(st.sent) : ""}).`}</div>}
             </>

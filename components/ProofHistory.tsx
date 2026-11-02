@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import FileThumb from "@/components/FileThumb";
 import { createClient } from "@/lib/supabase/client";
 import { fmtStamp } from "@/lib/format";
-import { restoreVersion } from "@/app/shop/proof-actions";
+import { bringBackVersion, restoreVersion } from "@/app/shop/proof-actions";
+import SendProofTool from "@/components/tools/SendProofTool";
 
 /**
  * Proof history (rebuilt Oct 16, Nick): only the versions the customer was sent, Version 1 being the first. Each
@@ -41,18 +42,30 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  // the current mockups (one not sent yet is the next version), and the order's messages (shown under the version
+  // that was out when they were written)
+  const [cur, setCur] = useState<{ id: string; file_path: string }[]>([]);
+  const [msgs, setMsgs] = useState<{ id: string; author_type: string; author_name: string; body: string; created_at: string }[]>([]);
+  const [n, setN] = useState(0);
   useEffect(() => {
     (async () => {
-      const { data: pr } = await sb.from("proofs").select(PROOF_COLS).eq("order_id", orderId).not("version", "is", null).order("version", { ascending: false }).order("created_at");
+      const [{ data: pr }, { data: ms }, { data: mm }] = await Promise.all([
+        sb.from("proofs").select(PROOF_COLS).eq("order_id", orderId).not("version", "is", null).order("version", { ascending: false }).order("created_at"),
+        sb.from("mockups").select("id, file_path").eq("order_id", orderId).is("archived_at", null).order("created_at"),
+        sb.from("messages").select("id, author_type, author_name, body, created_at").eq("order_id", orderId).neq("topic", "goods").order("created_at").limit(300),
+      ]);
       const list = (pr || []) as unknown as ProofRow[];
       setRows(list);
-      const paths = [...new Set(list.flatMap((r) => [r.file_path, ...(r.customer_change?.mockups || [])]).filter(Boolean))];
+      const cm = (ms || []) as { id: string; file_path: string }[];
+      setCur(cm);
+      setMsgs((mm || []) as { id: string; author_type: string; author_name: string; body: string; created_at: string }[]);
+      const paths = [...new Set([...list.flatMap((r) => [r.file_path, ...(r.customer_change?.mockups || [])]), ...cm.map((m) => m.file_path)].filter(Boolean))];
       if (paths.length) {
         const { data } = await sb.storage.from("proofs").createSignedUrls(paths, 3600);
         setUrls(Object.fromEntries(paths.map((p, i) => [p, data?.[i]?.signedUrl || ""])));
       }
     })();
-  }, [sb, orderId, bump]);
+  }, [sb, orderId, bump, n]);
 
   const versions = useMemo(() => {
     const m = new Map<number, ProofRow[]>();
@@ -68,12 +81,38 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
     if (r.open) window.location.href = r.open; else window.location.reload();
   };
 
+  // Version N again (Nov 2, Nick: "I want a version one back again"): its mockups become the current ones, not sent
+  const again = async (v: number) => {
+    setBusy("v" + v); setErr("");
+    const r = await bringBackVersion(orderId, v);
+    setBusy(""); setAsk("");
+    if (!r.ok) return setErr(r.error);
+    setN((x) => x + 1);
+  };
+  const live = rows.filter((r) => !r.archived_at);
+  const unsent = cur.filter((m) => !live.some((p) => p.mockup_id === m.id));
+  const nextV = (rows.length ? Math.max(...rows.map((r) => r.version)) : 0) + 1;
+  // when each version went out: its messages are the ones from then until the next version
+  const startOf = (ps: ProofRow[]) => ps.map((p) => p.sent_at || p.created_at).sort()[0] || "";
+  const msgsFor = (i: number) => { const from = startOf(versions[i][1]); const to = i > 0 ? startOf(versions[i - 1][1]) : "9999"; return msgs.filter((m) => m.created_at >= from && m.created_at < to); };
+
   return (
     <section className="panel ph-panel">
-      <div className="panel-h"><h2>Sent to the customer</h2><span className="faint">{versions.length ? `${versions.length} version${versions.length === 1 ? "" : "s"}` : "nothing sent yet"}</span></div>
+      <div className="panel-h"><h2>Versions</h2><span className="faint">{versions.length ? `${versions.length} sent to the customer, newest first` : "nothing sent yet"}</span></div>
       <div className="panel-b ph-list">
         {err && <div className="err">{err}</div>}
-        {!versions.length && <p className="faint" style={{ margin: 0 }}>Nothing sent to the customer yet. Save a mockup in the Mockup Creator, then send it from Mockup history.</p>}
+        {/* the current mockup, when it isn't the version out with the customer: the next version */}
+        {unsent.length > 0 && (
+          <div className="ph-row ph-next">
+            <div className="ph-pics">{unsent.map((m) => <a key={m.id} className="ph-pic" href={urls[m.file_path] || undefined} target="_blank" rel="noreferrer">{urls[m.file_path] ? <img src={urls[m.file_path]} alt="" /> : null}</a>)}</div>
+            <div className="ph-body">
+              <div className="ph-top"><b>Version {nextV}</b><span className="ph-cur ph-cur-new">Current · not sent</span></div>
+              <div className="ph-st wait">The mockup as it is now. The customer hasn&apos;t seen it.</div>
+              <div className="ph-acts"><SendProofTool target={{ kind: "art", orderId }} label={`Send as Version ${nextV}`} onDone={() => setN((x) => x + 1)} /><span className="faint" style={{ fontSize: 12.5 }}>or mark it approved in Customer approval</span></div>
+            </div>
+          </div>
+        )}
+        {!versions.length && !unsent.length && <p className="faint" style={{ margin: 0 }}>Nothing sent to the customer yet. Save a mockup in the Mockup Creator, then send it.</p>}
         {versions.map(([v, ps], i) => {
           const s = versionState(ps);
           const theirs = ps.find((p) => p.customer_change?.imprints && p.customer_change.imprints.length);
@@ -87,7 +126,7 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
                 ))}
               </div>
               <div className="ph-body">
-                <div className="ph-top"><b>Version {v}</b>{i === 0 && !s.old && <span className="ph-cur">Current</span>}</div>
+                <div className="ph-top"><b>Version {v}</b>{i === 0 && !s.old && !unsent.length && <span className="ph-cur">Current</span>}</div>
                 <div className="faint ph-sent">{s.sent ? <>Sent {fmtStamp(s.sent)}{s.to ? ` to ${s.to}` : ""}</> : "Not emailed: approved another way"}</div>
                 <div className="ph-title">{ps.map((p) => p.title).join(" · ")}</div>
                 {s.sent && (
@@ -100,6 +139,12 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
                 <div className={"ph-st " + s.tone}>{s.text}{s.dec?.decided_at ? <> · <b>{s.dec.decided_name || "customer"}</b> · {fmtStamp(s.dec.decided_at)}</> : null}</div>
                 {ps.filter((p) => p.customer_comment).map((p) => <div className="ph-note" key={p.id}>{p.customer_comment}</div>)}
                 {ps.map((p) => (p.customer_change?.mockups || []).length ? <div className="ph-own" key={p.id}><span>Their version:</span>{(p.customer_change?.mockups || []).map((m) => urls[m] ? <a key={m} href={urls[m]} target="_blank" rel="noreferrer"><img src={urls[m]} alt="The customer's mockup" /></a> : null)}</div> : null)}
+                {/* what was said while this version was out */}
+                {(() => { const ms = msgsFor(i); return ms.length ? <div className="ph-msgs">{ms.slice(-6).map((m) => <div key={m.id} className={"ph-msg " + (m.author_type === "customer" ? "c" : "s")}><b>{m.author_type === "customer" ? m.author_name || "Customer" : "We"}</b> {m.body}<small>{fmtStamp(m.created_at)}</small></div>)}</div> : null; })()}
+                {/* bring it back as the current mockup */}
+                {(s.old || unsent.length > 0) && (ask === "v" + v
+                  ? <div className="ph-acts"><span className="ph-q">Make Version {v} the current mockup again? Nothing is sent; you send it or mark it approved next.</span><button className="btn sm primary" type="button" disabled={!!busy} onClick={() => void again(v)}>{busy === "v" + v ? "Working…" : "Yes, use it again"}</button><button className="btn sm ghost" type="button" onClick={() => setAsk("")}>Cancel</button></div>
+                  : <div className="ph-acts"><button className="btn sm" type="button" onClick={() => setAsk("v" + v)}>Use this version again</button></div>)}
                 {theirs && (
                   <div className="ph-acts">
                     {ask === theirs.id
