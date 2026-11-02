@@ -129,8 +129,8 @@ async function findPages(ai: Ai, what: string): Promise<string[]> {
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
         model: ai.model, max_tokens: 700,
-        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-        system: "You find product pages for blank apparel. Search the web for shops that sell the exact style in the exact color and show flat product photos (laid flat or ghost mannequin, no person), ideally both the front and the back. Good sources: the brand's own site, Jiffy Shirts, ShirtSpace, Bulk Apparel, BlankStyle, Apparel Wholesale, TSC Apparel, Amazon. Skip ssactivewear.com and sanmar.com (already checked). Answer with only the product page URLs, one per line, best first, at most 6. A page for the style that has a color picker counts. No other words.",
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+        system: "You find product pages for blank apparel. Search the web for shops that sell the exact style in the exact color and show flat product photos of the BACK (laid flat or ghost mannequin, no person), ideally the front and the back. Many shops only show the back on a model: keep looking past those (more search terms: the style with back, flat, the color name) for shops whose own product pictures include a flat back, often smaller wholesalers on Shopify. Good sources: the brand's own site, Jiffy Shirts, ShirtSpace, Bulk Apparel, BlankStyle, Apparel Wholesale, TSC Apparel, Amazon. Skip ssactivewear.com and sanmar.com (already checked). Answer with only the product page URLs, one per line, best first, at most 8. A page for the style that has a color picker counts. No other words.",
         messages: [{ role: "user", content: `Find product pages with front and back photos of: ${what}` }],
       }),
     });
@@ -145,7 +145,7 @@ async function findPages(ai: Ai, what: string): Promise<string[]> {
     for (const b of blocks) if (b.type === "web_search_tool_result" && Array.isArray(b.content)) for (const x of b.content) if (x.url) urls.push(x.url);
     const out: string[] = [];
     for (const u of urls) { const p = publicUrl(u); if (!p || /ssactivewear|sanmar\.com/i.test(p.hostname)) continue; if (!out.includes(p.toString())) out.push(p.toString()); }
-    return out.slice(0, 6);
+    return out.slice(0, 8);
   } catch (e) { error = e instanceof Error ? e.message : "search failed"; return []; }
   finally {
     clearTimeout(t);
