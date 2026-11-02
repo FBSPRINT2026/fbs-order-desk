@@ -17996,3 +17996,8 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 @media (max-width:900px){.gdk-nlbox .gdk-um{grid-template-columns:16px minmax(0,1fr)}.gdk-nlbox .gdk-um-pick{grid-column:2}}
 /* each portal area's title gets the page title's color bar (Nov 2, Nick: Payments) */
 .portal .aa-bar h2::after{content:"";display:block;height:4px;border-radius:4px;margin-top:6px;width:calc(100% + 40px);min-width:110px;background:var(--fbs-fade)}
+/* Mockup Creator: the next style is an empty dashed box under the last one (Nov 2, Nick: option B) */
+.mk-gar-more{display:grid;grid-template-columns:220px minmax(0,1fr) 32px;gap:12px;margin:-12px 0 4px}
+.mk-gar-new{grid-column:1;height:36px;box-sizing:border-box;border:1px dashed var(--line);border-radius:6px;background:var(--surface);color:var(--ink-3);font:14px var(--body);text-align:left;padding:0 11px;cursor:pointer}
+.mk-gar-new:hover,.mk-gar-new:focus-visible{border-color:var(--accent);color:var(--accent)}
+@media (max-width:700px){.mk-gar-more{grid-template-columns:minmax(0,1fr);margin-top:-8px}}

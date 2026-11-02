@@ -4141,6 +4141,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       </div>
                     );
                   })}
+                  {/* the next style is an empty box under the last one, like the empty Color box (Nov 2, Nick: option B) */}
+                  <div className="mk-gar-more"><button type="button" className="mk-gar-new" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Another style</button></div>
                   <div className="mk-help-row"><button type="button" className="btn sm mk-help-pick" onClick={() => setPopOpen(true)}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" aria-hidden><path d="M8 4l-4 3 2 4 2-1v10h8V10l2 1 2-4-4-3c-1 2-3 2-4 2s-3 0-4-2z" /></svg>Need help picking garments?</button></div>
                   {popOpen && <PopularGarments askHref={portal ? `/portal?area=messages${asId ? `&as=${asId}` : ""}` : undefined} onClose={() => setPopOpen(false)} onPick={(g) => {
@@ -4148,7 +4150,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     setLines((ls) => { const blank = ls.find((x) => !x.style.trim()); const ln = { style: g.style, brand: g.brand, color: "", garment: g.garment }; return blank ? ls.map((x) => (x.id === blank.id ? { ...x, ...ln } : x)) : [...ls, { id: uid(), ...ln }]; });
                   }} />}
                   <div className="row mk-add-row" style={{ gap: 8 }}>
-                    <button className="btn sm mk-add" type="button" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Add a style</button>
                     {/* a garment the suppliers don't carry (Oct 24, Nick: "images not in catalog, upload my own images") */}
                     <button className="btn sm ghost mk-add mk-own-up" type="button" onClick={() => setOwnUp({ name: "", color: "", front: null, back: null })}>Not in the catalog? Upload photos</button>
                   </div>
