@@ -811,7 +811,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       const l = g.lines.find((x) => ck(x.color) === ck(k));
       for (const [a, b] of Object.entries(m || {})) if (b && b.trim().toLowerCase() !== a.trim().toLowerCase()) (changes[a.trim().toLowerCase()] ||= []).push({ to: b.trim(), on: l?.color || k });
     }
-    const sharedNote = shared.length ? <>{shared.map((k) => <span key={k} className="pr-scr-tag nc" title={`No charge: the same PMS as the ${firstOn(k) || "another print"} (one matching fee per order)`}>{k.replace(/^PMS\s+/i, "").replace(/\s+[CU]$/i, "")}<NoCharge title={`No charge: matched for the ${firstOn(k) || "another print"}`} /></span>)}</> : null;
+    const sharedNote = shared.length ? <NoCharge title={`No charge: ${shared.map((k) => `${k} matched for the ${firstOn(k) || "another print"}`).join("; ")} (one matching fee per order)`} /> : null;
     return (
       <InkLine key={"ink" + d.id} thread={d.method === "embroidery"} inks={chips ? inks : []} changes={changes} groups={ccShow && versionsOf(d).length ? versionsOf(d).map((v) => v.to) : undefined} charged={(k) => isScr && !!inks.find((x) => x.name === k)?.auto && !!inks.find((x) => x.name === k)?.charge}
         summary={pms.length || typed || toPms.length || shared.length ? <span className="pr-pms">{n ? `${n} PMS match${n === 1 ? "" : "es"}` : shared.length ? "PMS match" : "No PMS charge"}{!hidePrices && n ? <> · <b className="num">{money(fee)}</b></> : null}{sharedNote}</span> : null}
@@ -1703,12 +1703,12 @@ function InkLine({ inks, charged, summary, editable, children, thread, changes, 
     <div className="pr-scr pr-inkl">
       <span className="pr-scr-l">{thread ? "Threads" : "Inks"}</span>
       <span className="pr-scr-v">
-        {inks.length > 0 && groups?.length ? <span className="ink-chips ink-grp"><span className="ink-gl">A</span>{inks.map((k) => chip(k.name))}{groups.map((to, i) => <span key={i} className="ink-gw"><span className="ink-to">changes to</span><span className="ink-gl">{String.fromCharCode(66 + i)}</span>{chip(to, " chg")}</span>)}</span> : null}
+        {inks.length > 0 && groups?.length ? <span className="ink-chips ink-grp"><span className="ink-gl">A</span>{inks.map((k) => chip(k.name))}{groups.map((to, i) => <span key={i} className="ink-gw"><span className="ink-to" aria-label="changes to">→</span><span className="ink-gl">{String.fromCharCode(66 + i)}</span>{chip(to, " chg")}</span>)}</span> : null}
         {inks.length > 0 && !groups?.length && !anyChange && <span className="ink-chips">{inks.map((k) => chip(k.name))}</span>}
         {/* a color change: each ink on its own line, the ones that change followed by what they change to (Oct 26, Nick) */}
         {inks.length > 0 && !groups?.length && anyChange && <span className="ink-lines">{inks.map((k) => {
           const ch = changes![k.name.trim().toLowerCase()] || [];
-          return <span key={k.name} className="ink-ln">{chip(k.name)}{ch.length > 0 && <><span className="ink-to">change to</span>{ch.map((c) => <span key={c.on} className="ink-tw">{chip(c.to, " chg")}<span className="ink-on">on {c.on}</span></span>)}</>}</span>;
+          return <span key={k.name} className="ink-ln">{chip(k.name)}{ch.length > 0 && <><span className="ink-to" aria-label="changes to">→</span>{ch.map((c) => <span key={c.on} className="ink-tw">{chip(c.to, " chg")}<span className="ink-on">on {c.on}</span></span>)}</>}</span>;
         })}</span>}
         {summary}
       </span>

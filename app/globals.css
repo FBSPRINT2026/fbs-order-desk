@@ -17466,3 +17466,34 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .nochg text{fill:var(--ok);font:700 9.5px Arial,sans-serif}
 .pr-scr-tag.nc{display:inline-flex;align-items:center;gap:4px}
 .pr-shared{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+/* One look for every print's detail rows on the order page, every method (Nov 1, Nick: "normalize this part again over
+   screen printing and embroidery… a cohesive line… too many bubbles"): a gray label column, plain text in one size,
+   extras as gray words split by dots, money bold, the pencil at the end. Last in the file, so it wins over the old layers. */
+html body .pr .pr-scr{display:grid!important;grid-template-columns:96px minmax(0,1fr) auto;align-items:baseline!important;column-gap:10px!important;row-gap:2px!important;margin-top:2px;font-family:var(--body);font-size:13.5px;line-height:1.55;color:var(--ink)}
+html body .pr .pr-scr > .pr-scr-l{grid-column:1;font-size:12.5px!important;font-weight:400!important;color:var(--ink-3);text-transform:none!important;letter-spacing:0!important;padding:0!important;margin:0;min-width:0!important;white-space:nowrap;align-self:baseline}
+html body .pr .pr-scr > .pr-scr-v{grid-column:2;display:flex!important;flex-wrap:wrap;align-items:baseline!important;gap:0 6px!important;min-width:0;font-size:13.5px;color:var(--ink);white-space:normal}
+html body .pr .pr-scr-v > span:not(:first-child){padding-left:0;padding-right:0}
+html body .pr .pr-scr > .pr-scr-ed{grid-column:3;align-self:center!important;margin:0!important}
+html body .pr .pr-scr > .pr-scr-opts{grid-column:1/-1;margin-top:4px}
+html body .pr .pr-scr .num{font-weight:700;color:var(--ink);white-space:nowrap}
+/* tags (underbase, remake, fashion hit, soft hand): gray words after a dot, no bubbles */
+html body .pr .pr-scr-tag,html body .pr .pr-scr-tag.fashion{background:none;color:var(--ink-3);border-radius:0;padding:0;font-size:12.5px;font-weight:400;white-space:nowrap}
+html body .pr .pr-scr-tag::before{content:"·";margin-right:6px;color:var(--ink-3)}
+/* inks and threads: a color dot and the name, no pill */
+html body .pr .ink-chips{gap:0 12px}
+html body .pr .ink-chip{background:none;box-shadow:none;padding:0;font-size:13.5px;font-weight:400;color:var(--ink);gap:5px;line-height:1.55}
+html body .pr .ink-chip i{width:11px;height:11px}
+html body .pr .ink-to{font-size:13px;font-weight:400;color:var(--ink-3)}
+html body .pr .ink-on{font-size:12.5px;color:var(--ink-3)}
+html body .pr .ink-gl{font-size:11px}
+/* the PMS charge after the inks: gray, split off by a dot, its money bold */
+html body .pr .pr-pms{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+html body .pr .pr-pms::before{content:"·";color:var(--ink-3)}
+html body .pr .pr-pms .num{font-size:13.5px}
+html body .pr .pr-shared{gap:6px}
+@media (max-width:560px){
+  html body .pr .pr-scr{grid-template-columns:minmax(0,1fr) auto}
+  html body .pr .pr-scr > .pr-scr-l{grid-column:1/-1;font-size:11px!important;font-weight:700!important;letter-spacing:.04em!important;text-transform:uppercase!important}
+  html body .pr .pr-scr > .pr-scr-v{grid-column:1}
+  html body .pr .pr-scr > .pr-scr-ed{grid-column:2}
+}
