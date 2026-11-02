@@ -17994,3 +17994,5 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .gdk-nlbox .gdk-grip{display:flex;align-items:center;color:var(--ink-3);letter-spacing:0}
 .gdk-nlbox .gdk-um:hover .gdk-grip{color:var(--gk)}
 @media (max-width:900px){.gdk-nlbox .gdk-um{grid-template-columns:16px minmax(0,1fr)}.gdk-nlbox .gdk-um-pick{grid-column:2}}
+/* each portal area's title gets the page title's color bar (Nov 2, Nick: Payments) */
+.portal .aa-bar h2::after{content:"";display:block;height:4px;border-radius:4px;margin-top:6px;width:calc(100% + 40px);min-width:110px;background:var(--fbs-fade)}

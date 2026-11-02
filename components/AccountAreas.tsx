@@ -711,7 +711,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       Number(isLater(a)) - Number(isLater(b)) || (dueOn(a) || "9999").localeCompare(dueOn(b) || "9999") || a.number - b.number);
     // every open invoice, however many (Nov 2, Nick: "this is the one time I do want you to just show… a huge long list")
     const listShown = listAll;
-    const paidYear = payments.filter((p) => (p.paid_on || p.created_at || "").slice(0, 4) === today().slice(0, 4)).reduce((a, p) => a + p.amount + (+(p.fee || 0)), 0);
+    const paidYear = payments.filter((p) => (p.paid_on || p.created_at || "").slice(0, 4) === today().slice(0, 4)).reduce((a, p) => a + p.amount, 0); // what went on invoices, like the history (card fees aside)
     // just the date (Nov 2, Nick: "just put the date… just green. If it goes more than a week past due… red. Don't put
     // open since or ready to pay or anything like that"); no date yet (still being made, a quote): a dash
     const dueText = (o: AOrder) => {
@@ -721,7 +721,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     };
     const searchBox = search("Search payments");
     body = <>
-      <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={mode === "shop" && due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b>{!canPay && terms ? <> · Terms <b>{terms}</b></> : null}</span></div>
+      <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2></div>
       {/* the statement buttons on the title's line, at the right (Nov 2, Nick: "so that can collapse down some") */}
       {(!canPay || statementHref || onEmailStatement) && <div className="aa-stmt">
           {!canPay && searchBox}
