@@ -4181,7 +4181,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
               const pickStyle = (ids: string[], gg: { style: string; brand: string; description: string; colors?: string[] }) => setStyle(ids, (x) => ({ ...x, style: gg.style, brand: gg.brand, garment: gg.description, color: gg.colors?.includes(x.color) ? x.color : "" }));
               const removeLine = (i: number) => { setLines((ls) => (ls.length > 1 ? ls.filter((_, j) => j !== i) : [{ ...ls[0], color: "" }])); setActive((a) => (a >= i && a > 0 ? a - 1 : a)); };
               return (
-                <div className="mk-f mk-gar"><span className="mk-gar-h"><span>Garments</span>
+                <div className="mk-f mk-gar"><span className="mk-gar-h"><span className="mk-gar-h1"><span>Garments</span>
+                  {/* another style is a small link on the label line (Nov 2, Nick: "put it on the garment line, like a little plus
+                      add another"), once every style box is filled */}
+                  {lines.every((x) => x.style.trim() || x.own) && <button type="button" className="mk-gar-link" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Add another</button>}</span>
                   {/* the two helpers on the label line, at the right (Nov 2, Nick: option C; they were floating under the row) */}
                   <span className="mk-gar-hc"><span className="mk-gar-hc-t">Color</span>
                     <button type="button" className="mk-gar-link" onClick={() => setPopOpen(true)}>Help me pick</button>
@@ -4228,8 +4231,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                       </div>
                     );
                   })}
-                  {/* the next style is an empty box under the last one, like the empty Color box (Nov 2, Nick: option B) */}
-                  {lines.every((x) => x.style.trim() || x.own) && <div className="mk-gar-more"><button type="button" className="mk-gar-new" onClick={() => setLines((ls) => [...ls, { id: uid(), style: "", brand: "", color: "", garment: "" }])}>+ Another style</button></div>}
                   {popOpen && <PopularGarments askHref={portal ? `/portal?area=messages${asId ? `&as=${asId}` : ""}` : undefined} onClose={() => setPopOpen(false)} onPick={(g) => {
                     setPopOpen(false);
                     setLines((ls) => { const blank = ls.find((x) => !x.style.trim()); const ln = { style: g.style, brand: g.brand, color: "", garment: g.garment }; return blank ? ls.map((x) => (x.id === blank.id ? { ...x, ...ln } : x)) : [...ls, { id: uid(), ...ln }]; });

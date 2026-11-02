@@ -18583,3 +18583,5 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jc-dpt .prf-dept.on{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--ink)}
 .jc-dpt .prf-dept:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jc-list .toolbar .jc-search+.jc-dpt{margin-left:0}
+/* Mockup Creator: "+ Add another" next to the Garments label (Nov 2, Nick) */
+.mk-gar-h1{display:flex;align-items:baseline;gap:12px;min-width:0}
