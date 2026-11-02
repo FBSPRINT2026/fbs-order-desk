@@ -4254,6 +4254,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {/* scale, each side on its own, top right of its photo (Oct 24, Nick: "scale front, scale back") */}
                   {zoomG && <div className="mk-corner tr">{zoomCtl(v)}</div>}
                   {/* no flat back photo at S&S or SanMar: pick one (Oct 26) */}
+                  {/* a back that's drawn or stood in for (a model, the side): look for the real one online again */}
+                  {v === "back" && line && !line.own && !backAsk(line) && (() => {
+                    const gm = garmentFor(line); const ent = gm ? Object.entries(gm.color_images || {}).find(([k]) => colorKey(k) === colorKey(line.color)) : undefined;
+                    if (!gm || !ent || !["drawn", "model", "side", "picked"].includes((ent[1] as { back_from?: string } | undefined)?.back_from || "")) return null;
+                    return <div className="mk-corner tl"><button type="button" className="mk-pill mkwb-again" title="This back is drawn or stands in for the real one: look online for a flat back photo" onClick={() => setNoBack((m) => ({ ...m, [`${gm.id}|${colorKey(line.color)}`]: { garmentId: gm.id, name: ent[0], others: [] } }))}>Find the real back online</button></div>;
+                  })()}
                   {v === "back" && line && backAsk(line) && (() => {
                     const q = backAsk(line)!, gm = garmentFor(line), k0 = `${q.garmentId}|${colorKey(line.color)}`, wb = webBack[k0] || {}, found = wb.found || [], cur = found[wb.pick ?? 0];
                     backPasteRef.current = (f) => void uploadBack(line, f);
@@ -4261,6 +4267,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     return (
                     <div className="mk-noback" role="group" aria-label="Pick a back photo"
                       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); void dropBack(line, e.dataTransfer); }}>
+                      <button type="button" className="mkwb-x" aria-label="Close" title="Close for now" onClick={() => setNoBack((m) => { const n = { ...m }; delete n[k0]; return n; })}>×</button>
                       <b>No flat back photo of {gm?.style} {q.name}</b>
                       <span className="faint">S&amp;S and SanMar don&apos;t have one.</span>
                       {/* found online: a front and back from one site (they size alike), else a back alone */}
