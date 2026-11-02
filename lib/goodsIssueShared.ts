@@ -11,6 +11,13 @@ export type GoodsIssue = {
 };
 export const SUPPLIER: Record<string, string> = { ss: "S&S", sanmar: "SanMar", alpha: "alphabroder" };
 export const supplierName = (s: string) => SUPPLIER[s] || s || "the supplier";
+/**
+ * Suppliers who'll talk to us about an order on the customer's own account (Nov 2, Nick: "we can talk to SanMar… we
+ * can't talk to S&S about an order"). An issue on goods from one of these is ours to work; from any other supplier on
+ * the customer's account, the customer contacts them and we suggest it. Our own blank orders are always ours.
+ */
+export const TALKS_TO_US: Record<string, boolean> = { sanmar: true };
+export const whoWorks = (o: { blanks: boolean; supplier: string }): IssueOwner => (o.blanks || TALKS_TO_US[o.supplier] ? "shop" : "customer");
 export const STEPS: { k: GoodsIssue["status"]; label: string }[] = [
   { k: "open", label: "Found" }, { k: "reported", label: "Reported" }, { k: "replacing", label: "Replacement coming" }, { k: "closed", label: "Closed" },
 ];

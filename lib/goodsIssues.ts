@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
 import type { CheckinRow } from "@/lib/checkinShared";
 import type { Flag } from "@/lib/orderStages";
-import type { GoodsIssue, IssueItem, IssueOwner } from "@/lib/goodsIssueShared";
+import { whoWorks, type GoodsIssue, type IssueItem, type IssueOwner } from "@/lib/goodsIssueShared";
 
 /**
  * Goods issues (Nov 2, Nick: "something at the top that says issues… when receiving checks in goods… they sent us a wrong
@@ -51,7 +51,7 @@ async function goodsSource(admin: SupabaseClient, orderId: string | null, archiv
   const ls = (data || []) as { supplier: string; supplier_order: string; customer_po: string; kind: string; tracking: string }[];
   const blanks = ls.some((l) => l.kind === "blanks");
   return {
-    owner: (blanks ? "shop" : "customer") as IssueOwner,
+    owner: whoWorks({ blanks, supplier: ls[0]?.supplier || "" }),
     supplier: ls[0]?.supplier || "",
     supplierOrder: [...new Set(ls.map((l) => l.supplier_order).filter(Boolean))].join(", "),
     po: [...new Set(ls.map((l) => l.customer_po).filter(Boolean))].join(", "),

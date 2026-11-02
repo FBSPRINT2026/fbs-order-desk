@@ -18211,3 +18211,23 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .pav-open{position:relative;cursor:pointer;text-decoration:none}
 .pav-cap{position:absolute;left:8px;right:8px;bottom:8px;text-align:center;font-size:12.5px;font-weight:700;color:var(--accent);background:color-mix(in srgb,var(--surface) 92%,transparent);border:1px solid var(--line);border-radius:6px;padding:5px 0}
 .pav-open:hover .pav-cap{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* goods issues, reworded (Nov 2, Nick: "suggested action, contact S&S… I don't like how it reads with the expected 40…
+   the found… needs a little work"): the issue, each item as "4 short · what · came 36 of 40", where it is in a plain
+   line, and the email behind a button */
+.gis-top{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px 0 0}
+.gis-top .gis-bar{align-self:stretch;border-radius:0}
+.gis-us .gis-bar{background:var(--accent)}
+.gis-top .gis-tag{white-space:normal;text-align:right;max-width:240px}
+.gis-body{padding:6px 14px 12px 18px;display:flex;flex-direction:column;gap:10px}
+.gis-done .gis-top{padding-bottom:12px}
+.gis-items{list-style:none;margin:0;padding:0;font-size:13.5px}
+.gis-items li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;padding:6px 0;border-top:1px solid var(--line-2)}
+.gis-items li:last-child{border-bottom:1px solid var(--line-2)}
+.gis-q{font-weight:700;color:var(--danger);white-space:nowrap;min-width:84px}
+.gis-it{color:var(--ink)}
+.gis-dt{font-size:12.5px;color:var(--ink-3)}
+.gis-body .gis-steps{display:flex;flex-wrap:wrap;gap:4px 18px}
+.gis-body .gis-steps li{background:none;padding:0;border-radius:0;text-align:left;font-size:12.5px;color:var(--ink-3)}
+.gis-body .gis-steps li.done{background:none;color:var(--ok)}
+.gis-body .gis-steps li.on{background:none;color:var(--ink);font-weight:700}
+.gis-d:empty{display:none}

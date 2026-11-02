@@ -1,4 +1,5 @@
 import "server-only";
+import { whoWorks } from "@/lib/goodsIssueShared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
 import { orderGroups, type Order } from "@/lib/pricing";
@@ -138,7 +139,7 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     const need = ordered || total(own);
     const state: JobState = openIssue ? "issue" : cs.length ? "checked" : !ls.length ? "none" : delivered === ls.length ? (!need || arrived >= need ? "ready" : "partial") : delivered ? "partial" : "way";
     const { _kind, ...rest } = base as typeof base & { _kind?: JobKind };
-    return { ...rest, ref, kind: _kind || "sp", ordered: ordered || total(own), items, source: ls.length ? "manifest" : "order", shipped, arrived, lines: ls.length, delivered, boxes, suppliers: [...new Set(ls.map((l) => (l.supplier === "ss" ? "S&S" : l.supplier === "sanmar" ? "SanMar" : l.supplier)))], state, checkins: cs, owner: ls.some((l) => l.kind === "blanks") ? "shop" : "customer" };
+    return { ...rest, ref, kind: _kind || "sp", ordered: ordered || total(own), items, source: ls.length ? "manifest" : "order", shipped, arrived, lines: ls.length, delivered, boxes, suppliers: [...new Set(ls.map((l) => (l.supplier === "ss" ? "S&S" : l.supplier === "sanmar" ? "SanMar" : l.supplier)))], state, checkins: cs, owner: whoWorks({ blanks: ls.some((l) => l.kind === "blanks"), supplier: ls[0]?.supplier || "" }) };
   };
 
   const jobs: CheckJob[] = [];

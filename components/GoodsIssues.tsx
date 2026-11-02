@@ -34,46 +34,78 @@ export default function GoodsIssues({ as, customerId, href }: { /** the customer
   return (
     <section className="gis" aria-label="Goods issues">
       <div className="gis-h">
-        <b>Issues · {live.length}</b>
-        <span className="gis-sum">{[needYou && (portal ? `${needYou} need you` : `${needYou} the customer works`), ours && (portal ? `${ours} we're on` : `${ours} we work`), list.length > live.length && `${list.length - live.length} closed this week`].filter(Boolean).join(" · ")}</span>
+        <b>Issues</b>
+        <span className="gis-sum">{[needYou && (portal ? `${needYou} ${needYou === 1 ? "needs" : "need"} you` : `${needYou} the customer contacts`), ours && (portal ? `${ours} we're handling` : `${ours} we contact`), list.length > live.length && `${list.length - live.length} closed this week`].filter(Boolean).join(" · ")}</span>
       </div>
       {list.map((i) => <Row key={i.id} i={i} d={d} portal={portal} as={as} open={open === i.id} onToggle={() => setOpen(open === i.id ? null : i.id)} onDone={() => setRev((n) => n + 1)} href={href} />)}
     </section>
   );
 }
 
+/** each item in words: "4 short", "1 damaged", "2 wrong", then what it is and what came (Nov 2, Nick: "I don't like how it
+ *  reads with the expected 40") */
+function itemLine(it: GoodsIssue["items"][number]) {
+  const short = Math.max(0, (it.expected || 0) - (it.received || 0));
+  const bad = it.bad || 0;
+  const head = [short ? `${short} short` : "", bad ? `${bad} ${it.issue === "mispick" ? "wrong" : "damaged"}` : ""].filter(Boolean).join(", ") || (it.owed ? `${it.owed} owed` : "Checked");
+  const came = it.expected ? `came ${it.received} of ${it.expected}` : "";
+  return { head, what: [it.style, it.color].filter(Boolean).join(" ") + (it.size ? ` · ${it.size}` : ""), detail: [short ? came : "", it.note || ""].filter(Boolean).join(" · ") };
+}
+
 function Row({ i, d, portal, as, open, onToggle, onDone, href }: { i: GoodsIssue; d: IssueCtx; portal: boolean; as?: string; open: boolean; onToggle: () => void; onDone: () => void; href?: (i: GoodsIssue) => string }) {
   const sup = supplierName(i.supplier);
   const theirs = i.owner === "customer";
-  const tone = i.closed_at ? "done" : i.kind === "tracking" ? "watch" : "bad";
-  const tag = i.closed_at ? `Closed ${when(i.closed_at)}` : theirs ? (portal ? `You: tell ${sup}` : `Customer tells ${sup}`) : portal ? "We're on it" : i.kind === "tracking" ? "We're watching it" : `We tell ${sup}`;
-  const owedN = i.items.reduce((a, it) => a + (it.owed || 0), 0);
+  const closed = !!i.closed_at;
+  const tone = closed ? "done" : i.kind === "tracking" ? "watch" : theirs ? "bad" : "us";
+  // what to do about it, said plainly (Nov 2, Nick: "suggested action, contact S&S… not you tell SanMar")
+  const tag = closed ? `Closed ${when(i.closed_at)}`
+    : i.kind === "tracking" ? (portal ? "We're watching it" : "Watching the tracking")
+    : theirs ? (portal ? `Suggested action: contact ${sup}` : `Customer contacts ${sup}`)
+    : portal ? `We're contacting ${sup}` : `We contact ${sup}`;
+  // where it is, in plain words: checked in → contacted → replacements on the way → all here
+  const who = theirs ? (portal ? "You" : "Customer") : "We";
+  const steps = [
+    { k: "open", label: i.source === "tracking" ? `Spotted ${when(i.created_at)}` : `Checked in ${when(i.created_at)}` },
+    { k: "reported", label: i.reported_at ? `${who} contacted ${sup} ${when(i.reported_at)}` : `${who} contact${who === "We" || who === "You" ? "" : "s"} ${sup}` },
+    { k: "replacing", label: "Replacements on the way" },
+    { k: "closed", label: closed ? `${i.closed_how || "Closed"} ${when(i.closed_at)}` : "All here" },
+  ];
+  const at = STEPS.findIndex((x) => x.k === i.status);
   return (
-    <div className={"gis-row gis-" + tone + (open ? " open" : "")}>
-      <button type="button" className="gis-line" onClick={onToggle} aria-expanded={open}>
+    <div className={"gis-row gis-" + tone}>
+      <div className="gis-top">
         <span className="gis-bar" aria-hidden />
-        <span className="gis-what">
-          <b>{i.number ? `#${i.number}` : "Order"}{i.nickname ? ` ${i.nickname}` : ""}</b> · {i.title}
-          <small>{[i.supplier_order && `${sup} ${i.supplier_order}`, i.tracking && i.kind === "tracking" && `tracking ${i.tracking}`, `found ${when(i.created_at)}`, i.status === "reported" && `reported ${when(i.reported_at)}`, i.status === "replacing" && "replacement on the way"].filter(Boolean).join(" · ")}</small>
-        </span>
-        <span className={"gis-tag gis-tag-" + (i.closed_at ? "done" : theirs ? "you" : "us")}>{tag}</span>
-        <span className="gis-go">{open ? "Close" : i.closed_at ? "Details" : theirs && portal && i.status === "open" ? "Report it" : "Details"}</span>
-      </button>
-      {open && <Detail i={i} d={d} portal={portal} as={as} owedN={owedN} onDone={onDone} href={href} />}
+        <div className="gis-what">
+          <b>{i.number ? `#${i.number}` : "Order"}{i.nickname ? ` ${i.nickname}` : ""} · {i.title}</b>
+          <small>{[i.supplier_order && `${sup} order ${i.supplier_order}`, i.tracking && i.kind === "tracking" && `tracking ${i.tracking}`].filter(Boolean).join(" · ")}</small>
+        </div>
+        <span className={"gis-tag gis-tag-" + (closed ? "done" : theirs && i.kind !== "tracking" ? "you" : "us")}>{tag}</span>
+      </div>
+      {!closed && <div className="gis-body">
+        {i.kind === "tracking"
+          ? <p className="gis-p">{i.detail}{i.tracking ? <> · <a href={trackingUrl("", i.tracking)} target="_blank" rel="noreferrer">See the tracking</a></> : null}</p>
+          : <ul className="gis-items">{i.items.map((it, k) => { const x = itemLine(it); return <li key={k}><span className="gis-q">{x.head}</span><span className="gis-it" data-notranslate>{x.what}</span>{x.detail ? <span className="gis-dt">{x.detail}</span> : null}</li>; })}</ul>}
+        <ol className="gis-steps" aria-label="Where it is">{steps.map((s0, k) => <li key={s0.k} className={k < at ? "done" : k === at ? "on" : ""}>{k < at ? "✓ " : k === at ? "● " : "○ "}{s0.label}</li>)}</ol>
+        <div className="gis-acts">
+          {(portal ? theirs && i.kind !== "tracking" : i.kind !== "tracking") && <button type="button" className={"btn sm" + (i.status === "open" ? " primary" : "")} onClick={onToggle} aria-expanded={open}>{open ? "Hide the email" : `Write the email to ${sup}`}</button>}
+          {(i.photoUrls || []).length > 0 && <a className="btn sm" href={(i.photoUrls || [])[0]} target="_blank" rel="noreferrer">See photos ({(i.photoUrls || []).length})</a>}
+          {!portal && href && <a className="btn sm" href={href(i)}>Open the order</a>}
+        </div>
+      </div>}
+      {(open || (!portal && !closed)) && <Detail i={i} d={d} portal={portal} as={as} mail={open} onDone={onDone} />}
+      {closed && !portal && <Detail i={i} d={d} portal={portal} as={as} mail={false} onDone={onDone} />}
     </div>
   );
 }
 
-function Detail({ i, d, portal, as, owedN, onDone, href }: { i: GoodsIssue; d: IssueCtx; portal: boolean; as?: string; owedN: number; onDone: () => void; href?: (i: GoodsIssue) => string }) {
+function Detail({ i, d, portal, as, mail, onDone }: { i: GoodsIssue; d: IssueCtx; portal: boolean; as?: string; mail: boolean; onDone: () => void }) {
   const sup = supplierName(i.supplier);
   const theirs = i.owner === "customer";
-  // the email: the customer's own rep for their goods, ours for our blank orders
+  // the email: the customer's own rep for their goods, ours for the ones we work
   const rep = d.reps.find((r) => r.supplier === (i.supplier || "other") && (theirs ? r.customer_id === i.customer_id : r.customer_id === null))?.email || "";
   const draft = issueEmail(i, { shipTo: d.shipTo, signer: d.signer });
   const [to, setTo] = useState(rep), [subject, setSubject] = useState(draft.subject), [body, setBody] = useState(draft.body);
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
-  const canEmail = !i.closed_at && (portal ? theirs : true);
-  const step = STEPS.findIndex((s) => s.k === i.status);
   async function reported() {
     setBusy("Saving…"); setMsg("");
     const r = await reportIssue(i.id, { email: to }, as);
@@ -86,40 +118,28 @@ function Detail({ i, d, portal, as, owedN, onDone, href }: { i: GoodsIssue; d: I
   }
   return (
     <div className="gis-d">
-      <ol className="gis-steps" aria-label="Where it is">{STEPS.map((s, k) => <li key={s.k} className={k < step ? "done" : k === step ? "on" : ""}>{s.label}</li>)}</ol>
-      {i.kind === "tracking"
-        ? <p className="gis-p">{i.detail}{i.tracking ? <> · <a href={trackingUrl("", i.tracking)} target="_blank" rel="noreferrer">See the tracking</a></> : null}</p>
-        : (
-          <div className="tbl-wrap gis-items"><table className="tbl">
-            <thead><tr><th>Item</th><th className="r">Expected</th><th className="r">Got</th><th className="r">Still owed</th><th>Note</th></tr></thead>
-            <tbody>{i.items.map((it, k) => <tr key={k}><td data-notranslate>{[it.style, it.color, it.size].filter(Boolean).join(" ")}</td><td className="r num">{it.expected}</td><td className="r num">{it.received}{it.bad ? <span className="sub"> {it.bad} {it.issue === "mispick" ? "wrong" : "damaged"}</span> : null}</td><td className={"r num" + (it.owed ? " gis-owed" : "")}>{it.owed || "—"}</td><td>{it.note || ""}</td></tr>)}</tbody>
-          </table></div>
-        )}
-      {owedN > 0 && !i.closed_at && <p className="gis-note">When a box with {owedN === 1 ? "this piece" : `these ${owedN} pieces`} shows up on a later {sup} list, it goes to this issue, and checking it in closes it.</p>}
-      {(i.photoUrls || []).length > 0 && <div className="gis-pics">{(i.photoUrls || []).map((u, k) => <a key={k} href={u} target="_blank" rel="noreferrer"><img src={u} alt={`Photo ${k + 1}`} /></a>)}</div>}
-      {i.closed_at && <p className="gis-note">Closed {when(i.closed_at)}{i.closed_how ? `: ${i.closed_how}` : ""}.</p>}
-      {canEmail && (
+      {mail && !i.closed_at && (
         <div className="gis-mail">
-          <div className="gis-mail-h"><b>{portal ? `Tell ${sup}` : theirs ? `The email for the customer to send ${sup}` : `Email our ${sup} rep`}</b><span className="faint">{portal ? "We wrote it for you. It opens in your own email, so their reply comes to you." : "Written out; it opens in your own email."}</span></div>
+          <div className="gis-mail-h"><b>{portal || !theirs ? `Email ${sup}` : `The email for the customer to send ${sup}`}</b><span className="faint">{portal ? "We wrote it for you. It opens in your own email, so their reply comes to you." : "Written out; it opens in your own email."}</span></div>
           <label className="gis-f"><span>To</span><input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder={`Your ${sup} rep's email (we'll remember it)`} /></label>
           <label className="gis-f"><span>Subject</span><input value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
           <label className="gis-f"><span>Email</span><textarea rows={9} value={body} onChange={(e) => setBody(e.target.value)} /></label>
           <div className="gis-acts">
-            <a className="btn primary" href={mailto(to, subject, body)} onClick={() => setMsg("Opened in your email. Press \"I've reported it\" once it's sent.")}>Open in my email</a>
+            <a className="btn primary" href={mailto(to, subject, body)} onClick={() => setMsg(`Opened in your email. Press "I contacted ${sup}" once it's sent.`)}>Open in my email</a>
             <button type="button" className="btn" onClick={() => { void navigator.clipboard.writeText(`To: ${to}\nSubject: ${subject}\n\n${body}`); setMsg("Copied."); }}>Copy email</button>
             <span className="spacer" />
-            {i.status === "open" && <button type="button" className="btn" disabled={!!busy} onClick={() => void reported()}>{busy || "I've reported it"}</button>}
+            {i.status === "open" && <button type="button" className="btn" disabled={!!busy} onClick={() => void reported()}>{busy || `I contacted ${sup}`}</button>}
           </div>
         </div>
       )}
       {!portal && (
         <div className="gis-staff">
-          <span className="faint">Who works it</span>
-          <span className="gis-seg" role="radiogroup" aria-label="Who works it">{(["customer", "shop"] as const).map((k) => <button key={k} type="button" role="radio" aria-checked={i.owner === k} className={i.owner === k ? "on" : ""} disabled={!!busy || !!i.closed_at} onClick={() => void staff("owner", k)}>{k === "customer" ? "The customer" : "We do"}</button>)}</span>
+          <span className="faint">Who contacts {sup}</span>
+          <span className="gis-seg" role="radiogroup" aria-label={`Who contacts ${sup}`}>{(["customer", "shop"] as const).map((k) => <button key={k} type="button" role="radio" aria-checked={i.owner === k} className={i.owner === k ? "on" : ""} disabled={!!busy || !!i.closed_at} onClick={() => void staff("owner", k)}>{k === "customer" ? "The customer" : "We do"}</button>)}</span>
           <span className="spacer" />
-          {href && <a className="btn sm" href={href(i)}>Open the order</a>}
           {!i.closed_at ? <>
-            {i.status !== "replacing" && i.kind !== "tracking" && <button type="button" className="btn sm" disabled={!!busy} onClick={() => void staff("replacing")}>Replacement coming</button>}
+            {i.status === "open" && !theirs && i.kind !== "tracking" && <button type="button" className="btn sm" disabled={!!busy} onClick={() => void reported()}>We contacted {sup}</button>}
+            {i.status !== "replacing" && i.kind !== "tracking" && <button type="button" className="btn sm" disabled={!!busy} onClick={() => void staff("replacing")}>Replacements on the way</button>}
             <select className="gis-close" value="" disabled={!!busy} onChange={(e) => e.target.value && void staff("close", e.target.value)} aria-label="Close it">
               <option value="">Close it…</option><option>Replaced</option><option>Credited instead</option><option>Not needed</option><option>It arrived</option>
             </select>

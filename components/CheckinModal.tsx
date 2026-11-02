@@ -188,7 +188,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
                   <div className="ck-who-seg" role="radiogroup" aria-label={t("Who works it")}>
                     {(["customer", "shop"] as const).map((k) => <button key={k} type="button" role="radio" aria-checked={owner === k} className={owner === k ? "on" : ""} onClick={() => setOwner(k)}>{k === "customer" ? t("The customer") : t("We do")}</button>)}
                   </div>
-                  <span className="faint">{job.owner === "shop" ? t("Picked for you: these are our own blank order.") : t("Picked for you: these are the customer's goods (their account or vendor).")}</span></div>
+                  <span className="faint">{job.owner === "shop" ? t("Picked for you: our own blank order, or a supplier that talks to us (SanMar).") : t("Picked for you: the customer's goods from a supplier that only talks to them (S&S).")}</span></div>
                 <div className="ck-who-then"><span className="ck-who-l">{t("When you check in")}</span>
                   <span>✓ {t("An issue opens with what's still owed, and the order goes on hold for goods")}</span>
                   <span>✓ {owner === "customer" ? t("It shows on their Goods page with the email to their rep written for them") : t("It shows on Goods with the email to our rep written for you; they see we're getting it replaced")}</span>
