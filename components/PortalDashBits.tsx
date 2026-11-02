@@ -1,4 +1,5 @@
 "use client";
+import OrderRail from "@/components/OrderRail";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { OldReorderButton } from "@/components/PortalOldReorder";
@@ -52,17 +53,6 @@ export function StepIcon({ k, done }: { k: string; done: boolean }) {
   return <svg viewBox="0 0 24 24" aria-hidden><path d={PATHS[done ? "check" : k] || PATHS.out} /></svg>;
 }
 
-function JobSteps({ j }: { j: PortalJob }) {
-  const curI = j.steps.findIndex((s) => s.state === "cur");
-  const doneN = j.steps.filter((s) => s.state === "done").length;
-  const fill = j.done ? 100 : ((curI >= 0 ? curI : doneN) / (j.steps.length - 1)) * 100;
-  return (
-    <span className="pjs" style={{ ["--fill" as string]: String(Math.round(fill)) }} aria-label={j.steps.map((s) => `${s.label}${s.state === "done" ? " done" : s.state === "cur" ? " (now)" : ""}`).join(", ")}>
-      {j.steps.map((s) => <span key={s.key} className={"pjs-st " + s.state} title={s.sub ? `${s.label}: ${s.sub}` : s.label}><i><StepIcon k={s.key} done={s.state === "done"} /></i><b>{s.label}</b></span>)}
-    </span>
-  );
-}
-
 /** ☆ / ★: track this order on the dashboard (Oct 24, Nick) */
 export function StarOrder({ id, on, canAct, label = false }: { id: string; on: boolean; canAct: boolean; label?: boolean }) {
   const router = useRouter();
@@ -90,7 +80,7 @@ function JobRow({ j, canAct }: { j: PortalJob; canAct: boolean }) {
       <span className="pjr-picw"><Link href={j.href} className="pjr-pic">{j.pic ? <img src={j.pic} alt="" loading="lazy" /> : <span>#{j.number}</span>}</Link><StarOrder id={j.id} on={!!j.starred} canAct={canAct} /></span>
       <Link href={j.href} className="pjr-t"><small>#{j.number}</small><b>{j.nickname}</b><em>{j.summary}</em></Link>
       <div className={"pjr-mid" + (j.hold ? " held" : "")}>
-        <span className="pjr-stepsw"><JobSteps j={j} />{j.hold && <span className="hold-stamp" aria-label="On hold">On hold</span>}</span>
+        <OrderRail steps={j.steps} hold={!!j.hold} done={j.done} />
         {j.hold
           ? <div className="pjr-now hold"><b>On hold:</b> {j.hold.title}. <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></div>
           : (j.nowK || j.nowT) && <div className="pjr-now"><b>{j.nowK}</b> {j.nowT}</div>}

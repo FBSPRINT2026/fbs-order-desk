@@ -11,6 +11,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { colorHex } from "@/lib/inkColors";
 import { needsDetails } from "@/lib/productionDetails";
 import PortalArtView from "@/components/PortalArtView";
+import OrderRail from "@/components/OrderRail";
+import { jobFor } from "@/lib/portalJobs";
 import { calcOrder, FULL_COLOR, inkNames, methodLabel, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, money } from "@/lib/format";
 import { pvStatusOf } from "@/components/bits";
@@ -97,20 +99,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const canPay = c.balance > 0.004 && ps.can !== "none" && (o.type === "invoice" || o.status === "quote_sent");
 
   const qsAs = preview ? `?as=${ctx.preview!.id}` : "";
-  // where the order is, in plain words (Nov 2, Nick, option C: "done, now, next"; no bubbles): one cell per stage, the
-  // ones done with a ✓, the one it's at filled in, the rest gray. The ready stage says how it leaves (pickup, ship,
-  // delivery), and every order ends "Completed"
-  const readyWord = o.delivery_method === "ship" ? "Ready to ship" : o.delivery_method === "deliver" ? "Ready for delivery" : "Ready for pickup";
-  const stageAt: Record<string, number> = { request: 0, quote: 0, quote_sent: 0, approved: 1, art: 1, blanks: 2, production: 3, ready: 4, completed: 5 };
-  const at = stageAt[o.status] ?? 3;
-  const rail = [
-    { next: "Quote", done: "Quote approved", now: o.status === "request" ? "Sent to FBS" : o.status === "quote" ? "Quote in progress" : "Quote ready" },
-    { next: "Proof", done: "Proof approved", now: proofs.length ? "Proof ready" : "Making your proof" },
-    { next: "Garments", done: "Garments in", now: "Getting garments" },
-    { next: "Production", done: "Production done", now: "In production" },
-    { next: readyWord, done: cs?.key === "shipped" || cs?.key === "delivered" ? cs.label : readyWord, now: cs && ["ready", "shipped", "delivered"].includes(cs.key) ? cs.label : readyWord },
-    { next: "Completed", done: "Completed", now: "Completed" },
-  ];
+  // where the order is: the same steps as the home page's jobs (lib/portalJobs.ts), drawn by one piece (OrderRail)
+  const job = jobFor(o, { href: "", pic: "", pendingProof: pendingProofs.length ? "1" : undefined, approvedArt: proofs.some((x) => x.status === "approved") || !!o.approved_at,
+    goods: goodsAll[0]?.goods.updated_at ? goodsAll[0].goods.status : null, customerGoods: o.price_type === "wholesale", newMsgs: 0 });
   // the full proof, the page they approve from (Nov 2, Nick: "almost like what the customer sees when they approve")
   const latestProof = proofs[0];
   const proofHref = olk?.id ? `/proof/${olk.id}` : latestProof ? `/portal/orders/${o.id}/review/${latestProof.id}${qsAs}` : "";
@@ -157,13 +148,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         </div>
 
-        {String(o.status) !== "void" && <ol className={"pod-rail" + (hold ? " held" : "")} aria-label="Where your order is">
-          {rail.map((r, k) => {
-            const done = k < at || o.status === "completed";
-            const now = k === at && o.status !== "completed";
-            return <li key={k} className={done ? "done" : now ? "now" : ""} aria-current={now ? "step" : undefined}>{done ? <>✓ {r.done}</> : now ? (hold ? <>On hold<small>{r.now}</small></> : r.now) : r.next}</li>;
-          })}
-        </ol>}
+        {String(o.status) !== "void" && <div className="pod-railw"><OrderRail steps={job.steps} hold={!!hold} done={o.status === "completed"} /></div>}
 
         {/* the numbers in one summary card, like the shop's pages: what it costs, what's paid, what's left */}
         {!isReq && <div className="stats pod-stats">

@@ -84,8 +84,12 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
     shipped ? x.ship!.when : o.due_date ? day(o.due_date) : "",
     done ? short(o.completed_at || o.updated_at) : shipped ? x.ship!.carrier : "",
   ];
-  // the same steps as the order page (Oct 24, Nick): Sent to FBS / Quote, Proof, Goods, In production, Ready, Done
-  const labels = [asked ? "Sent to FBS" : "Quote", "Proof", "Goods", "In production", shipped ? "Shipped" : "Ready", how];
+  // the same steps on the home page and the order page (components/OrderRail.tsx): the ready step says how it leaves,
+  // and every order ends "Completed" (Nov 2, Nick: "ready for pickup, ready to ship, ready for delivery… all jobs will just
+  // say completed at the end")
+  const readyWord = shipped ? "Shipped" : o.delivery_method === "ship" ? "Ready to ship" : o.delivery_method === "deliver" ? "Ready for delivery" : o.delivery_method === "pickup" ? "Ready for pickup" : "Ready";
+  const labels = [asked ? "Sent to FBS" : "Quote", "Proof", "Garments", "In production", readyWord, "Completed"];
+  void how;
   void kind;
   const keys = ["placed", "art", "goods", "print", "ready", shipped ? "ship" : o.delivery_method === "ship" ? "ship" : o.delivery_method === "pickup" ? "pickup" : "out"];
   const steps: JobStep[] = labels.map((label, i) => ({ key: keys[i], label, state: done || i < at ? "done" : i === at ? "cur" : "todo", sub: sub[i] }));
