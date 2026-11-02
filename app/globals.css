@@ -18786,3 +18786,8 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pdx-fo-x:hover{background:var(--surface-2);color:var(--danger)}
 .pdx-fo-x:disabled{cursor:default;opacity:.5}
 @media (max-width:560px){.pdx-fo{grid-template-columns:40px minmax(0,1fr) auto}.pdx-fo .orm{grid-column:2/-1;grid-row:2}}
+/* the page name keeps its rainbow right under it, the two together centered on the search's middle; a touch bigger; more
+   room above the line (Nov 2, Nick: "put them back together… perfectly centered in the middle of the search… give space") */
+.aa-ptop{align-items:center;margin:8px 0 -6px}
+.aa-ptop .aa-ptitle{height:auto;display:block;align-self:center;font-size:25px;line-height:1.1;padding-bottom:7px;margin:0 0 0 8px}
+.aa-ptop-r{align-items:center}
