@@ -16,7 +16,7 @@ import { jobFor } from "@/lib/portalJobs";
 import { calcOrder, FULL_COLOR, inkNames, methodLabel, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, money } from "@/lib/format";
 import { pvStatusOf } from "@/components/bits";
-import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
+import { customerHold, customerStatus, holdShort, type Flag } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
 import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval } from "./client";
 import { OldReorderButton } from "@/components/PortalOldReorder";
@@ -148,7 +148,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         </div>
 
-        {String(o.status) !== "void" && <div className="pod-railw"><OrderRail steps={job.steps} done={o.status === "completed"} />{hold && <span className="hold-stamp">On hold</span>}</div>}
+        {String(o.status) !== "void" && <div className="pod-railw"><OrderRail steps={job.steps} done={o.status === "completed"} />{hold && <span className="hold-stamp">{holdShort(hold.key)}</span>}</div>}
 
         {/* the numbers in one summary card, like the shop's pages: what it costs, what's paid, what's left */}
         {!isReq && <div className="stats pod-stats">

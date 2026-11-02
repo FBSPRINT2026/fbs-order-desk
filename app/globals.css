@@ -18809,3 +18809,12 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aa-ptop-r:has(.pa-pop){flex:0 1 460px;min-width:260px}
 .aa-ptop-r .pa-pop{flex:1 1 auto;width:100%}
 .aa-ptop-r .pa-pop .pa-in{width:100%}
+/* dashboard notes (Nov 2, Nick): the AI box with no glow, so the title line matches the other pages */
+.aa-ptop .pa-pop .pa-in{box-shadow:none;border-width:1px}
+/* followed orders: the step's name centered under the line; the × in the same top-right spot on every row */
+.orm-t{text-align:center;padding-left:0}
+.pdx-fo,.pdx-track-list>.pdx-fo:first-child{padding:12px 22px 10px 0}
+.pdx-fo-x{top:6px;right:0}
+/* On hold: the reason's colored edge in the same place on every row, a little further left */
+.pdx-hl-why li{grid-template-columns:132px minmax(0,1fr) auto}
+.pdx-hl-why .pdx-hl-job span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

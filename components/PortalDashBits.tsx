@@ -1,4 +1,5 @@
 "use client";
+import { holdShort } from "@/lib/orderStages";
 import OrderRail from "@/components/OrderRail";
 import { useContext, useEffect, useState, useTransition, type ReactNode } from "react";
 import { PageSearchContext, pageHit } from "@/components/ArtSearchContext";
@@ -101,11 +102,11 @@ function JobRow({ j, canAct, detail = false }: { j: PortalJob; canAct: boolean; 
       <div className={"pjr-mid" + (j.hold ? " held" : "")}>
         <OrderRail steps={j.steps} done={j.done} />
         {j.hold
-          ? <div className={"pjr-now hold" + (detail ? " full" : "")}><b>On hold:</b> {detail ? j.hold.reason || j.hold.title : <>{j.hold.title}. <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></>}</div>
+          ? <div className={"pjr-now hold" + (detail ? " full" : "")}><b>{holdShort(j.hold.key)}:</b> {detail ? j.hold.reason || j.hold.title : <>{j.hold.title}. <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></>}</div>
           : (j.nowK || j.nowT) && <div className="pjr-now"><b>{j.nowK}</b> {j.nowT}</div>}
       </div>
       <div className="pjr-act">
-        {j.hold && <span className="hold-stamp">On hold</span>}
+        {j.hold && <span className="hold-stamp">{holdShort(j.hold.key)}</span>}
         {a && (a.external
           ? <a className={"btn pjr-btn " + a.tone} href={a.href} target="_blank" rel="noreferrer">{a.label}</a>
           : <Link className={"btn pjr-btn " + a.tone} href={a.href}>{a.label}</Link>)}

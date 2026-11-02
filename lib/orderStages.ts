@@ -129,3 +129,8 @@ export function customerHold(flags?: Flag[] | null): CustomerHold | null {
   if (f.key === "hold_payment") return { key: f.key, title: "Payment needed to start", reason: note || "We'll start as soon as the payment or deposit is in.", fix: "pay", since: f.at };
   return { key: f.key, title: "Waiting on you", reason: note || "We need something from you before we can go on. Send us a message and we'll explain.", fix: "reply", since: f.at };
 }
+
+/** a hold in two or three words, for the customer's stamp (Nov 2, Nick: "instead of on hold, just say… issue receiving,
+ *  payment needed, question… or quality control"): one wording everywhere a held job shows */
+export const holdShort = (key?: string | null) =>
+  key === "hold_payment" ? "Payment needed" : key === "art_problem" ? "Art issue" : key === "goods_wrong" ? "Issue receiving" : "Question for you";
