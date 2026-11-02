@@ -19,6 +19,7 @@ export default function VersionTag() {
   }, []);
   const newer = !!live && live !== APP_VERSION;
   return newer
-    ? <button type="button" className="ver-tag new" onClick={() => window.location.reload()} title={`You're on v${APP_VERSION}. Click to load v${live}.`} data-notranslate>v{live} ready · Refresh</button>
+    // a new version: just its number, in blue (Nov 1, Nick: "you don't need to say refresh ready… just an indicator")
+    ? <button type="button" className="ver-tag new" onClick={() => window.location.reload()} title={`A new version is ready (you're on v${APP_VERSION}). Click to load it.`} data-notranslate>v{live}</button>
     : <span className="ver-tag" title="The portal's version: it goes up with every update" data-notranslate>v{APP_VERSION}</span>;
 }

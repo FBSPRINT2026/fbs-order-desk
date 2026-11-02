@@ -10540,7 +10540,7 @@ div.prod-kind{border:0;padding:0}
 .mk-more a:hover{border-color:var(--accent)}
 /* the portal's version under the logo (Oct 20) */
 .ver-tag{margin-left:auto;align-self:center;font-size:10.5px;letter-spacing:.03em;color:rgba(255,255,255,.5);background:none;border:0;padding:0 4px;font-family:inherit;white-space:nowrap}
-button.ver-tag.new{color:#fff;background:var(--accent,#1F6FD1);border-radius:999px;padding:2px 8px;cursor:pointer;font-weight:700}
+button.ver-tag.new{color:#fff;background:var(--fbs-blue);border-radius:999px;padding:2px 8px;cursor:pointer;font-weight:700}
 .nav-h-ver{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .nav-h-ver .ver-tag{margin-left:auto;text-transform:none;letter-spacing:.02em;font-weight:500}
 /* the neckline seam on a garment photo (shown with the print areas; drag to fix) */
@@ -17382,17 +17382,14 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .rop-read-go{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-top:6px}
 .rop-read-go .faint{font-size:12px}
 .rop-all{font-size:12.5px;white-space:nowrap}
-/* +Q (new quote) and +C (new customer) on the version's line, at the left (Nov 1, Nick); folded menu: one above the other */
-.nav-quick{position:absolute;left:10px;bottom:100%;margin-bottom:2px;display:flex;gap:4px;pointer-events:auto;line-height:1}
-.nav-qk{font:700 11px var(--body);line-height:1;padding:4px 7px;border:0;border-radius:6px;background:var(--fbs-blue);color:#fff;cursor:pointer;white-space:nowrap}
-.nav-qk:hover{filter:brightness(1.08)}
+/* the menu's foot row (Nov 1): +Q salmon, +C orange at the left, the version at the right, never on top of each other;
+   folded menu: the two buttons one above the other, the version hidden */
+.nav-foot{position:absolute;left:10px;right:8px;bottom:100%;margin-bottom:2px;display:flex;align-items:center;gap:4px;pointer-events:auto;line-height:1}
+.nav-foot .nav-ver-all{position:static;margin-left:auto;min-width:0}
+.nav-qk{font:700 11px var(--body);line-height:1;padding:4px 7px;border:0;border-radius:6px;color:#fff;cursor:pointer;white-space:nowrap;flex:none}
+.nav-qk.q{background:var(--fbs-salmon)}
+.nav-qk.c{background:var(--fbs-orange);color:#16213a}
+.nav-qk:hover{filter:brightness(1.06)}
 .nav-qk:disabled{opacity:.6;cursor:default}
-.side.mini .nav-quick{position:static;flex-direction:column;align-items:center;margin:0 0 6px}
-/* the AI order helper (components/tools/OrderReview.tsx, Nov 1): drop anywhere on it, a paperclip, what's waiting to go */
-.orv.orv-over{outline:2px dashed var(--accent);outline-offset:-6px}
-.orv-name{font:700 12.5px var(--body);color:var(--accent);white-space:nowrap}
-.orv-att{flex:none;width:32px;height:32px;border:0;background:none;cursor:pointer;font-size:16px;color:var(--ink-3);border-radius:6px}
-.orv-att:hover{background:var(--surface-2)}
-.orv-pend{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 10px 0}
-.orv-pend img{width:44px;height:44px;object-fit:cover;border:1px solid var(--line);border-radius:6px;background:#fff}
-.orv-ans{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.side.mini .nav-foot{position:static;flex-direction:column;margin:0 0 6px}
+.side.mini .nav-foot .nav-ver-all{display:none}

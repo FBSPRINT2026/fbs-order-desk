@@ -449,15 +449,13 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
             updated… just above the log out button"); it takes no room, so the bottom bar stays where it was. The
             owner has it on the Admin Tools line. */}
         {/* everyone, me included (Oct 24, Nick: "move the version… to where it is for everybody else") */}
-        <span className="nav-ver-all"><VersionTag /></span>
-        {/* +Q and +C (Nov 1, Nick: "a small plus sign with a quote so that I can just create a quote from the toolbar…
-            plus quote plus customer"): on the version's line, at the left; folded, one above the other */}
-        {(perms.quotes || canOpen("/shop/customers", perms)) && (
-          <span className="nav-quick">
-            {perms.quotes && <button type="button" className="nav-qk" title="New quote" aria-label="New quote" disabled={!!quick} onClick={() => { setQuick("q"); newQuote((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ Q</button>}
-            {canOpen("/shop/customers", perms) && <button type="button" className="nav-qk" title="New customer" aria-label="New customer" disabled={!!quick} onClick={() => { setQuick("c"); newCustomer((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ C</button>}
-          </span>
-        )}
+        {/* one row (Nov 1, Nick: the buttons "interact with the refresh weird"): +Q (salmon) and +C (orange) at the left,
+            the version at the right; a new version shows as its number in blue */}
+        <span className="nav-foot">
+          {perms.quotes && <button type="button" className="nav-qk q" title="New quote" aria-label="New quote" disabled={!!quick} onClick={() => { setQuick("q"); newQuote((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ Q</button>}
+          {canOpen("/shop/customers", perms) && <button type="button" className="nav-qk c" title="New customer" aria-label="New customer" disabled={!!quick} onClick={() => { setQuick("c"); newCustomer((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ C</button>}
+          <span className="nav-ver-all"><VersionTag /></span>
+        </span>
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
         {/* you: your initials, and Settings under them; clicking opens Settings (Oct 16, Nick) */}
         {(() => {
