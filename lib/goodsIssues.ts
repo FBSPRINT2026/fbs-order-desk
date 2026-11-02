@@ -74,7 +74,8 @@ export async function openFromCheckin(admin: SupabaseClient, c: CheckinRow, by: 
   const owed = items.reduce((a, it) => a + it.owed, 0);
   const kinds = [...new Set(items.map((it) => it.issue))];
   const kind = kinds.length === 1 ? kinds[0] : kinds.includes("damaged") ? "damaged" : kinds.includes("mispick") ? "mispick" : "short";
-  const title = kind === "short" ? `Short ${pcs(owed)}` : kind === "over" ? `Over ${pcs(items.reduce((a, it) => a + Math.max(0, it.received - it.expected), 0))}` : kind === "damaged" ? `Damaged: ${pcs(owed)} to replace` : kind === "mispick" ? `Wrong items: ${pcs(owed)} to replace` : `${pcs(owed)} to replace`;
+  // said the way the items read: "5 pieces short", "2 pieces damaged" (Nov 2, Nick)
+  const title = kind === "short" ? `${pcs(owed)} short` : kind === "over" ? `${pcs(items.reduce((a, it) => a + Math.max(0, it.received - it.expected), 0))} over` : kind === "damaged" ? `${pcs(owed)} damaged` : kind === "mispick" ? `${pcs(owed)} wrong` : `${pcs(owed)} to replace`;
   const detail = items.map((it) => `${label(it)}: got ${it.received} of ${it.expected}${it.bad ? ` (${it.bad} ${it.issue === "mispick" ? "wrong" : "damaged"})` : ""}`).join("; ");
   const row = {
     order_id: c.order_id, archived_order_id: c.archived_order_id, customer_id: (o as { customer_id?: string } | null)?.customer_id || null, checkin_id: c.id,
