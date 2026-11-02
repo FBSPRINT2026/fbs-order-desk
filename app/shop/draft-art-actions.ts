@@ -65,14 +65,23 @@ export async function archiveOrderArt(orderId: string, designIds: string[], mock
 }
 
 /** Keep: this order's draft logos and mockups go into the customer's library now */
-export async function keepOrderArt(orderId: string) {
+export async function keepOrderArt(orderId: string, /** file the logos under one of the customer's brands (Nov 1, Nick: "assign it
+  to like a sub account like MEI… or make new, like Sugar and Sage"): its id, or a new brand's name; neither = the
+  customer's own */ to?: { brandId?: string; newBrand?: string }) {
   try {
     const v = await staff();
     const admin = createAdminClient();
-    const { data: o } = await admin.from("orders").select("id, groups").eq("id", orderId).maybeSingle();
+    const { data: o } = await admin.from("orders").select("id, groups, customer_id").eq("id", orderId).maybeSingle();
     if (!o) return { ok: false as const, error: "Order not found." };
+    let brandId: string | null = to?.brandId || null;
+    const nb = (to?.newBrand || "").trim();
+    if (nb && o.customer_id) {
+      const { data: have } = await admin.from("brands").select("id").eq("customer_id", o.customer_id).ilike("name", nb).is("archived_at", null).limit(1);
+      if (have?.length) brandId = have[0].id as string;
+      else { const { data: b, error } = await admin.from("brands").insert({ customer_id: o.customer_id, name: nb }).select("id").single(); if (error) return { ok: false as const, error: error.message }; brandId = b.id as string; }
+    }
     const ids = designIdsOf(o.groups);
-    const { data: d } = ids.length ? await admin.from("designs").update({ draft: false }).in("id", ids).eq("draft", true).select("id") : { data: [] };
+    const { data: d } = ids.length ? await admin.from("designs").update({ draft: false, ...(brandId ? { brand_id: brandId } : {}) }).in("id", ids).eq("draft", true).select("id") : { data: [] };
     const { data: m } = await admin.from("mockups").update({ draft: false }).eq("order_id", orderId).eq("draft", true).select("id");
     const n = (d || []).length + (m || []).length;
     if (n) await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: `Kept the order's art in the customer's library (${(d || []).length} logos, ${(m || []).length} mockups)`, actor: v.email });

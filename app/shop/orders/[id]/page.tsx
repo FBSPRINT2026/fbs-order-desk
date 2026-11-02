@@ -1,4 +1,5 @@
 "use client";
+import DraftArtKeep from "@/components/DraftArtKeep";
 import { accountOfMethod, carrierOf, isThirdParty, notOurShipping, onAccountMethod, type ThirdParty } from "@/lib/thirdParty";
 import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
@@ -66,7 +67,7 @@ import { programCard, type ProgramCardOpt } from "@/app/shop/program-pricing-act
 import { PriceSuggestions, ProgramNotes } from "@/components/ProgramPricing";
 import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
-import { archiveOrderArt, draftArtCount, keepOrderArt, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
+import { archiveOrderArt, draftArtCount, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
 import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
 import { printavoDeleteCheck } from "@/app/shop/orders/delete-actions";
 import QbLogo from "@/components/QbLogo";
@@ -1184,13 +1185,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // this order's art that's still a draft (not in the customer's library until the order goes out)
   const [drafts, setDrafts] = useState({ logos: 0, mockups: 0 });
   useEffect(() => { if (o?.id) draftArtCount(o.id).then((r) => setDrafts({ logos: r.logos, mockups: r.mockups })); }, [o?.id, o?.status]);
-  async function keepDrafts() {
-    if (!o) return;
-    const r = await keepOrderArt(o.id);
-    if (!r.ok) return say(r.error || "Couldn't keep the art.");
-    setDrafts({ logos: 0, mockups: 0 });
-    say("The art is in the customer's library now.");
-  }
   const delErr = useRef("");
   async function reallyDel(go = true): Promise<boolean> {
     if (!o) return false;
@@ -1486,12 +1480,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <button type="button" className="btn sm" onClick={() => { undoHelper(); setMovedMsg(""); }}>Undo</button>
         <button type="button" className="btn sm ghost" aria-label="Close" onClick={() => setMovedMsg("")}>✕</button>
       </div>}
-      {(drafts.logos > 0 || drafts.mockups > 0) && ["quote", "request"].includes(o.status) && (
-        <div className="draft-note" role="note">
-          <span><b>Draft art.</b> {[drafts.logos ? `${drafts.logos} logo${drafts.logos === 1 ? "" : "s"}` : "", drafts.mockups ? `${drafts.mockups} mockup${drafts.mockups === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ")} made for this order {drafts.logos + drafts.mockups === 1 ? "isn't" : "aren't"} in the customer&apos;s library yet. {drafts.logos + drafts.mockups === 1 ? "It joins" : "They join"} when the order is sent or approved, and go away if it&apos;s deleted.</span>
-          <button type="button" className="btn sm" onClick={keepDrafts}>Keep in their library</button>
-        </div>
-      )}
+      {/* the draft art note lives in Art & production now (Nov 1, Nick: "annoying that it's just always there"): DraftArtKeep */}
       {delAsk && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Delete order" onClick={() => !delAsk.busy && setDelAsk(null)} onKeyDown={(e) => { if (e.key === "Escape" && !delAsk.busy) setDelAsk(null); }}>
           <div className="dla" onClick={(e) => e.stopPropagation()}>
@@ -1997,6 +1986,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         {/* Art & production */}
         <div className="ed-grid" hidden={tab !== "prod"}>
           <div className="stack">
+            {["quote", "request"].includes(o.status) && <DraftArtKeep key={`${o.id}:${drafts.logos}:${drafts.mockups}`} orderId={o.id} customerId={o.customer_id} customer={(() => { const c = customers.find((x) => x.id === o.customer_id); return c ? custLabel(c) : "the customer"; })()} onKept={(m) => { setDrafts({ logos: 0, mockups: 0 }); say(m); }} />}
             <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
             <OrderSeparations o={o} />
           <ProductionPanel note={prodNotes} onNote={onProdNotes} noteState={noteState} uploading={artUploading}
