@@ -18744,3 +18744,35 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aa-paybox{background:var(--surface);border:1px solid var(--line);padding:0 16px 14px;overflow:hidden}
 .aa-paybox-h{margin:0 -16px;padding:11px 16px;font-family:var(--display);font-size:15px;font-weight:700;color:var(--ink);background:linear-gradient(90deg,var(--surface-2) 70%,color-mix(in srgb,var(--ok) 14%,var(--surface-2)));border-bottom:3px solid transparent;border-image:var(--fbs-fade) 1;border-image-slice:0 0 1 0}
 .portal .aa-payside .qp{background:var(--surface);border:1px solid var(--line)}
+/* the followed orders' small line: a dot for every step, the one it's on bigger and filled (Nov 2, Nick) */
+.pdx-fo{grid-template-columns:40px minmax(0,1fr) minmax(170px,240px) auto}
+.orm-bar{margin:0 6px}
+.orm-bar u{position:absolute;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:var(--surface);border:1px solid var(--line);box-sizing:border-box}
+.orm-bar u.d{background:var(--fbs-salmon);border-color:var(--fbs-salmon)}
+.orm-bar u.on{width:13px;height:13px;margin:-6.5px 0 0 -6.5px;background:var(--fbs-orange);border:2px solid var(--surface);box-shadow:0 0 0 1px var(--fbs-orange)}
+.orm-t{padding-left:6px}
+/* the dashboard's AI box on the title line, and its pop-up (Nov 2, Nick: "indicate somehow that that's a AI search… the
+   results should pop up") */
+.aa-ptop .pa-pop{position:relative;flex:0 1 420px;min-width:240px;padding:0;background:none;border:0;box-shadow:none}
+.aa-ptop .pa-pop .pa-in{border:1.5px solid var(--fbs-violet);border-radius:10px;box-shadow:0 0 0 3px color-mix(in srgb,var(--fbs-violet) 10%,transparent);padding:3px 3px 3px 10px;max-width:none}
+.aa-ptop .pa-pop .pa-in input{font-size:14px;padding:7px 0}
+.aa-ptop .pa-pop .pa-in .btn.primary{background:var(--fbs-violet);border-color:var(--fbs-violet)}
+.aa-ptop .pa-pop .pa-roll{font-size:13.5px}
+.pa-popbox{position:absolute;right:0;top:calc(100% + 8px);z-index:40;width:min(460px,calc(100vw - 32px));max-height:min(520px,calc(100vh - 160px));overflow:auto;background:var(--surface);border:1px solid color-mix(in srgb,var(--fbs-violet) 35%,var(--line));border-radius:12px;box-shadow:var(--shadow);padding:0 12px 10px}
+.pa-pop-h{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;margin:0 -12px 8px;padding:9px 12px;background:color-mix(in srgb,var(--fbs-violet) 10%,var(--surface));border-bottom:1px solid var(--line);z-index:1}
+.pa-pop-h b{font-size:13.5px;color:color-mix(in srgb,var(--fbs-violet) 70%,var(--ink))}
+.pa-pop-h button{all:unset;cursor:pointer;font-size:20px;line-height:1;color:var(--ink-3);padding:0 4px}
+.pa-popbox .pa-foot{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+/* Proofs waiting for approval: fills the right column like On hold did */
+.pdx-pf{--hc:var(--fbs-violet)}
+.pdx-col>.pdx-pf{flex:1 1 auto;display:flex;flex-direction:column}
+.pdx-pf .pdx-hold-ok{flex:1}
+.pdx-pf-n{min-width:22px;height:22px;border-radius:999px;background:var(--fbs-violet);color:#fff;font-size:12px;font-weight:700;display:inline-grid;place-items:center;padding:0 6px}
+.pdx-left>.pdx-hs{flex:0 0 auto}
+/* the page name and the search (or AI box) the same height, straight across from each other; a bit more room above them
+   than below (Nov 2, Nick) */
+.aa-ptop{margin:-2px 0 -10px;align-items:stretch}
+.aa-ptop .aa-ptitle{height:42px;box-sizing:border-box;display:flex;align-items:center;padding-bottom:4px;margin:0 0 0 8px}
+.aa-ptop-r{align-items:stretch}
+.aa-ptop-r>.aa-search,.aa-ptop .pa-pop .pa-in{height:42px;box-sizing:border-box;display:flex;align-items:center}
+.aa-ptop-r>.btn{align-self:center}

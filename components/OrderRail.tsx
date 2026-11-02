@@ -51,7 +51,10 @@ export function MiniRail({ steps, done = false }: { steps: JobStep[]; done?: boo
   const pct = n > 1 ? (at / (n - 1)) * 100 : 100;
   return (
     <span className="orm" title={steps.map((s) => s.label).join(" → ")}>
-      <span className="orm-bar" aria-hidden><i style={{ clipPath: `inset(0 ${100 - pct}% 0 0 round 3px)` }} /><b style={{ left: `${pct}%` }} /></span>
+      {/* a small dot for every step, so the step it's on sits where it does on every other line (Nov 2, Nick: "it should
+          be at the same point in the status bar as all the other readies… little dots") */}
+      <span className="orm-bar" aria-hidden><i style={{ clipPath: `inset(0 ${100 - pct}% 0 0 round 3px)` }} />
+        {steps.map((st, k) => <u key={st.key + k} className={k < at ? "d" : k === at ? "on" : ""} style={{ left: `${n > 1 ? (k / (n - 1)) * 100 : 0}%` }} />)}</span>
       <span className="orm-t">{steps[at]?.label || ""}</span>
     </span>
   );

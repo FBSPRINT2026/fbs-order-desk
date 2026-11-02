@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, PAY_TERMS, priceList, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import PortalPricing from "@/components/PortalPricing";
-import PortalDash, { type DashNeed, type DashPast, type DashThread } from "@/components/PortalDash";
+import PortalDash, { type DashNeed, type DashPast, type DashProof, type DashThread } from "@/components/PortalDash";
 import { customerHold, customerStatus } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
 import { jobFor, kindFromWords, type PortalJob, type JobKind, type JobShip } from "@/lib/portalJobs";
@@ -402,11 +402,13 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     href: link("/portal?area=payments"), statementHref: link("/portal/statement"),
   };
   // the assistant's shortcuts, from their own jobs
+  // proofs out for their OK, for the dashboard's "Proofs waiting for approval" (Nov 2, Nick)
+  const proofsDash: DashProof[] = orders.filter((o) => firstPending[o.id]).sort((a, b) => b.number - a.number).map((o) => ({ id: o.id, number: o.number, name: o.nickname || "", href: link(`/portal/orders/${o.id}/review/${firstPending[o.id]}`), orderHref: link(`/portal/orders/${o.id}`), n: pendingProofs[o.id] || 1 }));
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
   const dash = (
     <PortalDash held={held} tracked={tracked} sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
-      assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare ideas={ideas} personHref={msgLink(null)} />}
+      proofs={proofsDash}
       threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} mocks={mocks} mockupHref={link("/portal/mockup")} artHref={link("/portal?area=artwork")}
       pay={pay} canAct={!ctx.preview} ordersHref={link("/portal?area=orders")}
       goods={wholesale && goodsOpen.length ? <section className="pdx-card"><div className="pdx-h"><h2>Customer supplied goods</h2><a className="pd-link" href={goodsHref}>See all</a></div><PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="" /></section> : undefined} />
@@ -432,6 +434,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && (programItems.length > 0 || cardHasPrices(program.rate_card))}
             assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
+            titleAsk={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare pop ideas={ideas} personHref={msgLink(null)} />}
             goodsPanel={wholesale ? <PortalGoodsDesk items={goodsAll} incoming={incoming} told={told} canAct={!ctx.preview} canLink={!ctx.preview || ctx.isStaff} qs={qs} as={ctx.preview?.id} addTracking={addTracking} linkIncoming={linkIncoming} sendGoods={sendGoods} linkTold={linkToldShipment} /> : undefined}
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
             goodsCount={goodsOpen.length + incoming.length}

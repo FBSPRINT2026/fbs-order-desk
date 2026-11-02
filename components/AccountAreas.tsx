@@ -84,7 +84,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
@@ -146,6 +146,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
   onDelete?: (designId: string) => Promise<{ ok: boolean; error?: string }>;
   onStarMockup?: (mockupId: string, starred: boolean) => Promise<{ ok: boolean; error?: string }>;
   /** portal: the customer's Settings page, on the right of the tab bar (Oct 24) */ settingsHref?: string;
+  /** portal dashboard: the AI ask box on the title line, in place of its search (Nov 2, Nick) */ titleAsk?: ReactNode;
   /** portal, wholesale accounts: their price list, a tab just before Settings (Oct 24, Nick) */ pricingPanel?: ReactNode;
   /** portal: their unsent drafts (no number yet), to pick up again or throw away (Oct 24) */ drafts?: { id: string; name: string; updated: string; pcs: number }[];
   onDiscardDraft?: (id: string) => Promise<{ ok: boolean; error?: string }>;
@@ -1155,7 +1156,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         {/* the page's search, on the title's line at the right; it filters what this page shows. On Payments the statement
             sits just left of it (Nov 2, Nick) */}
         <span className="aa-ptop-r">{area === "payments" && statementHref && <a className="btn sm" href={statementHref}>View / print statement</a>}
-        {area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}</span>
+        {area === "home" && titleAsk ? titleAsk : area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}</span>
       </div>}
       <section className="aa-body">{mode === "portal" ? <PageSearchContext.Provider value={q}>{body}</PageSearchContext.Provider> : body}</section>
     </div>

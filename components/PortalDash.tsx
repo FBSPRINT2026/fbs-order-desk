@@ -20,6 +20,9 @@ export type DashSent = { id: string; href: string; number: number; name: string;
 export type DashTracked = { id: string; href: string; number: number; name: string; status: string; due: string; health: { text: string; tone: "ok" | "act" | "wait" | "bad" }; action: { label: string; href: string; external: boolean } | null;
   /** its picture and steps, so a starred order looks like its job below (Nov 2, Nick: "doesn't stand out like the rest") */ pic?: string; steps?: PortalJob["steps"]; done?: boolean };
 
+/** a proof waiting for their OK (Nov 2) */
+export type DashProof = { id: string; number: number; name: string; href: string; orderHref: string; n: number };
+
 /** an order on hold, with why (Oct 24, Nick: "there's got to be an on hold panel on the dashboard for the customer") */
 export type DashHeld = { id: string; href: string; number: number; name: string; msgHref: string; hold: { key?: string; title: string; reason: string; href: string; fixLabel: string } };
 
@@ -34,8 +37,9 @@ const HOLD_KINDS: { label: string; keys: string[]; c: string; none: string }[] =
 export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
   /** what's owed by how late it is: Current, 1–30, 31–60, 61–90, Over 90 */ aging?: { k: string; amt: number; late: boolean }[] };
 
-export default function PortalDash({ held = [], tracked = [], sent = [], draft, assistant, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
-  assistant: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
+export default function PortalDash({ proofs = [], held = [], tracked = [], sent = [], draft, threads, newMsgs, msgHref, needs, jobs, pastJobs, past, art, mocks = [], mockupHref, artHref, pay, goods, canAct, ordersHref }: {
+  /** proofs out for their OK */ proofs?: DashProof[];
+  assistant?: ReactNode; threads: DashThread[]; newMsgs: number; msgHref: string; needs: DashNeed[]; jobs: PortalJob[]; pastJobs: PortalJob[];
   past: DashPast[]; art: { id: string; url: string; name: string }[]; artHref: string;
   /** Orders sent to FBS, above the jobs (Oct 24, Nick) */ sent?: DashSent[];
   /** the orders they starred to track */ tracked?: DashTracked[];
@@ -75,10 +79,6 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
 
       <div className="pdx-top">
         <div className="pdx-col pdx-left">
-        <section className="pdx-card pdx-asst">
-          <div className="pdx-h"><h2>✨ Your FBS AI Assistant</h2><span className="faint">Instant answers about your jobs, any time</span></div>
-          {assistant}
-        </section>
         {/* Order tracking, under the assistant (Oct 24, Nick: "keep track of all your high priority orders, star to add to this list"… "underneath the panel where the FBS assistant is… the same width") */}
         <section className="pdx-card pdx-track">
           <div className="pdx-h"><h2>Orders I&apos;m following</h2><span className="faint" style={{ fontSize: 12 }}>Click the ☆ on an order to follow it here.</span></div>
@@ -102,21 +102,6 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         </div>}
       </section>
 
-        </div>
-        <div className="pdx-col">
-        {/* payments: a small statement, with Pay now */}
-        <section className="pdx-card pdx-stmt">
-          <div className="pdx-h"><h2>Payments</h2><Link href={pay.href} className="pd-link">Payment history</Link></div>
-          <div className="pdx-stmt-top">
-            {/* just the balance (Nov 2, Nick: "take the past due off… take red off"): no aging boxes, no red */}
-            <div className={"pdx-stmt-due" + (pay.due > 0.004 ? " owe" : " ok")}>
-              <small>Balance</small><b>{money(pay.due)}</b>
-              {pay.due <= 0.004 && <span>All paid up. Thank you!</span>}
-            </div>
-            <div className="pdx-stmt-acts">{pay.due > 0.004 && <Link className="btn primary" href={pay.href}>Pay now</Link>}<a className="btn" href={pay.statementHref}>Statement</a></div>
-          </div>
-          <div className="pdx-stmt-meta"><span>Terms <b>{pay.terms}</b></span>{pay.last && <span>Last payment <b>{pay.last}</b></span>}</div>
-        </section>
         {/* on hold: a short list and why, one line each (Nov 2, Nick: "just be like a list and like a quick thing of why
             they're on hold… zero orders on hold, everything's good to go… when you click it… an on hold section" in Your jobs) */}
         <section className={"pdx-card pdx-hs" + (held.length ? " has" : "")}>
@@ -135,6 +120,35 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <b>No orders on hold</b>
             <span>Everything&apos;s good to go.</span>
+          </div>}
+        </section>
+        </div>
+        <div className="pdx-col">
+        {/* payments: a small statement, with Pay now */}
+        <section className="pdx-card pdx-stmt">
+          <div className="pdx-h"><h2>Payments</h2><Link href={pay.href} className="pd-link">Payment history</Link></div>
+          <div className="pdx-stmt-top">
+            {/* just the balance (Nov 2, Nick: "take the past due off… take red off"): no aging boxes, no red */}
+            <div className={"pdx-stmt-due" + (pay.due > 0.004 ? " owe" : " ok")}>
+              <small>Balance</small><b>{money(pay.due)}</b>
+              {pay.due <= 0.004 && <span>All paid up. Thank you!</span>}
+            </div>
+            <div className="pdx-stmt-acts">{pay.due > 0.004 && <Link className="btn primary" href={pay.href}>Pay now</Link>}<a className="btn" href={pay.statementHref}>Statement</a></div>
+          </div>
+          <div className="pdx-stmt-meta"><span>Terms <b>{pay.terms}</b></span>{pay.last && <span>Last payment <b>{pay.last}</b></span>}</div>
+        </section>
+        {/* proofs waiting for their OK, where On hold was, filling the column (Nov 2, Nick: "where orders on hold are on the
+            right, let's put that as proofs… the same height as everything on the left") */}
+        <section className={"pdx-card pdx-pf" + (proofs.length ? " has" : "")}>
+          <div className="pdx-h"><h2>Proofs waiting for approval</h2>{proofs.length > 0 && <span className="pdx-pf-n">{proofs.length}</span>}</div>
+          {proofs.length ? <ul className="pdx-hl">{proofs.map((x) => (
+            <li key={x.id} style={{ ["--hk" as string]: "var(--fbs-violet)" }}>
+              <Link className="pdx-hl-job" href={x.orderHref}><b className="onum">#{x.number}</b>{x.name && <span>{x.name}{x.n > 1 ? ` · ${x.n} proofs` : ""}</span>}</Link>
+              <Link className="pdx-hl-do" href={x.href}>Review proof</Link>
+            </li>))}</ul> : <div className="pdx-hold-ok" role="status">
+            <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <b>No proofs waiting</b>
+            <span>New proofs show here for your OK.</span>
           </div>}
         </section>
         </div>

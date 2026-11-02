@@ -17,7 +17,9 @@ const IDEAS = ["Where's my order?", "Track my shipment", "Pay my bill", "Reorder
  */
 /** bare: inside the dashboard's assistant card (no greeting of its own); ideas: shortcuts from their own jobs;
  *  personHref: "Go to the FBS Message Center" (Nov 2, Nick) opens the message center (a message, not a live chat) */
-export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: ideas0, personHref }: { qs: string; canAct: boolean; wholesale: boolean; bare?: boolean; ideas?: string[]; personHref?: string }) {
+export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: ideas0, personHref, pop = false }: { qs: string; canAct: boolean; wholesale: boolean; bare?: boolean; ideas?: string[]; personHref?: string;
+  /** on the dashboard's title line: just the box, the talk opens in a pop-up under it (Nov 2, Nick: "put that there where…
+   *  search the dashboard is… indicate… that's a AI search… the results should pop up") */ pop?: boolean }) {
   const router = useRouter();
   const [hello, setHello] = useState("Hello");
   useEffect(() => setHello(greeting()), []);
@@ -86,21 +88,22 @@ export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: id
   }, [turns.length, q, ideas.length]);
   const shownIdea = !turns.length && !q ? ideas[idea % Math.max(1, ideas.length)] || "" : "";
   return (
-    <section className={"pa" + (bare ? " pa-bare" : "")} aria-label="Help">
+    <section className={"pa" + (bare ? " pa-bare" : "") + (pop ? " pa-pop" : "")} aria-label="Ask FBS AI">
       {!bare && <h2 className="pa-hello">{hello}</h2>}
       <form className="pa-in" onSubmit={(e) => { e.preventDefault(); ask(q.trim() ? q : shownIdea); }}>
         <span className="pa-spark" aria-hidden="true">✨</span>
         <span className="pa-field">
           <input ref={inRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} placeholder={shownIdea ? "" : bare ? "Ask about an order, a reorder, a payment, your art…" : "What can I help you with today?"} aria-label="Ask the assistant" autoComplete="off" />
-          {shownIdea && <span key={idea} className="pa-roll" aria-hidden>Try “{shownIdea}”</span>}
+          {shownIdea && <span key={idea} className="pa-roll" aria-hidden>{pop ? "Ask FBS AI · " : "Try "}“{shownIdea}”</span>}
         </span>
         {/* talk to it (Oct 24, Nick: "a microphone button in there so they can just talk to it"): what's said is asked */}
         <MicButton target={() => inRef.current} label="Ask by voice" className="pa-mic" onDone={(t) => { if (t.trim()) ask(t.trim()); }} />
         <button type="submit" className="btn primary" disabled={busy || (!q.trim() && !shownIdea)}>{busy ? "Thinking…" : "Ask"}</button>
       </form>
-      {!turns.length && personHref && <div className="pa-ideas pa-ideas-quiet"><a className="pa-person" href={personHref}>Go to the FBS Message Center →</a></div>}
+      {!pop && !turns.length && personHref && <div className="pa-ideas pa-ideas-quiet"><a className="pa-person" href={personHref}>Go to the FBS Message Center →</a></div>}
       {turns.length > 0 && (
-        <div className="pa-talk" ref={box}>
+        <div className={"pa-talk" + (pop ? " pa-popbox" : "")} ref={box} role={pop ? "dialog" : undefined} aria-label={pop ? "FBS AI Assistant" : undefined}>
+          {pop && <div className="pa-pop-h"><b>✨ FBS AI Assistant</b><button type="button" aria-label="Close" onClick={() => setTurns([])}>×</button></div>}
           {turns.map((t, i) => (
             <div key={i} className={"pa-t " + t.role}>
               <div className="pa-b">{t.text}</div>
@@ -111,7 +114,7 @@ export default function PortalAssistant({ qs, canAct, wholesale, bare, ideas: id
             </div>
           ))}
           {busy && <div className="pa-t assistant"><div className="pa-b pa-dots"><span /><span /><span /></div></div>}
-          <div className="pa-foot"><button type="button" className="pd-link" onClick={() => setTurns([])}>Start over</button></div>
+          <div className="pa-foot"><button type="button" className="pd-link" onClick={() => setTurns([])}>Start over</button>{pop && personHref && <a className="pd-link" href={personHref}>Go to the FBS Message Center →</a>}</div>
         </div>
       )}
     </section>
