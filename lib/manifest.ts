@@ -215,6 +215,11 @@ export function abbrevHit(po: string, names: string[], nickname: string): boolea
   return pw.some((w) => w.length >= 4 && !GENERIC.test(w) && theirs.some((t) => near(w, t)));
 }
 
+/** the order still needs at least some of these goods */
+function hasRoom(lines: Line[], o: Open): boolean {
+  return lines.some((l) => o.items.some((it) => it.need > 0 && (it.style ? styleEq(it.style, l.style) : true) && colorEq(it.color, l.color) && sameSize(it.size, sizeKey(l.size))));
+}
+
 /** every piece of the shipment has room on the order: by style, color and size, no more than it still needs */
 function fitsNeed(lines: Line[], o: Open): boolean {
   const left = o.items.map((it) => ({ ...it }));
@@ -619,7 +624,8 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   // the customer's only open order, and the pieces add up exactly
   if (orders.length === 1 && pcsIn >= 12 && orders[0].items.reduce((x, it) => x + it.need, 0) === pcsIn)
     return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: orders[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: false, how: `their only open order, and the pieces add up exactly (${pcsIn})` };
-  const a = allocate(lines, orders);
+  // only orders that still need some of these goods (an order whose goods are all here isn't suggested for more, Nov 2)
+  const a = allocate(lines, orders.filter((o) => hasRoom(lines, o)));
   const used = new Set(a.alloc.flatMap((x) => x.parts.map((p) => p.orderId)));
   const how = !a.alloc.length ? "" : `No order has PO ${g.customer_po || "(none)"}; items match ${[...used].map((id) => "#" + orders.find((o) => o.id === id)?.number).join(", ")}`;
   // Nicholas: the same quantity, style and color as an order due in the next two weeks is a link
