@@ -5191,7 +5191,9 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
   const cy = (topAlign ? top0 + (hIn * PX) / 2 : fold && arm !== "upper" ? top0 + maxH * PX - Math.min(maxH, hIn + SLEEVE_HEM_GAP) * PX + (hIn * PX) / 2 : H / 2) + offIn.y * PX;
   return (
     <div className="mk-sleeve" style={{ width: BOX }}>
-      <div className="mk-cu-h"><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span>
+      {/* the title, size line, colors and center tool line up with the box itself (Nov 1, Nick: on a tall spot the box is
+          narrower than its column and the button hung past its right edge) */}
+      <div className="mk-cu-h" style={{ width: W, alignSelf: "center", maxWidth: "100%" }}><span className="lbl">{title.toUpperCase()}</span><span className="mk-cu-max">max {maxW}&quot; × {maxH}&quot;</span>
         {onEyedrop && <span className="mk-cu-eye">
           <button type="button" className="mk-cu-eyeb" title="Shirt color wrong? Click, then click the shirt to pick its color" aria-label="Pick the shirt color" onClick={onEyedrop}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m2 22 1-1h3l9-9M3 21v-3l9-9M15 6l3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3z" /></svg>
@@ -5274,14 +5276,14 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
           {sel && !box && <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />}
         </div>
       </div>
-      <div className="mk-cu-dim mkc-dim"><span>{url ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : "No logo yet"}</span>
+      <div className="mk-cu-dim mkc-dim" style={{ width: W, alignSelf: "center", maxWidth: "100%" }}><span>{url ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : "No logo yet"}</span>
         {url && onCenter && <button type="button" className={"mkc-btn" + (box || ctr ? " on" : "")} aria-pressed={!!box} title={ctr ? "Centered on part of the art: click to change" : "Center on part of the art (leave out a ™ or a tail)"} aria-label="Center on part of the art"
           onClick={() => setBox(box ? null : ctr ? { x0: Math.max(0, ctr.x - 0.25), y0: Math.max(0, ctr.y - 0.25), x1: Math.min(1, ctr.x + 0.25), y1: Math.min(1, ctr.y + 0.25) } : { x0: 0, y0: 0, x1: 1, y1: 1 })}>
           <svg viewBox="0 0 16 16" aria-hidden><line x1="8" y1="1" x2="8" y2="15" /><rect x="3" y="4.5" width="10" height="7" /></svg>
         </button>}
       </div>
       {box && onCenter && (
-        <div className="mkc-bar">
+        <div className="mkc-bar" style={{ width: W, alignSelf: "center", maxWidth: "100%", boxSizing: "border-box" }}>
           <b>Center on the part you box</b>
           <span>Drag a box over the art to center on (leave out a ™ or a tail), or drag its sides in. The crop marks follow it.</span>
           <div className="mkc-acts">
@@ -5292,7 +5294,7 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
         </div>
       )}
       {url && (
-        <div className="mk-cu-colors">
+        <div className="mk-cu-colors" style={{ width: W, alignSelf: "center", maxWidth: "100%" }}>
           {colors.length ? colors.map((c, i) => (
             <div key={i} className="mk-cu-color"><span className="sw" style={{ background: c.hex || "transparent" }} /><span>{c.name}</span></div>
           )) : <span className="faint">Colors not read yet</span>}
