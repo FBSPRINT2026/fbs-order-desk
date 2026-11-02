@@ -65,7 +65,7 @@ import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
-import { registerAreas, isCustomSpot, setHeadwearSpots } from "@/lib/mockup";
+import { registerAreas, isCustomSpot, setHeadwearSpots, LOCATION_SPOTS } from "@/lib/mockup";
 import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, measureCap, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
@@ -2398,6 +2398,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setHelper((h) => ({ name: f.name, busy: "", kind, rows, pms, inkOpts: [...new Set([...pms, ...rows.flatMap((r) => r.inks)])], notes, ...(shirt ? { shirtHex: shirt } : {}), knocked, ...(h && h.name === f.name ? { garments: h.garments, gBusy: h.gBusy, gErr: h.gErr, file: h.file, keepFile: h.keepFile } : {}) }));
     } catch (e) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Couldn't read it: " + (e instanceof Error ? e.message : String(e)) }); }
   }
+  /** a print moved to a spot it can't fit (10" art put on a left chest, max 5"): its usual width there, the shape kept */
+  const fitLoc = (r: HelpRow, loc: string): Partial<HelpRow> => {
+    const sp = LOCATION_SPOTS[loc];
+    if (!sp || (r.widthIn <= sp.maxW && r.heightIn <= sp.maxH)) return {};
+    const k = r.heightIn / (r.widthIn || 1), w = Math.min(sp.defW, sp.maxH / (k || 1));
+    const widthIn = Math.max(0.5, Math.round(w * 4) / 4);
+    return { widthIn, heightIn: Math.round(widthIn * k * 100) / 100 };
+  };
   const helpSet = (key: string, ch: Partial<HelpRow>) => setHelper((h) => h && { ...h, rows: h.rows.map((r) => (r.key === key ? { ...r, ...ch } : r)) });
   /** the art with its distress, as the mockup shows it: one layer of the mask, the shirt showing through */
   async function distressRow(r: HelpRow, how: HelpRow["distress"]): Promise<Partial<HelpRow> | null> {
@@ -4841,7 +4849,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         <div className="mk-help-b">
                           <div className="row" style={{ gap: 6 }}>
                             <select aria-label="Side" value={r.side} onChange={(e) => { const side = e.target.value as HelpRow["side"]; helpSet(r.key, { side, location: side === "sleeve" ? (locsFor("sleeve").includes(r.location) ? r.location : locsFor("sleeve")[0] || "Left Sleeve") : locOfPulled(side, r.widthIn, r.dropIn, 0) }); }}><option value="front">Front</option><option value="back">Back</option><option value="sleeve">Sleeve</option></select>
-                            <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value })}>{[...new Set([...locsFor(r.side), r.location])].map((l) => <option key={l}>{l}</option>)}</select>
+                            <select aria-label="Location" value={r.location} onChange={(e) => helpSet(r.key, { location: e.target.value, ...fitLoc(r, e.target.value) })}>{[...new Set([...locsFor(r.side), r.location])].map((l) => <option key={l}>{l}</option>)}</select>
                           </div>
                           <div className="mk-help-rot" role="group" aria-label="Square it up">
                             <button type="button" className="btn sm" disabled={r.turning} title="Find the turn that sets the logo square and turn it" onClick={() => void turnRow(r, "auto")}>{r.turning ? "Turning…" : "Straighten"}</button>
