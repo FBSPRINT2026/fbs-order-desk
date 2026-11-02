@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, colorHex, customInk, parseCustom } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { findThreads, threadByName, threadLabel, type Thread } from "@/lib/embroidery";
+import type { OrderInk } from "@/lib/orderInks";
 
 /** The ink and thread pickers (one field each), shared by the Mockup Creator and the order page's color change. */
 /**
@@ -14,6 +15,9 @@ import { findThreads, threadByName, threadLabel, type Thread } from "@/lib/embro
 export type BrandInk = { name: string; ink: string; hex: string; group?: string };
 export type Brand = { label: string; colors: BrandInk[]; groups: { key: string; label: string; colors: BrandInk[] }[] };
 export const BrandCtx = createContext<Brand>({ label: "", colors: [], groups: [] });
+/** the inks already picked on this order (lib/orderInks): first in every ink dropdown, so a custom color or PMS made on
+ *  one print is one click on the next */
+export const OrderInkCtx = createContext<OrderInk[]>([]);
 
 /** Pick the ink a logo color prints as: a Wilflex RFU color, a PMS color, a custom PMS, or drop it. */
 /**
@@ -42,6 +46,7 @@ export function resolveInk(text: string, brand: Brand): { name: string; hex: str
 type InkOpt = { name: string; hex: string; sub?: string; act?: "keep" | "none" | "typed" | "custom" };
 export function InkSelect({ value, onChange, adder }: { value?: { name: string; hex: string }; onChange: (v: { name: string; hex: string } | null) => void; /** a picker that adds inks to a list (Logo details): this placeholder, no "Keep as uploaded" / "Remove" */ adder?: string }) {
   const brand = useContext(BrandCtx);
+  const onOrder = useContext(OrderInkCtx);
   const box = useRef<HTMLSpanElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const inp = useRef<HTMLInputElement>(null);
@@ -59,6 +64,8 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
     const add = (label: string, opts: InkOpt[]) => { const o = opts.filter((x) => !seen.has(x.name) && has(x.name, x.sub)); o.forEach((x) => seen.add(x.name)); if (o.length) out.push({ label, opts: o }); };
     if (hit) { out.push({ label: "", opts: [hit] }); seen.add(hit.name); }
     if (!q && !adder) out.push({ label: "", opts: [{ name: "Keep as uploaded", hex: "", act: "keep" }, { name: "Remove (shirt shows through)", hex: "", act: "none" }] });
+    // already on this order (a custom color made for the front, a PMS on another print): pick it again in one click
+    add("On this order", onOrder.map((x) => ({ name: x.name, hex: x.hex || colorHex(x.name) || "#888888", sub: x.where.join(", ") })));
     // a color mixed by hand: picked off the screen or chosen, and described (CustomInk under the field)
     if (!q || "custom".startsWith(q) || q.startsWith("custom")) out.push({ label: "", opts: [{ name: "Custom color (hand-matched)…", hex: "", act: "custom" }] });
     for (const g of brand.groups) if (g.colors.length) add(g.label, g.colors.map((b) => ({ name: b.ink, hex: b.hex || colorHex(b.ink) || "#888888", sub: b.name !== b.ink ? b.name : undefined })));
@@ -71,7 +78,7 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
       if (!hit && text!.trim()) out.push({ label: "", opts: [{ name: text!.trim(), hex: value?.hex || "#888888", act: "typed" }] });
     }
     return out;
-  }, [q, brand, hit, text, value?.hex]);
+  }, [q, brand, hit, text, value?.hex, onOrder]);
   const flat = groups.flatMap((g) => g.opts);
   const place = () => {
     const r = box.current?.getBoundingClientRect();

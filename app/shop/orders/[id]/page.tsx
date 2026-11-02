@@ -29,6 +29,8 @@ import {
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
+import { OrderInkCtx } from "@/components/InkSelect";
+import { orderInks } from "@/lib/orderInks";
 import FinishingPicker from "@/components/FinishingPicker";
 import { isRelabel } from "@/components/NeckLabelPick";
 import type { NeckLabelSet } from "@/lib/neckLabels";
@@ -1735,7 +1737,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 else if (p.helperFile) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&helper=1&helperFile=${encodeURIComponent(p.helperFile)}`);
               }} />
           )}
-          {o.groups.map((g, gi) => (
+          <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => (
             <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : undefined} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
@@ -1744,7 +1746,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })}
               moveTo={o.groups.flatMap((x, xi) => (x.id === g.id ? [] : [{ id: x.id, label: [x.name?.trim() || `Group ${xi + 1}`, x.lines.map((l) => l.style).filter(Boolean).slice(0, 2).join(", ")].filter(Boolean).join(" · ") }]))}
               onMoveLine={moveLine} />
-          ))}
+          ))}</OrderInkCtx.Provider>
           <div className="row grp-add">
             <button className="btn" type="button" onClick={() => patch((d) => { const ng = newGroup(); if (!finPerGroup) { ng.finishing = (d.groups[0]?.finishing || []).filter(isFin); if (d.groups[0]?.customFin?.length) ng.customFin = [...d.groups[0].customFin]; } d.groups.push(ng); })}>+ Add line item group</button>
             <span className="faint grp-hint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>

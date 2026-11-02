@@ -14,7 +14,8 @@ import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { BrandCtx, InkSelect, resolveInk, type Brand, type BrandInk } from "@/components/InkSelect";
+import { BrandCtx, InkSelect, OrderInkCtx, resolveInk, type Brand, type BrandInk } from "@/components/InkSelect";
+import { orderInks } from "@/lib/orderInks";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
@@ -3833,8 +3834,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const dirtyRef = useRef(false); dirtyRef.current = dirty;
   const markSaved = () => { baseSig.current = sigNow.current; };
   sigNowRef.current = () => sigNow.current; dirtyRefOut.current = () => dirtyRef.current;
+  // the inks already picked on this order: this group's as they stand now, and the other groups' as saved
+  const inksOnOrder = useMemo(() => orderInks(order?.groups || [], imprints.map((im) => { const pt = paints[im.id]; return { where: im.location || "Print", method: pt?.method === "embroidery" ? "embroidery" : im.method, inks: pt && pt.design === im.design_id ? Object.values(pt.map) : [] }; }), groupId), [order, imprints, paints, groupId]);
   return (
-    <BrandCtx.Provider value={brand}>
+    <BrandCtx.Provider value={brand}><OrderInkCtx.Provider value={inksOnOrder}>
       {pasteAsk && (() => { const groups = (["front", "back", "sleeve"] as Side[]).map((sd) => ({ sd, locs: locsFor(sd) })).filter((g) => g.locs.length); return (
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="pa-t" onClick={() => setPasteAsk(null)} onKeyDown={(e) => { if (e.key === "Escape") setPasteAsk(null); }}>
           <div className="mk-modal mkpa" onClick={(e) => e.stopPropagation()}>
@@ -4964,7 +4967,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {/* names & numbers (Oct 31, Nick): the list, the look, the first shirt on the mockup for approval */}
         </div>
       </div>
-    </BrandCtx.Provider>
+    </OrderInkCtx.Provider></BrandCtx.Provider>
   );
 }
 
