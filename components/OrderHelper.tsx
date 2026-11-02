@@ -19,16 +19,8 @@ type Msg = HelperMsg & { pics?: string[]; steps?: Step[]; undo?: boolean; error?
 /** a PDF's first pages as pictures to send (an S&S / SanMar confirmation, a PO, a size sheet) */
 async function pdfPics(f: Blob): Promise<Pic[]> {
   try {
-    const { pdfPicture } = await import("@/lib/printavoArt");
-    const buf = await f.arrayBuffer();
-    const out: Pic[] = [];
-    for (let n = 1; n <= 3; n++) {
-      const c = await pdfPicture(buf.slice(0), 1800, n).catch(() => null);
-      if (!c) break;
-      const d = c.toDataURL("image/jpeg", 0.85);
-      out.push({ media_type: "image/jpeg", data: d.split(",")[1], url: d });
-    }
-    return out;
+    const { pdfPictures } = await import("@/lib/printavoArt");
+    return (await pdfPictures(await f.arrayBuffer(), 1800, 3)).map((c) => { const d = c.toDataURL("image/jpeg", 0.85); return { media_type: "image/jpeg" as const, data: d.split(",")[1], url: d }; });
   } catch { return []; }
 }
 

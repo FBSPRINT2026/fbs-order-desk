@@ -127,6 +127,15 @@ export async function firstPageIn(buf: ArrayBuffer): Promise<{ w: number; h: num
 /** a PDF (or a PDF-compatible AI file) opened to draw its pages (the quick look's own viewer) */
 export const openPdf = openDoc;
 
+/** each page of a PDF as a picture (up to `max`), only the pages it really has (Nov 1: a one-page S&S confirmation
+ *  dropped in Quick ask showed three times: asking pdfPicture for page 2 and 3 gave page 1 again) */
+export async function pdfPictures(buf: ArrayBuffer, width = 1800, max = 3): Promise<HTMLCanvasElement[]> {
+  const doc = await openDoc(buf.slice(0));
+  const out: HTMLCanvasElement[] = [];
+  for (let n = 1; n <= Math.min(max, doc.numPages); n++) out.push(await pdfPicture(buf.slice(0), width, n));
+  return out;
+}
+
 /** a PDF's first page as a picture, about `width` px wide on white (the designs catalog's covers, Oct 20) */
 export async function pdfPicture(buf: ArrayBuffer, width = 900, pageNo = 1): Promise<HTMLCanvasElement> {
   const doc = await openDoc(buf);

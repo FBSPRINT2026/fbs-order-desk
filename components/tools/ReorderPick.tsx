@@ -75,8 +75,8 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
         const buf = await f.arrayBuffer();
         let bin = ""; const u8 = new Uint8Array(buf); for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode(...u8.subarray(i, i + 0x8000));
         pdf = btoa(bin);
-        const { pdfPicture } = await import("@/lib/printavoArt");
-        for (let n = 1; n <= 3; n++) { const c = await pdfPicture(buf.slice(0), 1800, n).catch(() => null); if (!c) break; pic(c); }
+        const { pdfPictures } = await import("@/lib/printavoArt");
+        for (const c of await pdfPictures(buf, 1800, 3).catch(() => [] as HTMLCanvasElement[])) pic(c);
       } else if (/^image\//.test(f.type)) {
         const url = URL.createObjectURL(f);
         const img = await new Promise<HTMLImageElement>((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
