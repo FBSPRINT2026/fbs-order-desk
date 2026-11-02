@@ -25,6 +25,7 @@ import { StarOrder } from "@/components/PortalDashBits";
 import PortalSwitch from "@/components/PortalSwitch";
 import { heldFiles } from "@/lib/heldFiles";
 import RowLink from "@/components/RowLink";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -190,11 +191,11 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
   const [moreOpen, setMoreOpen] = useState<{ top: number; right: number } | null>(null);
   const [recOpen, setRecOpen] = useState(false);
   const [sub, setSub] = useState<"quotes" | "orders">(rawArea === "quotes" || sp.get("sub") === "quotes" ? "quotes" : "orders");
-  const go = (a0: Area) => { let a = a0; if (mode === "portal" && (a === "quotes" || a === "orders")) { setSub(a === "quotes" ? "quotes" : "orders"); a = "orders"; } const p = new URLSearchParams(sp.toString()); if (a === "home") p.delete("area"); else p.set("area", a); const url = `${path}${p.size ? "?" + p : ""}`;
+  const go = (a0: Area) => { let a = a0; if (mode === "portal" && (a === "quotes" || a === "orders")) { setSub(a === "quotes" ? "quotes" : "orders"); a = "orders"; } const p = new URLSearchParams(window.location.search); p.delete("q"); /* a new tab starts with no search */ if (a === "home") p.delete("area"); else p.set("area", a); const url = `${path}${p.size ? "?" + p : ""}`;
     // portal: every tab's data is already on the page, so switching is instant (Oct 24, Nick: "the customer portal is
     // slow… it just kind of spins"); the address changes without asking the server for the whole page again
     if (mode === "portal") window.history.replaceState(null, "", url); else router.replace(url, { scroll: false }); };
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [homeTab, setHomeTab] = useState<"quotes" | "orders" | "current" | "past">("orders");
   const [stars, setStars] = useState<Record<string, boolean>>({});
   const [starErr, setStarErr] = useState("");

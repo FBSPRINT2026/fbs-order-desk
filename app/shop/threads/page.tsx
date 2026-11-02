@@ -6,6 +6,7 @@ import { useCan, useRole } from "@/components/RoleContext";
 import { THREAD_LINES, closestThreads, lineBrand, lineName, pmsOf, threadLabel, threads, type Thread } from "@/lib/embroidery";
 import { forgetThreadStock, stockKey, type StockThread } from "@/lib/threadStock";
 import { PMS_COATED } from "@/lib/pms";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * Thread Room (Oct 23, Nick: "just like we have the ink room, we need to have the thread room… its little logo can be a

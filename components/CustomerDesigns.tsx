@@ -7,6 +7,7 @@ import { coverJpeg, drawPic, isPdf, picRank } from "@/lib/pdfPic";
 import { pdfPicture } from "@/lib/printavoArt";
 import { isPsd } from "@/lib/psdPic";
 import PortalSwitch from "@/components/PortalSwitch";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * A customer's designs (Oct 20, Nick, Dear Heart Designs: "group orders by design… a master design and then all the
@@ -38,7 +39,7 @@ const yr = (d: string) => d.slice(0, 4);
 export default function CustomerDesigns({ customerId, portalOn, onPortal }: { customerId: string; /** shown in the customer's portal too: switched right here on the catalog (Oct 24, Nick) */ portalOn?: boolean; onPortal?: (v: boolean) => void }) {
   const [cat, setCat] = useState<Catalog | null>(null);
   const [err, setErr] = useState("");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("logoq");
   const [sort, setSort] = useSticky<"recent" | "most" | "az">("designs.sort", "recent");
   const [open, setOpen] = useState<string>("");
   const [busy, setBusy] = useState(false);

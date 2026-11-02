@@ -12,6 +12,7 @@ import { orderGroups } from "@/lib/pricing";
 import { colorHex, deltaE, repaintLogo } from "@/lib/inkColors";
 import { guessHex, shirtHex } from "@/lib/mockup";
 import { shirtSets } from "@/lib/shirtSets";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * Separations queue (Production → Separations): one row per job (Oct 22, Nick: "you shouldn't separate the separations
@@ -33,7 +34,7 @@ export default function SeparationsPage() {
   const [cust, setCust] = useState<Record<string, string>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [tab, setTab] = useSticky<Tab>("sep.tab.list2", "working");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   // archive / restore straight from the list: the whole job's prints (the row moves tabs)
   async function setStage(rs: SepRow[], status: SepRow["status"]) {
     const ids = new Set(rs.map((r) => r.id)), at = new Date().toISOString();

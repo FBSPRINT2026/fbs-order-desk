@@ -7,6 +7,7 @@ import SearchInput from "@/components/SearchInput";
 import GangReorder from "@/components/GangReorder";
 import GangSheetCard from "@/components/GangSheetCard";
 import { DTF_DALLAS, sheetFor } from "@/lib/dtfDallas";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * Gang sheets: every DTF gang sheet made, like the Artwork page (Oct 26, Nick: "when you click gang sheets, it opens to
@@ -27,7 +28,7 @@ export default function GangSheets() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [cust, setCust] = useState<Record<string, string>>({});
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [show, setShow] = useSticky<Show>("gang.list.show", "all");
   const [armed, setArmed] = useState("");
   const [reorder, setReorder] = useState<Row | null>(null);

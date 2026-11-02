@@ -7,6 +7,7 @@ import { ST } from "@/lib/pricing";
 import type { Dept, JobItem, Step, Track } from "@/lib/jobCenter";
 import { loadJobs, notAJob, undoDeclined } from "./actions";
 import JobPanel, { StartHere } from "./JobPanel";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * The Job Center (Oct 29, Nick: "everything pre-production… new requests… quotes without mockups and mockups without
@@ -65,7 +66,7 @@ export default function JobCenter() {
   const [mineOn, setMine] = useSticky<boolean>("jobs.mine", true);
   const [cameBack, setCameBack] = useSticky<boolean>("jobs.cameBack", false);
   const [artOnly, setArtOnly] = useSticky<boolean>("jobs.artOnly", false);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [pick, setPick] = useState<string | null>(null); // the job open in the right panel
   // View all (Oct 29, Nick: "when you first go onto the job center, you got to see everything… everything but leads,
   // just requests all the way through… all the symbols would be selected"): every step at once, in sections

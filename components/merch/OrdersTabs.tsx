@@ -5,6 +5,7 @@ import { editOrder, makeJob, setItemPack, setOrderStatus, setStoreStatus, type S
 import { bySize, fmtDateTime, isYouthSize, orderCode, packingKey, r2, sizeName, type Field, type MerchOrder } from "@/lib/merch";
 import { useSticky } from "@/lib/useSticky";
 import { fmtPhone } from "@/lib/phone";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 const money = (n: number) => (+n || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
 const LIVE = (o: MerchOrder) => !["cancelled", "refunded", "pending"].includes(o.status);
@@ -19,7 +20,7 @@ const print = (b: StoreBundle, what: string, extra = "") => window.open(`/print/
 /* ------------------------------------------------------------------ orders */
 
 export function OrdersTab({ b, reload }: { b: StoreBundle; reload: () => void }) {
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("oq1");
   const [show, setShow] = useSticky<"all" | "open" | "packed" | "cancelled">("store.orders.show", "all");
   const [open, setOpen] = useState<MerchOrder | null>(null);
   const flds = fieldsOf(b).filter((f) => f.kind === "select").slice(0, 2);
@@ -166,7 +167,7 @@ export function GoodsTab({ b, reload }: { b: StoreBundle; reload: () => void }) 
 
 export function PackingTab({ b, reload }: { b: StoreBundle; reload: () => void }) {
   const sf = sortFields(b);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("oq2");
   const [hideDone, setHideDone] = useSticky<boolean>("store.pack.hideDone", false);
   const [busy, setBusy] = useState("");
   const live = b.orders.filter(LIVE).sort((a, c) => packingKey(fieldsOf(b), a.answers || {}, a.shopper?.name).localeCompare(packingKey(fieldsOf(b), c.answers || {}, c.shopper?.name)));

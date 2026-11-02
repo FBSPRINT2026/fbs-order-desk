@@ -10,11 +10,12 @@ import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
 import { fmtPhone } from "@/lib/phone";
 import RowLink from "@/components/RowLink";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 export default function CustomersPage() {
   const router = useRouter();
   const { orders, customers, loading } = useShopData();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [busy, setBusy] = useState(false);
   // starred customers go to the top (Oct 21, Nick: "a little star so that we can favor the clients")
   // each person's own stars (Oct 26, Nick: "Amanda should have her own favorites, not my favorites"): customer_favorites

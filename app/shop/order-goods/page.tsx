@@ -9,6 +9,7 @@ import SearchInput from "@/components/SearchInput";
 import { SS_SHIP, FREE_CODE, paidShipLines } from "@/lib/goodsShip";
 import { PaidShipAsk } from "@/components/PaidShipAsk";
 import { askRepForQuote, findOrdersAndCustomers, goodsPayInfo, goodsSearch, goodsWarehouses, goodsStart, goodsStyle, linkGoods, placeGoods, recentGoods, type StyleColor } from "./actions";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * Order goods (Shop Tools): buy blanks from S&S right now, with or without an order. Open it from an email

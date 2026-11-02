@@ -11,6 +11,7 @@ import { FileTray, type MailFile } from "@/components/MailFolders";
 import type { ClickUpTeamRow, CuFile } from "@/lib/clickup";
 import { clickUpFiles, clickUpWorkspace, markClickUpDone, tickClickUpBox, dismissClickUpTask, hideClickUpField, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
 import CustomerPick from "@/components/CustomerPick";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * ClickUp Jobs (Oct 22, Nick: "When you click the clickup tool, it would basically show you, hey, McKenna uploaded…
@@ -88,7 +89,7 @@ export default function ClickUpJobs() {
   const [busy, setBusy] = useState("");
   const [tab, setTab] = useSticky<Tab>("clickup.tab", "new");
   const [team, setTeam] = useSticky<string>("clickup.team", "");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [openId, setOpenId] = useState<string | null>(null);
   const [act, setAct] = useState<string | null>(null); // the job brought in (activity), for the order maker
   const [pick, setPick] = useState(false);

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { useCan } from "@/components/RoleContext";
 import InkInventory from "@/components/InkInventory";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * Ink Room: every Epic Rio coated PMS color from Avient IMS 3.0, and a mixing calculator. Pick a color, say how much
@@ -46,7 +47,7 @@ const stockLabel = (x: Stock) => [x.brand, x.line].filter(Boolean).join(" ");
 export default function InkRoom() {
   const [inks, setInks] = useState<Ink[] | null>(null), [err, setErr] = useState("");
   const [stock, setStock] = useState<Stock[] | null>(null);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [sq, setSq] = useState(""), [choosing, setChoosing] = useState(false);
   const canStock = useCan("inkStock");
   const [tab, setTab] = useSticky<"pms" | "stock" | "inventory">("inks.tab", "pms");

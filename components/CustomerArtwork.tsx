@@ -6,6 +6,7 @@ import { designLabel, LOCATIONS, newImprint, uid, type Group, type Imprint } fro
 import { applyColorwayChange, printColorway, type Brand } from "@/lib/brands";
 import { guessHex } from "@/lib/mockup";
 import BrandArtwork from "@/components/BrandArtwork";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
  * Customer artwork (Oct 24, Nick: "a button under create mockups to pull in other mockups… go find the artwork in their
@@ -37,7 +38,7 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
   const [brands, setBrands] = useState<Brand[] | null>(null);
   // the brands (or their logos) first, then a brand's logos; mockups and old jobs are a card there (Oct 27, option 3)
   const [tab, setTab] = useState<"brands" | "mockups" | "logos">(start);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("artq");
   const [saves, setSaves] = useState<Save[] | null>(null);
   const [logos, setLogos] = useState<{ id: string; number: number; name: string; preview_path: string | null }[] | null>(null);
   const [pics, setPics] = useState<Record<string, string>>({});

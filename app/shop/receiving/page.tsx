@@ -18,6 +18,7 @@ import { PaidShipAsk } from "@/components/PaidShipAsk";
 import { useSticky } from "@/lib/useSticky";
 import ReceivingSettings from "@/components/ReceivingSettings";
 import { allRows } from "@/lib/readAll";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
@@ -110,7 +111,7 @@ export default function GoodsReceiving() {
   const [groupBy, setGroupBy] = useSticky<GroupBy>("receiving.groupBy", "carrier");
   const [truck, setTruck] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [hits, setHits] = useState<ManifestHit[] | null>(null);
   const [searching, setSearching] = useState(false);
   useEffect(() => {

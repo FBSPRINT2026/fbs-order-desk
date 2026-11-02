@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { SIZES, type Garment } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import SearchInput from "@/components/SearchInput";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 type Draft = { style: string; brand: string; description: string; colors: string; cost: string; sizes: string };
 const empty: Draft = { style: "", brand: "", description: "", colors: "", cost: "", sizes: "" };
@@ -32,7 +33,7 @@ const toRow = (d: Draft) => ({ style: d.style.trim(), brand: d.brand.trim(), des
 export default function CatalogPage() {
   const sb = useMemo(() => createClient(), []);
   const [items, setItems] = useState<Garment[]>([]);
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [draft, setDraft] = useState<Draft>(empty);
   const [editing, setEditing] = useState<string | null>(null);
   const [edit, setEdit] = useState<Draft>(empty);

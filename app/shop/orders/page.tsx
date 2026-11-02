@@ -18,6 +18,7 @@ import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { newQuote } from "@/lib/quickNew";
 import { bulkDeleteOrders } from "@/app/shop/bulk-delete-actions";
 import RowLink from "@/components/RowLink";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /** A Printavo status in our words, so the filters work on Printavo orders too. */
 function pvStatus(a: { kind: string; status_name: string }): string {
@@ -56,7 +57,7 @@ export default function OrdersPage() {
   }
   const [type, setType] = useSticky<F>("orders.type", "all");
   const [status, setStatus] = useSticky("orders.status", "");
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
 
   // Printavo orders (read-only copies) are listed with everything else: every open one + the most recent ones;
   // searching reaches all of them

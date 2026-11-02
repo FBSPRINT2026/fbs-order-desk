@@ -16,6 +16,7 @@ import { colorHex, deltaE } from "@/lib/inkColors";
 import { useSticky } from "@/lib/useSticky";
 import { laneState, type Brand } from "@/lib/brands";
 import { allRows } from "@/lib/readAll";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 type Mock = { id: string; number?: number | null; title: string; file_path: string; customer_id: string | null; order_id: string | null; created_at: string; starred?: boolean; design_ids?: string[]; group_id?: string | null; /** saved with its setup: can be edited again */ set?: string | null };
 /** which clients: the top 10 by what they spent this year, every client, the newest first */
@@ -39,7 +40,7 @@ export default function ArtworkPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [q, setQ] = useState("");
+  const [q, setQ] = useUrlSearch("q");
   const [cust, setCust] = useState("");
   const [show0, setShow] = useSticky<Show | "logos" | "mockups">("artwork.shelves", "top");
   const show: Show = show0 === "logos" || show0 === "mockups" ? "top" : show0;

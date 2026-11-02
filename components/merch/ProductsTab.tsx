@@ -6,6 +6,7 @@ import { bySize, isYouthSize, r2, storeImg, unitPrice, type Product, type Produc
 import { guessHex, garmentHex, ssImg } from "@/lib/mockup";
 import { renderMockup } from "@/lib/mockupRender";
 import type { Garment } from "@/lib/pricing";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 const money = (n: number) => (+n || 0).toLocaleString("en-US", { style: "currency", currency: "USD" });
 type Design = { id: string; number: number; name: string; url: string; width_px: number | null; height_px: number | null; colors: number; inks: string };

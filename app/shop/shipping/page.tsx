@@ -15,6 +15,7 @@ import TransitMap from "@/components/TransitMap";
 import { money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import LabelPrinterPanel from "@/components/job/LabelPrinterPanel";
+import { useUrlSearch } from "@/lib/useUrlSearch";
 
 type NewRow = { third_party?: ThirdParty | null; id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
