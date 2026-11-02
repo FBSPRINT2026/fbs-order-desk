@@ -1,6 +1,6 @@
 "use client";
 import OrderRail from "@/components/OrderRail";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { OldReorderButton } from "@/components/PortalOldReorder";
 import { starMyOrder } from "@/app/portal/actions";
@@ -27,15 +27,23 @@ const KIND_TABS: { k: string; label: string; test: (k: JobKind) => boolean }[] =
   { k: "embroidery", label: "Embroidery", test: (k) => k === "embroidery" || k === "mixed" },
   { k: "dtf", label: "DTF", test: (k) => k === "dtf" || k === "mixed" },
 ];
-const STAGE_TABS: { k: string; label: string; test: (s: JobStage) => boolean }[] = [
-  { k: "need", label: "Needs you", test: (s) => s === "need" },
+const STAGE_TABS: { k: string; label: string; test: (j: PortalJob) => boolean }[] = [
+  { k: "need", label: "Needs you", test: (j) => j.stage === "need" },
+  // every order on hold, each with why and what fixes it (Nov 2, Nick: "there should be an on hold section… a detailed
+  // list of everything and why it's on hold"); the On hold panel at the top opens it
+  { k: "hold", label: "On hold", test: (j) => !!j.hold },
   { k: "all", label: "All", test: () => true },
-  { k: "work", label: "In progress", test: (s) => s === "work" },
-  { k: "ready", label: "Ready", test: (s) => s === "ready" },
-  { k: "out", label: "On the way", test: (s) => s === "out" },
+  { k: "work", label: "In progress", test: (j) => j.stage === "work" },
+  { k: "ready", label: "Ready", test: (j) => j.stage === "ready" },
+  { k: "out", label: "On the way", test: (j) => j.stage === "out" },
   // recently completed, beside Ready (Oct 24, Nick: not a big card under the jobs)
-  { k: "done", label: "Recently completed", test: (s) => s === "done" },
+  { k: "done", label: "Recently completed", test: (j) => j.stage === "done" },
 ];
+/** the On hold panel's links: open Your jobs on its On hold tab and scroll there */
+const HOLD_EVT = "fbs:jobs-hold";
+export function HoldJump({ className, children }: { className?: string; children: ReactNode }) {
+  return <button type="button" className={className} onClick={() => { window.dispatchEvent(new Event(HOLD_EVT)); document.getElementById("your-jobs")?.scrollIntoView({ behavior: "smooth", block: "start" }); }}>{children}</button>;
+}
 const ORDER: Record<JobStage, number> = { need: 0, out: 1, ready: 2, work: 3, done: 4 };
 
 const PATHS: Record<string, string> = {
@@ -73,7 +81,7 @@ export function StarOrder({ id, on, canAct, label = false }: { id: string; on: b
   );
 }
 
-function JobRow({ j, canAct }: { j: PortalJob; canAct: boolean }) {
+function JobRow({ j, canAct, detail = false }: { j: PortalJob; canAct: boolean; /** the On hold tab: why, in full, under the row */ detail?: boolean }) {
   // on hold, the button is what fixes it (Nov 2, Nick: the stamp right above it, the row in salmon)
   const a: JobAction | undefined = j.hold ? { label: j.hold.fixLabel === "Reply" ? "See why and reply" : j.hold.fixLabel, href: j.hold.href, tone: "need" } : j.action;
   return (
@@ -83,7 +91,7 @@ function JobRow({ j, canAct }: { j: PortalJob; canAct: boolean }) {
       <div className={"pjr-mid" + (j.hold ? " held" : "")}>
         <OrderRail steps={j.steps} done={j.done} />
         {j.hold
-          ? <div className="pjr-now hold"><b>On hold:</b> {j.hold.title}. <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></div>
+          ? <div className="pjr-now hold"><b>On hold:</b> {j.hold.title}.{!detail && <> <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></>}</div>
           : (j.nowK || j.nowT) && <div className="pjr-now"><b>{j.nowK}</b> {j.nowT}</div>}
       </div>
       <div className="pjr-act">
@@ -95,6 +103,13 @@ function JobRow({ j, canAct }: { j: PortalJob; canAct: boolean }) {
         {j.owe && (j.owe.external ? <a className="pjr-owe" href={j.owe.href} target="_blank" rel="noreferrer">{j.owe.text} · Pay</a> : <Link className="pjr-owe" href={j.owe.href}>{j.owe.text} · Pay</Link>)}
         {j.newMsgs > 0 && j.lastMsg && <Link className="pjr-msg" href={j.lastMsg.href}>💬 {j.newMsgs} new message{j.newMsgs === 1 ? "" : "s"} · Read</Link>}
       </div>
+      {detail && j.hold && (
+        <div className="pjr-holdd">
+          <b>Why it&apos;s on hold: {j.hold.title}</b>
+          <ul>{j.hold.reason.split(/(?<=[.!?])\s+(?=[A-Z0-9(])/).map((t) => t.trim()).filter(Boolean).map((t, i) => <li key={i}>{t}</li>)}</ul>
+          <div className="pjr-holdd-a"><Link className="btn sm" href={j.hold.href}>{j.hold.fixLabel}</Link>{j.hold.fixLabel !== "Reply" && <Link className="btn sm" href={`${j.href}#messages`}>Ask us</Link>}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -103,26 +118,27 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
   const [tab, setTab] = useSticky("portal.jobsKind", "all");
   const [stg, setStg] = useSticky("portal.jobsStage", "all");
   const [more, setMore] = useState(0);
+  useEffect(() => { const go = () => { setStg("hold"); setMore(0); }; addEventListener(HOLD_EVT, go); return () => removeEventListener(HOLD_EVT, go); }, [setStg]);
   const sorted = [...jobs].sort((a, b) => ORDER[a.stage] - ORDER[b.stage] || (a.inHandsIso || "9999").localeCompare(b.inHandsIso || "9999") || b.number - a.number);
   const kinds = KIND_TABS.filter((t) => t.k === "all" || jobs.some((j) => t.test(j.kind)));
   const showKinds = kinds.length > 2;
   const curK = showKinds && kinds.some((t) => t.k === tab) ? tab : "all";
   const byKind = sorted.filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind));
   const doneK = pastJobs.filter((j) => KIND_TABS.find((t) => t.k === curK)!.test(j.kind)).map((j) => ({ ...j, stage: "done" as JobStage }));
-  const stages = STAGE_TABS.filter((t) => t.k === "all" || (t.k === "done" ? doneK.length > 0 : byKind.some((j) => t.test(j.stage))));
+  const stages = STAGE_TABS.filter((t) => t.k === "all" || (t.k === "done" ? doneK.length > 0 : byKind.some((j) => t.test(j))));
   const showStages = stages.length > 2 || (stages.length > 1 && doneK.length > 0);
   const curS = showStages && stages.some((t) => t.k === stg) ? stg : "all";
-  const list = curS === "done" ? doneK : byKind.filter((j) => STAGE_TABS.find((t) => t.k === curS)!.test(j.stage));
+  const list = curS === "done" ? doneK : byKind.filter((j) => STAGE_TABS.find((t) => t.k === curS)!.test(j));
   // five on the dashboard (Oct 24, Nick: "cap it at 5 and then say view all orders… we don't want that list to go down and
   // be like 50 things long")
   const shown = list.slice(0, 5 + more * 10);
   return (
-    <section className="pdx-card">
+    <section className="pdx-card" id="your-jobs">
       <div className="pdx-h"><h2>Your jobs{jobs.length ? <span className="pdx-count">{jobs.length} in progress</span> : null}</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
       {(showStages || showKinds) && (
         <div className="pjf">
           {showStages && <div className="toolbar aa-otabs pdx-stabs" data-toolbar><div className="chips" role="tablist" aria-label="Where the job is">
-            {stages.map((t) => { const n = t.k === "done" ? doneK.length : byKind.filter((j) => t.test(j.stage)).length; return (
+            {stages.map((t) => { const n = t.k === "done" ? doneK.length : byKind.filter((j) => t.test(j)).length; return (
               <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={"chip" + (curS === t.k ? " on" : "") + (t.k === "need" ? " need" : "")} onClick={() => { setStg(t.k); setMore(0); }}>{t.label}{n ? <span className="chip-n">{n}</span> : null}</button>
             ); })}
           </div></div>}
@@ -136,7 +152,7 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
       {!jobs.length && !pastJobs.length && <div className="pdx-none">No jobs in progress right now. Start an order, or reorder one below.</div>}
       {jobs.length > 0 && !list.length && <div className="pdx-none">Nothing here right now.</div>}
       <div className="pjr-list">
-        {shown.map((j) => <JobRow key={j.id} j={j} canAct={canAct} />)}
+        {shown.map((j) => <JobRow key={j.id} j={j} canAct={canAct} detail={curS === "hold"} />)}
         {list.length > 5 && <div className="pdx-more-row">
           {list.length > shown.length && <button type="button" className="pdx-more" onClick={() => setMore((m) => m + 1)}>Show the next {Math.min(10, list.length - shown.length)}</button>}
           <Link href={ordersHref} className="pdx-more">View all orders ({list.length})</Link>

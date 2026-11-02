@@ -4,6 +4,7 @@ import { allRows } from "@/lib/readAll";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
 import { ST, type Order } from "@/lib/pricing";
+import { customerHold, type Flag } from "@/lib/orderStages";
 import { portalSend } from "@/app/portal/message-actions";
 import { GOODS, trackingUrl, type GoodsStatus } from "@/lib/goods";
 
@@ -24,7 +25,7 @@ const TOOL = {
   input_schema: {
     type: "object",
     properties: {
-      reply: { type: "string", description: "A short, friendly answer (1-3 sentences). Never use the customer's personal name. Use only facts from the account data." },
+      reply: { type: "string", description: "The direct answer first (yes / no / the number / the date), then only the orders it's about, a few words each. One or two short sentences. Never use the customer's personal name. Use only facts from the account data." },
       actions: {
         type: "array", maxItems: 4,
         items: {
@@ -64,7 +65,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, company, price_type, payment_terms").order("id").range(ra, rb));
     const ids = (cs || []).map((c) => c.id);
     if (!ids.length) return { ok: false, error: "We couldn't find your account." };
-    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking, groups, approved_at").neq("status", "quote").order("created_at", { ascending: false }).limit(150);
+    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking, groups, approved_at, flags").neq("status", "quote").order("created_at", { ascending: false }).limit(150);
     const orders = ((os || []) as (Order & { submitted_at: string | null })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
     const oids = orders.map((o) => o.id);
     const [{ data: pays }, { data: arch }, { data: goods }] = await Promise.all([
@@ -128,7 +129,9 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const lines = orders.map((o) => {
       const bal = o.type === "invoice" ? r2((+o.total || 0) - (paid[o.id] || 0)) : 0;
       const g = gmap.get(o.id);
-      return `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.nickname || "(no name)"} | ${o.status === "request" ? "sent to us, not confirmed yet" : `${o.type === "quote" ? "quote: " : ""}${ST[o.status as keyof typeof ST]?.portal || o.status}`} | total $${(+o.total || 0).toFixed(2)}${bal > 0.004 ? ` | owes $${bal.toFixed(2)}` : ""}${o.due_date ? ` | in-hands ${o.due_date}` : ""}${o.qty ? ` | ${o.qty} pcs` : ""}${o.po_number ? ` | PO ${o.po_number}` : ""}${o.delivery_method === "ship" ? ` | shipping${o.ship_method ? ` ${o.ship_method}` : ""}${o.tracking ? ` tracking ${o.tracking}` : " (no tracking yet)"}` : o.delivery_method === "deliver" ? " | we deliver" : " | pickup"}${wholesale && g && o.status !== "request" ? ` | goods: ${GOODS[g.status]?.portal}${g.issue_type ? ` (${g.issue_type})` : ""}` : ""}`;
+      // on hold, and why: the same hold the order page and the dashboard show (lib/orderStages.ts customerHold)
+      const held = o.status !== "completed" ? customerHold(((o as { flags?: Flag[] }).flags || []) as Flag[]) : null;
+      return `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.nickname || "(no name)"} | ${held ? `ON HOLD (${held.title}${held.reason && held.reason !== held.title ? `: ${held.reason}` : ""}) | ` : ""}${o.status === "request" ? "sent to us, not confirmed yet" : `${o.type === "quote" ? "quote: " : ""}${ST[o.status as keyof typeof ST]?.portal || o.status}`} | total $${(+o.total || 0).toFixed(2)}${bal > 0.004 ? ` | owes $${bal.toFixed(2)}` : ""}${o.due_date ? ` | in-hands ${o.due_date}` : ""}${o.qty ? ` | ${o.qty} pcs` : ""}${o.po_number ? ` | PO ${o.po_number}` : ""}${o.delivery_method === "ship" ? ` | shipping${o.ship_method ? ` ${o.ship_method}` : ""}${o.tracking ? ` tracking ${o.tracking}` : " (no tracking yet)"}` : o.delivery_method === "deliver" ? " | we deliver" : " | pickup"}${wholesale && g && o.status !== "request" ? ` | goods: ${GOODS[g.status]?.portal}${g.issue_type ? ` (${g.issue_type})` : ""}` : ""}`;
     });
     const old = ((arch || []) as { id: string; visual_id: string; nickname: string; status_name: string; order_date: string | null; total: number; qty: number }[])
       .map((a) => `#${a.visual_id} | ${a.order_date || ""} | ${a.nickname || "(no name)"} | past order (${a.status_name}) | total $${(+a.total || 0).toFixed(2)}${a.qty ? ` | ${a.qty} pcs` : ""}`);
@@ -150,7 +153,8 @@ Help this customer with their account: order status, paying, reordering, startin
 Rules:
 - Never use the customer's personal name.
 - Only state facts found in the account data below. If something isn't there, say so and offer to message the shop.
-- Keep replies short and plain. No markdown.
+- Be concise (Nov 2, Nick: "it should have concise answers like, yes, these items, these are on hold"). Lead with the direct answer, then name only the orders it's about with a few words each, like: "Yes, 2 are on hold: #99008 FedEx Safety Week (payment needed to start) and #99007 FedEx Golf Outing (we need the names for the backs)." One or two short sentences. Don't describe orders they didn't ask about, don't recap the account, don't end with a question. No markdown.
+- "On hold" means the ORDERS lines marked ON HOLD, with the reason given there. None marked: say nothing is on hold.
 - Offer next steps as actions (buttons). Anything that changes something (reorder, new order, sending a message, paying) must be an action the customer presses, never done by you.
 - Reorders: find the order they mean by name, date or number (past orders count too) and offer "reorder" with its number. If several match, list the best 2-3 as separate reorder buttons.
 - Paying: offer "pay" with text describing the selection ("all orders in August", "everything", "#1002 and #1004", "everything under $100"). Include the amount in the label when you can work it out.

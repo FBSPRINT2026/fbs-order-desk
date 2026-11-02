@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { money } from "@/lib/format";
 import type { PortalJob } from "@/lib/portalJobs";
-import { DashJobs, DashReorder } from "./PortalDashBits";
+import { DashJobs, DashReorder, HoldJump } from "./PortalDashBits";
+import OrderRail from "@/components/OrderRail";
 
 /**
  * The customer's dashboard (Oct 15, Nick: "rethink the dashboard… more visual, jobs moving through… the AI assistant
@@ -16,7 +17,8 @@ export type DashPast = { id: string; number: number; nickname: string; when: str
 export type DashSent = { id: string; href: string; number: number; name: string; when: string; pcs: number; simple: boolean; step: number; label: string; tone: "wait" | "act" | "ok" | "off"; note: string };
 
 /** an order they're tracking (★) */
-export type DashTracked = { id: string; href: string; number: number; name: string; status: string; due: string; health: { text: string; tone: "ok" | "act" | "wait" | "bad" }; action: { label: string; href: string; external: boolean } | null };
+export type DashTracked = { id: string; href: string; number: number; name: string; status: string; due: string; health: { text: string; tone: "ok" | "act" | "wait" | "bad" }; action: { label: string; href: string; external: boolean } | null;
+  /** its picture and steps, so a starred order looks like its job below (Nov 2, Nick: "doesn't stand out like the rest") */ pic?: string; steps?: PortalJob["steps"]; done?: boolean };
 
 /** an order on hold, with why (Oct 24, Nick: "there's got to be an on hold panel on the dashboard for the customer") */
 export type DashHeld = { id: string; href: string; number: number; name: string; msgHref: string; hold: { title: string; reason: string; href: string; fixLabel: string } };
@@ -38,11 +40,16 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
   // in 30 days… then where you have payments right now, I want that to be your jobs… get rid of the needs you section
   // and the customer supplied goods… your artwork underneath it"). Messages stay a tab.
   // lists that never grow the page (Oct 24, Nick: "make that variable… without creating scroll bars… we don't want to create more page"): three show, the rest fold under "more"
+  // a starred order: its picture, name, the same rainbow steps as its job, and how it's doing (Nov 2, Nick: "the starred
+  // orders doesn't look like it stands out like the rest")
   const trackRow = (t: DashTracked) => (
-            <div key={t.id} className={"pdx-trk t-" + t.health.tone}>
-              <Link href={t.href} className="pdx-trk-t"><b><span className="onum">#{t.number}</span>{t.name ? ` ${t.name}` : ""}</b><small>{t.status}{t.due ? ` · In hands ${t.due}` : ""}</small></Link>
-              <span className="pdx-trk-h">{t.health.text}</span>
-              {t.action && t.health.tone === "act" && (t.action.external ? <a className="pd-link" href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link className="pd-link" href={t.action.href}>{t.action.label}</Link>)}
+            <div key={t.id} className={"pdx-st1 t-" + t.health.tone}>
+              <Link href={t.href} className="pdx-st1-pic" aria-hidden tabIndex={-1}>{t.pic ? <img src={t.pic} alt="" loading="lazy" /> : <span>#{t.number}</span>}</Link>
+              <div className="pdx-st1-b">
+                <div className="pdx-st1-top"><Link href={t.href} className="pdx-st1-t"><span className="onum">#{t.number}</span> {t.name || "Order"}</Link><span className="pdx-st1-h">{t.health.text}</span></div>
+                {t.steps?.length ? <OrderRail steps={t.steps} done={t.done} /> : <small className="faint">{t.status}</small>}
+                <small className="pdx-st1-d">{t.due ? `In hands ${t.due}` : t.status}{t.action && t.health.tone === "act" ? <> · {t.action.external ? <a href={t.action.href} target="_blank" rel="noreferrer">{t.action.label}</a> : <Link href={t.action.href}>{t.action.label}</Link>}</> : null}</small>
+              </div>
             </div>
   );
   const sentRow = (x: DashSent) => (
@@ -52,29 +59,6 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
               <span className="pdx-sent-st"><span className="pdx-sent-pill">{x.label}</span><small>{x.note}</small></span>
             </Link>
   );
-  const holdRow = (x: DashHeld, size: "full" | "mid" | "tight") => {
-    const points = x.hold.reason.split(/(?<=[.!?])\s+(?=[A-Z0-9(])/).map((t) => t.trim()).filter(Boolean);
-    if (size === "tight") return (
-      <div key={x.id} className="pdx-hold-row tight">
-        <Link href={x.href} className="pdx-hold-t"><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b><span>{x.hold.title}</span></Link>
-        <Link className="pdx-hold-go" href={x.hold.href}>{x.hold.fixLabel} ›</Link>
-      </div>
-    );
-    return (
-      <div key={x.id} className={"pdx-hold-row " + size}>
-        <div className="pdx-hold-t">
-          <Link href={x.href}><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b></Link>
-          <span>{x.hold.title}</span>
-          {size === "full" ? <ul className="pdx-hold-pts">{points.map((t, i) => <li key={i}>{t}</li>)}</ul>
-            : <details className="hold-why"><summary>See why</summary><p>{x.hold.reason}</p></details>}
-        </div>
-        <div className="pdx-hold-acts">
-          <Link className="btn sm primary" href={x.hold.href}>{x.hold.fixLabel}</Link>
-          {x.hold.fixLabel !== "Reply" && <Link className="btn sm" href={x.msgHref}>Ask us</Link>}
-        </div>
-      </div>
-    );
-  };
   void mockupHref; void threads; void newMsgs; void msgHref; void needs; void goods;
   return (
     <div className="pdx">
@@ -124,18 +108,20 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
           </div>
           <div className="pdx-stmt-meta"><span>Terms <b>{pay.terms}</b></span>{pay.last && <span>Last payment <b>{pay.last}</b></span>}</div>
         </section>
-        {/* on hold, under Payments (Oct 24, Nick: "where tracking is right now… let that be the on hold, need your attention") */}
-        <section className={"pdx-card pdx-hold" + (held.length ? " has" : "")}>
-          <div className="pdx-h"><h2>On hold: needs your attention</h2>{held.length > 0 && <span className="pdx-hold-n">{held.length}</span>}</div>
-          {held.length ? <div className={"pdx-hold-list n" + Math.min(held.length, 4)}>
-            {/* one: the reason as points; two: what's wrong and the buttons; three or more: a line each and one link, the
-                fourth on under "+N more" (Oct 24, Nick: fill the panel, never a scroll bar) */}
-            {held.length === 1 ? holdRow(held[0], "full") : held.length === 2 ? held.map((x) => holdRow(x, "mid")) : held.slice(0, 3).map((x) => holdRow(x, "tight"))}
-            {held.length > 3 && <details className="pdx-hold-more"><summary>+{held.length - 3} more on hold ›</summary>{held.slice(3).map((x) => holdRow(x, "tight"))}</details>}
-          </div> : <div className="pdx-hold-ok" role="status">
+        {/* on hold: a short list and why, one line each (Nov 2, Nick: "just be like a list and like a quick thing of why
+            they're on hold… zero orders on hold, everything's good to go… when you click it… an on hold section" in Your jobs) */}
+        <section className={"pdx-card pdx-hs" + (held.length ? " has" : "")}>
+          <div className="pdx-h"><h2>On hold</h2>{held.length > 0 && <span className="pdx-hold-n">{held.length}</span>}</div>
+          {held.length ? <>
+            <div className="pdx-hs-sum">{Object.entries(held.reduce((m, x) => { m[x.hold.title] = (m[x.hold.title] || 0) + 1; return m; }, {} as Record<string, number>)).map(([t, n]) => `${n} ${t.charAt(0).toLowerCase()}${t.slice(1)}`).join(" · ")}</div>
+            <ul className="pdx-hs-list">{held.map((x) => (
+              <li key={x.id}><HoldJump className="pdx-hs-row"><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b><span>{x.hold.title}</span><i aria-hidden>›</i></HoldJump></li>
+            ))}</ul>
+            <HoldJump className="pd-link pdx-hs-all">See why, in your jobs below</HoldJump>
+          </> : <div className="pdx-hold-ok" role="status">
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <b>Nothing on hold</b>
-            <span>Everything&apos;s good to go. If we ever need something from you to keep an order moving, it shows up here.</span>
+            <b>No orders on hold</b>
+            <span>Everything&apos;s good to go.</span>
           </div>}
         </section>
         </div>
