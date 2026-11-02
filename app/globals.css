@@ -18481,7 +18481,7 @@ table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
 table.tbl.jc tr.jc-chatrow>td{padding:0;background:var(--surface-2)}
 table.tbl.jc tr.jc-chatrow:hover>td{background:var(--surface-2)}
 .jmb-t{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:14px;padding:12px 14px;border-left:4px solid var(--mc);background:color-mix(in srgb,var(--mc) 5%,var(--surface))}
-.jmb-top>.jmb-t,.jmb-top .jmb-t{border-radius:var(--r);border:1px solid var(--line);border-left:4px solid var(--mc)}
+.jmb-solo .jmb-t{border-radius:var(--r);border:1px solid var(--line);border-left:4px solid var(--mc)}
 .jmb-th{display:flex;flex-direction:column;gap:8px;min-width:0}
 .jmb-th-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .jmb-th-h b{font-size:14px}

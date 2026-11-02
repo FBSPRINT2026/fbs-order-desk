@@ -237,7 +237,7 @@ export default function JobCenter() {
       <div className={"jc-body jct-body" + (picked ? " has-pick" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
         <section className="panel jc-list">
           <div className="panel-b stack" style={{ gap: 12 }}>
-            {curChat && !chatHere && <div className="jmb-top"><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></div>}
+            {curChat && !chatHere && <div className="jmb-solo"><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></div>}
             <div className="toolbar" data-toolbar>
               {(all || step !== "leads") && <div className="chips">{DEPTS.map(([k, l]) => <button key={k} type="button" className={"chip" + (dept === k ? " on" : "")} aria-pressed={dept === k} onClick={() => setDept(k)}>{l} <span className="pill-n">{items ? (all ? base.filter((it) => !it.steps.every((x) => x === "leads") && (k === "all" || it.depts.includes(k))).length : deptCount(k)) : "…"}</span></button>)}</div>}
               <div className="chips">
