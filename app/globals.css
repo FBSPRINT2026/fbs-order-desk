@@ -17658,3 +17658,9 @@ html body .pr .pr-scr.pr-sup > .faint{flex:1 1 180px;min-width:0}
 /* a logo's small picture fits its box whatever its shape (Nov 2 portal check: a tall logo ran off the bottom of its
    Artwork card): the box is one fixed cell, so the picture's max-height (a % of it) holds */
 .lp{grid-template-rows:minmax(0,1fr);grid-template-columns:minmax(0,1fr)}
+/* the sign-in card wears the portal's top bar (Nov 2) */
+.auth-card:has(.auth-brand){padding-top:0;overflow:hidden}
+.auth-brand{margin:0 -28px 6px;padding:16px 28px 18px;background:#141D2B;display:flex;align-items:center;gap:14px;position:relative}
+.auth-brand::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--fbs-fade)}
+.auth-brand img{height:34px;width:auto}
+.auth-brand span{font-size:11.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#C9D2DF;border-left:1px solid #3A4659;padding-left:14px}

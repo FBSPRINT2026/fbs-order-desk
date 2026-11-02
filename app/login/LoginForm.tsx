@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export default function LoginForm({ shopName, logoUrl, next, linkError }: { shopName: string; logoUrl: string; next: string; linkError: boolean }) {
+export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, linkError }: { shopName: string; logoUrl: string; /** the light logo for a dark bar, the same as the portal's top bar */ sideLogoUrl?: string; next: string; linkError: boolean }) {
   const supabase = createClient();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -53,7 +53,9 @@ export default function LoginForm({ shopName, logoUrl, next, linkError }: { shop
 
   return (
     <div className="auth-card">
-      {logoUrl ? <img src={logoUrl} alt={shopName} style={{ maxHeight: 48, width: "auto", alignSelf: "flex-start" }} /> : <div className="shopname">{shopName}</div>}
+      {/* the portal's own look at the door (Nov 2, launch day): its logo on the dark bar with the color line under it */}
+      {sideLogoUrl ? <div className="auth-brand"><img src={sideLogoUrl} alt={shopName} /><span>Customer portal</span></div>
+        : logoUrl ? <img src={logoUrl} alt={shopName} style={{ maxHeight: 48, width: "auto", alignSelf: "flex-start" }} /> : <div className="shopname">{shopName}</div>}
       {stage === "email" ? (
         <form onSubmit={sendCode} className="stack">
           <div>
