@@ -1,4 +1,5 @@
 "use client";
+import { openOrderCheck } from "@/components/tools/OrderReview";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { uploadDesign } from "@/lib/designs";
@@ -219,7 +220,11 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
       onCreated?.(k.id, k.number || 0, `Reorder of ${label}`);
       setStep("Opening it…");
       const first = x.groups.find((g) => g.imprints.some((p) => p.design_id));
-      location.assign(first ? `/shop/artwork/mockup?order=${k.id}&group=${first.id}&auto=1` : `/shop/orders/${k.id}`);
+      // the AI order helper opens with it, on the right, like a new order from Create order (Nov 1, Nick: "the panel isn't
+      // staying open to be like, hey, do I have it right?… open the new file with the AI order helper already open")
+      const pcs = x.groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce<number>((c, n) => c + (+(n || 0)), 0), 0), 0);
+      openOrderCheck(k.id, [`Made a reorder of ${label}: ${x.groups.length} group${x.groups.length === 1 ? "" : "s"}, ${pcs} pcs, ${price === "last" ? "last time's prices" : "today's price list"}`, ...(keep.length ? [`${keep.length} file${keep.length === 1 ? "" : "s"} from the old job in Production files`] : [])]);
+      location.assign(first ? `/shop/artwork/mockup?order=${k.id}&group=${first.id}&auto=1&chat=${k.id}` : `/shop/orders/${k.id}`);
     } catch (e) { setStep(""); setErr(e instanceof Error ? e.message : String(e)); }
   }
 
