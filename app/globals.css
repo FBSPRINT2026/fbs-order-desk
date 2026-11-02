@@ -18387,3 +18387,5 @@ table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
 .cpg-a{display:flex;gap:6px}
 @keyframes cpg-in{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){.cpg-card{animation:none}}
+/* On hold looks like every other tab; only its count is red (Nov 2, Nick: "this toolbar looks weird") */
+.pdx .pjt .chip-n.pjt-hn,main .pdx .pjt .chip.on .chip-n.pjt-hn{background:var(--danger)!important;color:#fff!important}

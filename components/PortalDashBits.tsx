@@ -139,8 +139,8 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
             {(["l", "r"] as const).map((side) => (
               <div key={side} className={"chips pjt-" + side} role="tablist" aria-label={side === "l" ? "Where the job is" : "On hold or all"}>
                 {stages.filter((t) => t.side === side).map((t) => { const n = t.k === "done" ? doneK.length : byKind.filter((j) => t.test(j)).length; return (
-                  <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={"chip" + (curS === t.k ? " on" : "") + (t.k === "hold" ? " pjt-hold" : "")} onClick={() => { setStg(t.k); setMore(0); }}>
-                    {t.label}{t.k === "hold" ? (n ? <span className="pjt-badge">{n}</span> : null) : n ? <span className="chip-n">{n}</span> : null}
+                  <button key={t.k} type="button" role="tab" aria-selected={curS === t.k} className={"chip" + (curS === t.k ? " on" : "")} onClick={() => { setStg(t.k); setMore(0); }}>
+                    {t.label}{n ? <span className={"chip-n" + (t.k === "hold" ? " pjt-hn" : "")}>{n}</span> : null}
                   </button>
                 ); })}
               </div>
