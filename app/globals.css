@@ -18057,3 +18057,4 @@ table.tbl-stack.tbl-stack-many > tbody > tr{display:grid;grid-template-columns:r
 table.tbl-stack.tbl-stack-many > tbody > tr > td[data-label]:not([data-label=""]){padding-left:0!important}
 table.tbl-stack.tbl-stack-many > tbody > tr > td[data-label]:not([data-label=""])::before{position:static;display:block;width:auto;margin-bottom:1px}
 table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-stack-many > tbody > tr > td[colspan]{grid-column:1/-1}
+.rop-read.over{outline:2px dashed var(--accent);outline-offset:2px}

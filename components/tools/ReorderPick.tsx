@@ -120,7 +120,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
       const r = await fetch("/api/archive/reorder/sizes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fs.map((f) => f.name).join(", "), count: fs.length, pdfs, images: images.slice(0, 10) }) });
       const j = await r.json().catch(() => ({})) as Read & { error?: string };
       if (!r.ok || j.error) throw new Error(j.error || "Couldn't read the sizes.");
-      setRead(j); setOffOld({}); setAddNew({}); setQueued([]);
+      setRead(j); setOffOld({}); setAddNew({}); // the files stay listed: drop one more and Read reads them all again
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
     setReadBusy("");
   }
@@ -321,14 +321,22 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
             )}
             <input ref={sizeFile} type="file" hidden multiple accept="application/pdf,.pdf,image/*,.msg" onChange={(e) => { void addSizeFiles([...(e.target.files || [])]); e.target.value = ""; }} />
             {read && match && (
-              <div className={"rop-read" + (readOk ? " ok" : "")}>
+              // another file can be dropped on what was read (Nov 2, Nick: "there's no way to add another file… I have to
+              // basically start again"): it joins the files already read and Read reads them all together
+              <div className={"rop-read" + (readOk ? " ok" : "") + (dropOver ? " over" : "")}
+                onDragOver={(e) => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDropOver(true); } }} onDragLeave={() => setDropOver(false)}
+                onDrop={(e) => { if (!e.dataTransfer.files.length) return; e.preventDefault(); setDropOver(false); void addSizeFiles([...e.dataTransfer.files]); }}>
                 <div className="rop-read-h"><b data-notranslate>{read.source}</b><span className="faint">{read.pieces.toLocaleString("en-US")} pcs</span></div>
                 {d.lines.map((l, i) => { const m = match.old[i], now = m.k >= 0 ? read.lines[m.k].sizes : null; return (
                   <div key={i} className="rop-cmp">
                     <div className="rop-l1"><b data-notranslate>{l.style}</b> <span>{l.color}</span><span className="spacer" />{now ? <span className="rop-n"><b>{pcs(now).toLocaleString("en-US")} pcs</b> <span className="faint">(last time {pcs(m.was).toLocaleString("en-US")})</span></span> : null}</div>
                     {/* the new order's sizes as they are, not old → new (Nov 2, Nick: "just say what they are… it's confusing") */}
                     {now ? <div className="rop-l2" data-notranslate>{sizeText(now) || "None this time"}</div>
-                      : <label className="rop-chk"><input type="checkbox" checked={offOld[i] !== false} onChange={(e) => setOffOld((o) => ({ ...o, [i]: e.target.checked }))} /> Not on this file: leave it off this time</label>}
+                      : <>
+                        {/* not on the files dropped: say what last time's sizes were, and what happens either way (Nov 2) */}
+                        <div className="rop-l2" data-notranslate>Last time: {sizeText(m.was) || "no sizes"}</div>
+                        <label className="rop-chk"><input type="checkbox" checked={offOld[i] !== false} onChange={(e) => setOffOld((o) => ({ ...o, [i]: e.target.checked }))} /> Not on the files you dropped: leave it off this time{offOld[i] === false ? " (unticked: last time's sizes go on)" : ""}</label>
+                      </>}
                   </div>); })}
                 {match.extra.map(({ r, i }) => (
                   <div key={`n${i}`} className="rop-cmp">
@@ -341,7 +349,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
                   {/* once you've said Update to these, it's done: a plain "updated" line, nothing more to answer (Nov 2, Nick:
                       "I already said update the lines. I'm confused"); Undo goes back a step */}
                   {readOk ? <><span className="rop-done">✓ Updated: these sizes go on the reorder.</span><span className="spacer" /><button type="button" className="linkbtn" onClick={() => setReadOk(false)}>Undo</button></>
-                    : <><span className="spacer" /><button type="button" className="btn sm" onClick={() => { setRead(null); setReadOk(false); setSizeMode("same"); }}>Keep last time&apos;s</button>
+                    : <><button type="button" className="linkbtn" onClick={() => sizeFile.current?.click()}>+ Add another file</button><span className="spacer" /><button type="button" className="btn sm" onClick={() => { setRead(null); setReadOk(false); setQueued([]); setSizeMode("same"); }}>Keep last time&apos;s</button>
                       <button type="button" className="btn sm primary" onClick={() => setReadOk(true)}>Update to these</button></>}
                 </div>
               </div>
