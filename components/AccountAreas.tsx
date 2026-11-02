@@ -618,7 +618,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     const starredList = [...quotes, ...invoices].filter((o) => o.starred && !o.archived && !["completed", "void", "canceled"].includes(o.status)).sort((x, y) => y.number - x.number).slice(0, 9);
     body = <>
       {starredList.length > 0 && <div className="aa-starred">
-        <div className="aa-sec-h"><h3>Order tracking</h3><span className="faint">Your high-priority orders, the same ones tracked on your dashboard. Star up to 9.</span></div>
+        <div className="aa-sec-h"><h3>Orders I&apos;m following</h3><span className="faint">The same ones followed on your dashboard. Click the ☆ on up to 9.</span></div>
         <div className="aa-starred-g">{starredList.map((o) => (
           <div key={o.id} className="aa-star-t">
             <StarOrder id={o.id} on canAct={canAct} />
