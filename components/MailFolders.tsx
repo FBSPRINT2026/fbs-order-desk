@@ -744,7 +744,6 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, [files.length, onClose]);
-  if (!f) return null;
   // a panel docked on the right stays clear: the shade stops right at its edge, measured (Nov 1, Nick: "make the shadow
   // align with the panel on the right")
   const [dockGap, setDockGap] = useState(0);
@@ -755,7 +754,7 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
   }, []);
   // on the page itself, never inside the panel it was opened from (Nov 1, Nick: opened from Create reorder's panel, its X,
   // Download and arrows didn't work: inside a docked panel the viewer was laid out and clicked as part of the panel)
-  if (typeof document === "undefined") return null;
+  if (!f || typeof document === "undefined") return null;
   return createPortal(
     <div className="mf-look-bg" onClick={onClose} style={dockGap ? { right: dockGap } : undefined}>
       <div className="mf-look" role="dialog" aria-label={`Quick look: ${f.name}`} onClick={(e) => e.stopPropagation()}>

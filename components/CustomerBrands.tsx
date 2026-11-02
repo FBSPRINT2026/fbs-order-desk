@@ -53,6 +53,8 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
   }
   useEffect(() => { void load(); }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // every hook above the first return (Nov 2: a hook below it crashed the customer page's Artwork once brands loaded)
+  const [rmSew, setRmSew] = useState("");
   if (brands === null) return null;
   const brand = brands.find((b) => b.id === sel) || brands[0] || null;
   const logos = brand ? ds.filter((d) => d.brand_id === brand.id) : [];
@@ -95,7 +97,6 @@ export default function CustomerBrands({ customerId }: { customerId: string }) {
     setBusy("");
   }
   /** take a sew file off the logo (lib/sewAdd.ts removeSewFile: kept, its files stay): a click arms it */
-  const [rmSew, setRmSew] = useState("");
   async function removeSew(d: D, f: SewFile) {
     if (rmSew !== f.path) { setRmSew(f.path); setTimeout(() => setRmSew((x) => (x === f.path ? "" : x)), 3500); return; }
     setRmSew("");
