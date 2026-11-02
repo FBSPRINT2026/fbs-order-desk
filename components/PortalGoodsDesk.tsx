@@ -24,6 +24,18 @@ const boxesOf = (n: number) => `${n} box${n === 1 ? "" : "es"}`;
  * One card per order with how much of its goods are here, each supplier shipment as one line (tracking folded away),
  * the shipments we couldn't match at the top with "Which order?", and a form for goods coming from anywhere else.
  */
+/** the order groups' header bars: an icon and one line each (Nov 2) */
+const GROUP_ICON: Record<string, string> = {
+  here: "M20 6 9 17l-5-5",
+  way: "M1 3h15v13H1zM16 8h4l3 3v5h-7zM5.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  info: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2",
+};
+const GROUP_LINE: Record<string, string> = {
+  here: "Your goods for these orders are checked in at FBS.",
+  way: "On the way to us. We're tracking every box.",
+  info: "We don't have tracking for these yet. Add it so we can watch for them.",
+};
+
 export default function PortalGoodsDesk({ items, incoming, told = [], canAct, canLink = canAct, qs, as, addTracking, linkIncoming, sendGoods, linkTold }: {
   items: GoodsItem[]; incoming: PendingShipment[]; told?: ToldShipment[]; canAct: boolean; /** staff in a customer's portal: can still put shipments on orders */ canLink?: boolean; qs: string; /** staff previewing: the customer */ as?: string;
   addTracking: (orderId: string, t: TrackingInput) => Promise<R>; linkIncoming: (pick: { lineId: string; orderId: string }[]) => Promise<R>;
@@ -144,11 +156,16 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
           <label className="aa-search gdk-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" /></svg><input type="search" placeholder="Search order, PO or tracking" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search goods" /></label>
           <button type="button" className="btn primary" onClick={() => setTell(true)}>+ Shipping us something?</button>
         </div>
-        <div className="gdk-legend" aria-hidden><span><i className="g-here" />Here</span><span><i className="g-way" />In transit</span><span><i className="g-info" />Waiting info</span><span><i className="g-nl" />Shipments not linked</span></div>
         {drag && <div className="gdk-dragtip">Drop it on the order it&apos;s for.</div>}
         {dropMsg && <div className="gdk-dragtip bad">{dropMsg}</div>}
         {GROUPS.filter((g) => g.list.length).map((g) => (
           <section key={g.k} className={"gdk-grp g-" + g.k} aria-label={g.label}>
+            {/* each group opens with the same header bar as Shipments not linked: its name, what it means, and a line in its
+                color across, with the color bar down the side under it (Nov 2, Nick: "make this uniform") */}
+            <div className="gdk-nlbar gdk-ghd">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={GROUP_ICON[g.k]} /></svg>
+              <div><b>{g.label} · {g.list.length}</b><span>{GROUP_LINE[g.k]}</span></div>
+            </div>
             <div className="gdk-vbar"><span>{g.label} · {g.list.length}</span></div>
             <div className="gdk-grp-b"><div className="gdk-row gdk-head" aria-hidden><span>Order</span><span>Shipment</span><span>Boxes</span><span>Tracking</span><span /></div>{g.list.map(card)}</div>
           </section>

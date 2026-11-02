@@ -18633,3 +18633,6 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @keyframes pa-roll{0%{opacity:0;transform:translateY(-20%)}12%{opacity:1;transform:translateY(-50%)}85%{opacity:1;transform:translateY(-50%)}100%{opacity:0;transform:translateY(-80%)}}
 @media (prefers-reduced-motion:reduce){.pa-roll{animation:none}}
 .pa-ideas.pa-ideas-quiet{justify-content:flex-end}
+/* the goods groups open with the same header bar as Shipments not linked, the color bar down the side under it (Nov 2, Nick) */
+.gdk-grp>.gdk-ghd{grid-column:1/-1}
+.gdk-list .gdk-grp+.gdk-grp{border-top:10px solid var(--surface-2)}
