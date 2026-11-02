@@ -12866,7 +12866,9 @@ html body .rv .rv-c.rv-chk{display:inline-flex;align-items:center;gap:6px;cursor
 .orv-thread{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:14px 16px;background:var(--surface)}
 .bub-pair{display:flex;flex-direction:column;gap:8px}
 .bub{max-width:82%;padding:9px 13px;border-radius:18px;font-size:14px;line-height:1.4;display:flex;flex-direction:column;gap:6px}
-.bub p{margin:0}
+.bub p{margin:0;white-space:pre-line;overflow-wrap:anywhere}
+/* a long file name or link wraps instead of pushing the panel sideways (Nov 1) */
+.bub{min-width:0;overflow-wrap:anywhere}
 .bub.them{align-self:flex-start;background:var(--surface-2);color:var(--ink);border-bottom-left-radius:5px}
 .bub.me{align-self:flex-end;background:var(--fbs-blue);color:#fff;border-bottom-right-radius:5px;white-space:pre-wrap}
 .bub-sub{font-size:12.5px;color:var(--ink-3)}
