@@ -26,7 +26,7 @@ const BACK_PATH = /^(Images\/[\w\/.\-]+\.(jpe?g|png|webp)|https:\/\/([\w-]+\.)*s
 const sq = (s: string) => (s || "").toLowerCase().replace(/grey/g, "gray").replace(/[^a-z0-9]+/g, "");
 export async function POST(req: Request) {
   const v = await getViewer(); if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const { garmentId, color, want, setBack } = await req.json().catch(() => ({})) as { garmentId?: string; color?: string; want?: string; setBack?: { path?: string; from?: string } };
+  const { garmentId, color, want, setBack } = await req.json().catch(() => ({})) as { garmentId?: string; color?: string; want?: string; setBack?: { path?: string; from?: string; /** the front from the same site, saved with it (Nov 1: both sides framed alike) */ front?: string } };
   if (!garmentId || !color?.trim()) return NextResponse.json({ error: "Which garment and color?" }, { status: 400 });
   const admin = createAdminClient();
   const { data: g } = await admin.from("garments").select("id, style, brand, supplier, supplier_style, color_images, ss_style_id").eq("id", garmentId).maybeSingle();
@@ -39,7 +39,10 @@ export async function POST(req: Request) {
     if (!have) return NextResponse.json({ error: "That color has no front photo." }, { status: 400 });
     const path = String(setBack.path || ""), from = String(setBack.from || "");
     if (path !== "drawn" && !BACK_PATH.test(path)) return NextResponse.json({ error: "That photo can't be used." }, { status: 400 });
-    const entry: Ci = { ...have[1], back: path === "drawn" ? "" : path, back_from: path === "drawn" ? "drawn" : (["model", "upload", "side"].includes(from) ? from : "picked") };
+    const front = String(setBack.front || "");
+    if (front && !/^store:garment-backs\/[\w\/.\-]+\.(jpe?g|png|webp)$/i.test(front)) return NextResponse.json({ error: "That front photo can't be used." }, { status: 400 });
+    // a back found online with its own front: both sides from that site (never one site's back with another's front)
+    const entry: Ci = { ...have[1], ...(front ? { front, from: "web" } : {}), back: path === "drawn" ? "" : path, back_from: path === "drawn" ? "drawn" : (["model", "upload", "side", "web"].includes(from) ? from : "picked") };
     await admin.from("garments").update({ color_images: { ...imgs, [have[0]]: entry } }).eq("id", g.id);
     return NextResponse.json({ name: have[0], ...entry });
   }

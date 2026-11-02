@@ -14594,7 +14594,7 @@ html body .ord .line-b .gl-list .gl.ver{padding-left:16px}
 .ink-on{font-size:11.5px;color:var(--ink-3)}
 .pr-cc-line .pr-scr-v{white-space:nowrap}
 /* Mockup Creator: no flat back photo at S&S or SanMar, pick one (Oct 26) */
-.mk-noback{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;width:min(92%,380px);display:flex;flex-direction:column;gap:8px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 30px rgba(20,29,43,.14);font-size:14px;color:var(--ink)}
+.mk-noback{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:6;width:min(94%,420px);display:flex;flex-direction:column;gap:8px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 30px rgba(20,29,43,.14);font-size:14px;color:var(--ink)}
 .mk-noback > .faint{font-size:12.5px;color:var(--ink-3)}
 .mk-noback-pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
 .mk-noback-pics button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:12px;color:var(--ink-2);cursor:pointer}
@@ -17539,3 +17539,22 @@ html body .pr .pr-shared{gap:6px}
 .ink-cu-l{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
 .ink-cu-in{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);min-width:0}
 .ink-cu-n{font-size:12px;color:var(--ink-3)}
+
+/* Mockup Creator: a garment's back found online (Nov 1): pairs from one site, best first */
+.mk-noback .mkwb{display:flex;flex-direction:column;gap:6px;padding:8px 0 4px;border-top:1px solid var(--line-2)}
+.mkwb-busy{font-size:12.5px;color:var(--ink-3)}
+.mkwb-h{font-size:12px;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.03em}
+.mkwb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.mkwb-t{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;cursor:pointer;text-align:left;min-width:0}
+.mkwb-t:hover{border-color:var(--accent)}
+.mkwb-t.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.mkwb-t:disabled{opacity:.6;cursor:wait}
+.mkwb-best{position:absolute;top:4px;left:4px;z-index:1;font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--accent-soft);color:var(--accent)}
+.mkwb-pics{display:grid;grid-template-columns:1fr;gap:3px}
+.mkwb-pics.two{grid-template-columns:1fr 1fr}
+.mkwb-pics img{width:100%;aspect-ratio:4/5;object-fit:contain;background:#fff;border-radius:4px}
+.mkwb-site{font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mkwb-what{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.mkwb-act,.mkwb-more{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.mkwb-link{font:inherit;font-size:12.5px;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:none}
+.mkwb-link:hover{text-decoration:underline}

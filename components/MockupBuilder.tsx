@@ -18,6 +18,8 @@ import { BrandCtx, InkSelect, OrderInkCtx, resolveInk, type Brand, type BrandInk
 import { orderInks } from "@/lib/orderInks";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { cleanPhoto } from "@/lib/cleanPhoto";
+import type { WebBack } from "@/lib/backFinder";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, fitLocation, METHODS, methodLabel, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
@@ -509,7 +511,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (t && (t.closest("input, textarea, select, [contenteditable='true']"))) return;
       const p = pastedSvg(e.clipboardData?.getData("image/svg+xml") || e.clipboardData?.getData("text/plain") || "");
       if (p) { e.preventDefault(); pasteRef.current(p); return; }
-      if ([...(e.clipboardData?.files || [])].some((f) => /^image\//.test(f.type))) setMsg("That came in from Illustrator as a picture, not art. In Illustrator turn on Preferences → File Handling → Clipboard → Copy As: SVG Code, then copy it again and paste here.");
+      const pic = [...(e.clipboardData?.files || [])].find((f) => /^image\//.test(f.type));
+      if (pic && backPasteRef.current) { e.preventDefault(); backPasteRef.current(pic); return; }
+      if (pic) setMsg("That came in from Illustrator as a picture, not art. In Illustrator turn on Preferences → File Handling → Clipboard → Copy As: SVG Code, then copy it again and paste here.");
     };
     window.addEventListener("paste", on);
     return () => window.removeEventListener("paste", on);
@@ -1442,15 +1446,63 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setCatalog((c) => c.map((x) => (x.id === q.garmentId ? { ...x, color_images: { ...(x.color_images || {}), [r.name!]: { ...(x.color_images?.[r.name!] || { front: "", back: "", side: "", hex: "" }), back: r.back || "", back_from: r.back_from } } } : x)));
     setNoBack((m) => { const n = { ...m }; delete n[`${q.garmentId}|${colorKey(l.color)}`]; return n; });
   };
-  const uploadBack = async (l: Line, f: File) => {
+  // a picture brought in for a back (uploaded, dropped, pasted or found online): its near-white background made pure
+  // white and padded to the photo frame's shape, so it's measured, sized and lined up like a supplier's photo
+  const putBackPic = async (garmentId: string, color: string, src: Blob, tag: string) => {
+    const pic = await cleanPhoto(src).catch(() => null);
+    if (!pic) return "";
+    const path = `garment-backs/${garmentId}/${colorKey(color) || "color"}-${Date.now().toString(36)}-${tag}.jpg`;
+    const up = await createClient().storage.from("proofs").upload(path, pic, { contentType: "image/jpeg" });
+    return up.error ? "" : `store:${path}`;
+  };
+  const uploadBack = async (l: Line, f: Blob) => {
     const q = backAsk(l); if (!q) return;
-    const ext = (f.name.match(/\.(jpe?g|png|webp)$/i)?.[1] || "jpg").toLowerCase();
-    const path = `garment-backs/${q.garmentId}/${colorKey(l.color) || "color"}-${Date.now().toString(36)}.${ext}`;
     setBackBusy("upload");
-    const up = await createClient().storage.from("proofs").upload(path, f, { contentType: f.type || undefined });
+    const path = await putBackPic(q.garmentId, l.color, f, "b");
     setBackBusy("");
-    if (up.error) { setBackErr("Couldn't upload that photo."); return; }
-    await pickBack(l, `store:${path}`, "upload");
+    if (!path) { setBackErr("Couldn't use that picture."); return; }
+    await pickBack(l, path, "upload");
+  };
+  // found online (Nov 1, Nick: "you go to a site that has it, then you just bring in the front and the back… that way you
+  // know it's formatted similar… if you can't, then you find just the back"): lib/backFinder.ts, searched once per color
+  const [webBack, setWebBack] = useState<Record<string, { busy?: boolean; err?: string; found?: WebBack[]; pick?: number }>>({});
+  const webAsked = useRef(new Set<string>());
+  const findBack = async (k0: string, garmentId: string, color: string, again = false) => {
+    setWebBack((m) => ({ ...m, [k0]: { busy: true } }));
+    const r = await fetch("/api/garments/find-back", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ garmentId, color, again }) }).then((x) => x.json()).catch(() => null) as { found?: WebBack[]; error?: string } | null;
+    setWebBack((m) => ({ ...m, [k0]: r?.found ? { found: r.found, pick: 0 } : { err: r?.error || "Couldn't search online." } }));
+  };
+  useEffect(() => {
+    for (const [k0, q] of Object.entries(noBack)) { if (webAsked.current.has(k0)) continue; webAsked.current.add(k0); void findBack(k0, q.garmentId, q.name); }
+  }, [noBack]); // eslint-disable-line react-hooks/exhaustive-deps
+  const webPic = (u: string) => `/api/garments/find-back?img=${encodeURIComponent(u)}`;
+  const takeWebBack = async (l: Line, c: WebBack) => {
+    const q = backAsk(l); if (!q) return;
+    setBackBusy("web"); setBackErr("");
+    const blob = async (u: string) => { const r = await fetch(webPic(u)).catch(() => null); return r?.ok ? r.blob() : null; };
+    const [bb, fb] = await Promise.all([blob(c.back), c.front ? blob(c.front) : Promise.resolve(null)]);
+    const [bp, fp] = await Promise.all([bb ? putBackPic(q.garmentId, l.color, bb, "b") : "", fb ? putBackPic(q.garmentId, l.color, fb, "f") : ""]);
+    if (!bp) { setBackBusy(""); setBackErr("That picture didn't come in. Pick another."); return; }
+    const r = await fetch("/api/garments/photo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ garmentId: q.garmentId, color: q.name, setBack: { path: bp, from: "web", ...(fp ? { front: fp } : {}) } }) }).then((x) => x.json()).catch(() => null) as { name?: string; front?: string; from?: string; back?: string; back_from?: string; error?: string } | null;
+    setBackBusy("");
+    if (!r?.name) { setBackErr(r?.error || "Couldn't save that back photo."); return; }
+    setCatalog((cs) => cs.map((x) => (x.id === q.garmentId ? { ...x, color_images: { ...(x.color_images || {}), [r.name!]: { ...(x.color_images?.[r.name!] || { front: "", back: "", side: "", hex: "" }), ...(r.front ? { front: r.front } : {}), back: r.back || "", back_from: r.back_from } } } : x)));
+    setNoBack((m) => { const n = { ...m }; delete n[`${q.garmentId}|${colorKey(l.color)}`]; return n; });
+  };
+  /** a picture dropped or pasted on the back panel: a file, or a picture's link (dragged from Google Images) */
+  const backPasteRef = useRef<((f: Blob) => void) | null>(null);
+  backPasteRef.current = null; // set again below while a back panel shows
+  const dropBack = async (l: Line, dt: DataTransfer) => {
+    const f = [...dt.files].find((x) => /^image\//.test(x.type));
+    if (f) return uploadBack(l, f);
+    const html = dt.getData("text/html"), link = (dt.getData("text/uri-list") || dt.getData("text/plain") || "").split(/\s+/)[0];
+    const src = html.match(/<img[^>]+src=["']([^"']+)/i)?.[1] || link;
+    if (!/^https:\/\//i.test(src || "")) { setBackErr("Drop the picture itself, or save it and upload it."); return; }
+    setBackBusy("upload");
+    const r = await fetch(webPic(src)).catch(() => null);
+    setBackBusy("");
+    if (!r?.ok) { setBackErr("That picture didn't come in. Save it and upload it."); return; }
+    await uploadBack(l, await r.blob());
   };
 
   // full color art (Oct 26, Nick): how it prints. DTF; screen print full color (the picture as is, production confirms
@@ -4202,10 +4254,50 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   {/* scale, each side on its own, top right of its photo (Oct 24, Nick: "scale front, scale back") */}
                   {zoomG && <div className="mk-corner tr">{zoomCtl(v)}</div>}
                   {/* no flat back photo at S&S or SanMar: pick one (Oct 26) */}
-                  {v === "back" && line && backAsk(line) && (() => { const q = backAsk(line)!; return (
-                    <div className="mk-noback" role="group" aria-label="Pick a back photo">
-                      <b>No flat back photo of {garmentFor(line)?.style} {q.name}</b>
-                      <span className="faint">S&amp;S and SanMar don&apos;t have one. Pick what to use for the back:</span>
+                  {v === "back" && line && backAsk(line) && (() => {
+                    const q = backAsk(line)!, gm = garmentFor(line), k0 = `${q.garmentId}|${colorKey(line.color)}`, wb = webBack[k0] || {}, found = wb.found || [], cur = found[wb.pick ?? 0];
+                    backPasteRef.current = (f) => void uploadBack(line, f);
+                    const google = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${gm?.brand || ""} ${gm?.style || ""} ${q.name} back`.trim())}`;
+                    return (
+                    <div className="mk-noback" role="group" aria-label="Pick a back photo"
+                      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); void dropBack(line, e.dataTransfer); }}>
+                      <b>No flat back photo of {gm?.style} {q.name}</b>
+                      <span className="faint">S&amp;S and SanMar don&apos;t have one.</span>
+                      {/* found online: a front and back from one site (they size alike), else a back alone */}
+                      <div className="mkwb">
+                        {wb.busy && <span className="mkwb-busy">Looking online for {gm?.brand} {gm?.style} {q.name}… about 30 seconds</span>}
+                        {wb.err && <span className="faint">{wb.err}</span>}
+                        {!wb.busy && !wb.err && !found.length && webAsked.current.has(k0) && <span className="faint">Nothing matching found online.</span>}
+                        {found.length > 0 && <>
+                          <span className="mkwb-h">Found online · {cur?.front ? "the front and back from one site, sized together" : "the back alone, sized to our front"}</span>
+                          <div className="mkwb-grid" role="radiogroup" aria-label="Photos found online">
+                            {found.map((c, i) => (
+                              <button key={c.back} type="button" role="radio" aria-checked={i === (wb.pick ?? 0)} className={"mkwb-t" + (i === (wb.pick ?? 0) ? " on" : "")} title={c.note} disabled={!!backBusy}
+                                onClick={() => setWebBack((m) => ({ ...m, [k0]: { ...m[k0], pick: i } }))}>
+                                {i === 0 && <span className="mkwb-best">Best match</span>}
+                                <span className={"mkwb-pics" + (c.front ? " two" : "")}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  {c.front && <img src={webPic(c.front)} alt="Front" loading="lazy" />}
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={webPic(c.back)} alt="Back" loading="lazy" />
+                                </span>
+                                <span className="mkwb-site" data-notranslate>{c.site}</span>
+                                <span className="mkwb-what">{c.front ? "Front + back" : "Back only"}</span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="mkwb-act">
+                            <button type="button" className="btn sm primary" disabled={!!backBusy || !cur} onClick={() => cur && void takeWebBack(line, cur)}>{backBusy === "web" ? "Bringing it in…" : cur?.front ? "Use this front & back" : "Use this back"}</button>
+                            {cur && <a className="mkwb-link" href={cur.page} target="_blank" rel="noreferrer">See the page</a>}
+                          </div>
+                        </>}
+                        <div className="mkwb-more">
+                          <a className="mkwb-link" href={google} target="_blank" rel="noreferrer">Search Google Images ↗</a>
+                          {!wb.busy && <button type="button" className="mkwb-link" onClick={() => void findBack(k0, q.garmentId, q.name, true)}>Search again</button>}
+                        </div>
+                        <span className="faint">Or drag a picture here, or copy it and paste it here.</span>
+                      </div>
+                      <span className="faint">Or use one of these:</span>
                       <div className="mk-noback-pics">
                         {q.others.map((o) => <button key={o.path} type="button" disabled={!!backBusy} onClick={() => void pickBack(line, o.path, /model/i.test(o.label) ? "model" : /side/i.test(o.label) ? "side" : "picked")}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={ssImg(o.path)} alt="" /><span>{o.label}</span></button>)}
                         <button type="button" disabled={!!backBusy} onClick={() => void pickBack(line, "drawn", "drawn")}>{/* eslint-disable-next-line @next/next/no-img-element */}<img src={drawn(line, "back")} alt="" /><span>Drawn back</span></button>
