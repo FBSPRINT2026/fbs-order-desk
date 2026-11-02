@@ -6,6 +6,7 @@ import { fileUrls, forCustomer, type PvOrder, storedPath } from "@/lib/archive";
 import ArchivedPortalView from "./view";
 import { pvHandle } from "@/lib/printavoNames";
 import { namesFor } from "@/lib/printavoFileMeta";
+import { OldReorderButton } from "@/components/PortalOldReorder";
 
 /**
  * A past order in the customer's portal. The record is read on the server and trimmed to what a customer
@@ -38,7 +39,7 @@ export default async function PortalArchivedOrder({ params, searchParams }: { pa
       {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s portal.</div>}
       <main className="p-main">
         <BackLink href={`/portal?area=orders${ctx.preview ? `&as=${ctx.preview.id}` : ""}`} label="Your orders" trail={false} />
-        <ArchivedPortalView o={o} urls={urls} names={names} paths={paths} importedAt={data.imported_at} />
+        <ArchivedPortalView o={o} urls={urls} names={names} paths={paths} importedAt={data.imported_at} actions={<OldReorderButton archivedId={data.id} as={ctx.preview?.id} />} />
       </main>
     </>
   );

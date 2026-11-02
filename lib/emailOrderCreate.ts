@@ -59,7 +59,8 @@ function dims(b: Buffer): { w: number; h: number } | null {
 /** activityId: the email it came from (Inbox), or customerId alone (a reorder from the Printavo archive) */
 export type CreateInput = { activityId?: string; customerId?: string; draft: EODraft; status: "quote" | "approved"; /** where it came from, when not an email (the AI Workbench) */ via?: string;
   /** the next step on an order already made from it (Oct 27, Nick: "make that be the first step. Then I can go and say,
-   *  okay, now bring in the art"): the garments and/or prints read now go onto that order instead of a new one */ addTo?: string };
+   *  okay, now bring in the art"): the garments and/or prints read now go onto that order instead of a new one */ addTo?: string;
+  /** a request to fill in where it is, keeping its number (a customer's portal reorder, Nov 1) */ intoOrder?: string };
 
 export async function createOrderFromDraft(admin: SupabaseClient, by: string, input: CreateInput): Promise<{ ok: true; id: string; number: number } | { ok: false; error: string }> {
   const { data: a } = input.activityId ? await admin.from("activities").select("id, customer_id, subject, body, meta").eq("id", input.activityId).maybeSingle() : { data: null };
@@ -241,7 +242,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     if (/^(urgent|high)$/.test(String(ct?.priority || ""))) flag = "🚩 ";
   }
   // a simple order from the portal (app/shop/actions.ts simpleOrderActivity): filled in where it is, keeping its number
-  const intoId = String(((a?.meta || {}) as { into_order?: string }).into_order || "");
+  const intoId = String(input.intoOrder || ((a?.meta || {}) as { into_order?: string }).into_order || "");
   // the brand's standard mockups (its "Standard mockups", Oct 30, Nick: "save the mockup number and reuse those… you don't
   // need to make it each time"): a group with exactly those logos gets that mockup, copied, nothing drawn
   const std = await standardMockups(admin, custId, groups).catch((e) => { console.warn("standard mockups", e); return new Map<string, StdMockup>(); });

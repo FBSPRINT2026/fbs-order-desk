@@ -30,6 +30,7 @@ import {
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
 import { OrderInkCtx } from "@/components/InkSelect";
+import ReorderPick from "@/components/tools/ReorderPick";
 import { orderInks } from "@/lib/orderInks";
 import FinishingPicker from "@/components/FinishingPicker";
 import { isRelabel } from "@/components/NeckLabelPick";
@@ -1008,6 +1009,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [recover, setRecover] = useState<{ at: number; o: Order } | null>(null);
   // a simple order from the portal: Create order (the one tool) reads their answers and files and fills this order in
   const [simpleAct, setSimpleAct] = useState<{ id: string; text: string } | null>(null);
+  /** a customer's portal reorder of an old-system job: the Create reorder tool, filling in this order (Nov 1) */
+  const [pvReorder, setPvReorder] = useState(false);
   const [simpleBusy, setSimpleBusy] = useState("");
   const buildSimple = async () => {
     setSimpleBusy("Bringing in what they sent…");
@@ -1360,7 +1363,25 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <button type="button" className="btn primary" onClick={() => void commitDraft()}>Save</button>
         </div>
       )}
-      {(o as Order & { simple_order?: unknown }).simple_order != null && o.status === "request" && (() => {
+      {(o as Order & { simple_order?: { reorder?: unknown } | null }).simple_order?.reorder && o.status === "request" && (() => {
+        // a customer's reorder of an old-system job (the portal's simple reorder form): their sizes, art and words are in,
+        // the rest is the Create reorder tool on the old job, filling in this order
+        const re = (o as Order & { simple_order: { reorder: { archived_id: string; visual: string; art?: string; changes?: string; off?: string[] } } }).simple_order.reorder;
+        const pcs = orderGroups(o).reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
+        return (
+          <div className="draft-bar" role="status">
+            <span><b>Customer reorder of old job #{re.visual}.</b> They sent {pcs ? `${pcs} pcs in sizes` : "their sizes in a file"}, {re.art === "new" ? "new art" : "the same art"}{re.off?.length ? `, left off ${re.off.length}` : ""}{re.changes ? `, and changes: “${re.changes.slice(0, 120)}”` : ""}. Price it and send it back for their OK.</span>
+            <span className="spacer" />
+            <button type="button" className="btn primary" onClick={() => setPvReorder(true)}>Make the reorder</button>
+          </div>
+        );
+      })()}
+      {pvReorder && (() => {
+        const re = (o as Order & { simple_order: { reorder: { archived_id: string; visual: string } } }).simple_order.reorder;
+        const lines = orderGroups(o).flatMap((g) => g.lines.map((l) => ({ style: l.style, color: l.color, sizes: Object.fromEntries(Object.entries(l.sizes || {}).filter(([, v]) => +v! > 0).map(([z, v]) => [z, +v!])) })));
+        return <ReorderPick archivedId={re.archived_id} into={o.id} given={lines.some((l) => Object.keys(l.sizes).length) ? { source: "the customer's reorder", lines } : undefined} onClose={() => setPvReorder(false)} />;
+      })()}
+      {(o as Order & { simple_order?: { reorder?: unknown } | null }).simple_order != null && !(o as Order & { simple_order?: { reorder?: unknown } | null }).simple_order?.reorder && o.status === "request" && (() => {
         const so = (o as Order & { simple_order: { about?: string; qty?: number | null; garments?: string; method?: string; files?: { name: string }[] } }).simple_order;
         return (
           <div className="draft-bar" role="status">

@@ -54,15 +54,17 @@ type Data = { job: { visual: string; nickname: string; date: string; qty: number
   lines: { style: string; brand: string; color: string; garment: string; qty: number; price: number; sizes: string }[]; files: ReorderFile[];
   /** last time's production and customer notes (Printavo's) */ notes?: { production: string; customer: string } };
 
-export default function ReorderPick({ archivedId, onClose, onCreated }: { archivedId: string; onClose: () => void; onCreated?: (id: string, number: number, label: string) => void }) {
+export default function ReorderPick({ archivedId, onClose, onCreated, into, given }: { archivedId: string; onClose: () => void; onCreated?: (id: string, number: number, label: string) => void;
+  /** the customer's portal reorder to fill in (keeps its number), and the sizes they gave: shown like a file's, used when you say so (Nov 1) */
+  into?: string; given?: { source: string; lines: { style: string; color: string; sizes: Record<string, number> }[] } }) {
   const [d, setD] = useState<Data | null>(null), [err, setErr] = useState(""), [what, setWhat] = useState<Record<string, string>>({});
   const [price, setPrice] = useState<"last" | "today">("last"), [step, setStep] = useState(""), [look, setLook] = useState<number | null>(null);
   const [ask, setAsk] = useState<{ rows: ColorRow[]; done: (r: ColorRow[] | null) => void } | null>(null);
   const [fitAsk, setFitAsk] = useState<{ rows: FitRow[]; done: (r: FitRow[] | null) => void } | null>(null);
   // the sizes first (Nov 1, Nick: "the first thing it should ask is… are we duplicating the sizes and lines?… clear the
   // sizes… or new sizes"): last time's, from a file dropped in Goods (read, shown old → new, used when you say so), or none
-  const [sizeMode, setSizeMode] = useState<"same" | "file" | "clear">("same");
-  const [read, setRead] = useState<Read | null>(null), [readBusy, setReadBusy] = useState(""), [readOk, setReadOk] = useState(false);
+  const [sizeMode, setSizeMode] = useState<"same" | "file" | "clear">(given ? "file" : "same");
+  const [read, setRead] = useState<Read | null>(given ? { source: given.source, pieces: given.lines.reduce((a, l) => a + pcs(l.sizes), 0), lines: given.lines, exact: true } : null), [readBusy, setReadBusy] = useState(""), [readOk, setReadOk] = useState(!!given);
   const [dropOver, setDropOver] = useState(false), [offOld, setOffOld] = useState<Record<number, boolean>>({}), [addNew, setAddNew] = useState<Record<number, boolean>>({});
   const sizeFile = useRef<HTMLInputElement>(null);
   async function readSizes(fs: (File | Blob)[]) {
@@ -212,7 +214,7 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
       // a print the old job listed that got no art, when you picked art for that side: it was the same print
       for (const g of x.groups) g.imprints = g.imprints.filter((p, i, all) => p.design_id || !all.some((q) => q !== p && q.design_id && q.location === p.location));
       setStep("Creating the order…");
-      const c = await fetch("/api/archive/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: d.customer.id, draft: x, status: "quote" }) });
+      const c = await fetch("/api/archive/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer: d.customer.id, draft: x, status: "quote", ...(into ? { into } : {}) }) });
       const k = await c.json().catch(() => ({})) as { id?: string; number?: number; error?: string };
       if (!c.ok || !k.id) throw new Error(k.error || "Couldn't create the order.");
       // every file you kept goes in Production files as what you said it is (the art too, as print art / film)

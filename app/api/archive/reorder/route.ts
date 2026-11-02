@@ -116,7 +116,17 @@ export async function PUT(req: Request) {
   const { data: c } = await v.supabase.from("customers").select("id, moved_at").eq("id", String(b.customer)).maybeSingle();
   if (!c) return NextResponse.json({ error: "Customer not found." }, { status: 404 });
   if (!c.moved_at) return NextResponse.json({ error: "Move this customer to the new system first (customer page → Move to the new system)." }, { status: 400 });
-  const r = await createOrderFromDraft(createAdminClient(), v.user!.email || "staff", { customerId: c.id as string, draft: b.draft as EODraft, status: b.status === "approved" ? "approved" : "quote" });
+  // a customer's portal reorder (Nov 1): filled in where it is, keeping its number, their words kept in the notes
+  let into = "";
+  const draft = b.draft as EODraft;
+  if (b.into) {
+    const { data: rq } = await createAdminClient().from("orders").select("id, customer_id, status, simple_order").eq("id", String(b.into)).maybeSingle();
+    if (!rq || rq.customer_id !== c.id || rq.status !== "request") return NextResponse.json({ error: "That request isn't waiting to be made any more." }, { status: 400 });
+    into = rq.id as string;
+    const about = String((rq.simple_order as { about?: string } | null)?.about || "").trim();
+    if (about) draft.customerNotes = [about, draft.customerNotes || ""].filter(Boolean).join("\n");
+  }
+  const r = await createOrderFromDraft(createAdminClient(), v.user!.email || "staff", { customerId: c.id as string, draft, status: b.status === "approved" ? "approved" : "quote", ...(into ? { intoOrder: into } : {}) });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
   return NextResponse.json(r);
 }

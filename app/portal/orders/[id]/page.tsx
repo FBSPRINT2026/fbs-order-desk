@@ -105,7 +105,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
 
   // the customer status, for orders run here; a Printavo-run job keeps its old wording
   const runHere = !pvStatusOf(o as never);
-  const cs = runHere ? customerStatus({ status: o.status, flags: ((o as { flags?: Flag[] }).flags || []) as Flag[], delivery_method: o.delivery_method }, { proofSent: proofs.length > 0 }) : null;
+  const cs = runHere ? customerStatus({ status: o.status, flags: ((o as { flags?: Flag[] }).flags || []) as Flag[], delivery_method: o.delivery_method, simple_order: (o as { simple_order?: { reorder?: unknown } | null }).simple_order }, { proofSent: proofs.length > 0 }) : null;
   const steps = cs ? CSTEPS : STEPS;
   const hold = !["completed", "void"].includes(o.status) ? customerHold(((o as { flags?: Flag[] }).flags || []) as Flag[]) : null;
   const curIdx = cs ? CSTEPS.findIndex((s) => s.keys.includes(cs.key)) : STEPS.findIndex((s) => s.keys.includes(o.status));
@@ -181,7 +181,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
 
         {isReq && (
           <div className="callout good">
-            <h2>{justSent ? "Thanks! Your order is in." : "We're reviewing your order"}</h2>
+            <h2>{(o as { simple_order?: { reorder?: unknown } | null }).simple_order?.reorder ? "Reorder pending approval" : justSent ? "Thanks! Your order is in." : "We're reviewing your order"}</h2>
             <div className="muted">We&apos;ll check your garments and artwork, price everything and send it back here for your final OK. Questions? Send us a message below.</div>
           </div>
         )}
@@ -274,7 +274,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             {isReq ? (
               <section className="panel">
                 <div className="panel-h"><h2>Pricing</h2></div>
-                <div className="panel-b muted" style={{ fontSize: 13 }}>We&apos;re pricing your order now. You&apos;ll get an email when it&apos;s ready to approve.</div>
+                <div className="panel-b muted" style={{ fontSize: 13 }}><b>TBD.</b> We&apos;re pricing your order now. You&apos;ll get an email when it&apos;s ready to approve.</div>
               </section>
             ) : <>
             <section className="panel">

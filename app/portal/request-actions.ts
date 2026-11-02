@@ -5,7 +5,7 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
-import { calcOrder, mergeSettings, newGLine, newGroup, orderGroups, requestProblems, uid, type Group, type Order, withoutShopPieces } from "@/lib/pricing";
+import { ADULT_SIZES, BABY_SIZES, calcOrder, mergeSettings, newGLine, newGroup, ONE_SIZE, orderGroups, requestProblems, SIZES, TODDLER_SIZES, uid, WAIST_SIZES, YOUTH_SIZES, type Group, type Order, withoutShopPieces } from "@/lib/pricing";
 import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
@@ -755,5 +755,142 @@ export async function bringOldJobFile(requestId: string, groupId: string, archiv
     if (error) return { ok: false, error: error.message };
     revalidatePath(`/portal/request/${requestId}`);
     return { ok: true, id: requestId };
+  } catch (e) { return fail(e); }
+}
+
+// ---------- Reorder an order from our old system (Nov 1, Nick: "we notice you're trying to make a reorder from our old
+// system. Here's our simple reorder form… new sizes… what changes… the same art, upload new art… a note section… the
+// customer pricing should say TBD… reorder pending approval… then send it to us and then we send it back to them") ------
+// A Printavo job has no clean art on file for them to rebuild with the order builder, so they tell us only what's new:
+// the sizes (typed in a grid, or a file / pasted text we read), what's left off, same or new art, changes and notes.
+// It comes in as a request; staff finish it with the same Create reorder tool (components/tools/ReorderPick.tsx), which
+// fills in this order and keeps its number.
+
+export type OldReorderKind = "adult" | "youth" | "toddler" | "baby" | "waist" | "one";
+export type OldReorderRow = { gi: number; li: number; style: string; brand: string; color: string; garment: string; kind: OldReorderKind; run: string[]; last: Record<string, number> };
+export type OldReorderStart = { id: string; number: string; name: string; date: string; rows: OldReorderRow[]; prints: string[] };
+const KIND_RUN: Record<OldReorderKind, readonly string[]> = { adult: ADULT_SIZES.slice(0, 7), youth: YOUTH_SIZES, toddler: TODDLER_SIZES, baby: BABY_SIZES, waist: ["30", "32", "34", "36", "38", "40"], one: [ONE_SIZE] };
+const kindOfSize = (z: string): OldReorderKind => ((YOUTH_SIZES as readonly string[]).includes(z) ? "youth" : (TODDLER_SIZES as readonly string[]).includes(z) ? "toddler" : (BABY_SIZES as readonly string[]).includes(z) ? "baby" : (WAIST_SIZES as readonly string[]).includes(z) ? "waist" : z === ONE_SIZE ? "one" : "adult");
+
+/** open the form: a draft request with last time's garments and prints, and each line's sizes to fill in */
+export async function startOldReorder(archivedId: string, as?: string): Promise<Result & { start?: OldReorderStart }> {
+  try {
+    // staff looking at a customer's portal: the form as the customer sees it, nothing saved and nothing to send
+    const v = await getViewer();
+    const preview = !!(v.user && v.isStaff);
+    const { admin, cust } = preview ? await readMe(as) : await me();
+    const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("id", archivedId).eq("customer_id", cust.id).maybeSingle();
+    if (!r) return { ok: false, error: "We couldn't find that order." };
+    const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const groups = groupsFromPrintavo(r as never, (st?.data as { production?: unknown } | null)?.production).map((g) => ({
+      ...g, id: uid(), lines: g.lines.map((l) => ({ ...l, id: uid(), cost: "" as const, priceOverride: null })), imprints: g.imprints.map((d) => ({ ...d, id: uid() })),
+      customerMockups: [], mockupSkipped: true, reprintOf: `#${r.visual_id}`,
+    })) as Group[];
+    if (!groups.length) return { ok: false, error: "That order has no garments to copy. Send us a message and we'll set it up." };
+    // the sizes each style comes in (our catalog), else the usual run for its kind
+    const styles = [...new Set(groups.flatMap((g) => g.lines.map((l) => String(l.style || "").trim().toUpperCase())).filter(Boolean))];
+    const { data: gs } = styles.length ? await admin.from("garments").select("style, sizes").in("style", styles) : { data: [] };
+    const runOf = new Map(((gs || []) as { style: string; sizes: string[] | null }[]).map((x) => [x.style.toUpperCase(), (x.sizes || []).filter((z) => (SIZES as readonly string[]).includes(z))]));
+    const rows: OldReorderRow[] = [];
+    groups.forEach((g, gi) => g.lines.forEach((l, li) => {
+      const last = Object.fromEntries(Object.entries(l.sizes || {}).filter(([, n]) => +n! > 0).map(([z, n]) => [z, +n!]));
+      const cat = runOf.get(String(l.style || "").trim().toUpperCase()) || [];
+      const k0 = Object.keys(last)[0] || cat[0] || (g.youth ? "YS" : "M");
+      const kind = kindOfSize(k0);
+      const run = [...new Set([...(cat.filter((z) => kindOfSize(z) === kind).length ? cat.filter((z) => kindOfSize(z) === kind) : KIND_RUN[kind]), ...Object.keys(last)])].sort((a, b) => SIZES.indexOf(a as never) - SIZES.indexOf(b as never));
+      rows.push({ gi, li, style: String(l.style || ""), brand: String(l.brand || ""), color: String(l.color || ""), garment: String(l.garment || ""), kind, run, last });
+    }));
+    const prints = [...new Set(groups.flatMap((g) => g.imprints.map((d) => [d.location, d.method === "embroidery" ? "embroidered" : ""].filter(Boolean).join(", "))).filter(Boolean))];
+    const label = `#${r.visual_id}`, nick = String(r.nickname || "");
+    const start0 = { number: String(r.visual_id || ""), name: nick, date: String(r.order_date || "").slice(0, 10), rows, prints };
+    if (preview) return { ok: true, start: { id: "", ...start0 } };
+    const { data, error } = await admin.from("orders").insert({
+      customer_id: cust.id, status: "request", type: "quote", source: "portal", draft: true,
+      price_type: cust.price_type || "retail", tax_exempt: !!cust.tax_exempt, groups, total: 0,
+      nickname: `${nick || `Order ${label}`} (reorder)`.slice(0, 120), notes: `Reorder of ${label}${nick ? ` (${nick})` : ""}.`,
+      simple_order: { about: "", reorder: { archived_id: r.id, visual: String(r.visual_id || "") } },
+    }).select("id").single();
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, id: data.id, start: { id: data.id, ...start0 } };
+  } catch (e) { return fail(e); }
+}
+
+/** sizes from a file they dropped or text they pasted, read for the grid (nothing saved; the file stays with the order) */
+export async function readOldReorderSizes(orderId: string, input: { files?: RqFile[]; text?: string }): Promise<Result & { lines?: { style: string; color: string; sizes: Record<string, number> }[]; kept?: boolean }> {
+  try {
+    const { admin, order, email, cust } = await myDraft(orderId);
+    const fs = cleanFiles(input.files || [], cust.id, orderId).map((f) => ({ ...f, kind: "po" as const }));
+    const text = String(input.text || "").trim().slice(0, 6000);
+    if (!fs.length && text.length < 3) return { ok: false, error: "Drop a file or paste your sizes." };
+    if (fs.length) await keepFiles(admin, orderId, fs);
+    const kept = fs.length > 0;
+    const st = await aiState(admin);
+    const later = kept ? "We couldn't read it here, but it's attached: we'll fill in the sizes from it." : "We couldn't read that here. Type the sizes in the grid, or add them to your notes.";
+    if (!st.ready) return { ok: false, error: later, kept };
+    const { count } = await admin.from("ai_runs").select("id", { count: "exact", head: true }).eq("created_by", email).gte("created_at", new Date(Date.now() - 3600_000).toISOString());
+    if ((count || 0) >= 12) return { ok: false, error: later, kept };
+    const lines = orderGroups(order).flatMap((g) => g.lines.map((l) => `${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim())).join("; ");
+    const files = fs.length ? await readFiles(admin, fs.map((f) => ({ name: f.name, path: f.path, type: f.type, size: f.size })) as never) : undefined;
+    const r = await orderFromText(st.settings, `${cust.company || cust.name} is reordering a past order and sent their new sizes${fs.length ? " in the attached file" : ""}. The garments on the order: ${lines}. Read only the garments, colors and sizes.${text ? `\n\nWhat they pasted:\n${text}` : ""}`, { admin, order_id: orderId, customer_id: order.customer_id, by: email, ...(files ? { files } : {}) });
+    if (!r.ok) return { ok: false, error: later, kept };
+    const out = proposalToGroups(r.data).flatMap((g) => g.lines.map((l) => ({ style: String(l.style || ""), color: String(l.color || ""), sizes: Object.fromEntries(Object.entries(l.sizes || {}).filter(([, n]) => +n! > 0).map(([z, n]) => [z, Math.round(+n!)])) })));
+    if (!out.some((x) => Object.keys(x.sizes).length)) return { ok: false, error: later, kept };
+    return { ok: true, lines: out, kept };
+  } catch (e) { return fail(e); }
+}
+
+export type OldReorderSend = { rows: { gi: number; li: number; sizes: Record<string, number>; off?: boolean }[]; art: "same" | "new"; files: RqFile[]; changes?: string; notes?: string; due?: string | null };
+/** send it in: the sizes on the lines, the lines left off removed, their words for us; a request we price and send back */
+export async function sendOldReorder(orderId: string, s: OldReorderSend): Promise<Result & { number?: number }> {
+  try {
+    const { admin, order: o0, cust, email, supabase } = await myDraft(orderId);
+    const re = (o0 as Order & { simple_order?: { reorder?: { archived_id?: string; visual?: string } } | null }).simple_order?.reorder;
+    if (!re?.archived_id) return { ok: false, error: "This isn't a reorder." };
+    const groups = orderGroups(o0).map((g) => ({ ...g, lines: g.lines.map((l) => ({ ...l, sizes: {} as typeof l.sizes })) }));
+    const offNames: string[] = [];
+    const drop = new Set<string>();
+    for (const r of s.rows || []) {
+      const l = groups[r.gi]?.lines[r.li]; if (!l) continue;
+      if (r.off) { drop.add(l.id); offNames.push(`${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim()); continue; }
+      for (const [z, n] of Object.entries(r.sizes || {})) { const q = Math.max(0, Math.min(100000, Math.round(+n || 0))); if (q && (SIZES as readonly string[]).includes(z)) (l.sizes as Record<string, number>)[z] = q; }
+    }
+    const kept = groups.map((g) => ({ ...g, lines: g.lines.filter((l) => !drop.has(l.id)) })).filter((g) => g.lines.length);
+    if (!kept.length) return { ok: false, error: "Every style is unticked. Tick at least one to reorder." };
+    const qty = kept.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
+    const files = cleanFiles(s.files || [], cust.id, orderId);
+    const changes = String(s.changes || "").trim().slice(0, 3000), notes = String(s.notes || "").trim().slice(0, 3000);
+    if (!qty && !files.length && !changes && !notes) return { ok: false, error: "Add your sizes, or drop a file with them." };
+    const art = s.art === "new" ? "new" : "same";
+    if (art === "new" && !files.some((f) => f.kind === "art") && !changes) return { ok: false, error: "Add your new art, or tell us what's changing." };
+    await keepFiles(admin, orderId, files);
+    const due = s.due && /^\d{4}-\d{2}-\d{2}$/.test(s.due) ? s.due : null;
+    const about = [
+      `Reorder of #${re.visual} (our old system).`,
+      art === "same" ? "Same art as last time." : "New art: see their files.",
+      offNames.length ? `Not reordering: ${offNames.join("; ")}.` : "",
+      changes ? `Changes: ${changes}` : "",
+      notes ? `Notes: ${notes}` : "",
+    ].filter(Boolean).join("\n");
+    const { error: ue } = await admin.from("orders").update({
+      groups: kept, qty, ...(due ? { due_date: due } : {}),
+      notes: [o0.notes || "", changes ? `Changes: ${changes}` : "", notes ? `Notes: ${notes}` : ""].filter(Boolean).join("\n").slice(0, 4000),
+      simple_order: { about, qty, method: "", reorder: { ...re, art, changes, notes, off: offNames }, files: files.map((f) => ({ path: f.path, name: f.name, kind: f.kind })), at: new Date().toISOString(), by: email },
+    }).eq("id", orderId);
+    if (ue) return { ok: false, error: ue.message };
+    const { data: num, error: ce } = await supabase.rpc("order_commit", { p_id: orderId });
+    if (ce) return { ok: false, error: ce.message };
+    const number = Number(num) || o0.number;
+    const { error } = await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "request_submitted", detail: `Reorder of #${re.visual}: ${qty} pcs${offNames.length ? `, ${offNames.length} left off` : ""}${art === "new" ? ", new art" : ""}`, actor: email });
+    const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const settings = mergeSettings(st?.data);
+    if (SHOP_NOTIFY_EMAIL) await sendEmail({
+      to: SHOP_NOTIFY_EMAIL,
+      subject: `Reorder #${number} from ${cust.company || cust.name} (old job #${re.visual})`,
+      html: emailLayout(settings.shop.name, `Reorder #${number}`, `${cust.company || cust.name} reordered #${re.visual} from our old system (${qty} pcs${art === "new" ? ", new art" : ", same art"}). Finish it with Make the reorder on the order page.`, "Open it", `${siteUrl()}/shop/orders/${orderId}`),
+    });
+    revalidatePath("/portal");
+    return { ok: true, number };
   } catch (e) { return fail(e); }
 }

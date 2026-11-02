@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { Order, OrderCalc } from "@/lib/pricing";
 import { cardFix, printavoChanges, sigOf, type PvSnap } from "@/lib/printavoChanges";
 import { createClient } from "@/lib/supabase/client";
+import Overlay from "@/components/Overlay";
 
 /**
  * Send to Printavo (40,000-series orders, until Nov 2): asks for Printavo's status and the two dates, then makes the
@@ -195,7 +196,7 @@ export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: O
       </div>
       {err && <div className="err">{err}</div>}
       {resetMsg && <div className="banner">{resetMsg}</div>}
-      {reset && reset !== "loading" && (
+      {reset && reset !== "loading" && (<Overlay>
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="pvr-t">
           <div className="mk-modal">
             <h2 id="pvr-t">Reset #{reset.visualId} in Printavo?</h2>
@@ -216,7 +217,7 @@ export function PrintavoChanges({ o, calc, patch, prodNote, onProdNote }: { o: O
             </div>
           </div>
         </div>
-      )}
+      </Overlay>)}
       {noArt > 0 && <div className="pvc-art"><span>{noArt === 1 ? "The product line in Printavo has" : `${noArt} product lines in Printavo have`} no mockup, so the customer can&apos;t see the art on their invoice.</span><button type="button" className="btn primary sm" disabled={busy} onClick={pushArt}>Add mockups &amp; art</button></div>}
       {changes.length > 0 && <ul className="pvc-list">{changes.map((c) => <li key={c.key}><span><span className="pvc-what">{c.what}</span> {c.text}</span><span className="row" style={{ gap: 6 }}><button type="button" className="btn ghost sm" title="Keep ours; hidden until Printavo changes this again" onClick={() => ignore(c)}>Ignore</button>{(c.apply || c.note !== undefined) && <button type="button" className="btn sm" onClick={() => take([c])}>Accept</button>}</span></li>)}</ul>}
       {info.length > 0 && <ul className="pvc-info">{info.map((t, i) => <li key={i} className="faint">{t}</li>)}</ul>}
