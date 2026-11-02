@@ -1436,17 +1436,17 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             {actsOpen ? "Close" : "Actions"}
           </button>
           <span className="ed-br" aria-hidden />
-          {/* the next step first (Nov 1, Nick: "send to customer first… rethink it"): Send to customer, Convert to
-              invoice, Send to Printavo; then the menus: Documents, Production, Ask AI, More. On a phone the next steps are
-              full-width buttons and the menus sit two by two under them */}
+          {/* the next steps (Nov 1, Nick): Send to Printavo first, then Send to customer; no Convert to invoice ("that's
+              redundant… like in Printavo, all you do is drop down and change the status": the status menu above does it,
+              any invoice status makes it an invoice); then the menus: Documents, Production, Ask AI, More. On a phone the
+              next steps are full-width buttons and the menus sit two by two under them */}
           <span className="ed-main">
-          {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
-          {o.status === "quote" && <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send to customer" before={beforeSend} onDone={afterSend} />}
-          {o.type === "quote" && !pvStatusOf(o as never) && <button className="btn" type="button" onClick={() => setStatus("approved")}>Convert to invoice</button>}
           {/* a draft too (Oct 27, Nick: "we lost the send to Printavo button"): sending saves it first, which gives it its
               40,000-series number */}
           {(o.draft || (o.number >= 40000 && o.number < 50000)) && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
             <SendToPrintavo orderId={o.id} onSaved={o.draft ? commitDraft : save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
+          {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
+          {o.status === "quote" && <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send to customer" before={beforeSend} onDone={afterSend} />}
           </span>
           <span className="ed-menus">
           <details className="ot-more" onBlur={closeSoon}>
