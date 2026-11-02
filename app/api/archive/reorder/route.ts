@@ -7,6 +7,7 @@ import { aiState } from "@/lib/ai/claude";
 import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
 import type { EODraft } from "@/lib/emailOrderShared";
 import { isSupplierPaperwork, looksLikePaperwork } from "@/lib/paperwork";
+import { pvFileName, pvHandle } from "@/lib/printavoNames";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -38,13 +39,21 @@ export async function GET(req: Request) {
   type F = { full?: string; mime?: string; name?: string; thumb?: string };
   type D = { files?: F[]; groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; description?: string; items?: number; price?: number; sizes?: Record<string, number>; mockups?: F[] }[]; imprints?: { mockups?: F[]; details?: string; typeOfWork?: string }[] }[] };
   const d = (r.data || {}) as D, map = (r.files || {}) as Record<string, string>;
+  // the files' original names ("COUNTITALLJOYSCREEN-BACK.pdf"), looked up from Filestack like the job's page does
+  const handles = [...new Set(Object.keys(map).map(pvHandle).filter((h): h is string => !!h))];
+  const names: Record<string, string> = {};
+  for (let i = 0; i < handles.length; i += 150) {
+    const { data: nm } = await admin.from("printavo_file_names").select("handle, filename").in("handle", handles.slice(i, i + 150)).not("filename", "is", null);
+    for (const n of (nm || []) as { handle: string; filename: string }[]) names[n.handle] = n.filename;
+  }
   const out: ReorderFile[] = [], seen = new Set<string>();
   const add = (f: F, where: string, group: number) => {
     const path = f.full ? map[f.full] : "";
     if (!path || seen.has(path)) return;
     seen.add(path);
     const ext = (path.split(".").pop() || "").toLowerCase();
-    const nm = String(f.name || "").trim() || `${where.replace(/^On the /, "").replace(/ line$/, "")} file ${out.length + 1}.${ext}`;
+    const real = pvFileName({ url: f.full, name: f.name, path, names });
+    const nm = real && real !== "File" && !/^[A-Za-z0-9]{16,}\.\w+$/.test(real) ? real : `${where.replace(/^On the /, "").replace(/ line$/, "")} file ${out.length + 1}.${ext}`;
     out.push({ key: path, name: nm, path, thumb: (f.thumb && map[f.thumb]) || (/^(png|jpe?g|gif|webp)$/.test(ext) ? path : ""), mime: f.mime || "", where, group, guess: "", why: "" });
   };
   for (const f of d.files || []) add(f, "On the job", 0);
