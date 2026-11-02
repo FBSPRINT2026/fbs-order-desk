@@ -616,7 +616,18 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
     const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
     // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
     // following will just be on the main page")
-    body = <>
+    // one card like the dashboard's Your jobs (Nov 2, Nick: "the floating orders total… should be in the box… like the your
+    // jobs on the first page… there and then underneath it, what it is"): its header says which list and what it adds up to
+    const secT: Record<string, [string, string]> = {
+      all: ["All orders", `${allRows.length} order${allRows.length === 1 ? "" : "s"} and quotes`],
+      drafts: ["Drafts", "Not sent to us yet. Pick one up or discard it."],
+      sent: ["Sent to FBS", "We're checking these. You'll get a message when we confirm."],
+      quotes: ["Quotes", openQ ? `${openQ} waiting on you` : "Prices we've sent you"],
+      orders: ["Orders", `Total ${money(invoices.reduce((a, o) => a + o.total, 0))}`],
+      done: ["Completed", `${done.length} finished order${done.length === 1 ? "" : "s"}`],
+    };
+    body = <section className="aa-ocard">
+      <div className="aa-ocard-h"><h2>{secT[tab]?.[0] || "Orders"}</h2><span className="faint">{secT[tab]?.[1] || ""}</span></div>
       <div className="toolbar aa-otabs" data-toolbar>
         <div className="chips">
           {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}
@@ -669,7 +680,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
         <div className="aa-sec-h aa-sec-pad"><h3>Completed</h3></div>
         {orderTable(done, "invoice")}
       </>}
-    </>;
+    </section>;
   } else if (area === "orders" || area === "invoices") body = <>
     {tableHead(<><h2 className="aa-areat">Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={mode === "shop" && due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders")}
     {orderTable(invoices, "invoice")}</>;
