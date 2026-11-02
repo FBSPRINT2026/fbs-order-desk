@@ -1603,7 +1603,7 @@ a.as-ai{text-decoration:none}
      Oct 27, 2026 · PO 123 · Due when done     (of $600.00)
    the balance on the right; "of" the total only when part is paid; late ones in red. The printed page keeps the table */
 .st-ph{display:none}
-@media screen and (max-width:640px){
+@media screen and (max-width:820px){
   html body .st-tbl thead{display:none}
   html body .st-tbl,html body .st-tbl tbody,html body .st-tbl tfoot{display:block;width:100%}
   html body .st-tbl tbody tr{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:6px;row-gap:3px;padding:10px 0;border-bottom:1px solid #eef1f4}
@@ -17625,3 +17625,20 @@ body:has(.mk-modal-back, .cc-back) .pr-vis-stamp{z-index:0}
 .por-done p{margin:0;font-size:13.5px}
 .por-done-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center;font-size:14px;color:var(--ink)}
 @media (max-width:560px){.por{padding:14px}.por-grid col.por-c-z{width:42px}.por-n{height:30px;font-size:13px}}
+/* the price grids go compact by the room their box has, not the window (Nov 1 sweep: on a tablet the eight color columns
+   didn't fit and the grid scrolled sideways): no sideways scroll at any width */
+.pl-wrap{container-type:inline-size;overflow:hidden}
+@container (max-width:860px){
+  .pl-long{display:none}
+  .pl-short{display:inline}
+  .pl-tbl{font-size:12.5px}
+  .pl-tbl th,.pl-tbl td{padding:7px 6px}
+  .pl-tbl td small{display:none}
+  .pl-grid{table-layout:fixed}
+  .pl-grid th,.pl-grid td{padding:7px 2px;font-size:12px;text-align:center}
+  .pl-grid th:first-child{width:62px;padding-left:8px;text-align:left}
+  .pl-grid .pl-dol{display:none}
+  .pl-grid thead th{letter-spacing:0}
+}
+/* a statement's dates and amounts stay on one line (Nov 1 sweep: "Oct 27, 2026" wrapped a word per line on a tablet) */
+.st-tbl td:is(.st-d,.st-n,.st-b,.st-t,.st-pd){white-space:nowrap}
