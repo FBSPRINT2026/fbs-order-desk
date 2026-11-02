@@ -997,6 +997,37 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
 }
 
 /** Link a waiting shipment's lines to orders by hand (staff or the customer). `pick`: line id → order id. */
+/**
+ * Before someone puts a shipment on an order by hand (drag and drop, Pick an order… Save): does it fit? (Nov 2, Nick:
+ * "some sort of checker that goes like, hey, this doesn't match… hey, we show we received everything already"). What's
+ * not on the order at all, what's more than it still needs, and an order whose goods are already all in. Nothing is
+ * changed; the person can still link it.
+ */
+export async function linkCheck(admin: SupabaseClient, lineIds: string[], orderId: string): Promise<string[]> {
+  const { data } = await admin.from("supplier_manifest_lines").select("*").in("id", lineIds.slice(0, 500));
+  const lines = (data || []) as Line[];
+  const { data: o0 } = await admin.from("orders").select("customer_id, number").eq("id", orderId).maybeSingle();
+  if (!lines.length || !o0?.customer_id) return [];
+  const o = (await openOrders0(admin, [o0.customer_id])).find((x) => x.id === orderId);
+  if (!o) return [`#${o0.number} isn't an open order.`];
+  const out: string[] = [];
+  const needAll = o.items.reduce((a, it) => a + it.need, 0);
+  if (o.items.length && needAll <= 0) out.push(`#${o.number} already has all its goods: everything it needs is linked or here.`);
+  // by style + color: not on the order at all, or more than it still needs
+  const by = new Map<string, { style: string; color: string; qty: number; sizes: Map<string, number> }>();
+  for (const l of lines) { const k = `${l.style}|${l.color}`.toLowerCase(); const x = by.get(k) || { style: l.style, color: l.color, qty: 0, sizes: new Map() }; x.qty += l.qty_shipped; x.sizes.set(sizeKey(l.size), (x.sizes.get(sizeKey(l.size)) || 0) + l.qty_shipped); by.set(k, x); }
+  for (const x of by.values()) {
+    const its = o.items.filter((it) => (it.style ? styleEq(it.style, x.style) : true) && colorEq(it.color, x.color));
+    if (!its.length) { out.push(`${x.style} ${x.color} isn't on #${o.number}.`); continue; }
+    if (needAll > 0) {
+      const over: string[] = [];
+      for (const [z, q] of x.sizes) { const need = its.filter((it) => sameSize(it.size, z)).reduce((a, it) => a + it.need, 0); if (q > need) over.push(`${z} ${q} (needs ${need})`); }
+      if (over.length) out.push(`${x.style} ${x.color}: more than #${o.number} still needs: ${over.join(", ")}.`);
+    }
+  }
+  return out;
+}
+
 export async function linkByHand(admin: SupabaseClient, pick: { lineId: string; orderId: string }[], by: string, allowedCustomers?: string[], note = "") {
   const ids = pick.map((p) => p.lineId);
   const { data } = await admin.from("supplier_manifest_lines").select("*").in("id", ids).eq("kind", "");

@@ -18132,3 +18132,7 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .gis.gis-none{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-color:color-mix(in srgb,var(--ok) 35%,var(--line));background:color-mix(in srgb,var(--ok) 6%,var(--surface))}
 .gis-none b{font-family:var(--display);font-size:15px;color:var(--ink)}
 .gis-ok{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--ok);color:#fff;flex:none}
+.gdk-sure{width:min(480px,100%)}
+.gdk-sure h3{margin:0 0 2px;font-family:var(--display);font-size:18px}
+.gdk-sure ul{margin:4px 0 0;padding-left:18px;font-size:14px;color:var(--ink);display:flex;flex-direction:column;gap:4px}
+.gdk-sure li::marker{color:var(--warn)}

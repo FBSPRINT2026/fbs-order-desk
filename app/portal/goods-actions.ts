@@ -166,6 +166,19 @@ export async function linkToldShipment(ids: string[], orderId: string): Promise<
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
+/** Does this shipment fit the order (before a hand link)? Warnings to show; nothing is changed (lib/manifest.ts linkCheck). */
+export async function checkLink(lineIds: string[], orderId: string): Promise<{ ok: boolean; warnings: string[]; error?: string }> {
+  try {
+    const ctx = await getPortalCtx();
+    if (ctx.preview && !ctx.isStaff) return { ok: false, warnings: [], error: "This is a preview." };
+    const admin = createAdminClient();
+    const { data: o } = await admin.from("orders").select("customer_id").eq("id", orderId).maybeSingle();
+    if (!o || !ctx.customerIds.includes(o.customer_id)) return { ok: false, warnings: [], error: "We couldn't find that order." };
+    const { linkCheck } = await import("@/lib/manifest");
+    return { ok: true, warnings: await linkCheck(admin, lineIds, orderId) };
+  } catch (e) { return { ok: false, warnings: [], error: e instanceof Error ? e.message : String(e) }; }
+}
+
 export type ShipmentRead = { vendor: string; orderNo: string; carrier: string; tracking: string[]; boxes: number | null; eta: string; what: string; orderId: string; why: string };
 /**
  * "Shipping us something?": a dropped or pasted order confirmation / shipping email from any vendor (One Stop, Peter

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CARRIERS, carrierOf, GOODS, shipGroups, trackedGoods, trackingUrl, trackWord, type GoodsItem, type GoodsStatus } from "@/lib/goods";
 import type { PendingShipment } from "@/lib/manifest";
-import { readShipmentPaper, type SendGoods, type TrackingInput } from "@/app/portal/goods-actions";
+import { checkLink, readShipmentPaper, type SendGoods, type TrackingInput } from "@/app/portal/goods-actions";
 import { portalAttachUrl } from "@/app/portal/message-actions";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDateLong } from "@/lib/format";
@@ -72,7 +72,17 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
 
   // a shipment dragged onto an order links it there (Nov 2, Nick: "drag it up to… the orders to make it go there")
   const [drag, setDrag] = useState<string | null>(null), [over, setOver] = useState<string | null>(null), [dropMsg, setDropMsg] = useState("");
-  const linkTo = async (g: PendingShipment, orderId: string) => { const ids = g.lines.flatMap((l) => l.id.split(",")).filter(Boolean); const r = await linkIncoming(ids.map((lineId) => ({ lineId, orderId }))); if (r.ok) router.refresh(); return r; };
+  // a hand link is checked first (Nov 2, Nick: "hey, this doesn't match… hey, we show we received everything already…
+  // just something to ask them if they're sure"): any doubt asks before it's linked
+  const [sure, setSure] = useState<{ warnings: string[]; label: string; yes: () => void; no: () => void } | null>(null);
+  const askSure = (warnings: string[], label: string) => new Promise<boolean>((done) => setSure({ warnings, label, yes: () => { setSure(null); done(true); }, no: () => { setSure(null); done(false); } }));
+  const linkTo = async (g: PendingShipment, orderId: string): Promise<R> => {
+    const ids = g.lines.flatMap((l) => l.id.split(",")).filter(Boolean);
+    const c = await checkLink(ids, orderId).catch(() => null);
+    const o = rows.find((r) => r.it.order.id === orderId)?.it.order;
+    if (c?.ok && c.warnings.length && !(await askSure(c.warnings, `${g.supplier === "sanmar" ? "SanMar" : g.supplier === "ss" ? "S&S" : g.supplier} ${g.supplier_order} on #${o?.number || ""} ${o?.nickname || ""}`.trim()))) return { ok: false, error: "Not linked." };
+    const r = await linkIncoming(ids.map((lineId) => ({ lineId, orderId }))); if (r.ok) router.refresh(); return r;
+  };
   const linkToldTo = async (ids: string[], orderId: string): Promise<R> => { if (!linkTold) return { ok: false, error: "Couldn't link it." }; const r = await linkTold(ids, orderId); if (r.ok) router.refresh(); return r; };
   const dropOn = async (orderId: string) => {
     const key = drag; setDrag(null); setOver(null);
@@ -147,6 +157,16 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
       </div>
       {/* shipments not linked: their own box after a break, a header bar that says what to do, the violet bar down the
           side and a grip on each (Nov 2, Nick: "that line shouldn't fall in… a break there with some sort of bar") */}
+      {sure && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Are you sure?" onClick={sure.no}>
+          <div className="dla gdk-sure" onClick={(e) => e.stopPropagation()}>
+            <h3>Are you sure?</h3>
+            <p className="dla-sub" data-notranslate>{sure.label}</p>
+            <ul>{sure.warnings.map((w, k) => <li key={k}>{w}</li>)}</ul>
+            <div className="gdk-sg-acts"><button type="button" className="btn" onClick={sure.no}>Cancel</button><button type="button" className="btn primary" onClick={sure.yes}>Link it anyway</button></div>
+          </div>
+        </div>
+      )}
       {tell && <SendGoodsDialog orders={rows.filter((r) => !r.done).map((r) => ({ id: r.it.order.id, label: `#${r.it.order.number} ${r.it.order.nickname}` }))} canAct={canAct}
         send={sendGoods} onClose={() => setTell(false)} onDone={() => { setTell(false); router.refresh(); }} />}
       {notLinked > 0 && (
