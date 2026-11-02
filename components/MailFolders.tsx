@@ -13,6 +13,7 @@ import { cheerWin } from "@/components/Cheer";
 import { createClient } from "@/lib/supabase/client";
 import { useSaneBox } from "@/components/RoleContext";
 import { keepFolderEmail } from "@/app/shop/mail-actions";
+import { MAIL_CREATE_ORDER, SOON } from "@/lib/features";
 
 /**
  * Email beyond the Inbox (Oct 12): the folder list, a folder's emails, reading / replying / moving any email, and
@@ -875,7 +876,7 @@ export function FolderMail({ row, folders, onGone, toggleList, listOpen, back, f
               <TbBtn icon={TbIcon.replyAll} label="Reply all" disabled={!m} onClick={() => setRep("all")} />
             </TbGroup>
             <TbGroup label="Actions">
-              {!row.sent && <TbBtn icon={TbIcon.order} label={ordering ? "Opening…" : "Create order"} disabled={ordering} title="Make an order from this email, the same way as from the Inbox" onClick={() => void orderFrom(row)} />}
+              {!row.sent && <TbBtn icon={TbIcon.order} label={!MAIL_CREATE_ORDER ? "Create order · coming soon" : ordering ? "Opening…" : "Create order"} disabled={!MAIL_CREATE_ORDER || ordering} title={MAIL_CREATE_ORDER ? "Make an order from this email, the same way as from the Inbox" : SOON} onClick={() => void orderFrom(row)} />}
               {/* every email, any folder (Oct 26, Nick): put this person on a customer's contacts */}
               <TbBtn icon={TbIcon.person} label="Add to customer" title="Add this person as a contact at a customer (or make them a new customer)" onClick={() => openAddToCustomer(row.sent ? { email: row.to[0] || "", name: row.toNames?.[0] || "" } : { email: row.from, name: row.fromName })} />
             </TbGroup>

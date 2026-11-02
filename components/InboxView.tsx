@@ -34,6 +34,7 @@ import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import NewEmail from "@/components/NewEmail";
 import EmailChat from "@/components/EmailChat";
 import type { EmailAction } from "@/lib/ai/emailChat";
+import { MAIL_CREATE_ORDER, SOON } from "@/lib/features";
 
 /**
  * Inbox (reworked Oct 9, Nick: "it doesn't flow… too much information spread out… buttons in weird spots").
@@ -360,7 +361,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     }
     if (!id) { urlDone.current = true; return; }
     // ?order=1: open it with Create order already started (from a searched conversation)
-    if (sp.get("order")) setAutoOrder(id);
+    if (sp.get("order") && MAIL_CREATE_ORDER) setAutoOrder(id);
     // a customer email that isn't in the Inbox (any more): it's in Conversations
     if (mode === "mail") {
       if (ol === null) return;
@@ -1091,7 +1092,7 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
           phone={{ reply: m ? () => setWriting(true) : undefined, move: (to, label) => void move(to, label), here: "INBOX", folders, busy: busy === "mv", files,
             ask: { id: "inbox:" + i.id, who: i.from_name || i.from_email, onDraft: (d) => { setBody(d.body); if (d.cc?.length) setCc((c) => [...new Set([...c, ...d.cc!])]); setWriting(true); } },
             more: onKeep ? (close) => <PSec label="Actions">
-              <PTile icon={TbIcon.order} label="Create order" kind="primary" disabled={!!busy} onClick={() => { close(); onKeep("order"); }} />
+              <PTile icon={TbIcon.order} label={MAIL_CREATE_ORDER ? "Create order" : "Create order · coming soon"} kind={MAIL_CREATE_ORDER ? "primary" : undefined} disabled={!MAIL_CREATE_ORDER || !!busy} onClick={() => { close(); onKeep("order"); }} />
               <PTile icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => { close(); onKeep("goods"); }} />
               <PTile icon={TbIcon.person} label="Add to customer" disabled={!!busy} onClick={() => { close(); openAddToCustomer({ email: i.from_email, name: i.from_name }); }} />
             </PSec> : undefined }}
@@ -1115,7 +1116,7 @@ function LiveMail({ replyNow, i, older, folders, listOpen, toggleList, back, bus
             <MoveBar folders={folders} busy={busy === "mv"} here="INBOX" onMove={(to, label) => move(to, label)} />
             </TbRow>
             {onKeep && <TbRow line={2}><TbGroup label="Actions">
-              <TbBtn icon={TbIcon.order} label={busy === "keep" ? "Opening…" : "Create order"} disabled={!!busy} title="Bring this email into the portal and make an order from it" onClick={() => onKeep("order")} />
+              <TbBtn icon={TbIcon.order} label={!MAIL_CREATE_ORDER ? "Create order · coming soon" : busy === "keep" ? "Opening…" : "Create order"} disabled={!MAIL_CREATE_ORDER || !!busy} title={MAIL_CREATE_ORDER ? "Bring this email into the portal and make an order from it" : SOON} onClick={() => onKeep("order")} />
               <TbBtn icon={TbIcon.goods} label="Order goods" disabled={!!busy} onClick={() => onKeep("goods")} />
               <TbBtn icon={TbIcon.person} label="Add to customer" disabled={!!busy} title="Add this person as a contact at a customer (or make them a new customer)" onClick={() => openAddToCustomer({ email: i.from_email, name: i.from_name })} />
             </TbGroup></TbRow>}
@@ -1268,7 +1269,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
   function act(a: EmailAction) {
     // the Assistant's "Create the reorder…": the chooser opens with it on top, and with the email's orders when it
     // holds several (Oct 20, Nick: "I should be able to say… create reorder from this email")
-    if (a.kind === "create_order") { setSuggest({ label: a.label || "Create the order", told: a.told, job: a.job }); setPickOpen(true); }
+    if (a.kind === "create_order") { if (!MAIL_CREATE_ORDER) return; setSuggest({ label: a.label || "Create the order", told: a.told, job: a.job }); setPickOpen(true); }
     else if (a.kind === "reply") { if (a.subject) setSubject(a.subject); setBody(a.body); setPicked(-1); write(); }
     else if (a.kind === "file_under") { const o = orders.find((z) => z.number === a.order_number); if (o) void run("ord", () => setEmailOrder(x.id, o.id), `Filed under #${o.number}.`); else setErr(`#${a.order_number} isn't one of their open orders.`); }
     else if (a.kind === "no_reply") void run("nr", () => markNoReply(x.id), "Off your Needs reply list.");
@@ -1364,7 +1365,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             more: (close) => <>
               <PSec label="Actions">
                 {view === "order" ? <PTile icon={TbIcon.back} label="Back to the email" onClick={() => { close(); setView("mail"); }} />
-                  : <PTile icon={TbIcon.order} label={ordering ? "Back to the order" : "Create order"} kind="primary" disabled={!!busy} onClick={() => { close(); if (ordering) startOrder(); else setPickOpen(true); }} />}
+                  : <PTile icon={TbIcon.order} label={!MAIL_CREATE_ORDER ? "Create order · coming soon" : ordering ? "Back to the order" : "Create order"} kind={MAIL_CREATE_ORDER ? "primary" : undefined} disabled={!MAIL_CREATE_ORDER || !!busy} onClick={() => { close(); if (ordering) startOrder(); else setPickOpen(true); }} />}
                 <PTile icon={TbIcon.goods} label="Order goods" onClick={() => { close(); openOrderGoods(x.id); }} />
                 {x.customer_id ? <PTile icon={TbIcon.person} label="Customer" href={`/shop/customers/${x.customer_id}`} onClick={close} />
                   : <PTile icon={TbIcon.person} label="Add to customer" onClick={() => { close(); openAddToCustomer({ email: x.direction === "in" ? x.from_email : (x.to_email || "").split(",")[0].trim(), name: x.direction === "in" ? x.meta?.from_name : "" }); }} />}
@@ -1425,7 +1426,7 @@ function Detail({ x, who, reply, quote, needs, urgent, answered, focus, orders, 
             <TbRow line={2}>
             {/* Actions */}
             <TbGroup label="Actions">
-              {<TbBtn icon={TbIcon.order} label={ordering ? "Back to the order" : "Create order"} kind={orderish && !x.order_id ? "primary" : undefined} disabled={!!busy} onClick={() => (ordering ? startOrder() : setPickOpen(true))} title="New order or reorder: pick, then the AI reads the email and its attachments and fills in the order for you to check" />}
+              {<TbBtn icon={TbIcon.order} label={!MAIL_CREATE_ORDER ? "Create order · coming soon" : ordering ? "Back to the order" : "Create order"} kind={MAIL_CREATE_ORDER && orderish && !x.order_id ? "primary" : undefined} disabled={!MAIL_CREATE_ORDER || !!busy} onClick={() => (ordering ? startOrder() : setPickOpen(true))} title={MAIL_CREATE_ORDER ? "New order or reorder: pick, then the AI reads the email and its attachments and fills in the order for you to check" : SOON} />}
               <TbBtn icon={TbIcon.goods} label="Order goods" title="Order the goods for this from S&S, or email our S&S rep for a custom quote" onClick={() => openOrderGoods(x.id)} />
               {x.customer_id
                 ? <TbBtn icon={TbIcon.person} label="Customer" title="Customer profile: open this customer's page" onClick={() => { window.location.href = `/shop/customers/${x.customer_id}`; }} />
