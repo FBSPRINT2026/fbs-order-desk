@@ -17896,3 +17896,25 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .gdk-drop span{font-size:12px;color:var(--ink-3)}
 .gdk-drop.over,.gdk-drop:focus-visible{border-color:var(--accent);background:var(--accent-soft)}
 .gdk-readnote{font-size:12.5px;color:var(--ok);font-weight:600}
+/* Goods grouped (Nov 2, Nick): a colored bar down each group's left side, its name written up the bar */
+.gdk-list .gdk-bar .gdk-search{margin-left:auto}
+.gdk-tellcard{padding:12px 14px;border-bottom:1px solid var(--line);background:var(--surface)}
+.gdk-legend{display:flex;flex-wrap:wrap;gap:6px 16px;padding:8px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-2)}
+.gdk-legend span{display:inline-flex;align-items:center;gap:6px}
+.gdk-legend i{width:10px;height:10px;border-radius:2px;background:var(--gk)}
+.gdk-grp{--gk:var(--ink-3)}
+.g-here{--gk:var(--ok)}.g-way{--gk:var(--fbs-blue)}.g-info{--gk:#d97a00}.g-nl{--gk:var(--fbs-violet)}
+.gdk-grp{display:grid;grid-template-columns:34px minmax(0,1fr);border-bottom:1px solid var(--line)}
+.gdk-grp:last-child{border-bottom:0}
+.gdk-vbar{background:var(--gk);display:flex;align-items:center;justify-content:center;padding:12px 0}
+.gdk-vbar span{writing-mode:vertical-rl;transform:rotate(180deg);color:#fff;font:800 11px var(--body);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.gdk-grp-b{min-width:0}
+.gdk-grp .gdk-ord{border-bottom:1px solid var(--line-2,var(--line))}
+.gdk-grp .gdk-ord:last-child{border-bottom:0}
+.gdk-one{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12.5px;color:var(--ink-2);margin-top:6px}
+.gdk-mini{width:140px;height:5px;border-radius:99px;background:var(--surface-2);overflow:hidden;flex:none}
+.gdk-mini i{display:block;height:100%;background:var(--gk)}
+.gdk-nl-h{padding:10px 14px;font-size:12.5px;color:var(--ink-3);border-bottom:1px solid var(--line-2,var(--line))}
+.gdk-grp.gdk-help{background:var(--surface);border:0;border-radius:0}
+.gdk-grp .gdk-um:first-of-type{border-top:0}
+@media (max-width:640px){.gdk-grp{grid-template-columns:22px minmax(0,1fr)}.gdk-vbar span{font-size:10px}}

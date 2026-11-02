@@ -8,7 +8,6 @@ import { readShipmentPaper, type TrackingInput } from "@/app/portal/goods-action
 import { portalAttachUrl } from "@/app/portal/message-actions";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDateLong } from "@/lib/format";
-import { useSticky } from "@/lib/useSticky";
 
 type R = { ok: boolean; error?: string };
 const when = (d?: string | null) => (d ? fmtDateLong(d.slice(0, 10)).replace(/, \d{4}$/, "") : "");
@@ -27,7 +26,6 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
 }) {
   const router = useRouter();
   const chatHref = (id: string) => `/portal${qs ? qs + "&" : "?"}area=messages&c=${id}:goods`;
-  const [f, setF] = useSticky<"waiting" | "here" | "all">("portal.goodsFilter", "waiting");
   const [q, setQ] = useState("");
   const [addFor, setAddFor] = useState<string | null>(null);
 
@@ -42,7 +40,15 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
   const waiting = rows.filter((r) => !r.done), done = rows.filter((r) => r.done);
   const w = q.trim().toLowerCase().replace(/^#/, "");
   const hit = (r: (typeof rows)[number]) => !w || [String(r.it.order.number), r.it.order.nickname, r.it.goods.supplier_po || "", ...r.it.shipments.flatMap((s) => [s.tracking, s.note])].some((x) => String(x || "").toLowerCase().includes(w));
-  const list = (f === "waiting" ? waiting : f === "here" ? done : rows).filter(hit).sort((a, b) => Number(a.done) - Number(b.done) || (a.it.order.due_date || "9999").localeCompare(b.it.order.due_date || "9999"));
+  // every order, grouped by where its goods are, each group with a colored bar down its left side (Nov 2, Nick: "all
+  // orders by default… group them… a vertical color bar… here, in transit, waiting info… shipments not linked")
+  const byDue = (a: (typeof rows)[number], b: (typeof rows)[number]) => (a.it.order.due_date || "9999").localeCompare(b.it.order.due_date || "9999");
+  const shown = rows.filter(hit);
+  const GROUPS = [
+    { k: "here", label: "Here", list: shown.filter((r) => r.done).sort(byDue) },
+    { k: "way", label: "In transit", list: shown.filter((r) => !r.done && r.boxes > 0).sort(byDue) },
+    { k: "info", label: "Waiting info", list: shown.filter((r) => !r.done && !r.boxes).sort(byDue) },
+  ];
 
   // the numbers on top
   const onWay = [...rows.flatMap((r) => r.it.shipments.filter((s) => !(s.track_status === "delivered" || s.delivered_at))), ...incoming.flatMap((g) => g.tracking.filter((t) => !t.delivered))];
@@ -62,79 +68,74 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
   };
   const [tell, setTell] = useState(false);
 
+  const card = (r: (typeof rows)[number]) => {
+    const o = r.it.order, groups = shipGroups(r.it.shipments);
+    return (
+      <article key={o.id} className={"gdk-ord" + (drag ? " drop" : "") + (over === o.id ? " over" : "")}
+        onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(o.id); } }} onDragLeave={() => setOver((x) => (x === o.id ? null : x))} onDrop={(e) => { e.preventDefault(); void dropOn(o.id); }}>
+        <header className="gdk-oh">
+          <Link className="gdk-on" href={o.href}>#{o.number}</Link>
+          <b className="gdk-nm">{o.nickname || "Order"}</b>
+          {r.st !== "waiting" && r.st !== "on_way" && r.st !== "received" && <span className="gdk-pill" style={{ ["--gc" as string]: GOODS[r.st]?.c || "var(--ink-3)" }}>{GOODS[r.st]?.portal || r.st}</span>}
+          <span className="gdk-sp" />
+          {o.due_date && <span className="gdk-due">In hands {when(o.due_date)}</span>}
+        </header>
+        {r.boxes > 0 ? <div className="gdk-one">
+          <span className="gdk-mini"><i style={{ width: `${Math.min(100, Math.round((r.here / r.boxes) * 100))}%` }} /></span>
+          <span>{r.here >= r.boxes ? `All ${boxesOf(r.boxes)} here` : `${r.here} of ${boxesOf(r.boxes)} here${r.eta ? ` · arrives ${when(r.eta)}` : ""}`}{o.qty ? ` · ${pcsOf(o.qty)} on the order` : ""}</span>
+        </div> : <div className="gdk-none">We haven&apos;t seen a shipment for this order yet{o.qty ? ` · ${pcsOf(o.qty)} on the order` : ""}.</div>}
+        {groups.map((g, k) => <ShipLine key={k} g={g} />)}
+        <div className="gdk-acts">
+          {canAct && <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>{addFor === o.id ? "Close" : r.boxes ? "+ Tell us about another shipment" : "+ Tell us what's coming"}</button>}
+          <Link className="linkbtn" href={chatHref(o.id)}>Message us about these goods</Link>
+        </div>
+        {addFor === o.id && <TellUs orders={[{ id: o.id, label: `#${o.number} ${o.nickname}` }]} fixed add={addTracking} onDone={() => { setAddFor(null); router.refresh(); }} />}
+      </article>
+    );
+  };
+  const goTo = (k: string) => document.querySelector(`.gdk-grp.g-${k}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
   return (
     <div className="gdk">
       <div className="stats gdk-stats">
-        <button type="button" className="stat" onClick={() => setF("waiting")}><span className="k">On the way</span><span className="v">{boxesOf(onWayBoxes)}</span><small>{onWay.length ? "Tracked for you" : "Nothing in transit"}</small></button>
-        <button type="button" className="stat" onClick={() => setF("here")}><span className="k">Arrived this week</span><span className="v">{boxesOf(hereWeek)}</span><small>Checked in at FBS</small></button>
-        <button type="button" className="stat" onClick={() => setF("waiting")}><span className="k">Orders waiting on goods</span><span className="v">{waiting.length}</span><small>{waiting.filter((r) => r.here > 0).length ? `${waiting.filter((r) => r.here > 0).length} partly here` : "None partly here"}</small></button>
-        <button type="button" className="stat" onClick={() => document.querySelector(".gdk-help")?.scrollIntoView({ behavior: "smooth" })}><span className="k">Not linked</span><span className="v">{incoming.length}</span><small>{incoming.length ? "shipments to put on an order" : "Everything's on an order"}</small></button>
+        <button type="button" className="stat" onClick={() => goTo("way")}><span className="k">On the way</span><span className="v">{boxesOf(onWayBoxes)}</span><small>{onWay.length ? "Tracked for you" : "Nothing in transit"}</small></button>
+        <button type="button" className="stat" onClick={() => goTo("here")}><span className="k">Arrived this week</span><span className="v">{boxesOf(hereWeek)}</span><small>Checked in at FBS</small></button>
+        <button type="button" className="stat" onClick={() => goTo("info")}><span className="k">Orders waiting on goods</span><span className="v">{waiting.length}</span><small>{waiting.filter((r) => r.here > 0).length ? `${waiting.filter((r) => r.here > 0).length} partly here` : "None partly here"}</small></button>
+        <button type="button" className="stat" onClick={() => goTo("nl")}><span className="k">Shipments not linked</span><span className="v">{incoming.length}</span><small>{incoming.length ? "to put on an order" : "Everything's on an order"}</small></button>
       </div>
 
-      <div className="gdk-grid">
-        {/* the left-hand rail (Nov 2, Nick: "waiting on goods, all here, arrived… a left-hand panel"): what's listed, then the
-            shipments not on an order, then "shipping us something?" */}
-        <nav className="gdk-rail" aria-label="Goods">
-          {([["waiting", "Waiting on goods", waiting.length], ["here", "All here", done.length], ["all", "All orders", rows.length]] as const).map(([k, t, n]) => (
-            <button key={k} type="button" className={f === k ? "on" : ""} aria-pressed={f === k} onClick={() => setF(k)}><span>{t}</span><b>{n}</b></button>
-          ))}
-          <button type="button" className={"gdk-rail-nl" + (incoming.length ? " has" : "")} onClick={() => document.querySelector(".gdk-help")?.scrollIntoView({ behavior: "smooth" })}><span>Not linked</span><b>{incoming.length}</b></button>
-          <div className="gdk-rail-sep" />
-          <button type="button" className="gdk-rail-add" onClick={() => setTell(!tell)}>{tell ? "Close" : "+ Shipping us something?"}</button>
-          <div className="gdk-auto">S&amp;S and SanMar shipments show up here by themselves.</div>
-        </nav>
-
-        <div className="gdk-main">
-          {tell && (
-            <section className="aa-card gdk-tellcard">
-              <div className="gdk-tell-h"><b>Shipping us something?</b><span>From anywhere other than S&amp;S or SanMar: tell us and we&apos;ll watch for it.</span></div>
-              {canAct && rows.length ? <TellUs orders={(waiting.length ? waiting : rows).map((r) => ({ id: r.it.order.id, label: `#${r.it.order.number} ${r.it.order.nickname}` }))} add={addTracking} onDone={() => { setTell(false); router.refresh(); }} />
-                : <div className="gdk-sm">{canAct ? "No open orders to send goods for." : "Customers add shipments from their own login."}</div>}
-            </section>
-          )}
-
-          <div className="aa-card gdk-list">
-            <div className="toolbar gdk-bar">
-              <b className="gdk-list-t">{f === "waiting" ? "Waiting on goods" : f === "here" ? "All here" : "All orders"}</b>
-              <label className="aa-search gdk-search"><input type="search" placeholder="Search order, PO or tracking" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search goods" /></label>
-            </div>
-            {drag && <div className="gdk-dragtip">Drop it on the order it&apos;s for.</div>}
-            {dropMsg && <div className="gdk-dragtip bad">{dropMsg}</div>}
-            {list.map((r) => {
-              const o = r.it.order, groups = shipGroups(r.it.shipments);
-              return (
-                <article key={o.id} className={"gdk-ord" + (drag ? " drop" : "") + (over === o.id ? " over" : "")}
-                  onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(o.id); } }} onDragLeave={() => setOver((x) => (x === o.id ? null : x))} onDrop={(e) => { e.preventDefault(); void dropOn(o.id); }}>
-                  <header className="gdk-oh">
-                    <Link className="gdk-on" href={o.href}>#{o.number}</Link>
-                    <b className="gdk-nm">{o.nickname || "Order"}</b>
-                    <span className="gdk-pill" style={{ ["--gc" as string]: GOODS[r.st]?.c || "var(--ink-3)" }}>{GOODS[r.st]?.portal || r.st}</span>
-                    <span className="gdk-sp" />
-                    {o.due_date && <span className="gdk-due">In hands {when(o.due_date)}</span>}
-                  </header>
-                  {r.boxes > 0 ? <>
-                    <div className="gdk-bar2"><i style={{ width: `${Math.min(100, Math.round((r.here / r.boxes) * 100))}%` }} /></div>
-                    <div className="gdk-bt"><span>{r.here} of {boxesOf(r.boxes)} here{!r.done && r.eta ? ` · the rest arrives ${when(r.eta)}` : ""}</span>{o.qty ? <span>{pcsOf(o.qty)} on the order</span> : null}</div>
-                  </> : <div className="gdk-none">We haven&apos;t seen a shipment for this order yet{o.qty ? ` · ${pcsOf(o.qty)} on the order` : ""}.</div>}
-                  {groups.map((g, k) => <ShipLine key={k} g={g} />)}
-                  <div className="gdk-acts">
-                    {canAct && <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>{addFor === o.id ? "Close" : r.boxes ? "+ Tell us about another shipment" : "+ Tell us what's coming"}</button>}
-                    <Link className="linkbtn" href={chatHref(o.id)}>Message us about these goods</Link>
-                  </div>
-                  {addFor === o.id && <TellUs orders={[{ id: o.id, label: `#${o.number} ${o.nickname}` }]} fixed add={addTracking} onDone={() => { setAddFor(null); router.refresh(); }} />}
-                </article>
-              );
-            })}
-            {!list.length && <div className="aa-empty">{f === "waiting" ? "No orders are waiting on goods right now." : w ? `Nothing matches “${q}”.` : "Nothing here yet."}</div>}
-          </div>
-
-          {incoming.length > 0 && (
-            <section className="gdk-help">
-              <div className="gdk-help-h"><b>Shipments not linked</b><span>Your supplier shipped these to us, but we couldn&apos;t tell which order they&apos;re for. Drag one onto its order above, or pick it here.</span></div>
-              {incoming.map((g) => <Unmatched key={g.key} g={g} canAct={canAct} onDrag={(on) => { setDrag(on ? g.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkTo(g, orderId)} />)}
-            </section>
-          )}
+      <div className="aa-card gdk-list">
+        <div className="toolbar gdk-bar">
+          <b className="gdk-list-t">All orders</b>
+          <label className="aa-search gdk-search"><input type="search" placeholder="Search order, PO or tracking" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search goods" /></label>
+          <button type="button" className={"btn" + (tell ? "" : " primary")} onClick={() => setTell(!tell)}>{tell ? "Close" : "+ Shipping us something?"}</button>
         </div>
+        {tell && (
+          <section className="gdk-tellcard">
+            <div className="gdk-tell-h"><b>Shipping us something?</b><span>From anywhere other than S&amp;S or SanMar (those show up here by themselves): drop the confirmation and we&apos;ll watch for it.</span></div>
+            {canAct && rows.length ? <TellUs orders={(waiting.length ? waiting : rows).map((r) => ({ id: r.it.order.id, label: `#${r.it.order.number} ${r.it.order.nickname}` }))} add={addTracking} onDone={() => { setTell(false); router.refresh(); }} />
+              : <div className="gdk-sm">{canAct ? "No open orders to send goods for." : "Customers add shipments from their own login."}</div>}
+          </section>
+        )}
+        <div className="gdk-legend" aria-hidden><span><i className="g-here" />Here</span><span><i className="g-way" />In transit</span><span><i className="g-info" />Waiting info</span><span><i className="g-nl" />Shipments not linked</span></div>
+        {drag && <div className="gdk-dragtip">Drop it on the order it&apos;s for.</div>}
+        {dropMsg && <div className="gdk-dragtip bad">{dropMsg}</div>}
+        {GROUPS.filter((g) => g.list.length).map((g) => (
+          <section key={g.k} className={"gdk-grp g-" + g.k} aria-label={g.label}>
+            <div className="gdk-vbar"><span>{g.label} · {g.list.length}</span></div>
+            <div className="gdk-grp-b">{g.list.map(card)}</div>
+          </section>
+        ))}
+        {incoming.length > 0 && (
+          <section className="gdk-grp g-nl gdk-help" aria-label="Shipments not linked">
+            <div className="gdk-vbar"><span>Shipments not linked · {incoming.length}</span></div>
+            <div className="gdk-grp-b">
+              <div className="gdk-nl-h">Your supplier shipped these to us, but we couldn&apos;t tell which order they&apos;re for. Drag one onto its order above, or pick it here.</div>
+              {incoming.map((g) => <Unmatched key={g.key} g={g} canAct={canAct} onDrag={(on) => { setDrag(on ? g.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkTo(g, orderId)} />)}
+            </div>
+          </section>
+        )}
+        {!shown.length && !incoming.length && <div className="aa-empty">{w ? `Nothing matches “${q}”.` : "No orders with goods right now."}</div>}
       </div>
     </div>
   );
