@@ -135,16 +135,50 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
     setBusy("");
     if (got.length) void addDrop(got);
   }
+  /** drops that go together (Nov 1, Nick: "I dragged in three separate attachments from three different emails… it should
+   *  formulate them as one response"): files dropped one after another with nothing said in between are ONE ask. Each
+   *  drop waits a moment for the next; a drop while the last ones are still being read, or right after their answer
+   *  (nothing said since, nothing changed), asks again about all of them together, in place of that answer. */
+  const batch = useRef<null | { pics: DropPic[]; names: string[]; texts: string[]; round: number | null }>(null);
+  const batchT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inflight = useRef<AbortController | null>(null);
+  const askRef = useRef<typeof ask | null>(null);
   async function addDrop(fs: (File | Blob)[]) {
-    if (!fs.length || busy) return;
+    const live = !!batchT.current || !!inflight.current;
+    if (!fs.length || (busy && !live)) return;
     setErr("");
     void keepOnOrder(fs);
     let d;
     try { d = await readDrop(fs); } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't read that."); return; }
-    if (d.text) { void ask("change", { message: d.text, label: d.label, pics: d.pics }); return; }
-    if (!d.pics.length) { setErr("Drop a PDF, a picture, a snip or an email from Outlook."); return; }
-    if (!text.trim() && !drop.pics.length) { void ask("change", { message: `Dropped: ${d.names.join(", ")}`, label: `Dropped: ${d.names.join(", ")}`, pics: d.pics }); return; }
-    setDrop((x) => ({ pics: [...x.pics, ...d.pics].slice(0, 6), names: [...x.names, ...d.names] }));
+    if (!d.text && !d.pics.length) { setErr("Drop a PDF, a picture, a snip or an email from Outlook."); return; }
+    // something typed in the box: the files wait with it, and go when it's sent
+    if (!d.text && (text.trim() || drop.pics.length)) { setDrop((x) => ({ pics: [...x.pics, ...d.pics].slice(0, 10), names: [...x.names, ...d.names] })); return; }
+    const b = batch.current, lastR = rounds[rounds.length - 1];
+    const joins = !!b && (live || (b.round === rounds.length - 1 && !!lastR && !lastR.applied.length && !lastR.art.length));
+    const nb = joins && b ? b : { pics: [], names: [], texts: [], round: null };
+    nb.pics = [...nb.pics, ...d.pics].slice(0, 10);
+    nb.names = [...nb.names, ...(d.text ? [d.label || d.names[0] || "Email"] : d.names)];
+    if (d.text) nb.texts = [...nb.texts, d.text];
+    // its earlier answer goes: one answer for all of them
+    if (joins && b && b.round != null && !live) { const at = b.round; setRounds((rs) => rs.slice(0, at)); }
+    nb.round = null;
+    batch.current = nb;
+    inflight.current?.abort(); inflight.current = null;
+    const n = nb.names.length;
+    const label = n === 1 ? (nb.texts.length ? nb.names[0] : `Dropped: ${nb.names[0]}`) : `Dropped ${n} files:\n${nb.names.join("\n")}`;
+    setPending(label); setBusy("Reading it…");
+    if (batchT.current) clearTimeout(batchT.current);
+    batchT.current = setTimeout(() => {
+      batchT.current = null;
+      const cur = batch.current; if (!cur) return;
+      const many = cur.names.length > 1;
+      const message = [many ? `Dropped ${cur.names.length} files together, one after another: ${cur.names.join("; ")}. Read them as ONE drop and give ONE answer for all of them (each picture is labeled with its file).` : cur.texts.length ? "" : `Dropped: ${cur.names[0]}`, ...cur.texts].filter(Boolean).join("\n\n");
+      const ac = new AbortController(); inflight.current = ac;
+      void askRef.current?.("change", { message, label, pics: cur.pics, signal: ac.signal, batch: true }).then((ri) => {
+        if (inflight.current === ac) inflight.current = null;
+        if (batch.current === cur && typeof ri === "number") cur.round = ri;
+      });
+    }, 1500);
   }
   // Order resources (Oct 23, Nick: "keep the production documents… at the bottom… pops up and pops down… looking back at
   // the original documents at the same time… call that order resources, like the purchase order, the work order"):
@@ -269,7 +303,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
     void remakeMockups([...fixedGroups]);
   }
 
-  async function ask(m: "review" | "change", given?: { message: string; label?: string; pics?: DropPic[] }) {
+  async function ask(m: "review" | "change", given?: { message: string; label?: string; pics?: DropPic[]; signal?: AbortSignal; batch?: boolean }): Promise<number | void> {
+    if (!given?.batch) { batch.current = null; if (batchT.current) { clearTimeout(batchT.current); batchT.current = null; } }
     const pics = given?.pics ?? (m === "change" ? drop.pics : []);
     const said = given ? given.message : [text.trim(), !given && drop.pics.length ? `(Dropped: ${drop.names.join(", ")})` : ""].filter(Boolean).join(" ");
     const shown = given?.label || said;
@@ -278,10 +313,12 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
     setPending(m === "review" ? "Check it for me" : shown); if (m === "change" && !given) { setText(""); setDrop({ pics: [], names: [] }); }
     if (m === "change") await pageSaves(orderId);
     // with pictures: the chat's route (pictures run past a server action's 2 MB); else the action
-    const r = m === "change" && (pics.length || given) ? await fetch(`/api/orders/${orderId}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: said, earlier, images: pics.map((p) => ({ media_type: p.media_type, data: p.data })) }) })
+    const r = m === "change" && (pics.length || given) ? await fetch(`/api/orders/${orderId}/chat`, { method: "POST", signal: given?.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: said, earlier, images: pics.map((p) => ({ media_type: p.media_type, data: p.data, label: p.name })) }) })
       .then(async (x) => { const j = await x.json().catch(() => ({})) as { ok?: boolean; r?: FixResult; error?: string }; return j.ok && j.r ? { ok: true as const, r: j.r } : { ok: false as const, error: j.error || "The AI didn't answer. Try again." }; })
-      .catch(() => ({ ok: false as const, error: "Couldn't reach the AI. Check the connection and try again." }))
+      .catch(() => ({ ok: false as const, error: given?.signal?.aborted ? "" : "Couldn't reach the AI. Check the connection and try again." }))
       : await aiOrderFix(orderId, m === "change" ? said : "", m, earlier);
+    // more was dropped while this was read: the new ask (about all of them) answers instead
+    if (given?.signal?.aborted) return;
     setBusy(""); setPending(null);
     if (!r.ok) { setErr(r.error); if (m === "change" && !given) setText(text || said); return; }
     const x = r.r;
@@ -298,7 +335,9 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
       void load();
     }
     if (x.lesson) setLesson({ on: true, text: x.lesson });
+    return ri;
   }
+  askRef.current = ask;
 
   async function makeSuggested() {
     if (!last) return;
@@ -435,7 +474,8 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
                 {isLast && didSome && !working && <p className="bub-q">Does everything look right now?</p>}
                 {/* a question: one tap to answer it (yes, or which group) */}
                 {isLast && !busy && !didSome && !r.suggest.length && /\?/.test(r.reply || "") && (() => { const gs = o.groups.filter((g) => g.lines.length).map((g, k) => g.name || `Group ${k + 1}`); return (
-                  <div className="orv-ans">{["Yes, do it", ...gs.map((g) => `Put them on ${g}`), gs.length ? "Make a new group" : "All in one new group"].map((q) => <button key={q} type="button" className="chip" onClick={() => void ask("change", { message: q })}>{q}</button>)}</div>); })()}
+                  <div className="orv-ans">{(/^Dropped \d+ files/.test(r.you) ? ["Yes, add them all", "All in one group", "A group for each", ...gs.map((g) => `Put them on ${g}`)]
+                    : [/^Dropped/.test(r.you) ? "Yes, add them" : "Yes, do it", ...gs.map((g) => `Put them on ${g}`), gs.length ? "Make a new group" : "All in one new group"]).map((q) => <button key={q} type="button" className="chip" onClick={() => void ask("change", { message: q })}>{q}</button>)}</div>); })()}
               </div>
             </div>
           );
@@ -468,7 +508,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
             placeholder={rounds.length ? "Anything else?" : "Tell me what to change"} aria-label="What to change" />
           <input ref={fileIn} type="file" hidden multiple accept="image/*,application/pdf,.pdf,.msg" onChange={(e) => { void addDrop([...(e.target.files || [])]); e.target.value = ""; }} />
-          <button type="button" className="orv-att" onClick={() => fileIn.current?.click()} disabled={!!busy} aria-label="Add a PDF, a picture or an email" title="Add a PDF, a picture or an email from Outlook (or drop it anywhere on this panel, or paste a snip)">📎</button>
+          <button type="button" onClick={() => fileIn.current?.click()} disabled={!!busy && !batchT.current && !inflight.current} aria-label="Add a PDF, a picture or an email" title="Add a PDF, a picture or an email from Outlook (or drop it anywhere on this panel, or paste a snip)" className="mic orv-att"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></svg></button>
           <MicButton target={() => box.current} append keepListening off={!!busy} label="Say what to change (click again when you're done)" />
           <button type="button" className="orv-send" onClick={send} disabled={!!busy || (!text.trim() && !drop.pics.length)} aria-label="Make the changes" title="Make the changes (Enter)">↑</button>
         </div>

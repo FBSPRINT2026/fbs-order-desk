@@ -4,7 +4,7 @@
  * Outlook… and just drop it in"): pictures made small enough to send, a PDF's pages as pictures (only the pages it has),
  * and an Outlook email (.msg) read into its words plus its attachments' pictures. One reader for every drop box.
  */
-export type DropPic = { media_type: "image/jpeg"; data: string; url: string };
+export type DropPic = { media_type: "image/jpeg"; data: string; url: string; /** the file it came from (a PDF's page: "x.pdf p2") */ name?: string };
 export type DropRead = { pics: DropPic[]; names: string[]; /** an Outlook email's words, for the AI */ text?: string; /** what the chat shows for it */ label?: string };
 
 /** a picture made small enough to send (longest side 2000px, JPEG on white) */
@@ -39,9 +39,9 @@ export async function readDrop(fs: (File | Blob)[]): Promise<DropRead> {
     const pics: DropPic[] = [], other: string[] = [];
     for (const a of m.attachments.slice(0, 6)) {
       const b = new Blob([a.data as BlobPart], { type: a.type || (/\.pdf$/i.test(a.name) ? "application/pdf" : "") });
-      if (isPdf(b, a.name)) pics.push(...(await pdfPics(b)));
+      if (isPdf(b, a.name)) pics.push(...(await pdfPics(b)).map((x, k, all) => ({ ...x, name: all.length > 1 ? `${a.name} p${k + 1}` : a.name })));
       // the little pictures in a signature aren't attachments anyone sent on purpose
-      else if (isPic(b, a.name)) { if (a.data.length < 15_000 && /image0\d+|outlook|logo/i.test(a.name)) continue; const p = await shrinkPic(b); if (p) pics.push(p); }
+      else if (isPic(b, a.name)) { if (a.data.length < 15_000 && /image0\d+|outlook|logo/i.test(a.name)) continue; const p = await shrinkPic(b); if (p) pics.push({ ...p, name: a.name }); }
       else other.push(a.name);
     }
     const text = [`Dropped an email from Outlook.`, `From: ${m.from}${m.fromEmail ? ` <${m.fromEmail}>` : ""}`, m.to ? `To: ${m.to}` : "", m.cc ? `Cc: ${m.cc}` : "", `Subject: ${m.subject}`, "", m.body.slice(0, 5000),
@@ -51,8 +51,8 @@ export async function readDrop(fs: (File | Blob)[]): Promise<DropRead> {
   const pics: DropPic[] = [], names: string[] = [];
   for (const f of fs.slice(0, 4)) {
     const nm = (f as File).name || "";
-    if (isPdf(f, nm)) { const ps = await pdfPics(f); if (ps.length) { pics.push(...ps); names.push(nm || "PDF"); } }
-    else if (isPic(f, nm)) { const p = await shrinkPic(f); if (p) { pics.push(p); names.push(nm || "Snip"); } }
+    if (isPdf(f, nm)) { const ps = await pdfPics(f); if (ps.length) { pics.push(...ps.map((x, k) => ({ ...x, name: ps.length > 1 ? `${nm || "PDF"} p${k + 1}` : nm || "PDF" }))); names.push(nm || "PDF"); } }
+    else if (isPic(f, nm)) { const p = await shrinkPic(f); if (p) { pics.push({ ...p, name: nm || "Snip" }); names.push(nm || "Snip"); } }
   }
   return { pics: pics.slice(0, 6), names };
 }
