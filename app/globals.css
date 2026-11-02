@@ -18588,3 +18588,10 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* the Message Center's list in two parts: Job related, then General messages (Nov 2, Nick) */
 .jmb-grp+.jmb-grp{margin-top:10px}
 .jmb-grp-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink-2);margin:0 0 6px 2px}
+/* the department buttons are gray until picked; the picked one lights up in its color, no ring (Nov 2, Nick) */
+.jc-dpt .prf-dept,.jc-dpt .prf-dept.embroidery,.jc-dpt .prf-dept.heat{background:var(--surface-2);color:var(--ink-3);opacity:1;box-shadow:none}
+.jc-dpt .prf-dept:hover{background:var(--surface-3);color:var(--ink-2)}
+.jc-dpt .prf-dept.on{background:var(--fbs-blue);color:#fff;box-shadow:none}
+.jc-dpt .prf-dept.embroidery.on{background:var(--danger)}
+.jc-dpt .prf-dept.heat.on{background:var(--warn)}
+.jc-dpt .prf-dept.z:not(.on){opacity:.55}
