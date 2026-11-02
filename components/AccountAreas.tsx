@@ -401,7 +401,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
             {homeTop}
             {due > 0.004 && (
               <button type="button" className="pd-act pay" onClick={() => go("payments")}>
-                <span className="ic"><Ico d={I.dollar} size={20} /></span><span><b>Pay {money(due)}</b><small>{overdue > 0.004 ? `${money(overdue)} past due` : "Balance on your orders"}</small></span>
+                <span className="ic"><Ico d={I.dollar} size={20} /></span><span><b>Pay {money(due)}</b><small>Balance on your orders</small></span>
               </button>
             )}
           </div>
@@ -432,7 +432,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
             <div className="pd-card pd-glance">
               <button type="button" onClick={() => go("orders")}><b>{inWork.length}</b><span>In progress</span></button>
               <button type="button" onClick={() => go("quotes")}><b>{openQ.length}</b><span>Quotes to review</span></button>
-              <button type="button" className={overdue > 0.004 ? "late" : ""} onClick={() => go("payments")}><b>{money(due)}</b><span>{overdue > 0.004 ? "Due (some late)" : "Balance due"}</span></button>
+              <button type="button" onClick={() => go("payments")}><b>{money(due)}</b><span>Balance</span></button>
             </div>
             <div className="pd-card">
               <div className="pd-card-h"><h3>Your orders</h3><button type="button" className="pd-link" onClick={() => go("orders")}>See all</button></div>
@@ -498,7 +498,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
         {/* the order page's summary card (Oct 21, Nick: "a common theme") */}
         <div className="stats">
           <button type="button" className="stat" onClick={() => setOrdF("all")}><span className="k">In the works</span><span className="v">{active.length} job{active.length === 1 ? "" : "s"}{sentQ.length ? ` · ${sentQ.length} quote${sentQ.length === 1 ? "" : "s"}` : ""}</span><small>{nextDue ? `Next due ${when(nextDue.due_date)} · #${nextDue.number}` : active.length ? "No in-hands dates yet" : "Nothing in progress"}</small></button>
-          <button type="button" className="stat money-only" onClick={() => go("payments")}><span className="k">Balance</span><span className={"v" + (overdue > 0.004 ? " alert" : "")}>{due > 0.004 ? money(due) : "Paid up"}</span><small>{due > 0.004 ? `${owedList.length && owedList.length <= 3 ? owedList.map((o) => "#" + o.number).join(", ") : `${owedList.length} invoices`}${overdue > 0.004 ? ` · ${money(overdue)} overdue` : terms ? ` · ${terms}` : ""}` : terms || "Nothing owed"}</small></button>
+          <button type="button" className="stat money-only" onClick={() => go("payments")}><span className="k">Balance</span><span className="v">{due > 0.004 ? money(due) : "Paid up"}</span><small>{due > 0.004 ? `${owedList.length && owedList.length <= 3 ? owedList.map((o) => "#" + o.number).join(", ") : `${owedList.length} invoices`}${terms ? ` · ${terms}` : ""}` : terms || "Nothing owed"}</small></button>
           <button type="button" className="stat" onClick={() => lastOrder && router.push(orderHref(lastOrder.id))}><span className="k">Last order</span><span className="v">{lastOrder ? when(dayOf(lastOrder)) : "None yet"}</span><small>{lastOrder ? `#${lastOrder.number} · ${dd(t0, dayOf(lastOrder))} days ago` : ""}</small></button>
           <button type="button" className="stat" onClick={() => setOrdF("completed")}><span className="k">Orders about</span><span className="v">{every || "Not enough orders"}</span><small>{nextAround ? (nextAround < t0 ? `Due for one: ${dd(t0, nextAround)} days past usual` : `Next one around ${when(nextAround)}`) : ""}</small></button>
           <button type="button" className="stat money-only" onClick={() => setOrdF("completed")}><span className="k">Sales this year</span><span className="v">{money(sales(yr))}</span><small>{`${lastYr} ${money(sales(lastYr))} · all time ${money(invoices.reduce((a, o) => a + o.total, 0))}`}{firstYr ? ` since ${firstYr}` : ""}</small></button>

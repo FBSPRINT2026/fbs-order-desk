@@ -111,15 +111,13 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         <section className="pdx-card pdx-stmt">
           <div className="pdx-h"><h2>Payments</h2><Link href={pay.href} className="pd-link">Payment history</Link></div>
           <div className="pdx-stmt-top">
-            <div className={"pdx-stmt-due" + (pay.due > 0.004 ? (pay.pastDue > 0.004 ? " late" : " owe") : " ok")}>
-              <small>Balance due</small><b>{money(pay.due)}</b>
-              <span>{pay.due <= 0.004 ? "All paid up. Thank you!" : pay.pastDue > 0.004 ? `${money(pay.pastDue)} is past due` : "Nothing past due"}</span>
+            {/* just the balance (Nov 2, Nick: "take the past due off… take red off"): no aging boxes, no red */}
+            <div className={"pdx-stmt-due" + (pay.due > 0.004 ? " owe" : " ok")}>
+              <small>Balance</small><b>{money(pay.due)}</b>
+              <span>{pay.due <= 0.004 ? "All paid up. Thank you!" : "Pay one, several or all of them on Payments."}</span>
             </div>
             <div className="pdx-stmt-acts">{pay.due > 0.004 && <Link className="btn primary" href={pay.href}>Pay now</Link>}<a className="btn" href={pay.statementHref}>Statement</a></div>
           </div>
-          {pay.due > 0.004 && pay.aging && <div className="pdx-aging">{pay.aging.map((a) => (
-            <div key={a.k} className={a.late && a.amt > 0.004 ? "late" : a.amt > 0.004 ? "has" : ""}><span>{a.k}</span><b>{money(a.amt)}</b></div>
-          ))}</div>}
           <div className="pdx-stmt-meta"><span>Terms <b>{pay.terms}</b></span>{pay.last && <span>Last payment <b>{pay.last}</b></span>}</div>
         </section>
         {/* on hold, under Payments (Oct 24, Nick: "where tracking is right now… let that be the on hold, need your attention") */}
