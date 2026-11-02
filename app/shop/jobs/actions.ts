@@ -78,3 +78,43 @@ export async function jobPanel(orderId: string) {
     return { ok: true as const, detail, rows };
   } catch (e) { return fail(e); }
 }
+
+/** The Job Center's messages (lib/jobChats.ts): every conversation a customer wrote in, the last 60 days. */
+export async function loadJobChats() {
+  try {
+    const { admin } = await me();
+    const { loadChats } = await import("@/lib/jobChats");
+    return { ok: true as const, chats: await loadChats(admin) };
+  } catch (e) { return fail(e); }
+}
+
+/** One conversation; opening it marks the customer's messages in it read. */
+export async function jobChatThread(key: string, markRead = true) {
+  try {
+    const { admin } = await me();
+    const { loadThread, markThreadRead } = await import("@/lib/jobChats");
+    if (markRead) await markThreadRead(admin, key);
+    return { ok: true as const, messages: await loadThread(admin, key) };
+  } catch (e) { return fail(e); }
+}
+
+/**
+ * Reply from the Job Center. It shows in the customer's portal Messages (and live on their order page). No email for now
+ * (Nov 2, Nick: "all email notifications are off for just now"); the order page's message box still emails as before.
+ */
+export async function jobChatSend(key: string, body: string) {
+  try {
+    const { admin, email } = await me();
+    const text = String(body || "").trim().slice(0, 5000);
+    if (!text) return { ok: false as const, error: "Write a message first." };
+    const { parseKey } = await import("@/lib/jobChats");
+    const p = parseKey(key);
+    const { mergeSettings } = await import("@/lib/pricing");
+    const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const shop = mergeSettings(s?.data).shop.name;
+    const row = p.orderId ? { order_id: p.orderId, topic: p.topic } : { customer_id: p.customerId };
+    const { error } = await admin.from("messages").insert({ ...row, author_type: "staff", author_email: email, author_name: shop, body: text });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}

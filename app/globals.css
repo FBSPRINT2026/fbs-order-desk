@@ -18311,3 +18311,79 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .pjt-hold{position:relative;color:var(--danger)!important;font-weight:700}
 .pjt-badge{position:absolute;top:-10px;right:-10px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--danger);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;box-shadow:0 0 0 2px var(--surface)}
 .pjt .chips.pjt-r{overflow:visible}
+/* the On hold / All group sits at the far right of the jobs' toolbar, its count a big red badge beside the words
+   (Nov 2, Nick: arrow to the right; the badge was clipped when it sat on the corner) */
+.pdx .pjt{display:flex!important;width:100%}
+.pdx .pjt>.chips.pjt-r{margin-left:auto!important}
+.pdx .pjt .pjt-badge{position:static;margin-left:6px;box-shadow:none;min-width:22px;height:22px}
+
+/* Job Center as browser tabs joined to the panel under them, with customer messages on the left (Nov 2, Nick: "like tabs
+   in a browser… the two panels fuse together… messages on the left and the jobs list on the right") */
+.jct{display:flex;align-items:flex-end;gap:6px;position:relative;z-index:1;padding:0 2px;flex-wrap:nowrap}
+.jct-tab{position:relative;margin-bottom:-1px;border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;background:var(--surface-2);padding:8px 6px 10px;filter:saturate(.55);opacity:.92;transition:filter .15s,opacity .15s}
+.jct-tab:hover{filter:none;opacity:1}
+.jct-tab.on{background:var(--surface);filter:none;opacity:1;z-index:2;padding-bottom:13px;border-color:var(--line)}
+.jct-tab.on::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:3px;background:var(--surface)}
+.jct>.jc-g{flex:var(--n) 1 0;min-width:min-content;border-top:3px solid var(--c)}
+.jct-hbtn{all:unset;box-sizing:border-box;cursor:pointer;width:100%}
+.jct-all{all:unset;box-sizing:border-box;cursor:pointer;flex:.9 1 0;min-width:110px;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;margin-bottom:-1px;border:1px solid var(--line);border-bottom:0;border-radius:12px 12px 0 0;background:var(--surface-2);padding:8px 6px 10px;filter:saturate(.55);opacity:.92}
+.jct-all::before{content:"";position:absolute;left:-1px;right:-1px;top:-1px;height:3px;border-radius:12px 12px 0 0;background:var(--fbs-fade)}
+.jct-all.on{background:var(--surface);filter:none;opacity:1;z-index:2;padding-bottom:13px}
+.jct-all.on::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:3px;background:var(--surface)}
+.jct-big{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:18px;font-weight:800;color:#fff;background:var(--fbs-fade)}
+.jct-new{position:absolute;top:6px;right:8px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--danger);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;z-index:2}
+.jct-new::before{content:"💬";font-size:10px;margin-right:3px}
+.jct-new{display:inline-flex;align-items:center}
+.jct-body{grid-template-columns:290px minmax(0,1fr);margin-top:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;gap:12px}
+.jct-body.first{border-top-left-radius:0}
+.jct-body.has-pick{grid-template-columns:270px minmax(0,1fr) 400px}
+.jct-body>.jc-list{border:0;box-shadow:none;background:none}
+.jct-body>.jc-list>.panel-b{padding:0}
+.jc-msgn{display:inline-block;margin-left:6px;font-size:11.5px;font-weight:700;color:var(--fbs-blue);background:color-mix(in srgb,var(--fbs-blue) 12%,var(--surface));border-radius:999px;padding:1px 7px;white-space:nowrap}
+table.tbl.jc tr.jc-hl td{background:color-mix(in srgb,var(--fbs-blue) 8%,var(--surface))}
+table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
+/* the messages column */
+.jcm{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-top:3px solid var(--c);border-radius:var(--r);background:var(--surface);overflow:hidden;align-self:start;position:sticky;top:12px;max-height:calc(100vh - 24px)}
+.jcm-h{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line-2)}
+.jcm-h b{font-family:var(--display);font-size:15px}
+.jcm-n{font-size:12px;font-weight:800;color:#fff;background:var(--danger);border-radius:999px;padding:1px 8px}
+.jcm-list{overflow:auto;min-height:0;flex:0 1 auto;max-height:46vh}
+.jcm-none{padding:14px 12px;font-size:13px}
+.jcm-c{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:30px minmax(0,1fr) 10px;gap:9px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line-2);cursor:pointer}
+.jcm-c:hover{background:var(--surface-2)}
+.jcm-c.on{background:color-mix(in srgb,var(--c) 10%,var(--surface));box-shadow:inset 3px 0 0 var(--c)}
+.jcm-av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;font-weight:800;color:#fff;background:var(--tc,var(--c))}
+.jcm-m{min-width:0;display:flex;flex-direction:column;gap:1px}
+.jcm-top{display:flex;align-items:baseline;gap:6px;justify-content:space-between}
+.jcm-top b{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jcm-top small{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.jcm-q{font-size:13.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jcm-c.new .jcm-q{color:var(--ink);font-weight:600}
+.jcm-j{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jcm-tag{font-weight:700;color:var(--tc,var(--ink-3))}
+.jcm-dot{width:9px;height:9px;border-radius:50%;background:var(--fbs-blue)}
+.jcm-t{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-top:2px solid var(--line);background:var(--surface-2);min-height:0}
+.jcm-th{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.jcm-th b{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jcm-msgs{display:flex;flex-direction:column;gap:6px;max-height:32vh;overflow:auto}
+.jcm-b{display:flex;flex-direction:column;max-width:88%;gap:2px}
+.jcm-b span{padding:6px 10px;border-radius:12px;font-size:13.5px;line-height:1.35;white-space:pre-wrap;overflow-wrap:anywhere}
+.jcm-b small{font-size:11px;color:var(--ink-3)}
+.jcm-b.customer{align-self:flex-start}.jcm-b.customer span{background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:4px}
+.jcm-b.staff{align-self:flex-end}.jcm-b.staff span{background:var(--fbs-blue);color:#fff;border-bottom-right-radius:4px}
+.jcm-quick{display:flex;gap:5px;flex-wrap:wrap}
+.jcm-quick button{all:unset;cursor:pointer;font-size:12px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;background:var(--surface);color:var(--ink-2)}
+.jcm-quick button:hover{border-color:var(--fbs-blue);color:var(--fbs-blue)}
+.jcm-in{display:flex;gap:6px}
+.jcm-in input{flex:1;min-width:0;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface)}
+.jcm-err{margin:0;font-size:12.5px;color:var(--danger)}
+@media (max-width:1180px){.jct-body,.jct-body.has-pick{grid-template-columns:260px minmax(0,1fr)}}
+@media (max-width:900px){.jct{flex-wrap:wrap}.jct-body,.jct-body.has-pick{grid-template-columns:minmax(0,1fr)}.jcm{position:static;max-height:none}}
+/* the live message pop-up (components/ChatPing.tsx) */
+.cpg{position:fixed;right:18px;bottom:18px;z-index:90;display:flex;flex-direction:column;gap:8px;width:min(330px,calc(100vw - 36px))}
+.cpg-card{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--fbs-blue);border-radius:10px;box-shadow:0 8px 24px rgba(20,29,43,.18);padding:10px 12px;display:flex;flex-direction:column;gap:6px;animation:cpg-in .25s ease-out}
+.cpg-t{font-size:13.5px;color:var(--ink)}
+.cpg-q{font-size:13px;color:var(--ink-2)}
+.cpg-a{display:flex;gap:6px}
+@keyframes cpg-in{from{transform:translateY(12px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.cpg-card{animation:none}}

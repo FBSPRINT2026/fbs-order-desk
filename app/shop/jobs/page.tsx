@@ -5,8 +5,10 @@ import SearchInput from "@/components/SearchInput";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import { ST } from "@/lib/pricing";
 import type { Dept, JobItem, Step, Track } from "@/lib/jobCenter";
-import { loadJobs, notAJob, undoDeclined } from "./actions";
-import JobPanel, { StartHere } from "./JobPanel";
+import { loadJobChats, loadJobs, notAJob, undoDeclined } from "./actions";
+import JobPanel from "./JobPanel";
+import JobChats from "./JobChats";
+import type { ChatSummary } from "@/lib/jobChats";
 import { useUrlSearch } from "@/lib/useUrlSearch";
 
 /**
@@ -74,9 +76,20 @@ export default function JobCenter() {
   const [more, setMore] = useState<Record<string, boolean>>({}); // sections opened past their first few
   const [n, setN] = useState(0);
   const [lead, setLead] = useState<JobItem | null>(null);
+  // customer messages (Nov 2, Nick): the conversations, and the one open under them
+  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const [chat, setChat] = useState<string | null>(null);
+  const [cn, setCn] = useState(0);
 
-  // a link straight to a step (the old Incoming Orders and Proof Center pages open here)
-  useEffect(() => { try { const s = new URL(window.location.href).searchParams.get("step") as Step | null; if (s && ALL_STEPS.includes(s)) setStep(s); } catch { /* */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // a link straight to a step (the old Incoming Orders and Proof Center pages open here), or to a conversation (the
+  // live message pop-up's Open chat)
+  useEffect(() => { try { const u = new URL(window.location.href).searchParams; const s = u.get("step") as Step | null; if (s && ALL_STEPS.includes(s)) setStep(s); const c = u.get("chat"); if (c) { setAll(true); setChat(c); } } catch { /* */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    let live = true;
+    const get = () => void loadJobChats().then((r) => { if (live && r.ok) setChats(r.chats); });
+    get(); const t = setInterval(get, 30_000);
+    return () => { live = false; clearInterval(t); };
+  }, [cn]);
   useEffect(() => {
     let live = true;
     void loadJobs().then((r) => { if (!live) return; if (!r.ok) { setErr(r.error); return; } setItems(r.items); setMe(r.me); setHasAcc(r.hasAccounts); });
@@ -114,14 +127,27 @@ export default function JobCenter() {
     }).filter((x) => x.steps.length);
   }, [items, dept, q, mine, me, cameBack]); // eslint-disable-line react-hooks/exhaustive-deps
   const allCount = sections.reduce((a, x) => a + x.rows.length, 0);
+  // the tabs (Nov 2, Nick: "like tabs in a browser… the two panels fuse together"): All, then each group; the open one
+  // joins the panel under it, which holds that tab's messages (left) and its jobs (right)
+  const curG = all ? null : GROUPS.find((g) => g.steps.some((x) => x[0] === step)) || null;
+  const byOrder = useMemo(() => new Map((items || []).filter((it) => it.orderId).map((it) => [it.orderId!, it])), [items]);
+  const myChats = chats.filter((c) => !mine || !c.owner || c.owner === me);
+  const inGroup = (c: ChatSummary, g: G) => { const it = c.orderId ? byOrder.get(c.orderId) : null; return !!it && it.steps.some((s0) => g.steps.some((x) => x[0] === s0)); };
+  const tabChats = curG ? myChats.filter((c) => inGroup(c, curG)) : myChats;
+  const newIn = (g: G | null) => (g ? myChats.filter((c) => inGroup(c, g)) : myChats).reduce((a, c) => a + c.unread, 0);
+  const tagOf = (c: ChatSummary) => {
+    const g = GROUPS.find((x) => inGroup(c, x));
+    if (g) return { t: g.t, c: g.c };
+    return c.orderId ? { t: ST[c.status]?.label || "Order", c: "var(--ink-3)" } : { t: "General", c: "var(--ink-3)" };
+  };
+  const unreadOf = (orderId?: string) => (orderId ? chats.filter((c) => c.orderId === orderId).reduce((a, c) => a + c.unread, 0) : 0);
+  const chatOrder = chat ? chats.find((c) => c.key === chat)?.orderId || null : null;
 
   return (
     <>
       <div className="page-head">
-        <div><h1>Job Center</h1><div className="eyebrow">Every job before production: where it is and what&apos;s next</div></div>
+        <div><h1>Job Center</h1><div className="eyebrow">Every job before production, and what customers are saying about it</div></div>
         <div className="jc-hd-r">
-          <button type="button" className={"chip" + (all ? " on" : "")} aria-pressed={all} title="Every job from Requests to Declined at once" onClick={() => { const on = !all; setAll(on); setPick(null); if (on) { setDept("all"); setCameBack(false); setQ(""); } }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01" /></svg> View all</button>
           {hasAcc && <div className="chips" role="group" aria-label="Whose jobs">
             {([[true, "My accounts"], [false, "Everyone"]] as const).map(([k, l]) => <button key={l} type="button" className={"chip" + (mineOn === k ? " on" : "")} aria-pressed={mineOn === k} onClick={() => setMine(k)}>{l}</button>)}
           </div>}
@@ -129,26 +155,29 @@ export default function JobCenter() {
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
-      <section className="panel">
-        <div className="panel-b">
-          <div className="jc-groups" role="tablist" aria-label="Steps">
-            {GROUPS.map((g) => (
-              <div key={g.t} className="jc-g" style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
-                <div className="jc-gh"><b>{g.t}</b><span>{g.line}</span></div>
-                <div className="jc-st">
-                  {g.steps.length > 1 && <div className="dgz-rail" aria-hidden />}
-                  {g.steps.map(([k, l, icon]) => { const nn = count(k); const c = colorOf(k); return (
-                    <button key={k} type="button" role="tab" aria-selected={all ? k !== "leads" : step === k} className={"dgz-stn" + ((all ? k !== "leads" : step === k) ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => go(k)}>
-                      <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (items && !nn ? " z" : "")}>{items ? nn : "…"}</span></span>
-                      <span className="dgz-nm">{l}</span>
-                    </button>); })}
-                </div>
-              </div>
-            ))}
+      <div className="jct" role="tablist" aria-label="Steps">
+        <button type="button" role="tab" aria-selected={all} className={"jct-tab jct-all" + (all ? " on" : "")} onClick={() => { setAll(true); setPick(null); setDept("all"); setCameBack(false); }}>
+          <span className="jc-gh"><b>All</b><span>Every job and message</span></span>
+          <span className="jct-big">{items ? allCount : "…"}</span>
+          {newIn(null) > 0 && <span className="jct-new" title={`${newIn(null)} new message${newIn(null) === 1 ? "" : "s"}`}>{newIn(null)}</span>}
+        </button>
+        {GROUPS.map((g) => { const on = curG?.t === g.t; const nm = newIn(g); return (
+          <div key={g.t} role="tab" aria-selected={on} className={"jct-tab jc-g" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
+            <button type="button" className="jc-gh jct-hbtn" onClick={() => go(g.steps[0][0])}><b>{g.t}</b><span>{g.line}</span></button>
+            {nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}
+            <div className="jc-st">
+              {g.steps.length > 1 && <div className="dgz-rail" aria-hidden />}
+              {g.steps.map(([k, l, icon]) => { const nn = count(k); const c = colorOf(k); return (
+                <button key={k} type="button" className={"dgz-stn" + (!all && step === k ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => go(k)}>
+                  <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (items && !nn ? " z" : "")}>{items ? nn : "…"}</span></span>
+                  <span className="dgz-nm">{l}</span>
+                </button>); })}
+            </div>
           </div>
-        </div>
-      </section>
-      <div className={"jc-body" + (picked ? " has-pick" : "")}>
+        ); })}
+      </div>
+      <div className={"jc-body jct-body" + (picked ? " has-pick" : "") + (all ? " first" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
+        <JobChats chats={tabChats} open={chat} onOpen={setChat} color={curG?.c || "var(--fbs-blue)"} label={curG ? curG.t : "All"} onSent={() => setCn((x) => x + 1)} tagOf={curG ? undefined : tagOf} />
         <section className="panel jc-list">
           <div className="panel-b stack" style={{ gap: 12 }}>
             <div className="toolbar" data-toolbar>
@@ -164,7 +193,7 @@ export default function JobCenter() {
                 <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
                 <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [
                   <tr key={x.g.t} className="jc-sec" style={{ ["--c" as string]: x.g.c }}><td colSpan={5}><i aria-hidden /><b>{x.g.t}</b> · {x.counts.filter(([, n]) => n).map(([k, n]) => `${GROUPS.flatMap((g) => g.steps).find((y) => y[0] === k)![1]} ${n}`).join(" · ")}</td></tr>,
-                  ...(open ? x.rows : x.rows.slice(0, 5)).map(({ it, s: st }) => <Row key={it.key} it={it} step={st} wide on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />),
+                  ...(open ? x.rows : x.rows.slice(0, 5)).map(({ it, s: st }) => <Row key={it.key} it={it} step={st} wide msgs={unreadOf(it.orderId)} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />),
                   ...(open ? [] : [<tr key={x.g.t + "+"} className="jc-more"><td colSpan={5}><button type="button" className="linkbtn" onClick={() => setMore((m) => ({ ...m, [x.g.t]: true }))}>+ {x.rows.length - 5} more in {x.g.t.toLowerCase()}</button></td></tr>]),
                 ]; })}</tbody>
               </table></div>
@@ -173,15 +202,14 @@ export default function JobCenter() {
                 <thead><tr>{step === "leads" ? <><th>Lead</th><th>Came in</th><th /></>
                   : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
                   : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></>}</tr></thead>
-                <tbody>{shown.map((it) => <Row key={it.key} it={it} step={step} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />)}</tbody>
+                <tbody>{shown.map((it) => <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />)}</tbody>
               </table></div>
             )}
           </div>
         </section>
-        <aside className="jc-side" aria-label={picked ? "The job" : "Where to start"}>
-          {picked ? <JobPanel key={picked.key + n} it={picked} step={step} after={after} onClose={() => setPick(null)} onLead={() => setLead(picked)} onUndo={() => void undoDeclined(picked.orderId!).then((r) => after(r.ok ? "Back on the Job Center." : r.error))} />
-            : <StartHere items={[...base, ...flagged.filter((x) => !base.includes(x) && x.steps.includes("sewouts")).map((x) => ({ ...x, steps: ["sewouts"] as Step[] }))].filter(inDept)} loading={!items} mine={mine} go={go} />}
-        </aside>
+        {picked && <aside className="jc-side" aria-label="The job">
+          <JobPanel key={picked.key + n} it={picked} step={step} after={after} onClose={() => setPick(null)} onLead={() => setLead(picked)} onUndo={() => void undoDeclined(picked.orderId!).then((r) => after(r.ok ? "Back on the Job Center." : r.error))} />
+        </aside>}
       </div>
       {/* Make a job: the one Create order tool (components/tools/CreateOrderTool.tsx), the same as on emails and ClickUp jobs */}
       {lead?.activityId && <CreateOrderTool activityId={lead.activityId} text={lead.leadText || lead.title} onClose={() => { setLead(null); setN((x) => x + 1); }} onCreated={(_, num) => after(`Order #${num} made.`)} />}
@@ -189,11 +217,11 @@ export default function JobCenter() {
   );
 }
 
-function Row({ it, step, wide, on, onPick, after, onLead }: { it: JobItem; step: Step; /** View all: every row in the same five columns */ wide?: boolean; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void }) {
+function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false }: { it: JobItem; step: Step; /** View all: every row in the same five columns */ wide?: boolean; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void; /** new customer messages on it */ msgs?: number; /** its conversation is open */ hl?: boolean }) {
   const [busy, setBusy] = useState(false);
   const here = it.tracks.filter((t) => forStep(step, t)), also = it.tracks.filter((t) => !forStep(step, t));
   const tag = (t: Track, i: number) => <span key={i} className="pill" style={{ ["--sc" as string]: TONE[t.state] }}><span className="pill-t">{t.label}</span></span>;
-  const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b><div className="sub">{it.title}</div></>;
+  const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b>{msgs > 0 && <span className="jc-msgn" title={`${msgs} new message${msgs === 1 ? "" : "s"}`}>💬 {msgs}</span>}<div className="sub">{it.title}</div></>;
   const keys = { tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(); } }, "aria-selected": on };
   if (it.type === "lead") return (
     <tr className={on ? "on" : ""} onClick={onPick} {...keys}>
@@ -208,7 +236,7 @@ function Row({ it, step, wide, on, onPick, after, onLead }: { it: JobItem; step:
     ? <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td><td><span className="pill" style={{ ["--sc" as string]: "var(--ink-3)" }}><span className="pill-t">Declined</span></span>{it.declined && <div className="sub">{it.declined}</div>}</td><td /><td className="nowrap">{day(it.at)}</td></tr>
     : <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td>{it.declined || <span className="faint">No reason given</span>}</td><td className="nowrap">{day(it.at)}</td></tr>;
   return (
-    <tr className={on ? "on" : ""} onClick={onPick} {...keys}>
+    <tr className={(on ? "on" : "") + (hl ? " jc-hl" : "")} onClick={onPick} {...keys}>
       <td>{who}</td>
       <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
       <td>{step === "requests" ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
