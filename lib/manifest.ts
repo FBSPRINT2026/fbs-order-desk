@@ -216,6 +216,22 @@ export function abbrevHit(po: string, names: string[], nickname: string): boolea
 }
 
 /**
+ * A job's name in a PO, the way customers write it into their supplier POs: glued, in capitals, with codes around it
+ * ("DH-WH-TAKEHEART-1075" for "Take Heart", "DH-BC-MAKESAWAY-750" for "He Makes a Way", "DH-WH-BLESSING-IVORY" for
+ * "Blessing Tee"). A PO word of 6+ letters that's the job's name run together (or a run of 2+ of its words), or one of its
+ * own 6+ letter words. Words that say nothing about a job (tee, shirt, order, staff…) don't count.
+ */
+export function jobNameHit(nickname: string, po: string): boolean {
+  const pw = words(po).filter((w) => /^[a-z]+$/.test(w) && w.length >= 6 && !GENERIC.test(w));
+  if (!pw.length) return false;
+  const nw = words(nickname).filter((w) => /^[a-z]+$/.test(w));
+  if (!nw.length) return false;
+  const runs = new Set<string>();
+  for (let i = 0; i < nw.length; i++) for (let j = i + 1; j <= nw.length; j++) { const r = nw.slice(i, j).join(""); if (r.length >= 6 && (j - i >= 2 || !GENERIC.test(r))) runs.add(r); }
+  return pw.some((w) => runs.has(w));
+}
+
+/**
  * A PO one typo away from the order's: the same letter codes and a number off by one digit ("LYL 092425" for the job
  * "Lyles MS Theatre Arts - LYL 092426"). Numbers of 4+ digits only, so short numbers can't collide.
  */
@@ -549,6 +565,14 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     if (!byNum.length && numbered >= Math.max(2, orders.length * 0.5) && !orders.some((o) => nearPoHit(o, g.customer_po, true)))
       return { ...empty, how: `PO number ${pr.join(", ")} isn't on any of their open jobs yet` };
   }
+  // the job's name written into the PO (Nov 2, Nick: Dear Heart's "DH-WH-TAKEHEART-1075" is #40362 Take Heart,
+  // "DH-BC-MAKESAWAY-750" is #40361 He Makes a Way): an order whose name is in the PO, and the goods are what it needs.
+  // One such order: linked. Several (two jobs of the same name): split by what each needs, linked only when that's sure
+  const named = orders.filter((o) => jobNameHit(o.nickname, g.customer_po));
+  if (named.length) {
+    const an = allocate(lines, named);
+    if (an.alloc.length && !an.unplaced.length) return { customerId, ...an, auto: named.length === 1 || an.sure, how: named.length === 1 ? `the job's name is in the PO (${g.customer_po} → #${named[0].number} ${named[0].nickname}) and the goods are what it needs` : `the job's name is in the PO on ${named.length} jobs, split by what each needs` };
+  }
   // a PO one typo off one order's ("LYL 092425" for "LYL 092426"), and the goods fit it: that order
   const near = orders.filter((o) => nearPoHit(o, g.customer_po, true));
   if (near.length === 1) {
@@ -785,8 +809,9 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
     const had = g.lines.some((l) => l.suggest_order_id || l.suggest_archived_id);
     const p = await planShipment(admin, g).catch(() => null);
     if (!p) continue;
-    // the AI has a say on this one: only a sure rule link replaces it
-    if (isAiGuess(g) && !(p.auto && !p.unplaced.length)) continue;
+    // the AI has a say on this one: only a sure rule link replaces it, unless its job isn't open any more (Nov 2: guesses
+    // made before the reorders existed pointed at jobs already printed, and held the shipments there)
+    if (isAiGuess(g) && !(p.auto && !p.unplaced.length) && !(await staleGuess(admin, g))) continue;
     // nothing fits any more (e.g. the PO's job number isn't entered yet): drop an old guess so nobody OKs a wrong job
     if (!p.alloc.length && had) { await admin.from("supplier_manifest_lines").update({ suggest_order_id: null, suggest_archived_id: null, suggest_how: p.how || "" }).in("id", g.lines.map((l) => l.id)); continue; }
     if (p.customerId && g.lines.some((l) => !l.customer_id)) await admin.from("supplier_manifest_lines").update({ customer_id: p.customerId }).in("id", g.lines.map((l) => l.id));
@@ -986,6 +1011,13 @@ export type { Waiting, Line as ManifestRow };
 /** a guess the AI made (the rules leave these alone; the AI pass revisits them) */
 export const AI_TAG = "🤖 AI";
 const isAiGuess = (g: Group<Waiting>) => g.lines.some((l) => (l.suggest_how || "").startsWith(AI_TAG));
+/** a guess whose job is done (completed, or an old Printavo job) or gone: nothing to hold the shipment for */
+async function staleGuess(admin: SupabaseClient, g: Group<Waiting>): Promise<boolean> {
+  const id = g.lines.find((l) => l.suggest_order_id)?.suggest_order_id;
+  if (!id) return true;
+  const { data } = await admin.from("orders").select("status").eq("id", id).maybeSingle();
+  return !data || data.status === "completed" || data.status === "void";
+}
 
 /**
  * Remember how staff linked a shipment (picked by hand, or OK'd a guess), with their note on why: the AI matcher reads
