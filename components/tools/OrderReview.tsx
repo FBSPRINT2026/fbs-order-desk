@@ -523,25 +523,28 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
 
 /** the AI order helper on the right, open on the pages of ITS order (Nov 1, Nick: "if you navigate away from an order,
  *  the AI order helper should close… don't lose your status. Next time you open that order back up, it should pop up
- *  where you were"): the order's page and anything opened for it (the Mockup Creator with ?order=, a page with ?chat=).
+ *  where you were"): the order's page and a page opened for it with ?chat= (Create order's new tab).
  *  Elsewhere it's put away, not closed: each order's open helper is kept for this tab (and its conversation with the
  *  order), so opening that order again brings it back as it was. Close for now / Yes, it's right put it away for good. */
-const DOCK_KEY = "fbs:orderCheck";
+// its own name (Nov 1: it shared "fbs:orderCheck:<id>" with the conversation kept for the tab, which wrote over it, so
+// the panel opened for no order, asking for order "undefined", stuck on "Opening the order…")
+const DOCK_KEY = "fbs:orderDock";
 /** the next steps of an order made a part at a time (Create order → Other options): how to read the job again, what's in */
 export type NextSteps = { ctx: PartialCtx; done: PartKind[] };
 type DockState = { orderId: string; did?: string[]; /** made from one of several orders in this email */ from?: { activity: string }; steps?: NextSteps };
 const dockKey = (id: string) => `${DOCK_KEY}:${id}`;
-const readDock = (id: string): DockState | null => { try { const x = sessionStorage.getItem(dockKey(id)); return x ? (JSON.parse(x) as DockState) : null; } catch { return null; } };
+const readDock = (id: string): DockState | null => { try { const x = sessionStorage.getItem(dockKey(id)); const d = x ? (JSON.parse(x) as DockState) : null; return d && d.orderId === id ? d : null; } catch { return null; } };
 export function openOrderCheck(orderId: string, did?: string[], from?: { activity: string }, steps?: NextSteps) {
   const st: DockState = { orderId, did, ...(from ? { from } : {}), ...(steps ? { steps } : {}) };
   try { sessionStorage.setItem(dockKey(orderId), JSON.stringify(st)); } catch { /* */ }
   window.dispatchEvent(new CustomEvent("fbs:order-check", { detail: st }));
 }
-/** the order a page is about: /shop/orders/<id>…, or ?order= / ?chat= (the Mockup Creator, Create order's full form) */
+/** the order a page is about: /shop/orders/<id>…, or ?chat= (Create order's full form). Not the Mockup Creator (Nov 1,
+ *  Nick: the panel "just opened" there): it comes back when the order page is opened again */
 function orderHere(path: string) {
   const m = /^\/shop\/orders\/([0-9a-f-]{36})/i.exec(path || "");
   if (m) return m[1];
-  try { const q = new URLSearchParams(window.location.search), id = q.get("order") || q.get("chat") || ""; return /^[0-9a-f-]{36}$/i.test(id) ? id : null; } catch { return null; }
+  try { const id = new URLSearchParams(window.location.search).get("chat") || ""; return /^[0-9a-f-]{36}$/i.test(id) ? id : null; } catch { return null; }
 }
 
 export function OrderCheckDock() {
@@ -557,7 +560,7 @@ export function OrderCheckDock() {
       const q = new URLSearchParams(window.location.search), id = q.get("chat") || "", em = q.get("email") || "";
       if (/^[0-9a-f-]{36}$/i.test(id) && !readDock(id)) sessionStorage.setItem(dockKey(id), JSON.stringify({ orderId: id, ...(/^[0-9a-f-]{36}$/i.test(em) ? { from: { activity: em } } : {}) }));
     } catch { /* */ }
-    const on = (e: Event) => { const d = (e as CustomEvent<DockState | null>).detail; askedOn.current = d ? window.location.pathname : null; setSt(d); };
+    const on = (e: Event) => { const d = (e as CustomEvent<DockState | null>).detail; const ok = d && /^[0-9a-f-]{36}$/i.test(String(d.orderId || "")) ? d : null; askedOn.current = ok ? window.location.pathname : null; setSt(ok); };
     window.addEventListener("fbs:order-check", on);
     return () => window.removeEventListener("fbs:order-check", on);
   }, []);
