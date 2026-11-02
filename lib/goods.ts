@@ -94,6 +94,10 @@ export const CARRIERS = ["UPS", "FedEx", "USPS", "DHL", "S&S freight", "SanMar",
 /** Wholesale jobs whose goods matter: from the moment the order is sent in (request) until it's completed. */
 export const needsGoods = (o: { price_type?: string | null; type: string; status: string; submitted_at?: string | null }) =>
   o.price_type === "wholesale" && o.status !== "completed" && o.status !== "quote" && !(o.status === "request" && !o.submitted_at);
+/** what the customer is asked about in their portal: not once it's printing or done (Nov 2 portal check: an order "In
+ *  production" still said "Send the garments for this job and add the tracking") */
+export const customerSendsGoods = (o: { price_type?: string | null; type: string; status: string; submitted_at?: string | null }) =>
+  needsGoods(o) && !["production", "ready", "completed", "void"].includes(o.status);
 
 /**
  * Which supplier order a shipment belongs to, from the line the supplier's manifest writes on it ("SanMar order

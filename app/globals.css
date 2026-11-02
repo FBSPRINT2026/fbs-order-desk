@@ -17647,3 +17647,10 @@ body:has(.mk-modal-back, .cc-back) .pr-vis-stamp{z-index:0}
 html body .pr .pr-scr.pr-sup{display:flex!important;flex-wrap:wrap;align-items:center!important;gap:4px 12px!important}
 html body .pr .pr-scr.pr-sup > .check{white-space:nowrap}
 html body .pr .pr-scr.pr-sup > .faint{flex:1 1 180px;min-width:0}
+/* a goods card in a side panel (the portal order page): its status goes under the title instead of squeezing it to a
+   word per line (Nov 2 portal check) */
+.gc-h{flex-wrap:wrap}
+.gc-h > .gc-t{flex:1 1 150px}
+.gc-st{max-width:100%;white-space:normal;line-height:1.35}
+/* statuses never wrap (the kit's rule; Nov 2 portal check: "Awaiting your approval" broke onto two lines in Orders) */
+.aa-tbl .aa-pill{white-space:nowrap;max-width:none}

@@ -2,7 +2,7 @@ import PortalGoods from "@/components/PortalGoods";
 import BackLink from "@/components/BackLink";
 import { termsPct } from "@/lib/payTerms";
 import { StarOrder } from "@/components/PortalDashBits";
-import { needsGoods } from "@/lib/goods";
+import { customerSendsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
 import { proofViewed } from "@/lib/proofs";
 import { notFound, redirect } from "next/navigation";
@@ -10,7 +10,7 @@ import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ImprintSpecs from "@/components/ImprintSpecs";
 import PortalArtView from "@/components/PortalArtView";
-import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
+import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
@@ -73,7 +73,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const waitingOn = olk?.id ? ((await orderSteps(createAdminClient(), olk.id))?.steps || []).filter((x) => x.state === "todo") : [];
   const payments = (p.data || []) as Payment[];
   const proofs = await signProofs((pr.data || []) as Proof[]);
-  const goodsHere = needsGoods(o as never) ? await loadGoodsItems(createAdminClient(), [o] as never, "customer", (x) => `/portal/orders/${x}${ctx.preview ? `?as=${ctx.preview.id}` : ""}`) : [];
+  const goodsHere = customerSendsGoods(o as never) ? await loadGoodsItems(createAdminClient(), [o] as never, "customer", (x) => `/portal/orders/${x}${ctx.preview ? `?as=${ctx.preview.id}` : ""}`) : [];
   // the mockup they made comes with the order (Oct 24, Nick: "it doesn't show the art, even though they're the ones that
   // created it… it should just come along with it"): its shirts, from their Mockup Creator mockup or their own file
   // the mockup FBS made shows too once it's a real order (Oct 24, Nick on the order page: "Can't see the art"); a quote
@@ -185,7 +185,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             <div className="muted">We&apos;ll check your garments and artwork, price everything and send it back here for your final OK. Questions? Send us a message below.</div>
           </div>
         )}
-        {o.status === "quote_sent" && <QuoteApproval orderId={o.id} total={money(c.total)} terms={ctx.settings.shop.terms} disabled={preview} defaultName={ctx.customers.find((x) => x.id === o.customer_id)?.name || ""} />}
+        {/* one way to approve: the review page when there is one (the "Waiting on you" box above), else here */}
+        {o.status === "quote_sent" && !waitingOn.some((x) => x.kind === "quote") && <QuoteApproval orderId={o.id} total={money(c.total)} terms={[termsText(terms, o.delivery_method === "pickup"), /deposit|balance|due|pay/i.test(ctx.settings.shop.terms || "") ? "" : ctx.settings.shop.terms].filter(Boolean).join(" ")} disabled={preview} defaultName={ctx.customers.find((x) => x.id === o.customer_id)?.name || ""} />}
         {o.approved_at && <div className="muted" style={{ fontSize: 13 }}>Quote approved{o.approved_name ? <> by <b>{o.approved_name}</b></> : null} on {fmtStamp(o.approved_at)}.</div>}
 
         {pendingProofs.length > 0 && (

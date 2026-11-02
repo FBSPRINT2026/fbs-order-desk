@@ -1,4 +1,5 @@
 "use client";
+import { fmtPhone } from "@/lib/phone";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mySavedMethods, removeSavedMethod, setStaffCharge, staffConsentWords, type SavedPM } from "@/app/portal/pay-actions";
@@ -140,7 +141,7 @@ function People({ customerId, preview, shopName }: { customerId: string; preview
                 <tr key={p.id}>
                   <td><b>{p.name || "—"}</b>{p.main && <span className="ps-tag">Main</span>}{p.you && <span className="ps-tag you">You</span>}{p.title && <div className="sub">{p.title}</div>}</td>
                   <td data-notranslate>{p.email}</td>
-                  <td className="nw">{p.phone}</td>
+                  <td className="nw">{fmtPhone(p.phone)}</td>
                   <td className="ppl-acts">
                     <button type="button" className="btn sm ghost" disabled={preview || !!edit} onClick={() => { setEdit({ ...p, was: p.email }); setAsk(false); }}>Edit</button>
                     {!p.main && <button type="button" className={"btn sm ghost" + (armed === p.id ? " danger armed" : "")} disabled={preview || !!edit} onClick={() => remove(p)}>{armed === p.id ? "Remove them?" : "Remove"}</button>}

@@ -26,7 +26,7 @@ import ProgramOrder from "@/components/ProgramOrder";
 import { projectSummaries } from "@/lib/projectsServer";
 import { cardHasPrices, type Program, type ProgramItem } from "@/lib/programs";
 import { aiPaySelect } from "@/app/portal/pay-select";
-import { needsGoods } from "@/lib/goods";
+import { customerSendsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction, storedPath } from "@/lib/archive";
 import { fmtPhone } from "@/lib/phone";
@@ -147,7 +147,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // supplier shipments on their account that aren't on one of their orders yet
   const incoming = early ? ((await early.incoming) as Awaited<ReturnType<typeof unmatchedGroups>>).filter((g) => !g.us) : [];
   const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale") || incoming.length > 0;
-  const goodsItems = wholesale ? await loadGoodsItems(admin, orders.filter(needsGoods) as never, "customer", (id) => `/portal/orders/${id}${qs}`) : [];
+  const goodsItems = wholesale ? await loadGoodsItems(admin, orders.filter(customerSendsGoods) as never, "customer", (id) => `/portal/orders/${id}${qs}`) : [];
   const goodsOpen = goodsItems.filter((g) => g.goods.status !== "received");
   const goodsHref = `/portal${qs ? qs + "&" : "?"}area=receive`;
   // projects and program pricing
