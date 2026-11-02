@@ -6,7 +6,7 @@ import { OldReorderButton } from "@/components/PortalOldReorder";
 import { starMyOrder } from "@/app/portal/actions";
 import Link from "next/link";
 import { useSticky } from "@/lib/useSticky";
-import type { JobKind, JobStage, PortalJob } from "@/lib/portalJobs";
+import type { JobKind, JobStage, PortalJob, JobAction } from "@/lib/portalJobs";
 
 /** Order again: the Reorder pop-up (sizes, art, notes; we price it and send it back), for an old-system job or one of
  *  theirs in the new system alike (Nov 2, Nick: "exact same functionality") */
@@ -74,9 +74,10 @@ export function StarOrder({ id, on, canAct, label = false }: { id: string; on: b
 }
 
 function JobRow({ j, canAct }: { j: PortalJob; canAct: boolean }) {
-  const a = j.action;
+  // on hold, the button is what fixes it (Nov 2, Nick: the stamp right above it, the row in salmon)
+  const a: JobAction | undefined = j.hold ? { label: j.hold.fixLabel === "Reply" ? "See why and reply" : j.hold.fixLabel, href: j.hold.href, tone: "need" } : j.action;
   return (
-    <div className={"pjr" + (j.stage === "need" ? " need" : "")}>
+    <div className={"pjr" + (j.stage === "need" ? " need" : "") + (j.hold ? " held" : "")}>
       <span className="pjr-picw"><Link href={j.href} className="pjr-pic">{j.pic ? <img src={j.pic} alt="" loading="lazy" /> : <span>#{j.number}</span>}</Link><StarOrder id={j.id} on={!!j.starred} canAct={canAct} /></span>
       <Link href={j.href} className="pjr-t"><small>#{j.number}</small><b>{j.nickname}</b><em>{j.summary}</em></Link>
       <div className={"pjr-mid" + (j.hold ? " held" : "")}>

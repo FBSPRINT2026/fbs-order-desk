@@ -22,9 +22,11 @@ export default function OrderRail({ steps, done = false }: { steps: JobStep[]; d
   const cur = done ? n - 1 : Math.max(0, steps.findIndex((s) => s.state === "cur") >= 0 ? steps.findIndex((s) => s.state === "cur") : steps.filter((s) => s.state === "done").length);
   const at = Math.min(cur, n - 1);
   const pct = n > 1 ? (at / (n - 1)) * 100 : 100;
+  // the marker takes the rainbow's color where it sits: blue at the start, salmon in the middle, orange at the end
+  const mk = pct <= 52 ? `color-mix(in srgb, var(--fbs-salmon) ${Math.round((pct / 52) * 100)}%, var(--fbs-blue))` : `color-mix(in srgb, var(--fbs-orange) ${Math.round(((pct - 52) / 48) * 100)}%, var(--fbs-salmon))`;
   const icon = at === n - 1 ? "check" : steps[at]?.key === "ship" ? "ship" : steps[at]?.key || "placed";
   return (
-    <div className="orl" style={{ ["--n" as string]: n, ["--p" as string]: `${pct}%` }} aria-label={steps.map((s, i) => `${s.label}${i < at || done ? " done" : i === at ? " (now)" : ""}`).join(", ")}>
+    <div className="orl" style={{ ["--n" as string]: n, ["--p" as string]: `${pct}%`, ["--mk" as string]: mk }} aria-label={steps.map((s, i) => `${s.label}${i < at || done ? " done" : i === at ? " (now)" : ""}`).join(", ")}>
       <div className="orl-bar" aria-hidden>
         <span className="orl-fill" />
         <span className="orl-mk"><svg viewBox="0 0 24 24"><path d={PATHS[icon] || PATHS.placed} /></svg></span>

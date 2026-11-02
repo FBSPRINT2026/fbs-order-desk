@@ -18236,7 +18236,7 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .orl{width:100%;min-width:0;padding-top:12px}
 .orl-bar{position:relative;height:6px;border-radius:3px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);margin:0 calc(50% / var(--n))}
 .orl-fill{position:absolute;inset:0;border-radius:3px;background:var(--fbs-fade);clip-path:inset(0 calc(100% - var(--p)) 0 0 round 3px)}
-.orl-mk{position:absolute;top:50%;left:var(--p);width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;background:var(--surface);border:2px solid var(--fbs-salmon);display:grid;place-items:center;color:var(--fbs-salmon)}
+.orl-mk{position:absolute;top:50%;left:var(--p);width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;background:var(--surface);border:2px solid var(--mk,var(--fbs-salmon));display:grid;place-items:center;color:color-mix(in srgb,var(--mk,var(--fbs-salmon)) 82%,#000)}
 .orl-mk svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .orl-lb{list-style:none;margin:14px 0 0;padding:0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:4px}
 .orl-lb li{text-align:center;font-size:12px;line-height:1.2;color:var(--ink-3);overflow-wrap:normal;word-break:normal;hyphens:none}
@@ -18245,3 +18245,13 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 /* on hold: a straight stamp right above the job's button (Nov 2, Nick: "a straight stamp right above"), not over the bar */
 .pjr-act>.hold-stamp,.pod-railw .hold-stamp{transform:none;align-self:center;font-size:13px;padding:3px 12px}
 
+
+/* the jobs' buttons all match (Nov 2, Nick, option B): white, and the one that needs them gets a blue outline; a job on
+   hold is a salmon row with the straight ON HOLD stamp above its button */
+.pjr .pjr-btn,.pjr .pjr-btn.go,.pjr .pjr-btn.ok,.pjr .pjr-btn.need{background:var(--surface);color:var(--ink);border:1px solid var(--line);font-weight:700;border-radius:6px;padding:7px 10px;font-size:13px}
+.pjr .pjr-btn.need{border:1.5px solid var(--fbs-blue);color:color-mix(in srgb,var(--fbs-blue) 70%,#000)}
+.pjr .pjr-btn:hover{background:var(--surface-2)}
+.pjr .pjr-btn.need:hover{background:color-mix(in srgb,var(--fbs-blue) 8%,var(--surface))}
+.pjr.held{background:color-mix(in srgb,var(--fbs-salmon) 13%,var(--surface));border-radius:10px;border-top-color:transparent}
+.pjr.held + .pjr{border-top-color:transparent}
+.pjr.held .hold-stamp{background:var(--surface)}

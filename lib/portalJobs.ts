@@ -136,11 +136,12 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
     nowK = "In production"; nowT = inHands ? `on schedule for ${inHands}` : ""; action = { label: "View approved art", href: x.href, tone: "" };
   } else if (at === 4) {
     if (o.delivery_method === "pickup") {
+      // no pickup info or address (Nov 2, Nick: "people are gonna know where we're at")
       nowK = "Ready for pickup"; nowT = o.updated_at ? `since ${day(o.updated_at)}` : "";
-      action = x.pickupHref ? { label: "Pickup info", href: x.pickupHref, tone: "ok", sub: x.pickup || "", external: true } : view;
+      action = view;
     } else if (o.delivery_method === "ship") { nowK = "Packed:"; nowT = "you'll get tracking here when it ships"; action = view; }
     else if (o.delivery_method === "deliver") { nowK = "Ready:"; nowT = "we'll be in touch to deliver it"; action = view; }
-    else { nowK = "Ready:"; nowT = "we'll be in touch about pickup or shipping"; action = x.pickupHref ? { label: "Pickup info", href: x.pickupHref, tone: "ok", sub: x.pickup || "", external: true } : view; }
+    else { nowK = "Ready:"; nowT = "we'll be in touch about pickup or shipping"; action = view; }
   }
   if (action && !action.sub && inHands && stage !== "out" && stage !== "ready") action.sub = `In hands ${inHands}`;
   const owe = x.balance && x.balance > 0.004 && x.payHref ? { text: `$${x.balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} due`, href: x.payHref, external: x.payExternal } : undefined;
