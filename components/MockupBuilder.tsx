@@ -1296,9 +1296,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // supplier's listing ("Mystic Blue"), named the same or one name inside the other
     // and a color filled in from the other supplier, when this garment's own supplier has it under a fuller name: the
     // supplier's own photos, so the front and back match (lib/colorMatch sameColorAs)
-    if (g && l.color && (!p || ONMODEL.test(p) || (ci as { from?: string } | undefined)?.from === "sanmar")) {
+    // Both sides from the same listing, so they're framed alike (Nov 1: SanMar's tall front with S&S's back came out
+    // zoomed and cut off): the color is checked as a whole, on its front, whichever side is drawn
+    const other = (x?: { front?: string; from?: string }) => !!x && (x.from === "sanmar" || /sanmar\.com/i.test(x.front || "")) && (g as { supplier?: string } | undefined)?.supplier !== "sanmar";
+    if (g && l.color && (!p || ONMODEL.test(ci?.back || "") || ONMODEL.test(ci?.front || "") || other(ci as { front?: string; from?: string } | undefined))) {
       const ims = g.color_images || {};
-      const sib = sameColorAs(l.color, Object.keys(ims).filter((k) => colorKey(k) !== colorKey(l.color) && (ims[k] as { from?: string }).from !== "sanmar" && !!ims[k].front && !ONMODEL.test(ims[k].front || "")));
+      const sib = sameColorAs(l.color, Object.keys(ims).filter((k) => colorKey(k) !== colorKey(l.color) && !other(ims[k] as { front?: string; from?: string }) && !!ims[k].front && !ONMODEL.test(ims[k].front || "")));
       const q = sib ? (view === "front" ? ims[sib].front : ims[sib].back) : "";
       if (q && !ONMODEL.test(q)) p = q;
     }
