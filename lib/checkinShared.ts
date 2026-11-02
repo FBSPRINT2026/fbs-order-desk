@@ -18,6 +18,8 @@ export type CheckJob = {
   items: CheckItem[]; source: "manifest" | "order";
   shipped: number; arrived: number; lines: number; delivered: number; boxes: number; suppliers: string[];
   state: JobState; checkins: CheckinRow[];
+  /** who works a problem with these goods: the shop for our own blank orders, else the customer (lib/goodsIssues.ts) */
+  owner?: "customer" | "shop";
   /** screen printing (sp), embroidery (emb), heat press (hp) or anything else */
   kind: JobKind;
   /** boxes this job shares with other jobs (a mixed box): split it when counting */

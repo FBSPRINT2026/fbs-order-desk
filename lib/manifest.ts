@@ -458,11 +458,16 @@ async function openOrders0(admin: SupabaseClient, custIds: string[]): Promise<Op
     .filter((o) => !PV_CLOSED.test(o.status_name || ""));
   if (!live.length && !pv.length) return [];
   const liveIds = live.map((o) => o.id), pvIds = pv.map((o) => o.id);
-  const [{ data: gd }, { data: have }, { data: havePv }] = await Promise.all([
+  const [{ data: gd }, { data: have }, { data: havePv }, { data: owedRows }] = await Promise.all([
     liveIds.length ? admin.from("order_goods").select("order_id, supplier_po").in("order_id", liveIds) : Promise.resolve({ data: [] }),
     liveIds.length ? admin.from("supplier_manifest_lines").select("order_id, style, color, size, qty_shipped").in("order_id", liveIds).eq("kind", "goods") : Promise.resolve({ data: [] }),
     pvIds.length ? admin.from("supplier_manifest_lines").select("archived_order_id, style, color, size, qty_shipped").in("archived_order_id", pvIds).eq("kind", "goods") : Promise.resolve({ data: [] }),
+    // what an open goods issue still owes (short, damaged, wrong items): the order needs it again, so the replacement box
+    // lands on it instead of reading as extra goods (Nov 2, Nick: "treat it like a suborder"; lib/goodsIssues.ts)
+    liveIds.length ? admin.from("goods_issues").select("order_id, items").in("order_id", liveIds).is("closed_at", null).not("kind", "in", "(tracking,over)") : Promise.resolve({ data: [] }),
   ]);
+  const owedBy = new Map<string, { style: string; color: string; size: string; owed: number }[]>();
+  for (const r of (owedRows || []) as { order_id: string; items: { style: string; color: string; size: string; owed: number }[] }[]) owedBy.set(r.order_id, [...(owedBy.get(r.order_id) || []), ...(r.items || []).filter((it) => it.owed > 0)]);
   const spo = new Map(((gd || []) as { order_id: string; supplier_po: string }[]).map((x) => [x.order_id, x.supplier_po]));
   const useUp = (items: Open["items"], got: { style: string; color: string; size: string; qty_shipped: number }[]) => {
     for (const h of got) {
@@ -474,6 +479,7 @@ async function openOrders0(admin: SupabaseClient, custIds: string[]): Promise<Op
   const out: Open[] = live.map((o) => {
     const items: Open["items"] = [];
     for (const g of orderGroups(o as unknown as Order)) for (const l of g.lines) for (const [z, q] of Object.entries(l.sizes || {})) if (q) items.push({ style: l.style || "", brand: l.brand || "", color: l.color || "", size: sizeKey(z), need: +q || 0 });
+    for (const it of owedBy.get(o.id) || []) items.push({ style: it.style || "", brand: "", color: it.color || "", size: sizeKey(it.size), need: it.owed });
     // goods already here for this order use up its need
     return { ...o, supplier_po: spo.get(o.id) || "", items: useUp(items, ((have || []) as { order_id: string; style: string; color: string; size: string; qty_shipped: number }[]).filter((x) => x.order_id === o.id)) };
   });
@@ -671,6 +677,11 @@ export async function linkLines(admin: SupabaseClient, g: Group, rows: { line: L
     }
     await admin.from("supplier_manifest_lines").update({ linked_by: by, suggest_order_id: null, suggest_archived_id: null, suggest_how: "" }).in("id", ids);
     await applyGroup(admin, g.supplier, { ...g, lines: ls }, orderId, "goods", how);
+    // a goods issue on the order that owes these goods: its replacement is coming
+    const { data: iss } = await admin.from("goods_issues").select("id, items, status").eq("order_id", orderId).is("closed_at", null).in("status", ["open", "reported"]).not("kind", "in", "(tracking,over)");
+    for (const x of (iss || []) as { id: string; items: { style: string; color: string; owed: number }[] }[])
+      if (x.items.some((it) => it.owed > 0 && ls.some((l) => styleEq(it.style, l.style) && colorEq(it.color, l.color))))
+        await admin.from("goods_issues").update({ status: "replacing", tracking: ls.find((l) => l.tracking)?.tracking || "", updated_at: new Date().toISOString() }).eq("id", x.id);
   }
   return byOrder.size;
 }

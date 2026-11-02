@@ -30,6 +30,8 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
   const [photos, setPhotos] = useState<{ path: string; name: string }[]>([]);
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const [editing, setEditing] = useState("");
+  // who works the problems (Nov 2, Nick): our own blank orders the shop, the customer's own goods the customer
+  const [owner, setOwner] = useState<"customer" | "shop">(job.owner || "customer");
 
   const n = (k: string) => (got[k] === undefined || got[k] === "" ? null : Math.max(0, Math.round(+got[k] || 0)));
   const left = cells.filter((c) => n(c.k) === null).length;
@@ -59,7 +61,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
       const v = n(c.k) ?? 0, p = problems.find((x) => x.k === c.k);
       return { item: [c.it.style, c.it.color].filter(Boolean).join(" · "), style: c.it.style, color: c.it.color, size: c.size, expected: c.expected, received: v, issue: p ? p.issue : "", ...(p?.bad ? { bad: p.bad } : {}), ...(p?.note ? { note: p.note } : {}) };
     });
-    const r = await fetch("/api/goods/checkin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: job.ref, lines, boxes: boxes === "" ? null : +boxes, note, photos: photos.map((p) => p.path), source: job.source }) }).catch(() => null);
+    const r = await fetch("/api/goods/checkin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: job.ref, lines, boxes: boxes === "" ? null : +boxes, note, photos: photos.map((p) => p.path), source: job.source, owner }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: t("Couldn't reach the server.") };
     setBusy("");
     if (!r?.ok || j.error) { setErr(j.error || t("Couldn't save.")); return; }
@@ -180,6 +182,19 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
                 <input className="ck-pnote" placeholder={t("Note (optional)")} value={p.note} onChange={(e) => setX(p.k, { note: e.target.value }, p.issue)} />
               </div>
             ))}
+            {problems.length > 0 && (
+              <div className="ck-who">
+                <div><span className="ck-who-l">{t("Who works it")}</span>
+                  <div className="ck-who-seg" role="radiogroup" aria-label={t("Who works it")}>
+                    {(["customer", "shop"] as const).map((k) => <button key={k} type="button" role="radio" aria-checked={owner === k} className={owner === k ? "on" : ""} onClick={() => setOwner(k)}>{k === "customer" ? t("The customer") : t("We do")}</button>)}
+                  </div>
+                  <span className="faint">{job.owner === "shop" ? t("Picked for you: these are our own blank order.") : t("Picked for you: these are the customer's goods (their account or vendor).")}</span></div>
+                <div className="ck-who-then"><span className="ck-who-l">{t("When you check in")}</span>
+                  <span>✓ {t("An issue opens with what's still owed, and the order goes on hold for goods")}</span>
+                  <span>✓ {owner === "customer" ? t("It shows on their Goods page with the email to their rep written for them") : t("It shows on Goods with the email to our rep written for you; they see we're getting it replaced")}</span>
+                  <span>✓ {t("Whoever's on the account gets an alert")}</span></div>
+              </div>
+            )}
           </section>
 
           <div className="ck-foot-f">

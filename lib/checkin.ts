@@ -138,7 +138,7 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     const need = ordered || total(own);
     const state: JobState = openIssue ? "issue" : cs.length ? "checked" : !ls.length ? "none" : delivered === ls.length ? (!need || arrived >= need ? "ready" : "partial") : delivered ? "partial" : "way";
     const { _kind, ...rest } = base as typeof base & { _kind?: JobKind };
-    return { ...rest, ref, kind: _kind || "sp", ordered: ordered || total(own), items, source: ls.length ? "manifest" : "order", shipped, arrived, lines: ls.length, delivered, boxes, suppliers: [...new Set(ls.map((l) => (l.supplier === "ss" ? "S&S" : l.supplier === "sanmar" ? "SanMar" : l.supplier)))], state, checkins: cs };
+    return { ...rest, ref, kind: _kind || "sp", ordered: ordered || total(own), items, source: ls.length ? "manifest" : "order", shipped, arrived, lines: ls.length, delivered, boxes, suppliers: [...new Set(ls.map((l) => (l.supplier === "ss" ? "S&S" : l.supplier === "sanmar" ? "SanMar" : l.supplier)))], state, checkins: cs, owner: ls.some((l) => l.kind === "blanks") ? "shop" : "customer" };
   };
 
   const jobs: CheckJob[] = [];
@@ -179,7 +179,7 @@ export async function checkinJobFor(admin: SupabaseClient, ref: { kind: "o" | "a
   return (await checkinJobs(admin, "", "", ref)).jobs[0] || null;
 }
 
-export async function saveCheckin(admin: SupabaseClient, by: string, b: { ref: string; lines: CheckLine[]; boxes?: number | null; note?: string; photos?: string[]; source?: string }) {
+export async function saveCheckin(admin: SupabaseClient, by: string, b: { ref: string; lines: CheckLine[]; boxes?: number | null; note?: string; photos?: string[]; source?: string; /** who works the problems: picked at check-in, else worked out (lib/goodsIssues.ts) */ owner?: "customer" | "shop" | "auto" }) {
   const pv = b.ref.startsWith(PV), id = pv ? b.ref.slice(PV.length) : b.ref;
   const lines: CheckLine[] = (b.lines || []).map((l) => {
     const expected = Math.max(0, Math.round(+l.expected || 0)), received = Math.max(0, Math.round(+l.received || 0)), bad = Math.max(0, Math.round(+(l.bad || 0)));
@@ -201,10 +201,18 @@ export async function saveCheckin(admin: SupabaseClient, by: string, b: { ref: s
     const { data: g } = await admin.from("order_goods").select("order_id").eq("order_id", id).maybeSingle();
     if (g) await admin.from("order_goods").update({ status: status === "issue" ? "issue" : "received", issue_type: first?.issue === "mispick" ? "mispick" : first?.issue || "", issue_note: status === "issue" ? `Check-in: ${received} of ${expected}` : "", updated_by: by, updated_at: now }).eq("order_id", id);
   }
+  // problems become a goods issue (what's still owed, who works it, the order on hold, the account told); a clean count
+  // closes the issues that were waiting on a replacement (Nov 2, lib/goodsIssues.ts)
+  const { openFromCheckin, closeOnGoodCount } = await import("@/lib/goodsIssues");
+  if (status === "issue") await openFromCheckin(admin, ins.data as CheckinRow, by, b.owner || "auto").catch((e) => console.warn("goods issue", e));
+  else await closeOnGoodCount(admin, pv ? null : id, pv ? id : null, by).catch((e) => console.warn("goods issue close", e));
   return ins.data as CheckinRow;
 }
 
 export async function resolveCheckin(admin: SupabaseClient, by: string, id: string, resolution: string, reopen = false) {
+  // the check-in's goods issue goes with it
+  if (!reopen) { const { data: gi } = await admin.from("goods_issues").select("id").eq("checkin_id", id).is("closed_at", null); const { closeIssue } = await import("@/lib/goodsIssues"); for (const x of (gi || []) as { id: string }[]) await closeIssue(admin, x.id, by, resolution || "Resolved in Goods & Receiving"); }
+  else await admin.from("goods_issues").update({ status: "open", closed_at: null, closed_by: "", closed_how: "" }).eq("checkin_id", id);
   const r = await admin.from("goods_checkins").update(reopen ? { resolved_at: null, resolved_by: "", resolution: "" } : { resolved_at: new Date().toISOString(), resolved_by: by, resolution: resolution.slice(0, 1000) }).eq("id", id).select("*").single();
   if (r.error) throw new Error(r.error.message);
   return r.data as CheckinRow;

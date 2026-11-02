@@ -8,6 +8,7 @@ import { readShipmentPaper, type SendGoods, type TrackingInput } from "@/app/por
 import { portalAttachUrl } from "@/app/portal/message-actions";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDateLong } from "@/lib/format";
+import GoodsIssues from "@/components/GoodsIssues";
 
 type R = { ok: boolean; error?: string };
 /** goods they told us are coming that aren't on an order yet (customer_shipments) */
@@ -23,8 +24,8 @@ const boxesOf = (n: number) => `${n} box${n === 1 ? "" : "es"}`;
  * One card per order with how much of its goods are here, each supplier shipment as one line (tracking folded away),
  * the shipments we couldn't match at the top with "Which order?", and a form for goods coming from anywhere else.
  */
-export default function PortalGoodsDesk({ items, incoming, told = [], canAct, canLink = canAct, qs, addTracking, linkIncoming, sendGoods, linkTold }: {
-  items: GoodsItem[]; incoming: PendingShipment[]; told?: ToldShipment[]; canAct: boolean; /** staff in a customer's portal: can still put shipments on orders */ canLink?: boolean; qs: string;
+export default function PortalGoodsDesk({ items, incoming, told = [], canAct, canLink = canAct, qs, as, addTracking, linkIncoming, sendGoods, linkTold }: {
+  items: GoodsItem[]; incoming: PendingShipment[]; told?: ToldShipment[]; canAct: boolean; /** staff in a customer's portal: can still put shipments on orders */ canLink?: boolean; qs: string; /** staff previewing: the customer */ as?: string;
   addTracking: (orderId: string, t: TrackingInput) => Promise<R>; linkIncoming: (pick: { lineId: string; orderId: string }[]) => Promise<R>;
   sendGoods?: (x: SendGoods) => Promise<R>; linkTold?: (ids: string[], orderId: string) => Promise<R>;
 }) {
@@ -104,7 +105,9 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
         </div>
         {trkOpen === o.id && (
           <ul className="gdk-trks gdk-full">
-            {trk.map((x) => <li key={x.id}><a href={trackingUrl(x.carrier, x.tracking)} target="_blank" rel="noreferrer">{x.carrier} {x.tracking}</a><span className="gdk-sm">{hereNow(x) ? `Arrived ${when(x.delivered_at)}` : `${trackWord(x.track_status)}${x.est_delivery ? ` · ${when(x.est_delivery)}` : ""}`}</span></li>)}
+            {/* one tracking number can carry several boxes (S&S ships a master tracking for 8): say how many, so a box that's
+                missing shows (Nov 2, Nick) */}
+            {trk.map((x) => <li key={x.id} className={hereNow(x) ? "in" : "way"}><a href={trackingUrl(x.carrier, x.tracking)} target="_blank" rel="noreferrer">{x.carrier} {x.tracking}</a><span className="gdk-sm">{(x.boxes || 1) > 1 ? <b className="gdk-trk-n">{x.boxes} boxes · </b> : null}{hereNow(x) ? `Arrived ${when(x.delivered_at)}` : `${trackWord(x.track_status)}${x.est_delivery ? ` · ${when(x.est_delivery)}` : ""}`}</span></li>)}
             {canAct && <li><button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>+ Tell us about another shipment</button></li>}
           </ul>
         )}
@@ -116,6 +119,8 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
 
   return (
     <div className="gdk">
+      {/* problems with their goods first (Nov 2, Nick: "something at the top that says issues") */}
+      <GoodsIssues as={as} />
       <div className="stats gdk-stats">
         <button type="button" className="stat" onClick={() => goTo("way")}><span className="k">On the way</span><span className="v">{boxesOf(onWayBoxes)}</span><small>{onWay.length ? "Tracked for you" : "Nothing in transit"}</small></button>
         <button type="button" className="stat" onClick={() => goTo("here")}><span className="k">Arrived this week</span><span className="v">{boxesOf(hereWeek)}</span><small>Checked in at FBS</small></button>

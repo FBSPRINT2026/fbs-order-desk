@@ -19,6 +19,7 @@ import { useSticky } from "@/lib/useSticky";
 import ReceivingSettings from "@/components/ReceivingSettings";
 import { allRows } from "@/lib/readAll";
 import { useUrlSearch } from "@/lib/useUrlSearch";
+import GoodsIssues from "@/components/GoodsIssues";
 
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
@@ -496,6 +497,8 @@ export default function GoodsReceiving() {
 </div>
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
+      {/* goods issues across every customer: check-in problems and tracking gone wrong (Nov 2, components/GoodsIssues.tsx) */}
+      <GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} />
       <div className="rv-tabrow">
       <div className="aa-sub rv-views" role="tablist">
         <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; Overview</button>

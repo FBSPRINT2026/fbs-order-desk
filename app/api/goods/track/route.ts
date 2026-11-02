@@ -23,8 +23,11 @@ export async function GET(req: Request) {
     // (Nov 2: the order goods check ran first and used up the time, so the matching stopped before it started and
     // Dear Heart's shipments sat unlinked round after round)
     const links = await resolvePending(admin, Date.now() + 35000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    // tracking gone wrong (no scan by the morning after the label, delayed, damaged…): a goods issue (lib/goodsIssues.ts)
+    const { scanTracking } = await import("@/lib/goodsIssues");
+    const issues = await scanTracking(admin, Date.now() + 6000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
     const goods = await goodsCheck(admin, end - 4000);
-    return NextResponse.json({ ...goods, links });
+    return NextResponse.json({ ...goods, links, issues });
   }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   finally { await admin.rpc("printavo_sync_release", { p_job: "goods-track" }); }
