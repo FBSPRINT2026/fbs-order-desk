@@ -9,10 +9,13 @@ export const dynamic = "force-dynamic";
  * Reorder of one of OUR orders (Nov 2, Nick: "instead of duplicate, it should just say reorder… the same thing we talked
  * about last night with the reorder helper… just now we have it in our system and we don't need to do anything
  * special"). The same Create reorder pop-up as an old Printavo job (components/tools/ReorderPick.tsx: sizes the same /
- * from a file / typed, last time's price or today's), without the file sorting: the art, mockups and files are already
- * ours and come with it.
- *   GET ?id=   the order as the pop-up lists it
- *   PUT { id, price, mode, sizes, drop, add }   make it
+ * from a file / typed, last time's price or today's). The art and mockups come with it; its Production files and its
+ * notes are asked about like a Printavo job's (Nov 2, Nick on #40359: "it brought in all the S&S stuff… you should still
+ * ask me… what are these attachments… autofill… keep them where they're at… the customer notes, production notes, ask
+ * me if you want to keep those"): each file starts as what it is on the old order (last time's blank orders and size
+ * sheets start as Leave it off), each note ticked.
+ *   GET ?id=   the order as the pop-up lists it (lines, files, notes)
+ *   PUT { id, price, mode, sizes, drop, add, files: { [art file id]: category | "skip" }, carry: ["production","customer"] }
  */
 async function staff() { const v = await getViewer(); return v.user && v.isStaff ? v : null; }
 const uid = () => crypto.randomUUID();
@@ -29,14 +32,23 @@ export async function GET(req: Request) {
   const each = new Map(calc.groups.flatMap((g) => g.lines).map((l) => [l.id, l.each]));
   const lines = orderGroups(o as Order).flatMap((g) => g.lines.map((l) => ({ ref: l.id, style: l.style || "", brand: l.brand || "", color: l.color || "", garment: l.garment || "",
     qty: Object.values(l.sizes || {}).reduce<number>((a, n) => a + (+(n || 0)), 0), price: each.get(l.id) || 0, sizes: sizeText(l.sizes as Record<string, number>) })));
+  // its Production files, each starting as what it is on this order; its notes
+  const [{ data: af }, { data: inn }] = await Promise.all([
+    admin.from("art_files").select("id, name, file_path, file_type, category, note, guess").eq("order_id", o.id).order("created_at"),
+    admin.from("order_internal").select("production_notes").eq("order_id", o.id).maybeSingle(),
+  ]);
+  const files = ((af || []) as { id: string; name: string; file_path: string; file_type: string | null; category: string | null; note: string | null; guess: string | null }[]).map((f) => ({
+    key: f.id, name: f.name, path: f.file_path, thumb: /^image\//.test(f.file_type || "") || /\.(png|jpe?g|webp|gif)$/i.test(f.name) ? f.file_path : "", mime: f.file_type || "", where: "", group: 0,
+    guess: f.category || f.guess || "", why: f.note || "" }));
   // our own customer is always "in the new system" for this
   return NextResponse.json({ job: { visual: String(o.number), nickname: o.nickname || "", date: String(o.created_at || "").slice(0, 10), qty: lines.reduce((a, l) => a + l.qty, 0), total: +o.total || 0 },
-    customer: c ? { ...c, moved_at: c.moved_at || new Date().toISOString() } : null, lines, files: [], own: true });
+    customer: c ? { ...c, moved_at: c.moved_at || new Date().toISOString() } : null, lines, files, own: true,
+    notes: { production: String(inn?.production_notes || ""), customer: String(o.notes || "") } });
 }
 
 export async function PUT(req: Request) {
   const v = await staff(); if (!v) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const b = await req.json().catch(() => ({})) as { id?: string; price?: "last" | "today"; mode?: "same" | "file" | "clear"; sizes?: Record<string, Record<string, number>>; drop?: string[]; add?: { style: string; color: string; sizes: Record<string, number> }[] };
+  const b = await req.json().catch(() => ({})) as { id?: string; price?: "last" | "today"; mode?: "same" | "file" | "clear"; sizes?: Record<string, Record<string, number>>; drop?: string[]; add?: { style: string; color: string; sizes: Record<string, number> }[]; files?: Record<string, string>; carry?: string[] };
   const admin = createAdminClient();
   const [{ data: o }, { data: s }] = await Promise.all([admin.from("orders").select("*").eq("id", String(b.id || "")).maybeSingle(), admin.from("settings").select("data").eq("id", 1).maybeSingle()]);
   if (!o) return NextResponse.json({ error: "That order isn't here." }, { status: 404 });
@@ -62,7 +74,7 @@ export async function PUT(req: Request) {
   const { data: made, error } = await admin.from("orders").insert({
     customer_id: o.customer_id, nickname: o.nickname || "Job", groups, fees: o.fees, po_number: "",
     delivery_method: o.delivery_method, ship_to: o.ship_to, ship_method: o.ship_method, third_party: o.third_party || null, price_type: o.price_type,
-    discount_pct: o.discount_pct, discount_amt: o.discount_amt || 0, discount_type: o.discount_type || "pct", tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: false, notes: o.notes, qty,
+    discount_pct: o.discount_pct, discount_amt: o.discount_amt || 0, discount_type: o.discount_type || "pct", tax_exempt: o.tax_exempt, tax_rate: o.tax_rate, waive_setup: false, notes: !b.carry || b.carry.includes("customer") ? o.notes : "", notes_on_invoice: (!b.carry || b.carry.includes("customer")) && !!o.notes_on_invoice, qty,
   }).select("id, number").single();
   if (error || !made) return NextResponse.json({ error: "Couldn't make the reorder: " + (error?.message || "unknown") }, { status: 500 });
   // its mockups (the latest of each group) and production files come with it, nothing made again
@@ -71,8 +83,17 @@ export async function PUT(req: Request) {
     const m = (olds || []).find((x) => x.group_id === (g as Group & { fromGroup?: string }).fromGroup);
     if (m) await admin.from("mockups").insert({ customer_id: m.customer_id, order_id: made.id, group_id: g.id, proof_id: null, title: m.title, file_path: m.file_path, design_ids: m.design_ids || [], created_by: v.email || "", snapshot: m.snapshot });
   }
-  const { data: files } = await admin.from("art_files").select("name, file_path, file_type, category, note").eq("order_id", o.id);
-  if (files?.length) await admin.from("art_files").insert(files.map((f) => ({ ...f, order_id: made.id, note: [f.note, `From #${o.number}`].filter(Boolean).join(" · ").slice(0, 300) })));
+  // the Production files you kept, each as what you said it is (nothing said: as it was)
+  const { data: all } = await admin.from("art_files").select("id, name, file_path, file_type, category, note").eq("order_id", o.id);
+  const pick = b.files || {};
+  const files = ((all || []) as { id: string; name: string; file_path: string; file_type: string | null; category: string | null; note: string | null }[]).filter((f) => pick[f.id] !== "skip")
+    .map((f) => ({ name: f.name, file_path: f.file_path, file_type: f.file_type, category: pick[f.id] && pick[f.id] !== "keep" ? pick[f.id] : f.category, order_id: made.id, note: [f.note, `From #${o.number}`].filter(Boolean).join(" · ").slice(0, 300) }));
+  if (files.length) await admin.from("art_files").insert(files);
+  // last time's production notes, when ticked
+  if (b.carry?.includes("production")) {
+    const { data: inn } = await admin.from("order_internal").select("production_notes").eq("order_id", o.id).maybeSingle();
+    if (inn?.production_notes) await admin.from("order_internal").upsert({ order_id: made.id, production_notes: inn.production_notes });
+  }
   await admin.from("order_events").insert({ order_id: made.id, kind: "reorder", detail: `Reorder of #${o.number}${b.mode === "file" ? " (new sizes from a file)" : b.mode === "clear" ? " (sizes to type)" : ""}, ${b.price === "last" ? "last time's prices" : "today's price list"}`, actor: v.email || "" });
   // a wholesale reorder still at new screens: the order page offers the reprint screen fee (?reprint=1), as Duplicate did
   const reprint = o.price_type === "wholesale" && groups.some((g) => g.imprints.some((im) => im.method === "screen" && !(im.remake ?? g.remake)));

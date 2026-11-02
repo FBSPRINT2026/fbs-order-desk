@@ -10,6 +10,7 @@ import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/component
 import SizeFitAsk, { applySizeFit, checkSizeFit, type FitRow } from "@/components/SizeFit";
 import { QuickLook, type MailFile } from "@/components/MailFolders";
 import { dragFile } from "@/lib/dragFile";
+import { PROD_KINDS } from "@/lib/productionFileKinds";
 
 /**
  * Reorder of an old Printavo job, inside THE Create order tool (Nov 1, Nick: "when you click a reorder, you should pop
@@ -140,7 +141,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
       if (!live) return;
       if (j.error) { setErr(j.error); return; }
       setD(j as Data);
-      setWhat(Object.fromEntries((j as Data).files.map((f) => [f.key, f.guess === "supplier_order" || f.guess === "order_sheet" ? "skip" : "production"])));
+      setWhat(Object.fromEntries((j as Data).files.map((f) => [f.key, f.guess === "supplier_order" || f.guess === "order_sheet" ? "skip" : (j as Data).own ? (PROD_KINDS.some((k) => k.k === f.guess) ? f.guess : "keep") : "production"])));
     }).catch(() => live && setErr("Couldn't read the old job."));
     return () => { live = false; };
   }, [archivedId, orderId]);
@@ -160,7 +161,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
         d.lines.forEach((l, i) => { const m = match.old[i]; if (!l.ref) return; if (m.k >= 0) sizes[l.ref] = { ...read.lines[m.k].sizes }; else if (offOld[i] !== false) drop.push(l.ref); });
         for (const { r, i } of match.extra) if (addNew[i] !== false) add.push({ style: r.style, color: r.color, sizes: { ...r.sizes } });
       }
-      const c = await fetch("/api/orders/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: orderId, price, mode: sizeMode === "file" && !readOk ? "same" : sizeMode, sizes, drop, add }) });
+      const c = await fetch("/api/orders/reorder", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: orderId, price, mode: sizeMode === "file" && !readOk ? "same" : sizeMode, sizes, drop, add, files: what, carry: (["production", "customer"] as const).filter((k) => d.notes?.[k] && keepNote[k]) }) });
       const k = await c.json().catch(() => ({})) as { id?: string; number?: number; pcs?: number; groups?: number; files?: number; reprint?: boolean; error?: string };
       if (!c.ok || !k.id) throw new Error(k.error || "Couldn't make the reorder.");
       onCreated?.(k.id, k.number || 0, `Reorder of ${label}`);
@@ -348,9 +349,10 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
             ))}
           </section>
 
-          {d.own ? <section className="rop-sec"><div className="rop-h"><b>Art, mockups and files</b><span className="faint">come with it, as they are on #{d.job.visual}</span></div></section> :
+          {d.own && <section className="rop-sec"><div className="rop-h"><b>Art and mockups</b><span className="faint">come with it, as they are on #{d.job.visual}</span></div></section>}
           <section className="rop-sec" aria-label="Files on the old job">
-            <div className="rop-h"><b>Everything attached</b>{d.files.length ? <button type="button" className="linkbtn rop-all" onClick={() => setWhat(Object.fromEntries(d.files.map((f) => [f.key, "production"])))}>All to Production files</button> : <span className="faint">No files on the old job</span>}</div>
+            {/* our own order's Production files are asked about too, each starting as what it is there (Nov 2, Nick, #40359) */}
+            <div className="rop-h"><b>{d.own ? "Production files" : "Everything attached"}</b>{d.files.length ? <button type="button" className="linkbtn rop-all" onClick={() => setWhat(Object.fromEntries(d.files.map((f) => [f.key, d.own ? (PROD_KINDS.some((k) => k.k === f.guess) ? f.guess : "keep") : "production"])))}>{d.own ? "Keep them all" : "All to Production files"}</button> : <span className="faint">{d.own ? `No production files on #${d.job.visual}` : "No files on the old job"}</span>}</div>
             {d.files.map((f, i) => (
               <div key={f.key} className={"rop-file" + (what[f.key] === "skip" ? " off" : "")}>
                 <button type="button" className="rop-th" onClick={() => setLook(i)} title="Look at it" draggable onDragStart={(e) => dragFile(e, { name: f.name, href: href(f), type: f.mime })}>
@@ -360,12 +362,13 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
                   <button type="button" className="linkbtn rop-fn" onClick={() => setLook(i)} data-notranslate>{f.name}</button>
                   <span className="faint">{[f.where, f.why].filter(Boolean).join(" · ")}</span>
                 </div>
-                <select className="rop-what" value={what[f.key] || "other"} onChange={(e) => setWhat((w) => ({ ...w, [f.key]: e.target.value }))} aria-label={`What ${f.name} is`}>
-                  {WHAT.map((w) => <option key={w.k} value={w.k}>{w.label}</option>)}
+                <select className="rop-what" value={what[f.key] || (d.own ? "keep" : "other")} onChange={(e) => setWhat((w) => ({ ...w, [f.key]: e.target.value }))} aria-label={`What ${f.name} is`}>
+                  {d.own ? <>{PROD_KINDS.map((w) => <option key={w.k} value={w.k}>{w.label}</option>)}<option value="keep">Production file</option><option value="skip">Leave it off</option></>
+                    : WHAT.map((w) => <option key={w.k} value={w.k}>{w.label}</option>)}
                 </select>
               </div>
             ))}
-          </section>}
+          </section>
           {(d.notes?.production || d.notes?.customer) && (
             <section className="rop-sec">
               <div className="rop-h"><b>Notes from last time</b><span className="faint">tick what comes along</span></div>
