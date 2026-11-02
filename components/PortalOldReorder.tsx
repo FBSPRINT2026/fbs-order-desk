@@ -131,7 +131,7 @@ function OldReorderForm({ s, onClose }: { s: OldReorderStart; onClose: () => voi
               <div className="por-foot"><button type="button" className="btn primary" onClick={close}>See the order</button></div>
             </div>
           ) : <>
-            <p className="por-note">Tell us your sizes and anything that&apos;s changed. We&apos;ll set it up and send you the price to OK.</p>
+            <p className="por-note">This order is from our old system. Tell us your sizes and anything that&apos;s changed. We&apos;ll set it up and send you the price to OK.</p>
 
             <section className="por-sec">
               <div className="por-lbl">Sizes</div>
