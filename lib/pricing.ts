@@ -1042,7 +1042,10 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   // contract extras per piece: special locations (sleeve, pocket, side), specialty ink on poly / nylon / dyed garments
   const imps = g.imprints || [];
   const specLocs = [...(pl.specialLocations || []), ...HAT_SPECIAL_LOCATIONS, ...((pl.specialLocations || []).some((z) => /sleeve/i.test(z)) ? LONG_SLEEVE_LOCATIONS : [])].map((z) => z.toLowerCase());
-  const locExtra = pl.specialLocPrice ? imps.filter((d) => specLocs.includes((d.location || "").toLowerCase())).length * num(pl.specialLocPrice) : 0;
+  // a left chest on a pocket tee prints on the pocket: a pocket print (Nov 1, Nick on #40352, a Comfort Colors 6030 Pocket
+  // Tee: "did you add the 25 cents… for the specialty location to the front imprint?")
+  const onPocket = (d: Imprint) => /^(left|right) chest$/i.test(d.location || "") && specLocs.includes("pocket") && (g.lines || []).some((l) => billQty(l) > 0 && /\bpocket\b/i.test(`${l.garment || ""} ${(l as { description?: string }).description || ""}`));
+  const locExtra = pl.specialLocPrice ? imps.filter((d) => specLocs.includes((d.location || "").toLowerCase()) || onPocket(d)).length * num(pl.specialLocPrice) : 0;
   // puff ink (Oct 30): each puffed screen print, per piece
   const puffExtra = imps.filter((d) => d.method === "screen" && d.puff).length * puffEach(pl);
   const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
