@@ -54,7 +54,9 @@ export function MiniRail({ steps, done = false }: { steps: JobStep[]; done?: boo
       {/* a small dot for every step, so the step it's on sits where it does on every other line (Nov 2, Nick: "it should
           be at the same point in the status bar as all the other readies… little dots") */}
       <span className="orm-bar" aria-hidden><i style={{ clipPath: `inset(0 ${100 - pct}% 0 0 round 3px)` }} />
-        {steps.map((st, k) => <u key={st.key + k} className={k < at ? "d" : k === at ? "on" : ""} style={{ left: `${n > 1 ? (k / (n - 1)) * 100 : 0}%` }} />)}</span>
+        {/* only a bubble at the start, one at the finish and the one it's on, all the same size (Nov 2, Nick: "remove the
+            little ribs… the bubble… all the way to the left, and the finish bubble… then it just slides") */}
+        {steps.map((st, k) => (k === 0 || k === n - 1 || k === at) ? <u key={st.key + k} className={k === at ? "on" : k < at ? "d" : ""} style={{ left: `${n > 1 ? (k / (n - 1)) * 100 : 0}%` }} /> : null)}</span>
       <span className="orm-t">{steps[at]?.label || ""}</span>
     </span>
   );

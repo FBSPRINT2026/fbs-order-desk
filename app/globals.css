@@ -18794,3 +18794,8 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* the spacing Nick liked on Messages (Nov 2): a little gap above the title line, closer to the page below */
 .aa-ptop{margin:-2px 0 -10px}
 .aa-ptop .aa-ptitle{font-size:26px}
+/* the small order line: three bubbles the same size, start, finish and the step it's on (Nov 2, Nick) */
+.orm-bar u,.orm-bar u.on{width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border:2px solid var(--surface);box-sizing:border-box}
+.orm-bar u{background:var(--line);box-shadow:0 0 0 1px var(--line)}
+.orm-bar u.d{background:var(--fbs-blue);box-shadow:0 0 0 1px var(--fbs-blue)}
+.orm-bar u.on{background:var(--fbs-orange);box-shadow:0 0 0 1px var(--fbs-orange)}
