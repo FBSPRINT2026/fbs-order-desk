@@ -23,11 +23,14 @@ function expectedLines(o: O) {
 export async function loadGoodsItems(admin: SupabaseClient, orders: O[], viewer: "customer" | "staff", href: (id: string) => string, portal = viewer === "customer"): Promise<GoodsItem[]> {
   if (!orders.length) return [];
   const ids = orders.map((o) => o.id);
-  const [g, s, m] = await Promise.all([
+  const [g, s, m, ml] = await Promise.all([
     admin.from("order_goods").select("*").in("order_id", ids),
     admin.from("goods_shipments").select("*").in("order_id", ids).order("created_at"),
     admin.from("messages").select("order_id, author_type, author_name, body, created_at, read_at").in("order_id", ids).eq("topic", "goods").order("created_at"),
+    admin.from("supplier_manifest_lines").select("order_id, qty_shipped").in("order_id", ids).eq("kind", "goods").limit(5000),
   ]);
+  const pcsOn = new Map<string, number>();
+  for (const x of (ml.data || []) as { order_id: string; qty_shipped: number }[]) pcsOn.set(x.order_id, (pcsOn.get(x.order_id) || 0) + (+x.qty_shipped || 0));
   const goods = new Map(((g.data || []) as (GoodsState & { order_id: string })[]).map((x) => [x.order_id, x]));
   const ships = (s.data || []) as (Omit<Shipment, "files"> & { order_id: string; files: Attachment[] })[];
   const paths = ships.flatMap((x) => (x.files || []).map((f) => f.path));
@@ -45,6 +48,7 @@ export async function loadGoodsItems(admin: SupabaseClient, orders: O[], viewer:
       shipments: ships.filter((x) => x.order_id === o.id).map((x) => ({ id: x.id, carrier: x.carrier, tracking: x.tracking, boxes: x.boxes, eta: x.eta, note: x.note, added_by: x.added_by, author_name: x.author_name, created_at: x.created_at,
         track_status: x.track_status || "", track_detail: x.track_detail || "", est_delivery: x.est_delivery || null, delivered_at: x.delivered_at || null, source: x.source || "",
         files: (x.files || []).map((f) => ({ name: f.name, mime: f.mime, size: f.size, url: url.get(f.path) || "" })) })),
+      ...(pcsOn.has(o.id) ? { pcs: pcsOn.get(o.id) } : {}),
       ...(viewer === "staff" ? { lines: expectedLines(o) } : {}),
       last: last ? { body: last.body, at: last.created_at, mine: last.author_type === mineType, who: last.author_name } : null,
       unread: gm.filter((x) => x.author_type !== mineType && !x.read_at).length,

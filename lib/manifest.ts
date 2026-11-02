@@ -421,7 +421,16 @@ const pvSize = (k: string) => sizeKey(k.replace(/^size_/, ""));
  */
 /** an order goods can go on: anything but a quote nobody has sent yet (to the customer, or to Printavo) */
 export const isLive = (o: { status?: string | null; sent_at?: string | null; printavo_sent_at?: string | null }) => o.status !== "quote" || !!o.sent_at || !!o.printavo_sent_at;
+/** one matching round's customers' open orders, read once (a round looks at 100+ shipments and ran out of time before
+ *  the newest; Nov 2) and read again after anything links, since a link uses up an order's need */
+let roundOrders: Map<string, Promise<Open[]>> | null = null;
 async function openOrders(admin: SupabaseClient, custIds: string[]): Promise<Open[]> {
+  if (!roundOrders) return openOrders0(admin, custIds);
+  const k = [...custIds].sort().join(",");
+  if (!roundOrders.has(k)) roundOrders.set(k, openOrders0(admin, custIds));
+  return roundOrders.get(k)!;
+}
+async function openOrders0(admin: SupabaseClient, custIds: string[]): Promise<Open[]> {
   if (!custIds.length) return [];
   const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
   const [{ data: os }, { data: ar }] = await Promise.all([
@@ -796,7 +805,12 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
   const { data } = await allRows((r0, r1) => admin.from("supplier_manifest_lines").select("*").eq("kind", "").order("created_at").order("id").range(r0, r1), 3000);
   const out = { linked: 0, suggested: 0, tracked: 0 };
   const notFor = await unlinkedFrom(admin).catch(() => new Map());
-  for (const g of groupLines((data || []) as Waiting[])) {
+  // newest shipments first: they're the ones today's orders are waiting on, and an old one nobody's matched in days
+  // shouldn't use up the round's time before them (Nov 2, Dear Heart's goods sat while the round ran out)
+  const groups = groupLines((data || []) as Waiting[]).sort((a, b) => (b.lines[0]?.created_at || "").localeCompare(a.lines[0]?.created_at || ""));
+  roundOrders = new Map();
+  try {
+  for (const g of groups) {
     if (Date.now() > deadline - 15000) break;
     // staff unlinked it from a job: the rules leave it alone (the AI, which knows which job was wrong, has a go)
     if (notFor.has(g.key)) continue;
@@ -818,11 +832,12 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
     if (p.auto && !p.unplaced.length) {
       const rows: { line: Line; orderId: string }[] = [];
       for (const a of p.alloc) rows.push(...(await splitLine(admin, a.line, a.parts)));
-      await linkLines(admin, g, rows, p.how, "auto"); out.linked++; continue;
+      await linkLines(admin, g, rows, p.how, "auto"); out.linked++; roundOrders = new Map(); continue;
     }
     // a new suggestion, or a better one than the old guess (the matching has learned something since)
     if (p.alloc.length && (!had || g.lines.some((l) => (l.suggest_how || "") !== p.how))) { await resolveShipment(admin, g); out.suggested++; }
   }
+  } finally { roundOrders = null; }
   // tracking for shipments still waiting for an order
   const trk = new Map<string, Waiting>();
   const { data: pvLinked } = await admin.from("supplier_manifest_lines").select("*").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).neq("track_status", "delivered").neq("tracking", "").limit(1000);

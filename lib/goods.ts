@@ -33,6 +33,9 @@ export type GoodsState = { status: GoodsStatus; issue_type: IssueType; issue_not
 export type GoodsItem = {
   order: { id: string; number: number; nickname: string; status: string; statusLabel: string; due_date: string | null; qty: number; href: string };
   goods: GoodsState; shipments: Shipment[];
+  /** pieces the suppliers' shipping lists have on this order (here or on the way): with the order's own count, whether
+   *  more is still to come even when every box linked so far is here (Nov 2, #40360 "All 37 here" with only its F260s) */
+  pcs?: number;
   /** shop only: what the order says is coming, for counting in (style + color, quantities by size) */
   lines?: { label: string; sizes: Record<string, number> }[];
   /** latest message in the goods conversation, and how many the viewer hasn't read */
