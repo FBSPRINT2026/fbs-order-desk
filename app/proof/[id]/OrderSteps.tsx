@@ -88,7 +88,7 @@ export default function OrderSteps({ id, steps }: { id: string; orderId?: string
         </div>
       </aside>
       <section className={"pfl-pdf" + (pane ? ` is-${pane}` : "")}>
-        <div className="pfl-bar"><span>{pdfStep.title} · {pdfStep.sub}</span><span className="pfl-sp" /><a href={pdfStep.pdf} target="_blank" rel="noreferrer">Open the PDF</a></div>
+        <div className="pfl-bar"><span title={`${pdfStep.title} · ${pdfStep.sub}`}>{pdfStep.title} · {pdfStep.sub}</span><span className="pfl-sp" /><a href={pdfStep.pdf} target="_blank" rel="noreferrer">Open PDF</a></div>
         <div className="pfl-frame">
           <iframe ref={frame} onLoad={tell} key={pdfStep.pdf} src={`${pdfStep.pdf}&embed=1`} title={pdfStep.title} aria-hidden={pane === "changes" || pane === "declined"} />
           {(pane === "changes" || pane === "declined") && <div className="pfl-over" role="status">

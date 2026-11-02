@@ -27,7 +27,9 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   const db = isStaff || byLink ? createAdminClient() : viewer.supabase; // customers read through row security
   // inside the proof page: no buttons, and the pages fit the frame's width
   // framed in the customer's page: the approval stamp on the top row (StampSlot), right side
-  const bar = (n: string) => embed ? <><script dangerouslySetInnerHTML={{ __html: "(function(){function f(){var w=document.documentElement.clientWidth;document.body.style.zoom=Math.min(1,(w-16)/830)}f();addEventListener('resize',f)})()" }} /><div className="print-bar"><PrintButton fileName={n} framed /><StampSlot /></div></> : <div className="print-bar"><PrintButton fileName={n} /></div>;
+  // inside the customer's approve page: the sheets are fitted once, by PrintButton (Nov 2: a second zoom on the page
+  // made them a quarter size on a phone), and the page tells the frame its height so it grows to show every page
+  const bar = (n: string) => embed ? <><script dangerouslySetInnerHTML={{ __html: "(function(){function h(){try{parent.postMessage({fbsFrameH:document.documentElement.scrollHeight},location.origin)}catch(e){}}addEventListener('load',h);addEventListener('resize',h);if(window.ResizeObserver)new ResizeObserver(h).observe(document.documentElement);setTimeout(h,600)})()" }} /><div className="print-bar"><PrintButton fileName={n} framed /><StampSlot /></div></> : <div className="print-bar"><PrintButton fileName={n} /></div>;
   const { data: od } = await db.from("orders").select("*").eq("id", id).maybeSingle();
   if (!od) notFound();
   // the customer's documents (invoice, quote, proof, sew-out) never show the shop's own pieces; the work order does

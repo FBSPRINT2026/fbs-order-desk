@@ -5,6 +5,7 @@ import { inkNames, lineQty, orderGroups, printHow, sizeLabel } from "@/lib/prici
 import { fmtPhone } from "@/lib/phone";
 import ProofAnswer from "./ProofAnswer";
 import OrderSteps from "./OrderSteps";
+import FrameFit from "@/components/FrameFit";
 import { orderSteps } from "@/lib/customerSend";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ export default async function ProofPage({ params }: { params: Promise<{ id: stri
           {sh0.phone && <a href={`tel:${sh0.phone.replace(/[^\d+]/g, "")}`}>Questions? {fmtPhone(sh0.phone)}</a>}
         </header>
         <OrderSteps id={id} orderId={os.o.id} steps={os.steps} />
+        <FrameFit />
       </div>
     );
   }
@@ -54,6 +56,7 @@ export default async function ProofPage({ params }: { params: Promise<{ id: stri
   const threads = sewout ? [...new Set((sewout.sewn?.threads || []).map((t) => t.sewn))] : [];
   return (
     <div className="pfl">
+      <FrameFit />
       <header className="pfl-top">
         <img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
         <span className="pfl-sp" />
@@ -86,7 +89,7 @@ export default async function ProofPage({ params }: { params: Promise<{ id: stri
           <ProofAnswer id={id} kind={link.kind === "sewout" ? "sewout" : "art"} status={p.status as "pending" | "approved" | "changes" | "replaced" | "gone"} decidedName={p.decidedName} decidedAt={p.decidedAt} comment={p.comment} />
         </aside>
         <section className="pfl-pdf">
-          <div className="pfl-bar"><span>{what}</span><span className="pfl-sp" /><a href={pdf.replace("&link=", "&link=")} target="_blank" rel="noreferrer">Open the PDF</a></div>
+          <div className="pfl-bar"><span>{what}</span><span className="pfl-sp" /><a href={pdf.replace("&link=", "&link=")} target="_blank" rel="noreferrer">Open PDF</a></div>
           <iframe src={`${pdf}&embed=1`} title={what} />
         </section>
       </div>

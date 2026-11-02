@@ -18231,3 +18231,8 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .gis-body .gis-steps li.done{background:none;color:var(--ok)}
 .gis-body .gis-steps li.on{background:none;color:var(--ink);font-weight:700}
 .gis-d:empty{display:none}
+/* the approve page's paper bar on one line (Nov 2, Nick, phone): the title ends in "…", the button never wraps; on a
+   phone the frame takes the paper's full height (components/FrameFit.tsx) rather than a box that scrolls inside */
+.pfl-bar > span:first-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfl-bar a{flex:none;white-space:nowrap}
+@media (max-width:820px){.pfl-bar{padding:8px 12px;font-size:12.5px}.pfl-pdf iframe{min-height:0}.pfl-frame{flex:none}}
