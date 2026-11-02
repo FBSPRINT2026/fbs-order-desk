@@ -18136,3 +18136,52 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .gdk-sure h3{margin:0 0 2px;font-family:var(--display);font-size:18px}
 .gdk-sure ul{margin:4px 0 0;padding-left:18px;font-size:14px;color:var(--ink);display:flex;flex-direction:column;gap:4px}
 .gdk-sure li::marker{color:var(--warn)}
+
+/* the customer's order page, laid out like the proof (Nov 2, Nick: option C1): title + one status line, the summary
+   card, each job with its mockups, prints (method, size, inks with their colors) and garments by size; order details,
+   payment and files on the right. No step bubbles. */
+.pod .page-head{margin-bottom:0}
+.pod-eb{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pod-eb .pill{font-size:12px}
+.pod-stats{margin-bottom:0}
+.pod-stats .stat{text-decoration:none;color:var(--ink)}
+.pod-stats .stat small{font-size:12px;color:var(--ink-3)}
+.pod-stats .v.pod-ok{color:var(--ok)}
+.pod-grp .panel-h .faint{white-space:nowrap}
+.pod-desc{font-size:13px;color:var(--ink-2);padding-bottom:0}
+.pod-g{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.pod-art{flex:0 1 240px;min-width:180px}
+.pod-art .pav{max-width:none;margin:0}
+.pod-spec{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.pod-prints{width:100%}
+.pod-prints td{vertical-align:top}
+.pod-nw{white-space:nowrap}
+.pod-inks{display:flex;flex-direction:column;gap:3px}
+.pod-ink{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pod-ink i{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);flex:none}
+.pod-fin{font-size:13px;display:flex;gap:8px;align-items:baseline}
+.pod-fin .lbl{margin:0}
+.pod-lines{border-top:1px solid var(--line-2);border-radius:0;box-shadow:none;border-left:0;border-right:0;border-bottom:0}
+.pod-x{display:flex;flex-direction:column}
+.pod-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:13.5px}
+.pod-row b{white-space:nowrap}
+.pod-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px 14px;font-size:13.5px;align-items:baseline}
+.pod-kv > span{color:var(--ink-3);font-size:12.5px;white-space:nowrap}
+.pod-kv > b{font-weight:600;color:var(--ink);min-width:0}
+.pod-kv .pod-addr{white-space:pre-wrap;overflow-wrap:anywhere;font-weight:500}
+.pod-kv a{color:var(--accent)}
+.totals .tr.pod-paid{font-size:13px;padding:3px 0}
+.totals .tr.pod-paid span:last-child{color:var(--ok);white-space:nowrap}
+.pod-files{display:flex;flex-direction:column;gap:2px}
+.pod-files a{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13.5px;color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line-2)}
+.pod-files a:last-child{border-bottom:0}
+.pod-files a:hover{color:var(--accent)}
+.pod-files small{margin-left:auto;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.pod-fi{flex:none;width:34px;height:22px;display:grid;place-items:center;border:1px solid var(--line);border-radius:4px;font-size:10.5px;font-weight:700;color:var(--ink-3);background:var(--surface-2)}
+/* order lists: a status never runs into the next column (Nov 2, Nick: "the status… crunched in there… bleed over into
+   the dates"): the column fits the longest customer status, and a longer one ends in "…" with the whole name on hover */
+@media (min-width:641px){ .aa-tbl-cols col.c-st{width:200px} }
+.aa-tbl.aa-tbl-cols td > .aa-pill{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+/* the customer's balance: "Paid" once it's all paid; what's been paid, small, under what's left */
+.aa-paidall{color:var(--ok);font-weight:700}
+.aa-paidpart{display:block;font-size:12px;font-weight:500;color:var(--ink-3);white-space:nowrap}

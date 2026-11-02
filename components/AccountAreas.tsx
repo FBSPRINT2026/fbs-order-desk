@@ -170,7 +170,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     : o.status === "request" && mode === "portal"
       // the customer's own order requests: not sent yet, or sent to us and waiting on our OK (Oct 24, Nick)
       ? <span className="aa-pill" style={{ ["--sc" as string]: o.sent ? "var(--fbs-orange, #F7941D)" : "var(--ink-3)" }}>{o.sent ? "Waiting on FBS" : "Not sent yet"}</span>
-      : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span>;
+      : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }} title={mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span>;
   const rawArea = (sp.get("area") as Area) || "home";
   // portal: quotes and orders are one "Orders" tab with a Quotes / Orders switch inside
   // shop (Oct 21, Nick: "the dashboard can be dashboard and orders… it just needs to be simpler"): Quotes and Orders are
@@ -316,7 +316,9 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
                 {/* customers see only the balance and total (Nov 2, Nick: "you don't need paid… more room for the order description") */}
                 {cols !== "quote" && mode !== "portal" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
-                {cols !== "quote" && <td data-l="Balance" className={"r num" + (mode === "shop" && !o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : money(Math.max(0, o.balance))}</td>}
+                {/* customers: what's left, and what's been paid under it, or "Paid" once it's all paid (Nov 2, Nick: "I can't tell
+                    what's been paid, what's not been paid") */}
+                {cols !== "quote" && <td data-l="Balance" className={"r num" + (mode === "shop" && !o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : mode === "portal" && o.total > 0 && o.balance <= 0.004 ? <span className="aa-paidall">Paid</span> : <>{money(Math.max(0, o.balance))}{mode === "portal" && o.paid > 0.004 ? <small className="aa-paidpart">{money(o.paid)} paid</small> : null}</>}</td>}
                 <td className="r num b" data-l="Total">{money(o.total)}</td>
                 {/* the star on the right (Oct 24, Nick) */}
                 {mode === "portal" && <td className="aa-starc" onClick={(e) => e.stopPropagation()}>{!o.archived && <StarOrder id={o.id} on={!!o.starred} canAct={canAct} />}</td>}
@@ -706,7 +708,9 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     const GRACE = 7;
     const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
     const isLate = (o: AOrder) => { const d = dueOn(o); return !!d && addDays(d, GRACE) < today(); };
-    const isLater = (o: AOrder) => !o.archived && o.type !== "quote" && o.payCan === "none";
+    // can't be paid yet: still being made, or a quote that's paid by approving it first (Nov 2, Nick: "why isn't this
+    // first invoice checkable?", a sent quote on due-on-receipt terms showed black like it was ready)
+    const isLater = (o: AOrder) => !o.archived && o.payCan === "none";
     const allOpen = [...open, ...oldOpen, ...waitingQuotes];
     const sumOf = (l: AOrder[]) => l.reduce((a, o) => a + Math.max(0, o.balance), 0);
     const lateL = allOpen.filter((o) => o.type !== "quote" && isLate(o)), laterL = allOpen.filter(isLater);

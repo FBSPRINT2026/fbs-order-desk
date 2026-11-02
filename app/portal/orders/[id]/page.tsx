@@ -2,16 +2,17 @@ import PortalGoods from "@/components/PortalGoods";
 import BackLink from "@/components/BackLink";
 import { termsPct } from "@/lib/payTerms";
 import { StarOrder } from "@/components/PortalDashBits";
-import { customerSendsGoods } from "@/lib/goods";
+import { customerSendsGoods, GOODS, trackedGoods, type GoodsStatus } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
 import { proofViewed } from "@/lib/proofs";
 import { notFound, redirect } from "next/navigation";
 import { getPortalCtx, signProofs } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import ImprintSpecs from "@/components/ImprintSpecs";
+import { colorHex } from "@/lib/inkColors";
+import { needsDetails } from "@/lib/productionDetails";
 import PortalArtView from "@/components/PortalArtView";
-import { calcOrder, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
-import { fmtDate, fmtDateLong, fmtStamp, money } from "@/lib/format";
+import { calcOrder, FULL_COLOR, inkNames, methodLabel, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
+import { fmtDate, fmtDateLong, money } from "@/lib/format";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
@@ -20,30 +21,8 @@ import { OldReorderButton } from "@/components/PortalOldReorder";
 import { fmtPhone } from "@/lib/phone";
 import { orderSteps } from "@/lib/customerSend";
 
-// the order's steps the customer sees (Oct 24, Nick: "sent to FBS, quote, proof, approved, and then you'd have waiting on
-// goods… in production, ready, and then done"); a quote and its proof usually go out together
-const STEPS: { label: string; keys: string[] }[] = [
-  { label: "Sent to FBS", keys: ["request"] },
-  { label: "Quote", keys: ["quote_sent"] },
-  { label: "Proof", keys: ["art"] },
-  { label: "Approved", keys: ["approved"] },
-  { label: "Waiting on goods", keys: ["blanks"] },
-  { label: "In production", keys: ["production"] },
-  { label: "Ready", keys: ["ready"] },
-  { label: "Done", keys: ["completed"] },
-];
-// orders run here (not from Printavo): the customer statuses (Oct 21, the order statuses doc). The shop's steps
-// (goods, film, screens, press) are never shown: it's all "In production"
-const CSTEPS: { label: string; keys: string[] }[] = [
-  { label: "Sent to FBS", keys: ["request"] },
-  { label: "Quote", keys: ["quote", "quote_sent", "changes"] },
-  { label: "Proof", keys: ["proof"] },
-  { label: "Approved", keys: ["approved"] },
-  { label: "Waiting on goods", keys: ["goods"] },
-  { label: "In production", keys: ["production", "waiting", "delayed"] },
-  { label: "Ready", keys: ["ready", "shipped", "delivered"] },
-  { label: "Done", keys: ["completed"] },
-];
+// our garments in words, for the order's details (the customer's own goods use GOODS[…].portal)
+const BLANKS: Record<GoodsStatus, string> = { waiting: "Ordered, not here yet", on_way: "On the way", arrived: "Arrived, checking them in", partial: "Partly here", received: "All here", issue: "Issue with the garments" };
 
 /** "Unisex EcoSmart® Crewneck Sweatshirt - P160" after "P160": the style number once (Oct 24, Nick's phone photo) */
 const garmentName = (g?: string | null, style?: string | null) => {
@@ -74,15 +53,15 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const waitingOn = olk?.id ? ((await orderSteps(createAdminClient(), olk.id))?.steps || []).filter((x) => x.state === "todo") : [];
   const payments = (p.data || []) as Payment[];
   const proofs = await signProofs((pr.data || []) as Proof[]);
-  const goodsHere = customerSendsGoods(o as never) ? await loadGoodsItems(createAdminClient(), [o] as never, "customer", (x) => `/portal/orders/${x}${ctx.preview ? `?as=${ctx.preview.id}` : ""}`) : [];
+  // the order's goods record (theirs or ours): their own goods get the tracking panel; every order gets a Garments line
+  const goodsAll = o.type === "invoice" ? await loadGoodsItems(createAdminClient(), [o] as never, "customer", (x) => `/portal/orders/${x}${ctx.preview ? `?as=${ctx.preview.id}` : ""}`) : [];
+  const goodsHere = customerSendsGoods(o as never) ? goodsAll : [];
   // the mockup they made comes with the order (Oct 24, Nick: "it doesn't show the art, even though they're the ones that
   // created it… it should just come along with it"): its shirts, from their Mockup Creator mockup or their own file
   // the mockup FBS made shows too once it's a real order (Oct 24, Nick on the order page: "Can't see the art"); a quote
   // still waits for its proof
   const realOrder = o.type === "invoice" && o.status !== "request";
   const mkGroups = orderGroups(o).filter((g) => g.fromMockup || (g.customerMockups || []).length || (realOrder && (g.mockupThumbs || []).length));
-  // the mockups show once, on the items; the Artwork panel is for proofs (Oct 24, Nick: "We don't need the artwork twice")
-  const ownMk: typeof mkGroups = [];
   const mkPaths = [...new Set(mkGroups.flatMap((g) => (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => !/\.pdf$/i.test(x))))];
   const mkUrls: Record<string, string> = {};
   if (mkPaths.length) { const { data: sg } = await createAdminClient().storage.from("proofs").createSignedUrls(mkPaths, 3600); mkPaths.forEach((pth, i) => { if (sg?.[i]?.signedUrl) mkUrls[pth] = sg[i].signedUrl!; }); }
@@ -107,9 +86,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   // the customer status, for orders run here; a Printavo-run job keeps its old wording
   const runHere = !pvStatusOf(o as never);
   const cs = runHere ? customerStatus({ status: o.status, flags: ((o as { flags?: Flag[] }).flags || []) as Flag[], delivery_method: o.delivery_method, simple_order: (o as { simple_order?: { reorder?: unknown } | null }).simple_order }, { proofSent: proofs.length > 0 }) : null;
-  const steps = cs ? CSTEPS : STEPS;
   const hold = !["completed", "void"].includes(o.status) ? customerHold(((o as { flags?: Flag[] }).flags || []) as Flag[]) : null;
-  const curIdx = cs ? CSTEPS.findIndex((s) => s.keys.includes(cs.key)) : STEPS.findIndex((s) => s.keys.includes(o.status));
   const pendingProofs = proofs.filter((x) => x.status === "pending");
   // the customer's payment terms decide what's paid up front (lib/payTerms.ts)
   const terms = ctx.customers.find((x) => x.id === o.customer_id)?.payment_terms || "receipt";
@@ -119,40 +96,58 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const ps = payState(o as typeof o & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: ctx.settings.depositPct, terms });
   const canPay = c.balance > 0.004 && ps.can !== "none" && (o.type === "invoice" || o.status === "quote_sent");
 
+  const qsAs = preview ? `?as=${ctx.preview!.id}` : "";
+  const cust = ctx.customers.find((x) => x.id === o.customer_id);
+  const approvedProof = proofs.find((x) => x.status === "approved");
+  // the garments for this order, in one line (Nov 2, Nick: "add the goods there"): ours or theirs, the same goods record
+  const gi0 = goodsAll[0];
+  const gShips = gi0?.shipments || [];
+  const gStatus = gi0 ? trackedGoods(gi0.goods.status, gShips) : null;
+  const gBoxes = gShips.reduce((a, x) => a + (+(x.boxes ?? 0) || 0), 0);
+  const garmentsLine = gi0 && (gi0.goods.updated_at || gShips.length)
+    ? `${o.price_type === "wholesale" ? GOODS[gStatus!].portal : BLANKS[gStatus!]}${gBoxes ? ` · ${gBoxes} box${gBoxes === 1 ? "" : "es"}` : ""}`
+    : "";
+  const delivery = o.delivery_method === "ship" ? `Shipping${o.ship_method ? ` (${o.ship_method.trim()})` : ""}` : o.delivery_method === "deliver" ? "Delivery" : o.delivery_method === "pickup" ? "Pickup" : "";
+  const extras = isReq ? [] : [
+    ...(c.setup > 0 ? [{ k: "Setup (screens / digitizing)", v: money(c.setup) }] : []),
+    ...(c.materials > 0 ? [{ k: "2XL+ materials charge", v: money(c.materials) }] : []),
+    ...o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free).map((f) => ({ k: f.label || "Fee", v: (f as { free?: boolean }).free ? "Free" : money(+f.amount) })),
+  ];
+
   return (
     <>
       {preview && <div className="preview-bar">Preview of {ctx.preview!.company || ctx.preview!.name}&apos;s portal. Buttons are turned off in preview.</div>}
-      <main className="p-main">
+      <main className="p-main pod">
         <BackLink href={back} label="All orders" trail={false} />
-        <div className="page-head" style={{ margin: 0 }}>
+        {/* the order page in the shop's look, laid out like the proof (Nov 2, Nick: "it looks so different from our other
+            screens… not enough information on the page… get rid of the little bubble tracker… more like what's on the
+            proof… add the goods there", option C1): title and one status line, the summary card, then each job */}
+        <div className="page-head">
           <div>
-            <div className="eyebrow">{o.type === "quote" ? "Quote" : "Order"} #{o.number}</div>
             <h1>{o.nickname || "Your Order"}</h1>
-            <div className="muted" style={{ marginTop: 6 }}>{c.qty} pieces{o.due_date ? ` · in hands ${fmtDateLong(o.due_date)}` : ""}{o.po_number ? ` · PO ${o.po_number}` : ""}{o.delivery_method === "ship" ? " · shipping" : o.delivery_method === "deliver" ? " · delivery" : ""}{o.tracking ? ` · tracking ${o.tracking}` : ""}</div>
+            <div className="eyebrow pod-eb">
+              {cs ? <span className="pill" title={cs.text}>{cs.label}</span> : <Pill status={o.status} portal />}
+              <span>{o.type === "quote" ? "Quote" : "Order"} #{o.number}{o.due_date ? ` · in hands ${fmtDateLong(o.due_date)}` : ""}</span>
+            </div>
           </div>
-          <div className="row">
-            {cs ? <span className="pill" title={cs.text}>{cs.label}</span> : <Pill status={o.status} portal />}
+          <div className="row pod-acts">
             {!["completed", "void"].includes(o.status) && <StarOrder id={o.id} on={!!(o as typeof o & { customer_starred_at?: string | null }).customer_starred_at} canAct={!preview} label />}
             {/* the same Reorder pop-up as an old-system order (Nov 2, Nick): sizes, art, notes; we price it and send it back */}
             {o.type === "invoice" && <OldReorderButton archivedId={`o:${o.id}`} as={preview ? ctx.preview!.id : undefined} primary={false} />}
             {(() => { const x = o as typeof o & { submitted_at?: string | null; staff_seen_at?: string | null; customer_archived_at?: string | null; cancel_requested_at?: string | null };
               const kind = x.status === "request" ? (x.staff_seen_at ? "seen" : "unseen") : x.type === "quote" ? "quote" : x.status === "completed" ? null : "order";
               return kind ? <OrderActions orderId={x.id} kind={kind} archived={!!x.customer_archived_at} cancelAsked={!!x.cancel_requested_at} disabled={preview} /> : null; })()}
-            <a className="btn" href={`/print/${o.id}${preview ? `?as=${ctx.preview!.id}` : ""}`} target="_blank" rel="noreferrer">Print or save PDF</a>
+            <a className="btn" href={`/print/${o.id}${qsAs}`} target="_blank" rel="noreferrer">Print or save PDF</a>
           </div>
         </div>
 
-        {/* on hold: a stamp across the steps, and why (Oct 24, Nick) */}
-        <div className={"panel" + (hold ? " po-held" : "")}><div className="panel-b">
-          {hold && <span className="hold-stamp big" aria-hidden>On hold</span>}
-          <div className="stepper" aria-label="Order progress">
-            {steps.map((s, i) => (
-              <div key={s.label} className={"step" + (i < curIdx ? " done" : "") + (i === curIdx ? " cur" : "")}>
-                <span className="dot">{i < curIdx ? "✓" : ""}</span>{s.label}
-              </div>
-            ))}
-          </div>
-        </div></div>
+        {/* the numbers in one summary card, like the shop's pages: what it costs, what's paid, what's left */}
+        {!isReq && <div className="stats pod-stats">
+          <a className="stat" href="#items"><span className="k">Pieces</span><span className="v">{c.qty.toLocaleString("en-US")}</span><small>{orderGroups(o).length === 1 ? "1 job" : `${orderGroups(o).length} jobs`}</small></a>
+          <a className="stat" href="#pay"><span className="k">Total</span><span className="v">{money(c.total)}</span><small>with tax{c.tax ? ` (${money(c.tax)})` : o.tax_exempt ? " exempt" : ""}</small></a>
+          <a className="stat" href="#pay"><span className="k">Paid</span><span className="v">{money(c.paid)}</span><small>{payments.length ? `${payments.length} payment${payments.length === 1 ? "" : "s"}` : "Nothing yet"}</small></a>
+          <a className="stat" href="#pay"><span className="k">Balance</span><span className={"v" + (c.balance <= 0.004 && c.total > 0 ? " pod-ok" : "")}>{c.balance <= 0.004 && c.total > 0 ? "Paid in full" : money(c.balance)}</span><small>{c.balance > 0.004 ? (canPay ? "Ready to pay" : "Not due yet") : o.type === "quote" ? "After you approve" : "Thank you"}</small></a>
+        </div>}
 
         {/* one place for everything waiting on them: the same page our email's button opens */}
         {olk?.id && waitingOn.length > 0 && <div className="callout warn po-wait">
@@ -176,11 +171,10 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <div className="callout" style={{ borderColor: "color-mix(in srgb, #A152C9 45%, var(--line))", background: "color-mix(in srgb, #A152C9 10%, var(--surface))" }}>
             <h2>Your sew-out is ready to approve</h2>
             <div className="muted">Here&apos;s your logo stitched on our machine. Look it over and approve it, or tell us what to change.</div>
-            <a className="btn primary" href={`/portal/orders/${o.id}/sewout/${pendingSew[0].id}${preview ? `?as=${ctx.preview!.id}` : ""}`} style={{ alignSelf: "flex-start" }}>Review the sew-out</a>
+            <a className="btn primary" href={`/portal/orders/${o.id}/sewout/${pendingSew[0].id}${qsAs}`} style={{ alignSelf: "flex-start" }}>Review the sew-out</a>
           </div>
         )}
         {justPaid && <div className="callout good"><h2>Thank you, payment received</h2><div className="muted">It can take a minute to show below. You&apos;ll get a receipt by email from our payment processor.</div></div>}
-
         {isReq && (
           <div className="callout good">
             <h2>{(o as { simple_order?: { reorder?: unknown } | null }).simple_order?.reorder ? "Reorder pending approval" : justSent ? "Thanks! Your order is in." : "We're reviewing your order"}</h2>
@@ -188,9 +182,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         )}
         {/* one way to approve: the review page when there is one (the "Waiting on you" box above), else here */}
-        {o.status === "quote_sent" && !waitingOn.some((x) => x.kind === "quote") && <QuoteApproval orderId={o.id} total={money(c.total)} terms={[termsText(terms, o.delivery_method === "pickup"), /deposit|balance|due|pay/i.test(ctx.settings.shop.terms || "") ? "" : ctx.settings.shop.terms].filter(Boolean).join(" ")} disabled={preview} defaultName={ctx.customers.find((x) => x.id === o.customer_id)?.name || ""} />}
-        {o.approved_at && <div className="muted" style={{ fontSize: 13 }}>Quote approved{o.approved_name ? <> by <b>{o.approved_name}</b></> : null} on {fmtStamp(o.approved_at)}.</div>}
-
+        {o.status === "quote_sent" && !waitingOn.some((x) => x.kind === "quote") && <QuoteApproval orderId={o.id} total={money(c.total)} terms={[termsText(terms, o.delivery_method === "pickup"), /deposit|balance|due|pay/i.test(ctx.settings.shop.terms || "") ? "" : ctx.settings.shop.terms].filter(Boolean).join(" ")} disabled={preview} defaultName={cust?.name || ""} />}
         {/* the proof is already asked for in "Waiting on you" above: not a second box for it */}
         {pendingProofs.length > 0 && !waitingOn.some((x) => x.kind === "art") && (
           <div className="callout" style={{ borderColor: "color-mix(in srgb, #A152C9 45%, var(--line))", background: "color-mix(in srgb, #A152C9 10%, var(--surface))" }}>
@@ -200,56 +192,78 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         )}
 
-        <div className="two">
-          <div className="stack">
-            <section className="panel">
-              <div className="panel-h"><h2>Items</h2></div>
-              <div className="fit-wrap">
-                <table className="items">
-                  <thead><tr><th>Item</th><th className="r">Qty</th>{!isReq && <th className="r">Each</th>}{!isReq && <th className="r">Amount</th>}</tr></thead>
-                  <tbody>
-                    {orderGroups(o).map((g, gi) => [
-                      // the group's mockup above its garments (Oct 24, Nick: "Can't see the art"; not tied to one garment)
-                      ...(() => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return pics.length ? [<tr key={g.id + "-art"} className="po-grp-art"><td colSpan={4}><PortalArtView pics={pics.slice(0, 8).map((x) => mkUrls[x])} /></td></tr>] : []; })(),
-                      ...g.lines.map((l, li) => {
-                      const lc = c.groups[gi]?.lines[li];
-                      return (
-                        <tr key={l.id}>
-                          <td>
-                            <b>{[l.style, garmentName(l.garment, l.style)].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}{c.groups[gi]?.wholesale ? " (your garments)" : ""}
-                            {li === 0 && g.imprints.length > 0 && <div className="sub po-item-prints"><ImprintSpecs list={g.imprints} /></div>}
-                            {li === 0 && (c.groups[gi]?.finishing.length || 0) > 0 && <div className="sub">Finishing: {c.groups[gi].finishing.map((f) => f.name).join(", ")}</div>}
-                            <div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{sizeLabel(s)} {l.sizes[s]}</span>)}</div>
-                          </td>
-                          <td className="r">{lc?.qty}</td>
-                          {!isReq && <td className="r">{money(lc?.each)}</td>}
-                          {!isReq && <td className="r">{money(lc?.sub)}</td>}
-                        </tr>
-                      );
-                    })])}
-                    {!isReq && c.setup > 0 && <tr><td>Setup (screens / digitizing)</td><td /><td /><td className="r">{money(c.setup)}</td></tr>}
-            {!isReq && c.materials > 0 && <tr><td>2XL+ Materials Charge</td><td /><td /><td className="r">{money(c.materials)}</td></tr>}
-                    {!isReq && o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free).map((f, i) => <tr key={i}><td>{f.label || "Fee"}</td><td /><td /><td className="r">{(f as { free?: boolean }).free ? "Free" : money(+f.amount)}</td></tr>)}
-                  </tbody>
-                </table>
-              </div>
-              {o.delivery_method !== "pickup" && o.ship_to && <div className="panel-b" style={{ borderTop: "1px solid var(--line-2)", whiteSpace: "pre-wrap" }}><div className="lbl">{o.delivery_method === "ship" ? `Shipping to${o.ship_method ? ` (${o.ship_method.trim()})` : ""}` : "Delivering to"}</div>{o.ship_to}{o.tracking ? `\nTracking: ${o.tracking}` : ""}</div>}
-              {o.notes && <div className="panel-b" style={{ borderTop: "1px solid var(--line-2)", whiteSpace: "pre-wrap" }}><div className="lbl">Notes</div>{o.notes}</div>}
-            </section>
+        <div className="two pod-two">
+          <div className="stack" id="items">
+            {/* each job like the proof: its mockups, what's printed where (method, size, inks with their colors), then the
+                garments by size with their prices */}
+            {orderGroups(o).map((g, gi) => {
+              const cg = c.groups[gi];
+              const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]);
+              const used = SIZES.filter((s) => g.lines.some((l) => +(l.sizes?.[s] || 0) > 0));
+              const grid = used.length > 0 && used.length <= 7;
+              const gq = g.lines.reduce((a, _l, li) => a + (cg?.lines[li]?.qty || 0), 0);
+              return (
+                <section key={g.id} className="panel pod-grp">
+                  <div className="panel-h"><h2>{g.name || (orderGroups(o).length > 1 ? `Job ${gi + 1}` : o.nickname || "Your order")}</h2><span className="faint">{gq.toLocaleString("en-US")} pieces{cg?.wholesale ? " · your garments" : ""}</span></div>
+                  {g.description && <div className="panel-b pod-desc">{g.description}</div>}
+                  <div className="panel-b pod-g">
+                    {pics.length > 0 && <div className="pod-art"><PortalArtView pics={pics.slice(0, 8).map((x) => mkUrls[x])} /></div>}
+                    <div className="pod-spec">
+                      {g.imprints.length > 0 ? (
+                        <table className="tbl pod-prints">
+                          <thead><tr><th>Print</th><th>Method</th><th>Size</th><th>Inks</th></tr></thead>
+                          <tbody>{g.imprints.map((d, k) => {
+                            const reorder = needsDetails(d);
+                            const inks = inkNames(d.inks || "");
+                            return (
+                              <tr key={d.id || k}>
+                                <td><b>{d.location || "Print"}</b></td>
+                                <td>{methodLabel(d)}{(d.method === "screen" || d.method === "embroidery") && d.colors ? <div className="sub">{d.method === "screen" && d.colors >= FULL_COLOR ? "Full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`}</div> : null}</td>
+                                <td className="pod-nw">{d.size || "—"}</td>
+                                <td>{reorder ? <span className="faint">Matches your previous order</span> : inks.length ? <span className="pod-inks">{inks.map((n) => { const hx = colorHex(n); return <span key={n} className="pod-ink"><i style={{ background: hx || "var(--surface-2)" }} aria-hidden />{n}</span>; })}</span> : "—"}</td>
+                              </tr>
+                            );
+                          })}</tbody>
+                        </table>
+                      ) : <div className="faint">No prints on this job.</div>}
+                      {(cg?.finishing.length || 0) > 0 && <div className="pod-fin"><span className="lbl">Finishing</span>{cg!.finishing.map((f) => f.name).join(", ")}</div>}
+                    </div>
+                  </div>
+                  <div className="tbl-wrap pod-lines">
+                    <table className="tbl">
+                      <thead><tr><th>Garment</th>{grid ? used.map((s) => <th key={s} className="r">{sizeLabel(s)}</th>) : <th>Sizes</th>}<th className="r">Qty</th>{!isReq && <th className="r">Each</th>}{!isReq && <th className="r">Total</th>}</tr></thead>
+                      <tbody>{g.lines.map((l, li) => {
+                        const lc = cg?.lines[li];
+                        return (
+                          <tr key={l.id}>
+                            <td><b>{l.style || "Garment"}</b> {garmentName(l.garment, l.style)}{l.color ? <div className="sub">{l.color}</div> : null}</td>
+                            {grid ? used.map((s) => <td key={s} className="r num">{+(l.sizes?.[s] || 0) || ""}</td>) : <td><div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{sizeLabel(s)} {l.sizes[s]}</span>)}</div></td>}
+                            <td className="r num b">{lc?.qty}</td>
+                            {!isReq && <td className="r num">{money(lc?.each)}</td>}
+                            {!isReq && <td className="r num b">{money(lc?.sub)}</td>}
+                          </tr>
+                        );
+                      })}</tbody>
+                    </table>
+                  </div>
+                </section>
+              );
+            })}
+
+            {(extras.length > 0 || o.notes) && (
+              <section className="panel">
+                <div className="panel-h"><h2>{extras.length ? "Other charges" : "Notes"}</h2></div>
+                {extras.length > 0 && <div className="panel-b pod-x">{extras.map((x, i) => <div key={i} className="pod-row"><span>{x.k}</span><b className="num">{x.v}</b></div>)}</div>}
+                {o.notes && <div className="panel-b" style={{ borderTop: extras.length ? "1px solid var(--line-2)" : 0, whiteSpace: "pre-wrap" }}>{extras.length ? <div className="lbl">Notes</div> : null}{o.notes}</div>}
+              </section>
+            )}
 
             {(proofs.length > 0 || mkGroups.length === 0) && <section className="panel" id="proofs">
-              <div className="panel-h"><h2>{ownMk.length && !proofs.length ? "Artwork" : "Artwork proofs"}</h2></div>
+              <div className="panel-h"><h2>Artwork proofs</h2></div>
               <div className="panel-b stack">
-                {ownMk.map((g) => { const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]); return (
-                  <div key={g.id} className="po-mock">
-                    <div className="po-mock-h"><b>{g.fromMockup ? `Your mockup${g.fromMockup.number ? ` M-${g.fromMockup.number}` : ""}` : (g.customerMockups || []).length ? "Your mockup" : "Mockup"}</b><span className="faint">{g.fromMockup ? "made in our Mockup Creator" : (g.customerMockups || []).length ? "your own file" : "by FBS Print"}{g.name ? ` · ${g.name}` : ""}</span></div>
-                    <div className="po-mock-pics">{pics.map((x) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><img src={mkUrls[x]} alt="Mockup" /></a>)}</div>
-                    {!proofs.length && <div className="faint" style={{ fontSize: 12.5 }}>This is the art we print from. If anything needs changing, we&apos;ll send you a proof to approve.</div>}
-                  </div>
-                ); })}
                 {proofs.length ? (
-                  <div className="proofs">{proofs.map((pf) => <ProofCard key={pf.id} proof={pf} reviewHref={`/portal/orders/${o.id}/review/${pf.id}${preview ? `?as=${ctx.preview!.id}` : ""}`} />)}</div>
-                ) : ownMk.length ? null : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
+                  <div className="proofs">{proofs.map((pf) => <ProofCard key={pf.id} proof={pf} reviewHref={`/portal/orders/${o.id}/review/${pf.id}${qsAs}`} />)}</div>
+                ) : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
               </div>
             </section>}
 
@@ -258,7 +272,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 <div className="panel-h"><h2>Sew-outs</h2></div>
                 <div className="panel-b">
                   <div className="proofs">{sewouts.map((x, i) => (
-                    <a key={x.id} className="sow-card" href={`/portal/orders/${o.id}/sewout/${x.id}${preview ? `?as=${ctx.preview!.id}` : ""}`}>
+                    <a key={x.id} className="sow-card" href={`/portal/orders/${o.id}/sewout/${x.id}${qsAs}`}>
                       {swSigned[i]?.signedUrl ? <img src={swSigned[i].signedUrl!} alt={`Sew-out version ${x.version}`} /> : null}
                       <b>Sew-out v{x.version}</b>
                       <span className="muted">{x.status === "approved" ? `Approved${x.decided_name ? ` by ${x.decided_name}` : ""}` : x.status === "changes" ? "Changes requested" : "Waiting for your approval"}</span>
@@ -275,52 +289,74 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
 
           <aside className="stack">
+            {/* the order's facts in one place, like the top of the proof */}
+            <section className="panel">
+              <div className="panel-h"><h2>Order details</h2></div>
+              <div className="panel-b pod-kv">
+                <span>{o.type === "quote" ? "Quote" : "Order"}</span><b>#{o.number}</b>
+                {o.po_number ? <><span>PO</span><b>{o.po_number}</b></> : null}
+                <span>Ordered</span><b>{fmtDateLong(String(o.created_at || "").slice(0, 10))}</b>
+                {o.due_date ? <><span>In hands</span><b>{fmtDateLong(o.due_date)}</b></> : null}
+                {delivery ? <><span>Delivery</span><b>{delivery}</b></> : null}
+                {o.delivery_method !== "pickup" && o.ship_to ? <><span>{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</span><b className="pod-addr">{o.ship_to}</b></> : null}
+                {o.tracking ? <><span>Tracking</span><b className="pod-addr">{o.tracking}</b></> : null}
+                {cust?.name ? <><span>Contact</span><b>{cust.name}</b></> : null}
+                {o.approved_at ? <><span>Approved</span><b>{fmtDate(o.approved_at)}{o.approved_name ? ` by ${o.approved_name}` : ""}</b></> : null}
+                {approvedProof ? <><span>Proof</span><b>Approved {fmtDate(approvedProof.decided_at || approvedProof.created_at)}</b></> : null}
+                {garmentsLine ? <><span>Garments</span><b><a href={goodsHere.length ? "#goods" : `/portal?area=goods${preview ? `&as=${ctx.preview!.id}` : ""}`}>{garmentsLine}</a></b></> : null}
+              </div>
+            </section>
+
             {isReq ? (
               <section className="panel">
                 <div className="panel-h"><h2>Pricing</h2></div>
                 <div className="panel-b muted" style={{ fontSize: 13 }}><b>TBD.</b> We&apos;re pricing your order now. You&apos;ll get an email when it&apos;s ready to approve.</div>
               </section>
-            ) : <>
-            <section className="panel">
-              <div className="panel-h"><h2>Summary</h2></div>
-              <div className="panel-b">
-                <div className="totals">
-                  <div className="tr"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
-                  {c.discount ? <div className="tr"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
-                  <div className="tr"><span>Tax{o.tax_exempt ? " (exempt)" : ""}</span><span>{money(c.tax)}</span></div>
-                  <div className="tr big"><span>Total</span><span>{money(c.total)}</span></div>
-                  <div className="tr"><span>Paid</span><span>{money(c.paid)}</span></div>
-                  <div className="tr bal"><span>Balance</span><span style={{ color: c.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(c.balance)}</span></div>
+            ) : (
+              <section className="panel" id="pay">
+                <div className="panel-h"><h2>Payment</h2></div>
+                <div className="panel-b stack">
+                  <div className="totals">
+                    <div className="tr"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
+                    {c.discount ? <div className="tr"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
+                    <div className="tr"><span>Tax{o.tax_exempt ? " (exempt)" : ""}</span><span>{money(c.tax)}</span></div>
+                    <div className="tr big"><span>Total</span><span>{money(c.total)}</span></div>
+                    {payments.map((x) => <div key={x.id} className="tr pod-paid"><span>Paid {fmtDate(x.paid_on)} · {x.method}</span><span>−{money(+x.amount)}</span></div>)}
+                    <div className="tr bal"><span>Balance</span><span style={{ color: c.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(c.balance)}</span></div>
+                  </div>
+                  {(() => { const d = o.type === "invoice" ? payDueDate(o, terms) : null; return <div className="aa-terms"><span>Payment terms</span><b>{PAY_TERMS[terms]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
+                  {canPay ? (
+                    <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: o.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note }}
+                      pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : cust?.email || ctx.email} />
+                  ) : c.balance > 0.004 && String(o.status) !== "void" ? (
+                    <div className="pay-notready"><b>Not ready to pay yet</b><span>{o.type === "quote" && o.status !== "quote_sent" ? "You can pay once we send your quote." : ps.why}</span></div>
+                  ) : o.type === "quote" ? (
+                    <div className="muted" style={{ fontSize: 13 }}>You can pay online after you approve the quote.</div>
+                  ) : <div className="okmsg"><b>Paid in full.</b> Thank you!</div>}
+                  {canPay && ps.can === "deposit" && <div className="faint" style={{ fontSize: 12.5 }}>We&apos;re asking for the deposit now. The balance is due when your order is ready.</div>}
+                  {canPay && ps.notFinal && <div className="pay-nf"><b>This invoice isn&apos;t final yet.</b> {ps.note || "There may be more charges (like shipping)."}</div>}
                 </div>
-              </div>
-            </section>
-            <section className="panel" id="pay">
-              <div className="panel-h"><h2>Payment</h2></div>
-              <div className="panel-b stack">
-                {(() => { const t = ctx.customers.find((x) => x.id === o.customer_id)?.payment_terms || "receipt"; const d = o.type === "invoice" ? payDueDate(o, t) : null; return <div className="aa-terms"><span>Payment terms</span><b>{PAY_TERMS[t]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
-                {canPay ? (
-                  <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: o.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note }}
-                    pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : ctx.customers.find((x) => x.id === o.customer_id)?.email || ctx.email} />
-                ) : c.balance > 0.004 && String(o.status) !== "void" ? (
-                  <div className="pay-notready"><b>Not ready to pay yet</b><span>{o.type === "quote" && o.status !== "quote_sent" ? "You can pay once we send your quote." : ps.why}</span></div>
-                ) : o.type === "quote" ? (
-                  <div className="muted" style={{ fontSize: 13 }}>You can pay online after you approve the quote.</div>
-                ) : <div className="okmsg"><b>Paid in full.</b> Thank you!</div>}
-                {canPay && ps.can === "deposit" && <div className="faint" style={{ fontSize: 12.5 }}>We&apos;re asking for the deposit now. The balance is due when your order is ready.</div>}
-                {canPay && ps.notFinal && <div className="pay-nf"><b>This invoice isn&apos;t final yet.</b> {ps.note || "There may be more charges (like shipping)."}</div>}
-                {payments.length > 0 && <div>{payments.map((x) => <div key={x.id} className="pay-row"><span>{fmtDate(x.paid_on)} · {x.method}</span><b className="num">{money(x.amount)}</b></div>)}</div>}
-              </div>
-            </section>
-            </>}
-            {/* their goods for this order, in the side panel under Payment (Oct 24, Nick: "move the customer supplied goods to the right panel below pay") */}
-            {/* earlier: (Oct 24, Nick: "another tab… customer supplied goods when it's a wholesale order… waiting on
-                goods, goods received… upload tracking… it should be on each order too") */}
+              </section>
+            )}
+
+            {/* their goods for this order, in the side panel under Payment (Oct 24, Nick) */}
             {goodsHere.length > 0 && (
               <section className="panel" id="goods">
                 <div className="panel-h"><h2>Customer supplied goods</h2><span className="faint">Your garments: send us tracking, see when they&apos;re here</span></div>
-                <div className="panel-b"><PortalGoods items={goodsHere} canAct={!preview} qs={preview ? `?as=${ctx.preview!.id}` : ""} empty="" /></div>
+                <div className="panel-b"><PortalGoods items={goodsHere} canAct={!preview} qs={qsAs} empty="" /></div>
               </section>
             )}
+
+            {/* the papers for this order: the invoice, each proof, each mockup */}
+            <section className="panel">
+              <div className="panel-h"><h2>Files</h2></div>
+              <div className="panel-b pod-files">
+                <a href={`/print/${o.id}${qsAs}`} target="_blank" rel="noreferrer"><span className="pod-fi">PDF</span>{o.type === "quote" ? "Quote" : "Invoice"} #{o.number}</a>
+                {proofs.map((pf) => <a key={pf.id} href={pf.status === "pending" ? `/portal/orders/${o.id}/review/${pf.id}${qsAs}` : pf.url || "#"} target={pf.status === "pending" ? undefined : "_blank"} rel="noreferrer"><span className="pod-fi">{pf.file_type.includes("pdf") ? "PDF" : "IMG"}</span>{pf.title || `Proof v${pf.version || 1}`}<small>{pf.status === "approved" ? "Approved" : pf.status === "changes" ? "Changes asked" : "To review"}</small></a>)}
+                {mkPaths.filter((x) => mkUrls[x]).slice(0, 8).map((x, i) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><span className="pod-fi">IMG</span>Mockup {i + 1}</a>)}
+              </div>
+            </section>
+
             <section className="panel">
               <div className="panel-h"><h2>Questions?</h2></div>
               <div className="panel-b stack" style={{ fontSize: 13 }}>
