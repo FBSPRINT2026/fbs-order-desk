@@ -20,7 +20,7 @@ const ck = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const sameColor = (a: string, b: string) => { const x = ck(a), y = ck(b); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
 const sizeHead = (z: string) => (z === "OS" ? "Qty" : /^\d+$/.test(z) ? `${z}"` : z);
 
-export function OldReorderButton({ archivedId, disabled, as }: { archivedId: string; disabled?: boolean; /** staff previewing: the customer, to show the form (nothing saved) */ as?: string }) {
+export function OldReorderButton({ archivedId, disabled, as, primary = true }: { archivedId: string; disabled?: boolean; /** the page's one blue button (not when Pay is there) */ primary?: boolean; /** staff previewing: the customer, to show the form (nothing saved) */ as?: string }) {
   const [start, setStart] = useState<OldReorderStart | null>(null), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const open = async () => {
     setBusy(true); setErr("");
@@ -31,7 +31,7 @@ export function OldReorderButton({ archivedId, disabled, as }: { archivedId: str
   };
   return (
     <>
-      <button type="button" className="btn primary" disabled={disabled || busy} title={disabled ? "Turned off" : "Reorder this: tell us the sizes and anything that's changed"} onClick={() => void open()}>{busy ? "Opening…" : "Reorder"}</button>
+      <button type="button" className={"btn" + (primary ? " primary" : "")} disabled={disabled || busy} title={disabled ? "Turned off" : "Reorder this: tell us the sizes and anything that's changed"} onClick={() => void open()}>{busy ? "Opening…" : "Reorder"}</button>
       {err && <span className="err">{err}</span>}
       {start && <OldReorderForm s={start} onClose={() => { if (start.id) void discardRequest(start.id); setStart(null); }} />}
     </>
