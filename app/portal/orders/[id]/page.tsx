@@ -189,7 +189,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
         {o.status === "quote_sent" && !waitingOn.some((x) => x.kind === "quote") && <QuoteApproval orderId={o.id} total={money(c.total)} terms={[termsText(terms, o.delivery_method === "pickup"), /deposit|balance|due|pay/i.test(ctx.settings.shop.terms || "") ? "" : ctx.settings.shop.terms].filter(Boolean).join(" ")} disabled={preview} defaultName={ctx.customers.find((x) => x.id === o.customer_id)?.name || ""} />}
         {o.approved_at && <div className="muted" style={{ fontSize: 13 }}>Quote approved{o.approved_name ? <> by <b>{o.approved_name}</b></> : null} on {fmtStamp(o.approved_at)}.</div>}
 
-        {pendingProofs.length > 0 && (
+        {/* the proof is already asked for in "Waiting on you" above: not a second box for it */}
+        {pendingProofs.length > 0 && !waitingOn.some((x) => x.kind === "art") && (
           <div className="callout" style={{ borderColor: "color-mix(in srgb, #A152C9 45%, var(--line))", background: "color-mix(in srgb, #A152C9 10%, var(--surface))" }}>
             <h2>Artwork ready for your review</h2>
             <div className="muted">Please approve each proof or tell us what to change. We start printing once artwork is approved.</div>
