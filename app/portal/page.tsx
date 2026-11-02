@@ -1,3 +1,4 @@
+import { allRows } from "@/lib/readAll";
 import { discardRequest } from "@/app/portal/request-actions";
 import { getPortalCtx } from "@/lib/portal";
 import { oneOfEach } from "@/lib/mockupList";
@@ -68,8 +69,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   let archived: (ArchiveSummary & { transactions: PvTransaction[] | null })[] = [];
   if (ctx.customerIds.length) {
     const [{ data: ar }, { data }] = await Promise.all([
-      admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).in("customer_id", ctx.customerIds).order("order_date", { ascending: false }),
-      ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").is("discarded_at", null).order("number", { ascending: false }),
+      // every one, in pages (Nov 2 portal check: Cedar Promos has 2,337 old orders and the list stopped at 1,000)
+      allRows((ra, rb) => admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).in("customer_id", ctx.customerIds).order("order_date", { ascending: false }).order("id").range(ra, rb)),
+      allRows((ra, rb) => ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").is("discarded_at", null).order("number", { ascending: false }).order("id").range(ra, rb)),
     ]);
     archived = (ar || []) as never;
     // drafts aren't orders yet (Oct 24, Nick): only in "Your drafts", never in the lists
