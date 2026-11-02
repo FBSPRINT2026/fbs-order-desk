@@ -84,7 +84,9 @@ export async function saveGoodsInfo(orderId: string, g: GoodsInfo): Promise<Resu
 export async function linkIncoming(pick: { lineId: string; orderId: string }[]): Promise<Result> {
   try {
     const ctx = await getPortalCtx();
-    if (ctx.isStaff || ctx.preview) return { ok: false, error: "This is a preview. Customers link goods from their own login." };
+    // staff looking at a customer's portal can put their shipments on their orders too (Nov 2, Nick: "drag and drop and
+    // save… not working… I'm in their portal"): only that customer's shipments and orders, as for the customer
+    if (ctx.preview && !ctx.isStaff) return { ok: false, error: "This is a preview." };
     if (!ctx.customerIds.length || !pick.length) return { ok: false, error: "Pick your order." };
     await linkByHand(createAdminClient(), pick, ctx.email || "customer", ctx.customerIds);
     revalidatePath("/portal");
@@ -142,7 +144,8 @@ export async function sendGoods(x: SendGoods): Promise<Result> {
 export async function linkToldShipment(ids: string[], orderId: string): Promise<Result> {
   try {
     const ctx = await getPortalCtx();
-    if (ctx.isStaff || ctx.preview) return { ok: false, error: "This is a preview. Customers link goods from their own login." };
+    if (ctx.preview && !ctx.isStaff) return { ok: false, error: "This is a preview." };
+    if (!ctx.customerIds.length) return { ok: false, error: "Please sign in again." };
     const admin = createAdminClient();
     const { data: o } = await admin.from("orders").select("id, customer_id").eq("id", orderId).maybeSingle();
     if (!o || !ctx.customerIds.includes(o.customer_id)) return { ok: false, error: "We couldn't find that order." };

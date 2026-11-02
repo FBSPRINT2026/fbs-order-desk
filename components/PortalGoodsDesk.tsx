@@ -23,8 +23,8 @@ const boxesOf = (n: number) => `${n} box${n === 1 ? "" : "es"}`;
  * One card per order with how much of its goods are here, each supplier shipment as one line (tracking folded away),
  * the shipments we couldn't match at the top with "Which order?", and a form for goods coming from anywhere else.
  */
-export default function PortalGoodsDesk({ items, incoming, told = [], canAct, qs, addTracking, linkIncoming, sendGoods, linkTold }: {
-  items: GoodsItem[]; incoming: PendingShipment[]; told?: ToldShipment[]; canAct: boolean; qs: string;
+export default function PortalGoodsDesk({ items, incoming, told = [], canAct, canLink = canAct, qs, addTracking, linkIncoming, sendGoods, linkTold }: {
+  items: GoodsItem[]; incoming: PendingShipment[]; told?: ToldShipment[]; canAct: boolean; /** staff in a customer's portal: can still put shipments on orders */ canLink?: boolean; qs: string;
   addTracking: (orderId: string, t: TrackingInput) => Promise<R>; linkIncoming: (pick: { lineId: string; orderId: string }[]) => Promise<R>;
   sendGoods?: (x: SendGoods) => Promise<R>; linkTold?: (ids: string[], orderId: string) => Promise<R>;
 }) {
@@ -77,7 +77,7 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, qs
     const key = drag; setDrag(null); setOver(null);
     const g = incoming.find((x) => x.key === key), t = toldGroups.find((x) => x.key === key);
     if (!g && !t) return;
-    if (!canAct) { setDropMsg("This is a preview: customers link shipments from their own login."); return; }
+    if (!canLink) { setDropMsg("This is a preview: customers link shipments from their own login."); return; }
     const r = g ? await linkTo(g, orderId) : await linkToldTo(t!.list.map((x) => x.id), orderId);
     setDropMsg(r.ok ? "" : r.error || "Couldn't link it.");
   };
@@ -153,9 +153,9 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, qs
           <section className="gdk-grp g-nl gdk-help" aria-label="Shipments not linked">
             <div className="gdk-vbar"><span>Not linked</span></div>
             <div className="gdk-grp-b">
-              {toldGroups.map((t) => <ToldRow key={t.key} list={t.list} canAct={canAct} orders={rows.filter((r) => !r.done).map((r) => ({ id: r.it.order.id, number: r.it.order.number, nickname: r.it.order.nickname }))}
+              {toldGroups.map((t) => <ToldRow key={t.key} list={t.list} canAct={canLink} orders={rows.filter((r) => !r.done).map((r) => ({ id: r.it.order.id, number: r.it.order.number, nickname: r.it.order.nickname }))}
                 onDrag={(on) => { setDrag(on ? t.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkToldTo(t.list.map((x) => x.id), orderId)} />)}
-              {incoming.map((g) => <Unmatched key={g.key} g={g} canAct={canAct} onDrag={(on) => { setDrag(on ? g.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkTo(g, orderId)} />)}
+              {incoming.map((g) => <Unmatched key={g.key} g={g} canAct={canLink} onDrag={(on) => { setDrag(on ? g.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkTo(g, orderId)} />)}
             </div>
           </section>
         </div>

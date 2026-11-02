@@ -215,6 +215,17 @@ export function abbrevHit(po: string, names: string[], nickname: string): boolea
   return pw.some((w) => w.length >= 4 && !GENERIC.test(w) && theirs.some((t) => near(w, t)));
 }
 
+/** every piece of the shipment has room on the order: by style, color and size, no more than it still needs */
+function fitsNeed(lines: Line[], o: Open): boolean {
+  const left = o.items.map((it) => ({ ...it }));
+  for (const l of lines) {
+    let q = l.qty_shipped;
+    for (const it of left) if (q > 0 && it.need > 0 && (it.style ? styleEq(it.style, l.style) : true) && colorEq(it.color, l.color) && sameSize(it.size, sizeKey(l.size))) { const t = Math.min(it.need, q); it.need -= t; q -= t; }
+    if (q > 0) return false;
+  }
+  return true;
+}
+
 /**
  * A job's name in a PO, the way customers write it into their supplier POs: glued, in capitals, with codes around it
  * ("DH-WH-TAKEHEART-1075" for "Take Heart", "DH-BC-MAKESAWAY-750" for "He Makes a Way", "DH-WH-BLESSING-IVORY" for
@@ -577,7 +588,9 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
   // the job's name written into the PO (Nov 2, Nick: Dear Heart's "DH-WH-TAKEHEART-1075" is #40362 Take Heart,
   // "DH-BC-MAKESAWAY-750" is #40361 He Makes a Way): an order whose name is in the PO, and the goods are what it needs.
   // One such order: linked. Several (two jobs of the same name): split by what each needs, linked only when that's sure
-  const named = orders.filter((o) => jobNameHit(o.nickname, g.customer_po));
+  // …and only orders the goods fit inside of (what they still need, size by size): an older shipment for the last job
+  // of the same name is not this one's (Nov 2: two October Blessing shipments landed on #40364 on top of its own)
+  const named = orders.filter((o) => jobNameHit(o.nickname, g.customer_po) && fitsNeed(lines, o));
   if (named.length) {
     const an = allocate(lines, named);
     if (an.alloc.length && !an.unplaced.length) return { customerId, ...an, auto: named.length === 1 || an.sure, how: named.length === 1 ? `the job's name is in the PO (${g.customer_po} → #${named[0].number} ${named[0].nickname}) and the goods are what it needs` : `the job's name is in the PO on ${named.length} jobs, split by what each needs` };
@@ -808,10 +821,26 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
   // newest shipments first: they're the ones today's orders are waiting on, and an old one nobody's matched in days
   // shouldn't use up the round's time before them (Nov 2, Dear Heart's goods sat while the round ran out)
   const groups = groupLines((data || []) as Waiting[]).sort((a, b) => (b.lines[0]?.created_at || "").localeCompare(a.lines[0]?.created_at || ""));
+  // a shipment looked at since anything changed (the shipment, or its customer's orders) is skipped: the round spends its
+  // time on what's new, not on re-reading the same 100 shipments every hour (Nov 2). Unknown accounts: once a day.
+  const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const { data: oc } = await allRows((r0, r1) => admin.from("orders").select("customer_id, updated_at, created_at").gte("updated_at", since).order("id").range(r0, r1), 20000);
+  const changed = new Map<string, string>();
+  for (const o of (oc || []) as { customer_id: string | null; updated_at: string | null; created_at: string }[]) { const t = o.updated_at || o.created_at; if (o.customer_id && t > (changed.get(o.customer_id) || "")) changed.set(o.customer_id, t); }
+  const dayAgo = new Date(Date.now() - 86400000).toISOString();
+  const fresh = (g: Group<Waiting>) => {
+    const seen = g.lines.map((l) => (l as Waiting & { checked_at?: string | null }).checked_at || "").sort()[0];
+    if (!seen) return false;
+    const cust = g.lines.find((l) => l.customer_id)?.customer_id;
+    return cust ? seen > (changed.get(cust) || "") : seen > dayAgo;
+  };
   roundOrders = new Map();
   try {
   for (const g of groups) {
     if (Date.now() > deadline - 15000) break;
+    if (fresh(g)) continue;
+    // looked at now (whatever comes of it)
+    await admin.from("supplier_manifest_lines").update({ checked_at: new Date().toISOString() }).in("id", g.lines.map((l) => l.id));
     // staff unlinked it from a job: the rules leave it alone (the AI, which knows which job was wrong, has a go)
     if (notFor.has(g.key)) continue;
     if (isUs(g.customer_name)) {
