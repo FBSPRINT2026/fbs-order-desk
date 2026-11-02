@@ -17719,3 +17719,12 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .pv-sum-r .pv-totals{padding:18px 22px}
 @media (max-width:820px){.pv-sum{grid-template-columns:1fr}.pv-sum-r{order:-1}}
 @media (max-width:640px){html body .pv .pv-items th:first-child,html body .pv .pv-items td:first-child{padding-left:14px}html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padding-right:14px}.pv .pv-head,.pv .pv-info{padding:16px}.pv-thumb.md,.pv-art-none{width:56px;height:56px}.pv-items .pv-artc{width:70px}}
+/* the quick look is as tall as the file it shows, up to the window (Nov 2, Nick: "snap to the attachment… a variable
+   height that adjusts up to whatever it's viewing"); Office files and web pages keep the full height they need */
+.mf-look{height:auto;max-height:min(92vh,100%);min-height:220px}
+.mf-look > .mf-look-b{flex:0 1 auto;min-height:0}
+.mf-look-b:has(.mf-pdf){display:flex;overflow:hidden}
+.mf-look-b .mf-pdf{flex:1 1 auto;height:auto;max-height:100%;min-height:0}
+.mf-look-b .mf-pdf-main{overflow-y:auto}
+.mf-look:has(.ofv),.mf-look:has(.mf-look-b > iframe){height:min(92vh,100%)}
+.mf-look:has(.ofv) > .mf-look-b,.mf-look:has(.mf-look-b > iframe) > .mf-look-b{flex:1 1 auto}
