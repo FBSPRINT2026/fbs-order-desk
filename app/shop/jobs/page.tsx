@@ -224,7 +224,7 @@ export default function JobCenter() {
             <div className="jc-st">
               {g.steps.length > 1 && <div className="dgz-rail" aria-hidden />}
               {g.steps.map(([k, l, icon]) => { const nn = count(k); const c = colorOf(k); return (
-                <button key={k} type="button" className={"dgz-stn" + (!all && step === k ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => go(k)}>
+                <button key={k} type="button" className={"dgz-stn" + (!all && !solo && step === k ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => go(k)}>
                   <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (items && !nn ? " z" : "")}>{items ? nn : "…"}</span></span>
                   <span className="dgz-nm">{l}</span>
                 </button>); })}
