@@ -165,24 +165,28 @@ export default function JobCenter() {
   const shownIds = new Set(shown.map((it) => it.orderId).filter(Boolean));
   const offTab = boardChats.filter((c) => !c.orderId || !shownIds.has(c.orderId));
   const chatHere = !!curChat && !!curChat.orderId && shownIds.has(curChat.orderId);
-  // line the board's rows up with the job table's rows: measured after every draw
+  // line the board's rows up with the job table's rows: measured when the table changes or resizes, at most once a
+  // frame (Nov 2: measuring after every draw looped, React error #185)
   useLayoutEffect(() => {
     if (!lineup) return;
+    let raf = 0;
     const measure = () => {
+      raf = 0;
       const t = document.querySelector(".jct-body table.jc"), L = listRef.current;
       if (!t || !L) { setRowsM((p) => (p.length ? [] : p)); return; }
       const trs = [...t.querySelectorAll("thead tr, tbody tr")] as HTMLTableRowElement[];
-      const next = trs.map((tr) => ({ h: Math.round(tr.getBoundingClientRect().height * 10) / 10, job: tr.dataset.job || "", kind: tr.closest("thead") ? "head" : tr.dataset.kind || "row" }));
-      const top = trs[0] ? trs[0].getBoundingClientRect().top - L.getBoundingClientRect().top + L.scrollTop - parseFloat(getComputedStyle(L).paddingTop || "0") : 0;
-      setPadTop((p) => (Math.abs(p - top) > 0.5 ? Math.max(0, top) : p));
-      setRowsM((p) => (JSON.stringify(p) === JSON.stringify(next) ? p : next));
+      const next = trs.map((tr) => ({ h: Math.round(tr.getBoundingClientRect().height), job: tr.dataset.job || "", kind: tr.closest("thead") ? "head" : tr.dataset.kind || "row" }));
+      const top = trs[0] ? Math.round(trs[0].getBoundingClientRect().top - L.getBoundingClientRect().top - (parseFloat(getComputedStyle(L).paddingTop || "0") || 0)) : 0;
+      setPadTop((p) => (Math.abs(p - top) > 1 ? Math.max(0, top) : p));
+      setRowsM((p) => (p.length === next.length && p.every((x, i) => x.h === next[i].h && x.job === next[i].job && x.kind === next[i].kind) ? p : next));
     };
+    const later = () => { if (!raf) raf = requestAnimationFrame(measure); };
     measure();
-    const ro = new ResizeObserver(measure);
-    const b = document.querySelector(".jct-body"); if (b) ro.observe(b);
-    addEventListener("resize", measure);
-    return () => { ro.disconnect(); removeEventListener("resize", measure); };
-  });
+    const ro = new ResizeObserver(later);
+    const tb = document.querySelector(".jct-body .jc-list"); if (tb) ro.observe(tb);
+    addEventListener("resize", later);
+    return () => { ro.disconnect(); removeEventListener("resize", later); if (raf) cancelAnimationFrame(raf); };
+  }, [lineup, items, step, dept, q, chat, chats, mq, pick, mine, cameBack]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
