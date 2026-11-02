@@ -32,7 +32,7 @@ async function get(url: string, ms: number, accept: string): Promise<Response | 
 /** a picture off the web: its bytes when it's a real JPEG/PNG/WebP under 6 MB */
 export async function webImage(url: string, ms = 8000): Promise<{ buf: Buffer; type: "image/jpeg" | "image/png" | "image/gif" | "image/webp" } | null> {
   if (!publicUrl(url)) return null;
-  const r = await get(url, ms, "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.5");
+  const r = await get(url, ms, "image/webp,image/png,image/jpeg;q=0.9,*/*;q=0.1");
   if (!r) return null;
   const len = +(r.headers.get("content-length") || 0); if (len > 6e6) return null;
   const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 6e6) return null;
@@ -179,7 +179,7 @@ const TOOL = {
 };
 
 /** the whole search: pages → their pictures → the pairs Claude sees, best first */
-export async function findWebBacks(ai: Ai, g: { brand: string; style: string; title?: string; color: string; front?: { buf: Buffer; type: "image/jpeg" | "image/png" | "image/gif" | "image/webp" } | null }, opts: { /** a page staff found (a known link): only it, looked at deeper */ pages?: string[] } = {}): Promise<{ found: WebBack[]; searched: string[] }> {
+export async function findWebBacks(ai: Ai, g: { brand: string; style: string; title?: string; color: string; front?: { buf: Buffer; type: "image/jpeg" | "image/png" | "image/gif" | "image/webp" } | null }, opts: { /** a page staff found (a known link): only it, looked at deeper */ pages?: string[] } = {}): Promise<{ found: WebBack[]; searched: string[]; looked?: number; picked?: number }> {
   const what = `${g.brand} ${g.style}${g.title ? ` (${g.title})` : ""} in the color "${g.color}"`;
   const pages = opts.pages?.length ? opts.pages : await findPages(ai, what);
   if (!pages.length) return { found: [], searched: [] };
@@ -215,5 +215,5 @@ export async function findWebBacks(ai: Ai, g: { brand: string; style: string; ti
   }
   // a matching pair from one site first, then the best backs alone
   found.sort((a, b) => (b.score + (b.front ? 15 : 0)) - (a.score + (a.front ? 15 : 0)));
-  return { found: found.filter((x) => x.score >= 40).slice(0, 6), searched: pages };
+  return { found: found.filter((x) => x.score >= 40).slice(0, 6), searched: pages, looked: ok.length, picked: (res.data.pairs || []).length };
 }

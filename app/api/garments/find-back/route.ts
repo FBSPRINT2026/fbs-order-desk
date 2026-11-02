@@ -53,7 +53,7 @@ export async function POST(req: Request) {
   const front = await ourFront(admin, String(ci.front || "")).catch(() => null);
   const r = await findWebBacks({ model: st.settings.assistant.ai.model || "claude-sonnet-5", admin, by: v.user.email || "staff" },
     { brand: String(g.brand || ""), style: String(g.style || ""), title: String(g.description || "").slice(0, 80), color: name, front }, page ? { pages: [page] } : {});
-  const web_backs = { at: new Date().toISOString(), found: r.found, searched: r.searched };
+  const web_backs = { at: new Date().toISOString(), found: r.found, searched: r.searched, looked: r.looked || 0, picked: r.picked || 0 };
   // read again just before saving: another color may have been saved meanwhile
   const { data: g2 } = await admin.from("garments").select("color_images").eq("id", g.id).maybeSingle();
   const cur = (g2?.color_images || imgs) as Record<string, Ci>;
