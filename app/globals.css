@@ -17968,3 +17968,6 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .gdk-msg:hover{color:var(--accent);border-color:var(--accent)}
 .gdk-full{grid-column:1/-1}
 @media (max-width:760px){.gdk-row{grid-template-columns:minmax(0,1fr) auto}.gdk-row.gdk-head{display:none}.gdk-c2{grid-column:1/-1}.gdk-c3{grid-column:1}.gdk-c4{grid-column:2;grid-row:1}}
+.rop-q{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}
+.rop-qf{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid var(--line);border-radius:6px;padding:4px 4px 4px 9px;font-size:12.5px;background:var(--surface);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rop-qf button{border:0;background:none;font-size:15px;line-height:1;color:var(--ink-3);cursor:pointer;padding:0 4px}
