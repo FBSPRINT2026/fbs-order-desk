@@ -17918,3 +17918,35 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .gdk-grp.gdk-help{background:var(--surface);border:0;border-radius:0}
 .gdk-grp .gdk-um:first-of-type{border-top:0}
 @media (max-width:640px){.gdk-grp{grid-template-columns:22px minmax(0,1fr)}.gdk-vbar span{font-size:10px}}
+/* the customer statement (Nov 2, Nick: "rethink the statement") */
+.stx-h{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
+.stx-logo{height:54px;width:auto;display:block}
+.stx-shop{font-size:12px;color:var(--ink-3);margin-top:8px;line-height:1.55}
+.stx-title{text-align:right;font-size:12.5px;color:var(--ink-3);line-height:1.65}
+.stx-title h1{font-family:var(--display);font-size:28px;letter-spacing:.03em;text-transform:uppercase;margin:0 0 4px;color:var(--ink)}
+.stx-title b{color:var(--ink)}
+.stx-strip{height:3px;background:var(--fbs-strip);margin:16px 0 18px}
+.stx-info{display:grid;grid-template-columns:1.3fr 1fr 1.1fr;gap:18px;align-items:start;font-size:13px;line-height:1.55}
+.stx-lb{display:block;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.stx-due{border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.stx-due b{display:block;font-size:26px;font-weight:800;white-space:nowrap}
+.stx-due small{font-size:12px;color:var(--ink-3)}
+.stx-tbl{margin-top:20px}
+.stx-tbl tbody tr td{color:var(--ink)}
+.stx-tbl .st-late{color:var(--danger);font-weight:700}
+.stx-tbl .st-n{white-space:nowrap}
+.stx-tbl .st-n a{font-weight:700}
+.stx-grp td{padding-top:14px!important;font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)!important;border-bottom:1px solid var(--line)}
+.stx-sub td{background:var(--surface-2);font-weight:700}
+.stx-tot td{border-top:1.5px solid var(--ink);font-weight:800;font-size:14.5px;padding-top:10px}
+.stx-note{font-size:11.5px;color:var(--ink-3);margin:8px 0 0;display:flex;align-items:center;gap:6px}
+.stx-age{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:18px}
+.stx-age div{padding:8px 10px;border-right:1px solid var(--line-2,var(--line))}
+.stx-age div:last-child{border-right:0}
+.stx-age span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.stx-age b{font-size:13.5px;white-space:nowrap}
+.stx-pay{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:18px;font-size:12.5px;line-height:1.5}
+.stx-pay>div{border:1px solid var(--line-2,var(--line));border-radius:8px;padding:10px 12px}
+.stx-stub{margin-top:22px;border-top:1.5px dashed var(--line);padding-top:12px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px;color:var(--ink-2)}
+@media (max-width:700px){.stx-info{grid-template-columns:minmax(0,1fr)}.stx-title{text-align:left}.stx-age{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media print{.stx-strip{print-color-adjust:exact;-webkit-print-color-adjust:exact}.stx-sub td{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
