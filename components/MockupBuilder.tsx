@@ -1,7 +1,7 @@
 "use client";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
 import { askPage } from "@/lib/artboards";
-import { pastedSvg, pastedWidths, type PastedSvg } from "@/lib/pastedSvg";
+import { pastedSvg, type PastedSvg } from "@/lib/pastedSvg";
 import BackLink from "@/components/BackLink";
 import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
@@ -491,6 +491,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     /** the shirt's color on the file, and how many prints had it inside (taken out: the shirt shows through) */ shirtHex?: string; knocked?: number }>(null);
   const [helpOpen, setHelpOpen] = useSticky("mk.helper", true);
   const [helpOver, setHelpOver] = useState(false);
+  /** art pasted from Illustrator, waiting on where it goes */
+  const [pasteAsk, setPasteAsk] = useState<null | { p: PastedSvg; row: HelpRow }>(null);
   /** the location asked about removing (Delete on its logo) */
   const [delAsk, setDelAsk] = useState<string | null>(null);
   // art copied in Illustrator and pasted anywhere on the page but a box (helperPaste)
@@ -2259,25 +2261,27 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    *  its inks read off its colors. The first is the front, the next the back (both can be changed); sizes are read
    *  against each other (lib/pastedSvg.ts) */
   async function helperPaste(p: PastedSvg) {
-    setHelpOpen(true);
-    const n = (helper?.rows.filter((r) => r.wPt).length || 0) + 1;
-    const file = new File([p.svg], `Pasted art ${n}.svg`, { type: "image/svg+xml" });
+    // where it goes is asked in a small pop-up in the middle (Nov 1, Nick: "where do you want to put this? …full front,
+    // back. It doesn't have to stay in that little helper")
+    const file = new File([p.svg], `Pasted art.svg`, { type: "image/svg+xml" });
     const url = URL.createObjectURL(file);
     const img = await loadImg(url).catch(() => null);
     const cols = img ? detectColors(img, 6).filter((c) => c.share >= 0.02) : [];
     const inks = [...new Set(cols.map((c) => { const s0 = suggestInk(c.hex); return s0.rec === "pms" ? s0.pms.name : s0.standard.name; }).filter(Boolean))];
     const hx = (cols[0]?.hex || "#000000").replace("#", "");
     const lum = (0.299 * parseInt(hx.slice(0, 2), 16) + 0.587 * parseInt(hx.slice(2, 4), 16) + 0.114 * parseInt(hx.slice(4, 6), 16)) / 255;
-    setHelper((h) => {
-      const base = h && !h.busy ? h : { name: "Art pasted from Illustrator", busy: "", kind: "art" as const, rows: [], pms: [], inkOpts: [] };
-      const side: HelpRow["side"] = base.rows.some((r) => r.wPt && r.side === "front") && !base.rows.some((r) => r.wPt && r.side === "back") ? "back" : "front";
-      const row: HelpRow = { key: `p${Date.now().toString(36)}`, file, url, side, location: "", widthIn: 10, heightIn: 0, dropIn: side === "back" ? 4 : 3, inks, use: true, light: lum > 0.7, distress: "none", wPt: p.wPt };
-      const rows = [...base.rows, row];
-      const pasted = rows.filter((r) => r.wPt), ws = pastedWidths(pasted.map((r) => r.wPt || 0));
-      const ratio = (r: HelpRow) => { const s0 = r.file === file ? p : null; return s0 ? s0.hPt / s0.wPt : r.heightIn / (r.widthIn || 1); };
-      const sized = rows.map((r) => { const k = pasted.indexOf(r); if (k < 0) return r; const w = ws[k]; return { ...r, widthIn: w, heightIn: Math.round(w * ratio(r) * 100) / 100, location: r.side === "sleeve" ? r.location : locOfPulled(r.side, w, r.dropIn, r.side === "front" && w <= 5 ? 2 : 0) }; });
-      return { ...base, err: "", rows: sized, inkOpts: [...new Set([...base.inkOpts, ...inks])] };
-    });
+    setPasteAsk((old) => { if (old) URL.revokeObjectURL(old.row.url); return { p, row: { key: `p${Date.now().toString(36)}`, file, url, side: "front", location: "", widthIn: 0, heightIn: 0, dropIn: 3, inks, use: true, light: lum > 0.7, distress: "none", wPt: p.wPt } }; });
+  }
+  /** the pasted art put at the spot picked: its real size when it was copied at one (an art file, 1" to 15"), else the
+   *  spot's usual width; never past what the spot can hold */
+  async function pastePut(loc: string) {
+    const a = pasteAsk; if (!a) return;
+    const sp = LOCATION_SPOTS[loc], k = a.p.hPt / (a.p.wPt || 1), real = a.p.wPt / 72;
+    let w = real >= 1 && real <= 15 ? real : sp?.defW || 10;
+    if (sp) w = Math.min(w, sp.maxW, sp.maxH / (k || 1));
+    const widthIn = Math.max(0.5, Math.round(w * 4) / 4);
+    setPasteAsk(null);
+    await helperApply({ name: "Art pasted from Illustrator", kind: "art", rows: [{ ...a.row, location: loc, side: sideOf(loc), widthIn, heightIn: Math.round(widthIn * k * 100) / 100 }] });
   }
   pasteRef.current = (p) => void helperPaste(p);
   /** the Paste from Illustrator button: the clipboard read (the browser asks once to allow it) */
@@ -2450,15 +2454,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     setMsg("Saved as the customer's distress mask (Brand standards). Every logo of theirs can use it now.");
   }
   /** Helper → Put on the mockup: each checked print saved to the customer's logos and put at its location */
-  async function helperApply() {
-    if (!helper) return;
+  async function helperApply(given?: { name: string; kind?: "photos" | "drawn" | "art"; rows: HelpRow[] }) {
+    // the Helper's checked prints, or art put on straight from a paste (pasteAsk)
+    const H = given ? { ...given, file: undefined as File | undefined, keepFile: false } : helper;
+    if (!H) return;
     if (!customerId) return setMsg("Pick the customer first. The art is saved to their account.");
-    const rows = helper.rows.filter((r) => r.use);
+    const rows = H.rows.filter((r) => r.use);
     if (!rows.length) return setMsg("Check at least one print.");
-    setHelper((h) => h && { ...h, busy: "Saving the art…" });
+    if (!given) setHelper((h) => h && { ...h, busy: "Saving the art…" });
     try {
       const { data: u } = await sb.auth.getUser();
-      const base = helper.name.replace(/\.(pdf|ai)$/i, "").replace(/_/g, " ");
+      const base = H.name.replace(/\.(pdf|ai)$/i, "").replace(/_/g, " ");
       const made: { im: Imprint; d: Design }[] = [];
       for (const r of rows) {
         // distressed: the distressed picture is the logo, the clean one its "Distress: off"; the film stacks the mask (3 layers)
@@ -2467,8 +2473,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the mask itself is kept with the logo, so the separation can stack it for the film (the customer's, or this file's)
         let maskPath = r.distress === "brand" ? brandMask?.path : "";
         if (dz && r.distress === "file" && r.mask) { const mp = `masks/${customerId}/${Date.now().toString(36)}-${r.key}.png`; const up = await sb.storage.from("proofs").upload(mp, r.mask, { contentType: "image/png" }); if (!up.error) maskPath = mp; }
-        const d = await uploadDesign(sb, { draft: true, file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: maskPath || undefined, layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, fit: r.distress === "brand" ? "cover" : "stretch", note: how } } : {}), customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${helper.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
-        made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: `From ${helper.name}: ${r.widthIn}" × ${r.heightIn}"${helper.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
+        const d = await uploadDesign(sb, { draft: true, file: dz ? r.dfile! : r.file, ...(dz ? { preview: r.dfile!, clean: r.file, distress: { mask: maskPath || undefined, layers: r.distress === "brand" ? brandMask?.layers || 3 : 3, fit: r.distress === "brand" ? "cover" : "stretch", note: how } } : {}), customer_id: customerId, name: `${base} ${r.side}`, colors: Math.max(1, r.inks.length), inks: r.inks.join(", "), notes: `Pulled from ${H.name}${dz ? `. Distress: ${how}` : ""}`, by: u.user?.email || "" });
+        made.push({ d, im: { ...newImprint(r.location), design_id: d.id, size: `${r.widthIn}" wide`, inks: r.inks.join(", "), colors: Math.max(1, r.inks.length), notes: `From ${H.name}: ${r.widthIn}" × ${r.heightIn}"${H.kind !== "art" ? `, ${r.dropIn}" below the collar there` : ""}${dz ? `. Distress: ${how}` : ""}` } });
       }
       setDesigns((x) => [...made.map((m) => m.d), ...x]);
       setUrls({ ...urls, ...(await previewUrls(sb, made.map((m) => m.d))) });
@@ -2485,8 +2491,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setTab(sideOf(made[0].im.location));
       // the customer's own mockup goes on the order as a production file (Oct 27, Nick: "include the document along with
       // the mockup as a production file… a checkmark"), once
-      if (orderId && helper.keepFile && helper.file) {
-        const f = helper.file, label = `Customer's mockup: ${f.name}`.slice(0, 200);
+      if (orderId && H.keepFile && H.file) {
+        const f = H.file, label = `Customer's mockup: ${f.name}`.slice(0, 200);
         const { data: have } = await sb.from("art_files").select("id").eq("order_id", orderId).eq("name", label).limit(1);
         if (!have?.length) {
           const path = `art/${orderId}/${uid()}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
@@ -2494,10 +2500,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           if (!up.error) await sb.from("art_files").insert({ order_id: orderId, name: label, file_path: path, file_type: f.type || "application/pdf", note: "The customer's sheet the mockup was made from (Mockup Creator Helper)" });
         }
       }
-      helper.rows.forEach((r) => { URL.revokeObjectURL(r.url); if (r.durl) URL.revokeObjectURL(r.durl); });
-      setHelper(null);
-      setMsg(`Put ${made.map((m) => `${m.im.location} (${m.im.size})`).join(" and ")} on the mockup from ${helper.name}. Check the sizes against the art.`);
-    } catch (e) { setHelper((h) => h && { ...h, busy: "", err: "Couldn't save the art: " + (e instanceof Error ? e.message : String(e)) }); }
+      if (!given) { H.rows.forEach((r) => { URL.revokeObjectURL(r.url); if (r.durl) URL.revokeObjectURL(r.durl); }); setHelper(null); }
+      setMsg(`Put ${made.map((m) => `${m.im.location} (${m.im.size})`).join(" and ")} on the mockup from ${H.name}. Check the sizes against the art.`);
+    } catch (e) { const m = "Couldn't save the art: " + (e instanceof Error ? e.message : String(e)); if (given) setMsg(m); else setHelper((h) => h && { ...h, busy: "", err: m }); }
   }
 
   async function uploadNew(im: Imprint, f: File) {
@@ -3778,6 +3783,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   sigNowRef.current = () => sigNow.current; dirtyRefOut.current = () => dirtyRef.current;
   return (
     <BrandCtx.Provider value={brand}>
+      {pasteAsk && (() => { const groups = (["front", "back", "sleeve"] as Side[]).map((sd) => ({ sd, locs: locsFor(sd) })).filter((g) => g.locs.length); return (
+        <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="pa-t" onClick={() => setPasteAsk(null)} onKeyDown={(e) => { if (e.key === "Escape") setPasteAsk(null); }}>
+          <div className="mk-modal mkpa" onClick={(e) => e.stopPropagation()}>
+            <h2 id="pa-t">Where does this go?</h2>
+            <div className={"mkpa-pic" + (pasteAsk.row.light ? " dark" : "")} style={(lines[active] || lines[0])?.color ? { background: shirtHex(lines[active] || lines[0]) } : undefined}><img src={pasteAsk.row.url} alt="The pasted art" /></div>
+            {groups.map((g) => (
+              <div key={g.sd} className="mkpa-g">
+                <span className="mkpa-k">{g.sd === "front" ? "Front" : g.sd === "back" ? "Back" : "Sleeves"}</span>
+                <div className="mkpa-locs">{g.locs.map((l) => <button key={l} type="button" className="chip" onClick={() => void pastePut(l)}>{l}{imprints.some((x) => x.location === l && x.design_id) ? " (replace)" : ""}</button>)}</div>
+              </div>
+            ))}
+            <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}><button type="button" className="btn ghost" autoFocus onClick={() => setPasteAsk(null)}>Cancel</button></div>
+          </div>
+        </div>
+      ); })()}
       {delAsk && (() => { const im = imprints.find((x) => x.id === delAsk); if (!im) return null; const done = (yes: boolean) => { if (yes) setImprints((xs) => xs.filter((x) => x.id !== im.id)); setDelAsk(null); }; return (
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="del-t" onClick={() => done(false)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); done(true); } if (e.key === "Escape") done(false); }}>
