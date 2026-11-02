@@ -855,7 +855,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
       </div>
       {canPay && payCfg && (
         <aside className="aa-payside">
-          {terms && <div className="aa-terms"><span>Payment terms</span><b>{terms}</b></div>}
+          {/* the terms are small text on the title line now (Nov 2, Nick) */}
+          {terms && mode !== "portal" && <div className="aa-terms"><span>Payment terms</span><b>{terms}</b></div>}
           {canPay && (
         <QuickPay initial={sp.get("find") || undefined} ask={onPaySelect} onSelect={(ids) => { setPaySel(ids); setPayNow(null); setPayAmt(undefined); }}
           onPayAmount={(parts, amount) => {
@@ -1166,7 +1167,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
         <h1 className="aa-ptitle">{AREAS.find((a) => a.id === area)?.label || ""}</h1>
         {/* the page's search, on the title's line at the right; it filters what this page shows. On Payments the statement
             sits just left of it (Nov 2, Nick) */}
-        <span className="aa-ptop-r">{area === "payments" && statementHref && <a className="btn sm" href={statementHref}>View / print statement</a>}
+        <span className="aa-ptop-r">{area === "payments" && terms && <span className="aa-ptop-terms">Terms: <b>{terms}</b></span>}{area === "payments" && statementHref && <a className="btn sm" href={statementHref}>View / print statement</a>}
         {area === "home" && titleAsk ? titleAsk : area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}</span>
       </div>}
       <section className="aa-body">{mode === "portal" ? <PageSearchContext.Provider value={q}>{body}</PageSearchContext.Provider> : body}</section>
