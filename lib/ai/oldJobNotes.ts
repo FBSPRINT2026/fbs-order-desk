@@ -35,7 +35,7 @@ const SAYS_INKS = /\bpms\b|\b\d{3,4}\s?c\b|\bink|\bcolou?rs?\b|\bc\s?=\s?\d|\b(t
 
 export async function fillFromOldNotes(admin: SupabaseClient, s: Settings, draft: EODraft, by: string, customerId?: string | null): Promise<void> {
   if (!draft.reorderOf?.startsWith("a:")) return;
-  const { data: row } = await admin.from("archived_orders").select("visual_id, nickname, data").eq("id", draft.reorderOf.slice(2)).maybeSingle();
+  const { data: row } = await admin.from("archived_orders").select("visual_id, nickname, data").is("removed_at", null).eq("id", draft.reorderOf.slice(2)).maybeSingle();
   if (!row) return;
   const text = oldJobText(row as Old);
   const ims = draft.groups.flatMap((g: Group) => g.imprints);

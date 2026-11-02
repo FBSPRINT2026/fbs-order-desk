@@ -19,7 +19,7 @@ export default async function Statement({ searchParams }: { searchParams: Promis
   // invoices from our old system still owed (Nov 2 portal check: the dashboard's balance counted them, the statement
   // didn't, so the two disagreed): listed under their own heading, each paid through its own link
   type Old = { id: string; visual_id: string; nickname: string | null; order_date: string | null; due_date: string | null; total: number; paid: number; balance: number; pay: string | null };
-  const { data: oldRows } = ctx.customerIds.length ? await allRows<Old>((ra, rb) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, due_date, total, paid, balance, pay:data->urls->>publicUrl").in("customer_id", ctx.customerIds).eq("kind", "invoice").gt("balance", 0.004).order("order_date").order("id").range(ra, rb)) : { data: [] as Old[] };
+  const { data: oldRows } = ctx.customerIds.length ? await allRows<Old>((ra, rb) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, due_date, total, paid, balance, pay:data->urls->>publicUrl").is("removed_at", null).in("customer_id", ctx.customerIds).eq("kind", "invoice").gt("balance", 0.004).order("order_date").order("id").range(ra, rb)) : { data: [] as Old[] };
   const old = (oldRows || []) as Old[];
   const acct = ctx.customers[0];
   const shop = ctx.settings.shop;

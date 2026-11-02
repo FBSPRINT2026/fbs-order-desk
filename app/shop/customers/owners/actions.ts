@@ -35,7 +35,7 @@ export async function ownerList(limit: number) {
     // who Printavo had on each customer's latest order (a hint, never saved on its own)
     const pv = new Map<string, string>();
     for (let i = 0; i < ids.length; i += 100) {
-      const { data: ao } = await allRows((r0, r1) => admin.from("archived_orders").select("customer_id, order_date, owner:data->>owner").in("customer_id", ids.slice(i, i + 100)).not("order_date", "is", null).order("order_date", { ascending: false }).order("id").range(r0, r1), 5000);
+      const { data: ao } = await allRows((r0, r1) => admin.from("archived_orders").select("customer_id, order_date, owner:data->>owner").is("removed_at", null).in("customer_id", ids.slice(i, i + 100)).not("order_date", "is", null).order("order_date", { ascending: false }).order("id").range(r0, r1), 5000);
       for (const a of (ao || []) as { customer_id: string; owner: string | null }[]) if (a.owner && !pv.has(a.customer_id)) pv.set(a.customer_id, a.owner);
     }
     const owners = (((st?.data as { accountOwners?: { name: string }[] } | null)?.accountOwners) || []).map((o) => o.name).filter(Boolean);

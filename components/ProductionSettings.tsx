@@ -196,7 +196,7 @@ function Learning({ s, onApply }: { s: ProductionSettings; onApply: (t: MachineT
       const oIds = [...new Set(js.map((j) => j.order_id).filter(Boolean))] as string[], aIds = [...new Set(js.map((j) => j.archived_order_id).filter(Boolean))] as string[];
       const [{ data: os }, { data: as }] = await Promise.all([
         oIds.length ? sb.from("orders").select("id, groups, lines, number, nickname").in("id", oIds) : Promise.resolve({ data: [] }),
-        aIds.length ? sb.from("archived_orders").select("id, qty, status_name, nickname, pvgroups:data->groups").in("id", aIds) : Promise.resolve({ data: [] }),
+        aIds.length ? sb.from("archived_orders").select("id, qty, status_name, nickname, pvgroups:data->groups").is("removed_at", null).in("id", aIds) : Promise.resolve({ data: [] }),
       ]);
       const acc: Record<string, { est: number; actual: number; jobs: number }> = {};
       const add = (key: string, needs: ReturnType<typeof needsForOrder>) => {

@@ -19,7 +19,7 @@ export default async function PortalArchivedOrder({ params, searchParams }: { pa
   const ctx = await getPortalCtx(as, `/portal/archive/${id}`);
   if (!ctx.customerIds.length) notFound();
   const admin = createAdminClient();
-  const { data } = await admin.from("archived_orders").select("id, customer_id, data, files, imported_at, balance").eq("id", id).in("customer_id", ctx.customerIds).maybeSingle();
+  const { data } = await admin.from("archived_orders").select("id, customer_id, data, files, imported_at, balance").is("removed_at", null).eq("id", id).in("customer_id", ctx.customerIds).maybeSingle();
   if (!data) notFound();
   const o = forCustomer(data.data as PvOrder);
   const raw = data.data as { urls?: { publicUrl?: string } } & Record<string, unknown>;

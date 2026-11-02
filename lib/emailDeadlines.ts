@@ -54,7 +54,7 @@ export async function watchEmailOrders(admin: SupabaseClient, opts: { deadline?:
   // Fossil's order was in Printavo, the email still showed "no order yet")
   const custIds = [...new Set(convos.flatMap((g) => g.map((x) => x.customer_id)).filter(Boolean))] as string[];
   const [{ data: pv }, { data: po }] = custIds.length ? await Promise.all([
-    admin.from("archived_orders").select("customer_id, order_date, data->>createdAt").in("customer_id", custIds).gte("order_date", since.slice(0, 10)),
+    admin.from("archived_orders").select("customer_id, order_date, data->>createdAt").is("removed_at", null).in("customer_id", custIds).gte("order_date", since.slice(0, 10)),
     admin.from("orders").select("customer_id, created_at").in("customer_id", custIds).gte("created_at", since),
   ]) : [{ data: [] }, { data: [] }];
   const ordersSince = (cid: string | null, from: string) => !!cid && ([...((pv || []) as { customer_id: string; order_date: string | null; createdAt?: string }[]).map((x) => ({ c: x.customer_id, at: x.createdAt || x.order_date || "" })), ...((po || []) as { customer_id: string; created_at: string }[]).map((x) => ({ c: x.customer_id, at: x.created_at }))])

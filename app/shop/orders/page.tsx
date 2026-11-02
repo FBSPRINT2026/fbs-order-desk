@@ -64,8 +64,8 @@ export default function OrdersPage() {
   useEffect(() => {
     const sb = createClient();
     Promise.all([
-      sb.from("archived_orders").select(ARCHIVE_LIST_COLS).not("status_name", "in", '("Job Completed","Quote - Closed")').order("visual_id", { ascending: false }).limit(600),
-      sb.from("archived_orders").select(ARCHIVE_LIST_COLS).order("visual_id", { ascending: false }).limit(300),
+      sb.from("archived_orders").select(ARCHIVE_LIST_COLS).is("removed_at", null).not("status_name", "in", '("Job Completed","Quote - Closed")').order("visual_id", { ascending: false }).limit(600),
+      sb.from("archived_orders").select(ARCHIVE_LIST_COLS).is("removed_at", null).order("visual_id", { ascending: false }).limit(300),
     ]).then(([a, b]) => {
       const seen = new Set<string>();
       setPvAll([...((a.data || []) as ArchiveSummary[]), ...((b.data || []) as ArchiveSummary[])].filter((x) => !seen.has(x.id) && !!seen.add(x.id)));
@@ -118,7 +118,7 @@ export default function OrdersPage() {
       const custIds = Object.values(customers).filter((c) => matches(q, c.company, c.name, c.email)).map((c) => c.id).slice(0, 50);
       const [a, b] = await Promise.all([
         byText,
-        custIds.length ? sb.from("archived_orders").select(ARCHIVE_LIST_COLS).in("customer_id", custIds).order("order_date", { ascending: false }).limit(100) : Promise.resolve({ data: [] }),
+        custIds.length ? sb.from("archived_orders").select(ARCHIVE_LIST_COLS).is("removed_at", null).in("customer_id", custIds).order("order_date", { ascending: false }).limit(100) : Promise.resolve({ data: [] }),
       ]);
       const seen = new Set<string>();
       setArch([...((a.data || []) as ArchiveSummary[]), ...((b.data || []) as ArchiveSummary[])].filter((x) => !seen.has(x.id) && !!seen.add(x.id)));

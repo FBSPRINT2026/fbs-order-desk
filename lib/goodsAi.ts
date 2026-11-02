@@ -46,7 +46,7 @@ const usable = (status: string) => !/quote|cancel/i.test(status);
 /** Jobs due in a window (our blanks, unknown accounts): fetched once per run. */
 async function windowJobs(admin: SupabaseClient, from: string, to: string): Promise<Job[]> {
   const [{ data: ar }, { data: os }] = await Promise.all([
-    allRows((r0, r1) => admin.from("archived_orders").select(PV_COLS).gte("due_date", from).lte("due_date", to).order("id").range(r0, r1), 2500),
+    allRows((r0, r1) => admin.from("archived_orders").select(PV_COLS).is("removed_at", null).gte("due_date", from).lte("due_date", to).order("id").range(r0, r1), 2500),
     admin.from("orders").select(LIVE_COLS).not("status", "in", "(quote,request)").gte("due_date", from).lte("due_date", to).limit(1000),
   ]);
   return [
@@ -59,7 +59,7 @@ async function windowJobs(admin: SupabaseClient, from: string, to: string): Prom
 async function customerJobs(admin: SupabaseClient, custIds: string[]): Promise<Job[]> {
   const since = iso(new Date(Date.now() - 90 * 86400000));
   const [{ data: ar }, { data: os }] = await Promise.all([
-    admin.from("archived_orders").select(PV_COLS).in("customer_id", custIds).or(`due_date.gte.${since},due_date.is.null`).order("due_date", { ascending: false, nullsFirst: true }).limit(120),
+    admin.from("archived_orders").select(PV_COLS).is("removed_at", null).in("customer_id", custIds).or(`due_date.gte.${since},due_date.is.null`).order("due_date", { ascending: false, nullsFirst: true }).limit(120),
     admin.from("orders").select(LIVE_COLS).in("customer_id", custIds).not("status", "in", "(quote,request)").order("number", { ascending: false }).limit(60),
   ]);
   return [...((ar || []) as unknown as PvRow[]).map(fromPv), ...((os || []) as unknown as Parameters<typeof fromLive>[0][]).map(fromLive)].filter((j) => usable(j.status));

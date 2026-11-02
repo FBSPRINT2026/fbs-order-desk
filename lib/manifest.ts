@@ -103,7 +103,7 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   const nums = [...new Set(words(g.customer_po).filter((w) => /^\d{4,6}$/.test(w)))];
   if (nums.length) {
     const [{ data: an }, { data: on }] = await Promise.all([
-      admin.from("archived_orders").select("id, visual_id").in("visual_id", nums).limit(5),
+      admin.from("archived_orders").select("id, visual_id").is("removed_at", null).in("visual_id", nums).limit(5),
       admin.from("orders").select("id, number").in("number", nums.map(Number)).limit(5),
     ]);
     const hits = [...((an || []) as { id: string; visual_id: string | number }[]).map((x) => ({ id: PV + x.id, n: +x.visual_id })), ...((on || []) as { id: string; number: number }[]).map((x) => ({ id: x.id, n: x.number }))];
@@ -112,7 +112,7 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
   const [{ data }, { data: ar }] = await Promise.all([
     admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, due_date, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).limit(400),
-    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").or(`due_date.gte.${since},due_date.is.null`).limit(600),
+    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").is("removed_at", null).or(`due_date.gte.${since},due_date.is.null`).limit(600),
   ]);
   type C = Open & { who: string };
   const who = (c: { company: string; name: string } | null) => [c?.company || "", c?.name || ""];
@@ -282,7 +282,7 @@ async function guessCustomerByGoods(admin: SupabaseClient, g: Group) {
   if (pcs < 6) return null; // a couple of pieces fit too many jobs
   const lo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10), hi = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
   const [{ data: ar }, { data: os }] = await Promise.all([
-    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").gte("due_date", lo).lte("due_date", hi).not("status_name", "ilike", "%job completed%").order("id").range(r0, r1), 1500),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").is("removed_at", null).gte("due_date", lo).lte("due_date", hi).not("status_name", "ilike", "%job completed%").order("id").range(r0, r1), 1500),
     admin.from("orders").select("id, number, nickname, po_number, customer_id, due_date, status, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).gte("due_date", lo).lte("due_date", hi).limit(500),
   ]);
   type J = { id: string; number: number; nickname: string; po: string; customerId: string | null; customer: string; due: string | null; items: { style: string; color: string; qty: number }[] };
@@ -315,7 +315,7 @@ async function doneTwin(admin: SupabaseClient, custIds: string[], lines: Line[])
   if (pcs < 12) return null;
   const ss = bySizeOf(lines.map((l) => ({ size: l.size, qty: l.qty_shipped })));
   const since = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
-  const { data: done } = await admin.from("archived_orders").select("id, visual_id, nickname, data").in("customer_id", custIds).gte("due_date", since).ilike("status_name", "%job completed%").limit(300);
+  const { data: done } = await admin.from("archived_orders").select("id, visual_id, nickname, data").is("removed_at", null).in("customer_id", custIds).gte("due_date", since).ilike("status_name", "%job completed%").limit(300);
   const twins = ((done || []) as { id: string; visual_id: string | number; nickname: string; data: { groups?: { lines?: { sizes?: Record<string, number> }[] }[] } }[])
     .filter((o) => sameSizes(ss, bySizeOf((o.data?.groups || []).flatMap((gr) => (gr.lines || []).flatMap((l) => Object.entries(l.sizes || {}).map(([k, q]) => ({ size: pvSize(k), qty: +q || 0 })))))));
   if (twins.length !== 1) return null;
@@ -402,7 +402,7 @@ async function openOrders(admin: SupabaseClient, custIds: string[]): Promise<Ope
   const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
   const [{ data: os }, { data: ar }] = await Promise.all([
     admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, submitted_at, due_date, groups, lines").in("customer_id", custIds).neq("status", "completed"),
-    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data").in("customer_id", custIds).or(`due_date.gte.${since},due_date.is.null`).not("status_name", "ilike", "%job completed%").order("due_date", { ascending: false, nullsFirst: true }).limit(600),
+    admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data").is("removed_at", null).in("customer_id", custIds).or(`due_date.gte.${since},due_date.is.null`).not("status_name", "ilike", "%job completed%").order("due_date", { ascending: false, nullsFirst: true }).limit(600),
   ]);
   const live = ((os || []) as (Candidate & { submitted_at: string | null; due_date: string | null; groups: unknown; lines: unknown })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
   const pv = ((ar || []) as { id: string; visual_id: string | number; nickname: string; po_number: string; customer_id: string | null; status_name: string; due_date: string | null; data: { groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; sizes?: Record<string, number> }[] }[] } }[])
@@ -529,7 +529,7 @@ export async function planShipment(admin: SupabaseClient, g: Group): Promise<Pla
     // not on an open job: maybe on one that's already printed (goods for it still belong to it, then drop off)
     if (!byNum.length) {
       const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
-      const { data: done } = await admin.from("archived_orders").select("id, visual_id, nickname, po_number").in("customer_id", custIds).gte("due_date", since).ilike("status_name", "%job completed%").limit(600);
+      const { data: done } = await admin.from("archived_orders").select("id, visual_id, nickname, po_number").is("removed_at", null).in("customer_id", custIds).gte("due_date", since).ilike("status_name", "%job completed%").limit(600);
       const hit = ((done || []) as { id: string; visual_id: string | number; nickname: string; po_number: string }[]).filter((o) => numRuns(`${o.nickname} ${o.po_number}`).some((r) => pr.includes(r)));
       if (hit.length === 1) return { customerId, alloc: lines.map((line) => ({ line, parts: [{ orderId: PV + hit[0].id, qty: line.qty_shipped }] })), unplaced: [], auto: true, how: `PO number is on #${hit[0].visual_id} (already completed)` };
     }
@@ -867,7 +867,7 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
         const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
         const [{ data: os }, { data: ar }] = await Promise.all([
           admin.from("orders").select("id, number, nickname, po_number, due_date, status, submitted_at").eq("customer_id", customer.id).not("status", "in", "(completed,quote)").order("number", { ascending: false }).limit(60),
-          admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, status_name").eq("customer_id", customer.id).or(`due_date.gte.${since},due_date.is.null`).order("visual_id", { ascending: false }).limit(60),
+          admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, status_name").is("removed_at", null).eq("customer_id", customer.id).or(`due_date.gte.${since},due_date.is.null`).order("visual_id", { ascending: false }).limit(60),
         ]);
         orderCache.set(customer.id, [
           ...((os || []) as { id: string; number: number; nickname: string; po_number: string; due_date: string | null; status: string; submitted_at: string | null }[]).filter((o) => !(o.status === "request" && !o.submitted_at)).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", po: o.po_number || "", due_date: o.due_date, printavo: false })),
@@ -882,7 +882,7 @@ export async function unmatchedGroups(admin: SupabaseClient, onlyCustomers?: str
       const pvIds = [...new Set(g.lines.map((l) => l.suggest_archived_id).filter(Boolean))] as string[];
       const [{ data: lo }, { data: po }] = await Promise.all([
         liveIds.length ? admin.from("orders").select("id, number, nickname, po_number, due_date, customer_id, customers(company, name)").in("id", liveIds) : Promise.resolve({ data: [] }),
-        pvIds.length ? admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, customer_id, customers(company, name)").in("id", pvIds) : Promise.resolve({ data: [] }),
+        pvIds.length ? admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, customer_id, customers(company, name)").is("removed_at", null).in("id", pvIds) : Promise.resolve({ data: [] }),
       ]);
       type R = { id: string; number?: number; visual_id?: string | number; nickname: string; po_number: string; due_date: string | null; customer_id?: string | null; customers: { company: string; name: string } | null };
       // the customer of the job we guessed (an unknown account: "is X them?"; our blanks: whose job it is)
@@ -910,7 +910,7 @@ export async function linkByHand(admin: SupabaseClient, pick: { lineId: string; 
   const liveIds = orderIds.filter((id) => !id.startsWith(PV)), pvIds = orderIds.filter((id) => id.startsWith(PV)).map((id) => id.slice(PV.length));
   const [{ data: lo }, { data: po }] = await Promise.all([
     liveIds.length ? admin.from("orders").select("id, customer_id").in("id", liveIds) : Promise.resolve({ data: [] }),
-    pvIds.length ? admin.from("archived_orders").select("id, customer_id").in("id", pvIds) : Promise.resolve({ data: [] }),
+    pvIds.length ? admin.from("archived_orders").select("id, customer_id").is("removed_at", null).in("id", pvIds) : Promise.resolve({ data: [] }),
   ]);
   const os = [...(lo || []), ...(po || [])];
   if (os.length !== orderIds.length) throw new Error("Pick an order.");
@@ -985,13 +985,13 @@ export async function saveGoodsLesson(admin: SupabaseClient, g: Group<Waiting>, 
   const guess = g.lines.map((l) => l.suggest_order_id || (l.suggest_archived_id ? PV + l.suggest_archived_id : "")).find(Boolean) || "";
   const isPv = orderId.startsWith(PV);
   const { data: o } = isPv
-    ? await admin.from("archived_orders").select("visual_id, nickname, po_number, status_name, due_date, customers(company, name)").eq("id", orderId.slice(PV.length)).maybeSingle()
+    ? await admin.from("archived_orders").select("visual_id, nickname, po_number, status_name, due_date, customers(company, name)").is("removed_at", null).eq("id", orderId.slice(PV.length)).maybeSingle()
     : await admin.from("orders").select("number, nickname, po_number, status, due_date, customers(company, name)").eq("id", orderId).maybeSingle();
   if (!o) return;
   const r = o as unknown as { visual_id?: string | number; number?: number; nickname: string; po_number: string; status_name?: string; status?: string; due_date: string | null; customers: { company: string; name: string } | null };
   let guessNo = 0;
   if (guess && guess !== orderId) {
-    const { data: gx } = guess.startsWith(PV) ? await admin.from("archived_orders").select("visual_id").eq("id", guess.slice(PV.length)).maybeSingle() : await admin.from("orders").select("number").eq("id", guess).maybeSingle();
+    const { data: gx } = guess.startsWith(PV) ? await admin.from("archived_orders").select("visual_id").is("removed_at", null).eq("id", guess.slice(PV.length)).maybeSingle() : await admin.from("orders").select("number").eq("id", guess).maybeSingle();
     guessNo = +((gx as { visual_id?: number; number?: number } | null)?.visual_id || (gx as { number?: number } | null)?.number || 0);
   }
   const by_sc = sumByStyleColor((g.lines as Line[]).map((l) => ({ style: l.style, color: l.color, qty: l.qty_shipped })));
@@ -1153,7 +1153,7 @@ export async function openOrdersFor(admin: SupabaseClient, customerId: string, p
   const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10), since60 = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
   const [{ data: os }, { data: ar }] = await Promise.all([
     admin.from("orders").select("id, number, nickname, po_number, due_date, status, submitted_at, groups, lines").eq("customer_id", customerId).not("status", "in", "(quote)").order("number", { ascending: false }).limit(80),
-    admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, status_name, qty, data").eq("customer_id", customerId).or(`due_date.gte.${since},due_date.is.null`).order("visual_id", { ascending: false }).limit(80),
+    admin.from("archived_orders").select("id, visual_id, nickname, po_number, due_date, status_name, qty, data").is("removed_at", null).eq("customer_id", customerId).or(`due_date.gte.${since},due_date.is.null`).order("visual_id", { ascending: false }).limit(80),
   ]);
   const g = { customer_po: po, supplier_order: "" };
   const itemsOf = (lines: { style: string; color: string; n: number }[]) => {
@@ -1199,7 +1199,7 @@ export async function unlinkLines(admin: SupabaseClient, lineIds: string[], by: 
     // the job numbers, for the AI and for people reading it
     const nums: number[] = [];
     for (const id of wrong) {
-      const { data: o } = id.startsWith(PV) ? await admin.from("archived_orders").select("visual_id").eq("id", id.slice(PV.length)).maybeSingle() : await admin.from("orders").select("number").eq("id", id).maybeSingle();
+      const { data: o } = id.startsWith(PV) ? await admin.from("archived_orders").select("visual_id").is("removed_at", null).eq("id", id.slice(PV.length)).maybeSingle() : await admin.from("orders").select("number").eq("id", id).maybeSingle();
       const n = +((o as { visual_id?: number; number?: number } | null)?.visual_id || (o as { number?: number } | null)?.number || 0);
       if (n) nums.push(n);
     }
@@ -1241,7 +1241,7 @@ export async function mixedBoxes(admin: SupabaseClient, trackings: string[]): Pr
   const pv = [...new Set(multi.flatMap(([, rs]) => rs.map((r) => (r.kind ? r.archived_order_id : null)).filter(Boolean)))] as string[];
   const lv = [...new Set(multi.flatMap(([, rs]) => rs.map((r) => (r.kind ? r.order_id : null)).filter(Boolean)))] as string[];
   const [{ data: a1 }, { data: a2 }] = await Promise.all([
-    pv.length ? admin.from("archived_orders").select("id, visual_id").in("id", pv) : Promise.resolve({ data: [] }),
+    pv.length ? admin.from("archived_orders").select("id, visual_id").is("removed_at", null).in("id", pv) : Promise.resolve({ data: [] }),
     lv.length ? admin.from("orders").select("id, number").in("id", lv) : Promise.resolve({ data: [] }),
   ]);
   const num = new Map<string, number>([...((a1 || []) as { id: string; visual_id: number }[]).map((o) => [o.id, +o.visual_id] as const), ...((a2 || []) as { id: string; number: number }[]).map((o) => [o.id, o.number] as const)]);

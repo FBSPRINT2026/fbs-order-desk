@@ -291,8 +291,8 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
       <div className="aa-card aa-tblcard">
         {/* the same column widths in every list, so Quotes and Orders line up one above the other (Oct 24, Nick) */}
         <table className="aa-tbl aa-tbl-cols">
-          <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /><col className="c-m" /></>}<col className="c-m" />{mode === "portal" && <col className="c-star" />}</colgroup>
-          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
+          <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" />{mode !== "portal" && <col className="c-m" />}<col className="c-m" /></>}<col className="c-m" />{mode === "portal" && <col className="c-star" />}</colgroup>
+          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && mode !== "portal" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
           <tbody>
             {rows.map((o) => { const late = !o.archived && o.balance > 0.004 && !!payDue(o) && (payDue(o) as string) < today() && cols !== "quote"; return (
               <tr key={o.id} onClick={() => router.push(orderHref(o.id))}>
@@ -303,7 +303,8 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
                 {/* one simple line per order (Nov 2, Nick); a late payment says so in the status, not a pink row ("why is this one pink?") */}
                 <td>{late ? <span className="aa-pill" title={`${ST[o.status]?.portal || ST[o.status]?.label || ""} · payment was due ${when(payDue(o) as string)}`} style={{ ["--sc" as string]: "var(--danger)" }}>Past due</span> : pill(o)}</td>
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
-                {cols !== "quote" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
+                {/* customers see only the balance and total (Nov 2, Nick: "you don't need paid… more room for the order description") */}
+                {cols !== "quote" && mode !== "portal" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
                 {cols !== "quote" && <td data-l="Balance" className={"r num" + (!o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : money(Math.max(0, o.balance))}</td>}
                 <td className="r num b" data-l="Total">{money(o.total)}</td>
                 {/* the star on the right (Oct 24, Nick) */}
@@ -320,7 +321,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
             const owes = !o.archived && o.balance > 0.004 && !(all && o.type !== "invoice") && cols !== "quote";
             const dt = cols === "quote" ? when(o.created_at) : when(o.due_date);
             return (
-              <li key={o.id} className={"rl aa-oc" + (owes && payDue(o) && (payDue(o) as string) < today() ? " late" : "")}>
+              <li key={o.id} className="rl aa-oc">
                 <RowLink href={orderHref(o.id)} label={`Open ${o.nickname || `#${o.number}`}`} />
                 <div className="aa-oc-top">
                   <Link href={orderHref(o.id)} className="aa-oc-n" onClick={(e) => e.stopPropagation()}>{o.nickname || (o.type === "invoice" ? "Order" : "Quote")}</Link>
@@ -328,7 +329,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
                 </div>
                 <div className="aa-oc-sub">#{o.number}{o.qty ? ` · ${o.qty.toLocaleString("en-US")} pcs` : ""}{dt ? ` · ${cols === "quote" ? "Created" : "In hands"} ${dt}` : ""}</div>
                 <div className="aa-oc-bot">
-                  {pill(o)}
+                  {owes && payDue(o) && (payDue(o) as string) < today() ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--danger)" }}>Past due</span> : pill(o)}
                   {all && kindOf(o) !== "Order" && <span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span>}
                   <span className="aa-oc-amt">{owes ? <><b className="aa-due">{money(o.balance)}</b><small>due</small></> : <><b>{money(o.total)}</b><small>{cols === "quote" || o.type !== "invoice" ? "total" : o.balance <= 0.004 ? "paid" : "total"}</small></>}</span>
                 </div>

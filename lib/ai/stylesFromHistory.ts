@@ -66,7 +66,7 @@ export async function stylesFromHistory(admin: SupabaseClient, customerId: strin
   const todo = draft.groups.flatMap((g) => g.lines).filter((l) => !(l.style || "").trim() && ((l as { called?: string }).called || l.garment || "").trim());
   if (!todo.length) return [];
   const [{ data: pv }, { data: os }] = await Promise.all([
-    admin.from("archived_orders").select("data").eq("customer_id", customerId).order("order_date", { ascending: false }).limit(600),
+    admin.from("archived_orders").select("data").is("removed_at", null).eq("customer_id", customerId).order("order_date", { ascending: false }).limit(600),
     admin.from("orders").select("groups").eq("customer_id", customerId).order("created_at", { ascending: false }).limit(300),
   ]);
   const seen = new Map<string, Known>();
@@ -189,7 +189,7 @@ export async function describeFromStyles(admin: SupabaseClient, customerId: stri
   for (const r of (gs || []) as { style: string; brand: string; description: string }[]) if ((r.description || "").trim()) nameOf.set(r.style.toUpperCase(), { name: r.description.split(/\r?\n/)[0].trim(), brand: r.brand || "" });
   // what the shop called it on this customer's past orders, when neither list has it
   if (customerId && lines.some((l) => !nameOf.has(l.style!.trim().toUpperCase()))) {
-    const { data: pv } = await admin.from("archived_orders").select("data").eq("customer_id", customerId).order("order_date", { ascending: false }).limit(300);
+    const { data: pv } = await admin.from("archived_orders").select("data").is("removed_at", null).eq("customer_id", customerId).order("order_date", { ascending: false }).limit(300);
     for (const r of (pv || []) as { data?: { groups?: { lines?: { itemNumber?: string; brand?: string; description?: string }[] }[] } }[])
       for (const g of r.data?.groups || []) for (const x of g.lines || []) {
         const st = (x.itemNumber || "").trim().toUpperCase();

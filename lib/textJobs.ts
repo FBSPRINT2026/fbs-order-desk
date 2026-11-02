@@ -26,7 +26,7 @@ export function jobKeys(name: string): string[] {
 
 export async function customerJobs(admin: SupabaseClient, customerId: string): Promise<Job[]> {
   const [{ data: pv }, { data: os }] = await Promise.all([
-    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, due_date, kind").eq("customer_id", customerId).order("id").range(r0, r1), 3000),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, due_date, kind").is("removed_at", null).eq("customer_id", customerId).order("id").range(r0, r1), 3000),
     allRows((r0, r1) => admin.from("orders").select("id, number, nickname, created_at, due_date, status").eq("customer_id", customerId).order("id").range(r0, r1), 2000),
   ]);
   const t = (d: string | null | undefined) => (d ? Date.parse(d.length === 10 ? d + "T12:00:00Z" : d) : NaN);

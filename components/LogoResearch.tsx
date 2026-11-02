@@ -48,7 +48,7 @@ export default function LogoResearch({ d, brand, onClose, onDone }: { d: D; bran
       // a logo under a brand is looked for in that brand's jobs only: its own words ("flag") are too common across the
       // client's other stores (Oct 28: "flag" pulled in 40 MEI store carts); they rank the brand's jobs instead
       const terms = (words.brand ? [words.brand] : words.own).filter((x) => x && x.length > 2).map((x) => x.replace(/[%,()*]/g, " ").trim());
-      let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files, search_text").eq("customer_id", d.customer_id).gt("files_total", 0).order("order_date", { ascending: false }).limit(words.brand ? 150 : 80);
+      let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files, search_text").is("removed_at", null).eq("customer_id", d.customer_id).gt("files_total", 0).order("order_date", { ascending: false }).limit(words.brand ? 150 : 80);
       if (terms.length) r = r.or(terms.flatMap((t) => [`nickname.ilike.%${t}%`, `search_text.ilike.%${t}%`]).join(","));
       const { data, error } = await r;
       if (!on) return;

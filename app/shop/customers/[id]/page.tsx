@@ -101,7 +101,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   }, [id]);
   const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
   useEffect(() => {
-    createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_staff, transactions:data->transactions`)
+    createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_staff, transactions:data->transactions`).is("removed_at", null)
       .eq("customer_id", id).order("order_date", { ascending: false }).then(({ data }) => setArchive((data || []) as never));
   }, [id]);
   const orderIds = orders.filter((o) => o.customer_id === id).map((o) => o.id).join(",");

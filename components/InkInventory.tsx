@@ -59,7 +59,7 @@ export default function InkInventory({ stock, formulas, canStock }: { stock: Sto
       const [o, sp, ar] = await Promise.all([
         oIds.length ? sb.from("orders").select("id, number, nickname, groups").in("id", oIds) : Promise.resolve({ data: [] }),
         oIds.length ? sb.from("separations").select("order_id, imprint_id, garment_color, location, design_id, status, settings, channels").in("order_id", oIds) : Promise.resolve({ data: [] }),
-        aIds.length ? sb.from("archived_orders").select("id, visual_id, nickname, qty, status_name, data").in("id", aIds) : Promise.resolve({ data: [] }),
+        aIds.length ? sb.from("archived_orders").select("id, visual_id, nickname, qty, status_name, data").is("removed_at", null).in("id", aIds) : Promise.resolve({ data: [] }),
       ]);
       const orders = (o.data || []) as Parameters<typeof jobsFromOrders>[1];
       const imDesigns = [...new Set(orders.flatMap((x) => (x.groups || []).flatMap((g) => (g.imprints || []).map((i) => i.design_id))).filter(Boolean))] as string[];

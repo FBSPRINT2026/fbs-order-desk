@@ -590,7 +590,7 @@ export async function myReorderables(q = ""): Promise<Reorderable[]> {
     const num = term.replace(/^#/, "");
     let oq = supabase.from("orders").select("id, number, nickname, created_at, qty, status, draft, groups").eq("customer_id", cust.id).not("status", "in", "(request,quote,void)").is("discarded_at", null).order("number", { ascending: false }).limit(25);
     if (term) oq = /^\d+$/.test(num) ? oq.eq("number", +num) : oq.ilike("nickname", `%${term}%`);
-    let aq = admin.from("archived_orders").select("id, visual_id, nickname, qty, order_date, files, data").eq("customer_id", cust.id).order("order_date", { ascending: false }).limit(25);
+    let aq = admin.from("archived_orders").select("id, visual_id, nickname, qty, order_date, files, data").is("removed_at", null).eq("customer_id", cust.id).order("order_date", { ascending: false }).limit(25);
     if (term) aq = /^\d+$/.test(num) ? aq.eq("visual_id", num) : aq.ilike("nickname", `%${term}%`);
     const [{ data: os }, { data: as }] = await Promise.all([oq, aq]);
     // a picture of each (Oct 24, Nick: "for Peticolas you might have like 10 Velvet Hammers… the little thumbnail there so they can view it")
@@ -631,7 +631,7 @@ export async function reorderInto(id: string, ref: string): Promise<Result & { g
       })) as Group[];
       label = `#${src.number}`; nick = src.nickname || "";
     } else if (ref.startsWith("a:")) {
-      const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("id", ref.slice(2)).eq("customer_id", cust.id).maybeSingle();
+      const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").is("removed_at", null).eq("id", ref.slice(2)).eq("customer_id", cust.id).maybeSingle();
       if (!r) return { ok: false, error: "We couldn't find that order." };
       const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       groups = groupsFromPrintavo(r as never, (st?.data as { production?: unknown } | null)?.production).map((g) => ({
@@ -722,7 +722,7 @@ export async function searchMyOldJobs(q: string, as?: string): Promise<{ ok: tru
     if (t.length < 2) return { ok: true, list: [] };
     const num = /^#?\d{4,6}$/.test(t) ? t.replace("#", "") : "";
     const like = `%${t.replace(/[%_,()]/g, " ").trim().split(/\s+/).join("%")}%`;
-    const base = admin.from("archived_orders").select("id, visual_id, nickname, order_date, files").eq("customer_id", cust.id).eq("kind", "invoice");
+    const base = admin.from("archived_orders").select("id, visual_id, nickname, order_date, files").is("removed_at", null).eq("customer_id", cust.id).eq("kind", "invoice");
     const { data } = await (num ? base.eq("visual_id", num) : base.ilike("nickname", like)).order("order_date", { ascending: false, nullsFirst: false }).limit(10);
     const rows = (data || []) as { id: string; visual_id: string; nickname: string | null; order_date: string | null; files: Record<string, string> | null }[];
     // their paperwork (order confirmations, POs) left out: only mockups and art (Oct 24)
@@ -741,7 +741,7 @@ export async function searchMyOldJobs(q: string, as?: string): Promise<{ ok: tru
 export async function bringOldJobFile(requestId: string, groupId: string, archivedId: string, path: string): Promise<Result> {
   try {
     const { admin, order } = await myDraft(requestId);
-    const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, customer_id, files").eq("id", archivedId).maybeSingle();
+    const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, customer_id, files").is("removed_at", null).eq("id", archivedId).maybeSingle();
     if (!a || a.customer_id !== order.customer_id) return { ok: false, error: "We couldn't find that order." };
     const name = Object.entries((a.files || {}) as Record<string, string>).find(([, p]) => p === path)?.[0];
     if (!name) return { ok: false, error: "We couldn't find that file." };
@@ -779,7 +779,7 @@ export async function startOldReorder(archivedId: string, as?: string): Promise<
     const v = await getViewer();
     const preview = !!(v.user && v.isStaff);
     const { admin, cust } = preview ? await readMe(as) : await me();
-    const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("id", archivedId).eq("customer_id", cust.id).maybeSingle();
+    const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").is("removed_at", null).eq("id", archivedId).eq("customer_id", cust.id).maybeSingle();
     if (!r) return { ok: false, error: "We couldn't find that order." };
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const groups = groupsFromPrintavo(r as never, (st?.data as { production?: unknown } | null)?.production).map((g) => ({

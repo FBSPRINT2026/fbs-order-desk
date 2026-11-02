@@ -79,7 +79,7 @@ export default function MailSuggest({ q, senders, onPick, onText }: {
         const cid = top.key.slice(1);
         const [{ data: ords }, { data: arch }] = await Promise.all([
           sb.from("orders").select("nickname, created_at").eq("customer_id", cid).not("nickname", "is", null).order("created_at", { ascending: false }).limit(40),
-          sb.from("archived_orders").select("nickname, order_date").eq("customer_id", cid).not("nickname", "is", null).order("order_date", { ascending: false }).limit(80),
+          sb.from("archived_orders").select("nickname, order_date").is("removed_at", null).eq("customer_id", cid).not("nickname", "is", null).order("order_date", { ascending: false }).limit(80),
         ]);
         const jobs = [...((ords || []) as { nickname: string; created_at: string }[]).map((o) => ({ n: o.nickname, d: o.created_at })), ...((arch || []) as { nickname: string; order_date: string }[]).map((a) => ({ n: a.nickname, d: a.order_date }))]
           .filter((j) => j.n?.trim() && j.d).sort((a, b) => b.d.localeCompare(a.d));

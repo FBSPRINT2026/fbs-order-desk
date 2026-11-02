@@ -202,7 +202,7 @@ async function runTool(name: string, input: Record<string, unknown>, c: Ctx): Pr
     if (!j) return `No job #${n} found.`;
     let who = "";
     if (j.ref.startsWith("o:")) { const { data: o } = await admin.from("orders").select("status, due_date, customers(company, name)").eq("id", j.ref.slice(2)).maybeSingle(); const cu = (o?.customers || null) as { company?: string; name?: string } | null; who = `Customer: ${cu?.company || cu?.name || "?"}. Status: ${o?.status || "?"}. Due: ${o?.due_date || "none"}.`; }
-    else { const { data: a } = await admin.from("archived_orders").select("status_name, due_date, customers(company, name)").eq("id", j.ref.slice(2)).maybeSingle(); const cu = (a?.customers || null) as { company?: string; name?: string } | null; who = `Customer: ${cu?.company || cu?.name || "?"}. Printavo status: ${a?.status_name || "?"}. Due: ${a?.due_date || "none"}.`; }
+    else { const { data: a } = await admin.from("archived_orders").select("status_name, due_date, customers(company, name)").is("removed_at", null).eq("id", j.ref.slice(2)).maybeSingle(); const cu = (a?.customers || null) as { company?: string; name?: string } | null; who = `Customer: ${cu?.company || cu?.name || "?"}. Printavo status: ${a?.status_name || "?"}. Due: ${a?.due_date || "none"}.`; }
     return `${j.label} — ${j.date}, ${j.qty} pcs. ${who}\n${describeGroups(j.groups)}`.slice(0, 8000);
   }
   if (name === "find_garment") {

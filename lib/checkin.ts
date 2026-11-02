@@ -89,7 +89,7 @@ const CLOSED = /job\s*completed|quote|cancel|closed/i;
 export async function checkinJobs(admin: SupabaseClient, from: string, to: string, only?: { kind: "o" | "a"; id: string }): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
   const lo = addDays(from, -21), hi = addDays(to, 30);
   // a fresh query each time it's used (a query is changed by each filter put on it: one can't be read page after page)
-  const pvQ0 = () => admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)");
+  const pvQ0 = () => admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)").is("removed_at", null);
   const pvQ = pvQ0();
   const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name), printavo_id, pv:printavo_state->pv, pv_status:printavo_state->>status");
   const [{ data: pv, error: e1 }, { data: os, error: e2 }, { data: open, error: e3 }] = await Promise.all([

@@ -32,7 +32,9 @@ for (const f of files) {
     if (!GROWING.includes(m[1])) return;
     const rest = q.slice(m.index).replace(BROAD_ONLY, "");
     // a builder kept for later filters (const q = sb.from("orders").select("*"); q.eq(…)) isn't a read by itself
-    if (/^\s*(const|let)\s+\w+\s*=\s*(\(\)\s*=>\s*)?\w+\.from\(/.test(l) && !/"\)\.\w+\(/.test(l.slice(l.indexOf(".select(")))) return;
+    // (".is("removed_at", null)" on old orders only hides ones deleted in Printavo: it doesn't make a builder a read)
+    const lb = l.replace('.is("removed_at", null)', "");
+    if (/^\s*(const|let)\s+\w+\s*=\s*(\(\)\s*=>\s*)?\w+\.from\(/.test(lb) && !/"\)\.\w+\(/.test(lb.slice(lb.indexOf(".select(")))) return;
     if (!NARROW.test(rest)) out.push(`${f}:${i + 1}  ${m[1]}: the whole table, read in one go`);
   });
 }

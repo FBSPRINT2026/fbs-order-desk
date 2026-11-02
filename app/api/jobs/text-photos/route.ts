@@ -83,7 +83,7 @@ export async function GET(req: Request) {
   const aIds = [...new Set(list.map((x) => x.ref).filter((r) => r.startsWith("pv:")).map((r) => r.slice(3)))];
   const [{ data: os }, { data: as }] = await Promise.all([
     oIds.length ? admin.from("orders").select("id, number, nickname").in("id", oIds) : Promise.resolve({ data: [] }),
-    aIds.length ? admin.from("archived_orders").select("id, visual_id, nickname").in("id", aIds) : Promise.resolve({ data: [] }),
+    aIds.length ? admin.from("archived_orders").select("id, visual_id, nickname").is("removed_at", null).in("id", aIds) : Promise.resolve({ data: [] }),
   ]);
   const jobs = new Map<string, string>([
     ...((os || []) as { id: string; number: number; nickname: string }[]).map((o) => [`o:${o.id}`, `#${o.number} ${o.nickname || ""}`.trim()] as [string, string]),

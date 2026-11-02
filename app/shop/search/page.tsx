@@ -106,18 +106,18 @@ function SearchInner() {
       // Printavo jobs: by number, by words, and the matched customers' own
       const ids = cs.slice(0, 6).map((x) => x.id);
       const [byNum, byWords, byCust] = await Promise.all([
-        num ? sb.from("archived_orders").select(ASEL).eq("visual_id", num).limit(5) : Promise.resolve({ data: [] }),
+        num ? sb.from("archived_orders").select(ASEL).is("removed_at", null).eq("visual_id", num).limit(5) : Promise.resolve({ data: [] }),
         // a number is a job number AND anything with it in it: their PO number, the job's name (Oct 23, Nick: "I searched
         // 85254… In Printavo it returns order 32303 because that's a customer PO. It should search deeper")
         sb.rpc("search_archived_orders", { p_words: [num || low], p_limit: 40 }).select(ASEL).order("order_date", { ascending: false, nullsFirst: false }),
-        ids.length && !num ? sb.from("archived_orders").select(ASEL).in("customer_id", ids).order("order_date", { ascending: false, nullsFirst: false }).limit(60) : Promise.resolve({ data: [] }),
+        ids.length && !num ? sb.from("archived_orders").select(ASEL).is("removed_at", null).in("customer_id", ids).order("order_date", { ascending: false, nullsFirst: false }).limit(60) : Promise.resolve({ data: [] }),
       ]);
       const seen = new Set<string>();
       const all = [...(byNum.data || []), ...(byWords.data || []), ...(byCust.data || [])].filter((r) => { const k = (r as { id: string }).id; if (seen.has(k)) return false; seen.add(k); return true; });
       if (live) setArch(all as never); done();
       // each matched customer's totals (for the card and the other customers' lines)
       if (cs.length) {
-        const { data: st } = await allRows((r0, r1) => sb.from("archived_orders").select(ARCHIVE_LIST_COLS).in("customer_id", cs.map((x) => x.id)).order("id").range(r0, r1), 5000);
+        const { data: st } = await allRows((r0, r1) => sb.from("archived_orders").select(ARCHIVE_LIST_COLS).is("removed_at", null).in("customer_id", cs.map((x) => x.id)).order("id").range(r0, r1), 5000);
         const rows = (st || []) as ArchiveSummary[];
         if (!live) return;
         setBestArch(rows);

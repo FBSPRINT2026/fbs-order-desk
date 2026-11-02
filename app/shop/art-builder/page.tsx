@@ -335,7 +335,7 @@ function BringInArt() {
   useEffect(() => {
     if (!cust) return;
     const t = setTimeout(async () => {
-      let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files, search_text").eq("customer_id", cust).gt("files_total", 0).order("order_date", { ascending: false }).limit(300);
+      let r = sb.from("archived_orders").select("id, visual_id, nickname, order_date, files, search_text").is("removed_at", null).eq("customer_id", cust).gt("files_total", 0).order("order_date", { ascending: false }).limit(300);
       // anything in the job: its name, PO, line items, notes (archived_orders.search_text)
       const w = q.trim().replace(/[%,()*]/g, " ").trim();
       if (w) r = r.or(`nickname.ilike.%${w}%,search_text.ilike.%${w}%`);

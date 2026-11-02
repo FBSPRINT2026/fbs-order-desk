@@ -13,7 +13,7 @@ export async function loadSummaries(customerId?: string): Promise<ProjectSummary
   const ids = projects.map((p) => p.id);
   const [{ data: os }, { data: ar }, { data: ts }] = await Promise.all([
     sb.from("orders").select("project_id, total").in("project_id", ids),
-    sb.from("archived_orders").select("project_id, total").in("project_id", ids),
+    sb.from("archived_orders").select("project_id, total").is("removed_at", null).in("project_id", ids),
     sb.from("project_tasks").select("project_id, title, due_date").in("project_id", ids).is("done_at", null).order("due_date", { ascending: true, nullsFirst: false }),
   ]);
   return projects.map((p) => {

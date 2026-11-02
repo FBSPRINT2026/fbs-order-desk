@@ -56,14 +56,16 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
         <a className="btn" href={`/print/job/${row.visual_id}`} target="_blank" rel="noreferrer" title="A sheet with the job's QR code, for the press">Job ticket (QR)</a>
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
         <RefreshFromPrintavo archivedId={row.id} locked={!!(row as { locked?: boolean }).locked} onDone={() => setRev((n) => n + 1)} />
+        <button type="button" className="btn" onClick={() => window.print()}>Print</button>
       </div>
+      {(row as { removed_at?: string | null }).removed_at && <div className="pv-gone">Deleted in Printavo, so it&apos;s hidden from every list here. If it shows up in Printavo again, it comes back by itself.</div>}
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView production={<JobFiles job={{ kind: "a", id: row.id }} inside />}
           below={<>{/* under the invoice, the width of Production notes & files: labor, then Printavo messages, emails & texts (Oct 15, Nick) */}
             <div style={{ marginTop: 10 }}><JobLabor archivedId={row.id} qty={+(row as unknown as { qty?: number }).qty! || 0} total={+(row as unknown as { total?: number }).total! || 0} /></div>
             <div className="pv-below"><JobTalk jobRef={`pv:${row.id}`} printavoCount={(row.data.messages?.length || 0) + (row.data.approvals?.length || 0)}
-        printavo={<History o={row.data} fileUrl={(u) => signed[u] || u} dl={(u, name) => downloadUrl(signed[u] || u, name)} paths={row.files || {}} audience="shop" />} /></div></>} o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} names={names} paths={row.files || {}} actions={row.kind === "invoice" ? <ArchiveReorder archivedId={row.id} small /> : null} />
+        printavo={<History o={row.data} fileUrl={(u) => signed[u] || u} dl={(u, name) => downloadUrl(signed[u] || u, name)} paths={row.files || {}} audience="shop" />} /></div></>} o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} names={names} paths={row.files || {}} />
       </div>
     </>
   );

@@ -43,7 +43,7 @@ export async function GET(req: Request) {
 
   // the jobs and designs the customer has, to know which words are design names
   const [{ data: arch }, { data: ords }, { data: dsgs }, { data: cust }] = await Promise.all([
-    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, search_text, total, qty, status_name").eq("customer_id", cid).order("order_date").order("id").range(r0, r1), 2000),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, search_text, total, qty, status_name").is("removed_at", null).eq("customer_id", cid).order("order_date").order("id").range(r0, r1), 2000),
     admin.from("orders").select("id, number, nickname, notes, created_at, status, groups").eq("customer_id", cid).order("created_at").limit(1000),
     admin.from("designs").select("id, name, specs").eq("customer_id", cid).limit(1000),
     admin.from("customers").select("company, name, email").eq("id", cid).maybeSingle(),
@@ -84,7 +84,7 @@ export async function GET(req: Request) {
     return (data || []).map((d) => d.signedUrl || "").filter(Boolean);
   };
   for (const j of jobs) {
-    const { data: a } = await admin.from("archived_orders").select("data, files").eq("id", j.id).maybeSingle();
+    const { data: a } = await admin.from("archived_orders").select("data, files").is("removed_at", null).eq("id", j.id).maybeSingle();
     const d = (a?.data || {}) as { groups?: { lines?: { description?: string; itemNumber?: string; color?: string; items?: number }[]; imprints?: { details?: string; typeOfWork?: string }[] }[]; messages?: { at?: string; incoming?: boolean; subject?: string; text?: string; from?: string }[] };
     const pics = Object.values((a?.files || {}) as Record<string, string>).filter((p) => /\.(jpe?g|png|webp)$/i.test(p)).slice(0, 3);
     items.push({

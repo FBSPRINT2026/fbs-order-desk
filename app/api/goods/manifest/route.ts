@@ -98,7 +98,7 @@ export async function POST(req: Request) {
         const ls = (data || []) as { order_id: string | null; archived_order_id: string | null }[];
         const pv = [...new Set(ls.map((l) => l.archived_order_id).filter(Boolean))] as string[], lv = [...new Set(ls.map((l) => l.order_id).filter(Boolean))] as string[];
         const [{ data: a1 }, { data: a2 }] = await Promise.all([
-          pv.length ? admin.from("archived_orders").select("id, visual_id, nickname").in("id", pv) : Promise.resolve({ data: [] }),
+          pv.length ? admin.from("archived_orders").select("id, visual_id, nickname").is("removed_at", null).in("id", pv) : Promise.resolve({ data: [] }),
           lv.length ? admin.from("orders").select("id, number, nickname").in("id", lv) : Promise.resolve({ data: [] }),
         ]);
         const job = new Map<string, { number: number; nickname: string }>([

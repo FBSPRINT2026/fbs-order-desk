@@ -6,7 +6,7 @@ const PV_DONE = /job\s*completed|quote\s*-\s*closed|cancel/i;
 export async function loadOpenJobs(sb: SupabaseClient): Promise<OpenJob[]> {
   const [{ data: o }, { data: a }] = await Promise.all([
     sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id").in("status", ["approved", "art", "blanks", "production", "ready"]).order("due_date", { ascending: true, nullsFirst: false }).limit(300),
-    sb.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, customer_id").eq("kind", "invoice").gte("due_date", new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)).order("due_date").limit(500),
+    sb.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, customer_id").is("removed_at", null).eq("kind", "invoice").gte("due_date", new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)).order("due_date").limit(500),
   ]);
   const pv = ((a || []) as { id: string; visual_id: string; nickname: string; due_date: string | null; qty: number; status_name: string; customer_id: string | null }[]).filter((x) => !PV_DONE.test(x.status_name || ""));
   const ids = [...new Set([...((o || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...pv.map((x) => x.customer_id)].filter(Boolean))] as string[];

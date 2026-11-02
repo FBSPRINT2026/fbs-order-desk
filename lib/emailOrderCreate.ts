@@ -200,7 +200,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     if (ref.startsWith("o:")) { const { data: o } = await admin.from("orders").select("number").eq("id", ref.slice(2)).maybeSingle(); if (o) label = `#${o.number}`; }
     // the old Printavo job's notes carried over to production (ticked, else the ones about the print)
     if (ref.startsWith("a:")) {
-      const { data: o } = await admin.from("archived_orders").select("visual_id, data").eq("id", ref.slice(2)).maybeSingle();
+      const { data: o } = await admin.from("archived_orders").select("visual_id, data").is("removed_at", null).eq("id", ref.slice(2)).maybeSingle();
       if (o) {
         label = `Printavo #${o.visual_id}`;
         const od = (o.data || {}) as { customerNote?: string; productionNote?: string };

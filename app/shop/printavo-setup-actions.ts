@@ -47,7 +47,7 @@ export async function printavoSetup(input: { customerId: string; since: number }
     const { admin } = await me();
     const since = `${Math.max(2015, Math.min(new Date().getFullYear(), Math.round(input.since || 2023)))}-01-01`;
     const [{ data: rows }, { data: prog }, { data: c }, { data: cts }, { data: priv }] = await Promise.all([
-      allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, data, files").eq("customer_id", input.customerId).eq("kind", "invoice").gte("order_date", since).order("order_date", { ascending: false }).order("id").range(r0, r1), 1500),
+      allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, order_date, data, files").is("removed_at", null).eq("customer_id", input.customerId).eq("kind", "invoice").gte("order_date", since).order("order_date", { ascending: false }).order("id").range(r0, r1), 1500),
       admin.from("programs").select("id").eq("customer_id", input.customerId).order("created_at").limit(1).maybeSingle(),
       admin.from("customers").select("name, email, phone, contact2_name, contact2_email, contact2_phone").eq("id", input.customerId).maybeSingle(),
       admin.from("customer_contacts").select("name, email, phone").eq("customer_id", input.customerId),

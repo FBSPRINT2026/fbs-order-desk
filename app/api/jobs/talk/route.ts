@@ -46,7 +46,7 @@ async function owner() {
 async function jobOf(admin: ReturnType<typeof createAdminClient>, ref: string) {
   const [k, id] = ref.split(":");
   if (k === "pv") {
-    const { data } = await admin.from("archived_orders").select("id, visual_id, nickname, customer_id, data").eq("id", id).maybeSingle();
+    const { data } = await admin.from("archived_orders").select("id, visual_id, nickname, customer_id, data").is("removed_at", null).eq("id", id).maybeSingle();
     return data ? { customer: data.customer_id as string, number: String(data.visual_id), name: String(data.nickname || ""), pvMsgs: (((data.data || {}) as { messages?: { at?: string; incoming?: boolean; from?: string; subject?: string; text?: string }[] }).messages || []) } : null;
   }
   if (k === "o") {

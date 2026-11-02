@@ -34,7 +34,7 @@ export async function GET(req: Request) {
   const v = await staff(); if (!v) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const id = new URL(req.url).searchParams.get("id") || "";
   const admin = createAdminClient();
-  const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, order_date, total, files, data, customer_id").eq("id", id).maybeSingle();
+  const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, order_date, total, files, data, customer_id").is("removed_at", null).eq("id", id).maybeSingle();
   if (!r) return NextResponse.json({ error: "That job isn't in the archive." }, { status: 404 });
   type F = { full?: string; mime?: string; name?: string; thumb?: string };
   type D = { files?: F[]; groups?: { lines?: { itemNumber?: string; brand?: string; color?: string; description?: string; items?: number; price?: number; sizes?: Record<string, number>; mockups?: F[] }[]; imprints?: { mockups?: F[]; details?: string; typeOfWork?: string }[] }[] };
@@ -92,7 +92,7 @@ export async function POST(req: Request) {
   const v = await staff(); if (!v) return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const { id } = await req.json().catch(() => ({}));
   const admin = createAdminClient();
-  const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("id", String(id || "")).maybeSingle();
+  const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").is("removed_at", null).eq("id", String(id || "")).maybeSingle();
   if (!r) return NextResponse.json({ error: "That job isn't in the archive." }, { status: 404 });
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const groups = groupsFromPrintavo(r as never, (st?.data as { production?: unknown } | null)?.production);

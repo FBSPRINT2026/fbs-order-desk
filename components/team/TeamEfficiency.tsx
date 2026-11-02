@@ -36,7 +36,7 @@ export default function TeamEfficiency({ d }: { d: TeamData }) {
     const oIds = [...new Set(js.map((x) => x.order_id).filter(Boolean))] as string[], aIds = [...new Set(js.map((x) => x.archived_order_id).filter(Boolean))] as string[];
     const [{ data: os }, { data: as }] = await Promise.all([
       oIds.length ? sb.from("orders").select("id, number, nickname, qty, total, customer_id").in("id", oIds) : Promise.resolve({ data: [] }),
-      aIds.length ? sb.from("archived_orders").select("id, visual_id, nickname, qty, total, customer_id").in("id", aIds) : Promise.resolve({ data: [] }),
+      aIds.length ? sb.from("archived_orders").select("id, visual_id, nickname, qty, total, customer_id").is("removed_at", null).in("id", aIds) : Promise.resolve({ data: [] }),
     ]);
     const cIds = [...new Set([...((os || []) as { customer_id: string | null }[]), ...((as || []) as { customer_id: string | null }[])].map((x) => x.customer_id).filter(Boolean))] as string[];
     const { data: cs } = cIds.length ? await sb.from("customers").select("id, company, name").in("id", cIds) : { data: [] };

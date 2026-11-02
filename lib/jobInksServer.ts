@@ -50,7 +50,7 @@ export async function phoneInks(admin: SupabaseClient, card: JobCard, settingsDa
     const slot = { order_id: card.id, archived_order_id: null, day, status: "", finished_at: null, locations: null, label: null };
     jobs = jobsFromOrders([slot], orders, seps as Parameters<typeof jobsFromOrders>[2], (designs || []) as Parameters<typeof jobsFromOrders>[3], s, (gar || []) as GarmentFabric[]);
   } else {
-    const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, data").eq("id", card.id).maybeSingle();
+    const { data: r } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, data").is("removed_at", null).eq("id", card.id).maybeSingle();
     if (!r) return null;
     const ps = mergeProduction(d.production);
     type Arch = Parameters<typeof jobsFromPrintavo>[1][number] & { qty: number | null; status_name: string };

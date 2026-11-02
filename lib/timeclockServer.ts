@@ -114,7 +114,7 @@ const PV_DONE = /job\s*completed|quote\s*-\s*closed|cancel/i;
 export async function openJobs(admin: SupabaseClient): Promise<OpenJob[]> {
   const [{ data: o }, { data: a }] = await Promise.all([
     admin.from("orders").select("id, number, nickname, due_date, qty, status, customer_id").in("status", ["approved", "art", "blanks", "production", "ready"]).order("due_date", { ascending: true, nullsFirst: false }).limit(300),
-    admin.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, customer_id").eq("kind", "invoice").gte("due_date", new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)).order("due_date").limit(500),
+    admin.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, customer_id").is("removed_at", null).eq("kind", "invoice").gte("due_date", new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)).order("due_date").limit(500),
   ]);
   const pv = ((a || []) as { id: string; visual_id: string; nickname: string; due_date: string | null; qty: number; status_name: string; customer_id: string | null }[]).filter((x) => !PV_DONE.test(x.status_name || ""));
   const ids = [...new Set([...((o || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...pv.map((x) => x.customer_id)].filter(Boolean))] as string[];
@@ -141,7 +141,7 @@ export async function stopJob(admin: SupabaseClient, employeeId: string, opts: {
 export async function startJob(admin: SupabaseClient, p: { employeeId: string; job: { kind: "o" | "a"; id: string }; task: string; station?: string; team?: string[]; source: string }) {
   const { data: j } = p.job.kind === "o"
     ? await admin.from("orders").select("id, number, nickname").eq("id", p.job.id).maybeSingle()
-    : await admin.from("archived_orders").select("id, visual_id, nickname").eq("id", p.job.id).maybeSingle();
+    : await admin.from("archived_orders").select("id, visual_id, nickname").is("removed_at", null).eq("id", p.job.id).maybeSingle();
   if (!j) return { error: "That order wasn't found." };
   const label = `#${(j as { number?: number; visual_id?: string }).number ?? (j as { visual_id?: string }).visual_id} ${(j as { nickname: string }).nickname || ""}`.trim();
   const people = [...new Set([p.employeeId, ...(p.team || [])])];

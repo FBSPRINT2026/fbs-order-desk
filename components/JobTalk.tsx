@@ -125,7 +125,7 @@ export function OriginalJobTalk({ notes, orderId }: { notes: string | null | und
     const sb = createClient();
     (async () => {
       if (m[1]) {
-        const { data } = await sb.from("archived_orders").select("id, data, files").eq("visual_id", m[2]).maybeSingle();
+        const { data } = await sb.from("archived_orders").select("id, data, files").is("removed_at", null).eq("visual_id", m[2]).maybeSingle();
         if (!data) return;
         setRef({ ref: `pv:${data.id}`, pv: data.data as PvOrder, files: (data.files || {}) as Record<string, string> });
         const stored = Object.entries((data.files || {}) as Record<string, string>).filter(([, p]) => storedPath(p));

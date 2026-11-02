@@ -70,7 +70,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   if (ctx.customerIds.length) {
     const [{ data: ar }, { data }] = await Promise.all([
       // every one, in pages (Nov 2 portal check: Cedar Promos has 2,337 old orders and the list stopped at 1,000)
-      allRows((ra, rb) => admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).in("customer_id", ctx.customerIds).order("order_date", { ascending: false }).order("id").range(ra, rb)),
+      allRows((ra, rb) => admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).is("removed_at", null).in("customer_id", ctx.customerIds).order("order_date", { ascending: false }).order("id").range(ra, rb)),
       allRows((ra, rb) => ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").is("discarded_at", null).order("number", { ascending: false }).order("id").range(ra, rb)),
     ]);
     archived = (ar || []) as never;
@@ -130,7 +130,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const owedArch = archived.filter((a) => a.kind === "invoice" && +a.balance > 0.004).map((a) => a.id);
   const payUrls: Record<string, string> = {};
   for (let i = 0; i < owedArch.length; i += 200) {
-    const { data: pu } = await admin.from("archived_orders").select("id, pay:data->urls->>publicUrl").in("id", owedArch.slice(i, i + 200));
+    const { data: pu } = await admin.from("archived_orders").select("id, pay:data->urls->>publicUrl").is("removed_at", null).in("id", owedArch.slice(i, i + 200));
     ((pu || []) as { id: string; pay: string | null }[]).forEach((r) => { if (r.pay && /^https:\/\//.test(r.pay)) payUrls[r.id] = r.pay; });
   }
   aOrders.push(...archived.map((a) => ({ ...archiveAsOrder(a, archHref(a.id)), payUrl: payUrls[a.id] })));
@@ -305,7 +305,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const archPics: Record<string, string> = {};
   const pvKind: Record<string, JobKind> = {};
   if (archTop.length || pvOpen.length) {
-    const { data: ad } = await admin.from("archived_orders").select("id, files, data").in("id", [...archTop.map((a) => a.id), ...pvOpen.map((x) => x.a.id)]);
+    const { data: ad } = await admin.from("archived_orders").select("id, files, data").is("removed_at", null).in("id", [...archTop.map((a) => a.id), ...pvOpen.map((x) => x.a.id)]);
     const want: { id: string; path: string }[] = [];
     ((ad || []) as { id: string; files: Record<string, string> | null; data: PvOrder }[]).forEach((r) => {
       // the imprint mockups first (the shirt with the art), pictures only (not barcodes or file icons)

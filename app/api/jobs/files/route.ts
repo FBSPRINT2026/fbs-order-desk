@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     const oIds = [...new Set(rows.map((x) => x.order_id).filter(Boolean))] as string[], aIds = [...new Set(rows.map((x) => x.archived_order_id).filter(Boolean))] as string[];
     const [{ data: os }, { data: as }] = await Promise.all([
       oIds.length ? admin.from("orders").select("id, number, nickname").in("id", oIds) : Promise.resolve({ data: [] }),
-      aIds.length ? admin.from("archived_orders").select("id, visual_id, nickname").in("id", aIds) : Promise.resolve({ data: [] }),
+      aIds.length ? admin.from("archived_orders").select("id, visual_id, nickname").is("removed_at", null).in("id", aIds) : Promise.resolve({ data: [] }),
     ]);
     nums = new Map([...((os || []) as { id: string; number: number; nickname: string }[]).map((o) => [o.id, `#${o.number} ${o.nickname || ""}`.trim()] as [string, string]), ...((as || []) as { id: string; visual_id: string; nickname: string }[]).map((o) => [o.id, `#${o.visual_id} ${o.nickname || ""}`.trim()] as [string, string])]);
   }

@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   // each candidate's mockup: a Printavo job's picture (asked bigger from Printavo's image service), else ours
   const aIds = cands.filter((j) => j.ref.startsWith("a:")).map((j) => j.ref.slice(2)), oIds = cands.filter((j) => j.ref.startsWith("o:")).map((j) => j.ref.slice(2));
   const [{ data: as }, { data: os }] = await Promise.all([
-    aIds.length ? admin.from("archived_orders").select("id, files").in("id", aIds) : Promise.resolve({ data: [] }),
+    aIds.length ? admin.from("archived_orders").select("id, files").is("removed_at", null).in("id", aIds) : Promise.resolve({ data: [] }),
     oIds.length ? admin.from("orders").select("id, groups").in("id", oIds) : Promise.resolve({ data: [] }),
   ]);
   const load = async (path: string) => { const { data } = await admin.storage.from("proofs").download(path); return data ? Buffer.from(await data.arrayBuffer()) : null; };

@@ -650,7 +650,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       const { data: ev } = await sb.from("order_events").select("detail").eq("order_id", id).eq("kind", "reorder").order("created_at").limit(1).maybeSingle();
       const num = String(ev?.detail || "").match(/Printavo #(\d{3,7})/)?.[1];
       let prev: JF[] = [];
-      if (num) { const { data: ao } = await sb.from("archived_orders").select("id").eq("visual_id", num).limit(1).maybeSingle(); if (ao?.id) prev = await get("a", ao.id as string); }
+      if (num) { const { data: ao } = await sb.from("archived_orders").select("id").is("removed_at", null).eq("visual_id", num).limit(1).maybeSingle(); if (ao?.id) prev = await get("a", ao.id as string); }
       if (!live) return;
       setJobPics([...mine.map((x) => ({ id: "jf-" + x.id, name: x.body || x.file_name || "Photo", url: x.url, mime: x.file_type || "image/jpeg", note: "Photo of this run" })),
         ...prev.map((x) => ({ id: "jf-" + x.id, name: x.body || x.file_name || "Photo", url: x.url, mime: x.file_type || "image/jpeg", note: `Photo from last time (#${num})` }))]);

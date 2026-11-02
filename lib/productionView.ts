@@ -200,7 +200,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
     if (q) prev = { kind: "o", id: q.id as string, number: String(q.number), label: `#${q.number}${q.nickname ? ` ${q.nickname}` : ""}` };
   }
   if (pv) {
-    const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, order_date, data").eq("visual_id", pv[1]).maybeSingle();
+    const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, order_date, data").is("removed_at", null).eq("visual_id", pv[1]).maybeSingle();
     if (a) prev = { kind: "a", id: a.id as string, number: String(a.visual_id), label: `Printavo #${a.visual_id}` };
     if (a) for (const line of oldJobText(a).split("\n").filter(Boolean)) {
       const [k, ...r] = line.split(": ");

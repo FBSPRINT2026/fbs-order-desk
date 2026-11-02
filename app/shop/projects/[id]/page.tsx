@@ -29,7 +29,7 @@ export default function ShopProject({ params }: { params: Promise<{ id: string }
     setP(data as Project);
     const [{ data: ts }, { data: ar }] = await Promise.all([
       sb.from("project_tasks").select("*").eq("project_id", id).order("position"),
-      sb.from("archived_orders").select("id, visual_id, nickname, status_name, status_color, kind, total, balance, due_date, project_id").eq("customer_id", data.customer_id).order("order_date", { ascending: false }).limit(500),
+      sb.from("archived_orders").select("id, visual_id, nickname, status_name, status_color, kind, total, balance, due_date, project_id").is("removed_at", null).eq("customer_id", data.customer_id).order("order_date", { ascending: false }).limit(500),
     ]);
     setTasks((ts || []) as ProjectTask[]);
     setArch((ar || []) as never);

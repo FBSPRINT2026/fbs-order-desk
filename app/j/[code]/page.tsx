@@ -39,7 +39,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     if (gate.offNetwork && !(await searchParams).customer) return wrap(<JobSignIn code={code} offNetwork />);
     const job = ref ? await admin.from("orders").select("id").eq("number", +ref.number).maybeSingle() : null;
     if (job?.data) redirect(`/portal/orders/${job.data.id}`);
-    const pv = ref ? await admin.from("archived_orders").select("id").eq("visual_id", ref.number).maybeSingle() : null;
+    const pv = ref ? await admin.from("archived_orders").select("id").is("removed_at", null).eq("visual_id", ref.number).maybeSingle() : null;
     redirect(pv?.data ? `/portal/archive/${pv.data.id}` : "/portal");
   }
   const card = ref ? await loadJobCard(admin, { number: ref.number }) : null;
@@ -70,7 +70,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
       const { data: o } = await admin.from("orders").select("ship_to").eq("id", card.id).single();
       to = addressFromText((o?.ship_to as string) || c?.ship_address || c?.address || "", c?.name || "", c?.company || "");
     } else {
-      const { data: a } = await admin.from("archived_orders").select("data").eq("id", card.id).single();
+      const { data: a } = await admin.from("archived_orders").select("data").is("removed_at", null).eq("id", card.id).single();
       const d = (a?.data || {}) as PvOrder, sa = d.shippingAddress;
       to = { ...emptyAddress(), company: sa?.companyName || c?.company || "", name: sa?.customerName || d.contact?.fullName || "", street1: sa?.address1 || "", street2: sa?.address2 || "", city: sa?.city || "", state: sa?.state || "", zip: sa?.zipCode || "", country: !sa?.country || /^(us|usa|united states)$/i.test(sa.country) ? "US" : sa.country, phone: d.contact?.phone || "", email: d.contact?.email || "" };
       if (!to.street1 && addressLines(sa).length === 0 && c) to = addressFromText(c.ship_address || c.address || "", c.name || "", c.company || "");

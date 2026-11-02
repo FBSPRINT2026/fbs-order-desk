@@ -146,7 +146,7 @@ export async function pastJobs(admin: SupabaseClient, customerId: string | null)
   if (!customerId) return [];
   const [{ data: os }, { data: as }, { data: st }] = await Promise.all([
     admin.from("orders").select("id, number, nickname, status, created_at, groups, lines").eq("customer_id", customerId).not("status", "in", "(request)").order("created_at", { ascending: false }).limit(12),
-    admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data").eq("customer_id", customerId).eq("kind", "invoice").order("order_date", { ascending: false, nullsFirst: false }).limit(15),
+    admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data").is("removed_at", null).eq("customer_id", customerId).eq("kind", "invoice").order("order_date", { ascending: false, nullsFirst: false }).limit(15),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
   ]);
   const prod = (st?.data as { production?: unknown } | null)?.production;
@@ -185,7 +185,7 @@ export async function jobsNamed(admin: SupabaseClient, told: string, customerId:
       const like = `%${n}%`;
       const [{ data: po }, { data: pa }] = await Promise.all([
         admin.from("orders").select("id, number, nickname, status, created_at, groups, lines, customer_id").eq("customer_id", customerId).or(`po_number.ilike.${like},nickname.ilike.${like}`).order("created_at", { ascending: false }).limit(2),
-        admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("customer_id", customerId).eq("kind", "invoice").or(`po_number.ilike.${like},nickname.ilike.${like}`).order("order_date", { ascending: false, nullsFirst: false }).limit(2),
+        admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").is("removed_at", null).eq("customer_id", customerId).eq("kind", "invoice").or(`po_number.ilike.${like},nickname.ilike.${like}`).order("order_date", { ascending: false, nullsFirst: false }).limit(2),
       ]);
       let hit = false;
       for (const o of (po || []) as (Order & { created_at: string })[]) {
@@ -208,7 +208,7 @@ export async function jobsNamed(admin: SupabaseClient, told: string, customerId:
       out.push({ ref: `o:${o.id}`, label: `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}`, date: (o.created_at || "").slice(0, 10), qty: qtyOf(groups), groups });
       continue;
     }
-    const { data: as } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").eq("visual_id", n).limit(2);
+    const { data: as } = await admin.from("archived_orders").select("id, visual_id, nickname, qty, status_name, order_date, files, data, customer_id").is("removed_at", null).eq("visual_id", n).limit(2);
     // this customer's job (a stray number like part of a phone number shouldn't pull in someone else's job)
     const r = ((as || []) as (PvRow & { customer_id: string | null })[]).find((x) => !customerId || x.customer_id === customerId);
     if (r) {

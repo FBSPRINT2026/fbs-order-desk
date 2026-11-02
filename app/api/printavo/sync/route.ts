@@ -162,7 +162,10 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
     if (k.fingerprint !== o.fingerprint || k.status === "gone") { did.changed++; return [row]; }
     return [];
   });
-  if (back.length) await admin.from("printavo_index").update({ status: "files", seen_sweep: pass || currentPass }).in("printavo_id", back); // the file copier finishes it (right away if nothing is missing);
+  if (back.length) {
+    await admin.from("printavo_index").update({ status: "files", seen_sweep: pass || currentPass }).in("printavo_id", back); // the file copier finishes it (right away if nothing is missing);
+    await admin.from("archived_orders").update({ removed_at: null }).in("printavo_id", back); // shown again
+  }
   if (rows.length) { const { error } = await admin.from("printavo_index").upsert(rows, { onConflict: "printavo_id" }); if (error) throw new Error(error.message); }
   if (pass) {
     const unchanged = ids.filter((id) => !rows.some((r) => r.printavo_id === id));
@@ -175,6 +178,8 @@ async function comparePage(admin: SupabaseClient, orders: Awaited<ReturnType<typ
 async function rangePage(admin: SupabaseClient, sync: Sync, did: Record<string, number>) {
   const since = sync.range_since!;
   const page = await listOrders(sync.range_cursor, "number");
+  // what Printavo's list still has (Nov 2: #34596 was deleted in Printavo and stayed here): what it doesn't is checked at the end
+  if (page.orders.length) await admin.from("printavo_index").update({ range_seen_at: new Date().toISOString() }).in("printavo_id", page.orders.map((o) => o.id));
   const before = did.changed;
   await comparePage(admin, page.orders, did, null, sync.sweep_no + 1, since);
   // queued (new or changed) on this page: what comparePage counted plus the new ones it queued
@@ -187,8 +192,23 @@ async function rangePage(admin: SupabaseClient, sync: Sync, did: Record<string, 
   const older = page.orders.filter((o) => +o.visualId < 40000);
   const done = !page.next || (older.length > 0 && older.every((o) => o.createdAt && o.createdAt < since));
   sync.range_cursor = done ? null : page.next;
-  if (done) sync.range_done_at = new Date().toISOString();
+  if (done) { sync.range_done_at = new Date().toISOString(); await queueMissing(admin, since, sync.range_started_at); }
   await admin.from("printavo_sync").update({ range_cursor: sync.range_cursor, range_pages: sync.range_pages, range_seen: sync.range_seen, range_changed: sync.range_changed, ...(done ? { range_done_at: sync.range_done_at } : {}) }).eq("id", 1);
+}
+
+/**
+ * Deleted in Printavo (Nov 2, Nick: "#34596 for Cedar Promos was deleted in Printavo… but it's still in our system"):
+ * when a time-frame run reaches its end, every order we have from that window that Printavo's list didn't show is read
+ * again on its own. Printavo answering "not found" marks it removed (importOne); one it still has just refreshes. The
+ * list only points at suspects, the read decides, so a list that skipped something never hides a real order.
+ */
+async function queueMissing(admin: SupabaseClient, since: string, startedAt: string | null) {
+  if (!startedAt) return;
+  const from = since > FREEZE ? since : FREEZE, upto = new Date(Date.parse(startedAt) - 3600000).toISOString();
+  const { data } = await admin.from("printavo_index").select("printavo_id, visual_id").in("status", ["done", "files"]).not("archived_id", "is", null)
+    .gte("created_at", from).lt("created_at", upto).or(`range_seen_at.is.null,range_seen_at.lt.${startedAt}`).order("created_at", { ascending: false }).limit(400);
+  const ids = ((data || []) as { printavo_id: string; visual_id: string }[]).filter((r) => +r.visual_id < 40000).map((r) => r.printavo_id);
+  if (ids.length) await admin.from("printavo_index").update({ status: "pending", attempts: 0 }).in("printavo_id", ids);
 }
 
 /** One page of the active jobs (latest due dates first). */
@@ -257,6 +277,8 @@ async function importOne(admin: SupabaseClient, printavoId: string, attempts: nu
     const gone = e instanceof PrintavoError && /not found/i.test(msg);
     if (e instanceof PrintavoThrottled) throw e; // not the order's fault: leave it as it was
     await admin.from("printavo_index").update({ status: gone ? "gone" : attempts + 1 >= 3 ? "error" : "pending", attempts: attempts + 1, error: msg, deep_at: new Date().toISOString() }).eq("printavo_id", printavoId);
+    // deleted in Printavo: hidden here too (kept, never deleted; it comes back if Printavo shows it again)
+    if (gone) await admin.from("archived_orders").update({ removed_at: new Date().toISOString() }).eq("printavo_id", printavoId).is("removed_at", null);
     if (e instanceof PrintavoThrottled || /Printavo answered HTTP 401|403|isn't connected/i.test(msg)) throw e; // slow down / bad credentials: stop this run
   }
 }

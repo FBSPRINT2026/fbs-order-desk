@@ -68,7 +68,7 @@ export async function specHistory(admin: SupabaseClient, s: Settings, orderId: s
   const dIds = [...new Set(ims.map((i) => i.design_id).filter(Boolean))] as string[];
   const { data: dsgs } = dIds.length ? await admin.from("designs").select("name").in("id", dIds) : { data: [] as { name: string }[] };
   let oldNick = "";
-  if (ref?.[1]) { const { data: a } = await admin.from("archived_orders").select("nickname").eq("visual_id", ref[2]).maybeSingle(); oldNick = a?.nickname || ""; }
+  if (ref?.[1]) { const { data: a } = await admin.from("archived_orders").select("nickname").is("removed_at", null).eq("visual_id", ref[2]).maybeSingle(); oldNick = a?.nickname || ""; }
   const words = designWords(o.nickname, oldNick, ...(dsgs || []).map((d) => d.name));
   if (!words.length) return { ok: false, error: "Couldn't tell the design's name from the order. Give the order a nickname with the design's name." };
   const hit = (t: string | null | undefined) => { const x = String(t || "").toLowerCase(); return words.some((w) => x.includes(w)); };
@@ -78,10 +78,10 @@ export async function specHistory(admin: SupabaseClient, s: Settings, orderId: s
   const counts = { jobs: 0, emails: 0, kept: 0, orders: 0, pics: 0, confirmed: 0, texts: 0 };
 
   // 1. old Printavo jobs that mention the design (their details, notes, emails and mockups)
-  const { data: arch } = await admin.from("archived_orders").select("id, visual_id, nickname, order_date, search_text").eq("customer_id", o.customer_id).order("order_date", { ascending: true }).limit(1000);
+  const { data: arch } = await admin.from("archived_orders").select("id, visual_id, nickname, order_date, search_text").is("removed_at", null).eq("customer_id", o.customer_id).order("order_date", { ascending: true }).limit(1000);
   const jobs = (arch || []).filter((a) => hit(a.nickname) || hit(a.search_text)).slice(-14);
   for (const j of jobs) {
-    const { data: a } = await admin.from("archived_orders").select("data, files").eq("id", j.id).maybeSingle();
+    const { data: a } = await admin.from("archived_orders").select("data, files").is("removed_at", null).eq("id", j.id).maybeSingle();
     const d = (a?.data || {}) as { groups?: { lines?: { description?: string; color?: string; items?: number }[]; imprints?: { details?: string; typeOfWork?: string }[] }[]; productionNote?: string; customerNote?: string; messages?: { at?: string; incoming?: boolean; subject?: string; text?: string; from?: string }[] };
     counts.jobs++;
     lines.push(`PRINTAVO JOB #${j.visual_id} "${j.nickname || ""}" (ordered ${j.order_date || "?"})`);

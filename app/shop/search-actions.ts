@@ -26,7 +26,7 @@ export async function quickJump(q: string): Promise<string> {
     if (num) {
       const { data: o } = await admin.from("orders").select("id").eq("number", num).eq("draft", false).is("discarded_at", null).limit(1).maybeSingle();
       if (o) return `/shop/orders/${o.id}`;
-      const { data: a } = await admin.from("archived_orders").select("id, kind").eq("visual_id", String(num)).order("kind", { ascending: true }).limit(2);
+      const { data: a } = await admin.from("archived_orders").select("id, kind").is("removed_at", null).eq("visual_id", String(num)).order("kind", { ascending: true }).limit(2);
       const pick = (a || []).find((x) => x.kind === "invoice") || (a || [])[0];
       return pick ? `/shop/archive/${pick.id}` : "";
     }

@@ -41,7 +41,7 @@ export async function orderBrief(admin: SupabaseClient, orderId: string, needReo
 
   const old: string[] = [];
   if (ref?.[1]) {
-    const { data: a } = await admin.from("archived_orders").select("visual_id, nickname, order_date, data").eq("visual_id", ref[2]).maybeSingle();
+    const { data: a } = await admin.from("archived_orders").select("visual_id, nickname, order_date, data").is("removed_at", null).eq("visual_id", ref[2]).maybeSingle();
     if (!a) return { ok: false as const, error: `Printavo #${ref[2]} isn't in the archive.` };
     const d = (a.data || {}) as { groups?: { lines?: { description?: string; itemNumber?: string; color?: string; sizes?: Record<string, number>; items?: number; price?: number }[]; imprints?: { details?: string; typeOfWork?: string }[] }[]; fees?: { description?: string; quantity?: number; amount?: number }[]; productionNote?: string; customerNote?: string };
     old.push(`Printavo #${a.visual_id} "${a.nickname || ""}", ${a.order_date || ""}`);

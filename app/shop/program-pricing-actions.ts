@@ -69,7 +69,7 @@ export async function pastPricesForDesign(input: { customerId: string; orderId: 
     if (!keys.length) return { ok: true as const, rows: [] as PastPrice[], keys };
     const like = keys.map((k) => `nickname.ilike.%${k}%`).join(",");
     const [{ data: arch }, { data: ours }] = await Promise.all([
-      admin.from("archived_orders").select("id, visual_id, order_date, nickname, total, data").eq("customer_id", input.customerId).neq("kind", "quote").or(keys.map((k) => `search_text.ilike.%${k}%`).join(",")).order("order_date", { ascending: false }).limit(12),
+      admin.from("archived_orders").select("id, visual_id, order_date, nickname, total, data").is("removed_at", null).eq("customer_id", input.customerId).neq("kind", "quote").or(keys.map((k) => `search_text.ilike.%${k}%`).join(",")).order("order_date", { ascending: false }).limit(12),
       admin.from("orders").select("id, number, created_at, nickname, total, groups, waive_setup, type").eq("customer_id", input.customerId).eq("type", "invoice").neq("id", input.orderId).or(like).order("created_at", { ascending: false }).limit(8),
     ]);
     const rows: PastPrice[] = [];
@@ -138,7 +138,7 @@ const PROPOSAL_TOOL = {
 /** their last 18 months on Printavo, boiled down: per-piece prices by style and print, and the fees charged */
 async function historyBrief(admin: ReturnType<typeof createAdminClient>, customerId: string) {
   const since = new Date(Date.now() - 548 * 864e5).toISOString().slice(0, 10);
-  const { data } = await admin.from("archived_orders").select("visual_id, order_date, nickname, data").eq("customer_id", customerId).eq("kind", "invoice").gte("order_date", since).order("order_date", { ascending: false }).limit(80);
+  const { data } = await admin.from("archived_orders").select("visual_id, order_date, nickname, data").is("removed_at", null).eq("customer_id", customerId).eq("kind", "invoice").gte("order_date", since).order("order_date", { ascending: false }).limit(80);
   type PvLine = { itemNumber?: string; items?: number; price?: number; description?: string };
   type PvData = { groups?: { lines?: PvLine[] }[]; fees?: { description?: string; unitPrice?: number }[] };
   const lines = new Map<string, { n: number; min: number; max: number; qmin: number; qmax: number }>(), fees = new Map<string, number>();
@@ -284,7 +284,7 @@ export async function programCardStats(customerId: string): Promise<{ ok: true; 
     if (!p) return { ok: true, stats: { since, who: {}, styles: {} } };
     const { data: its } = await admin.from("program_items").select("match").eq("program_id", p.id).eq("active", true).is("archived_at", null);
     const [{ data: ar }, { data: os }] = await Promise.all([
-      allRows((r0, r1) => admin.from("archived_orders").select("nickname, qty, total, search_text").eq("customer_id", customerId).gte("order_date", since).order("id").range(r0, r1), 5000),
+      allRows((r0, r1) => admin.from("archived_orders").select("nickname, qty, total, search_text").is("removed_at", null).eq("customer_id", customerId).gte("order_date", since).order("id").range(r0, r1), 5000),
       allRows((r0, r1) => admin.from("orders").select("nickname, qty, total, groups, po_number").eq("customer_id", customerId).gte("created_at", since).neq("status", "request").order("id").range(r0, r1), 2000),
     ]);
     const jobs = [

@@ -72,7 +72,7 @@ export async function loadJobCard(admin: SupabaseClient, ref: { number: string }
     if (byId) return null;
   }
 
-  const q = admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, qty, po_number, customer_id, data");
+  const q = admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, qty, po_number, customer_id, data").is("removed_at", null);
   const { data: a } = byId ? await q.eq("id", ref.id).maybeSingle() : await q.eq("visual_id", ref.number).maybeSingle();
   if (!a) return null;
   const d = (a.data || {}) as PvOrder;

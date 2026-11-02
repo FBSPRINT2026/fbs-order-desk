@@ -159,7 +159,7 @@ function ResolveRow({ g, onDone }: { g: PendingShipment; onDone: () => void }) {
     const { data } = await sb.from("orders").select("id").eq("number", +n).maybeSingle();
     if (data) return run({ assign: { lineIds: g.lineIds, orderId: data.id, kind: "blanks" } });
     // still a Printavo job (until go-live)
-    const { data: pv } = await sb.from("archived_orders").select("id").eq("visual_id", n).maybeSingle();
+    const { data: pv } = await sb.from("archived_orders").select("id").is("removed_at", null).eq("visual_id", n).maybeSingle();
     if (!pv) return setErr(`No order #${num}.`);
     run({ assign: { lineIds: g.lineIds, orderId: "pv:" + pv.id, kind: "blanks" } });
   }

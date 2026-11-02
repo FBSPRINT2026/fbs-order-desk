@@ -686,8 +686,6 @@ td > .sz-dim.on input{padding-right:24px}
 .aa-tbl td{padding:12px 14px;border-bottom:1px solid var(--line-2,var(--line));vertical-align:middle}
 .aa-tbl tbody tr{cursor:pointer}
 .aa-tbl tbody tr:hover{background:var(--surface-2)}
-.aa-tbl tbody tr.late{background:#FDECEC}
-.aa-tbl tbody tr.late:hover{background:#FADADA}
 .aa-tbl tbody tr:last-child td{border-bottom:0}
 .aa-tbl td a{font-weight:700}
 .aa-tbl td.b{font-weight:700}
@@ -14475,7 +14473,6 @@ html body .ord .line-b .gl-list .gl.ver{padding-left:16px}
   .portal .aa-ocards{display:block;list-style:none;margin:0;padding:0}
   .aa-oc{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer}
   .aa-oc:first-child{border-top:0}
-  .aa-oc.late{box-shadow:inset 3px 0 0 var(--danger)}
   .aa-oc-top{display:flex;align-items:center;gap:8px;min-height:28px}
   .aa-oc-n{flex:1 1 auto;min-width:0;font-size:15px;font-weight:700;color:var(--ink);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .aa-oc-top .aa-arch{margin-left:0;flex:0 0 auto}
@@ -17728,3 +17725,11 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .mf-look-b .mf-pdf-main{overflow-y:auto}
 .mf-look:has(.ofv),.mf-look:has(.mf-look-b > iframe){height:min(92vh,100%)}
 .mf-look:has(.ofv) > .mf-look-b,.mf-look:has(.mf-look-b > iframe) > .mf-look-b{flex:1 1 auto}
+/* the shop's view of an old Printavo order: one column, fees & totals on the right (Nov 2, Nick) */
+.pv-shop{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,320px);gap:14px;align-items:start}
+.pv-shop-side{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px}
+.pv-shop-side .panel .pv-totals{border:0;box-shadow:none;border-radius:0;padding:14px 16px}
+.pv-kind .pv-kind-mark{display:inline-flex;vertical-align:2px;margin-left:8px}
+.pv-ro{font-size:12px;color:var(--ink-3);margin-top:2px}
+.pv-gone{margin:6px 0;padding:10px 14px;border-radius:10px;background:var(--danger-soft);color:var(--danger);font-weight:600;font-size:13px}
+@media (max-width:1000px){.pv-shop{grid-template-columns:minmax(0,1fr)}.pv-shop-side{position:static}}

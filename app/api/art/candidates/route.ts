@@ -35,7 +35,7 @@ export async function GET(req: Request) {
   let old: { name: string; path: string; url: string; type: string }[] = [];
   const arch = sp.get("archived") || "";
   if (arch) {
-    const { data: row } = await admin0.from("archived_orders").select("files, customer_id").eq("id", arch).maybeSingle();
+    const { data: row } = await admin0.from("archived_orders").select("files, customer_id").is("removed_at", null).eq("id", arch).maybeSingle();
     if (row && (!cid || row.customer_id === cid)) {
       const paths = [...new Set(Object.entries((row.files || {}) as Record<string, string>).filter(([k, v]) => typeof v === "string" && v.startsWith("printavo/") && !/resize=width:\d+/.test(k)).map(([, v]) => v))];
       const names = await namesForPaths(admin0, paths).catch(() => ({} as Record<string, { name: string }>));

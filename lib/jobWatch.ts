@@ -188,7 +188,7 @@ export async function customerOwners(admin: SupabaseClient, ids: string[]): Prom
   const [{ data: st }, { data: ao }, { data: pv }] = await Promise.all([
     admin.from("staff").select("email, name"),
     admin.from("customer_private").select("customer_id, account_owner").in("customer_id", ids).neq("account_owner", ""),
-    allRows((r0, r1) => admin.from("archived_orders").select("customer_id, order_date, owner:data->>owner").in("customer_id", ids).order("order_date", { ascending: false }).order("id").range(r0, r1), 2000),
+    allRows((r0, r1) => admin.from("archived_orders").select("customer_id, order_date, owner:data->>owner").is("removed_at", null).in("customer_id", ids).order("order_date", { ascending: false }).order("id").range(r0, r1), 2000),
   ]);
   const staff = (st || []) as { email: string; name: string | null }[];
   const emailOf = (n?: string | null) => { const t = (n || "").trim().toLowerCase(); if (!t) return undefined; const first = t.split(/\s+/)[0]; const m = staff.find((x) => (x.name || "").toLowerCase() === t) || staff.find((x) => (x.name || "").toLowerCase().split(/\s+/)[0] === first) || staff.find((x) => x.email.toLowerCase().split("@")[0] === first); return m?.email.toLowerCase(); };
@@ -207,7 +207,7 @@ type PvGroup = { lines?: PvLine[]; imprints?: { mockups?: unknown[] }[] };
 type PvData = { groups?: PvGroup[]; approvals?: { status?: string; name?: string }[]; deliveryMethod?: string; owner?: string; createdAt?: string; files?: unknown[] };
 async function watchPrintavoJobs(admin: SupabaseClient, today: string, lead: number, opts: { live?: boolean; deadline?: number; cut?: boolean }): Promise<JobAction[]> {
   const [{ data: rows }, { data: st }] = await Promise.all([
-    admin.from("archived_orders").select("id, visual_id, kind, nickname, status_name, due_date, customer_id, data, customers(company, name, is_test)")
+    admin.from("archived_orders").select("id, visual_id, kind, nickname, status_name, due_date, customer_id, data, customers(company, name, is_test)").is("removed_at", null)
       .not("due_date", "is", null).gte("due_date", today).lte("due_date", bizAdd(today, -30)).not("status_name", "ilike", "%complete%").not("status_name", "ilike", "%cancel%").limit(400),
     admin.from("staff").select("email, name"),
   ]);

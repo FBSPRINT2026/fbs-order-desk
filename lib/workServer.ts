@@ -52,7 +52,7 @@ export async function lookupJob(admin: SupabaseClient, text: string, by?: { kind
     return { kind: "o", id: o.id, number: String(o.number), name: o.nickname || "", customer: c?.company || c?.name || "", due: o.due_date, qty: o.qty || 0, status: o.status, spots };
   }
   if (by?.kind === "o") return null;
-  const q = admin.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, customer_id");
+  const q = admin.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, customer_id").is("removed_at", null);
   const { data: a } = by ? await q.eq("id", by.id).maybeSingle() : await q.eq("visual_id", n).maybeSingle();
   if (a) {
     const { data: c } = a.customer_id ? await admin.from("customers").select("company, name").eq("id", a.customer_id).maybeSingle() : { data: null };

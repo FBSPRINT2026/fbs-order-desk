@@ -58,7 +58,7 @@ export default function ShippingCenter() {
   const load = useCallback(async () => {
     const [n, p, st] = await Promise.all([
       sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party").eq("status", "ready").eq("delivery_method", "ship").order("due_date", { ascending: true, nullsFirst: false }),
-      sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, po_number, status_name, ship:data->shippingAddress, delivery:data->deliveryMethod, contact:data->contact").ilike("status_name", "%ready to ship%").order("due_date", { ascending: true, nullsFirst: false }).limit(300),
+      sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, po_number, status_name, ship:data->shippingAddress, delivery:data->deliveryMethod, contact:data->contact").is("removed_at", null).ilike("status_name", "%ready to ship%").order("due_date", { ascending: true, nullsFirst: false }).limit(300),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     const s = mergeSettings(st.data?.data); setSettings(s);
@@ -89,7 +89,7 @@ export default function ShippingCenter() {
     const oIds = d.map((x) => x.order_id).filter(Boolean) as string[], aIds = d.map((x) => x.archived_order_id).filter(Boolean) as string[];
     const [{ data: on }, { data: an }, { data: dc }] = await Promise.all([
       oIds.length ? sb.from("orders").select("id, number").in("id", oIds) : Promise.resolve({ data: [] }),
-      aIds.length ? sb.from("archived_orders").select("id, visual_id").in("id", aIds) : Promise.resolve({ data: [] }),
+      aIds.length ? sb.from("archived_orders").select("id, visual_id").is("removed_at", null).in("id", aIds) : Promise.resolve({ data: [] }),
       d.length ? sb.from("customers").select("id, company, name").in("id", d.map((x) => x.customer_id).filter(Boolean) as string[]) : Promise.resolve({ data: [] }),
     ]);
     const lab = new Map<string, string>([...((on || []) as { id: string; number: number }[]).map((x) => [x.id, String(x.number)] as [string, string]), ...((an || []) as { id: string; visual_id: string }[]).map((x) => [x.id, x.visual_id] as [string, string])]);

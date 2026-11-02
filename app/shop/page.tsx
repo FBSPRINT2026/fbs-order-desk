@@ -80,13 +80,13 @@ export default function Dashboard() {
       // everything the page needs, asked for at once (each query used to wait for the one before it)
       const [o, a, m, e, ly, recent, sml, bal, sepQ, aoQ] = await Promise.all([
         sb.from("orders").select("id, number, nickname, customer_id, due_date, status, type, total, delivery_method, submitted_at, printavo_id, pv_status:printavo_state->>status").eq("draft", false).is("discarded_at", null).not("status", "in", "(completed)").limit(800),
-        sb.from("archived_orders").select("id, visual_id, nickname, customer_id, due_date, status_name, kind, total, owner:data->>owner").not("status_name", "in", '("Job Completed","Quote - Closed")').limit(800),
+        sb.from("archived_orders").select("id, visual_id, nickname, customer_id, due_date, status_name, kind, total, owner:data->>owner").is("removed_at", null).not("status_name", "in", '("Job Completed","Quote - Closed")').limit(800),
         sb.from("messages").select("id, order_id, customer_id, author_name, author_email, body, created_at, topic").eq("author_type", "customer").is("read_at", null).order("created_at", { ascending: false }).limit(30),
         sb.from("activities").select("id, customer_id, order_id, subject, body, from_email, to_email, occurred_at, direction, external_id, thread_id, meta").eq("kind", "email").gte("occurred_at", new Date(Date.now() - 21 * 86400000).toISOString()).order("occurred_at", { ascending: false }).limit(500),
-        sb.from("archived_orders").select("id, visual_id, nickname, customer_id, order_date, total, kind, owner:data->>owner").eq("kind", "invoice").gte("order_date", lastYearFrom).lte("order_date", lastYearTo).order("order_date").limit(400),
-        allRows((r0, r1) => sb.from("archived_orders").select("customer_id, order_date, owner:data->>owner").gte("order_date", addDays(-240)).order("order_date", { ascending: false }).order("id").range(r0, r1), 3000),
+        sb.from("archived_orders").select("id, visual_id, nickname, customer_id, order_date, total, kind, owner:data->>owner").is("removed_at", null).eq("kind", "invoice").gte("order_date", lastYearFrom).lte("order_date", lastYearTo).order("order_date").limit(400),
+        allRows((r0, r1) => sb.from("archived_orders").select("customer_id, order_date, owner:data->>owner").is("removed_at", null).gte("order_date", addDays(-240)).order("order_date", { ascending: false }).order("id").range(r0, r1), 3000),
         allRows((r0, r1) => sb.from("supplier_manifest_lines").select("tracking, track_status, est_delivery, delivered_at, ship_date, method").neq("kind", "ignored").gte("created_at", new Date(Date.now() - 20 * 86400000).toISOString()).order("id").range(r0, r1), 3000),
-        sb.from("archived_orders").select("id, visual_id, nickname, customer_id, balance, due_date").eq("kind", "invoice").gt("balance", 0.5).order("balance", { ascending: false }).limit(60),
+        sb.from("archived_orders").select("id, visual_id, nickname, customer_id, balance, due_date").is("removed_at", null).eq("kind", "invoice").gt("balance", 0.5).order("balance", { ascending: false }).limit(60),
         sb.from("separations").select("id, number, order_id, location, garment_color, status, due_date, customer_id, channels, updated_at").not("status", "in", "(cancelled,films)").order("due_date", { ascending: true, nullsFirst: false }).limit(200),
         allRows((r0, r1) => sb.from("customer_private").select("customer_id, account_owner").neq("account_owner", "").order("customer_id").range(r0, r1), 5000),
       ]);
@@ -131,7 +131,7 @@ export default function Dashboard() {
         // one tiny look per customer (a single query for all of them hit the row cap on Nine18's 10,000 old orders and
         // called everyone new)
         const old = await Promise.all(cids.slice(0, 60).map(async (cid) => {
-          const { data: a1 } = await sb.from("archived_orders").select("id").eq("customer_id", cid).lt("order_date", cut.slice(0, 10)).limit(1);
+          const { data: a1 } = await sb.from("archived_orders").select("id").is("removed_at", null).eq("customer_id", cid).lt("order_date", cut.slice(0, 10)).limit(1);
           if (a1?.length) return cid;
           const { data: o1 } = await sb.from("orders").select("id").eq("customer_id", cid).eq("draft", false).lt("created_at", cut).limit(1);
           return o1?.length ? cid : null;

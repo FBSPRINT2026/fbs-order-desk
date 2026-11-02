@@ -89,13 +89,17 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
 
   return (
     <div className="pv">
-      <div className="pv-note">
+      {/* the shop's page: no "Archived order" bar; the Printavo P by the number says it (Nov 2, Nick) */}
+      {audience !== "shop" && <div className="pv-note">
         <span className="pv-arch">Archived order</span>
-        <span>{audience === "shop" ? <>Read-only, as it was in Printavo. Stored on our own servers (imported {stamp(importedAt)}).</> : <>This is an order from our old system. On your Orders screen these are marked with <PrintavoMark className="pv-note-mark" /></>}</span>
+        <span>This is an order from our old system. On your Orders screen these are marked with <PrintavoMark className="pv-note-mark" /></span>
         <span className="spacer" />
         {actions}
         <button type="button" className="btn sm" onClick={() => window.print()}>Print</button>
-      </div>
+      </div>}
+      {/* shop: everything in one column, the fees & totals (and payments) in a panel on the right (Nov 2, Nick: "I like
+          the fees and totals on the right… everything else can just be the other way") */}
+      <div className={audience === "shop" ? "pv-shop" : undefined}>
 
       {/* one column, full width, like the invoice in Printavo (Nov 2, Nick: "very narrow and compact… remove the right
           panel… brings everything up"): the job, then payments beside the totals, then messages (when there are any) and
@@ -104,8 +108,9 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         <header className="pv-head">
           {back && <span className="pv-back">{back}</span>}
           <div className="pv-head-t">
-            <div className="pv-kind">{label} <span>#{o.visualId}</span></div>
+            <div className="pv-kind">{label} <span>#{o.visualId}</span>{audience === "shop" && <PrintavoMark className="pv-kind-mark" />}</div>
             {o.nickname && <div className="pv-nick">{o.nickname}</div>}
+            {audience === "shop" && <div className="pv-ro">From Printavo · read-only · copied {stamp(importedAt)}</div>}
             {o.tags.length > 0 && <div className="pv-tags">{o.tags.map((t) => <span key={t}>{t}</span>)}</div>}
           </div>
           <div className="pv-head-r">
@@ -142,15 +147,15 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         {o.groups.map((g, gi) => group(g, gi + 1))}
         {!o.groups.length && <div className="pv-card faint" style={{ padding: 18 }}>No line items on this {label.toLowerCase()}.</div>}
 
-        <div className="pv-sum">
+        {audience === "shop" ? plain(o.customerNote) && <div className="pv-card"><h3>Customer note</h3><p className="pv-pre">{plain(o.customerNote)}</p></div> : <div className="pv-sum">
           <div className="pv-sum-l">
             {paymentsCard}
             {plain(o.customerNote) && (
-              <div className="pv-card"><h3>{audience === "shop" ? "Customer note" : "Note"}</h3><p className="pv-pre">{plain(o.customerNote)}</p></div>
+              <div className="pv-card"><h3>Note</h3><p className="pv-pre">{plain(o.customerNote)}</p></div>
             )}
           </div>
           <div className="pv-sum-r">{totalsCard}</div>
-        </div>
+        </div>}
 
         {audience !== "shop" && (o.messages.length > 0 || o.approvals.length > 0) && <History o={o} fileUrl={fileUrl} dl={dl} paths={paths} audience={audience} />}
 
@@ -175,6 +180,11 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
         )}
 
         {audience === "shop" && o.warnings?.length ? <div className="pv-card faint" style={{ fontSize: 12.5 }}>Some parts couldn&apos;t be read from Printavo: {o.warnings.join(" · ")}</div> : null}
+      </div>
+      {audience === "shop" && <aside className="pv-shop-side">
+        <section className="panel"><div className="panel-h"><h2>Fees &amp; totals</h2></div>{totalsCard}</section>
+        {paymentsCard}
+      </aside>}
       </div>
 
       {lookAt != null && looks[lookAt] && <QuickLook files={looks} at={lookAt} strip title={`#${o.visualId || ""}`.trim()} onClose={() => setLookAt(null)} />}

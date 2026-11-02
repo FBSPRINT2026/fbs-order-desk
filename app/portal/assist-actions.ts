@@ -69,7 +69,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const oids = orders.map((o) => o.id);
     const [{ data: pays }, { data: arch }, { data: goods }] = await Promise.all([
       oids.length ? admin.from("payments").select("order_id, amount").in("order_id", oids) : Promise.resolve({ data: [] }),
-      admin.from("archived_orders").select("id, visual_id, nickname, status_name, order_date, total, qty").in("customer_id", ids).order("order_date", { ascending: false }).limit(150),
+      admin.from("archived_orders").select("id, visual_id, nickname, status_name, order_date, total, qty").is("removed_at", null).in("customer_id", ids).order("order_date", { ascending: false }).limit(150),
       oids.length ? admin.from("order_goods").select("order_id, status, issue_type").in("order_id", oids) : Promise.resolve({ data: [] }),
     ]);
     const paid: Record<string, number> = {};
@@ -208,7 +208,7 @@ export async function reorderArchived(archivedId: string, note = ""): Promise<{ 
     if (!user || isStaff) return { ok: false, error: "Reorders start from the customer's own login." };
     const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id").order("id").range(ra, rb));
     const admin = createAdminClient();
-    const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, qty").eq("id", archivedId).in("customer_id", (cs || []).map((c) => c.id)).maybeSingle();
+    const { data: a } = await admin.from("archived_orders").select("id, visual_id, nickname, qty").is("removed_at", null).eq("id", archivedId).in("customer_id", (cs || []).map((c) => c.id)).maybeSingle();
     if (!a) return { ok: false, error: "We couldn't find that order." };
     return portalSend(null, `I'd like to reorder past order #${a.visual_id}${a.nickname ? ` (${a.nickname})` : ""}: same garments and artwork as before${a.qty ? ` (last time ${a.qty} pcs)` : ""}.${note ? `\n\n${note.slice(0, 1000)}` : ""}\n\nPlease send me a quote.`);
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }

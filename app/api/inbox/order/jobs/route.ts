@@ -27,8 +27,8 @@ export async function GET(req: Request) {
   const [os, as] = await Promise.all([
     (num ? admin.from("orders").select("id, number, nickname, created_at, qty").eq("customer_id", cid).eq("number", +num)
       : admin.from("orders").select("id, number, nickname, created_at, qty").eq("customer_id", cid).ilike("nickname", like)).not("status", "in", "(request)").order("created_at", { ascending: false }).limit(60),
-    (num ? admin.from("archived_orders").select("id, visual_id, nickname, order_date, qty").eq("customer_id", cid).eq("visual_id", num)
-      : admin.from("archived_orders").select("id, visual_id, nickname, order_date, qty").eq("customer_id", cid).ilike("nickname", like)).eq("kind", "invoice").order("order_date", { ascending: false, nullsFirst: false }).limit(100),
+    (num ? admin.from("archived_orders").select("id, visual_id, nickname, order_date, qty").is("removed_at", null).eq("customer_id", cid).eq("visual_id", num)
+      : admin.from("archived_orders").select("id, visual_id, nickname, order_date, qty").is("removed_at", null).eq("customer_id", cid).ilike("nickname", like)).eq("kind", "invoice").order("order_date", { ascending: false, nullsFirst: false }).limit(100),
   ]);
   const jobs = [
     ...((os.data || []) as { id: string; number: number; nickname: string | null; created_at: string; qty: number | null }[]).map((o) => ({ ref: `o:${o.id}`, label: `#${o.number}${o.nickname ? ` ${o.nickname}` : ""}`, date: String(o.created_at || "").slice(0, 10), qty: o.qty || 0, groups: [] })),

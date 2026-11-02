@@ -34,7 +34,7 @@ async function knownJobs(admin: ReturnType<typeof createAdminClient>, tasks: Cli
   if (!custs.length) return out;
   const since = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
   const [{ data: pv }, { data: ord }] = await Promise.all([
-    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, po_number, status_name, order_date, customer_id").in("customer_id", custs).gte("order_date", since).order("id").range(r0, r1), 4000),
+    allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, po_number, status_name, order_date, customer_id").is("removed_at", null).in("customer_id", custs).gte("order_date", since).order("id").range(r0, r1), 4000),
     allRows((r0, r1) => admin.from("orders").select("id, number, nickname, po_number, customer_id, created_at").in("customer_id", custs).gte("created_at", since).order("id").range(r0, r1), 4000),
   ]);
   const nums = (s: string) => [...new Set((s.match(/\d{3,10}/g) || []).filter((n) => !/^20[2-3]\d$/.test(n)))];

@@ -14,7 +14,7 @@ export async function accountOwners(admin: SupabaseClient, customerIds: string[]
   for (let i = 0; i < all.length; i += 200) {
     const ids = all.slice(i, i + 200);
     const [{ data: last }, { data: ao }] = await Promise.all([
-      allRows((r0, r1) => admin.from("archived_orders").select("customer_id, owner:data->>owner").in("customer_id", ids).not("data->>owner", "is", null).order("order_date", { ascending: false }).order("id").range(r0, r1), 4000),
+      allRows((r0, r1) => admin.from("archived_orders").select("customer_id, owner:data->>owner").is("removed_at", null).in("customer_id", ids).not("data->>owner", "is", null).order("order_date", { ascending: false }).order("id").range(r0, r1), 4000),
       admin.from("customer_private").select("customer_id, account_owner").in("customer_id", ids).neq("account_owner", ""),
     ]);
     for (const r of (last || []) as { customer_id: string; owner: string | null }[]) if (r.owner && !acct.has(r.customer_id)) acct.set(r.customer_id, firstName(r.owner));

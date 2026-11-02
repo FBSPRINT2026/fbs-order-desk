@@ -11,7 +11,7 @@ export async function projectSummaries(admin: SupabaseClient, customerIds: strin
   const ids = projects.map((p) => p.id);
   const [{ data: os }, { data: ar }, { data: ts }] = await Promise.all([
     admin.from("orders").select("project_id, total, status").in("project_id", ids),
-    admin.from("archived_orders").select("project_id, total").in("project_id", ids),
+    admin.from("archived_orders").select("project_id, total").is("removed_at", null).in("project_id", ids),
     admin.from("project_tasks").select("project_id, title, due_date, done_at, shop_only").in("project_id", ids).is("done_at", null).order("due_date", { ascending: true, nullsFirst: false }),
   ]);
   return projects.map((p) => {

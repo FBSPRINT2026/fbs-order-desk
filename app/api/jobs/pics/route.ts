@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const aIds = want.filter((r) => r.startsWith("a:")).map((r) => r.slice(2)), oIds = want.filter((r) => r.startsWith("o:")).map((r) => r.slice(2));
   const [{ data: as }, { data: os }, { data: ms }] = await Promise.all([
-    aIds.length ? admin.from("archived_orders").select("id, files").in("id", aIds) : Promise.resolve({ data: [] }),
+    aIds.length ? admin.from("archived_orders").select("id, files").is("removed_at", null).in("id", aIds) : Promise.resolve({ data: [] }),
     oIds.length ? admin.from("orders").select("id, groups").in("id", oIds) : Promise.resolve({ data: [] }),
     oIds.length ? admin.from("mockups").select("order_id, file_path, created_at").in("order_id", oIds).is("archived_at", null).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
   ]);
