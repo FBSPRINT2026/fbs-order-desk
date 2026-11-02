@@ -18935,3 +18935,5 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aa-ocard{min-height:max(420px,calc(100vh - 330px));display:flex;flex-direction:column}
 .aa-ocard>.aa-otabs{align-items:center}
 .aa-oldq-bar{font-size:13px;color:var(--ink-2);white-space:nowrap}
+/* the followed order's step name a little lower, off the bar (Nov 2, Nick) */
+.orm{gap:9px}
