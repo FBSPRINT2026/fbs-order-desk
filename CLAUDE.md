@@ -57,6 +57,12 @@
   text never wraps a word per line, a row added under a grid line spans the full width (`grid-column:1/-1`), and fields
   keep a readable width (`minmax(…)` / wrap the row, never fixed pixel columns that crush the middle one). A short form
   (a few fields and a button) sits on one line when there's room.
+  **It's also measured on every page** (Nick, Nov 1: "I've had to tell you this… 20 times, maybe 30… write it in the
+  rules"): `components/SquishFit.tsx`, mounted for every page like TableFit, finds text narrower than its own longest
+  word that runs 3+ lines and gives it its own full-width line in its row. It's a safety net, not the design: a row in a
+  side panel (Create order, Create reorder, the AI order helper, a dock) is built stacked from the start (picture beside a
+  column of name, then the field under it; never three columns side by side), and a switch of 3+ options in a panel is
+  a one-line segmented bar with short words (`grid-template-columns:repeat(n,minmax(0,1fr))`), never chips that wrap.
 - **Each AI tool is ONE tool, used in many places** (Nicholas, Oct 23 2026: "think of each of these as an individual
   tool that just gets applied multiple places in the site… the create order is in email, it's in the ClickUp thing, it's
   in the projects area… one uniform tool that works throughout the site"). Every AI tool is listed in `lib/aiTools.ts`

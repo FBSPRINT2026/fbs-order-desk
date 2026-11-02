@@ -243,8 +243,9 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
 
           <section className="rop-sec" aria-label="Goods">
             <div className="rop-h"><b>Goods</b><span className="faint">{d.job.qty ? `${d.job.qty.toLocaleString("en-US")} pcs last time` : ""}</span></div>
-            <div className="chips rop-modes" role="group" aria-label="Sizes">
-              {([["same", "Same sizes as last time"], ["file", "New sizes from a file"], ["clear", "Clear them (I'll type)"]] as const).map(([k, t]) => <button key={k} type="button" className={"chip" + (sizeMode === k ? " on" : "")} aria-pressed={sizeMode === k} onClick={() => { setSizeMode(k); if (k !== "file") setReadOk(false); }}>{t}</button>)}
+            <div className="rop-modes" role="group" aria-label="Sizes">
+              {/* three equal parts on one line, short words (Nov 1, Nick: the toolbar "showing two lines and collapsing weird") */}
+              {([["same", "Same sizes", "The same sizes as last time"], ["file", "From a file", "New sizes from a confirmation, PO or size sheet"], ["clear", "I'll type", "Clear the sizes and type them"]] as const).map(([k, t, tip]) => <button key={k} type="button" title={tip} className={sizeMode === k ? "on" : ""} aria-pressed={sizeMode === k} onClick={() => { setSizeMode(k); if (k !== "file") setReadOk(false); }}>{t}</button>)}
             </div>
             {sizeMode === "file" && !read && (
               <button type="button" className={"rop-drop" + (dropOver ? " over" : "")} onClick={() => sizeFile.current?.click()} disabled={!!readBusy}

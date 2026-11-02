@@ -14094,7 +14094,12 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .rop-l1{display:flex;align-items:baseline;gap:6px;font-size:14px;color:var(--ink);min-width:0}
 .rop-n{white-space:nowrap;color:var(--ink-3);font-size:12.5px}
 .rop-l2{font-size:12px;margin-top:2px}
-.rop-file{display:grid;grid-template-columns:52px minmax(0,1fr) minmax(150px,auto);gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line-2,var(--line))}
+/* the file's name and what it is stacked beside its picture: a side panel is too narrow for three columns (Nov 1: the
+   name wrapped a letter per line) */
+.rop-file{display:grid;grid-template-columns:52px minmax(0,1fr);grid-template-areas:"th fi" "th what";gap:4px 10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line-2,var(--line))}
+.rop-file > .rop-th{grid-area:th;align-self:start}
+.rop-file > .rop-fi{grid-area:fi}
+.rop-file > .rop-what{grid-area:what;width:100%}
 .rop-file.off{opacity:.55}
 .rop-th{width:52px;height:52px;border:1px solid var(--line);border-radius:var(--r);background:#fff;padding:2px;display:grid;place-items:center;cursor:zoom-in;overflow:hidden;font:600 11px var(--body);color:var(--ink-3)}
 .rop-th img{max-width:100%;max-height:100%;object-fit:contain}
@@ -14103,7 +14108,7 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .rop-fi .faint{font-size:12px}
 .rop-what{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);background:var(--surface);padding:0 8px;min-width:0}
 .rop-step{font-size:12.5px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media (max-width:520px){.rop-file{grid-template-columns:52px minmax(0,1fr)}.rop-what{grid-column:1/-1}}
+
 
 .osp-cb-f{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:start}
 .osp-cb-f .field{margin:0}
@@ -17369,7 +17374,11 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 .oh-listen{font-size:12.5px;color:var(--danger);padding:6px 2px 0}
 .oh-listen.err{color:var(--ink-3)}
 /* Create reorder, sizes first (Nov 1): same / from a file / clear; the file's sizes old → new before they're used */
-.rop-modes{flex-wrap:wrap;margin:8px 0 6px}
+.rop-modes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:8px 0 6px;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.rop-modes button{all:unset;cursor:pointer;text-align:center;font-size:13px;font-weight:600;padding:8px 4px;color:var(--ink-3);white-space:nowrap;border-right:1px solid var(--line)}
+.rop-modes button:last-child{border-right:0}
+.rop-modes button.on{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 -2px var(--accent)}
+.rop-modes button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .rop-drop{display:flex;flex-direction:column;align-items:center;gap:3px;width:100%;padding:14px 10px;border:1.5px dashed var(--accent);border-radius:var(--r);background:color-mix(in srgb,var(--accent) 6%,var(--surface));color:var(--accent);font:inherit;cursor:pointer;text-align:center}
 .rop-drop.over{background:color-mix(in srgb,var(--accent) 14%,var(--surface))}
 .rop-drop b{font-size:13.5px}

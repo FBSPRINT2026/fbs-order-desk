@@ -4,6 +4,7 @@ import PageTitle from "@/components/PageTitle";
 import ToolbarFit from "@/components/ToolbarFit";
 import SwipeHint from "@/components/SwipeHint";
 import TableFit from "@/components/TableFit";
+import SquishFit from "@/components/SquishFit";
 import FileDrag from "@/components/FileDrag";
 
 // appleWebApp: from the Home Screen the portal opens as its own app (full screen), which iPhones need for notifications
@@ -23,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap"
         />
       </head>
-      <body>{children}<ToolbarFit /><SwipeHint /><TableFit /><FileDrag /><PageTitle /></body>
+      <body>{children}<ToolbarFit /><SwipeHint /><TableFit /><SquishFit /><FileDrag /><PageTitle /></body>
     </html>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { createPortal } from "react-dom";
 import OfficeView, { officeKind } from "@/components/OfficeView";
 import { useSticky } from "@/lib/useSticky";
 import { openAddToCustomer } from "@/components/AddToCustomer";
@@ -744,8 +745,19 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
     return () => window.removeEventListener("keydown", k);
   }, [files.length, onClose]);
   if (!f) return null;
-  return (
-    <div className="mf-look-bg" onClick={onClose}>
+  // a panel docked on the right stays clear: the shade stops right at its edge, measured (Nov 1, Nick: "make the shadow
+  // align with the panel on the right")
+  const [dockGap, setDockGap] = useState(0);
+  useEffect(() => {
+    const m = () => { const d = document.querySelector<HTMLElement>(".dla-bg.dock > .dla, .dla-bg.dock"); const r = d?.getBoundingClientRect(); setDockGap(r && r.width > 0 && r.left > 0 ? Math.max(0, Math.round(window.innerWidth - r.left)) : 0); };
+    m(); window.addEventListener("resize", m);
+    return () => window.removeEventListener("resize", m);
+  }, []);
+  // on the page itself, never inside the panel it was opened from (Nov 1, Nick: opened from Create reorder's panel, its X,
+  // Download and arrows didn't work: inside a docked panel the viewer was laid out and clicked as part of the panel)
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="mf-look-bg" onClick={onClose} style={dockGap ? { right: dockGap } : undefined}>
       <div className="mf-look" role="dialog" aria-label={`Quick look: ${f.name}`} onClick={(e) => e.stopPropagation()}>
         {strip && files.length > 0 && <div className="mf-look-strip">{title && <b>{title}</b>}{files.map((x, k) => <button key={x.key} type="button" className={"chip" + (k === i ? " on" : "")} onClick={() => setI(k)} title={x.name}>{x.label || x.name}</button>)}</div>}
         <div className="mf-look-h">
@@ -763,7 +775,8 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
           {kindOf(f) === "img" ? <img src={f.href} alt={f.name} /> : officeKind(f.name, f.type) ? <OfficeView key={f.key} url={f.href!} name={f.name} type={f.type} /> : <PdfPages key={f.key} url={f.href!} />}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 export function Attachments({ m, inBar }: { m: FullMsg; inBar?: boolean }) {
