@@ -18013,3 +18013,5 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .mk-gar-h>.mk-gar-hc{grid-column:2/-1}
 @media (max-width:700px){.mk-gar-h>span.mk-gar-hc{display:flex}.mk-gar-hc-t{visibility:hidden}}
 .portal .p-main h1::after{height:4px;width:calc(100% + 36px);min-width:72px;margin-top:4px}
+/* the goods search is the portal's one search box: one border, the magnifier, no box inside a box (Nov 2, Nick) */
+.aa-search.gdk-search input{height:auto;border:0;border-radius:0;padding:9px 0;width:auto;flex:1;background:transparent}

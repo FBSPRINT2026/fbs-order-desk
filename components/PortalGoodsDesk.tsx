@@ -109,7 +109,7 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
       <div className="aa-card gdk-list">
         <div className="toolbar gdk-bar">
           <b className="gdk-list-t">All orders</b>
-          <label className="aa-search gdk-search"><input type="search" placeholder="Search order, PO or tracking" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search goods" /></label>
+          <label className="aa-search gdk-search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" /></svg><input type="search" placeholder="Search order, PO or tracking" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search goods" /></label>
           <button type="button" className={"btn" + (tell ? "" : " primary")} onClick={() => setTell(!tell)}>{tell ? "Close" : "+ Shipping us something?"}</button>
         </div>
         {tell && (
