@@ -115,5 +115,5 @@ export function archiveAsOrder(r: ArchiveSummary, href: string) {
 /** An archived order's payments as rows in the payment history. */
 export function archivePayments(r: ArchiveSummary & { transactions?: PvTransaction[] | null }, href: string) {
   return (r.transactions || []).filter((t) => t.kind === "Payment" && !t.processing).map((t) => ({
-    id: `pv-${t.id}`, order_id: r.id, number: +r.visual_id || 0, amount: +t.amount || 0, method: METHOD_NAMES[t.category] || t.category || "", paid_on: t.date || null, created_at: t.date || "", href }));
+    id: `pv-${t.id}`, order_id: r.id, number: +r.visual_id || 0, amount: +t.amount || 0, method: METHOD_NAMES[t.category] || t.category || "", paid_on: t.date || null, created_at: t.date || "", href, nickname: r.nickname || "", archived: true }));
 }

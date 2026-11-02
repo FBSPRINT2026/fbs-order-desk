@@ -36,7 +36,8 @@ export type AOrder = { id: string; number: number; nickname: string; status: str
   /** portal: the customer starred it to track it (up to 9) */ starred?: boolean;
   /** a quote the customer archived (not going ahead) */ archivedQ?: boolean; /** they asked us to cancel */ cancelAsked?: boolean;
   /** portal: what can be paid now (lib/payReady.ts), why not, and whether charges may still change */ payCan?: "none" | "deposit" | "full"; payWhy?: string; notFinal?: boolean; payNote?: string };
-export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
+export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string;
+  /** the invoice's name, and whether it's an old-system (Printavo) one: shown in the payment history (Nov 2) */ nickname?: string; archived?: boolean; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean;
   /** the mockup's own number, M-1001 (one per set: every shirt color saved together shares it) */ mno?: number | null;
   /** saved with its setup (garments, prints, inks), so it can be opened to edit or ordered */ setup?: boolean;
@@ -796,19 +797,24 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
                   return [
                     <tr key={g.key} className={many ? "ph-g" + (open ? " open" : "") : "rl"} onClick={many ? () => setOpenPay(open ? null : g.key) : undefined}>
                       <td className="dt"><RowLink href={g.lines[0].href || orderHref(g.lines[0].order_id)} off={many} />{when(g.date)}</td>
-                      <td className="m">{many ? <button type="button" className="ph-toggle" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpenPay(open ? null : g.key); }}>{g.lines.length} invoices <span aria-hidden="true">{open ? "▴" : "▾"}</span></button>
-                        : <Link className="num" href={g.lines[0].href || orderHref(g.lines[0].order_id)} onClick={(e) => e.stopPropagation()}>#{g.lines[0].number}</Link>}</td>
+                      {/* paid together: one line, the first invoices under it, the rest when opened (Nov 2, Nick: "you pay 10
+                          invoices… it should show paid $10,588 and these invoices") */}
+                      <td className="m">{many ? <button type="button" className="ph-toggle ph-many" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpenPay(open ? null : g.key); }}>
+                          <b>{g.lines.length} invoices paid together <span aria-hidden="true">{open ? "▴" : "▾"}</span></b>
+                          <span className="ph-ids">{g.lines.slice(0, 4).map((l, k) => <span key={l.id}>{k ? ", " : ""}#{l.number}{l.archived && <PrintavoMark />}</span>)}{g.lines.length > 4 ? ` +${g.lines.length - 4} more` : ""}</span>
+                        </button>
+                        : <span className="ph-one"><Link className="num" href={g.lines[0].href || orderHref(g.lines[0].order_id)} onClick={(e) => e.stopPropagation()}>#{g.lines[0].number}</Link>{g.lines[0].archived && <PrintavoMark />}{g.lines[0].nickname ? <span className="ph-nm">{g.lines[0].nickname}</span> : null}</span>}</td>
                       <td className="mt">{g.method || "—"}{g.fee > 0.004 ? <small className="faint"> (+{money(g.fee)} card fee)</small> : null}</td>
                       <td className="r num b amt">{money(g.total + g.fee)}</td>
                     </tr>,
                     many && open ? (
                       <tr key={g.key + "-d"} className="ph-d"><td colSpan={4}>
                         <div className="ph-lines">
-                          {g.lines.slice().sort((a, b) => a.number - b.number).map((l) => (
-                            <Link key={l.id} href={l.href || orderHref(l.order_id)} className="ph-line"><span className="num">#{l.number}</span><b className="num">{money(l.amount)}</b></Link>
+                          {g.lines.slice().sort((a, b) => b.number - a.number).map((l) => (
+                            <Link key={l.id} href={l.href || orderHref(l.order_id)} className="ph-line"><span className="num">#{l.number}{l.archived && <PrintavoMark />}</span>{l.nickname ? <span className="ph-nm">{l.nickname}</span> : null}<b className="num">{money(l.amount)}</b></Link>
                           ))}
                         </div>
-                        <div className="ph-sum">{g.lines.length} invoices · {money(g.total)}{g.fee > 0.004 ? ` + ${money(g.fee)} card fee` : ""}</div>
+                        <div className="ph-sum">{g.lines.length} invoices <b>{money(g.total)}</b>{g.fee > 0.004 ? <> + card fee <b>{money(g.fee)}</b> = <b>{money(g.total + g.fee)}</b></> : null}</div>
                       </td></tr>
                     ) : null,
                   ];

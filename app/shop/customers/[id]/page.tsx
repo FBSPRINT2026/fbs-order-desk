@@ -112,17 +112,22 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     const ids = orderIds ? orderIds.split(",") : [];
     const num = (oid: string | null) => orders.find((o) => o.id === oid)?.number ?? null;
     (async () => {
-      const [p, d, m, msg, pr] = await Promise.all([
+      const [p, d, m, msg, pr, op] = await Promise.all([
         ids.length ? sb.from("payments").select("*").in("order_id", ids).order("paid_on", { ascending: false }) : Promise.resolve({ data: [] }),
         sb.from("designs").select("*").eq("customer_id", id).eq("draft", false).order("number", { ascending: false }),
         sb.from("mockups").select("*").eq("customer_id", id).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
         sb.from("messages").select("*").or(ids.length ? `customer_id.eq.${id},order_id.in.(${ids.join(",")})` : `customer_id.eq.${id}`).order("created_at"),
         ids.length ? sb.from("proofs").select("order_id,created_at").in("order_id", ids).is("archived_at", null).eq("status", "pending") : Promise.resolve({ data: [] }),
+        // old invoices paid in the portal (migration 260)
+        sb.from("payments").select("*, ao:archived_orders!inner(id, visual_id, nickname, customer_id)").eq("ao.customer_id", id).order("paid_on", { ascending: false }),
       ]);
       const pa: Record<string, string> = {};
       ((pr.data || []) as { order_id: string; created_at: string }[]).forEach((x) => { pa[x.order_id] = x.created_at; });
       setPendingArt(pa);
-      setPayments(((p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[]).map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0 })));
+      setPayments([
+        ...((p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[]).map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0, nickname: orders.find((o) => o.id === x.order_id)?.nickname || "" })),
+        ...((op.data || []) as { id: string; amount: number; method: string; paid_on: string | null; created_at: string; processor_id: string | null; note: string | null; fee: number | null; ao: { id: string; visual_id: string; nickname: string | null } }[]).map((x) => ({ id: x.id, order_id: x.ao.id, number: +x.ao.visual_id || 0, amount: +x.amount || 0, method: x.method, paid_on: x.paid_on, created_at: x.created_at, processor_id: x.processor_id, note: x.note, fee: x.fee, href: `/shop/archive/${x.ao.id}`, nickname: x.ao.nickname || "", archived: true })),
+      ]);
       const dl = (d.data || []) as Design[];
       const { data: used } = await sb.rpc("designs_in_use", { p_customer: id });
       setUsedIds((used || []) as string[]);

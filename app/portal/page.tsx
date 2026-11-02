@@ -92,7 +92,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     ]);
     const pays = (p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[];
     pays.forEach((x) => { paid[x.order_id] = (paid[x.order_id] || 0) + (+x.amount || 0); });
-    payments = pays.map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0 }));
+    payments = pays.map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0, nickname: orders.find((o) => o.id === x.order_id)?.nickname || "" }));
     ((pr.data || []) as { id: string; order_id: string; status: string }[]).forEach((x) => {
       if (x.status === "pending") { pendingProofs[x.order_id] = (pendingProofs[x.order_id] || 0) + 1; if (!firstPending[x.order_id]) firstPending[x.order_id] = x.id; }
       if (x.status === "approved") approvedArt[x.order_id] = true;
@@ -146,7 +146,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const { data: op } = await admin.from("payments").select("id, archived_order_id, amount, method, paid_on, created_at, processor_id, note, fee").in("archived_order_id", archIds.slice(i, i + 300));
     for (const x of (op || []) as { id: string; archived_order_id: string; amount: number; method: string; paid_on: string | null; created_at: string; processor_id: string | null; note: string | null; fee: number | null }[]) {
       const a = archived.find((r) => r.id === x.archived_order_id);
-      ours.push({ id: x.id, order_id: x.archived_order_id, number: +(a?.visual_id || 0), amount: +x.amount || 0, method: x.method, paid_on: x.paid_on, created_at: x.created_at, href: archHref(x.archived_order_id), processor_id: x.processor_id, note: x.note, fee: x.fee });
+      ours.push({ id: x.id, order_id: x.archived_order_id, number: +(a?.visual_id || 0), amount: +x.amount || 0, method: x.method, paid_on: x.paid_on, created_at: x.created_at, href: archHref(x.archived_order_id), processor_id: x.processor_id, note: x.note, fee: x.fee, nickname: a?.nickname || "", archived: true });
     }
   }
   payments = [...payments, ...ours, ...archived.flatMap((a) => archivePayments(a, archHref(a.id)))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at));
