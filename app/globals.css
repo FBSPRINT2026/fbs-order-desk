@@ -17981,3 +17981,5 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .stx-tbl th.r,.stx-tbl td.r{text-align:right;white-space:nowrap;padding-left:22px}
 .stx-tbl th.r{letter-spacing:.06em;margin-right:-.06em}
 .stx-tbl .stx-dueh,.stx-tbl td.st-pd{padding-left:28px}
+/* the statement buttons sit at the right end of the Payments title line (Nov 2, Nick) */
+.aa-bar>.aa-stmt{margin:0 0 0 auto;justify-content:flex-end}

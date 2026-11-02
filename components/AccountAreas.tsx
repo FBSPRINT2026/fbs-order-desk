@@ -721,15 +721,16 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
     };
     const searchBox = search("Search payments");
     body = <>
-      <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={mode === "shop" && due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b>{!canPay && terms ? <> · Terms <b>{terms}</b></> : null}</span></div>{!canPay && searchBox}</div>
-      {(statementHref || onEmailStatement) && (
-        <div className="aa-stmt">
+      <div className="aa-bar"><div className="aa-bar-l"><h2>Payments</h2><span className="aa-sum">Balance due <b className={mode === "shop" && due > 0.004 ? "aa-due" : ""}>{money(due)}</b> · Paid to date <b>{money(payments.reduce((a, p) => a + p.amount, 0))}</b>{!canPay && terms ? <> · Terms <b>{terms}</b></> : null}</span></div>
+      {/* the statement buttons on the title's line, at the right (Nov 2, Nick: "so that can collapse down some") */}
+      {(!canPay || statementHref || onEmailStatement) && <div className="aa-stmt">
+          {!canPay && searchBox}
           {statementHref && <a className="btn sm" href={statementHref} target={mode === "shop" ? "_blank" : undefined} rel="noreferrer">{mode === "shop" ? "Open statement" : "View / print statement"}</a>}
           {onEmailStatement && <button type="button" className="btn sm" onClick={async () => { setStNote("Sending…"); const r = await onEmailStatement(); setStNote(r.ok ? (r.emailed ? "Statement emailed." : "Couldn't send the email.") : r.error || "Couldn't send."); }}>Email statement</button>}
           {mode === "shop" && onRecordPayment && <button type="button" className={"btn sm" + (recOpen ? " on" : " primary")} onClick={() => setRecOpen((x) => !x)}>{recOpen ? "Close" : "Record a payment"}</button>}
           {stNote && <span className="faint">{stNote}</span>}
-        </div>
-      )}
+        </div>}
+      </div>
       <div className={canPay ? "aa-home aa-paylay" : ""}><div className="aa-home-main stack">
       {mode === "shop" && onRecordPayment && recOpen && <RecordPayment record={onRecordPayment} onDone={() => { setRecOpen(false); router.refresh(); }} />}
       {/* the numbers in one summary card (Nov 2, Nick: "it looks busy") */}
