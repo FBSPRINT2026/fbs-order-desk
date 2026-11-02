@@ -17443,3 +17443,20 @@ html body table:is(.m-card,.tbl-stack) tbody tr:hover{background:var(--surface-2
 /* the logo picker's "Art on this order" (components/DesignSearch.tsx) */
 .ds-sec{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);padding:10px 6px 4px;margin-top:4px;border-top:1px solid var(--line-2,var(--line))}
 .ds-same{flex:none;font-size:11.5px;font-weight:600;color:var(--accent);white-space:nowrap}
+/* Mockup Creator close-up: center on part of the art (components/MockupBuilder.tsx CloseUp) */
+.mkc-dim{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.mkc-btn{all:unset;cursor:pointer;flex:none;width:26px;height:26px;display:grid;place-items:center;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.mkc-btn svg{width:16px;height:16px}
+.mkc-btn svg line{stroke:var(--ink-2);stroke-width:1.6}
+.mkc-btn svg rect{fill:var(--ink-3);stroke:var(--ink-2);stroke-width:1;opacity:.75}
+.mkc-btn:hover,.mkc-btn.on{border-color:var(--accent);background:var(--accent-soft)}
+.mkc-btn.on svg line{stroke:var(--accent)}
+.mkc-btn.on svg rect{fill:var(--accent);stroke:var(--accent);opacity:.45}
+.mkc-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.mkc-layer{position:absolute;inset:0;cursor:crosshair;z-index:3;outline:1px dashed var(--accent);touch-action:none}
+.mkc-box{position:absolute;border:2px solid var(--accent);background:rgba(26,143,214,.18);border-radius:2px;pointer-events:none}
+.mkc-mid{position:absolute;top:0;bottom:0;width:0;border-left:1.5px dashed var(--warn);pointer-events:none}
+.mkc-whole{position:absolute;top:0;bottom:0;width:0;border-left:1px dotted var(--ink-3);pointer-events:none}
+.mkc-bar{display:flex;flex-direction:column;gap:4px;margin-top:6px;padding:10px 12px;border-radius:var(--r);background:var(--accent-soft);font-size:12.5px;color:var(--ink-2)}
+.mkc-bar b{font-size:13px;color:var(--ink)}
+.mkc-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}

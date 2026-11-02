@@ -1971,6 +1971,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [centerSkip, setCenterSkip] = useState<Record<string, boolean>>({});
   const centerAsk = auto ? undefined : imprints.find((x) => x.center && x.center.d === x.design_id && x.center.by === "auto" && !x.center.on && (Math.abs(x.center.x - 0.5) > 0.02 || Math.abs(x.center.y - 0.5) > 0.02) && !spotFor(x.location).wrap && !centerSkip[x.id + x.design_id]);
   const answerCenter = (im: Imprint, on: boolean) => setImprints((xs) => xs.map((x) => (x.id === im.id && x.center ? { ...x, center: { ...x.center, on, by: "you" } } : x)));
+  /** centered on the middle of a box drawn over the art (the close-up's center tool), or the whole art again; a hand nudge
+   *  across is cleared, so it really sits centered */
+  const setCenterOn = (im: Imprint, c: { x: number; y: number } | null) => {
+    const d = designOf(im); if (!d) return;
+    setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, center: { d: d.id, x: c?.x ?? 0.5, y: c?.y ?? 0.5, on: !!c, by: "you" } } : x)));
+    setOffsets((q) => (q[im.id] ? { ...q, [im.id]: { ...q[im.id], dx: 0 } } : q));
+  };
   async function toggleCenter(im: Imprint, on: boolean) {
     const d = designOf(im); if (!d) return;
     let c = im.center?.d === d.id && (im.center.x !== 0.5 || im.center.y !== 0.5) ? { x: im.center.x, y: im.center.y } : null;
@@ -2161,7 +2168,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                     maxW={sp.maxW} maxH={sp.maxH} topAlign={!!sp.top || !!(im.drop && !isNaN(+im.drop))} fold={viewsFor(im.location).length > 1} arm={sp.arm} offIn={{ x: o.dx / (PX_PER_IN * scale), y: o.dy / (PX_PER_IN * scale) }}
                     onMove={(dxIn, dyIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; setOffsets((q) => ({ ...q, [im.id]: { dx: (q[im.id]?.dx || 0) + dxIn * PX_PER_IN * scale, dy: (q[im.id]?.dy || 0) + dyIn * PX_PER_IN * scale } })); }}
                     onResize={(newWIn) => { if (im.visualOnly && !im.confirmed && !adjust) return; guardSize(im.id, () => { if (sp.wrap) growTo(im, newWIn); else settle(im, newWIn); }); }}
-                    onEnd={() => {}} />
+                    onEnd={() => {}}
+                    ctr={!sp.wrap && im.center?.on && im.center.d === im.design_id ? { x: im.center.x, y: im.center.y } : null}
+                    onCenter={sp.wrap || (im.visualOnly && !im.confirmed && !adjust) ? undefined : (c) => setCenterOn(im, c)} />
                   </div>
                 );
   };
@@ -5131,7 +5140,10 @@ let inkNamesCache: string[] | null = null;
 const allInkNames = () => (inkNamesCache ||= [...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX), ...Object.keys(PMS_HEX), ...Object.keys(PMS_COATED).filter((k) => !PMS_HEX[k])]);
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
-function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex, onColor }: {
+function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex, onColor, ctr, onCenter }: {
+  /** the part of the art it's centered on (shares of the art's width and height), when it isn't the whole art */ ctr?: { x: number; y: number } | null;
+  /** center on a part of the art (Nov 1, Nick: "the TM is throwing off the center… highlight the whole area and say,
+   *  this is my art to center on"): the middle of the box drawn over the art; null = the whole art */ onCenter?: (c: { x: number; y: number } | null) => void;
   /** pick the shirt's color off the photo (Oct 24, Nick: "an eyedropper to select the color in the shirt") */ onEyedrop?: () => void; picked?: boolean; onResetHex?: () => void;
   /** choose the background color outright, when there's no garment photo to pick it off (a logo mockup) */ onColor?: (hex: string) => void;
   size: number; topAlign?: boolean; title: string; hex: string; url: string; wIn: number; hIn: number; maxW: number; maxH: number; fold: boolean; offIn: { x: number; y: number };
@@ -5143,6 +5155,10 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
   const lastDown = useRef<{ t: number; x: number; y: number } | null>(null);
   const [sel, setSel] = useState(false);
   const artRef = useRef<HTMLDivElement>(null);
+  // the box drawn over the art to center on (shares of the art), while the center tool is open
+  const [box, setBox] = useState<null | { x0: number; y0: number; x1: number; y1: number }>(null);
+  const boxDrag = useRef<{ x: number; y: number } | null>(null);
+  const at = (e: { clientX: number; clientY: number }) => { const r = artRef.current?.getBoundingClientRect(); if (!r) return { x: 0.5, y: 0.5 }; return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }; };
   useEffect(() => {
     if (!sel) return;
     const off = (e: PointerEvent) => { if (!artRef.current?.contains(e.target as Node)) setSel(false); };
@@ -5208,10 +5224,37 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
             el.setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode, w: wIn };
           }}>
           {url ? <img src={url} alt="" draggable={false} /> : "?"}
-          {sel && <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />}
+          {box && (
+            <div className="mkc-layer" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); const p = at(e); boxDrag.current = p; setBox({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }); }}
+              onPointerMove={(e) => { const s0 = boxDrag.current; if (!s0) return; e.stopPropagation(); const p = at(e); setBox({ x0: Math.min(s0.x, p.x), y0: Math.min(s0.y, p.y), x1: Math.max(s0.x, p.x), y1: Math.max(s0.y, p.y) }); }}
+              onPointerUp={(e) => { e.stopPropagation(); boxDrag.current = null; }}>
+              <span className="mkc-whole" style={{ left: "50%" }} />
+              {box.x1 - box.x0 > 0.01 && <>
+                <span className="mkc-box" style={{ left: `${box.x0 * 100}%`, top: `${box.y0 * 100}%`, width: `${(box.x1 - box.x0) * 100}%`, height: `${(box.y1 - box.y0) * 100}%` }} />
+                <span className="mkc-mid" style={{ left: `${((box.x0 + box.x1) / 2) * 100}%` }} />
+              </>}
+            </div>
+          )}
+          {sel && !box && <span className="mk-handle" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, mode: "size", w: wIn }; }} />}
         </div>
       </div>
-      <div className="mk-cu-dim">{url ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : "No logo yet"}</div>
+      <div className="mk-cu-dim mkc-dim"><span>{url ? <>{wIn.toFixed(2)}&quot; W × {hIn.toFixed(2)}&quot; H</> : "No logo yet"}</span>
+        {url && onCenter && <button type="button" className={"mkc-btn" + (box || ctr ? " on" : "")} aria-pressed={!!box} title={ctr ? "Centered on part of the art: click to change" : "Center on part of the art (leave out a ™ or a tail)"} aria-label="Center on part of the art"
+          onClick={() => setBox(box ? null : ctr ? { x0: Math.max(0, ctr.x - 0.25), y0: Math.max(0, ctr.y - 0.25), x1: Math.min(1, ctr.x + 0.25), y1: Math.min(1, ctr.y + 0.25) } : { x0: 0, y0: 0, x1: 1, y1: 1 })}>
+          <svg viewBox="0 0 16 16" aria-hidden><line x1="8" y1="1" x2="8" y2="15" /><rect x="3" y="4.5" width="10" height="7" /></svg>
+        </button>}
+      </div>
+      {box && onCenter && (
+        <div className="mkc-bar">
+          <b>Center on the part you box</b>
+          <span>Drag a box over the art to center on (leave out a ™ or a tail). The crop marks follow it.</span>
+          <div className="mkc-acts">
+            <button type="button" className="btn sm primary" disabled={box.x1 - box.x0 < 0.02} onClick={() => { onCenter({ x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }); setBox(null); }}>Center on this</button>
+            <button type="button" className="btn sm" onClick={() => { onCenter(null); setBox(null); }}>Whole art</button>
+            <button type="button" className="btn sm ghost" onClick={() => setBox(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
       {url && (
         <div className="mk-cu-colors">
           {colors.length ? colors.map((c, i) => (
