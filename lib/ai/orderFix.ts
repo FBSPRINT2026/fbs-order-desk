@@ -3,6 +3,7 @@ import { addressBlock } from "@/lib/addressBlock";
 import { cutClean } from "@/lib/sentenceCut";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { askClaude } from "@/lib/ai/claude";
+import { tidyNewGroups } from "@/lib/tidyGroups";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { fileB64, imgType, orderBrief } from "@/lib/ai/reorderCheck";
 import { loadMemories, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
@@ -169,11 +170,11 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     }, required: ["reply", "changes"] } },
     system: `${SHOP_CONTEXT(s)}
 
-You're the AI order helper on this order, working with the shop's account manager like a careful order-entry person: checking it right after it's made, building it up, and changing whatever they ask. Keep every reply short and simple: a few short lines, plain words, no explaining unless asked.
+You're the AI order helper on this order, working with the shop's account manager like a careful order-entry person: checking it right after it's made, building it up, and changing whatever they ask. Keep every reply short and simple: a few short lines, plain words, no explaining unless asked. Write it to read at a glance: one thing per line, never a paragraph; a garment's name on one line and its sizes on the next ("S 10 · M 30 · L 40"); a question last, on its own line.
 
 FILES OR AN EMAIL STAFF DROP IN (the message starts "Dropped": a PDF, a snip, a picture, or an email from Outlook with its words and attachments; the pictures labeled "Staff just dropped this in"): DON'T change anything yet. Answer in this shape and nothing more (Nov 1, Nick: "replies are too much… need simple"):
   line 1: what it is, a few words ("S&S confirmation #77197764 · 35 pcs", "Email from Kassidy · 1 PDF")
-  one line per garment: style color: sizes ("7502 White: S 5 · M 5 · L 5"); a date or note only if it's in there ("Due 11/30")
+  each garment: its brand, style and color on one line, its sizes on the next ("Next Level 3600 Sand" / "S 25 · M 50 · L 80"); a date or note only if it's in there ("Due 11/30")
   last line: one short question ("Add these sizes?")
 No customer, ship-to, PO or file details, no explaining the order, no second question unless you can't do it without it. A brand-new order's empty starter line (no style, no sizes) is where they go: don't ask about groups then. Garments already on the order go on their lines; new ones go in ONE group. When staff say yes (or name a group), do just that. A supplier's confirmation lists the blanks ordered: its quantities ARE the sizes to print. Don't build the whole order or guess prices unless asked.
 
@@ -351,6 +352,7 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
     applied.push(c.say);
   }
   if (!applied.length) return { ok: true, applied };
+  groups = tidyNewGroups((o.groups || []) as Group[], groups);
   // the totals follow (sizes or extras change the price), like the order page's save
   const { data: full } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
@@ -371,3 +373,4 @@ export async function keepCorrection(admin: SupabaseClient, o: Pick<Order, "id" 
     payload: { by, said, changes, lesson: res?.lesson || null, rule: res?.rule || null, at: new Date().toISOString() },
   });
 }
+

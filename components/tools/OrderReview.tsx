@@ -14,6 +14,7 @@ import type { FixResult, OrderChange } from "@/lib/ai/orderFix";
 import type { EOPart } from "@/lib/emailOrderShared";
 import { doneOf, partialStep, type PartialCtx, type PartKind } from "@/components/tools/PartialOrder";
 import { readDrop, type DropPic } from "@/lib/dropRead";
+import AiReply from "@/components/AiReply";
 
 /**
  * THE order check after it's made (Oct 23, Nick: "the right panel opens. That never closes until I say, yes, we've got
@@ -424,7 +425,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
             <div key={ri} className="bub-pair">
               <div className="bub me"><p>{r.you}</p></div>
               <div className="bub them">
-                {r.reply && <p>{r.reply}</p>}
+                {r.reply && <AiReply text={r.reply} />}
                 {r.applied.length > 0 && <ul className="orv-done">{r.applied.map((t, i) => <li key={i}>{t}</li>)}</ul>}
                 {r.art.length > 0 && <ul className="orv-done">{r.art.map((a, i) => <li key={i} className={a.state}>{a.say}{a.state === "doing" ? <span className="faint"> · changing the logo…</span> : a.state === "error" ? <span className="err-t"> · {a.err}</span> : <span className="orv-tag">On the proof</span>}</li>)}</ul>}
                 {isLast && r.suggest.length > 0 && <>
