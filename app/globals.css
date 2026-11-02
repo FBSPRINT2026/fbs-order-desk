@@ -18310,7 +18310,7 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .pjt .chips{flex:none}
 .pjt-hold{position:relative;color:var(--danger)!important;font-weight:700}
 .pjt-badge{position:absolute;top:-10px;right:-10px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--danger);color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;box-shadow:0 0 0 2px var(--surface)}
-.pjt .chips.pjt-r{overflow:visible}
+
 /* the On hold / All group sits at the far right of the jobs' toolbar, its count a big red badge beside the words
    (Nov 2, Nick: arrow to the right; the badge was clipped when it sat on the corner) */
 .pdx .pjt{display:flex!important;width:100%}
@@ -18412,7 +18412,7 @@ table.tbl.jc tr.jc-hl td:first-child{box-shadow:inset 3px 0 0 var(--fbs-blue)}
 .jct-body .jc-list .tbl-wrap{border:1px solid var(--line-2);border-radius:var(--r)}
 .jc-also{font-size:12.5px;color:var(--ink-3)}
 /* the portal jobs' toolbar groups keep their picked tab inside their rounded box (Nov 2, Nick: "still overflows the box") */
-.pdx .pjt>.chips{overflow:hidden!important;border-radius:999px}
+.pdx .pjt>.chips{overflow:hidden!important}
 /* On hold tab: the reason, in full, right under the steps; no second box (Nov 2, Nick: "I don't love how these look") */
 .pjr-now.hold.full{font-size:13px;line-height:1.45;max-width:46ch;margin-left:auto;margin-right:auto}
 .pjr-ask{font-size:12.5px;color:var(--accent);text-align:center;text-decoration:none}
