@@ -5159,7 +5159,21 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
   const artRef = useRef<HTMLDivElement>(null);
   // the box drawn over the art to center on (shares of the art), while the center tool is open
   const [box, setBox] = useState<null | { x0: number; y0: number; x1: number; y1: number }>(null);
-  const boxDrag = useRef<{ x: number; y: number } | null>(null);
+  // drawing a new box, or dragging an edge (or the whole box) of the one there (Nov 1, Nick: "I could just drag the right
+  // hand over… just like you adjust that right panel window")
+  const boxDrag = useRef<{ x: number; y: number; mode: "new" | "move" | "l" | "r" | "t" | "b"; b0: { x0: number; y0: number; x1: number; y1: number } } | null>(null);
+  const [edgeHover, setEdgeHover] = useState("");
+  /** which edge of the box the pointer is on (within 8px), inside it ("move"), or "" (draw a new one) */
+  const edgeAt = (e: { clientX: number; clientY: number }): string => {
+    const r = artRef.current?.getBoundingClientRect(); if (!r || !box || box.x1 - box.x0 < 0.01) return "";
+    const x = e.clientX - r.left, y = e.clientY - r.top, L = box.x0 * r.width, R = box.x1 * r.width, T = box.y0 * r.height, B = box.y1 * r.height, g = 8;
+    const inY = y > T - g && y < B + g, inX = x > L - g && x < R + g;
+    if (inY && Math.abs(x - L) <= g) return "l";
+    if (inY && Math.abs(x - R) <= g) return "r";
+    if (inX && Math.abs(y - T) <= g) return "t";
+    if (inX && Math.abs(y - B) <= g) return "b";
+    return x > L && x < R && y > T && y < B ? "move" : "";
+  };
   const at = (e: { clientX: number; clientY: number }) => { const r = artRef.current?.getBoundingClientRect(); if (!r) return { x: 0.5, y: 0.5 }; return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }; };
   useEffect(() => {
     if (!sel) return;
@@ -5227,12 +5241,32 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
           }}>
           {url ? <img src={url} alt="" draggable={false} /> : "?"}
           {box && (
-            <div className="mkc-layer" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); const p = at(e); boxDrag.current = p; setBox({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }); }}
-              onPointerMove={(e) => { const s0 = boxDrag.current; if (!s0) return; e.stopPropagation(); const p = at(e); setBox({ x0: Math.min(s0.x, p.x), y0: Math.min(s0.y, p.y), x1: Math.max(s0.x, p.x), y1: Math.max(s0.y, p.y) }); }}
+            <div className={"mkc-layer" + (edgeHover ? ` mkc-${edgeHover}` : "")}
+              onPointerDown={(e) => {
+                e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+                const p = at(e), mode = (edgeAt(e) || "new") as "new" | "move" | "l" | "r" | "t" | "b";
+                boxDrag.current = { x: p.x, y: p.y, mode, b0: box };
+                if (mode === "new") setBox({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+              }}
+              onPointerMove={(e) => {
+                const d0 = boxDrag.current;
+                if (!d0) { setEdgeHover(edgeAt(e)); return; }
+                e.stopPropagation();
+                const p = at(e), b = d0.b0, cl = (v: number) => Math.max(0, Math.min(1, v));
+                if (d0.mode === "new") setBox({ x0: Math.min(d0.x, p.x), y0: Math.min(d0.y, p.y), x1: Math.max(d0.x, p.x), y1: Math.max(d0.y, p.y) });
+                else if (d0.mode === "move") { const dx = Math.max(-b.x0, Math.min(1 - b.x1, p.x - d0.x)), dy = Math.max(-b.y0, Math.min(1 - b.y1, p.y - d0.y)); setBox({ x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy }); }
+                else if (d0.mode === "l") setBox({ ...b, x0: cl(Math.min(p.x, b.x1 - 0.02)) });
+                else if (d0.mode === "r") setBox({ ...b, x1: cl(Math.max(p.x, b.x0 + 0.02)) });
+                else if (d0.mode === "t") setBox({ ...b, y0: cl(Math.min(p.y, b.y1 - 0.02)) });
+                else setBox({ ...b, y1: cl(Math.max(p.y, b.y0 + 0.02)) });
+              }}
+              onPointerLeave={() => { if (!boxDrag.current) setEdgeHover(""); }}
               onPointerUp={(e) => { e.stopPropagation(); boxDrag.current = null; }}>
               <span className="mkc-whole" style={{ left: "50%" }} />
               {box.x1 - box.x0 > 0.01 && <>
-                <span className="mkc-box" style={{ left: `${box.x0 * 100}%`, top: `${box.y0 * 100}%`, width: `${(box.x1 - box.x0) * 100}%`, height: `${(box.y1 - box.y0) * 100}%` }} />
+                <span className="mkc-box" style={{ left: `${box.x0 * 100}%`, top: `${box.y0 * 100}%`, width: `${(box.x1 - box.x0) * 100}%`, height: `${(box.y1 - box.y0) * 100}%` }}>
+                  <i className="mkc-h l" /><i className="mkc-h r" /><i className="mkc-h t" /><i className="mkc-h b" />
+                </span>
                 <span className="mkc-mid" style={{ left: `${((box.x0 + box.x1) / 2) * 100}%` }} />
               </>}
             </div>
@@ -5249,7 +5283,7 @@ function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAl
       {box && onCenter && (
         <div className="mkc-bar">
           <b>Center on the part you box</b>
-          <span>Drag a box over the art to center on (leave out a ™ or a tail). The crop marks follow it.</span>
+          <span>Drag a box over the art to center on (leave out a ™ or a tail), or drag its sides in. The crop marks follow it.</span>
           <div className="mkc-acts">
             <button type="button" className="btn sm primary" disabled={box.x1 - box.x0 < 0.02} onClick={() => { onCenter({ x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 }); setBox(null); }}>Center on this</button>
             <button type="button" className="btn sm" onClick={() => { onCenter(null); setBox(null); }}>Whole art</button>

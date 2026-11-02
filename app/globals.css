@@ -17503,3 +17503,11 @@ html body .pr .pr-shared{gap:6px}
 .dak-to{flex-wrap:wrap;margin-bottom:10px}
 .dak-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .dak-in{flex:1 1 220px;min-width:180px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink)}
+.mkc-layer.mkc-l,.mkc-layer.mkc-r{cursor:ew-resize}
+.mkc-layer.mkc-t,.mkc-layer.mkc-b{cursor:ns-resize}
+.mkc-layer.mkc-move{cursor:move}
+.mkc-h{position:absolute;background:var(--surface);border:1.5px solid var(--accent);border-radius:3px}
+.mkc-h.l,.mkc-h.r{top:50%;width:7px;height:18px;margin-top:-9px}
+.mkc-h.l{left:-5px}.mkc-h.r{right:-5px}
+.mkc-h.t,.mkc-h.b{left:50%;width:18px;height:7px;margin-left:-9px}
+.mkc-h.t{top:-5px}.mkc-h.b{bottom:-5px}
