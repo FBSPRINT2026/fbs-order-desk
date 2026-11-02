@@ -18606,3 +18606,13 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .mh-sec-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink-2);padding:8px 12px 4px}
 .mh-sec-h span{font-size:11px;font-weight:600;color:var(--ink-3);background:var(--surface-2);border-radius:999px;padding:0 7px}
 .mh-c-st{display:inline-block;align-self:flex-start;margin-top:3px;font-size:11px;font-weight:600;color:var(--ink-2);background:var(--surface-2);border-radius:999px;padding:1px 8px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* Job Center messages, plain (Nov 2, Nick: "you don't need the color coordinated thing… don't make the whole thing red or the
+   whole thing blue… maybe just the upper part"): the list's cards are neutral, the picked one outlined; the open conversation
+   is a plain card with only a strip across its top in its stage's color (red for revisions / on hold) */
+.jcx .jmb-c{border-left:0;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.jcx .jmb-c:hover{background:var(--surface-2)}
+.jcx .jmb-c.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:none}
+.jcx .jmb-av{background:var(--ink-3)}
+.jmb-focus .jmb-t{border:1px solid var(--line);border-top:4px solid var(--mc);border-radius:var(--r);background:var(--surface)}
+.jmb-gen .jmb-gen-h{padding-bottom:0;border-bottom:0;min-height:36px}
+.jmb-gen .jmb-gen-h .btn{margin-left:0}

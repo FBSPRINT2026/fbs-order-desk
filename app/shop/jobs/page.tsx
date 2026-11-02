@@ -161,9 +161,11 @@ export default function JobCenter() {
   const boardChats = myChats.filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
   const chatOfJob = (orderId: string) => myChats.find((c) => c.orderId === orderId) || null;
   const colorOfChat = (c: ChatSummary) => tagOf(c).c;
-  const shownIds = new Set(shown.map((it) => it.orderId).filter(Boolean));
-  const chatHere = !!curChat && !!curChat.orderId && shownIds.has(curChat.orderId);
-  const solo = !!curChat && !chatHere;
+  // a conversation picked is a filter (Nov 2, Nick: "when you click on a message, it should just pull up the message. There
+  // shouldn't be any other jobs in the center panel"): its job alone, then the conversation; a message with no job on the
+  // board is a general inquiry, with no tab picked
+  const focusJob = curChat?.orderId ? byOrder.get(curChat.orderId) || null : null;
+  const solo = !!curChat && !focusJob;
   // the Messages heading level with the jobs' heading: the space above it is measured from the table's own heading,
   // again when anything above the table changes size (filters wrapping, a narrower window)
   useLayoutEffect(() => {
@@ -252,11 +254,24 @@ export default function JobCenter() {
           <div className="panel-b stack" style={{ gap: 12 }}>
             {/* a message with no job in the Job Center (a general question, or an order past it) opens on its own, as a general
                 inquiry, with no tab picked (Nov 2, Nick: "it should go back as a general inquiry and not go to a tab") */}
-            {solo && curChat ? <div className="jmb-gen">
-              <div className="jmb-gen-h"><b>{byOrder.has(curChat.orderId || "") ? "Its job is hidden by the filters" : "General inquiry"}</b>
-                <span className="faint">{curChat.number ? `#${curChat.number}${curChat.nickname ? ` ${curChat.nickname}` : ""}${ST[curChat.status]?.label ? ` · ${ST[curChat.status]!.label}` : ""}` : "Not about an order"}{curChat.customer ? ` · ${curChat.customer}` : ""}</span>
-                <button type="button" className="btn sm" onClick={() => setChat(null)}>Back to the jobs</button></div>
-              <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} />
+            {curChat ? <div className="jmb-gen">
+              <div className="toolbar jmb-gen-h" data-toolbar>
+                <button type="button" className="btn sm" onClick={() => setChat(null)}>← All jobs</button>
+                <span className="faint">{focusJob ? `Just this job and its conversation with ${whoOf(curChat) === "You" ? curChat.customer : whoOf(curChat)}` : "A message that isn't about a job on the board"}</span>
+              </div>
+              <div className="tbl-wrap"><table className="tbl jc" data-nofit>
+                {focusJob ? <>
+                  <thead><tr><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></tr></thead>
+                  <tbody><Row it={focusJob} step={focusJob.steps.includes(step) ? step : (focusJob.steps.find((x) => x !== "leads") || step)} msgs={unreadOf(focusJob.orderId)} on={pick === focusJob.key} onPick={() => setPick(pick === focusJob.key ? null : focusJob.key)} after={after} onLead={() => setLead(focusJob)} /></tbody>
+                </> : <>
+                  <thead><tr><th>General inquiry</th><th>Where it is</th></tr></thead>
+                  <tbody><tr><td><b>{curChat.customer || "No customer"}</b><div className="sub">{curChat.number ? `#${curChat.number}${curChat.nickname ? ` ${curChat.nickname}` : ""}` : "Not about an order"}</div></td>
+                    <td>{curChat.number ? <span className="pill" style={{ ["--sc" as string]: ST[curChat.status]?.c || "var(--ink-3)" }}><span className="pill-t">{ST[curChat.status]?.label || curChat.status}</span></span> : <span className="faint">General question</span>}</td></tr></tbody>
+                </>}
+              </table></div>
+              <div className="jmb-focus" style={{ ["--mc" as string]: focusJob ? colorOfChat(curChat) : "var(--ink-3)" }}>
+                <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} />
+              </div>
             </div> : <>
             <div className="toolbar" data-toolbar>
               {/* the departments as small SP / EMB / HP buttons beside the search, like the Dept column's tags (Nov 2, Nick: "just
@@ -284,7 +299,6 @@ export default function JobCenter() {
                 <tbody>{shown.flatMap((it) => { const c0 = it.orderId ? chatOfJob(it.orderId) : null; return [
                   <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} mc={c0 ? colorOfChat(c0) : undefined} onChat={c0 ? () => openChat(chat === c0.key ? null : c0.key) : undefined} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />,
                   // the conversation opens on the next line, in the big panel (Nov 2, Nick)
-                  ...(curChat && chatHere && curChat.orderId === it.orderId ? [<tr key={it.key + ":chat"} className="jc-chatrow" data-kind="chat" data-job=""><td colSpan={5}><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></td></tr>] : []),
                 ]; })}</tbody>
               </table></div>
             )}
