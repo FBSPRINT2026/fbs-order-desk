@@ -80,12 +80,13 @@ function JobRow({ j, canAct }: { j: PortalJob; canAct: boolean }) {
       <span className="pjr-picw"><Link href={j.href} className="pjr-pic">{j.pic ? <img src={j.pic} alt="" loading="lazy" /> : <span>#{j.number}</span>}</Link><StarOrder id={j.id} on={!!j.starred} canAct={canAct} /></span>
       <Link href={j.href} className="pjr-t"><small>#{j.number}</small><b>{j.nickname}</b><em>{j.summary}</em></Link>
       <div className={"pjr-mid" + (j.hold ? " held" : "")}>
-        <OrderRail steps={j.steps} hold={!!j.hold} done={j.done} />
+        <OrderRail steps={j.steps} done={j.done} />
         {j.hold
           ? <div className="pjr-now hold"><b>On hold:</b> {j.hold.title}. <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></div>
           : (j.nowK || j.nowT) && <div className="pjr-now"><b>{j.nowK}</b> {j.nowT}</div>}
       </div>
       <div className="pjr-act">
+        {j.hold && <span className="hold-stamp">On hold</span>}
         {a && (a.external
           ? <a className={"btn pjr-btn " + a.tone} href={a.href} target="_blank" rel="noreferrer">{a.label}</a>
           : <Link className={"btn pjr-btn " + a.tone} href={a.href}>{a.label}</Link>)}

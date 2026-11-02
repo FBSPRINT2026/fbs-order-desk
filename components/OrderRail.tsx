@@ -1,28 +1,35 @@
 import type { JobStep } from "@/lib/portalJobs";
 
+const PATHS: Record<string, string> = {
+  check: "M5 12l4 4 10-10",
+  placed: "M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5",
+  art: "M4 20l4-1 11-11-3-3L5 16zM14 7l3 3",
+  goods: "M8 3L3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z",
+  print: "M6 9V3h12v6M6 18H4v-7h16v7h-2M7 14h10v7H7z",
+  ready: "M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10",
+  ship: "M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a2 2 0 1 0 0-.01M17 19a2 2 0 1 0 0-.01",
+};
+
 /**
- * Where an order is, as a segmented line with the words under it (Nov 2, Nick: option C-2 "make it match our rainbow"):
- * each finished step fills with its slice of the FBS rainbow, so a completed order shows the whole bar; the step it's on
- * is a little thicker with an outline. On hold, the line goes gray under the red ON HOLD stamp (Nov 2, Nick: "on hold
- * shouldn't be one of the statuses… the stamp like it was before"). Each step's name shows whole, never cut off. One piece for the home page's jobs and the
- * order page (lib/portalJobs.ts jobFor makes the steps), so the two always agree.
+ * Where an order is (Nov 2, Nick: "make it a smooth rainbow from start to finish… whichever section it's on gets the
+ * symbols that we had before"): one bar, the FBS rainbow filled up to the step it's on, that step's icon sitting on the
+ * bar, the step names under it, never cut off. On hold isn't a step: the line keeps showing where the job is, and the page
+ * shows the ON HOLD stamp by its button. One piece for the home page's jobs and the order page (steps from
+ * lib/portalJobs.ts jobFor), so the two always agree.
  */
-export default function OrderRail({ steps, hold = false, done = false }: { steps: JobStep[]; hold?: boolean; done?: boolean }) {
+export default function OrderRail({ steps, done = false }: { steps: JobStep[]; done?: boolean }) {
   const n = steps.length;
+  const cur = done ? n - 1 : Math.max(0, steps.findIndex((s) => s.state === "cur") >= 0 ? steps.findIndex((s) => s.state === "cur") : steps.filter((s) => s.state === "done").length);
+  const at = Math.min(cur, n - 1);
+  const pct = n > 1 ? (at / (n - 1)) * 100 : 100;
+  const icon = at === n - 1 ? "check" : steps[at]?.key === "ship" ? "ship" : steps[at]?.key || "placed";
   return (
-    <div className={"orl-w" + (hold ? " held" : "")}>
-      <ol className={"orl" + (done ? " all" : "")} aria-label={steps.map((s) => `${s.label}${s.state === "done" || done ? " done" : s.state === "cur" ? hold ? " (on hold)" : " (now)" : ""}`).join(", ")}>
-        {steps.map((s, i) => {
-          const st = done ? "done" : s.state;
-          return (
-            <li key={s.key + i} className={"orl-s " + st} style={{ ["--n" as string]: n, ["--i" as string]: i }} title={s.sub ? `${s.label}: ${s.sub}` : s.label}>
-              <i aria-hidden />
-              <span>{s.label}</span>
-            </li>
-          );
-        })}
-      </ol>
-      {hold && <span className="hold-stamp" aria-hidden>On hold</span>}
+    <div className="orl" style={{ ["--n" as string]: n, ["--p" as string]: `${pct}%` }} aria-label={steps.map((s, i) => `${s.label}${i < at || done ? " done" : i === at ? " (now)" : ""}`).join(", ")}>
+      <div className="orl-bar" aria-hidden>
+        <span className="orl-fill" />
+        <span className="orl-mk"><svg viewBox="0 0 24 24"><path d={PATHS[icon] || PATHS.placed} /></svg></span>
+      </div>
+      <ol className="orl-lb">{steps.map((s, i) => <li key={s.key + i} className={i < at || done ? "done" : i === at ? "cur" : ""} title={s.sub ? `${s.label}: ${s.sub}` : s.label}>{s.label}</li>)}</ol>
     </div>
   );
 }

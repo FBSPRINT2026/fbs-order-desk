@@ -18186,7 +18186,8 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .aa-paidall{color:var(--ok);font-weight:700}
 .aa-paidpart{display:block;font-size:12px;font-weight:500;color:var(--ink-3);white-space:nowrap}
 /* the order's steps (components/OrderRail.tsx) in a white bar under the title */
-.pod-railw{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 12px}
+.pod-railw{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px 12px;display:flex;align-items:center;gap:16px}
+.pod-railw .orl{flex:1}
 .pod-proof{margin-left:auto}
 .pod-grp .panel-h .faint + .pod-proof{margin-left:12px}
 .pod-grp .panel-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -18230,16 +18231,17 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-
 .pfl-bar > span:first-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pfl-bar a{flex:none;white-space:nowrap}
 @media (max-width:820px){.pfl-bar{padding:8px 12px;font-size:12.5px}.pfl-pdf iframe{min-height:0}.pfl-frame{flex:none}}
-/* an order's steps as a segmented rainbow line (components/OrderRail.tsx; Nov 2, Nick: C-2 in our rainbow) */
-.orl{list-style:none;margin:0;padding:0;display:flex;gap:4px;width:100%;min-width:0}
-.orl-s{flex:1 1 auto;min-width:min-content;display:flex;flex-direction:column;align-items:center;gap:5px;font-size:12px;color:var(--ink-3);text-align:center}
-.orl-s i{display:block;width:100%;height:6px;border-radius:3px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line)}
-.orl-s span{line-height:1.2;overflow-wrap:normal;word-break:normal}
-.orl-s.done,.orl-s.cur{color:var(--ink)}
-.orl-s.done i,.orl-s.cur i{box-shadow:none;background-image:var(--fbs-fade);background-size:calc(var(--n) * 100%) 100%;background-position:calc(var(--i) / (var(--n) - 1) * 100%) 0}
-.orl-s.cur{font-weight:700}
-.orl-s.cur i{height:10px;margin-top:-2px;box-shadow:0 0 0 2px var(--surface),0 0 0 3px var(--fbs-salmon)}
-.orl-w{position:relative;width:100%}
-.orl-w.held .orl{opacity:.45;filter:grayscale(1)}
-.orl-w>.hold-stamp{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%) rotate(-8deg);background:var(--surface);z-index:1;white-space:nowrap}
-.orl.all .orl-s{color:var(--ink-2)}
+/* an order's steps: one smooth rainbow bar filled to where it is, the step's icon on it, the names under it
+   (components/OrderRail.tsx; Nov 2, Nick). The bar runs from the middle of the first name to the middle of the last. */
+.orl{width:100%;min-width:0;padding-top:12px}
+.orl-bar{position:relative;height:6px;border-radius:3px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);margin:0 calc(50% / var(--n))}
+.orl-fill{position:absolute;inset:0;border-radius:3px;background:var(--fbs-fade);clip-path:inset(0 calc(100% - var(--p)) 0 0 round 3px)}
+.orl-mk{position:absolute;top:50%;left:var(--p);width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;background:var(--surface);border:2px solid var(--fbs-salmon);display:grid;place-items:center;color:var(--fbs-salmon)}
+.orl-mk svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.orl-lb{list-style:none;margin:14px 0 0;padding:0;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:4px}
+.orl-lb li{text-align:center;font-size:12px;line-height:1.2;color:var(--ink-3);overflow-wrap:normal;word-break:normal;hyphens:none}
+.orl-lb li.done{color:var(--ink)}
+.orl-lb li.cur{color:var(--ink);font-weight:700}
+/* on hold: a straight stamp right above the job's button (Nov 2, Nick: "a straight stamp right above"), not over the bar */
+.pjr-act>.hold-stamp,.pod-railw .hold-stamp{transform:none;align-self:center;font-size:13px;padding:3px 12px}
+
