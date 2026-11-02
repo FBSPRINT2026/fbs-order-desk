@@ -48,3 +48,11 @@ export async function signProofs<T extends { file_path: string }>(proofs: T[]) {
   const { data } = await createAdminClient().storage.from("proofs").createSignedUrls(proofs.map((p) => p.file_path), 3600);
   return proofs.map((p, i) => ({ ...p, url: data?.[i]?.signedUrl ?? null }));
 }
+
+/**
+ * Whether this login sees the wholesale price list (the portal's Pricing tab). Retail clients never do (Nov 2, Nick: "if
+ * you're a client marked as retail, then you can't see the pricing tab… only retail clients that would see pricing would be
+ * if they had program pricing"): so it shows only when every company on the login is wholesale. A program's own pricing
+ * shows to anyone who has one, retail or not.
+ */
+export const seesPriceList = (customers: { price_type?: string | null }[]) => customers.length > 0 && customers.every((c) => c.price_type === "wholesale");
