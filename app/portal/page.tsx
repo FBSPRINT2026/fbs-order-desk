@@ -1,6 +1,7 @@
 import { allRows } from "@/lib/readAll";
 import { discardRequest } from "@/app/portal/request-actions";
 import { getPortalCtx, seesPriceList } from "@/lib/portal";
+import type { HubOrder } from "@/lib/messages";
 import { oneOfEach } from "@/lib/mockupList";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { orderGroups, PAY_TERMS, priceList, payDueDate, type Design, type Order } from "@/lib/pricing";
@@ -208,7 +209,6 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   });
   if (incoming.length) attention.push({ kind: "receive", order_id: "", number: 0, date: "", label: `${incoming.length} incoming shipment${incoming.length === 1 ? "" : "s"} not linked to an order`, href: goodsHref });
   const acct = ctx.customers[0];
-  const hubOrders = orders.filter((o) => o.status !== "request" || o.submitted_at).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", href: `/portal/orders/${o.id}${qs}` }));
   const company = acct?.company || acct?.name || "";
 
   // ---------- the dashboard (Oct 15, Nick): the assistant and message center up top, what needs them, their jobs
@@ -259,6 +259,18 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       if (!k || !t || shipOf.has(k)) return;
       shipOf.set(k, { carrier: r.carrier || carrierOf(t), service: r.service || "", tracking: t, url: trackingLink(t), boxes: (r.boxes || []).length, when: whenShort(r.shipped_at || r.updated_at) });
     });
+  }
+  // the orders their conversations are about, each with its number, name and where it is (Nov 2, Nick: the list "just
+  // looks like a big mess"; a quote's or an older order's chat showed as "An order"): orders the page doesn't list are read
+  // by the ids their messages carry
+  const hubStatus = (o: Order) => customerStatus(o, { proofSent: !!firstPending[o.id], shipped: !!shipOf.get(o.id) }).label;
+  const hubOrders: HubOrder[] = orders.filter((o) => o.status !== "request" || o.submitted_at).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: hubStatus(o), href: `/portal/orders/${o.id}${qs}` }));
+  {
+    const missing = [...new Set(hubMsgs.map((m) => m.order_id).filter((x): x is string => !!x && !hubOrders.some((o) => o.id === x)))];
+    if (missing.length) {
+      const { data: mo } = await ctx.db.from("orders").select("*").in("id", missing.slice(0, 200)).in("customer_id", ctx.customerIds);
+      for (const o of (mo || []) as Order[]) hubOrders.push({ id: o.id, number: o.number, nickname: o.nickname || "", status: o.status === "quote" ? "Quote" : hubStatus(o), href: `/portal/orders/${o.id}${qs}` });
+    }
   }
   const shopAddr = (ctx.settings.shop.address || "").replace(/\s*\n\s*/g, ", ").trim();
   const pickupHref = shopAddr ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shopAddr)}` : "";

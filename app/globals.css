@@ -18595,3 +18595,14 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jc-dpt .prf-dept.embroidery.on{background:var(--danger)}
 .jc-dpt .prf-dept.heat.on{background:var(--warn)}
 .jc-dpt .prf-dept.z:not(.on){opacity:.55}
+/* the customer's Messages list in parts (Nov 2, Nick: "it just looks like a big mess"): the general chat, Your orders with
+   each order's status, Your goods, Projects; "+ New message" at the top */
+.mh-list-top{display:flex;align-items:center;gap:8px}
+.mh-list-top h2{flex:1;min-width:0}
+.mh-newbtn{white-space:nowrap}
+.mh-start{display:grid;gap:8px;padding:0 14px 10px}
+.mh-start select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);color:var(--ink);background:var(--surface);width:100%}
+.mh-sec+.mh-sec{margin-top:6px}
+.mh-sec-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink-2);padding:8px 12px 4px}
+.mh-sec-h span{font-size:11px;font-weight:600;color:var(--ink-3);background:var(--surface-2);border-radius:999px;padding:0 7px}
+.mh-c-st{display:inline-block;align-self:flex-start;margin-top:3px;font-size:11px;font-weight:600;color:var(--ink-2);background:var(--surface-2);border-radius:999px;padding:1px 8px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}

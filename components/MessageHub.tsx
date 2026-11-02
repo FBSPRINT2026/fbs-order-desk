@@ -71,7 +71,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
       const o = oid ? ordersById.get(oid) : undefined;
       return { key, orderId: oid, topic, order: o, msgs: ms, last: ms[ms.length - 1] || null,
         unread: ms.filter((m) => !mine(m) && !m.read_at).length,
-        title: key === "general" ? (mode === "portal" ? `Chat with ${shopName}` : "General") : o ? `#${o.number}${topic === "goods" ? " · Goods" : o.nickname ? ` · ${o.nickname}` : ""}` : topic === "goods" ? "Goods" : "An order",
+        title: key === "general" ? (mode === "portal" ? `Chat with ${shopName}` : "General") : o ? `#${o.number}${topic === "goods" ? " · Goods" : o.nickname ? ` · ${o.nickname}` : ""}` : topic === "goods" ? "Goods" : "An earlier order",
         sub: key === "general" ? "Questions, ideas, files" : topic === "goods" ? "Customer supplied goods" : "About this order" };
     };
     if (only) return [mk(only)];
@@ -98,8 +98,8 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordersById]);
   const [q, setQ] = useState("");
+  const [newOpen, setNewOpen] = useState(false);
   const shown = q.trim() ? convos.filter((c) => [c.title, ...c.msgs.map((m) => m.body + " " + m.files.map((f) => f.name).join(" "))].join(" ").toLowerCase().includes(q.trim().toLowerCase())) : convos;
-  const noConvo = orders.filter((o) => !convos.some((c) => c.key === o.id));
 
   const refresh = useCallback(async () => { const m = await load(); if (m) setMsgs(m); }, [load]);
   // new messages show up without reloading the page
@@ -166,31 +166,39 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
     <section className={"mh" + (showThread || only ? " thread-open" : "") + (only ? " single" : "")} style={{ ["--mh-h" as string]: `${height}px` }} aria-label="Messages">
       <div className="mh-list">
         <div className="mh-list-h">
-          <h2>Messages{totalUnread ? <span className="mh-badge">{totalUnread}</span> : null}</h2>
+          <div className="mh-list-top"><h2>Messages{totalUnread ? <span className="mh-badge">{totalUnread}</span> : null}</h2>
+            {canAct && !only && <button type="button" className="btn sm primary mh-newbtn" aria-expanded={newOpen} onClick={() => setNewOpen((x) => !x)}>+ New message</button>}</div>
           <SearchInput placeholder="Search messages" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search messages" />
         </div>
+        {/* a new conversation starts from the top (Nov 2, Nick): a general question, or which order it's about */}
+        {newOpen && canAct && <div className="mh-start">
+          <button type="button" className="btn sm" onClick={() => { setNewOpen(false); openConvo("general"); }}>A general question</button>
+          {orders.length > 0 && <select value="" onChange={(e) => { if (e.target.value) { setNewOpen(false); openConvo(e.target.value); } }} aria-label="Which order it's about">
+            <option value="">About an order…</option>
+            {orders.slice(0, 80).map((o) => <option key={o.id} value={o.id}>#{o.number}{o.nickname ? ` · ${o.nickname}` : ""}</option>)}
+          </select>}
+        </div>}
         <div className="mh-convos">
-          {shown.map((c) => (
-            <button key={c.key} type="button" className={"mh-c" + (cur?.key === c.key ? " on" : "") + (c.unread ? " is-unread" : "")} onClick={() => openConvo(c.key)}>
-              <span className={"mh-av" + (c.key === "general" ? " gen" : c.topic === "goods" ? " goods" : c.projectId ? " proj" : "")}>{c.key === "general" ? "💬" : c.topic === "goods" ? "📦" : c.projectId ? "📁" : "#"}</span>
-              <span className="mh-c-main">
-                <span className="mh-c-top"><b>{c.title}</b>{c.last && <span className="mh-c-t">{ago(c.last.created_at)}</span>}</span>
-                <span className="mh-c-sub">{c.last ? `${mine(c.last) ? "You: " : ""}${c.last.body || (c.last.files.length ? `📎 ${c.last.files[0].name}` : "")}` : c.sub}</span>
-              </span>
-              {c.unread > 0 && <span className="mh-dot" aria-label={`${c.unread} unread`}>{c.unread}</span>}
-            </button>
+          {/* in parts, so it reads at a glance (Nov 2, Nick: "it just looks like a big mess"): the general chat on top, then
+              each order's conversation with its number, name and where the order is, then goods, then projects */}
+          {([["", shown.filter((c) => c.key === "general")], ["Your orders", shown.filter((c) => c.orderId && c.topic !== "goods")], [mode === "portal" ? "Your goods" : "Goods", shown.filter((c) => c.orderId && c.topic === "goods")], ["Projects", shown.filter((c) => !!c.projectId)]] as const).map(([h, list]) => list.length > 0 && (
+            <div key={h || "general"} className="mh-sec">
+              {h && <div className="mh-sec-h">{h}<span>{list.length}</span></div>}
+              {list.map((c) => (
+                <button key={c.key} type="button" className={"mh-c" + (cur?.key === c.key ? " on" : "") + (c.unread ? " is-unread" : "")} onClick={() => openConvo(c.key)}>
+                  <span className={"mh-av" + (c.key === "general" ? " gen" : c.topic === "goods" ? " goods" : c.projectId ? " proj" : "")}>{c.key === "general" ? "💬" : c.topic === "goods" ? "📦" : c.projectId ? "📁" : "#"}</span>
+                  <span className="mh-c-main">
+                    <span className="mh-c-top"><b>{c.key === "general" && mode === "portal" ? shopName : c.title}</b>{c.last && <span className="mh-c-t">{ago(c.last.created_at)}</span>}</span>
+                    <span className="mh-c-sub">{c.last ? `${mine(c.last) ? "You: " : ""}${c.last.body || (c.last.files.length ? `📎 ${c.last.files[0].name}` : "")}` : c.sub}</span>
+                    {c.key === "general" ? <span className="mh-c-st">General questions</span> : c.topic !== "goods" && c.order?.status ? <span className="mh-c-st">{c.order.status}</span> : null}
+                  </span>
+                  {c.unread > 0 && <span className="mh-dot" aria-label={`${c.unread} unread`}>{c.unread}</span>}
+                </button>
+              ))}
+            </div>
           ))}
           {!shown.length && <div className="mh-none">No messages match “{q}”.</div>}
         </div>
-        {noConvo.length > 0 && (
-          <label className="mh-new">
-            <span>Message about an order</span>
-            <select value="" onChange={(e) => e.target.value && openConvo(e.target.value)} aria-label="Start a conversation about an order">
-              <option value="">Choose an order…</option>
-              {noConvo.slice(0, 60).map((o) => <option key={o.id} value={o.id}>#{o.number}{o.nickname ? ` · ${o.nickname}` : ""}</option>)}
-            </select>
-          </label>
-        )}
       </div>
 
       <div className={"mh-thread" + (over ? " over" : "")}
