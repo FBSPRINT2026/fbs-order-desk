@@ -17769,3 +17769,37 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .pyb .pyb-cb.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .pyb .pyb-note{font-size:12px;color:var(--ink-3);line-height:1.45}
 .pyb .pyb-note .pvm,.pyb .pyb-nums .pvm{vertical-align:-3px}
+/* the mockup viewer (components/MockupViewer.tsx, Nov 2, Nick: "a dynamic mock-up screen") */
+.mkv{display:grid;grid-template-columns:minmax(0,1fr) 280px;width:min(1200px,100%);max-height:min(92vh,900px);background:var(--surface);border-radius:14px;overflow:hidden;box-shadow:0 20px 60px rgba(15,23,42,.3)}
+.mkv-stage{display:flex;flex-direction:column;gap:10px;padding:14px 18px;background:var(--surface-2);min-width:0;min-height:0}
+.mkv-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mkv-t{flex:1 1 200px;min-width:0;display:flex;flex-direction:column}
+.mkv-t b{font-family:var(--display);font-size:18px}
+.mkv-sub{font-size:12.5px;color:var(--ink-3)}
+.mkv-seg{display:inline-grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.mkv-seg button{border:0;background:none;padding:7px 12px;font:600 12.5px var(--body);color:var(--ink-3);cursor:pointer;white-space:nowrap}
+.mkv-seg button.on{background:var(--accent-soft);color:var(--accent)}
+.mkv-x{width:32px;height:32px;border-radius:6px;border:1px solid var(--line);background:var(--surface);font-size:20px;line-height:1;cursor:pointer;color:var(--ink-2)}
+.mkv-pic{position:relative;display:flex;align-items:center;justify-content:center;flex:1 1 auto;min-height:0}
+.mkv-crop{max-width:100%;overflow:hidden;border-radius:10px;background:#fff}
+.mkv-crop img{display:block;width:100%;height:100%;object-fit:contain}
+.mkv-pic.s-front .mkv-crop img,.mkv-pic.s-back .mkv-crop img{object-fit:fill}
+.mkv-arr{position:absolute;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:22px;line-height:1;color:var(--ink-2);cursor:pointer;z-index:1}
+.mkv-arr.l{left:0}.mkv-arr.r{right:0}
+.mkv-strip{display:flex;gap:8px;overflow-x:auto;justify-content:center;flex-wrap:wrap}
+.mkv-th{display:flex;flex-direction:column;align-items:center;gap:3px;width:104px;padding:5px;border:2px solid transparent;border-radius:10px;background:var(--surface);cursor:pointer;font:500 11px var(--body);color:var(--ink-3)}
+.mkv-th img{width:100%;height:56px;object-fit:contain}
+.mkv-th span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mkv-th.on{border-color:var(--accent);color:var(--accent);font-weight:700}
+.mkv-side{display:flex;flex-direction:column;gap:14px;padding:16px;border-left:1px solid var(--line);overflow-y:auto}
+.mkv-count{font-weight:700;font-size:13px;color:var(--ink-3)}
+.mkv-cap{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.mkv-g{font-weight:700;font-size:14px}
+.mkv-sm{font-size:12.5px;color:var(--ink-3)}
+.mkv-pr{padding:5px 0;font-size:13px}
+.mkv-inks{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:2px;font-size:12.5px;color:var(--ink-2)}
+.mkv-inks span{display:inline-flex;align-items:center;gap:5px}
+.mkv-inks i{width:11px;height:11px;border-radius:50%;border:1px solid rgba(0,0,0,.15)}
+.mkv-acts{display:flex;flex-direction:column;gap:6px;margin-top:auto}
+.mkv-acts .btn{justify-content:center;width:100%}
+@media (max-width:860px){.mkv{grid-template-columns:minmax(0,1fr);max-height:none}.mkv-side{border-left:0;border-top:1px solid var(--line)}.mkv-crop{max-height:none}}

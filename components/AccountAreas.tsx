@@ -18,6 +18,8 @@ import RecordPayment from "@/components/RecordPayment";
 import type { PayFilter } from "@/lib/paySelect";
 import SearchInput from "@/components/SearchInput";
 import { useSticky } from "@/lib/useSticky";
+import MockupViewer from "@/components/MockupViewer";
+import type { MockupDetail } from "@/lib/mockupDetail";
 import { PaidMark, Pill } from "@/components/bits";
 import { StarOrder } from "@/components/PortalDashBits";
 import PortalSwitch from "@/components/PortalSwitch";
@@ -38,7 +40,8 @@ export type APayment = { id: string; order_id: string; number: number; amount: n
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean;
   /** the mockup's own number, M-1001 (one per set: every shirt color saved together shares it) */ mno?: number | null;
   /** saved with its setup (garments, prints, inks), so it can be opened to edit or ordered */ setup?: boolean;
-  /** archived by the customer or the shop: shown under Archive */ shelved?: boolean };
+  /** archived by the customer or the shop: shown under Archive */ shelved?: boolean;
+  /** the garment and its prints, for the mockup viewer (lib/mockupDetail.ts) */ detail?: MockupDetail };
 export type AMessage = { id: string; order_id: string | null; number: number | null; author_type: string; author_name: string; body: string; created_at: string };
 /** Things waiting on someone: shown in the "Requires your attention" panel. */
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
@@ -211,6 +214,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
   // orders… all quotes and orders just like we have on our order screen")
   const [oTab, setOTab] = useSticky<"all" | "drafts" | "quotes" | "sent" | "orders" | "done">("portal.ordersTab", "all");
   const [showOldOwed, setShowOldOwed] = useState(false);
+  const [viewSet, setViewSet] = useState<AMockup[] | null>(null);
   const [payF, setPayF] = useSticky<"open" | "late" | "later">("portal.payFilter", "open");
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
@@ -964,7 +968,7 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
           <div className="design-grid aa-grid6">
             {P.items.map((set) => { const m = set[0], name = m.title.split(" — ")[0].replace(/^Group \d+$/, "Mockup"); return (
               <div key={m.id} className={"design-card mk-card" + (m.starred ? " starred" : "")}>
-                <div className="dc-img mock"><a href={m.url} target="_blank" rel="noreferrer" className="dc-open">{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</a>
+                <div className="dc-img mock"><a href={m.url} target="_blank" rel="noreferrer" className="dc-open" onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); setViewSet(set); }}>{m.thumb ? <img src={m.thumb} alt={m.title} /> : null}</a>
                   {m.mno != null && programMockups[m.mno] && <span className="dc-kept" title={`Used in their program (${programMockups[m.mno]}), so it can't be archived. Take it off the program first.`}>In program</span>}
                   {!m.shelved && onArchiveMockup && !(m.mno != null && programMockups[m.mno]) && <button type="button" className="dc-arch" title="Archive this mockup (find it under Archive)" aria-label="Archive mockup" onClick={() => shelveMock(m, true)}><Ico d={I.archive} size={14} /></button>}
                   {set.length > 1 && <span className="mk-card-n" title={set.map((x) => x.title.split(" — ")[1] || x.title).join("\n")}>{set.length} colors</span>}
@@ -986,6 +990,18 @@ export default function AccountAreas({ newMockup, programMockups = {}, gangPanel
           </div>{pager("mock", mSets.length, P.p, P.n, 12)}</>; })()
         : <div className="aa-empty">{showArch ? "No archived mockups." : mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
       </div>
+      {viewSet && (() => { const m0 = viewSet[0], name = m0.title.split(" — ")[0].replace(/^Group \d+$/, "Mockup"); return (
+        <MockupViewer set={viewSet} name={name} onClose={() => setViewSet(null)}
+          sub={<>{m0.mno ? `M-${m0.mno}` : ""}{m0.number ? <>{m0.mno ? " · " : ""}Order <Link href={orderHref(m0.order_id || "")}>#{m0.number}</Link></> : null}</>}
+          actions={(m) => {
+            const x = viewSet.find((y) => y.id === m.id) || m0;
+            return <>
+              {x.number && x.order_id ? <Link className="btn primary" href={orderHref(x.order_id)}>Open order #{x.number}</Link>
+                : <>{mode === "portal" && x.setup && <MockupOrderButton id={x.id} canAct={canAct} className="btn primary" />}
+                  {x.setup && <a className="btn" href={mode === "portal" ? `/portal/mockup?mockup=${x.id}${hrefQuery ? "&" + hrefQuery.replace(/^\?/, "") : ""}` : `/shop/artwork/mockup?mockup=${x.id}`}>Edit</a>}</>}
+            </>;
+          }} />
+      ); })()}
       {/* a small text button under the mockups, on the right (Oct 24, Nick: "at the bottom right-hand corner under mockups") */}
       <div className="aa-arch-foot"><button type="button" className="linkbtn aa-arch-link" onClick={() => { setShowArch(!showArch); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{showArch ? "Hide archive" : "Show archive"}</button></div>
       {mode === "shop" && gangPanel}
