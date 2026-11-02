@@ -335,10 +335,11 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
                   </div>
                 ))}
                 <div className="rop-read-go">
-                  {readOk ? <span className="faint">These sizes go on the reorder.</span> : null}<span className="spacer" />
-                  <button type="button" className="btn sm" onClick={() => { setRead(null); setReadOk(false); setSizeMode("same"); }}>Keep last time&apos;s</button>
-                  {!readOk && <button type="button" className="btn sm primary" onClick={() => setReadOk(true)}>Update to these</button>}
-                  {readOk && <button type="button" className="btn sm" onClick={() => { setRead(null); setReadOk(false); }}>Another file</button>}
+                  {/* once you've said Update to these, it's done: a plain "updated" line, nothing more to answer (Nov 2, Nick:
+                      "I already said update the lines. I'm confused"); Undo goes back a step */}
+                  {readOk ? <><span className="rop-done">✓ Updated: these sizes go on the reorder.</span><span className="spacer" /><button type="button" className="linkbtn" onClick={() => setReadOk(false)}>Undo</button></>
+                    : <><span className="spacer" /><button type="button" className="btn sm" onClick={() => { setRead(null); setReadOk(false); setSizeMode("same"); }}>Keep last time&apos;s</button>
+                      <button type="button" className="btn sm primary" onClick={() => setReadOk(true)}>Update to these</button></>}
                 </div>
               </div>
             )}
