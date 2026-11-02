@@ -18507,3 +18507,23 @@ table.tbl.jc tr.jc-chatrow:hover>td{background:var(--surface-2)}
 .jc-msgn{color:var(--mc,var(--fbs-blue));background:color-mix(in srgb,var(--mc,var(--fbs-blue)) 12%,var(--surface))}
 .jc-msgn.new{color:#fff;background:var(--mc,var(--fbs-blue))}
 @media (max-width:900px){.jmb-t{grid-template-columns:minmax(0,1fr)}.jcx>.jmb{grid-row:auto}.jmb.lined .jmb-list{padding-top:0!important}}
+/* the FBS Message Center card (Nov 2, Nick: "our actual logo… a communications version… a cool graphic") */
+.jcx>.jcx-mtab.jmc{gap:4px;padding:8px 10px 10px}
+.jmc-art{width:100%;max-width:230px;height:auto;display:block}
+.jmc b{font-family:var(--display);font-size:15px}
+.jmc-n{font-size:12px;color:var(--ink-3)}
+/* Line up: the open message and its job are one band, joined across the gap; the chat opens under the message */
+.jcx{position:relative}
+.jmb-bridge{position:absolute;z-index:3;pointer-events:none;background:color-mix(in srgb,var(--mc) 16%,var(--surface));border-top:2px solid var(--mc);border-bottom:2px solid var(--mc);box-sizing:border-box}
+.jmb-cell.linked{background:color-mix(in srgb,var(--mc) 16%,var(--surface));border-top:2px solid var(--mc);border-bottom:2px solid var(--mc);margin-right:-10px;padding-right:10px;position:relative;z-index:2}
+.jmb-cell.linked .jmb-c{background:transparent;box-shadow:none}
+table.tbl.jc tr.jc-linked>td{background:color-mix(in srgb,var(--mc) 16%,var(--surface));border-top:2px solid var(--mc);border-bottom:2px solid var(--mc)}
+table.tbl.jc tr.jc-gaprow>td{padding:0;border-bottom:2px solid var(--mc,var(--line));background:repeating-linear-gradient(135deg,transparent 0 8px,color-mix(in srgb,var(--line) 40%,transparent) 8px 9px)}
+table.tbl.jc tr.jc-gaprow:hover>td{background:repeating-linear-gradient(135deg,transparent 0 8px,color-mix(in srgb,var(--line) 40%,transparent) 8px 9px)}
+.jmb-lchat{border-bottom:2px solid var(--mc);margin-right:-10px;position:relative;z-index:2}
+.jmb-t.narrow{grid-template-columns:minmax(0,1fr);gap:10px;padding:10px;border-left-width:3px}
+.jmb-t.narrow .jmb-msgs{max-height:200px}
+.jmb-t.narrow .jmb-rep textarea{min-height:72px}
+button.jc-msgn{all:unset;cursor:pointer;display:inline-block;margin-left:6px;font-size:11.5px;font-weight:700;border-radius:999px;padding:1px 7px;white-space:nowrap;color:var(--mc,var(--fbs-blue));background:color-mix(in srgb,var(--mc,var(--fbs-blue)) 12%,var(--surface))}
+button.jc-msgn.new{color:#fff;background:var(--mc,var(--fbs-blue))}
+button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}

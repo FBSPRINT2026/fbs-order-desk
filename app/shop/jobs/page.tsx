@@ -86,6 +86,10 @@ export default function JobCenter() {
   const [rowsM, setRowsM] = useState<{ h: number; job: string; kind: string }[]>([]);
   const [padTop, setPadTop] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const jcxRef = useRef<HTMLDivElement | null>(null);
+  const leftChatRef = useRef<HTMLDivElement | null>(null);
+  const [chatH, setChatH] = useState(0);
+  const [bridge, setBridge] = useState<{ top: number; h: number; left: number; w: number } | null>(null);
 
   // a link straight to a step (the old Incoming Orders and Proof Center pages open here), or to a conversation (the
   // live message pop-up's Open chat)
@@ -179,6 +183,13 @@ export default function JobCenter() {
       const top = trs[0] ? Math.round(trs[0].getBoundingClientRect().top - L.getBoundingClientRect().top - (parseFloat(getComputedStyle(L).paddingTop || "0") || 0)) : 0;
       setPadTop((p) => (Math.abs(p - top) > 1 ? Math.max(0, top) : p));
       setRowsM((p) => (p.length === next.length && p.every((x, i) => x.h === next[i].h && x.job === next[i].job && x.kind === next[i].kind) ? p : next));
+      // the band that physically joins the open message to its job, across the gap between the panels
+      const X = jcxRef.current, linked = t.querySelector("tr.jc-linked") as HTMLElement | null, lp = document.querySelector(".jcx>.jmb") as HTMLElement | null, rp = document.querySelector(".jcx>.jct-body") as HTMLElement | null;
+      if (X && linked && lp && rp) {
+        const xr = X.getBoundingClientRect(), r0 = linked.getBoundingClientRect(), a = lp.getBoundingClientRect(), b = rp.getBoundingClientRect();
+        const nb = { top: Math.round(r0.top - xr.top), h: Math.round(r0.height), left: Math.round(a.right - xr.left - 12), w: Math.round(b.left - a.right + 24) };
+        setBridge((p) => (p && p.top === nb.top && p.h === nb.h && p.left === nb.left && p.w === nb.w ? p : nb));
+      } else setBridge((p) => (p ? null : p));
     };
     const later = () => { if (!raf) raf = requestAnimationFrame(measure); };
     measure();
@@ -186,7 +197,15 @@ export default function JobCenter() {
     const tb = document.querySelector(".jct-body .jc-list"); if (tb) ro.observe(tb);
     addEventListener("resize", later);
     return () => { ro.disconnect(); removeEventListener("resize", later); if (raf) cancelAnimationFrame(raf); };
-  }, [lineup, items, step, dept, q, chat, chats, mq, pick, mine, cameBack]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lineup, items, step, dept, q, chat, chats, mq, pick, mine, cameBack, chatH]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the open chat on the left, in Line up: its height makes the matching gap under its job on the right
+  useLayoutEffect(() => {
+    const el = leftChatRef.current;
+    if (!el) { setChatH((p) => (p ? 0 : p)); return; }
+    const f = () => setChatH((p) => { const h = Math.round(el.getBoundingClientRect().height); return Math.abs(p - h) > 1 ? h : p; });
+    f(); const ro = new ResizeObserver(f); ro.observe(el);
+    return () => ro.disconnect();
+  }, [chat, lineup, rowsM]);
 
   return (
     <>
@@ -200,10 +219,27 @@ export default function JobCenter() {
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
-      <div className="jcx">
+      <div className="jcx" ref={jcxRef}>
+      {lineup && bridge && curChat && <div className="jmb-bridge" style={{ top: bridge.top, height: bridge.h, left: bridge.left, width: bridge.w, ["--mc" as string]: colorOfChat(curChat) }} aria-hidden />}
       {/* Messages as its own tab, level with the stages, its panel beside the jobs' (Nov 2, Nick: "the messages tab should
           just extend all the way up to even with incoming… then the messages should start even with the panel on the right") */}
-      <div className="jcx-mtab"><b>Message board{myChats.reduce((a0, c) => a0 + c.unread, 0) > 0 && <span className="jct-new">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</span>}</b><span>{lineup ? "Lined up with the jobs" : "All customers"}</span></div>
+      <div className="jcx-mtab jmc">
+        {/* the FBS Message Center (Nov 2, Nick: "our actual logo and like a communications version of it… two computers
+            linked together, like a telephone… some sort of cool graphic"): our logo between two screens talking */}
+        <svg className="jmc-art" viewBox="0 0 220 64" aria-hidden>
+          <defs><linearGradient id="jmcFade" x1="0" x2="1"><stop offset="0" stopColor="#0e9bd8" /><stop offset=".52" stopColor="#f26660" /><stop offset="1" stopColor="#fcb122" /></linearGradient></defs>
+          <path d="M44 34 C 70 10, 150 10, 176 34" fill="none" stroke="url(#jmcFade)" strokeWidth="2.5" strokeDasharray="4 5" strokeLinecap="round" />
+          <g><rect x="6" y="20" width="40" height="28" rx="4" fill="var(--surface)" stroke="#0e9bd8" strokeWidth="2.5" /><rect x="20" y="49" width="12" height="4" rx="1" fill="#0e9bd8" /><rect x="14" y="53" width="24" height="3" rx="1.5" fill="#0e9bd8" />
+            <path d="M14 28h16a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-9l-5 4v-4h-2a4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4z" fill="#0e9bd8" transform="translate(2 -1) scale(.95)" /></g>
+          <g><rect x="174" y="20" width="40" height="28" rx="4" fill="var(--surface)" stroke="#f26660" strokeWidth="2.5" /><rect x="188" y="49" width="12" height="4" rx="1" fill="#f26660" /><rect x="182" y="53" width="24" height="3" rx="1.5" fill="#f26660" />
+            <path d="M206 28h-16a4 4 0 0 0-4 4v4a4 4 0 0 0 4 4h9l5 4v-4h2a4 4 0 0 0 4-4v-4a4 4 0 0 0-4-4z" fill="#f26660" transform="translate(-2 -1) scale(1)" /></g>
+          <circle cx="110" cy="30" r="24" fill="var(--surface)" stroke="url(#jmcFade)" strokeWidth="3" />
+          <image href="/brand/fbs-logo.svg" x="91" y="11" width="38" height="38" />
+          <g fill="#fcb122"><circle cx="72" cy="17" r="2.5" /><circle cx="148" cy="17" r="2.5" /></g>
+        </svg>
+        <b>FBS Message Center{myChats.reduce((a0, c) => a0 + c.unread, 0) > 0 && <span className="jct-new">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</span>}</b>
+        <span className="jmc-n">{[`${myChats.reduce((a0, c) => a0 + c.unread, 0)} new`, `${myChats.filter((c) => c.waiting).length} waiting on us`].join(" · ")}</span>
+      </div>
       <div className="jct" role="tablist" aria-label="Steps">
         {GROUPS.map((g) => { const on = curG?.t === g.t; const nm = newIn(g); return (
           <div key={g.t} role="tab" aria-selected={on} className={"jct-tab jc-g" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
@@ -229,9 +265,11 @@ export default function JobCenter() {
           {lineup ? <>
             {rowsM.map((r, i) => {
               if (r.kind === "head") return <div key={i} className="jmb-head" style={{ height: r.h }}>Messages</div>;
-              if (r.kind === "chat") return <div key={i} className="jmb-gap" style={{ height: r.h }}><span>Open →</span></div>;
+              // the open conversation, under its message (Line up): the job table leaves the same gap under the job
+              if (r.kind === "gap") return curChat ? <div key={i} className="jmb-lchat" ref={leftChatRef} style={{ ["--mc" as string]: colorOfChat(curChat) }}><ChatThread c={curChat} color={colorOfChat(curChat)} narrow onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></div> : null;
               const c = r.job ? chatOfJob(r.job) : null;
-              return <div key={i} className="jmb-cell" style={{ height: r.h }}>{c && <ChatLine c={c} color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />}</div>;
+              const lk = !!c && chat === c.key;
+              return <div key={i} className={"jmb-cell" + (lk ? " linked" : "")} style={{ height: r.h, ...(c ? { ["--mc" as string]: colorOfChat(c) } : {}) }}>{c && <ChatLine c={c} color={colorOfChat(c)} on={lk} onClick={() => openChat(lk ? null : c.key)} />}</div>;
             })}
             {offTab.length > 0 && <div className="jmb-off"><div className="jmb-off-h">Not on this tab · {offTab.length}</div>{offTab.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}</div>}
           </> : (!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : "No customer messages."}</div>
@@ -265,9 +303,11 @@ export default function JobCenter() {
                   : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
                   : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></>}</tr></thead>
                 <tbody>{shown.flatMap((it) => { const c0 = it.orderId ? chatOfJob(it.orderId) : null; return [
-                  <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} mc={c0 ? colorOfChat(c0) : undefined} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />,
+                  <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} mc={c0 ? colorOfChat(c0) : undefined} onChat={c0 ? () => openChat(chat === c0.key ? null : c0.key) : undefined} linked={lineup && !!chatOrder && chatOrder === it.orderId} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />,
                   // the conversation opens on the next line, in the big panel (Nov 2, Nick)
-                  ...(curChat && chatHere && curChat.orderId === it.orderId ? [<tr key={it.key + ":chat"} className="jc-chatrow" data-kind="chat" data-job=""><td colSpan={5}><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></td></tr>] : []),
+                  ...(curChat && chatHere && curChat.orderId === it.orderId ? [lineup
+                    ? <tr key={it.key + ":gap"} className="jc-gaprow" data-kind="gap" data-job=""><td colSpan={5} style={{ height: Math.max(chatH, 1) }} /></tr>
+                    : <tr key={it.key + ":chat"} className="jc-chatrow" data-kind="chat" data-job=""><td colSpan={5}><ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} /></td></tr>] : []),
                 ]; })}</tbody>
               </table></div>
             )}
@@ -284,11 +324,11 @@ export default function JobCenter() {
   );
 }
 
-function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, mc }: { it: JobItem; step: Step; /** View all: every row in the same five columns */ wide?: boolean; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void; /** new customer messages on it */ msgs?: number; /** its conversation is open */ hl?: boolean; /** it has a conversation: the color it has on the message board */ mc?: string }) {
+function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, mc, onChat, linked = false }: { /** open its conversation */ onChat?: () => void; /** joined to its open message (Line up) */ linked?: boolean; it: JobItem; step: Step; /** View all: every row in the same five columns */ wide?: boolean; on: boolean; onPick: () => void; after: (m: string) => void; onLead: () => void; /** new customer messages on it */ msgs?: number; /** its conversation is open */ hl?: boolean; /** it has a conversation: the color it has on the message board */ mc?: string }) {
   const [busy, setBusy] = useState(false);
   const here = it.tracks.filter((t) => forStep(step, t)), also = it.tracks.filter((t) => !forStep(step, t));
   const tag = (t: Track, i: number) => <span key={i} className="pill" style={{ ["--sc" as string]: TONE[t.state] }}><span className="pill-t">{t.label}</span></span>;
-  const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b>{mc && <span className={"jc-msgn" + (msgs ? " new" : "")} style={{ ["--mc" as string]: mc }} title={msgs ? `${msgs} new message${msgs === 1 ? "" : "s"}` : "Has messages"}>💬{msgs ? ` ${msgs}` : ""}</span>}<div className="sub">{it.title}</div></>;
+  const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b>{mc && <button type="button" className={"jc-msgn" + (msgs ? " new" : "")} style={{ ["--mc" as string]: mc }} title={msgs ? `${msgs} new message${msgs === 1 ? "" : "s"}: open` : "Open the messages"} onClick={(e) => { e.stopPropagation(); onChat?.(); }}>💬{msgs ? ` ${msgs}` : ""}</button>}<div className="sub">{it.title}</div></>;
   const keys = { tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(); } }, "aria-selected": on };
   if (it.type === "lead") return (
     <tr className={on ? "on" : ""} onClick={onPick} {...keys} data-job="">
@@ -303,7 +343,7 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, 
     ? <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td><td><span className="pill" style={{ ["--sc" as string]: "var(--ink-3)" }}><span className="pill-t">Declined</span></span>{it.declined && <div className="sub">{it.declined}</div>}</td><td /><td className="nowrap">{day(it.at)}</td></tr>
     : <tr className={on ? "on" : ""} onClick={onPick} {...keys}><td>{who}</td><td>{it.declined || <span className="faint">No reason given</span>}</td><td className="nowrap">{day(it.at)}</td></tr>;
   return (
-    <tr className={(on ? "on" : "") + (hl ? " jc-hl" : "")} onClick={onPick} {...keys} data-job={it.orderId || ""}>
+    <tr className={(on ? "on" : "") + (hl && !linked ? " jc-hl" : "") + (linked ? " jc-linked" : "")} onClick={onPick} {...keys} data-job={it.orderId || ""} style={linked && mc ? { ["--mc" as string]: mc } : undefined}>
       <td>{who}</td>
       <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
       <td>{step === "requests" ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>

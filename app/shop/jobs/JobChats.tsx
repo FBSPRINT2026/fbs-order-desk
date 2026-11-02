@@ -33,7 +33,7 @@ export function ChatLine({ c, color, on, onClick, full = false }: { c: ChatSumma
  * line… in the big area… a big typing area, reply, send attachments… send links"): the thread on the left, the reply on
  * the right with quick answers, files, the order's portal link and the pay link. Opening it marks it read.
  */
-export function ChatThread({ c, color, onSent, onClose }: { c: ChatSummary; color: string; onSent: () => void; onClose: () => void }) {
+export function ChatThread({ c, color, onSent, onClose, narrow = false }: { c: ChatSummary; color: string; onSent: () => void; onClose: () => void; /** in the message column: one column */ narrow?: boolean }) {
   const [msgs, setMsgs] = useState<ChatMsg[] | null>(null);
   const [text, setText] = useState(""), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const [files, setFiles] = useState<{ path: string; name: string; mime: string; size: number }[]>([]);
@@ -72,7 +72,7 @@ export function ChatThread({ c, color, onSent, onClose }: { c: ChatSummary; colo
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const add = (s: string) => setText((t) => (t.trim() ? `${t.trim()} ${s}` : s));
   return (
-    <div className="jmb-t" style={{ ["--mc" as string]: color }}>
+    <div className={"jmb-t" + (narrow ? " narrow" : "")} style={{ ["--mc" as string]: color }}>
       <div className="jmb-th">
         <div className="jmb-th-h"><b>{c.last.from === "customer" ? c.last.who || c.customer : c.customer}</b><span className="faint">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General"}{c.customer ? ` · ${c.customer}` : ""}</span><button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
         <div className="jmb-msgs" ref={box}>
