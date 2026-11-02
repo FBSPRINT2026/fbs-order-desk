@@ -240,7 +240,11 @@ export default function JobCenter() {
         <div className="jmb-head" style={lvl.h ? { height: lvl.h } : undefined}>Messages</div>
         <div className="jmb-list">
           {!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : "No customer messages."}</div>
-            : boardChats.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}
+            : /* in two parts (Nov 2, Nick: "sort the messages… a little heading that says job related… and then just general
+                 messages"): about a job on the Job Center, then everything else */
+            ([["Job related", boardChats.filter((c) => !!c.orderId && byOrder.has(c.orderId))], ["General messages", boardChats.filter((c) => !c.orderId || !byOrder.has(c.orderId))]] as const).map(([h, list]) => list.length > 0 && (
+              <div key={h} className="jmb-grp"><div className="jmb-grp-h">{h}<span className="pill-n">{list.length}</span></div>
+                {list.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}</div>))}
         </div>
       </div>
       <div className={"jc-body jct-body" + (picked ? " has-pick" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
