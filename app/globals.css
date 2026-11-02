@@ -17983,3 +17983,14 @@ html body .pv .pv-items th:last-child,html body .pv .pv-items td:last-child{padd
 .stx-tbl .stx-dueh,.stx-tbl td.st-pd{padding-left:28px}
 /* the statement buttons sit at the right end of the Payments title line (Nov 2, Nick) */
 .aa-bar>.aa-stmt{margin:0 0 0 auto;justify-content:flex-end}
+/* shipments not linked: their own box after a break, a violet header bar with what to do, a grip on each (Nov 2, Nick) */
+.gdk-nlbox{padding:0;overflow:hidden}
+.gdk-nlbar{display:flex;align-items:center;gap:12px;padding:12px 16px;background:color-mix(in srgb,var(--gk) 12%,var(--surface));border-bottom:3px solid var(--gk);color:var(--gk)}
+.gdk-nlbar>svg{flex:none}
+.gdk-nlbar b{display:block;font-family:var(--display);font-size:15px;color:var(--ink)}
+.gdk-nlbar span{display:block;font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.gdk-nlbox .gdk-grp{border-bottom:0}
+.gdk-nlbox .gdk-um{grid-template-columns:16px minmax(0,1fr) minmax(220px,320px)}
+.gdk-nlbox .gdk-grip{display:flex;align-items:center;color:var(--ink-3);letter-spacing:0}
+.gdk-nlbox .gdk-um:hover .gdk-grip{color:var(--gk)}
+@media (max-width:900px){.gdk-nlbox .gdk-um{grid-template-columns:16px minmax(0,1fr)}.gdk-nlbox .gdk-um-pick{grid-column:2}}

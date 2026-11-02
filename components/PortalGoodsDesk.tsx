@@ -128,17 +128,24 @@ export default function PortalGoodsDesk({ items, incoming, canAct, qs, addTracki
             <div className="gdk-grp-b"><div className="gdk-row gdk-head" aria-hidden><span>Order</span><span>Shipment</span><span>Boxes</span><span /></div>{g.list.map(card)}</div>
           </section>
         ))}
-        {incoming.length > 0 && (
+        {!shown.length && !incoming.length && <div className="aa-empty">{w ? `Nothing matches “${q}”.` : "No orders with goods right now."}</div>}
+      </div>
+      {/* shipments not linked: their own box after a break, a header bar that says what to do, the violet bar down the
+          side and a grip on each (Nov 2, Nick: "that line shouldn't fall in… a break there with some sort of bar") */}
+      {incoming.length > 0 && (
+        <div className="aa-card gdk-nlbox g-nl">
+          <div className="gdk-nlbar">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3" /></svg>
+            <div><b>Shipments not linked · {incoming.length}</b><span>Your supplier shipped these to us, but we couldn&apos;t tell which order they&apos;re for. Drag one by its handle onto its order above, or pick the order here.</span></div>
+          </div>
           <section className="gdk-grp g-nl gdk-help" aria-label="Shipments not linked">
-            <div className="gdk-vbar"><span>Shipments not linked · {incoming.length}</span></div>
+            <div className="gdk-vbar"><span>Not linked</span></div>
             <div className="gdk-grp-b">
-              <div className="gdk-nl-h">Your supplier shipped these to us, but we couldn&apos;t tell which order they&apos;re for. Drag one onto its order above, or pick it here.</div>
               {incoming.map((g) => <Unmatched key={g.key} g={g} canAct={canAct} onDrag={(on) => { setDrag(on ? g.key : null); if (!on) setOver(null); setDropMsg(""); }} link={(orderId) => linkTo(g, orderId)} />)}
             </div>
           </section>
-        )}
-        {!shown.length && !incoming.length && <div className="aa-empty">{w ? `Nothing matches “${q}”.` : "No orders with goods right now."}</div>}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -177,12 +184,12 @@ function Unmatched({ g, canAct, link, onDrag }: { g: PendingShipment; canAct: bo
   const eta = g.tracking.filter((t) => !t.delivered).map((t) => t.eta).filter(Boolean).sort()[0];
   return (
     <div className="gdk-um" draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", g.key); e.dataTransfer.effectAllowed = "move"; onDrag(true); }} onDragEnd={() => onDrag(false)} title="Drag onto its order">
+      <span className="gdk-grip" aria-hidden><svg width="14" height="18" viewBox="0 0 14 18" fill="currentColor"><circle cx="4" cy="3" r="1.6" /><circle cx="10" cy="3" r="1.6" /><circle cx="4" cy="9" r="1.6" /><circle cx="10" cy="9" r="1.6" /><circle cx="4" cy="15" r="1.6" /><circle cx="10" cy="15" r="1.6" /></svg></span>
       <div className="gdk-um-t">
         <div><b>{g.supplier === "sanmar" ? "SanMar" : g.supplier === "ss" ? "S&S" : g.supplier} {g.supplier_order}</b>{g.customer_po ? <span className="gdk-sm"> · PO {g.customer_po}</span> : null} <span className={"gdk-st" + (here ? " in" : " way")}>{here ? "Arrived" : eta ? `On the way · ${when(eta)}` : "On the way"}</span></div>
         <div className="gdk-sm">{boxesOf(g.boxes)} · {pcsOf(g.pcs)}{g.styles ? ` · ${g.styles}` : ""}</div>
       </div>
       <div className="gdk-um-pick">
-        <span className="gdk-grip" aria-hidden>⋮⋮</span>
         <select value={pick} disabled={busy} onChange={(e) => setPick(e.target.value)} aria-label="Which order">
           <option value="">Pick an order…</option>
           {g.orders.map((o) => <option key={o.id} value={o.id}>#{o.number} {o.nickname}{o.po ? ` · PO ${o.po}` : ""}</option>)}
