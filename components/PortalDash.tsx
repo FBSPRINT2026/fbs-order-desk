@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { money } from "@/lib/format";
 import type { PortalJob } from "@/lib/portalJobs";
-import { DashJobs, DashReorder, HoldJump, Unfollow } from "./PortalDashBits";
+import { DashJobs, DashReorder, Unfollow } from "./PortalDashBits";
 import { MiniRail } from "@/components/OrderRail";
 
 /**
@@ -27,11 +27,11 @@ export type DashProof = { id: string; number: number; name: string; href: string
 export type DashHeld = { id: string; href: string; number: number; name: string; msgHref: string; hold: { key?: string; title: string; reason: string; href: string; fixLabel: string } };
 
 /** the On hold panel's sections, by the hold's flag (lib/orderStages.ts customerHold) */
-const HOLD_KINDS: { label: string; keys: string[]; c: string; none: string }[] = [
-  { label: "Needs payment", keys: ["hold_payment"], c: "var(--danger)", none: "Nothing waiting on a payment" },
-  { label: "Waiting on you", keys: ["hold_customer"], c: "var(--warn)", none: "Nothing waiting on you" },
-  { label: "Art problem", keys: ["art_problem"], c: "var(--fbs-violet)", none: "No art problems" },
-  { label: "Issue with goods", keys: ["goods_wrong"], c: "var(--ink-3)", none: "Nothing wrong with your goods" },
+const HOLD_KINDS: { label: string; keys: string[]; c: string; none: string; /** why, in the customer's words */ why: string }[] = [
+  { label: "Needs payment", keys: ["hold_payment"], c: "var(--danger)", none: "Nothing waiting on a payment", why: "Waiting for payment" },
+  { label: "Waiting on you", keys: ["hold_customer"], c: "var(--warn)", none: "Nothing waiting on you", why: "Waiting on your answer" },
+  { label: "Art problem", keys: ["art_problem"], c: "var(--fbs-violet)", none: "No art problems", why: "Artwork needs a fix" },
+  { label: "Issue with goods", keys: ["goods_wrong"], c: "var(--ink-3)", none: "Nothing wrong with your goods", why: "Issue with your goods" },
 ];
 
 export type DashPay = { due: number; portalDue: number; pvDue: number; portalCount: number; pvCount: number; pastDue: number; last: string; terms: string; href: string; statementHref: string;
@@ -97,7 +97,7 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
         {!sent.length && (
           <div className="pdx-caught">
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <div><b>You&apos;re all caught up</b><span>Everything you&apos;ve sent us has been confirmed. New orders you send show here until we confirm them.</span></div>
+            <div><b>We&apos;re all caught up</b><span>Everything you&apos;ve sent us has been confirmed. New orders you send show here until we confirm them.</span></div>
           </div>
         )}
         {sent.length > 0 && <div className="pdx-sent-list">
@@ -112,13 +112,14 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
           {held.length ? <>
             {/* one line per held job (Nov 2, Nick: "the job numbers… large… the main line… no art problem or no issues… just
                 say… pay now, reply"): its number big, its name, and one button that says what to do */}
-            <ul className="pdx-hl">{held.map((x) => { const k = HOLD_KINDS.find((y) => y.keys.includes(x.hold.key || "")) || HOLD_KINDS[1]; return (
+            {/* now with room for why (Nov 2, Nick: "flesh that out… give a status… goods missing… awaiting proof approval… waiting
+                for payment"): the job, why it's held in plain words with what we wrote, and the one button */}
+            <ul className="pdx-hl pdx-hl-why">{held.map((x) => { const k = HOLD_KINDS.find((y) => y.keys.includes(x.hold.key || "")) || HOLD_KINDS[1]; return (
               <li key={x.id} style={{ ["--hk" as string]: k.c }}>
                 <Link className="pdx-hl-job" href={x.href}><b className="onum">#{x.number}</b>{x.name && <span>{x.name}</span>}</Link>
+                <span className="pdx-hl-why-t"><b>{k.why}</b>{x.hold.reason && <small>{x.hold.reason}</small>}</span>
                 <Link className="pdx-hl-do" href={x.hold.href} title={x.hold.title}>{x.hold.fixLabel}</Link>
               </li>); })}</ul>
-            <span className="pdx-hs-gap" />
-            <HoldJump className="pd-link pdx-hs-all">See why on your jobs</HoldJump>
           </> : <div className="pdx-hold-ok" role="status">
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <b>No orders on hold</b>

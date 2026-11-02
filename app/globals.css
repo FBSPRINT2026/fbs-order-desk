@@ -18799,3 +18799,9 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .orm-bar u{background:var(--line);box-shadow:0 0 0 1px var(--line)}
 .orm-bar u.d{background:var(--fbs-blue);box-shadow:0 0 0 1px var(--fbs-blue)}
 .orm-bar u.on{background:var(--fbs-orange);box-shadow:0 0 0 1px var(--fbs-orange)}
+/* On hold, with room for why (Nov 2, Nick): the job, the reason in plain words with what we wrote under it, the button */
+.pdx-hl-why li{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.6fr) auto;gap:14px;align-items:center}
+.pdx-hl-why-t{min-width:0;display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--hk);padding-left:10px}
+.pdx-hl-why-t b{font-size:13.5px;font-weight:700;color:color-mix(in srgb,var(--hk) 75%,var(--ink))}
+.pdx-hl-why-t small{font-size:12px;color:var(--ink-3);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media (max-width:640px){.pdx-hl-why li{grid-template-columns:minmax(0,1fr) auto}.pdx-hl-why-t{grid-column:1/-1;grid-row:2}}
