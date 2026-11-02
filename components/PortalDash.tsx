@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { money } from "@/lib/format";
 import type { PortalJob } from "@/lib/portalJobs";
-import { DashJobs, DashReorder, HoldJump, StarOrder } from "./PortalDashBits";
+import { DashJobs, DashReorder, HoldJump, Unfollow } from "./PortalDashBits";
 import { MiniRail } from "@/components/OrderRail";
 
 /**
@@ -17,7 +17,7 @@ export type DashPast = { id: string; number: number; nickname: string; when: str
 export type DashSent = { id: string; href: string; number: number; name: string; when: string; pcs: number; simple: boolean; step: number; label: string; tone: "wait" | "act" | "ok" | "off"; note: string };
 
 /** an order they're tracking (★) */
-export type DashTracked = { id: string; href: string; number: number; name: string; status: string; due: string; health: { text: string; tone: "ok" | "act" | "wait" | "bad" }; action: { label: string; href: string; external: boolean } | null;
+export type DashTracked = { id: string; href: string; number: number; name: string; /** pieces */ pcs?: number; status: string; due: string; health: { text: string; tone: "ok" | "act" | "wait" | "bad" }; action: { label: string; href: string; external: boolean } | null;
   /** its picture and steps, so a starred order looks like its job below (Nov 2, Nick: "doesn't stand out like the rest") */ pic?: string; steps?: PortalJob["steps"]; done?: boolean };
 
 /** a proof waiting for their OK (Nov 2) */
@@ -59,10 +59,13 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
   const trackRow = (t: DashTracked) => (
             <div key={t.id} className={"pdx-fo t-" + t.health.tone}>
               <Link href={t.href} className="pdx-fo-pic" aria-hidden tabIndex={-1}>{t.pic ? <img src={t.pic} alt="" loading="lazy" /> : <span>#{t.number}</span>}</Link>
+              {/* number and name, the pieces under them; the order line in the middle, wider; the in-hands date at the right;
+                  a small × in the corner stops following it (Nov 2, Nick) */}
               <Link href={t.href} className="pdx-fo-t"><b><span className="onum">#{t.number}</span> {t.name || "Order"}</b>
-                <small>{t.due ? `In hands ${t.due}` : t.status}{t.health.tone === "act" || t.health.tone === "bad" ? <em> · {t.health.text}</em> : null}</small></Link>
+                <small>{t.pcs ? `${t.pcs} pcs` : t.status}{t.health.tone === "act" || t.health.tone === "bad" ? <em> · {t.health.text}</em> : null}</small></Link>
               {t.steps?.length ? <MiniRail steps={t.steps} done={t.done} /> : <small className="faint">{t.status}</small>}
-              <StarOrder id={t.id} on canAct={canAct} />
+              <span className="pdx-fo-due">{t.due ? <><small>In hands</small><b>{t.due.replace(/^[A-Z][a-z]{2} /, "")}</b></> : null}</span>
+              <Unfollow id={t.id} canAct={canAct} />
             </div>
   );
   const sentRow = (x: DashSent) => (

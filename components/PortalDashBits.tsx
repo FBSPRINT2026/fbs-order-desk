@@ -62,6 +62,15 @@ export function StepIcon({ k, done }: { k: string; done: boolean }) {
 }
 
 /** ☆ / ★: track this order on the dashboard (Oct 24, Nick) */
+/** stop following an order: a small × in its row's corner on the dashboard (Nov 2, Nick) */
+export function Unfollow({ id, canAct }: { id: string; canAct: boolean }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <button type="button" className="pdx-fo-x" disabled={!canAct || pending} title={canAct ? "Stop following this order" : "Turned off in preview"} aria-label="Stop following this order"
+      onClick={() => start(async () => { const r = await starMyOrder(id, false); if (r.ok) router.refresh(); })}>×</button>
+  );
+}
 export function StarOrder({ id, on, canAct, label = false }: { id: string; on: boolean; canAct: boolean; label?: boolean }) {
   const router = useRouter();
   const [v, setV] = useState(on);

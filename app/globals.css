@@ -18776,3 +18776,13 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aa-ptop-r{align-items:stretch}
 .aa-ptop-r>.aa-search,.aa-ptop .pa-pop .pa-in{height:42px;box-sizing:border-box;display:flex;align-items:center}
 .aa-ptop-r>.btn{align-self:center}
+/* followed orders (Nov 2, Nick): no star; a small × in the row's top-right corner; the order line wider; pieces under the
+   name; the in-hands date at the right */
+.pdx-fo{position:relative;grid-template-columns:40px minmax(0,1fr) minmax(170px,1.3fr) auto;padding-right:18px}
+.pdx-fo-due{display:flex;flex-direction:column;align-items:flex-end;min-width:56px;white-space:nowrap}
+.pdx-fo-due small{font-size:11px;color:var(--ink-3)}
+.pdx-fo-due b{font-size:13px;font-weight:700;color:var(--ink)}
+.pdx-fo-x{all:unset;position:absolute;top:4px;right:0;width:18px;height:18px;display:grid;place-items:center;border-radius:50%;font-size:15px;line-height:1;color:var(--ink-3);cursor:pointer}
+.pdx-fo-x:hover{background:var(--surface-2);color:var(--danger)}
+.pdx-fo-x:disabled{cursor:default;opacity:.5}
+@media (max-width:560px){.pdx-fo{grid-template-columns:40px minmax(0,1fr) auto}.pdx-fo .orm{grid-column:2/-1;grid-row:2}}

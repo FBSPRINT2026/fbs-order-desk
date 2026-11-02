@@ -308,7 +308,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         : late ? { text: "Running late", tone: "bad" as const }
         : ["ready", "shipped", "delivered"].includes(cs.key) ? { text: cs.label, tone: "ok" as const }
         : o.due_date ? { text: "On time", tone: "ok" as const } : { text: "In progress", tone: "wait" as const };
-      return { id: o.id, href: j.href, number: o.number, name: o.nickname || "", status: cs.label, due: j.inHands || "", health, action: j.action ? { label: j.action.label, href: j.action.href, external: !!j.action.external } : null, pic: j.pic, steps: j.steps, done: j.done };
+      return { id: o.id, href: j.href, number: o.number, name: o.nickname || "", pcs: +(o as { qty?: number }).qty! || 0, status: cs.label, due: j.inHands || "", health, action: j.action ? { label: j.action.label, href: j.action.href, external: !!j.action.external } : null, pic: j.pic, steps: j.steps, done: j.done };
     });
   // Orders sent to FBS (Oct 24, Nick: "as soon as you click that button, you want to keep track of it on the main
   // dashboard… order sent to FBS, waiting on FBS… approved"): everything still with us, and what we did with the ones
