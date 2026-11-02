@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SearchInput from "@/components/SearchInput";
 import { useShopData } from "@/lib/shopData";
-import { Due, PaidMark, Pill, pvStatusOf } from "@/components/bits";
+import { Due, Pill, pvStatusOf } from "@/components/bits";
 import { money, testFound } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { quickJump } from "@/app/shop/search-actions";
@@ -37,6 +37,15 @@ const fmtDay = (d: string | null | undefined) => (d ? new Date(d.slice(0, 10) + 
 const today = () => new Date().toISOString().slice(0, 10);
 const dd = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
 const custName = (c?: { company?: string | null; name?: string | null } | null) => c?.company || c?.name || "";
+/** a question for the AI (who / what / when… / a "?" / six words or more), not a name or a number to look up */
+const isQuestion = (t: string) => /\?\s*$/.test(t) || /^(who|what|when|where|why|how|did|does|do|is|are|was|were|which|can|has|have|should|show|find|list|tell)\b/i.test(t) || t.trim().split(/\s+/).length >= 6;
+/** the words searched for, marked in a result */
+function Hl({ text, words }: { text: string; words: string[] }) {
+  const ws = words.filter((w) => w.length >= 2).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!ws.length || !text) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${ws.join("|")})`, "ig"));
+  return <>{parts.map((p, i) => (i % 2 ? <mark key={i} className="sxr-hl">{p}</mark> : p))}</>;
+}
 
 function SearchInner() {
   const sp = useSearchParams();
@@ -59,6 +68,8 @@ function SearchInner() {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(0);
   const [more, setMore] = useState(false);
+  /** the result groups opened past their first few */
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const searchedFor = useRef("");
   const [ai, setAi] = useState<{ answer?: string; refs?: { label: string; href: string }[]; off?: boolean; reason?: string; error?: string; busy?: boolean; skip?: boolean } | null>(null);
 
@@ -79,7 +90,7 @@ function SearchInner() {
   useEffect(() => {
     if (jump !== "none") return;
     searchedFor.current = q0;
-    setCusts([]); setArch([]); setArt([]); setMsgs([]); setShips([]); setProjs([]); setJobs([]); setBestArch([]); setOtherStats({}); setMore(false);
+    setCusts([]); setArch([]); setArt([]); setMsgs([]); setShips([]); setProjs([]); setJobs([]); setBestArch([]); setOtherStats({}); setMore(false); setOpenGroups({});
     if (t.length < 2) { setPending(0); return; }
     setPending(7);
     let live = true;
@@ -186,7 +197,9 @@ function SearchInner() {
 
   // the AI answer: once the results are in (it reads them too)
   useEffect(() => {
-    if (t.length < 3 || num || jump !== "none") { setAi(null); return; }
+    // only for a question (Nov 2, Nick: "people are complaining that this search… returns hard to read results": a name
+    // like "xyz" got "I'm not sure what you're asking")
+    if (t.length < 3 || num || jump !== "none" || !isQuestion(t)) { setAi(null); return; }
     if (loading || pending || searchedFor.current !== q0) return;
     const found = [...rows.slice(0, 20).map((r) => ({ ref: r.href.replace("/shop/orders/", "o:").replace("/shop/archive/", "a:"), text: `#${r.number} ${r.name} · ${r.customer} · ${r.archived ? r.label : r.status}${r.due ? ` · due ${r.due}` : ""} · total ${r.total}${r.balance > 0.004 ? ` · owes ${r.balance}` : ""}` })), ...custs.slice(0, 8).map((c) => ({ ref: `c:${c.id}`, text: `${c.company || c.name} · ${c.name} · ${c.email}` }))];
     let live = true;
@@ -223,7 +236,6 @@ function SearchInner() {
   const counts: Record<Kind, number> = { all: 0, customers: custs.length, orders: rows.length, jobs: jobs.length, artwork: art.length, messages: msgs.length, shipments: ships.length, projects: projs.length };
   counts.all = counts.customers + counts.orders + counts.jobs + counts.artwork + counts.messages + counts.shipments + counts.projects;
   const show = (k: Kind) => (kind === "all" || kind === k) && counts[k] > 0;
-  const shownRows = more ? rows : rows.slice(0, 25);
   const searching = loading || pending > 0;
 
   return (
@@ -267,31 +279,50 @@ function SearchInner() {
         </section>
       )}
 
-      {show("orders") && (
-        <section className="sx-sec">
-          <h3>Orders <span className="faint">{rows.length} · newest first · ours and Printavo&apos;s together</span></h3>
-          <div className="tbl-wrap">
-            <table className="tbl">
-              <thead><tr><th>#</th><th>Job</th><th>Customer</th><th>Status</th><th>Due</th><th className="r">Pcs</th><th className="r money-only">Total</th><th className="r money-only ol-bal">Balance</th></tr></thead>
-              <tbody>
-                {shownRows.map((r) => (
-                  <tr className="rl" key={r.key}>
-                    <td><RowLink href={r.href} /><span className="ordno">{r.number}</span> <span className="ol-tags"><span className={"tag " + (r.quote ? "q" : "i")}>{r.quote ? "Quote" : "Inv"}</span>{!r.quote && <PaidMark total={r.total} balance={r.balance} />}</span>{r.archived && <span className="ol-pv">Printavo</span>}</td>
-                    <td><div className="sx-job"><span className="sx-th">{thumbs[r.key] ? <img src={thumbs[r.key]} alt="" /> : null}</span><span>{r.name}{r.archived && <span className="aa-arch">Printavo</span>}</span></div></td>
-                    <td>{r.customer}</td>
-                    <td>{r.archived ? <span className="pv-dot" style={{ ["--sc" as string]: r.color }}>{r.label}</span> : <Pill status={r.status} pv={r.pv} />}</td>
-                    <td>{r.due ? <Due date={r.due} status={r.archived ? "completed" : r.status} /> : <span className="faint">No date</span>}</td>
-                    <td className="r">{r.pcs}</td>
-                    <td className="r money-only">{money(r.total)}</td>
-                    <td className="r money-only ol-bal"><span className={"bal" + (r.balance > 0.004 ? "" : " paid")}>{r.quote ? "" : r.balance > 0.004 ? money(r.balance) : "Paid"}</span></td>
-                  </tr>
+      {show("orders") && (() => {
+        // grouped so it reads at a glance (Nov 2, Nick: the results were "hard to read"): what's in the works (due soonest
+        // first), quotes, then finished and Printavo history; two lines each, the words searched for marked, the customer
+        // only when the results are from more than one
+        const words = t.split(/\s+/);
+        const many = new Set(rows.map((r) => r.customerId || r.customer)).size > 1;
+        const groups: { k: string; title: string; note: string; list: Row[]; first: number }[] = [
+          { k: "open", title: "In the works", note: "due soonest first", list: rows.filter((r) => !r.archived && !r.quote && r.status !== "completed").sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || b.number - a.number), first: 8 },
+          { k: "quotes", title: "Quotes", note: "newest first", list: rows.filter((r) => !r.archived && r.quote), first: 5 },
+          { k: "done", title: "Finished", note: "newest first", list: rows.filter((r) => !r.archived && !r.quote && r.status === "completed"), first: 5 },
+          { k: "pv", title: "Printavo history", note: "newest first", list: rows.filter((r) => r.archived), first: 5 },
+        ];
+        return groups.filter((g) => g.list.length).map((g) => {
+          const all = more || openGroups[g.k];
+          const list = all ? g.list : g.list.slice(0, g.first);
+          return (
+            <section className="sx-sec" key={g.k}>
+              <h3>{g.title} <span className="faint">{g.list.length} · {g.note}</span></h3>
+              <div className="sxr">
+                {list.map((r) => (
+                  <Link className="sxr-r" key={r.key} href={r.href}>
+                    {thumbs[r.key] ? <span className="sxr-th"><img src={thumbs[r.key]} alt="" /></span> : null}
+                    <span className="sxr-m">
+                      <span className="sxr-n"><Hl text={r.name} words={words} /></span>
+                      <span className="sxr-s">
+                        <span className="nowrap">#<Hl text={String(r.number)} words={words} /></span>
+                        {many && r.customer ? <span><Hl text={r.customer} words={words} /></span> : null}
+                        {r.pcs ? <span className="nowrap">{r.pcs} pcs</span> : null}
+                        {r.archived ? (r.day ? <span className="nowrap">{fmtDay(r.day)}</span> : null) : r.due ? <span className="nowrap">due <Due date={r.due} status={r.status} /></span> : <span className="nowrap">no date yet</span>}
+                      </span>
+                    </span>
+                    <span className="sxr-st">{r.archived ? <span className="pv-dot" style={{ ["--sc" as string]: r.color }}>{r.label}</span> : <Pill status={r.status} pv={r.pv} />}</span>
+                    <span className="sxr-a money-only">
+                      <b>{money(r.total)}</b>
+                      {!r.quote && <span className={r.balance > 0.004 ? "sxr-due" : "sxr-paid"}>{r.balance > 0.004 ? `${money(r.balance)} due` : "Paid"}</span>}
+                    </span>
+                  </Link>
                 ))}
-              </tbody>
-            </table>
-          </div>
-          {rows.length > 25 && !more && <button type="button" className="btn sm" style={{ marginTop: 8 }} onClick={() => setMore(true)}>Show all {rows.length}</button>}
-        </section>
-      )}
+                {!all && g.list.length > g.first && <button type="button" className="sxr-more" onClick={() => setOpenGroups((m) => ({ ...m, [g.k]: true }))}>Show {g.list.length - g.first} more</button>}
+              </div>
+            </section>
+          );
+        });
+      })()}
 
       {show("artwork") && (
         <section className="sx-sec">
