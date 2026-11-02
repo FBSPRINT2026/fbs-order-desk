@@ -17655,3 +17655,6 @@ html body .pr .pr-scr.pr-sup > .faint{flex:1 1 180px;min-width:0}
 /* statuses never wrap (the kit's rule; Nov 2 portal check: "Awaiting your approval" broke onto two lines in Orders) */
 .aa-tbl .aa-pill{white-space:nowrap;max-width:none}
 .st-old-h{font-size:15px;margin:22px 0 2px;font-family:var(--display);color:var(--ink)}
+/* a logo's small picture fits its box whatever its shape (Nov 2 portal check: a tall logo ran off the bottom of its
+   Artwork card): the box is one fixed cell, so the picture's max-height (a % of it) holds */
+.lp{grid-template-rows:minmax(0,1fr);grid-template-columns:minmax(0,1fr)}
