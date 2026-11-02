@@ -27,7 +27,7 @@ export type DashHeld = { id: string; href: string; number: number; name: string;
 const HOLD_KINDS: { label: string; keys: string[]; c: string; none: string }[] = [
   { label: "Needs payment", keys: ["hold_payment"], c: "var(--danger)", none: "Nothing waiting on a payment" },
   { label: "Waiting on you", keys: ["hold_customer"], c: "var(--warn)", none: "Nothing waiting on you" },
-  { label: "Art problem", keys: ["art_problem"], c: "#7F77DD", none: "No art problems" },
+  { label: "Art problem", keys: ["art_problem"], c: "var(--fbs-violet)", none: "No art problems" },
   { label: "Issue with goods", keys: ["goods_wrong"], c: "var(--ink-3)", none: "Nothing wrong with your goods" },
 ];
 
@@ -121,18 +121,15 @@ export default function PortalDash({ held = [], tracked = [], sent = [], draft, 
         <section className={"pdx-card pdx-hs" + (held.length ? " has" : "")}>
           <div className="pdx-h"><h2>On hold</h2>{held.length > 0 && <span className="pdx-hold-n">{held.length}</span>}</div>
           {held.length ? <>
-            {/* by why it's on hold, every kind always shown so the panel fills its column (Nov 2, Nick: "should always fill
-                that space… sections to it too, like needs payment, issue with goods") */}
-            {HOLD_KINDS.map((k) => { const xs = held.filter((x) => (HOLD_KINDS.some((y) => y.keys.includes(x.hold.key || "")) ? k.keys.includes(x.hold.key || "") : k.keys.includes("hold_customer"))); return (
-              <div key={k.label} className={"pdx-hs-sec" + (xs.length ? " has" : "")} style={{ ["--hk" as string]: k.c }}>
-                <div className="pdx-hs-st"><i aria-hidden />{k.label}<small>{xs.length}</small></div>
-                {xs.length ? <ul className="pdx-hs-list">{xs.map((x) => (
-                  <li key={x.id}><HoldJump className="pdx-hs-row"><b><span className="onum">#{x.number}</span>{x.name ? ` ${x.name}` : ""}</b><span>{x.hold.fixLabel}</span><i aria-hidden>›</i></HoldJump></li>
-                ))}</ul> : <div className="pdx-hs-none">✓ {k.none}</div>}
-              </div>
-            ); })}
+            {/* one line per held job (Nov 2, Nick: "the job numbers… large… the main line… no art problem or no issues… just
+                say… pay now, reply"): its number big, its name, and one button that says what to do */}
+            <ul className="pdx-hl">{held.map((x) => { const k = HOLD_KINDS.find((y) => y.keys.includes(x.hold.key || "")) || HOLD_KINDS[1]; return (
+              <li key={x.id} style={{ ["--hk" as string]: k.c }}>
+                <Link className="pdx-hl-job" href={x.href}><b className="onum">#{x.number}</b>{x.name && <span>{x.name}</span>}</Link>
+                <Link className="pdx-hl-do" href={x.hold.href} title={x.hold.title}>{x.hold.fixLabel}</Link>
+              </li>); })}</ul>
             <span className="pdx-hs-gap" />
-            <HoldJump className="pd-link pdx-hs-all">See why, in your jobs below</HoldJump>
+            <HoldJump className="pd-link pdx-hs-all">See why on your jobs</HoldJump>
           </> : <div className="pdx-hold-ok" role="status">
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <b>No orders on hold</b>

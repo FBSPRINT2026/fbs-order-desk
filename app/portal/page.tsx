@@ -287,7 +287,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const h = customerHold((o as Order & { flags?: unknown }).flags as never);
     if (!h) return null;
     const href = h.fix === "pay" ? link("/portal?area=payments") : h.fix === "art" ? msgLink(o.id) : h.fix === "goods" ? link(`/portal/orders/${o.id}#goods`) : msgLink(o.id);
-    return { key: h.key, title: h.title, reason: h.reason, href, fixLabel: h.fix === "pay" ? "Pay now" : h.fix === "art" ? "Send new art" : h.fix === "goods" ? "See the goods" : "Reply" };
+    return { key: h.key, title: h.title, reason: h.reason, href, fixLabel: h.fix === "pay" ? "Pay now" : h.fix === "art" ? "Send art" : h.fix === "goods" ? "Check goods" : "Reply" };
   };
   const jobs: PortalJob[] = jobOrders.map((o) => ({ ...jobOf(o), starred: starOf(o), hold: holdOf(o) })), pastJobs = recentDone.map(jobOf);
   const held = jobs.filter((j) => j.hold).map((j) => ({ id: j.id, href: j.href, number: j.number, name: j.nickname, hold: j.hold!, msgHref: msgLink(j.id) }));
