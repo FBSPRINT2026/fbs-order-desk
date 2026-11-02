@@ -7,7 +7,10 @@
  * person picks the one they mean in <ArtboardPrompt/>; that page alone becomes the file (still vector: a one-page PDF).
  * One page, a picture, or nowhere to ask (no prompt on the page): the file goes on as it is.
  */
-export type ArtboardAsk = { fileName: string; pages: string[]; /** said above the pictures (an EPS that only shows its first artboard) */ note?: string; resolve: (page: number | null) => void };
+export type ArtboardAsk = { fileName: string; pages: string[]; /** said above the pictures (an EPS that only shows its first artboard) */ note?: string; resolve: (page: number | null) => void } & AskWords;
+/** how the question is put where it's asked (a logo upload: "Which logo are you using?"; the Mockup Creator's Helper:
+ *  "Where are we starting?"), and whether each choice is an artboard (.ai) or a page (PDF) */
+export type AskWords = { title?: string; sub?: string; unit?: "Artboard" | "Page" };
 const listeners = new Set<(a: ArtboardAsk) => void>();
 export function onArtboard(f: (a: ArtboardAsk) => void) { listeners.add(f); return () => { listeners.delete(f); }; }
 
@@ -15,25 +18,27 @@ const isPdfLike = (f: File) => /pdf|illustrator|postscript/i.test(f.type) || /\.
 const isPs = (head: string) => head.startsWith("%!PS") || head.charCodeAt(0) === 0xc5; // an EPS (plain, or with a preview header)
 
 /** the file to save: the one artboard picked, or the file as it is. Throws "Upload canceled." when they close it. */
-export async function pickArtboard(file: File): Promise<File> {
+export async function pickArtboard(file: File, words: AskWords & { /** only real pages: no splitting art lying off the page */ pagesOnly?: boolean } = {}): Promise<File> {
+  const { pagesOnly, ...say } = words;
+  const unit = say.unit || (/\.pdf$/i.test(file.name) || /pdf/i.test(file.type) ? "Page" : "Artboard");
   if (!listeners.size || !isPdfLike(file)) return file;
   let pages: string[] = [];
   const buf = await file.arrayBuffer();
   const text = new TextDecoder("latin1").decode(new Uint8Array(buf));
   // how many artboards Illustrator says the document has (its XMP: xmpTPg:NPages)
   const boards = +(text.match(/<xmpTPg:NPages>\s*(\d+)\s*</)?.[1] || 0);
-  if (isPs(text.slice(0, 4))) return pickFromArt(file, text, boards);
+  if (isPs(text.slice(0, 4))) return pagesOnly ? file : pickFromArt(file, text, boards);
   try {
     const { pdfPicture, pdfPageCount } = await import("@/lib/printavoArt");
     const n = await pdfPageCount(buf.slice(0));
     // one page, but Illustrator says several artboards: the others may be art lying off the page
-    if (n < 2) return boards > 1 ? pickFromArt(file, buf, boards) : file;
+    if (n < 2) return boards > 1 && !pagesOnly ? pickFromArt(file, buf, boards) : file;
     for (let i = 1; i <= Math.min(n, 12); i++) {
       try { pages.push((await pdfPicture(buf.slice(0), 360, i)).toDataURL("image/png")); } catch { pages.push(""); }
     }
   } catch { return file; }
   if (pages.length < 2) return file;
-  const page = await new Promise<number | null>((resolve) => { listeners.forEach((f) => f({ fileName: file.name, pages, resolve })); });
+  const page = await new Promise<number | null>((resolve) => { listeners.forEach((f) => f({ fileName: file.name, pages, resolve, ...say, unit })); });
   pages = [];
   if (page == null) throw new Error("Upload canceled.");
   return onePage(file, buf, page);

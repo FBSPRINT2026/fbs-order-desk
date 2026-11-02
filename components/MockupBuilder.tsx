@@ -1,5 +1,6 @@
 "use client";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
+import { pickArtboard } from "@/lib/artboards";
 import BackLink from "@/components/BackLink";
 import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
@@ -2247,7 +2248,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (!f) { setHelper(error ? { name: "Dropped file", busy: "", rows: [], pms: [], inkOpts: [], err: error } : null); return; }
     void helperRead(f);
   }
-  async function helperRead(f: File) {
+  async function helperRead(f0: File) {
+    // a file with several pages or artboards (Nov 1, Nick: "where are we starting? Are we starting on this page? …this
+    // artboard? Like a little pop-up so that you can see it"): picked in the same pop-up as a logo upload's, and that page
+    // alone is read
+    let f = f0;
+    if (/\.(pdf|ai)$/i.test(f0.name) || /pdf|postscript|illustrator/i.test(f0.type)) {
+      try { f = await pickArtboard(f0, { title: "Where are we starting?", sub: "Pick the one to pull the art and the shirts from.", pagesOnly: true }); }
+      catch { return; }
+    }
     // a picture (a photo of the garment, a screenshot): the art is flattened into it, but the garments on it are read and
     // can be drawn (Oct 27, Nick: "you're gonna get a bunch of images")
     if (!portal && (/\.(jpe?g|png|webp)$/i.test(f.name) || /^image\/(jpeg|png|webp)$/i.test(f.type))) {
@@ -2262,7 +2271,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     }
     if (!/\.(pdf|ai)$/i.test(f.name) && !/pdf|postscript|illustrator/i.test(f.type)) { setHelper({ name: f.name, busy: "", rows: [], pms: [], inkOpts: [], err: "Use the PDF or Illustrator file (saved PDF-compatible). A picture (JPG, PNG) has the art flattened into the shirt." }); return; }
     setHelpOpen(true);
-    setHelper({ name: f.name, busy: "Reading the file…", rows: [], pms: [], inkOpts: [], file: f, keepFile: true });
+    setHelper({ name: f.name, busy: "Reading the file…", rows: [], pms: [], inkOpts: [], file: f0, keepFile: true }); // their whole file is kept, not just the page picked
     try {
       const buf = await f.arrayBuffer();
       const base = f.name.replace(/\.(pdf|ai)$/i, "").replace(/[ _-]*mock-?up$/i, "").replace(/_/g, " ");
