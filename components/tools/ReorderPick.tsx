@@ -64,8 +64,17 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
   const [dropOver, setDropOver] = useState(false), [offOld, setOffOld] = useState<Record<number, boolean>>({}), [addNew, setAddNew] = useState<Record<number, boolean>>({});
   const sizeFile = useRef<HTMLInputElement>(null);
   async function readSizes(fs: (File | Blob)[]) {
-    const f = fs[0]; if (!f) return;
-    const nm = (f as File).name || "Snip";
+    let f = fs[0]; if (!f) return;
+    let nm = (f as File).name || "Snip";
+    // an email dragged out of Outlook: its first PDF or picture attachment
+    if (/\.msg$/i.test(nm) || /ms-outlook/i.test(f.type)) {
+      try {
+        const { readMsg } = await import("@/lib/outlookMsg");
+        const a = readMsg(await f.arrayBuffer()).attachments.find((x) => /pdf|^image\//i.test(x.type) || /\.(pdf|png|jpe?g)$/i.test(x.name));
+        if (!a) { setErr("That email has no PDF or picture attached to read sizes from."); return; }
+        f = new File([a.data as BlobPart], a.name, { type: a.type || (/\.pdf$/i.test(a.name) ? "application/pdf" : "image/png") }); nm = a.name;
+      } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't read that email."); return; }
+    }
     setSizeMode("file"); setRead(null); setReadOk(false); setErr(""); setReadBusy(`Reading ${nm}…`);
     try {
       const images: { media_type: "image/jpeg"; data: string }[] = [];
@@ -243,7 +252,7 @@ export default function ReorderPick({ archivedId, onClose, onCreated }: { archiv
                 <b>{readBusy || "Drop or paste the S&S / SanMar confirmation, PO or size sheet"}</b>{!readBusy && <span>A PDF, a picture or a snip (Ctrl+V). You check the new sizes before anything changes.</span>}
               </button>
             )}
-            <input ref={sizeFile} type="file" hidden accept="application/pdf,.pdf,image/*" onChange={(e) => { void readSizes([...(e.target.files || [])]); e.target.value = ""; }} />
+            <input ref={sizeFile} type="file" hidden accept="application/pdf,.pdf,image/*,.msg" onChange={(e) => { void readSizes([...(e.target.files || [])]); e.target.value = ""; }} />
             {read && match && (
               <div className={"rop-read" + (readOk ? " ok" : "")}>
                 <div className="rop-read-h"><b data-notranslate>{read.source}</b><span className="faint">{read.pieces.toLocaleString("en-US")} pcs</span></div>

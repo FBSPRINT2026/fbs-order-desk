@@ -14,7 +14,7 @@ import { startListening } from "@/components/VoiceDraft";
  */
 type Pic = { media_type: "image/jpeg"; data: string; url: string };
 type Step = { label: string; state: "wait" | "doing" | "done" | "error" };
-type Msg = HelperMsg & { pics?: string[]; steps?: Step[]; undo?: boolean; error?: boolean };
+type Msg = HelperMsg & { pics?: string[]; steps?: Step[]; undo?: boolean; error?: boolean; /** shown instead of text (a dropped email's whole text is sent, its subject shown) */ show?: string };
 
 /** a PDF's first pages as pictures to send (an S&S / SanMar confirmation, a PO, a size sheet) */
 async function pdfPics(f: Blob): Promise<Pic[]> {
@@ -77,6 +77,26 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
   // nothing typed is sent straight away, and the helper says what it is and asks before changing anything
   async function addFiles(fs: (File | Blob)[]) {
     const out: Pic[] = [], names: string[] = [];
+    // an email dragged out of Outlook (a .msg; Nov 1, Nick: "drag in an email from Outlook… tell it like, hey, I read the
+    // email. What do you want me to do?"): its words and its attachments, sent straight away; it says what it sees and asks
+    const msgFile = fs.find((f) => /\.msg$/i.test((f as File).name || "") || /ms-outlook/i.test(f.type));
+    if (msgFile) {
+      try {
+        const { readMsg } = await import("@/lib/outlookMsg");
+        const m = readMsg(await msgFile.arrayBuffer());
+        const other: string[] = [];
+        for (const a of m.attachments.slice(0, 6)) {
+          const b = new Blob([a.data as BlobPart], { type: a.type || (/\.pdf$/i.test(a.name) ? "application/pdf" : "") });
+          if (/pdf/i.test(b.type) || /\.pdf$/i.test(a.name)) out.push(...(await pdfPics(b)).slice(0, 3));
+          else if (/^image\//.test(b.type) || /\.(png|jpe?g|gif|webp)$/i.test(a.name)) { if (a.data.length < 15_000 && /image0\d+|outlook|logo/i.test(a.name)) continue; const p = await shrink(b); if (p) out.push(p); }
+          else other.push(a.name);
+        }
+        const text = [`Dropped an email from Outlook.`, `From: ${m.from}${m.fromEmail ? ` <${m.fromEmail}>` : ""}`, m.to ? `To: ${m.to}` : "", m.cc ? `Cc: ${m.cc}` : "", `Subject: ${m.subject}`, "", m.body.slice(0, 5000),
+          m.attachments.length ? `\nAttachments: ${m.attachments.map((a) => a.name).join(", ")}${other.length ? ` (${other.join(", ")} can't be shown here)` : ""}` : "\nNo attachments."].filter((x) => x !== "").join("\n");
+        if (!busy) void send({ pics: out.slice(0, 6), message: text, label: `Dropped an email: ${m.subject || "(no subject)"}${m.attachments.length ? ` · ${m.attachments.length} attachment${m.attachments.length === 1 ? "" : "s"}` : ""}` });
+      } catch (e) { setMsgs((ms) => [...ms, { role: "ai", text: e instanceof Error ? e.message : "Couldn't read that email.", error: true }]); }
+      return;
+    }
     for (const f of fs.slice(0, 4)) {
       const nm = (f as File).name || "";
       if (/pdf/i.test(f.type) || /\.pdf$/i.test(nm)) { const ps = await pdfPics(f); if (ps.length) { out.push(...ps); names.push(nm || "PDF"); } }
@@ -89,7 +109,7 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
   const setLast = (fn: (m: Msg) => Msg) => setMsgs((ms) => ms.map((m, i) => (i === ms.length - 1 ? fn(m) : m)));
   const stepTo = (n: number, state: Step["state"] = "doing") => setLast((m) => ({ ...m, steps: m.steps?.map((s, i) => ({ ...s, state: i < n ? "done" : i === n ? state : "wait" })) }));
 
-  async function send(o?: { pics?: Pic[]; message?: string }) {
+  async function send(o?: { pics?: Pic[]; message?: string; /** what the bubble shows instead of the whole message (a dropped email) */ label?: string }) {
     micOff();
     const message = (o?.message ?? text).trim();
     const pics = o?.pics ?? pics0;
@@ -106,7 +126,7 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
       { label: "Making the changes", state: "wait" },
       { label: "Checking the totals", state: "wait" },
     ];
-    setMsgs((ms) => [...ms.map((m) => ({ ...m, undo: false })), { role: "staff", text: message, images: sent.length || undefined, pics: sent.map((p) => p.url) }, { role: "ai", text: "", steps }]);
+    setMsgs((ms) => [...ms.map((m) => ({ ...m, undo: false })), { role: "staff", text: message, show: o?.label, images: sent.length || undefined, pics: sent.map((p) => p.url) }, { role: "ai", text: "", steps }]);
     if (sent.length) lastPics.current = sent;
     setText(""); setPics([]); setBusy(true);
     const t = setTimeout(() => stepTo(1), sent.length ? 7000 : 3500);
@@ -156,12 +176,12 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
               <button type="button" className="qo-x oh-x" onClick={() => setOpen(false)} disabled={busy} aria-label="Close">×</button></div>
             <div className="oh-thread">
               {!msgs.length && <div className="oh-hint">
-                <button type="button" className="oh-drop" onClick={() => file.current?.click()}><b>Drop a PDF, a snip or a picture here</b><span>S&amp;S or SanMar confirmations, POs, size sheets: I&apos;ll ask before adding anything</span></button>
+                <button type="button" className="oh-drop" onClick={() => file.current?.click()}><b>Drop a PDF, a snip, a picture or an email from Outlook</b><span>S&amp;S or SanMar confirmations, POs, size sheets, their email: I&apos;ll say what I see and ask before adding anything</span></button>
                 Or talk, paste (Ctrl+V) or type what to do:
                 <ul>{["Fill in the sizes from this snip", "Make this order: here's what they want", "Make all the 2XLs $2 more and the 3XLs $2.50", "Set the 1717s to $14 each", "Add a $25 rush fee", "Change the red to cardinal"].map((x) => <li key={x}><button type="button" className="linkbtn" onClick={() => { setText(x); box.current?.focus(); }}>{x}</button></li>)}</ul>
               </div>}
               {msgs.map((m, i) => m.role === "staff" ? (
-                <div key={i} className="oh-me">{m.text}{m.pics?.length ? <div className="oh-pics">{m.pics.map((u, k) => <img key={k} src={u} alt="Snip" />)}</div> : null}</div>
+                <div key={i} className="oh-me">{m.show || m.text}{m.pics?.length ? <div className="oh-pics">{m.pics.map((u, k) => <img key={k} src={u} alt="Snip" />)}</div> : null}</div>
               ) : (
                 <div key={i} className={"oh-ai" + (m.error ? " err" : "")}>
                   {m.steps && !m.text && <ol className="qo-steps oh-steps">{m.steps.map((s, k) => <li key={k} className={s.state}><i aria-hidden>{s.state === "done" ? "✓" : s.state === "error" ? "!" : ""}</i><span>{s.label}</span></li>)}</ol>}
@@ -179,7 +199,7 @@ export default function OrderHelper({ orderId, snapshot, apply, undo, onChat, on
             <div className="oh-box">
               <textarea ref={box} rows={2} value={text} placeholder="Tell me what to do, or paste a snip…" aria-label="Tell the helper what to do"
                 onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-              <input ref={file} type="file" accept="image/*,application/pdf,.pdf" multiple hidden onChange={(e) => { void addFiles([...(e.target.files || [])]); e.target.value = ""; }} />
+              <input ref={file} type="file" accept="image/*,application/pdf,.pdf,.msg" multiple hidden onChange={(e) => { void addFiles([...(e.target.files || [])]); e.target.value = ""; }} />
               <button type="button" className="btn icon ghost" title="Add a PDF or a picture" aria-label="Add a PDF or a picture" onClick={() => file.current?.click()}>📎</button>
               <button type="button" className={"btn icon oh-mic" + (mic.on ? " on" : "")} title={mic.on ? "Stop listening" : "Talk: tap, say what to do, tap again"} aria-label={mic.on ? "Stop listening" : "Talk"} aria-pressed={mic.on} onClick={() => (mic.on ? micOff() : micOn())}>
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>
