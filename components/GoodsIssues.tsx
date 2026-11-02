@@ -24,10 +24,15 @@ export default function GoodsIssues({ as, customerId, href }: { /** the customer
   const list = d.issues;
   const live = list.filter((i) => !i.closed_at);
   // always there: nothing wrong says so (Nov 2, Nick: "the issues box always there… no issues, all good to go right now")
+  // the same box and header whether there's anything or not (Nov 2, Nick: "that no issues floats… the header… stays
+  // there… say, all good, no issues")
   if (!list.length) return (
-    <section className="gis gis-none" aria-label="Goods issues">
-      <span className="gis-ok" aria-hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg></span>
-      <b>No issues</b><span className="gis-sum">All good to go right now. Anything short, damaged or stuck in shipping shows up here.</span>
+    <section className="gis gis-clear" aria-label="Goods issues">
+      <div className="gis-h"><b>Issues</b><span className="gis-sum">All good · no issues</span></div>
+      <div className="gis-clear-b">
+        <span className="gis-ok" aria-hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10" /></svg></span>
+        <span>Nothing short, damaged or stuck in shipping right now. Anything that comes up shows here.</span>
+      </div>
     </section>
   );
   const needYou = live.filter((i) => i.owner === "customer").length, ours = live.length - needYou;
@@ -85,7 +90,7 @@ function Row({ i, d, portal, as, open, onToggle, onDone, href }: { i: GoodsIssue
         {i.kind === "tracking"
           ? <p className="gis-p">{i.detail}{i.tracking ? <> · <a href={trackingUrl("", i.tracking)} target="_blank" rel="noreferrer">See the tracking</a></> : null}</p>
           : <ul className="gis-items">{i.items.map((it, k) => { const x = itemLine(it); return <li key={k}><span className="gis-q">{x.head}</span><span className="gis-it" data-notranslate>{x.what}</span>{x.detail ? <span className="gis-dt">{x.detail}</span> : null}</li>; })}</ul>}
-        <ol className="gis-steps" aria-label="Where it is">{steps.map((s0, k) => <li key={s0.k} className={k < at ? "done" : k === at ? "on" : ""}>{k < at ? "✓ " : k === at ? "● " : "○ "}{s0.label}</li>)}</ol>
+        <ol className="gis-steps" aria-label="Where it is">{steps.map((s0, k) => <li key={s0.k} className={k < at ? "done" : k === at ? "on" : ""}>{s0.label}</li>)}</ol>
         <div className="gis-acts">
           {(portal ? theirs && i.kind !== "tracking" : i.kind !== "tracking") && <button type="button" className={"btn sm" + (i.status === "open" ? " primary" : "")} onClick={onToggle} aria-expanded={open}>{open ? "Hide the email" : `Write the email to ${sup}`}</button>}
           {(i.photoUrls || []).length > 0 && <a className="btn sm" href={(i.photoUrls || [])[0]} target="_blank" rel="noreferrer">See photos ({(i.photoUrls || []).length})</a>}

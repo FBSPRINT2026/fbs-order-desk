@@ -145,14 +145,15 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
 
   return (
     <div className="gdk">
-      {/* problems with their goods first (Nov 2, Nick: "something at the top that says issues") */}
-      <GoodsIssues as={as} />
       <div className="stats gdk-stats">
         <button type="button" className="stat" onClick={() => goTo("way")}><span className="k">On the way</span><span className="v">{boxesOf(onWayBoxes)}</span><small>{onWay.length ? "Tracked for you" : "Nothing in transit"}</small></button>
         <button type="button" className="stat" onClick={() => goTo("here")}><span className="k">Arrived this week</span><span className="v">{boxesOf(hereWeek)}</span><small>Checked in at FBS</small></button>
         <button type="button" className="stat" onClick={() => goTo("info")}><span className="k">Orders waiting on goods</span><span className="v">{waiting.length}</span><small>{waiting.filter((r) => r.here > 0).length ? `${waiting.filter((r) => r.here > 0).length} partly here` : "None partly here"}</small></button>
         <button type="button" className="stat" onClick={() => goTo("nl")}><span className="k">Shipments not linked</span><span className="v">{notLinked}</span><small>{notLinked ? "to put on an order" : "Everything's on an order"}</small></button>
       </div>
+      {/* the numbers first, then Issues, always there with the same header (Nov 2, Nick: "flop it… on the way… right
+          underneath goods, then issues would drop down right below it") */}
+      <GoodsIssues as={as} />
 
       <div className="aa-card gdk-list">
         <div className="toolbar gdk-bar">
