@@ -1,4 +1,5 @@
 "use client";
+import { garmentFor as catalogGarment } from "@/lib/garmentMatch";
 import { sameColorAs } from "@/lib/colorMatch";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
 import { askPage } from "@/lib/artboards";
@@ -549,12 +550,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [lookingUp, setLookingUp] = useState("");
   const tried = useRef(new Set<string>());
   /** `quiet`: looked up on its own (a style on the order), so a miss just leaves the plain color, with no message */
-  async function lookupStyle(style: string, styleID?: number, supplier?: string, quiet = false): Promise<Garment | null> {
+  async function lookupStyle(style: string, styleID?: number, supplier?: string, quiet = false, brand = ""): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
     if (!key) return null;
     setLookingUp(key);
     try {
-      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${bySupplierStyle(supplier) ? `&supplier=${supplier}` : ""}`);
+      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${bySupplierStyle(supplier) ? `&supplier=${supplier}` : ""}${brand.trim() ? `&brand=${encodeURIComponent(brand.trim())}` : ""}`);
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.garment) { if (!quiet) setMsg(r.status === 404 ? j.error || `Couldn't find ${key} at the suppliers.` : `Couldn't look up ${key} right now. Try again in a minute.`); return null; }
       const g = j.garment as Garment;
@@ -1208,8 +1209,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const garmentFor = (l: Line) => {
     // "Gildan 64000" on an order: the style is the number (lib/ai/normalize.ts bareStyle)
     const st = bareStyle(l.style, l.brand).style.toLowerCase();
-    return catalog.find((g) => g.style.toLowerCase() === st && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()))
-      || catalog.find((g) => g.style.toLowerCase() === st);
+    // a line naming its brand takes only that brand's garment (Rabbit Skins 3400 is not Colortone 3400: lib/garmentMatch.ts)
+    return catalogGarment(catalog, st, l.brand);
   };
 
   // links for uploaded garment photos (signed for a week, asked for whenever a line has new ones)
@@ -1229,10 +1230,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     if (logoOnly || (!catalog.length && !orderId)) return;
     lines.forEach((l) => {
       const st = bareStyle(l.style, l.brand).style;
-      if (l.own || !st || garmentFor(l) || tried.current.has(st.toUpperCase())) return;
-      tried.current.add(st.toUpperCase());
+      const tk = `${st.toUpperCase()}|${(l.brand || "").toLowerCase()}`;
+      if (l.own || !st || garmentFor(l) || tried.current.has(tk)) return;
+      tried.current.add(tk);
       // SanMar's brands (Port Authority, Sport-Tek, District…) go straight to SanMar
-      if (orderId) void lookupStyle(st, undefined, /port authority|port & company|sport-?tek|district|ogio|cornerstone|red kap|eddie bauer|new era|travis ?mathew|mercer|nike/i.test(l.brand || "") ? "sanmar" : undefined, true);
+      if (orderId) void lookupStyle(st, undefined, /port authority|port & company|sport-?tek|district|ogio|cornerstone|red kap|eddie bauer|new era|travis ?mathew|mercer|nike/i.test(l.brand || "") ? "sanmar" : undefined, true, l.brand || "");
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, catalog]);

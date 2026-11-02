@@ -13,7 +13,8 @@ import { allRows } from "@/lib/readAll";
  * "Bella + Canvas" = "BELLA+CANVAS", "Next Level Apparel" = "Next Level").
  */
 export type Sup = "ss" | "sm" | "os";
-export const brandKey = (b: string) => String(b || "").toLowerCase().replace(/&|\+|\band\b/g, " ").replace(/\b(company|co|apparel|inc|brand|brands|usa)\b/g, " ").replace(/[^a-z0-9]/g, "");
+import { brandKey } from "@/lib/garmentMatch";
+export { brandKey };
 
 let memo: { at: number; ss: Set<string>; sm: Set<string>; os: Set<string> } | null = null;
 

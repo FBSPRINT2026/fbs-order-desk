@@ -1,4 +1,5 @@
 "use client";
+import { garmentFor } from "@/lib/garmentMatch";
 import NoCharge from "@/components/NoCharge";
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
@@ -58,7 +59,7 @@ type Props = {
   onDuplicate: () => void;
   onRemove: () => void;
   onSaveToCatalog: (l: GLine) => void;
-  onLookup?: (style: string, styleID?: number, supplier?: string) => Promise<Garment | null>;
+  onLookup?: (style: string, styleID?: number, supplier?: string, brand?: string) => Promise<Garment | null>;
   designs?: Design[];
   onMockup?: () => void;
   /** Add logo: the Mockup Creator with only the close-ups (Oct 27) */ onLogo?: () => void;
@@ -129,7 +130,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // only by its style number (CT89241804) is marked from the catalog's name for it ("Carhartt Canvas Backpack")
   const specFromCatalog = g.imprints.some((d) => d.method === "embroidery") ? g.lines.map((l, i) => ({ l, i })).filter(({ l }) => {
     if (l.specialty != null || isSpecialtyItem(l) || !(l.style || "").trim()) return false;
-    const gar = catalog.find((x) => x.style.toLowerCase() === l.style.trim().toLowerCase());
+    const gar = garmentFor(catalog, l.style, l.brand);
     return !!gar && specialtyText(gar.description || "");
   }).map((x) => x.i) : [];
   // a print sewn at a spot none of the group's garments use (Nov 1, #40345: "Cuff" from the beanies' mockup on two
@@ -208,7 +209,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const st = style.trim().toUpperCase();
     const at = fix ?? g.lines.length;
     if (fix == null) update((x) => { x.lines.push({ ...newGLine(), color: adult.color }); });
-    const hit = findStyle(st, brand) || findStyle(st) || (onLookup ? await onLookup(st, undefined, bySupplierStyle(supplier) ? supplier : undefined) : null);
+    const hit = findStyle(st, brand) || (brand ? undefined : findStyle(st)) || (onLookup ? await onLookup(st, undefined, bySupplierStyle(supplier) ? supplier : undefined, brand) : null);
     onStyle(at, hit?.style || st, hit || undefined);
     if (learn) void fetch("/api/garments/youth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ adult: adult.style, adultBrand: adult.brand, youth: hit?.style || st, youthBrand: hit?.brand || brand, source: learn }) }).catch(() => null);
     setYth(null);
@@ -249,7 +250,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const at = g.lines.length;
     update((x) => { x.lines.push({ ...newGLine(), color: adult.color }); });
     setCmp(null);
-    const hit = findStyle(st, brand) || findStyle(st) || (onLookup ? await onLookup(st, undefined, "sanmar") : null);
+    const hit = findStyle(st, brand) || (brand ? undefined : findStyle(st)) || (onLookup ? await onLookup(st, undefined, "sanmar", brand) : null);
     onStyle(at, hit?.style || st, hit || undefined);
     if (remember) void fetch("/api/garments/youth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ adult: adult.style, adultBrand: adult.brand, youth: hit?.style || st, youthBrand: hit?.brand || brand, source: "staff" }) }).catch(() => null);
     setYthNote({ text: `${kind} for ${adult.style}: ${hit?.style || st}${hit?.description ? ` · ${hit.description}` : ""}${remember ? " (remembered for next time)" : ""}`, li, youthLi: kind === "Youth" ? at : -1, adult: adult.style, brand: adult.brand || "" });
@@ -279,7 +280,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     if (!l) return "#9aa1ab";
     if (lineHex(l)) return lineHex(l); // as the Mockup Creator showed it (picked, or drawn): lib/mockup.ts lineHex
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const gar = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase());
+    const gar = garmentFor(catalog, l.style, l.brand);
     const ci = gar?.color_images?.[l.color] || Object.entries(gar?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
     return garmentHex(ci?.hex, l.color) || "#9aa1ab";
   })();
@@ -288,7 +289,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const l = g.lines.find((x) => key(x.color) === key(color));
     if (lineHex(l)) return lineHex(l);
-    const gar = l ? catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase()) : undefined;
+    const gar = l ? garmentFor(catalog, l.style, l.brand) : undefined;
     const ci = gar?.color_images?.[color] || Object.entries(gar?.color_images || {}).find(([k]) => key(k) === key(color))?.[1];
     return garmentHex(ci?.hex, color) || guessHex(color) || "#9aa1ab";
   };
@@ -465,7 +466,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // exact style match; if the same number exists under several brands, only the brand given (or none) counts
   const findStyle = (style: string, brand?: string) => {
     const hits = catalog.filter((x) => x.style.toLowerCase() === style.trim().toLowerCase());
-    if (brand) return hits.find((x) => x.brand.toLowerCase() === brand.toLowerCase());
+    if (brand) return garmentFor(hits, style, brand);
     return hits.length === 1 ? hits[0] : undefined;
   };
 

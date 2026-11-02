@@ -11,7 +11,7 @@ export type GroupRef = number | string;
 export type HelperAction =
   | { kind: "set_sizes"; group: number; line: number; sizes: Record<string, number>; mode?: "replace" | "add" }
   | { kind: "add_line"; group: GroupRef; style: string; brand?: string; color: string; sizes: Record<string, number> }
-  | { kind: "set_line"; group: number; line: number; style?: string; color?: string }
+  | { kind: "set_line"; group: number; line: number; style?: string; brand?: string; color?: string }
   | { kind: "remove_line"; group: number; line: number }
   | { kind: "set_imprint"; group: GroupRef; location: string; method?: string; colors?: number; inks?: string; size?: string }
   /** a 2XL+ charge each, typed by hand ("make all the 2XLs $2"); null = back to automatic. group/line left out = every line */

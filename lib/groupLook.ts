@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { garmentFor } from "@/lib/garmentMatch";
 import { designOther, headwearOf, SIZES, type Design, type Garment, type Group, type Imprint } from "@/lib/pricing";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, setHeadwearSpots, spotFor } from "@/lib/mockup";
 import { bodyAt, bodyOf, smallestOrdered, sortSizes } from "@/lib/garmentBody";
@@ -9,7 +10,7 @@ import { bodyAt, bodyOf, smallestOrdered, sortSizes } from "@/lib/garmentBody";
  * smallest size ordered (one screen prints every size).
  */
 export type MaxArea = { w: number; h: number; on: string } | null;
-type Cat = Pick<Garment, "style" | "sizes" | "specs" | "color_images">;
+type Cat = Pick<Garment, "style" | "brand" | "sizes" | "specs" | "color_images">;
 
 export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
   // custom spots (a typed location with its own area) sized like any other (lib/mockup.ts registerAreas)
@@ -18,11 +19,12 @@ export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
   const styles = [...new Set(groups.flatMap((g) => g.lines.map((l) => (l.style || "").trim()).filter(Boolean)))];
   const [{ data: dz }, { data: gz }] = await Promise.all([
     dIds.length ? admin.from("designs").select("*").in("id", dIds) : Promise.resolve({ data: [] }),
-    styles.length ? admin.from("garments").select("style, sizes, specs, color_images").in("style", styles) : Promise.resolve({ data: [] }),
+    styles.length ? admin.from("garments").select("style, brand, sizes, specs, color_images").in("style", styles) : Promise.resolve({ data: [] }),
   ]);
   const designs: Record<string, Design> = Object.fromEntries(((dz || []) as Design[]).map((d) => [d.id, d]));
   const cat = (gz || []) as Cat[];
-  const garOf = (style: string) => cat.find((x) => x.style.toLowerCase() === (style || "").trim().toLowerCase()) || null;
+  // the line's own brand's garment (lib/garmentMatch.ts: several brands share a style number)
+  const garOf = (style: string, brand?: string) => garmentFor(cat, style, brand) || null;
   const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   // the shirt behind a group's art: the color most of its pieces are (mainLine), as the Mockup Creator drew it (lineHex),
   // else the catalog's color for it, else its name's (Oct 31, #40315: the first garment's unknown "Marine" made a
@@ -30,20 +32,20 @@ export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
   const hexes = groups.map((g) => {
     const l = mainLine(g.lines.filter((x) => (x.style || "").trim() || (x.color || "").trim())) || g.lines[0];
     if (!l) return "#9aa1ab";
-    const ci = Object.entries(garOf(l.style)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
+    const ci = Object.entries(garOf(l.style, l.brand)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
     return lineHex(l) || garmentHex(ci?.hex, l.color) || "#9aa1ab";
   });
   /** every garment color's own shirt color (lower-case letters and digits → hex): a color change's close-ups (Oct 26) */
   const colorHexes: Record<string, string> = {};
   for (const g of groups) for (const l of g.lines) {
     if (!l.color || colorHexes[key(l.color)]) continue;
-    const ci = Object.entries(garOf(l.style)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
+    const ci = Object.entries(garOf(l.style, l.brand)?.color_images || {}).find(([k]) => key(k) === key(l.color))?.[1];
     const h = lineHex(l) || garmentHex(ci?.hex, l.color);
     if (h) colorHexes[key(l.color)] = h;
   }
   const maxes: MaxArea[][] = groups.map((g) => {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
-    const gar = l ? garOf(l.style) : null;
+    const gar = l ? garOf(l.style, l.brand) : null;
     const ordered = [...new Set(g.lines.flatMap((x) => SIZES.filter((z) => x.sizes?.[z])))] as string[];
     const run = sortSizes(ordered);
     const shown = g.mockupSize && run.includes(g.mockupSize) ? bodyAt(gar, g.mockupSize) : bodyOf(gar, run);
@@ -64,7 +66,7 @@ export async function loadGroupLook(admin: SupabaseClient, groups: Group[]) {
     const l = g.lines.find((x) => (x.style || "").trim()) || g.lines[0];
     const ordered = [...new Set(g.lines.flatMap((x) => SIZES.filter((z) => x.sizes?.[z])))] as string[];
     const run = sortSizes(ordered);
-    return g.mockupSize && run.includes(g.mockupSize) ? g.mockupSize : bodyOf(l ? garOf(l.style) : null, run).size;
+    return g.mockupSize && run.includes(g.mockupSize) ? g.mockupSize : bodyOf(l ? garOf(l.style, l.brand) : null, run).size;
   });
   return { designs, hexes, maxes, shownSizes, colorHexes };
 }

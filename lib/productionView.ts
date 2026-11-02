@@ -1,4 +1,5 @@
 import "server-only";
+import { garmentFor } from "@/lib/garmentMatch";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { orderGroups, type Imprint, type Order } from "@/lib/pricing";
 import { oldJobText } from "@/lib/ai/oldJobNotes";
@@ -91,11 +92,11 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
   // each shirt color's real color (the supplier's swatch), for the art "as it will print on" it (Oct 24, Nick on #40166:
   // "it doesn't even have the background color right": Sandstone showed as gray)
   const pvStyles = [...new Set(groups.flatMap((g) => g.lines.map((l) => (l.style || "").trim()).filter(Boolean)))];
-  const { data: pvGar } = pvStyles.length ? await admin.from("garments").select("style, color_images").in("style", pvStyles) : { data: [] as { style: string; color_images: Record<string, { hex?: string }> | null }[] };
+  const { data: pvGar } = pvStyles.length ? await admin.from("garments").select("style, brand, color_images").in("style", pvStyles) : { data: [] as { style: string; color_images: Record<string, { hex?: string }> | null }[] };
   const ckey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  const shirtHexOf = (color: string, styles: string[]) => {
+  const shirtHexOf = (color: string, styles: { style: string; brand?: string }[]) => {
     for (const st of styles) {
-      const g = (pvGar || []).find((x) => x.style.toLowerCase() === st.toLowerCase());
+      const g = garmentFor((pvGar || []) as { style: string; brand?: string | null; color_images: Record<string, { hex?: string }> }[], st.style, st.brand);
       const ci = Object.entries((g?.color_images || {}) as Record<string, { hex?: string }>).find(([k]) => ckey(k) === ckey(color))?.[1];
       const hx = garmentHex(ci?.hex, color);
       if (hx && hx !== "#9aa1ab") return hx;
@@ -216,7 +217,7 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       qty: groups.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, b) => a + (+b || 0), 0), 0), 0), reorderOf: pv ? `Printavo #${pv[1]}` : "", notes: String(order.notes || "") },
     groups: groups.map((g) => ({
       id: g.id, name: g.name || "",
-      shirts: [...new Map(g.lines.filter((l) => (l.color || "").trim()).map((l) => [l.color.trim().toLowerCase(), l.color.trim()])).values()].map((c) => ({ color: c, styles: [...new Set(g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase()).map((l) => l.style).filter(Boolean))].join(", "), hex: shirtHexOf(c, [...new Set(g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase()).map((l) => (l.style || "").trim()).filter(Boolean))]) })),
+      shirts: [...new Map(g.lines.filter((l) => (l.color || "").trim()).map((l) => [l.color.trim().toLowerCase(), l.color.trim()])).values()].map((c) => ({ color: c, styles: [...new Set(g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase()).map((l) => l.style).filter(Boolean))].join(", "), hex: shirtHexOf(c, g.lines.filter((l) => (l.color || "").trim().toLowerCase() === c.toLowerCase() && (l.style || "").trim()).map((l) => ({ style: l.style.trim(), brand: l.brand }))) })),
       lines: g.lines.map((l) => [l.brand, l.style, l.color].filter(Boolean).join(" ") + ` · ${Object.entries(l.sizes || {}).filter(([, q]) => +q > 0).map(([z, q]) => `${z} ${q}`).join(" ")}`),
       mockups: (mks || []).filter((m) => m.group_id === g.id || (!m.group_id && groups.length === 1)).map((m) => ({ title: String(m.title || ""), full: signed.get(m.file_path) || "", thumb: signed.get(String(m.file_path).replace(/\.png$/, "-thumb.png")) || signed.get(m.file_path) || "" })),
     })),

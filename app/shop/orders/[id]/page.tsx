@@ -77,6 +77,7 @@ import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 import { mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
 import type { DgzSewout } from "@/lib/digitizeStatus";
+import { garmentFor, sameBrand } from "@/lib/garmentMatch";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -141,12 +142,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [designUrls, setDesignUrls] = useState<Record<string, string>>({});
   const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({});
   // Style not in the catalog yet: pull it from S&S (saves it to the catalog too)
-  async function lookupStyle(style: string, styleID?: number, supplier?: string): Promise<Garment | null> {
+  async function lookupStyle(style: string, styleID?: number, supplier?: string, brand?: string): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
     if (!key || lookingUp === key) return null;
     setLookingUp(key);
     try {
-      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${bySupplierStyle(supplier) ? `&supplier=${supplier}` : ""}`);
+      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${bySupplierStyle(supplier) ? `&supplier=${supplier}` : ""}${brand?.trim() ? `&brand=${encodeURIComponent(brand.trim())}` : ""}`);
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.garment) { say(j.error || "Couldn't find that style at S&S or SanMar."); return null; }
       const g = j.garment as Garment;
@@ -472,7 +473,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     if (!o || o.status !== "request" || costsFilled.current || !catalog.length) return;
     costsFilled.current = true;
-    const find = (l: GLine) => catalog.find((g) => g.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || g.brand.toLowerCase() === l.brand.toLowerCase()));
+    const find = (l: GLine) => garmentFor(catalog, l.style, l.brand);
     const missing = (o.groups || []).some((g) => g.lines.some((l) => (l.cost === "" || l.cost === null || l.cost === undefined) && find(l)));
     if (missing) patch((d) => { d.groups.forEach((g) => g.lines.forEach((l) => { const gm = find(l); if ((l.cost === "" || l.cost == null) && gm) {
       l.cost = colorCosts(gm, l.color).base || gm.cost;
@@ -488,7 +489,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o || o.price_type !== "wholesale" || !catalog.length || ["production", "ready", "completed"].includes(o.status)) return;
     const want = o.groups.map((g) => {
       const hits = g.lines.filter((l) => (l.style || l.garment || "").trim()).map((l) => {
-        const cat = catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase());
+        const cat = garmentFor(catalog, l.style, l.brand);
         return specialtyGarment({ style: l.style, brand: l.brand, garment: `${l.garment || ""} ${cat?.description || ""}`, color: l.color, fabric: cat?.fabric, supplier: cat?.supplier || undefined });
       });
       const yes = hits.filter((h) => h.yes);
@@ -523,7 +524,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     art: g.imprints.map((x) => designs.find((y) => y.id === x.design_id)?.name || "").join(" "),
     garments: g.lines.map((l) => lineText(l)).join(" "), lineGarments: Object.fromEntries(g.lines.map((l) => [l.id, lineText(l)])),
     designs: Object.fromEntries(designs.map((y) => [y.id, { brand: (y as { brand_id?: string | null }).brand_id || null, live: !(y as { archived_at?: string | null }).archived_at }])) });
-  const lineText = (l: Group["lines"][number]) => [l.style, l.brand, l.garment, catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase())?.description || ""].join(" ");
+  const lineText = (l: Group["lines"][number]) => [l.style, l.brand, l.garment, garmentFor(catalog, l.style, l.brand)?.description || ""].join(" ");
   // with Program on, each line gets the card's price (GLine.prog, saved as the line's price so every total agrees);
   // a price typed by hand wins and stays; off, or not covered (under the minimum, a print the card doesn't have), the
   // line goes back to normal pricing. Not once the job is in production.
@@ -532,7 +533,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     // in production the prices stay as they are, except what's below (frozen)
     const frozen = ["production", "ready", "completed"].includes(o.status);
     const on = !!o.use_program && !!prog;
-    const findGm = (l: GLine) => catalog.find((c) => c.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || c.brand.toLowerCase() === l.brand.toLowerCase()));
+    const findGm = (l: GLine) => garmentFor(catalog, l.style, l.brand);
     // flat: a design's own price. Finishing on the job is added on top of it (Oct 21, Nick: Mewjira's tagging is $1 a
     // piece on top of $5.50) unless the card says designs are all-in (Nine18: then only extras the program prices itself,
     // like personalization $5)
@@ -708,7 +709,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   /** Groups the AI read from an email: fill blank costs and details from the catalog, then add or replace. */
   function applyProposal(groups: Group[], p: { nickname?: string; due_date?: string | null; notes?: string; po_number?: string }, mode: "replace" | "add") {
-    const find = (l: GLine) => { const hits = catalog.filter((g) => g.style.toLowerCase() === (l.style || "").trim().toLowerCase()); return (l.brand ? hits.find((g) => g.brand.toLowerCase() === l.brand.toLowerCase()) : undefined) || (hits.length === 1 ? hits[0] : undefined); };
+    // a line naming its brand takes only that brand's garment; a bare number, the catalog's only one (lib/garmentMatch.ts)
+    const find = (l: GLine) => (l.brand?.trim() ? garmentFor(catalog, l.style, l.brand) : (catalog.filter((g) => g.style.toLowerCase() === (l.style || "").trim().toLowerCase()).length === 1 ? garmentFor(catalog, l.style) : undefined));
     groups.forEach((g) => g.lines.forEach((l) => {
       const gm = find(l);
       if (!gm) return;
@@ -744,7 +746,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       groups: o.groups.map((g, gi) => ({
         name: g.name || "",
         lines: g.lines.map((l, li) => {
-          const gm = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || x.brand.toLowerCase() === l.brand.toLowerCase()));
+          const gm = garmentFor(catalog, l.style, l.brand);
           const lc = calc.groups[gi]?.lines[li];
           const sizeCharges: Record<string, number> = {};
           for (const z of big) if ((l.sizeRun || []).includes(z) || l.sizes?.[z as Size]) {
@@ -764,14 +766,17 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const done: string[] = [];
     const cleanSizes = (sz: Record<string, unknown> | undefined) => Object.fromEntries(Object.entries(sz || {}).filter(([k, v]) => (SIZES as readonly string[]).includes(k) && Number.isFinite(+(v as number)) && +(v as number) > 0).map(([k, v]) => [k, Math.round(+(v as number))])) as GLine["sizes"];
     const sizesText = (sz: GLine["sizes"]) => Object.entries(sz).map(([k, v]) => `${k} ${v}`).join(", ") || "no sizes";
-    // styles the order doesn't know yet: pulled from S&S / SanMar first
-    const found = new Map<string, Garment>();
-    for (const st of [...new Set(acts.flatMap((a) => ((a.kind === "add_line" || a.kind === "set_line") && a.style ? [String(a.style).trim().toUpperCase()] : [])))]) {
-      const hit = catalog.find((g) => g.style.toUpperCase() === st) || (await lookupStyle(st).catch(() => null));
-      if (hit) found.set(st, hit); else done.push(`${st}: couldn't find that style at S&S or SanMar (added without catalog details)`);
+    // styles the order doesn't know yet: pulled from S&S / SanMar first, by brand and number (lib/garmentMatch.ts: Rabbit
+    // Skins 3400 is not Colortone 3400)
+    const found: Garment[] = [];
+    const want = new Map<string, { st: string; br: string }>();
+    for (const a of acts) if ((a.kind === "add_line" || a.kind === "set_line") && a.style) { const st = String(a.style).trim().toUpperCase(), br = String(a.brand || "").trim(); want.set(`${st}|${br.toLowerCase()}`, { st, br }); }
+    for (const { st, br } of want.values()) {
+      const hit = garmentFor(catalog, st, br) || (await lookupStyle(st, undefined, undefined, br).catch(() => null));
+      if (hit && (!br || sameBrand(hit.brand, br))) found.push(hit); else done.push(`${br ? `${br} ` : ""}${st}: couldn't find that style at S&S or SanMar${hit ? ` (only ${hit.brand}'s ${st})` : ""}, added without catalog details`);
     }
     const fill = (l: GLine) => {
-      const gm = found.get(l.style.trim().toUpperCase()) || catalog.find((g) => g.style.toUpperCase() === l.style.trim().toUpperCase());
+      const gm = garmentFor(found, l.style, l.brand) || garmentFor(catalog, l.style, l.brand);
       if (!gm) return;
       l.brand = gm.brand; l.garment = gm.description;
       if (o.price_type !== "wholesale") l.cost = +colorCosts(gm, l.color).base || +gm.cost || "";
@@ -821,8 +826,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             const l = d.groups[a.group]?.lines[a.line]; if (!l) continue;
             const was = name(l);
             if (a.style) l.style = String(a.style).trim().toUpperCase();
+            if (a.brand != null && String(a.brand).trim()) l.brand = String(a.brand).trim();
             if (a.color != null) l.color = String(a.color).trim();
-            if (a.style || a.color) fill(l);
+            if (a.style || a.color || a.brand) fill(l);
             done.push(`${was} → ${name(l)}`);
           } else if (a.kind === "remove_line") {
             if (d.groups[a.group]?.lines[a.line]) { removals.push([a.group, a.line]); done.push(`Removed ${name(d.groups[a.group].lines[a.line])}`); }
@@ -1982,7 +1988,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <ShipQuote pieces={calc.qty} shipTo={o.ship_to || ""} settings={settings.ship} shipMethod={o.ship_method || ""} due={o.due_date} shipOn={o.production_date}
               garments={o.groups.flatMap((g) => g.lines.map((l) => {
                 // the supplier's weight for each size ordered (S&S unitWeight), when the catalog has it
-                const gm = catalog.find((x) => x.style.toLowerCase() === (l.style || "").trim().toLowerCase() && (!l.brand || x.brand.toLowerCase() === l.brand.toLowerCase()));
+                const gm = garmentFor(catalog, l.style, l.brand);
                 const w = gm?.specs?.weights;
                 const vals = w ? Object.values(w).filter((v) => v > 0) : [];
                 const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;

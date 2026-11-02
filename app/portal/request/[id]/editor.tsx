@@ -109,12 +109,12 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     if (keep) setRecover(keep);
   }, [initial.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function lookupStyle(style: string, styleID?: number, supplier?: string): Promise<Garment | null> {
+  async function lookupStyle(style: string, styleID?: number, supplier?: string, brand?: string): Promise<Garment | null> {
     const key = style.trim().toUpperCase();
     if (!key || lookingUp === key) return null;
     setLookingUp(key);
     try {
-      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${bySupplierStyle(supplier) ? `&supplier=${supplier}` : ""}`);
+      const r = await fetch(`/api/ss/lookup?${styleID ? `styleid=${styleID}` : `style=${encodeURIComponent(key)}`}${bySupplierStyle(supplier) ? `&supplier=${supplier}` : ""}${brand?.trim() ? `&brand=${encodeURIComponent(brand.trim())}` : ""}`);
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.garment) { setErr(j.error || "Couldn't find that style."); return null; }
       const g = j.garment as Garment;
