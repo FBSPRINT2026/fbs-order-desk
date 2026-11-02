@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isSupplierPaperwork, looksLikePaperwork } from "@/lib/paperwork";
 import { calcOrder, mergeSettings, newGLine, orderGroups, type GLine, type Group, type Order } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,20 @@ export async function GET(req: Request) {
   ]);
   const files = ((af || []) as { id: string; name: string; file_path: string; file_type: string | null; category: string | null; note: string | null; guess: string | null }[]).map((f) => ({
     key: f.id, name: f.name, path: f.file_path, thumb: /^image\//.test(f.file_type || "") || /\.(png|jpe?g|webp|gif)$/i.test(f.name) ? f.file_path : "", mime: f.file_type || "", where: "", group: 0,
-    guess: f.category || f.guess || "", why: f.note || "" }));
+    guess: f.category || (f.guess && f.guess !== "?" ? f.guess : ""), why: f.note || "" }));
+  // a file nobody labeled is read the way the Printavo reorder reads one (Nov 2, Nick: two S&S confirmations started as
+  // Production file): a PDF that reads like a supplier's order or a PO / size sheet is that, so it starts as Leave it off.
+  // What it read is kept as the file's guess, so the order's Production files show it too
+  const { pdfTextServer } = await import("@/lib/pdfTextServer");
+  for (const f of files) {
+    if (f.guess || !/\.pdf$/i.test(f.path)) continue;
+    const { data: blob } = await admin.storage.from("proofs").download(f.path).catch(() => ({ data: null }));
+    const text = blob && blob.size < 25_000_000 ? await pdfTextServer(new Uint8Array(await blob.arrayBuffer()), 2).catch(() => "") : "";
+    if (!looksLikePaperwork(text)) continue;
+    f.guess = isSupplierPaperwork(text) ? "supplier_order" : "order_sheet";
+    f.why = [f.why, isSupplierPaperwork(text) ? "Reads like a supplier's order for the blanks" : "Reads like paperwork (a PO or size sheet)"].filter(Boolean).join(" · ");
+    await admin.from("art_files").update({ guess: f.guess }).eq("id", f.key).or("guess.is.null,guess.eq.?");
+  }
   // our own customer is always "in the new system" for this
   return NextResponse.json({ job: { visual: String(o.number), nickname: o.nickname || "", date: String(o.created_at || "").slice(0, 10), qty: lines.reduce((a, l) => a + l.qty, 0), total: +o.total || 0 },
     customer: c ? { ...c, moved_at: c.moved_at || new Date().toISOString() } : null, lines, files, own: true,
