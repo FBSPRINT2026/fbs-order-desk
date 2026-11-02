@@ -137,6 +137,8 @@ function containRect(img: HTMLImageElement) {
 /** the AI picks each new photo's neckline from the pixel finder's lines (off until it beats the pixel finder on Nick's marked photos) */
 const NECK_AI = false;
 
+/** a supplier photo of a person wearing the garment, not laid flat (SanMar "_model_back", S&S "_om") */
+const ONMODEL = /(model|_om)[_.-]|onmodel/i;
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const im = new Image();
@@ -1287,7 +1289,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // SanMar names colors without spaces ("TrueRoyal" for True Royal): matched ignoring spaces and case
     const ci = g?.color_images?.[l.color] || Object.entries(g?.color_images || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1];
     // a bag with no back photo: its back looks like its front (same bag, other side), never a drawn tee
-    const p = ci ? (view === "front" ? ci.front : ci.back || (isBag(l) ? ci.front : "")) : "";
+    let p = ci ? (view === "front" ? ci.front : ci.back || (isBag(l) ? ci.front : "")) : "";
+    // a photo of a person wearing it (SanMar has only a model back for some colors: 6030 "Mystic"; Nov 1, Nick: "why
+    // on this comfort color shirt do you have this back… with the guy"): the same color's flat photo from the other
+    // supplier's listing ("Mystic Blue"), named the same or one name inside the other
+    if (p && ONMODEL.test(p) && g && l.color) {
+      const me = colorKey(l.color);
+      const flat = Object.entries(g.color_images || {}).find(([k, v]) => { const o = colorKey(k); const q = view === "front" ? v.front : v.back; return o !== me && !!q && !ONMODEL.test(q) && (o.startsWith(me) || me.startsWith(o)); });
+      const q = flat ? (view === "front" ? flat[1].front : flat[1].back) : "";
+      if (q) p = q;
+    }
     if (p) { const u = ssImg(p); return view === "back" ? leveled[u] || u : u; }
     // no photo of this color: the style's own photo dyed to it, once it's made (below), not a drawn tee
     const t = g && l.color ? tinted[`${g.style}|${colorKey(l.color)}|${view}`] : "";
