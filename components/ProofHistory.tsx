@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import FileThumb from "@/components/FileThumb";
 import { createClient } from "@/lib/supabase/client";
 import { fmtStamp } from "@/lib/format";
 import { restoreVersion } from "@/app/shop/proof-actions";
@@ -81,7 +82,7 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
               <div className="ph-pics">
                 {ps.map((r) => (
                   <a key={r.id} className="ph-pic" href={urls[r.file_path] || undefined} target="_blank" rel="noreferrer" title={`${r.title}: open full size`}>
-                    {r.file_type.startsWith("image/") && urls[r.file_path] ? <img src={urls[r.file_path]} alt="" /> : <span>{r.file_type.includes("pdf") ? "PDF" : "File"}</span>}
+                    {r.file_type.startsWith("image/") && urls[r.file_path] ? <img src={urls[r.file_path]} alt="" /> : <FileThumb name={r.file_path.split("/").pop() || "file"} url={urls[r.file_path]} mime={r.file_type} />}
                   </a>
                 ))}
               </div>

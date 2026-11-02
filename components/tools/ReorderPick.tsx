@@ -11,6 +11,7 @@ import SizeFitAsk, { applySizeFit, checkSizeFit, type FitRow } from "@/component
 import { QuickLook, type MailFile } from "@/components/MailFolders";
 import { dragFile } from "@/lib/dragFile";
 import { PROD_KINDS } from "@/lib/productionFileKinds";
+import FileThumb from "@/components/FileThumb";
 
 /**
  * Reorder of an old Printavo job, inside THE Create order tool (Nov 1, Nick: "when you click a reorder, you should pop
@@ -356,7 +357,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
             {d.files.map((f, i) => (
               <div key={f.key} className={"rop-file" + (what[f.key] === "skip" ? " off" : "")}>
                 <button type="button" className="rop-th" onClick={() => setLook(i)} title="Look at it" draggable onDragStart={(e) => dragFile(e, { name: f.name, href: href(f), type: f.mime })}>
-                  {f.thumb ? <img src={href({ path: f.thumb, name: f.name })} alt="" loading="lazy" /> : <span>{(f.path.split(".").pop() || "file").toUpperCase()}</span>}
+                  {f.thumb ? <img src={href({ path: f.thumb, name: f.name })} alt="" loading="lazy" /> : <FileThumb name={f.name} url={href(f)} mime={f.mime} />}
                 </button>
                 <div className="rop-fi">
                   <button type="button" className="linkbtn rop-fn" onClick={() => setLook(i)} data-notranslate>{f.name}</button>

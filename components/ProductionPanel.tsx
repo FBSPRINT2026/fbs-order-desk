@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
+import FileThumb from "@/components/FileThumb";
 import { downloadUrl } from "@/lib/printavoNames";
 import { PROD_KINDS, fileTypeOf, guessProdKind, prodKindLabel } from "@/lib/productionFileKinds";
 import { heldFiles } from "@/lib/heldFiles";
@@ -10,7 +11,6 @@ import { QuickLook, canQuickLook, type MailFile } from "@/components/MailFolders
 export type ProdFile = { id: string; name: string; url?: string; /** a stamped customer mockup: their file without the stamp (hold to see it) */ plain?: string; thumb?: string; mime?: string; fileName?: string; /** what it is (lib/productionFileKinds.ts) */ category?: string | null; /** what the AI thinks it is, to confirm */ guess?: string | null; /** e.g. "Amazon barcodes for The Bottles" */ note?: string | null; /** shown, not labeled or removed here (a job photo) */ readOnly?: boolean };
 
 const isImg = (f: ProdFile) => /^image\//.test(f.mime || "") || /\.(png|jpe?g|gif|webp|svg)$/i.test(f.name);
-const ext = (n: string) => (n.split("?")[0].split(".").pop() || "file").slice(0, 4).toUpperCase();
 
 /**
  * Production notes & files: shop only, never shown to the customer. Laid out like Printavo's:
@@ -51,7 +51,7 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
             {files.map((f) => (
               <div key={f.id} className="prod-file">
                 <button type="button" className="prod-thumb" title={f.name} draggable={!!f.url} onDragStart={(e) => dragFile(e, { name: f.fileName || f.name, href: f.url, type: f.mime })} onClick={(e) => (isImg(f) && f.url && f.plain ? setZoom(f) : lookable.some((x) => x.key === f.id) && !(e.metaKey || e.ctrlKey || e.shiftKey) ? setLook(f.id) : f.url && window.open(f.url, "_blank", "noopener"))}>
-                  {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <FileThumb f={f} />}
+                  {(f.thumb || (isImg(f) && f.url)) ? <img src={f.thumb || f.url} alt={f.name} loading="lazy" /> : <FileThumb name={f.name} url={f.url} mime={f.mime} />}
                 </button>
                 <div className="prod-fname" title={f.name}>{f.name}</div>
                 {!f.readOnly && onCategory && !f.category && f.guess && f.guess !== "?" && (
@@ -97,42 +97,3 @@ export default function ProductionPanel({ note, noteState, files, onNote, onUplo
   );
 }
 
-/**
- * A file's picture (Oct 21, Nick: "files don't show, they just show PDF and XLS"): a PDF / AI shows its first page
- * (drawn in the browser, kept for the visit), a spreadsheet a sheet icon with its type; anything else its type.
- */
-const thumbCache = new Map<string, Promise<string>>();
-function pdfThumb(url: string, name: string): Promise<string> {
-  if (!thumbCache.has(url)) thumbCache.set(url, (async () => {
-    // the first page as it is, the whole page, like a file preview (Oct 23, Nick: "the little thumbnails aren't working
-    // like they should"): the art preparer cut a mockup sheet down to a speck); the art preparer stays the fallback
-    try {
-      const buf = await (await fetch(url)).arrayBuffer();
-      try {
-        const { openPdf } = await import("@/lib/printavoArt");
-        type Doc = { getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> } }> };
-        const doc = await openPdf(buf.slice(0)) as unknown as Doc;
-        const pg = await doc.getPage(1), v1 = pg.getViewport({ scale: 1 });
-        const vp = pg.getViewport({ scale: 420 / Math.max(v1.width, v1.height) });
-        const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
-        await pg.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
-        return c.toDataURL("image/jpeg", 0.85);
-      } catch {
-        const { makePreview } = await import("@/lib/artPrep");
-        const png = await makePreview(new File([buf], name, { type: "application/pdf" }), 360);
-        return png ? URL.createObjectURL(png) : "";
-      }
-    } catch { return ""; }
-  })());
-  return thumbCache.get(url)!;
-}
-function FileThumb({ f }: { f: ProdFile }) {
-  const [u, setU] = useState("");
-  const pdf = /\.(pdf|ai)$/i.test(f.name) || /pdf/i.test(f.mime || "");
-  const sheet = /\.(xlsx?|csv|numbers)$/i.test(f.name) || /sheet|excel|csv/i.test(f.mime || "");
-  useEffect(() => { let off = false; if (pdf && f.url) void pdfThumb(f.url, f.name).then((x) => { if (!off) setU(x); }); return () => { off = true; }; }, [pdf, f.url, f.name]);
-  // eslint-disable-next-line @next/next/no-img-element
-  if (u) return <img src={u} alt={f.name} className="prod-page" />;
-  if (sheet) return <span className="prod-sheet" aria-hidden><i /><i /><i /><i /><i /><i /><i /><i /><i /><b>{ext(f.name)}</b></span>;
-  return <span>{ext(f.name)}</span>;
-}
