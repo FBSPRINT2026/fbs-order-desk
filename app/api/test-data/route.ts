@@ -11,7 +11,7 @@ export const maxDuration = 60;
 /**
  * Test accounts (owner / admin only).
  * POST {customerId, action: "flag", on}: mark a customer as a test account (or not).
- * POST {customerId, action: "generate", count? (25)}: add sample jobs to a test account, and book about half of the ready
+ * POST {customerId, action: "generate", count? (25), book? (true)}: add sample jobs to a test account, and book about half of the ready
  *      ones onto the production calendar (a few earlier this week already done, one running).
  * POST {customerId, action: "clear"}: put away every job and message on a test account (only ever a test account; nothing deleted).
  */
@@ -58,6 +58,8 @@ export async function POST(req: Request) {
     const { data: existing } = await admin.from("production_slots").select("machine, day, minutes").gte("day", today);
     const load: Record<string, Record<string, number>> = {};
     for (const x of existing || []) (load[x.machine as string] ||= {})[x.day as string] = (load[x.machine as string]?.[x.day as string] || 0) + (x.minutes as number);
+    // book: false keeps the sample jobs off the real production calendar (a portal walk-through doesn't need them there)
+    if (b.book === false) return NextResponse.json({ ok: true, created: made?.length || 0, booked: 0 });
     const ready = (made || []).filter((o) => o.status === "production").sort((a, c) => String(a.due_date).localeCompare(String(c.due_date)));
     const slots: Record<string, unknown>[] = [];
     ready.slice(0, Math.ceil(ready.length * 0.7)).forEach((o) => {
