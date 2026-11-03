@@ -20274,3 +20274,5 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .psm-pf > .btn{grid-column:1/-1;justify-content:center}
 .psm-pf-n{margin-left:auto;min-width:22px;height:22px;padding:0 7px;border-radius:999px;background:var(--fbs-salmon,var(--warn));color:#fff;font-size:12px;font-weight:700;display:inline-grid;place-items:center}
 @media (max-width:900px){.psm-side > .psm-proofs{order:2}}
+.ptour-img{display:block;width:100%;max-height:44vh;object-fit:contain;object-position:top;margin-top:10px;border:1px solid var(--line);border-radius:8px;background:#F3F5F8}
+.ptour-foot{margin-top:8px!important;font-size:12px!important;color:var(--ink-3)!important}

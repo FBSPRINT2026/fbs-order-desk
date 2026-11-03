@@ -1159,7 +1159,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
       ) : (
       <nav className="aa-nav" aria-label="Account areas">
         {AREAS.filter((a) => a.show !== false).map((a) => (
-          <button key={a.id} type="button" className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : a.label} onClick={() => { go(a.id); setQ(""); }}>
+          <button key={a.id} type="button" data-area={a.id} className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : a.label} onClick={() => { go(a.id); setQ(""); }}>
             <Ico d={a.icon} /><span>{a.label}</span>{a.n && (mode !== "portal" || a.id === "messages") ? <span className="aa-n">{a.n}</span> : null}
           </button>
         ))}
