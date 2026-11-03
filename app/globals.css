@@ -14876,21 +14876,30 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .ucx-rank{font-size:12px;color:var(--ink-3);white-space:nowrap}
 .ucx-form .panel-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .ucx-open{margin-left:auto;white-space:nowrap}
-.ucx-sec{font-size:11.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 8px}
+.ucx-sec{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 8px}
+.ucx-sec .faint{text-transform:none;letter-spacing:0;font-weight:400}
+.ucx-sec .btn{text-transform:none;letter-spacing:0}
+.ucx-sec .btn:first-of-type{margin-left:auto}
 .ucx-sec:first-child{margin-top:0}
 .ucx-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .ucx-wide{grid-column:1/-1}
 .ucx-g input,.ucx-g textarea{width:100%}
 input.ucx-sug{border-color:var(--accent);background:var(--accent-soft)}
+.ucx-t td{vertical-align:top}
+.ucx-c{text-align:center;width:64px}
+.ucx-t td.ucx-c{padding-top:16px}
+.ucx-t td.ucx-c input{width:18px;height:18px}
+.ucx-in{width:100%;min-width:140px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 9px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.ucx-in.ucx-em{margin-top:6px}
+.ucx-t tr.ucx-off td{background:var(--surface-2)}
+.ucx-t tr.ucx-off .ucx-in{color:var(--ink-3)}
+.ucx-t tr.ucx-sugrow td{background:var(--accent-soft)}
+.ucx-roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden;min-width:180px}
+.ucx-role{height:34px;border:0;border-right:1px solid var(--line);background:var(--surface);font:inherit;font-size:12.5px;color:var(--ink-2);cursor:pointer;white-space:nowrap;padding:0 6px}
+.ucx-role:last-child{border-right:0}
+.ucx-role.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.ucx-more{font-size:13px;margin:12px 0 8px;display:inline-block}
 .ucx-hint{font-size:12.5px;color:var(--accent);margin-top:8px}
-.ucx-p{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);flex-wrap:wrap}
-.ucx-p.same .ucx-pt b{color:var(--ink)}
-.ucx-p.added{background:var(--accent-soft);padding-left:8px;padding-right:8px;border-radius:6px}
-.ucx-pt{flex:1 1 240px;min-width:0;display:flex;flex-direction:column}
-.ucx-pt b{font-size:14px}
-.ucx-pt small{font-size:12px;color:var(--ink-3)}
-.ucx-pa{display:inline-flex;gap:6px;flex:0 0 auto}
-.ucx-main{font-size:12px;font-weight:700;color:var(--ok);white-space:nowrap}
 .ucx-none{margin:0;font-size:13px}
 .ucx-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
 /* Move to the portal (app/shop/customers/move-list) */

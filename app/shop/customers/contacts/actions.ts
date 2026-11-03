@@ -57,8 +57,9 @@ export async function contactList() {
   } catch (e) { return fail(e); }
 }
 
-export type Person = { email: string; name: string; n: number; last: string; boxes: string[]; sameCompany: boolean };
-export type Contact = { id: string; name: string; email: string; phone: string; isPrimary: boolean };
+export type Person = { email: string; name: string; n: number; last: string; boxes: string[]; sameCompany: boolean; /** from their email signature */ phone: string };
+const ROLES = ["Orders", "Art", "Billing"];
+export type Contact = { id: string; name: string; email: string; phone: string; isPrimary: boolean; portal: boolean; roles: string[]; /** the phone in their email signature, when none is on file */ foundPhone?: string };
 export type Detail = { id: string; company: string; name: string; email: string; phone: string; address: string; owner: string; printavoAs: string[]; contacts: Contact[]; found: Person[] };
 
 /** one customer: what's on file, their contacts, and who we've been emailing with there */
@@ -68,13 +69,13 @@ export async function contactDetail(customerId: string) {
     const admin = createAdminClient();
     const [{ data: c }, { data: cc }, { data: pv }, { data: pr }] = await Promise.all([
       admin.from("customers").select("id, company, name, email, phone, address").eq("id", customerId).maybeSingle(),
-      admin.from("customer_contacts").select("id, name, email, phone, is_primary").eq("customer_id", customerId).is("removed_at", null).order("created_at"),
+      admin.from("customer_contacts").select("id, name, email, phone, is_primary, portal_access, roles").eq("customer_id", customerId).is("removed_at", null).order("created_at"),
       admin.from("printavo_customers").select("data").eq("customer_id", customerId),
       admin.from("customer_private").select("account_owner").eq("customer_id", customerId).maybeSingle(),
     ]);
     if (!c) throw new Error("That customer isn't here.");
-    const contacts = ((cc || []) as { id: string; name: string | null; email: string | null; phone: string | null; is_primary: boolean | null }[])
-      .map((x) => ({ id: x.id, name: String(x.name || "").trim(), email: String(x.email || "").trim().toLowerCase(), phone: String(x.phone || "").trim(), isPrimary: !!x.is_primary }));
+    const contacts = ((cc || []) as { id: string; name: string | null; email: string | null; phone: string | null; is_primary: boolean | null; portal_access: boolean | null; roles: string[] | null }[])
+      .map((x): Contact => ({ id: x.id, name: String(x.name || "").trim(), email: String(x.email || "").trim().toLowerCase(), phone: String(x.phone || "").trim(), isPrimary: !!x.is_primary, portal: x.portal_access !== false, roles: x.roles || [] }));
     const printavoAs = [...new Set(((pv || []) as { data: { companyName?: string } | null }[]).map((x) => String(x.data?.companyName || "").trim()).filter(Boolean))];
     const company = String(c.company || "").trim();
     // what to look for: the company's name (as written and run together), and the web domains of emails we already have
@@ -90,7 +91,7 @@ export async function contactDetail(customerId: string) {
       if (error) throw new Error(error.message);
       const by = new Map<string, Person>();
       for (const r of (rows || []) as { email: string; name: string | null; acct: string; n: number; last: string }[]) {
-        const p = by.get(r.email) || { email: r.email, name: "", n: 0, last: "", boxes: [], sameCompany: false };
+        const p = by.get(r.email) || { email: r.email, name: "", n: 0, last: "", boxes: [], sameCompany: false, phone: "" };
         p.n += +r.n || 0;
         // "Holly Ries | Brandegroup" → "Holly Ries"
         const nm = (r.name || "").replace(/\s*\|.*$/, "").replace(/\s+/g, " ").trim();
@@ -106,41 +107,62 @@ export async function contactDetail(customerId: string) {
         if (!p.name) p.name = p.email.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
       }
       // the company's own people first, then whoever we've traded the most mail with; one-off strangers on a thread are left out
+      // everyone at the company (their web domain), then whoever else we've traded real mail with on those threads
       found = [...by.values()].filter((p) => p.sameCompany || p.n >= 3 || known.includes(p.email))
-        .sort((a, b) => Number(b.sameCompany) - Number(a.sameCompany) || b.n - a.n).slice(0, 8);
+        .sort((a, b) => Number(b.sameCompany) - Number(a.sameCompany) || b.n - a.n).slice(0, 40);
+      // their phone from their own email signature (recent mail only), never our own number
+      const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+      const ours = [String((st?.data as { shop?: { phone?: string } } | null)?.shop?.phone || ""), "972 487 7858"].map((x) => x.replace(/\D/g, "")).filter((x) => x.length >= 10);
+      const ask = [...found.map((p) => p.email), ...contacts.map((x) => x.email)].filter(Boolean);
+      if (ask.length) {
+        const { data: ph } = await admin.rpc("contact_phones", { p_emails: ask, p_skip: ours });
+        const m = new Map(((ph || []) as { email: string; phone: string }[]).map((x) => [x.email, fmtPhone(x.phone)]));
+        for (const p of found) p.phone = m.get(p.email) || "";
+        for (const x of contacts) if (!x.phone) x.foundPhone = m.get(x.email) || "";
+      }
     }
     return { ok: true as const, detail: { id: c.id as string, company, name: String(c.name || "").trim(), email: String(c.email || "").trim().toLowerCase(), phone: String(c.phone || "").trim(), address: String(c.address || "").trim(),
       owner: String((pr as { account_owner?: string | null } | null)?.account_owner || ""), printavoAs, contacts, found } as Detail };
   } catch (e) { return fail(e); }
 }
 
-/** save the main contact (and anyone added), and mark the customer's contacts checked */
-export async function saveContacts(input: { id: string; company: string; name: string; email: string; phone: string; address: string; add: { name: string; email: string }[] }) {
+export type PersonSave = { contactId?: string; name: string; email: string; phone: string; contact: boolean; portal: boolean; main: boolean; roles: string[] };
+
+/** save the account: the company's details, and each person (kept, added, or taken off the account), and mark it checked */
+export async function saveContacts(input: { id: string; company: string; phone: string; address: string; people: PersonSave[] }) {
   try {
     const v = await me();
     const admin = createAdminClient();
-    const email = input.email.trim().toLowerCase();
-    if (email && !okEmail(email)) throw new Error("That email doesn't look right.");
     const company = input.company.trim();
-    if (!company && !input.name.trim()) throw new Error("Give it a company or a contact name.");
+    const people = input.people.map((p) => ({ ...p, name: p.name.trim(), email: p.email.trim().toLowerCase(), phone: fmtPhone(p.phone.trim()), roles: p.roles.filter((r) => ROLES.includes(r)) }));
+    const keep = people.filter((p) => p.contact);
+    for (const p of keep) if (p.email && !okEmail(p.email)) throw new Error(`${p.name || p.email}: that email doesn't look right.`);
+    const main = keep.find((p) => p.main) || keep.find((p) => okEmail(p.email));
+    if (!company && !main?.name) throw new Error("Give it a company or a contact name.");
+    const { data: cur } = await admin.from("customers").select("name, email, phone").eq("id", input.id).maybeSingle();
     const { error } = await admin.from("customers").update({
-      company, name: input.name.trim(), email, phone: fmtPhone(input.phone.trim()), address: input.address.trim(),
+      company, address: input.address.trim(),
+      name: main?.name || String(cur?.name || ""), email: main?.email || String(cur?.email || ""),
+      phone: fmtPhone(input.phone.trim()) || main?.phone || String(cur?.phone || ""),
       contacts_checked_at: new Date().toISOString(), contacts_checked_by: v.email || "",
     }).eq("id", input.id);
     if (error) throw new Error(error.message);
-    // the main contact and everyone added are the company's contacts too (they can all sign in to its portal)
     const { data: have } = await admin.from("customer_contacts").select("id, email").eq("customer_id", input.id).is("removed_at", null);
-    const got = new Map(((have || []) as { id: string; email: string | null }[]).map((x) => [String(x.email || "").trim().toLowerCase(), x.id]));
-    const add = [...(email ? [{ name: input.name.trim(), email, main: true }] : []), ...input.add.map((x) => ({ name: x.name.trim(), email: x.email.trim().toLowerCase(), main: false }))]
-      .filter((x) => okEmail(x.email) && !got.has(x.email));
-    const seen = new Set<string>();
-    const rows = add.filter((x) => (seen.has(x.email) ? false : (seen.add(x.email), true))).map((x) => ({ customer_id: input.id, name: x.name, email: x.email, is_primary: x.main }));
-    if (rows.length) { const { error: ie } = await admin.from("customer_contacts").insert(rows); if (ie) throw new Error(ie.message); }
-    // the main email is the one marked Main
-    if (email) {
-      await admin.from("customer_contacts").update({ is_primary: false }).eq("customer_id", input.id).neq("email", email);
-      await admin.from("customer_contacts").update({ is_primary: true }).eq("customer_id", input.id).eq("email", email);
+    const byEmail = new Map(((have || []) as { id: string; email: string | null }[]).filter((x) => x.email).map((x) => [String(x.email).trim().toLowerCase(), x.id]));
+    let added = 0, removed = 0;
+    for (const p of people) {
+      const id = p.contactId || (p.email ? byEmail.get(p.email) : undefined);
+      const row = { name: p.name, email: p.email || null, phone: p.phone || null, portal_access: p.contact && p.portal, is_primary: !!main && p === main, roles: p.roles };
+      if (p.contact) {
+        if (id) { const { error: ue } = await admin.from("customer_contacts").update(row).eq("id", id); if (ue) throw new Error(ue.message); }
+        else if (p.email || p.name) { const { error: ie } = await admin.from("customer_contacts").insert({ customer_id: input.id, ...row }); if (ie) throw new Error(ie.message); added++; if (p.email) byEmail.set(p.email, "new"); }
+      } else if (id && p.contactId) {
+        // taken off the account: kept on file, just not a contact any more (and no portal sign-in)
+        const { error: re } = await admin.from("customer_contacts").update({ portal_access: false, is_primary: false, removed_at: new Date().toISOString(), removed_by: v.email || "staff" }).eq("id", id);
+        if (re) throw new Error(re.message);
+        removed++;
+      }
     }
-    return { ok: true as const, added: rows.length };
+    return { ok: true as const, added, removed };
   } catch (e) { return fail(e); }
 }
