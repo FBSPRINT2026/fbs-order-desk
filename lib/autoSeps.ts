@@ -11,7 +11,8 @@ import { requestSeparations } from "@/lib/artGate";
  * The moment an order is ready, its missing separations are requested, the same as pressing Request Separations
  * (lib/artGate.ts requestSeparations, so the same checks): it's an order (the quote approved), the art is approved
  * (every proof, or staff marked it approved another way), each screen-print location has its saved art, and the
- * customer's terms are met: pre-pay paid in full, a deposit paid, nothing needed on receipt or net 30.
+ * customer's terms are met: pre-pay paid in full, a deposit paid, nothing needed on receipt or net 30; and it isn't on
+ * hold (a payment hold comes off here once it's paid; lib/holdServer.ts).
  *
  * Called after everything that can make an order ready (an approval of the quote or the proof, staff marking the art
  * approved, a payment, a status change on the order page), so it doesn't matter which comes last. Never throws: a
@@ -25,6 +26,10 @@ export async function autoSeparations(admin: SupabaseClient, orderId: string, wh
     const { data: od } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
     const o = od as (Order & { declined_at?: string | null; discarded_at?: string | null }) | null;
     if (!o || o.type !== "invoice" || ["request", "quote", "quote_sent", "completed", "void"].includes(String(o.status)) || o.declined_at || o.discarded_at || o.draft) return { made: 0 };
+    // paid: a payment hold comes off first (lib/holdServer.ts); any hold still on waits
+    const hs = await import("@/lib/holdServer");
+    if (await hs.releasePaymentHold(admin, o)) (o as { flags?: unknown }).flags = ((o as { flags?: { key: string }[] }).flags || []).filter((f) => f.key !== "hold_payment");
+    if ((await import("@/lib/holds")).holdOf((o as { flags?: unknown }).flags)) return { made: 0 };
     const screen = orderGroups(o).flatMap((g) => g.imprints || []).filter((im) => im.method === "screen");
     if (!screen.length) return { made: 0 };
     // the customer's terms

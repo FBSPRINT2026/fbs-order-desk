@@ -13,6 +13,7 @@ import { quickJump } from "@/app/shop/search-actions";
 import { previewUrls } from "@/lib/designs";
 import { ARCHIVE_LIST_COLS, type ArchiveSummary } from "@/lib/archive";
 import { PAY_TERMS, statusKey, type Design, type PayTerms } from "@/lib/pricing";
+import { holdLabel } from "@/lib/holds";
 import { allRows } from "@/lib/readAll";
 import RowLink from "@/components/RowLink";
 
@@ -24,7 +25,7 @@ import RowLink from "@/components/RowLink";
  * messages and texts that mention it; supplier shipments; other customers one line each. A filter toolbar on top, a
  * short AI answer.
  */
-type Row = { key: string; href: string; number: number; quote: boolean; name: string; customer: string; customerId: string | null; status: string; pv?: string; label?: string; color?: string; archived: boolean; due: string | null; day: string; pcs: number; total: number; balance: number; thumb?: string };
+type Row = { key: string; href: string; number: number; quote: boolean; name: string; customer: string; customerId: string | null; status: string; pv?: string; /** On hold · reason */ hold?: string; label?: string; color?: string; archived: boolean; due: string | null; day: string; pcs: number; total: number; balance: number; thumb?: string };
 type Cust = { id: string; company: string; name: string; email: string; phone: string; price_type: string | null; payment_terms: string | null };
 type Msg = { key: string; href: string; who: string; when: string; text: string; kind: string };
 type Ship = { href: string; title: string; sub: string };
@@ -182,7 +183,7 @@ function SearchInner() {
   const rows: Row[] = useMemo(() => {
     if (t.length < 2) return [];
     const mine = ours.filter((o) => (num && String(o.number) === num) || `${o.nickname || ""} ${o.po_number || ""}`.toLowerCase().includes(num || low) || (!num && o.customer_id && custIds.has(o.customer_id)));
-    const a: Row[] = mine.map((o) => ({ key: o.id, href: `/shop/orders/${o.id}`, number: o.number, quote: o.type === "quote", name: o.nickname || "Untitled Job", customer: custName(custMap[o.customer_id || ""]), customerId: o.customer_id, status: statusKey(o), pv: pvStatusOf(o as never), archived: false, due: o.due_date, day: (o.created_at || "").slice(0, 10), pcs: o.qty, total: o.total, balance: o.type === "invoice" ? o.balance : 0 }));
+    const a: Row[] = mine.map((o) => ({ key: o.id, href: `/shop/orders/${o.id}`, number: o.number, quote: o.type === "quote", name: o.nickname || "Untitled Job", customer: custName(custMap[o.customer_id || ""]), customerId: o.customer_id, status: statusKey(o), pv: pvStatusOf(o as never), hold: holdLabel((o as { flags?: unknown }).flags), archived: false, due: o.due_date, day: (o.created_at || "").slice(0, 10), pcs: o.qty, total: o.total, balance: o.type === "invoice" ? o.balance : 0 }));
     const b: Row[] = arch.map((r) => ({ key: r.id, href: `/shop/archive/${r.id}`, number: +r.visual_id || 0, quote: r.kind === "quote", name: r.nickname || "Untitled Job", customer: custName(r.customers), customerId: r.customer_id, status: "archived", label: r.status_name || "", color: r.status_color || "#888", archived: true, due: r.due_date, day: (r.order_date || "").slice(0, 10), pcs: r.qty || 0, total: +r.total || 0, balance: r.kind === "quote" ? 0 : +r.balance || 0 }));
     return [...a, ...b].sort((x, y) => y.day.localeCompare(x.day) || y.number - x.number);
   }, [ours, arch, custIds, custMap, t, num, low]);
@@ -310,7 +311,7 @@ function SearchInner() {
                         {r.archived ? (r.day ? <span className="nowrap">{fmtDay(r.day)}</span> : null) : r.due ? <span className="nowrap">due <Due date={r.due} status={r.status} /></span> : <span className="nowrap">no date yet</span>}
                       </span>
                     </span>
-                    <span className="sxr-st">{r.archived ? <span className="pv-dot" style={{ ["--sc" as string]: r.color }}>{r.label}</span> : <Pill status={r.status} pv={r.pv} />}</span>
+                    <span className="sxr-st">{r.archived ? <span className="pv-dot" style={{ ["--sc" as string]: r.color }}>{r.label}</span> : <Pill status={r.status} pv={r.pv} hold={r.hold} />}</span>
                     <span className="sxr-a money-only">
                       <b>{money(r.total)}</b>
                       {!r.quote && <span className={r.balance > 0.004 ? "sxr-due" : "sxr-paid"}>{r.balance > 0.004 ? `${money(r.balance)} due` : "Paid"}</span>}

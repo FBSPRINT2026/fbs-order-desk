@@ -35,6 +35,7 @@ export type AOrder = { /** which of the customer's order types it is (Cedar: Bul
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string;
   /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string;
   /** an order request the customer has sent us, waiting on our confirmation (Oct 24) */ sent?: boolean;
+  /** on hold: "On hold · Payment needed" (lib/holds.ts), shown instead of the status */ hold?: string;
   /** portal: the customer starred it to track it (up to 9) */ starred?: boolean;
   /** a quote the customer archived (not going ahead) */ archivedQ?: boolean; /** they asked us to cancel */ cancelAsked?: boolean;
   /** portal: what can be paid now (lib/payReady.ts), why not, and whether charges may still change */ payCan?: "none" | "deposit" | "full"; payWhy?: string; notFinal?: boolean; payNote?: string };
@@ -171,6 +172,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     ? <span className="aa-pill" style={{ ["--sc" as string]: o.statusColor || "var(--ink-3)" }}>{o.statusLabel || "Archived"}</span>
     : o.cancelAsked ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--danger)" }}>Cancellation requested</span>
     : o.archivedQ ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--ink-3)" }}>Archived</span>
+    : o.hold ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--warn)" }} title={ST[statusKey(o)]?.portal || ST[statusKey(o)]?.label}>{o.hold}</span>
     : o.status === "request"
       // the customer's own order requests: not sent yet, or sent to us and waiting on our OK (Oct 24, Nick)
       ? <span className="aa-pill" style={{ ["--sc" as string]: o.sent ? "var(--fbs-orange, #F7941D)" : "var(--ink-3)" }}>{o.sent ? "Waiting on FBS" : "Not sent yet"}</span>

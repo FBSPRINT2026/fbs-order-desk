@@ -245,7 +245,8 @@ export async function jobDates(fromDay: string, toDay: string, today: string, by
     const OPEN_PV = '("Job Completed","Quote - Closed","Quote")';
     const [{ data: ours }, { data: pv }] = await Promise.all([
       admin.from("orders").select(`id, number, nickname, ${col}, qty, status, groups, customer_id, customers(company, name)`).gte(col, lo).lte(col, t).eq("draft", false).is("discarded_at", null)
-        .not("status", "in", "(quote,quote_sent,request,completed)").order(col).limit(1000),
+        // a job on hold for payment isn't production's yet (Nov 3, Nick: "he's not gonna see it if it's prepayment… until it's paid")
+        .not("status", "in", "(quote,quote_sent,request,completed)").not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).order(col).limit(1000),
       by === "print" ? Promise.resolve({ data: [] }) : admin.from("archived_orders").select("id, visual_id, nickname, due_date, qty, status_name, kind, customer_id, imps:data->groups, owner:data->>owner").is("removed_at", null).eq("kind", "invoice").gte("due_date", lo).lte("due_date", t)
         .not("status_name", "in", OPEN_PV).order("due_date").limit(1000),
     ]);

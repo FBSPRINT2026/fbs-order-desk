@@ -20383,3 +20383,28 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .pvr-st.ok{color:var(--ok)}.pvr-st.bad{color:var(--danger)}.pvr-st.wait{color:var(--warn)}.pvr-st.off{color:var(--ink-3)}
 @container pvr (max-width:600px){.pvr-head{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @container pvr (max-width:300px){.pvr-head{grid-template-columns:minmax(0,1fr)}.pvr-row{grid-template-columns:minmax(0,1fr)}.pvr-pics{flex-direction:row}}
+
+/* On hold (Nov 3, Nick; lib/holds.ts): the bar on the order, the status menu while held, and the pop-up */
+.ohb{display:flex;align-items:flex-start;gap:10px;margin:0 0 12px;padding:10px 14px;border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));border-radius:var(--r);background:color-mix(in srgb,var(--warn) 9%,var(--surface));color:color-mix(in srgb,var(--warn) 65%,#000);font-size:14px}
+.ohb>svg{flex:none;margin-top:2px}
+.ohb>span{flex:1;min-width:0}
+.ohb b{font-weight:700}
+.ohb small{display:block;font-size:12px;color:var(--ink-3);margin-top:2px}
+.ohb .btn{flex:none}
+.status-select.ohs-held{font-weight:700}
+.pill.pill-hold .pill-t{font-weight:700}
+.ohd{max-width:560px}
+.ohd-reasons{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:12px}
+.ohd-r{display:flex;align-items:flex-start;gap:10px;text-align:left;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);cursor:pointer;font:inherit}
+.ohd-r svg{flex:none;margin-top:1px;color:var(--ink-3)}
+.ohd-r span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.ohd-r b{font-size:14px;font-weight:700}
+.ohd-r small{font-size:12px;color:var(--ink-3)}
+.ohd-r.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+.ohd-r.on svg{color:var(--accent)}
+.ohd-l{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin:10px 0 5px}
+.ohd textarea{width:100%;box-sizing:border-box}
+.ohd-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.ohd-seg button{height:36px;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:inherit;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px}
+.ohd-seg button:first-child{border-left:0}
+.ohd-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700}

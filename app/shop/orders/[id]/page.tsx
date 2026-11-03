@@ -41,6 +41,11 @@ import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import { markDeclined, undoDeclined } from "@/app/shop/jobs/actions";
 import { autoSepsNow } from "@/app/shop/sep-auto-actions";
+import { takeOffHold } from "@/app/shop/hold-order-actions";
+import HoldDialog from "@/components/HoldDialog";
+import { holdOf, holdsOf } from "@/lib/holds";
+import { upFront } from "@/lib/payTerms";
+import type { Flag } from "@/lib/orderStages";
 import ProductionPanel from "@/components/ProductionPanel";
 import { isReorder } from "@/components/ReorderPanel";
 import OrderTypeRow, { orderTypeOf, ORDER_TYPE_LABEL } from "@/components/OrderTypeRow";
@@ -1166,8 +1171,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (!o?.id) return;
     const back = async () => {
       if (document.visibilityState !== "visible") return;
-      const { data } = await sb.from("orders").select("status, type, approved_at, approved_name, sent_at, declined_at, declined_reason").eq("id", o.id).maybeSingle();
-      if (data) setO((p) => (p && (p.status !== data.status || p.type !== data.type || (p as { declined_at?: string | null }).declined_at !== data.declined_at || p.approved_at !== data.approved_at) ? ({ ...p, ...data } as Order) : p));
+      const { data } = await sb.from("orders").select("status, type, approved_at, approved_name, sent_at, declined_at, declined_reason, flags").eq("id", o.id).maybeSingle();
+      if (data) setO((p) => (p && (p.status !== data.status || p.type !== data.type || (p as { declined_at?: string | null }).declined_at !== data.declined_at || p.approved_at !== data.approved_at || JSON.stringify((p as { flags?: unknown }).flags || []) !== JSON.stringify(data.flags || [])) ? ({ ...p, ...data } as Order) : p));
       loadSide();
     };
     document.addEventListener("visibilitychange", back);
@@ -1264,6 +1269,22 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
   // the order may be ready for separations now: they ask for themselves (lib/autoSeps.ts)
   const [sepN, setSepN] = useState(0);
+  // On hold (lib/holds.ts): the pop-up from the status menu, and taking it off
+  const [holdAsk, setHoldAsk] = useState(false);
+  async function offHold() {
+    if (!o) return;
+    const r = await takeOffHold(o.id);
+    if (!r.ok) return say(r.error);
+    setO((p) => (p ? ({ ...p, flags: r.flags } as Order) : p));
+    loadSide(); setSepN((x) => x + 1);
+  }
+  async function statusPicked(v: string) {
+    if (!o) return;
+    if (v === "hold") return setHoldAsk(true);
+    // another status while it's on hold: off hold, then the status
+    if (holdOf((o as { flags?: unknown }).flags)) await offHold();
+    if (v !== statusKey(o)) await setStatus(v as StatusKey | "closed");
+  }
   function sepsIfReady(why: string) {
     if (!o) return;
     void autoSepsNow(o.id, why).then((r) => { if (r.made) { say(`Separations requested for ${r.made} location${r.made === 1 ? "" : "s"}: they're in the Separation Center under Working.`); setSepN((x) => x + 1); } }, () => null);
@@ -1516,7 +1537,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             </span>;
           })()}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
-          : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={statusKey(o)} onChange={(e) => setStatus(e.target.value as StatusKey | "closed")}>
+          : <select className={"status-select" + (holdOf((o as { flags?: unknown }).flags) ? " ohs-held" : "")} style={{ ["--sc" as string]: holdOf((o as { flags?: unknown }).flags) ? "var(--warn)" : st.c }} aria-label="Status" value={holdOf((o as { flags?: unknown }).flags) ? "hold" : statusKey(o)} onChange={(e) => void statusPicked(e.target.value)}>
+            <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>
             <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote"), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
@@ -1816,6 +1838,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             it… once they open it, you can't make changes… make changes, resend… version 2"; "declined… closed quote… grayed
             out… you could still click in it, but you'd have to override it"): one line above the order, the order under it
             grayed and locked while it's theirs to look at */}
+        {/* On hold: why, who and since when, on every tab (Nov 3, Nick: "no one on my team knows why") */}
+        {holdsOf((o as { flags?: unknown }).flags).map((h) => (
+          <div key={h.key} className="ohb">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M10 4v16M14 4v16" /></svg>
+            <span><b>On hold · {h.reason}.</b>{h.note ? ` ${h.note}` : ""}
+              <small>{h.by === "Automatic" ? "Put on hold automatically" : `By ${h.by}`} · {fmtStamp(h.at)} · the customer sees {h.show === "none" || (!h.show && ["hold_qc", "hold_shop"].includes(h.key)) ? "nothing" : h.show === "hold" ? "\u201cOn hold\u201d only" : "this message"}{h.key === "hold_payment" ? " · comes off by itself when it's paid" : ""}</small></span>
+            <button type="button" className="btn sm" onClick={() => void offHold()}>Take off hold</button>
+          </div>
+        ))}
+        {holdAsk && <HoldDialog orderId={o.id} owed={money(Math.max(0, upFront(cust?.payment_terms, calc.total, settings.depositPct, calc.paid).amount) || Math.max(0, calc.balance))} onClose={() => setHoldAsk(false)} onDone={(fl: Flag[]) => { setHoldAsk(false); setO((p) => (p ? ({ ...p, flags: fl } as Order) : p)); loadSide(); }} />}
         {tab === "order" && quoteLock.bar}
         {closedAsk && (
           <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Open a closed quote" onClick={() => setClosedAsk(false)}>

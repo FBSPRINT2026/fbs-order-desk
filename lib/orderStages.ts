@@ -49,12 +49,16 @@ export function stepsFor(methods: string[]): Step[] {
 }
 
 export type Check = { by: string; at: string; auto?: boolean; note?: string };
-export type FlagKey = "hold_customer" | "hold_payment" | "hold_shop" | "rush" | "firm" | "goods_issue" | "customer_goods" | "art_problem" | "misprint" | "press_approval" | "partial" | "delayed" | "goods_wrong";
-export type Flag = { key: FlagKey; note?: string; by: string; at: string; /** Delayed: the new date */ date?: string };
+export type FlagKey = "hold_customer" | "hold_payment" | "hold_shop" | "hold_receiving" | "hold_qc" | "rush" | "firm" | "goods_issue" | "customer_goods" | "art_problem" | "misprint" | "press_approval" | "partial" | "delayed" | "goods_wrong";
+export type Flag = { key: FlagKey; note?: string; by: string; at: string; /** Delayed: the new date */ date?: string;
+  /** a hold: what the customer sees (lib/holds.ts): the note, just "On hold", or nothing */ show?: "message" | "hold" | "none" };
 export const FLAGS: { key: FlagKey; label: string; hold?: boolean; /** what the customer sees (null: nothing) */ customer: ((f: Flag) => string) | null }[] = [
   { key: "hold_customer", label: "On hold: waiting on customer", hold: true, customer: (f) => `Waiting on you${f.note ? `: ${f.note}` : ""}` },
   { key: "hold_payment", label: "On hold: payment / deposit", hold: true, customer: () => "Payment needed to start" },
   { key: "hold_shop", label: "On hold: shop", hold: true, customer: null },
+  // the On hold status's reasons (Nov 3, Nick; lib/holds.ts): receiving and quality control
+  { key: "hold_receiving", label: "On hold: receiving", hold: true, customer: (f) => `On hold: a problem with the garments${f.note ? `: ${f.note}` : ""}` },
+  { key: "hold_qc", label: "On hold: quality control", hold: true, customer: null },
   { key: "delayed", label: "Delayed (customer sees it)", customer: (f) => `Delayed${f.note ? `: ${f.note}` : ""}${f.date ? `. New date ${f.date}` : ""}` },
   { key: "rush", label: "Rush", customer: null },
   { key: "firm", label: "Firm date", customer: null },
@@ -63,7 +67,7 @@ export const FLAGS: { key: FlagKey; label: string; hold?: boolean; /** what the 
   // the garments they sent us are wrong, short or damaged (Oct 24, Nick: "the goods showed up and they picked the order
   // wrong and we need to get those replaced")
   { key: "goods_wrong", label: "On hold: their goods are wrong / short", hold: true, customer: (f) => `On hold: a problem with the garments you sent${f.note ? `: ${f.note}` : ""}` },
-  { key: "art_problem", label: "Art problem", customer: (f) => `Waiting on you: a better art file${f.note ? ` (${f.note})` : ""}` },
+  { key: "art_problem", label: "On hold: art", hold: true, customer: (f) => `Waiting on you: a better art file${f.note ? ` (${f.note})` : ""}` },
   { key: "misprint", label: "Misprint / reprint needed", customer: null },
   { key: "press_approval", label: "Approval at press", customer: () => "We'll send a photo of the first print to approve" },
   { key: "partial", label: "Partial ship / split delivery", customer: () => "Part of your order shipped" },
@@ -95,8 +99,10 @@ export function customerStatus(o: { status: string; flags?: Flag[] | null; deliv
   if (o.status === "quote_sent") return extra.changesRequested ? say("changes", "Changes requested", "We're updating your quote.") : say("quote_sent", "Quote sent", "Your quote is ready to review and approve.");
   if (o.status === "completed" && o.type === "quote") return say("closed", "Closed quote", "Thank you for the opportunity. We hope to hear from you again soon.");
   if (o.status === "completed") return say("completed", "Completed", "Completed. Thank you!");
-  // a hold the customer must act on, or a delay, comes first
-  for (const k of ["hold_customer", "art_problem", "goods_wrong", "hold_payment", "customer_goods", "delayed"] as FlagKey[]) {
+  // a hold comes first: On hold, and why (as much as the shop chose to show them; customerHold), then a delay
+  const held = customerHold(flags);
+  if (held) return say("waiting", `On hold · ${holdShort(held.key)}`, held.reason);
+  for (const k of ["customer_goods", "delayed"] as FlagKey[]) {
     const f = flag(k); const def = FLAGS.find((x) => x.key === k);
     if (f && def?.customer) return k === "customer_goods" ? say("goods", "Waiting on goods", def.customer(f)) : say(k === "delayed" ? "delayed" : "waiting", k === "delayed" ? "Delayed" : "Waiting on you", def.customer(f));
   }
@@ -122,9 +128,15 @@ export function customerStatus(o: { status: string; flags?: Flag[] | null; deliv
 export type CustomerHold = { key: FlagKey; title: string; reason: string; /** what they can do about it */ fix: "reply" | "art" | "pay" | "goods"; since: string };
 export function customerHold(flags?: Flag[] | null): CustomerHold | null {
   const fs = (flags || []) as Flag[];
-  const f = (["art_problem", "goods_wrong", "hold_customer", "hold_payment"] as FlagKey[]).map((k) => fs.find((x) => x.key === k)).find(Boolean);
+  // what the customer is shown, per hold (Nov 3: the On hold pop-up's "The customer sees"): its message, just "on hold", or
+  // nothing; quality control and the shop's own holds are ours unless someone chose to show them
+  const shown = (x: Flag) => (x.show ? x.show !== "none" : !["hold_qc", "hold_shop"].includes(x.key));
+  const f = (["hold_payment", "art_problem", "goods_wrong", "hold_receiving", "hold_customer", "hold_qc", "hold_shop"] as FlagKey[]).map((k) => fs.find((x) => x.key === k && shown(x))).find(Boolean);
   if (!f) return null;
   const note = (f.note || "").trim();
+  if (f.show === "hold") return { key: f.key, title: "Your order is on hold", reason: "We'll be in touch about it shortly. Questions? Send us a message.", fix: f.key === "hold_payment" ? "pay" : "reply", since: f.at };
+  if (f.key === "hold_receiving") return { key: f.key, title: "A problem with the garments", reason: note || "The garments came in short, wrong or damaged. We're getting it fixed and will let you know.", fix: "reply", since: f.at };
+  if (f.key === "hold_qc" || f.key === "hold_shop") return { key: f.key, title: "Your order is on hold", reason: note || "We're checking something on your order and will let you know.", fix: "reply", since: f.at };
   if (f.key === "art_problem") return { key: f.key, title: "We need better artwork", reason: note || "The art file we have won't print well. Please send a better file (vector or high resolution), or ask us what we need.", fix: "art", since: f.at };
   if (f.key === "goods_wrong") return { key: f.key, title: "A problem with the garments you sent", reason: note || "The garments that came in don't match the order (wrong, short or damaged). They need to be replaced before we can print.", fix: "goods", since: f.at };
   if (f.key === "hold_payment") return { key: f.key, title: "Payment needed to start", reason: note || "We'll start as soon as the payment or deposit is in.", fix: "pay", since: f.at };
@@ -134,4 +146,4 @@ export function customerHold(flags?: Flag[] | null): CustomerHold | null {
 /** a hold in two or three words, for the customer's stamp (Nov 2, Nick: "instead of on hold, just say… issue receiving,
  *  payment needed, question… or quality control"): one wording everywhere a held job shows */
 export const holdShort = (key?: string | null) =>
-  key === "hold_payment" ? "Payment needed" : key === "art_problem" ? "Art issue" : key === "goods_wrong" ? "Issue receiving" : "Question for you";
+  key === "hold_payment" ? "Payment needed" : key === "art_problem" ? "Art issue" : key === "goods_wrong" || key === "hold_receiving" ? "Issue receiving" : key === "hold_qc" ? "Quality check" : key === "hold_shop" ? "On hold" : "Question for you";
