@@ -1,5 +1,6 @@
 "use client";
-import { stateFromZip } from "@/lib/zipState";
+import BillAddressFields from "@/components/BillAddressFields";
+import { billMissing, emptyBill, staxAddress } from "@/lib/billAddress";
 import { useEffect, useRef, useState } from "react";
 import { addSavedMethod } from "@/app/portal/pay-actions";
 
@@ -14,6 +15,7 @@ export default function AddPayMethod({ staxToken, consent, staffConsent, onDone,
   staxToken: string; consent: { card: string; bank: string }; staffConsent: { card: string; bank: string }; onDone: () => void; onCancel: () => void;
 }) {
   const [method, setMethod] = useState<"card" | "bank">("card");
+  const [bill, setBill] = useState(emptyBill);
   const [f, setF] = useState({ first: "", last: "", month: "", year: "", zip: "", routing: "", account: "", bankType: "checking", holder: "personal" });
   const [staffOk, setStaffOk] = useState(false);
   const [ok, setOk] = useState(false);
@@ -42,8 +44,8 @@ export default function AddPayMethod({ staxToken, consent, staffConsent, onDone,
     const d: Record<string, unknown> = { firstname: f.first.trim(), lastname: f.last.trim(), total: 1, match_customer: false, validate: false };
     if (method === "card") {
       if (!/^\d{1,2}$/.test(f.month) || !/^\d{2,4}$/.test(f.year)) return setErr("Enter the card's expiration month and year.");
-      if (!stateFromZip(f.zip)) return setErr("Enter the card's 5-digit billing ZIP code.");
-      Object.assign(d, { method: "card", month: f.month, year: f.year.length === 2 ? `20${f.year}` : f.year, address_zip: f.zip.trim(), address_state: stateFromZip(f.zip) });
+      { const miss = billMissing(bill); if (miss) return setErr(miss); }
+      Object.assign(d, { method: "card", month: f.month, year: f.year.length === 2 ? `20${f.year}` : f.year, ...staxAddress(bill) });
     } else {
       if (!/^\d{9}$/.test(f.routing)) return setErr("The routing number should be 9 digits.");
       if (!/^\d{4,17}$/.test(f.account)) return setErr("Check the account number.");
@@ -72,7 +74,7 @@ export default function AddPayMethod({ staxToken, consent, staffConsent, onDone,
           <div className="field"><label htmlFor="apm-yy">Exp. year</label><input id="apm-yy" inputMode="numeric" placeholder="YYYY" maxLength={4} value={f.year} onChange={set("year")} /></div>
           <div className="field"><label>CVV</label><div className="pp-stax" id="stax-add-cvv" /></div>
         </div>
-        <div className="field" style={{ maxWidth: 180 }}><label htmlFor="apm-zip">Billing ZIP</label><input id="apm-zip" inputMode="numeric" autoComplete="postal-code" value={f.zip} onChange={set("zip")} /></div>
+        <BillAddressFields v={bill} set={setBill} id="apm-bl" />
       </div>
       {method === "bank" && (
         <div className="stack" style={{ gap: 10 }}>

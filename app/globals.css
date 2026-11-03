@@ -20312,3 +20312,8 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .mkx-h .faint{font-size:12.5px}
 .mkx-by{display:inline-block;align-self:flex-start;margin:2px 0;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--surface-2);color:var(--ink-3);white-space:nowrap}
 .mkx-by.fbs{background:var(--accent-soft);color:var(--accent)}
+
+/* a card's full billing address (components/BillAddressFields.tsx, Nov 3) */
+.pbl{display:flex;flex-direction:column;gap:10px}
+.pbl-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(64px,.7fr) minmax(90px,1fr);gap:10px}
+@media (max-width:420px){.pbl-row{grid-template-columns:minmax(0,1fr) minmax(64px,.6fr)}.pbl-row > :first-child{grid-column:1/-1}}

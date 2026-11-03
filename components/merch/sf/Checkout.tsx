@@ -95,7 +95,7 @@ export default function Checkout({ store, bag, preview, staxToken, onEditBag, on
         if (!stax.current || !ready) throw new Error("The secure card form is still loading.");
         if (!pay.first.trim() || !pay.last.trim()) throw new Error("Enter the name on the card.");
         if (!/^\d{1,2}$/.test(pay.month) || !/^\d{2,4}$/.test(pay.year)) throw new Error("Enter the card's expiration month and year.");
-        pm = (await stax.current.tokenize({ firstname: pay.first.trim(), lastname: pay.last.trim(), method: "card", month: pay.month, year: pay.year.length === 2 ? `20${pay.year}` : pay.year, address_zip: pay.zip.trim(), address_state: stateFromZip(pay.zip) || ship.state.trim().toUpperCase(), total: totals.total, match_customer: false, validate: false })).id;
+        pm = (await stax.current.tokenize({ firstname: pay.first.trim(), lastname: pay.last.trim(), method: "card", month: pay.month, year: pay.year.length === 2 ? `20${pay.year}` : pay.year, address_zip: pay.zip.trim(), address_state: stateFromZip(pay.zip) || ship.state.trim().toUpperCase(), ...(ship.street1.trim() ? { address_1: ship.street1.trim(), address_2: ship.street2.trim(), address_city: ship.city.trim(), address_country: "USA" } : {}), total: totals.total, match_customer: false, validate: false })).id;
       }
       const r = await checkout({
         slug: store.slug, shopper: { ...who }, delivery, ship_to: { name: who.name, ...ship }, paymentMethodId: pm || "test", method,

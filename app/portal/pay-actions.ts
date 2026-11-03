@@ -304,3 +304,18 @@ export async function staffConsentWords(): Promise<{ card: string; bank: string 
   const shop = mergeSettings(s?.data).shop.name;
   return { card: staffConsentText(shop, "card"), bank: staffConsentText(shop, "bank") };
 }
+
+/** the billing address on file, to fill in the card form (their own account; staff previewing: the previewed one) */
+export async function myBillAddress(as?: string): Promise<import("@/lib/billAddress").BillAddr> {
+  const { parseBill } = await import("@/lib/billAddress");
+  try {
+    const { supabase, isStaff } = await getViewer();
+    if (isStaff) {
+      if (!as) return parseBill("");
+      const { data } = await createAdminClient().from("customers").select("address").eq("id", as).maybeSingle();
+      return parseBill((data as { address?: string } | null)?.address);
+    }
+    const { data } = await supabase.from("customers").select("address").order("id").limit(1);
+    return parseBill(((data || [])[0] as { address?: string } | undefined)?.address);
+  } catch { return parseBill(""); }
+}
