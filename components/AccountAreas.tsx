@@ -879,11 +879,16 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
               <button type="button" className="linkbtn pyb-clear" onClick={() => { setPaySel([]); setPayNow(null); setPayAmt(undefined); }}>Clear</button>
             </> : allOpen.some(payable) ? <>
               <div className="pyb-hint"><svg width="26" height="16" viewBox="0 0 26 16" aria-hidden><path d="M25 8H3M9 2 3 8l6 6" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg>Check the orders on the left</div>
-              <div className="pyb-demo" aria-hidden>
-                {allOpen.filter(payable).slice(0, 3).map((o, i) => <div key={o.id} className={"pyb-row" + (i === 2 ? " ghost" : "")}><span className={"pyb-cb" + (i < 2 ? " on" : "")}>{i < 2 ? "✓" : ""}</span><span className="pyb-n">#{o.number}</span><b>{money(amtOf(o))}</b></div>)}
+              {/* a picture of what it looks like, not their own orders, fading out so it reads as an example (Nov 2, Nick:
+                  "it should be like an example picture… five invoices checked… the text faded out") */}
+              <div className="pyb-demo pyb-ex" aria-hidden>
+                <span className="pyb-ex-tag">Example</span>
+                {[["10421", "Team tees", "$412.50"], ["10422", "Event hoodies", "$935.00"], ["10425", "Staff polos", "$1,212.40"], ["10430", "Banner", "$86.00"], ["10433", "Hats", "$340.00"]].map(([n, t, a]) => (
+                  <div key={n} className="pyb-row"><span className="pyb-cb on">✓</span><span className="pyb-n">#{n}</span><span className="pyb-ex-t">{t}</span><b>{a}</b></div>))}
+                <div className="pyb-ex-sum"><span>5 orders</span><b>$2,985.90</b></div>
+                <div className="pyb-ex-btn">Pay $2,985.90</div>
               </div>
-              <div className="pyb-note">Check one or many{oldOpen.some(payable) ? <>, new orders and old <PrintavoMark /> ones together</> : null}. Your total shows here.</div>
-              <button type="button" className="btn pyb-go" disabled>Pay</button>
+              <div className="pyb-note">Check one or many{oldOpen.some(payable) ? <>, new orders and old <PrintavoMark /> ones together</> : null}. Your total and the Pay button show here.</div>
             </> : <div className="faint" style={{ fontSize: 13 }}>Nothing due right now.</div>}
           </div>
           {payNow && <PayPanel modal receiptEmail={payCfg.receiptEmail} key={payNow.map((x) => x.id).join() + (payAmt || "")} items={payNow} amount={payAmt} pay={payCfg} staxToken={payCfg.staxToken} canAct={canAct} onClose={() => { setPayNow(null); setPayAmt(undefined); }} />}
