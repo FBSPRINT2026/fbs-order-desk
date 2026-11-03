@@ -27,7 +27,9 @@ const dueTxt = (d: string | null) => {
 let rqMem: DeskRequest[] | null = null;
 const asMail = (r: DeskRequest): MailFile[] => r.files.map((f) => ({ key: f.path, name: f.name, size: f.size, type: f.type, href: `/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}` }));
 
-export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { q: string; onChanged?: () => void; /** open a conversation about this request in the Message Center */ onMessage?: (orderId: string) => void; /** just this request, opened (a customer's message about it in the Message Center) */ only?: string; /** open this one when the list loads (a link from its order page) */ pick?: string }) {
+export default function RequestsDesk({ q, onChanged, onMessage, only, pick, onlyIds }: { q: string; onChanged?: () => void; /** open a conversation about this request in the Message Center */ onMessage?: (orderId: string) => void; /** just this request, opened (a customer's message about it in the Message Center) */ only?: string; /** open this one when the list loads (a link from its order page) */ pick?: string;
+  /** just these requests: the Job Center's My accounts / Everyone and department switch (Nov 2, Nick: "it doesn't actually
+   *  filter the down below") */ onlyIds?: Set<string> }) {
   const [list, setList] = useState<DeskRequest[] | null>(rqMem);
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
   const [openId, setOpenId] = useState<string | null>(only || null);
@@ -38,7 +40,7 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { 
   const load = async () => { const r = await requestsDesk(); if (r.ok) { rqMem = r.list; setList(r.list); } else setErr(r.error); };
   useEffect(() => { void load(); }, []);
   const w = q.trim().toLowerCase().replace(/^#/, "");
-  const shown = useMemo(() => (list || []).filter((r) => !w || [String(r.number), r.name, r.customer, r.contact, r.po, r.about].some((x) => x.toLowerCase().includes(w))), [list, w]);
+  const shown = useMemo(() => (list || []).filter((r) => !onlyIds || onlyIds.has(r.id)).filter((r) => !w || [String(r.number), r.name, r.customer, r.contact, r.po, r.about].some((x) => x.toLowerCase().includes(w))), [list, w, onlyIds]);
   // sorted by a click on a column's name (Nov 2, Nick: "click by customer… by due date… it should sort the list"); by
   // customer (the start) they're grouped A to Z with our rainbow line between customers, newest first inside each
   type SortK = "customer" | "number" | "due" | "files" | "sent";
