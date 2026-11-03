@@ -66,12 +66,13 @@ export function ScreenCalc({ pl }: { pl: PriceList }) {
         <div className="pcx-out" aria-live="polite">
           {!q ? <p className="faint">Type how many pieces.</p> : !rows.length ? <p className="faint">Pick at least one location with ink colors.</p> : <>
             <dl className="pl-dl">
-              {rows.map((r, i) => <div key={i}><dt>{r.spot} · {r.colors} color{r.colors > 1 ? "s" : ""}{r.under ? " + underbase" : ""}{r.sp ? " · special location" : ""}{r.ink ? " · specialty ink" : ""}</dt><dd>{r.custom ? "Quoted" : <>{m(r.each)} <small>each</small></>}</dd></div>)}
+              {rows.map((r, i) => <div key={i}><dt>{r.spot} · {r.colors} color{r.colors > 1 ? "s" : ""}{r.under ? " + underbase" : ""}{r.sp ? " · special location" : ""}{r.ink ? " · specialty ink" : ""} <small>each</small></dt><dd>{r.custom ? "Quoted" : m(r.each)}</dd></div>)}
               <div><dt>Per piece</dt><dd><b>{custom ? "Quoted" : m(each)}</b></dd></div>
-              <div><dt>Screens ({screens} × {m(pl.screenFee || 0)})</dt><dd>{m(setup)} <small>one time</small></dd></div>
+              <div><dt>Screens ({screens} × {m(pl.screenFee || 0)}) <small>one time</small></dt><dd>{m(setup)}</dd></div>
               <div className="tot"><dt>Total for {q.toLocaleString()}{charged > q ? ` (charged as ${charged})` : ""}</dt><dd><b>{custom ? "Quoted" : m(each * charged + setup)}</b></dd></div>
             </dl>
-            <p className="pcx-fine">An estimate from your price list, before garments, finishing and tax.{dark && pl.darkAddsColor ? " Dark garments get a white underbase, counted as one more color." : ""}{custom ? ` ${cols + 1}+ colors are quoted for the job.` : ""}</p>
+            <p className="pcx-fine">Before garments, finishing and tax.{dark && pl.darkAddsColor ? " Dark garments get a white underbase, counted as one more color." : ""}{custom ? ` ${cols + 1}+ colors are quoted for the job.` : ""}</p>
+            <Ballpark />
           </>}
         </div>
       </div>
@@ -115,13 +116,16 @@ export function EmbCalc({ pl }: { pl: PriceList }) {
   const [pic, setPic] = useState<{ url: string; name: string; aspect: number; cov: number } | null>(null);
   const [est, setEst] = useState(false);
   const pp = PLACES.find((p) => p.k === place) || PLACES[0];
+  // how wide they'd like it (Nov 2, Nick: "how big do you think you want it… 10 inches, then this would be your cost");
+  // empty = the usual size for that spot
+  const [wide, setWide] = useState("");
   // a logo picked: its stitches estimated from its shape at this spot's size (the digitized file's count is the real one)
   const estimate = useMemo(() => {
     if (!pic) return 0;
-    let w = pp.w, h = w * pic.aspect;
-    if (h > pp.maxH) { h = pp.maxH; w = h / pic.aspect; }
+    let w = +wide > 0 ? +wide : pp.w, h = w * pic.aspect;
+    if (!(+wide > 0) && h > pp.maxH) { h = pp.maxH; w = h / pic.aspect; }
     return estimateStitches(w, h, pic.cov, 3);
-  }, [pic, pp]);
+  }, [pic, pp, wide]);
   const st = est && estimate ? estimate : Math.max(0, Math.floor(+stitches || 0));
   const q = Math.max(0, Math.floor(+qty || 0));
   const eti = tierOf(q, embT);
@@ -148,29 +152,40 @@ export function EmbCalc({ pl }: { pl: PriceList }) {
             <label className="pcx-f"><span>Garment</span><select value={garment} onChange={(e) => { setGarment(e.target.value); if (/^Hat/.test(e.target.value) && !/^Hat/.test(place)) setPlace("Hat front"); if (/^Bag/.test(e.target.value)) setPlace("Bag or backpack"); }}>{GARMENTS.map((x) => <option key={x.k}>{x.k}</option>)}</select></label>
           </div>
           <div className="pcx-row">
-            <label className="pcx-f"><span>Where it goes</span><select value={place} onChange={(e) => setPlace(e.target.value)}>{PLACES.map((p) => <option key={p.k} value={p.k}>{p.k} ({p.w}&quot; wide)</option>)}</select></label>
+            <label className="pcx-f"><span>Where it goes</span><select value={place} onChange={(e) => { setPlace(e.target.value); setWide(""); }}>{PLACES.map((p) => <option key={p.k} value={p.k}>{p.k}</option>)}</select></label>
             <label className="pcx-f"><span>Stitches</span><input inputMode="numeric" value={est && estimate ? String(estimate) : stitches} onChange={(e) => { setEst(false); setStitches(e.target.value.replace(/[^\d]/g, "")); }} /></label>
           </div>
+          {pic && <div className="pcx-row">
+            <label className="pcx-f"><span>How wide, in inches</span><input inputMode="decimal" placeholder={`About ${pp.w}`} value={wide} onChange={(e) => setWide(e.target.value.replace(/[^\d.]/g, ""))} /></label>
+            <div className="pcx-f pcx-hint"><span>&nbsp;</span><small>Usually about {pp.w}&quot; on a {pp.k.toLowerCase()}.</small></div>
+          </div>}
           <label className={"pcx-up" + (pic ? " has" : "")}>
             <input type="file" accept="image/*" onChange={(e) => onFile(e.target.files?.[0])} />
-            {pic ? <><img src={pic.url} alt="" /><span><b>{pic.name}</b><small>About {estimate.toLocaleString()} stitches at {pp.k.toLowerCase()} size. Choose another logo to change it.</small></span></>
+            {pic ? <><img src={pic.url} alt="" /><span><b>{pic.name}</b><small>About {estimate.toLocaleString()} stitches at {+wide > 0 ? `${wide}" wide` : `${pp.k.toLowerCase()} size`}. Choose another logo to change it.</small></span></>
               : <span><b>Upload your logo</b><small>We&apos;ll estimate the stitch count for where it goes.</small></span>}
           </label>
         </div>
         <div className="pcx-out" aria-live="polite">
           {!q ? <p className="faint">Type how many pieces.</p> : <>
             <dl className="pl-dl">
-              <div><dt>Embroidery up to {(pl.embStitches || 0).toLocaleString()} stitches</dt><dd>{m(base)} <small>each</small></dd></div>
-              {extra > 0 && <div><dt>{st.toLocaleString()} stitches: {Math.ceil((st - (pl.embStitches || 0)) / 1000)} more thousand</dt><dd>+{m(extra)} <small>each</small></dd></div>}
-              {spec > 0 && <div><dt>Specialty item ({g.k.toLowerCase()})</dt><dd>+{m(spec)} <small>each</small></dd></div>}
+              <div><dt>Embroidery up to {(pl.embStitches || 0).toLocaleString()} stitches <small>each</small></dt><dd>{m(base)}</dd></div>
+              {extra > 0 && <div><dt>{st.toLocaleString()} stitches: {Math.ceil((st - (pl.embStitches || 0)) / 1000)} more thousand <small>each</small></dt><dd>+{m(extra)}</dd></div>}
+              {spec > 0 && <div><dt>Specialty item ({g.k.toLowerCase()}) <small>each</small></dt><dd>+{m(spec)}</dd></div>}
               <div><dt>Per piece</dt><dd><b>{m(each)}</b></dd></div>
-              <div><dt>Digitizing your logo</dt><dd>{m(dig)} <small>one time</small></dd></div>
+              <div><dt>Digitizing your logo <small>one time</small></dt><dd>{m(dig)}</dd></div>
               <div className="tot"><dt>Total for {q.toLocaleString()}</dt><dd><b>{m(each * q + dig)}</b></dd></div>
             </dl>
-            <p className="pcx-fine">An estimate from your price list, before garments and tax.{q < (embT[0] || 0) ? ` Embroidery starts at ${embT[0]} pieces.` : ""} The stitch count is final once your logo is digitized; logos we&apos;ve digitized before have no digitizing charge.</p>
+            <p className="pcx-fine">Before garments and tax.{q < (embT[0] || 0) ? ` Embroidery starts at ${embT[0]} pieces.` : ""} The stitch count is set once your logo is digitized; a logo we&apos;ve digitized before has no digitizing charge.</p>
+            <Ballpark />
           </>}
         </div>
       </div>
     </section>
   );
+}
+
+/** the same plain note under both calculators (Nov 2, Nick: "these are just estimates… FBS has the right to change the
+ *  price… once seeing it… a good ballpark… a nice way to say it") */
+function Ballpark() {
+  return <p className="pcx-ball">This is a ballpark to help you plan, based on your price list without seeing your artwork. Once we see the art and the garments, the price can change with the design&apos;s detail, the stitch count or the garment itself. Your quote always shows the final price before anything is made.</p>;
 }
