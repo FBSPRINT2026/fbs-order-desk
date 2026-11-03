@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { PriceList } from "@/lib/pricing";
 import PrintButton from "@/app/portal/pricing/print";
 import PricingTabs from "@/app/portal/pricing/tabs";
+import { EmbCalc, ScreenCalc } from "@/components/PricingCalc";
 
 /**
  * The wholesale price list, a tab in the portal for wholesale accounts (Oct 24, Nick: "on the wholesale companies, we
@@ -24,10 +25,6 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
   const notes = String(pl.contractNotes || "").split(/(?<=\.)\s+(?=[A-Z0-9])/).map((x) => x.trim()).filter((x) => x && !/^FBS Contract Pricing List/i.test(x));
   const title = String(pl.contractNotes || "").match(/^FBS Contract Pricing List[^.]*/)?.[0] || "FBS wholesale price list";
   const light = (pl.lightColors || []).join(" and ");
-  // a worked example from the list itself: 100 dark tees, 1-color front and 1-color back
-  const ti = (q: number, t: number[]) => t.reduce((a, x, i) => (q >= x ? i : a), 0);
-  const exC = 1 + (pl.darkAddsColor ? 1 : 0), exRow = pl.screen?.[ti(100, tiers)] || [];
-  const exEach = (exRow[exC - 1] || 0) * 2, exSetup = exC * 2 * (pl.screenFee || 0);
   return (
       <div className="pl">
         <div className="pl-head">
@@ -70,19 +67,13 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
               </dl>
             </div>
           </section>
-          <section className="panel pl-sec pl-ex">
-            <div className="panel-h"><h2>How it adds up</h2><span className="faint">An example</span></div>
-            <div className="panel-b">
-              <p><b>100 black tees, a 1-color front and a 1-color back.</b></p>
-              <dl className="pl-dl">
-                <div><dt>Each print{pl.darkAddsColor ? " (1 color + underbase)" : ""}</dt><dd>{m(exRow[exC - 1] || 0)} × 2 locations</dd></div>
-                <div><dt>Per shirt</dt><dd><b>{m(exEach)}</b></dd></div>
-                <div><dt>Screens ({exC * 2} × {m(pl.screenFee || 0)})</dt><dd>{m(exSetup)} <small>one time</small></dd></div>
-                <div className="tot"><dt>Order total</dt><dd><b>{m(exEach * 100 + exSetup)}</b></dd></div>
-              </dl>
-            </div>
-          </section>
+          {/* finishing beside screens and setup (Nov 2, Nick: "instead of how it adds up… put the finishing there") */}
+          {fin.length > 0 && <section className="panel pl-sec">
+            <div className="panel-h"><h2>Finishing</h2><span className="faint">Per piece</span></div>
+            <div className="panel-b"><dl className="pl-dl">{fin.map((f) => <div key={f.id}><dt>{f.name}</dt><dd>{m(f.price)}</dd></div>)}</dl></div>
+          </section>}
         </div>
+        <ScreenCalc pl={pl} />
 
           </> },
           { k: "emb", label: "Embroidery", body: <>
@@ -103,6 +94,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
           </div>
         </section>
 
+        <EmbCalc pl={pl} />
           </> },
           ...(dtfOk ? [{ k: "dtf", label: "DTF heat transfers", body: <>
         <section className="panel pl-sec">
@@ -118,12 +110,6 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
           </> }] : []),
         ]} />
 
-        {fin.length > 0 && (
-          <section className="panel pl-sec">
-            <div className="panel-h"><h2>Finishing</h2><span className="faint">Per piece</span></div>
-            <div className="panel-b"><dl className="pl-dl pl-cols">{fin.map((f) => <div key={f.id}><dt>{f.name}</dt><dd>{m(f.price)}</dd></div>)}</dl></div>
-          </section>
-        )}
 
         {notes.length > 0 && (
           <section className="panel pl-sec">

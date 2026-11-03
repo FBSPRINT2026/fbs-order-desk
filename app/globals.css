@@ -19178,3 +19178,69 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pl-tabs .pl-tabs-r{margin-left:auto}
 @media print{.pl-tabs-r{display:none}}
 .mh-convos > .mh-ask{margin:10px 6px 8px}
+/* ---- the printed contract price list (app/print/pricing): the FBS Contract Pricing List in the site's look (Nov 2) ---- */
+.pls{background:var(--surface-2);min-height:100vh;padding:20px 12px 40px;font-family:var(--body);color:var(--ink)}
+.pls-bar{max-width:816px;margin:0 auto 12px;display:flex;justify-content:flex-end}
+.pls-page{max-width:816px;margin:0 auto;background:#fff;box-shadow:0 2px 16px rgba(20,29,43,.12);border-radius:8px;overflow:hidden;font-size:11.5px;line-height:1.35}
+.pls-h{display:flex;align-items:center;gap:18px;background:#141D2B;color:#fff;padding:16px 28px;border-bottom:4px solid transparent;border-image:var(--fbs-fade) 1;border-image-slice:0 0 1 0}
+.pls-logo{height:42px;width:auto;display:block}
+.pls-ttl{flex:1;display:flex;flex-direction:column;gap:2px;border-left:1px solid rgba(255,255,255,.25);padding-left:18px}
+.pls-ttl b{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-.01em}
+.pls-ttl span{font-size:12px;color:#B8C2D3}
+.pls-c{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-size:11.5px;color:#DDE3EC;text-align:right}
+.pls-c b{font-size:16px;color:#fff;font-weight:700}
+.pls-b{padding:14px 28px 10px}
+.pls h2{font-family:var(--display);font-size:17px;font-weight:800;margin:6px 0 8px;text-align:center;letter-spacing:.01em;text-transform:uppercase}
+.pls-t{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.pls-t thead th{background:#141D2B;color:#fff;font-weight:700;font-size:12px;padding:6px 8px;text-align:left}
+.pls-grid thead th:first-child{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:#B8C2D3}
+.pls-t tbody th{font-weight:700;text-align:left;padding:4.5px 8px;white-space:nowrap}
+.pls-t td{padding:4.5px 8px;border-bottom:1px solid #E3E8EF}
+.pls-t tbody th{border-bottom:1px solid #E3E8EF}
+.pls-t tbody tr:nth-child(even) th,.pls-t tbody tr:nth-child(even) td{background:#F3F6FA}
+.pls-kv{margin-top:12px}
+.pls-kv tbody th{font-weight:700;font-size:11px}
+.pls-kv tbody th span{font-weight:400;color:#5B6678}
+.pls-kv td{font-size:11px;white-space:nowrap}
+.pls-note{text-align:center;margin:6px 0 1px;font-size:12.5px}
+.pls-fine{text-align:center;margin:0;font-size:10px;color:#5B6678}
+.pls-c2{margin-top:5px}
+.pls-two{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
+.pls-two .pls-kv{margin-top:0}
+.pls-rush{margin-top:12px;text-align:center;display:flex;flex-direction:column;gap:3px}
+.pls-rush b{font-family:var(--display);font-size:15px;font-weight:800;text-transform:uppercase}
+.pls-rush span{font-size:11px;color:#5B6678}
+.pls-f{display:flex;justify-content:space-between;gap:12px;padding:8px 28px 12px;font-size:10px;color:#5B6678;border-top:1px solid #E3E8EF;margin-top:8px}
+@media (max-width:700px){.pls-two{grid-template-columns:1fr}.pls-h{flex-wrap:wrap}.pls-page{font-size:11px}.pls-t thead th{font-size:10.5px;padding:5px 4px}.pls-t td,.pls-t tbody th{padding:4px}}
+@media print{
+  @page{size:letter;margin:.3in}
+  .pls{background:#fff;padding:0;min-height:0}
+  .pls-bar{display:none}
+  .pls-page{box-shadow:none;border-radius:0;max-width:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+/* the price list's calculators (components/PricingCalc.tsx): what they'd order on the left, what it comes to on the right */
+.pcx-b{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:start}
+.pcx-in{display:flex;flex-direction:column;gap:10px;min-width:0}
+.pcx-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end}
+.pcx-loc{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}
+.pcx-f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.pcx-f > span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.pcx-f input,.pcx-f select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);width:100%;box-sizing:border-box}
+.pcx-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));height:36px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.pcx-seg button{border:0;background:var(--surface);font:inherit;font-size:14px;color:var(--ink-3);cursor:pointer}
+.pcx-seg button + button{border-left:1px solid var(--line)}
+.pcx-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.pcx-x{height:36px;font-size:12.5px}
+.pcx-more{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:13px}
+.pcx-ck{display:inline-flex;align-items:center;gap:6px;color:var(--ink-3);font-size:13px}
+.pcx-up{display:flex;align-items:center;gap:12px;border:1px dashed var(--line);border-radius:var(--r);padding:12px;cursor:pointer;background:var(--surface-2)}
+.pcx-up:hover{border-color:var(--accent)}
+.pcx-up input{display:none}
+.pcx-up img{width:56px;height:56px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:6px;flex:none}
+.pcx-up span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pcx-up b{font-size:14px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcx-up small{font-size:12px;color:var(--ink-3)}
+.pcx-out{background:var(--surface-2);border-radius:var(--r);padding:12px 14px;min-width:0}
+.pcx-out .pl-dl{margin:0}
+.pcx-fine{font-size:12px;color:var(--ink-3);margin:8px 0 0}
+@media (max-width:760px){.pcx-b{grid-template-columns:1fr}.pcx-f input,.pcx-f select{font-size:16px}}
