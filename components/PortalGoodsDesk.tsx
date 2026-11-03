@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { CARRIERS, carrierOf, GOODS, shipGroups, trackedGoods, trackingUrl, trackWord, type GoodsItem, type GoodsStatus } from "@/lib/goods";
 import type { PendingShipment } from "@/lib/manifest";
 import { checkLink, readShipmentPaper, type SendGoods, type TrackingInput } from "@/app/portal/goods-actions";
-import { portalAttachUrl } from "@/app/portal/message-actions";
+import { portalAttachUrl, portalSend } from "@/app/portal/message-actions";
 import { createClient } from "@/lib/supabase/client";
 import { fmtDateLong } from "@/lib/format";
 import GoodsIssues from "@/components/GoodsIssues";
@@ -43,7 +43,6 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
   sendGoods?: (x: SendGoods) => Promise<R>; linkTold?: (ids: string[], orderId: string) => Promise<R>;
 }) {
   const router = useRouter();
-  const chatHref = (id: string) => `/portal${qs ? qs + "&" : "?"}area=messages&c=${id}:goods`;
   const [q0, setQ] = useState("");
   // the portal page's own search, at the right of its title (PageSearchContext); else this box's
   const outerQ = useContext(PageSearchContext);
@@ -112,22 +111,32 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
 
   // one plain row per order (Nov 2, Nick: "it's a hard to read section"): the order, its shipments, boxes here, tracking
   const [trkOpen, setTrkOpen] = useState<string | null>(null);
+  // "Ask about this": a small pop-up with the message already written from what we know (Nov 2, Nick: "almost like an
+  // autofill thing… I noticed you haven't received these. This was the tracking")
+  const [ask, setAsk] = useState<(typeof rows)[number] | null>(null);
   const card = (r: (typeof rows)[number]) => {
     const o = r.it.order, groups = shipGroups(r.it.shipments), trk = r.it.shipments.filter((s) => s.tracking);
     const hereNow = (s: { track_status?: string; delivered_at?: string | null }) => s.track_status === "delivered" || !!s.delivered_at;
+    const late = !r.done && !!r.eta && r.eta.slice(0, 10) < new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
     return (
       <article key={o.id} className={"gdk-row" + (drag ? " drop" : "") + (over === o.id ? " over" : "")}
         onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(o.id); } }} onDragLeave={() => setOver((x) => (x === o.id ? null : x))} onDrop={(e) => { e.preventDefault(); void dropOn(o.id); }}>
-        <div className="gdk-c1"><Link className="gdk-on" href={o.href}>#{o.number}</Link> <b>{o.nickname || "Order"}</b>
+        {/* the job first and big (Nov 2, Nick: "really clear on the left… the job number and the description with the due date") */}
+        <div className="gdk-c1"><Link className="gdk-on" href={o.href}>#{o.number}</Link><b className="gdk-jnm">{o.nickname || "Order"}</b>
           <div className="gdk-sm">{[o.due_date ? `In hands ${when(o.due_date)}` : "", o.qty ? pcsOf(o.qty) : ""].filter(Boolean).join(" · ")}</div></div>
-        <div className="gdk-c2">{groups.length ? groups.map((g, k) => <div key={k}><b>{g.supplier ? `${g.supplier.replace(/ Activewear$/, "")} ${g.order}` : "Your shipment"}</b>{!g.supplier && g.ships[0]?.added_by === "customer" ? <> {youTold}</> : null}{g.ships[0]?.note && g.supplier ? <span className="gdk-sm"> · {g.ships[0].note.split(" · ").slice(2).join(" · ") || ""}</span> : g.ships[0]?.note ? <span className="gdk-sm"> · {g.ships[0].note}</span> : null}</div>)
-          : <span className="gdk-sm">No shipment yet{canAct ? <> · <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>Tell us what&apos;s coming</button></> : null}</span>}</div>
-        <div className="gdk-c3">{r.boxes ? <span className={r.done ? "gdk-ok" : ""}>{r.done ? `All ${r.boxes} here` : r.here >= r.boxes ? `All ${r.boxes} linked here` : `${r.here} of ${r.boxes} here`}{r.short ? <span className="gdk-sm gdk-c3-sub">{pcsOf(r.short)} not shipped yet</span> : null}{!r.done && r.eta ? <span className="gdk-sm"> · {when(r.eta)}</span> : null}</span> : <span className="gdk-sm">—</span>}</div>
-        <div className="gdk-c4">
-          {trk.length > 0 ? <button type="button" className="gdk-trk" aria-expanded={trkOpen === o.id} onClick={() => setTrkOpen(trkOpen === o.id ? null : o.id)}>{trk.length} tracking {trkOpen === o.id ? "▴" : "▾"}</button> : <span className="gdk-sm">—</span>}
-        </div>
-        <div className="gdk-c5">
-          <Link className="gdk-msg" href={chatHref(o.id)} title="Message us about these goods" aria-label="Message us about these goods"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></Link>
+        <div className="gdk-c2">{groups.length ? groups.map((g, k) => <div key={k}><b>{g.supplier ? `${g.supplier.replace(/ Activewear$/, "")} ${g.order}` : "Your shipment"}</b>{!g.supplier && g.ships[0]?.added_by === "customer" ? <> {youTold}</> : null}{g.ships[0]?.note && g.supplier ? <span className="gdk-sm gdk-c2-sub">{g.ships[0].note.split(" · ").slice(2).join(" · ") || ""}</span> : g.ships[0]?.note ? <span className="gdk-sm gdk-c2-sub">{g.ships[0].note}</span> : null}</div>)
+          : <span className="gdk-sm">No shipment yet</span>}</div>
+        {/* one plain status, the tracking folded under it, and a way to ask only when something's off (no message button) */}
+        <div className="gdk-c3">
+          {r.boxes ? <span className={"gdk-stx " + (r.done ? "gdk-ok" : late || r.short || r.st === "issue" ? "gdk-warn" : "")}>{r.done ? "All here" : r.here >= r.boxes ? "All linked boxes here" : `${r.here} of ${r.boxes} boxes here`}</span>
+            : <span className="gdk-stx gdk-warn">Waiting on tracking</span>}
+          {r.short ? <span className="gdk-sm gdk-c3-sub">{pcsOf(r.short)} not shipped yet</span> : null}
+          {!r.done && r.eta ? <span className="gdk-sm gdk-c3-sub">{late ? "Was due" : "Expected"} {when(r.eta)}</span> : null}
+          <span className="gdk-c3-acts">
+            {trk.length > 0 && <button type="button" className="gdk-trk" aria-expanded={trkOpen === o.id} onClick={() => setTrkOpen(trkOpen === o.id ? null : o.id)}>{trk.length} tracking {trkOpen === o.id ? "▴" : "▾"}</button>}
+            {!r.boxes && canAct && <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>Add tracking</button>}
+            {(late || r.short > 0 || r.st === "issue") && <button type="button" className="linkbtn" onClick={() => setAsk(r)}>Ask about this</button>}
+          </span>
         </div>
         {trkOpen === o.id && (
           <ul className="gdk-trks gdk-full">
@@ -172,7 +181,7 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
               <div><b>{g.label} · {g.list.length}</b><span>{GROUP_LINE[g.k]}</span></div>
             </div>
             <div className="gdk-vbar"><span>{g.label} · {g.list.length}</span></div>
-            <div className="gdk-grp-b"><div className="gdk-row gdk-head" aria-hidden><span>Order</span><span>Shipment</span><span>Boxes</span><span>Tracking</span><span /></div>{g.list.map(card)}</div>
+            <div className="gdk-grp-b"><div className="gdk-row gdk-head" aria-hidden><span>Job</span><span>What&apos;s coming</span><span>Status</span></div>{g.list.map(card)}</div>
           </section>
         ))}
         {!shown.length && !notLinked && <div className="aa-empty">{w ? `Nothing matches “${q}”.` : "No orders with goods right now."}</div>}
@@ -189,6 +198,7 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
           </div>
         </div>
       )}
+      {ask && <AskGoods item={ask.it} short={ask.short} eta={ask.eta} canAct={canAct} messagesHref={`/portal${qs ? qs + "&" : "?"}area=messages&c=${ask.it.order.id}:goods`} onClose={() => setAsk(null)} />}
       {tell && <SendGoodsDialog orders={rows.filter((r) => !r.done).map((r) => ({ id: r.it.order.id, label: `#${r.it.order.number} ${r.it.order.nickname}` }))} canAct={canAct}
         send={sendGoods} onClose={() => setTell(false)} onDone={() => { setTell(false); router.refresh(); }} />}
       {notLinked > 0 && (
@@ -427,6 +437,58 @@ function SendGoodsDialog({ orders, canAct, send, onClose, onDone }: { orders: { 
         {msg && <div className="gdk-err">{msg}</div>}
         <div className="gdk-sg-acts"><button type="button" className="btn" disabled={busy} onClick={onClose}>Cancel</button>
           <button type="button" className="btn primary" disabled={busy || !canAct || !!reading} title={canAct ? undefined : "Turned off in preview"} onClick={go}>{busy ? "Sending…" : "Send it"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ask about an order's goods: the message is already written from what we know (which boxes aren't here, the supplier
+ * order, the tracking, when it was due), with a few short choices that change the wording. It goes into that order's
+ * goods conversation in the Message Center, where the shop answers (Nov 2, Nick).
+ */
+function AskGoods({ item, short, eta, canAct, messagesHref, onClose }: { item: GoodsItem; short: number; eta: string | null; canAct: boolean; messagesHref: string; onClose: () => void }) {
+  const o = item.order;
+  const out = item.shipments.filter((s) => !(s.track_status === "delivered" || s.delivered_at));
+  const facts = shipGroups(out).map((g) => {
+    const trk = g.ships.filter((x) => x.tracking).map((x) => `${x.carrier ? x.carrier + " " : ""}${x.tracking}`);
+    return `${g.supplier ? `${g.supplier.replace(/ Activewear$/, "")} ${g.order}` : "our shipment"}${trk.length ? `, tracking ${trk.join(", ")}` : ""}`;
+  }).join("; ");
+  const job = `#${o.number}${o.nickname ? ` (${o.nickname})` : ""}`;
+  const due = eta ? `, expected ${when(eta)}` : "";
+  const KINDS = [
+    { k: "late", label: "It's late", text: `Hi FBS, we haven't seen ${out.length ? "these" : "our goods"} checked in for ${job} yet${facts ? `: ${facts}${due}` : ""}. Can you take a look?` },
+    ...(short > 0 ? [{ k: "short", label: "Some haven't shipped", text: `Hi FBS, the supplier shows ${pcsOf(short)} for ${job} haven't shipped yet${facts ? ` (${facts})` : ""}. Can you check on them?` }] : []),
+    { k: "trk", label: "Here's new tracking", text: `Hi FBS, here's new tracking for ${job}: ` },
+    { k: "wrong", label: "Something's wrong", text: `Hi FBS, something's not right with the goods for ${job}: ` },
+  ];
+  const [kind, setKind] = useState(KINDS[0].k);
+  const [text, setText] = useState(KINDS[0].text);
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [sent, setSent] = useState(false);
+  const pick = (k: string) => { setKind(k); setText(KINDS.find((x) => x.k === k)!.text); };
+  const send = async () => {
+    if (!text.trim()) { setErr("Write a message first."); return; }
+    setBusy(true); setErr("");
+    const r = await portalSend(o.id, text.trim(), [], "goods").catch(() => ({ ok: false, error: "Couldn't send it. Try again." }));
+    setBusy(false);
+    if (!r.ok) { setErr(r.error || "Couldn't send it."); return; }
+    setSent(true);
+  };
+  return (
+    <div className="dla-bg" role="dialog" aria-modal="true" aria-label={`Ask about ${job}'s goods`} onClick={onClose}>
+      <div className="dla gdk-ask" onClick={(e) => e.stopPropagation()}>
+        <h3>Ask about #{o.number}&apos;s goods</h3>
+        <p className="dla-sub" data-notranslate>{[o.nickname, o.due_date ? `in hands ${when(o.due_date)}` : ""].filter(Boolean).join(" · ")}</p>
+        {sent ? <>
+          <p className="gdk-ask-ok">Sent. We&apos;ll answer in your Message Center.</p>
+          <div className="gdk-sg-acts"><Link className="btn" href={messagesHref}>Open the conversation</Link><button type="button" className="btn primary" onClick={onClose}>Done</button></div>
+        </> : <>
+          <div className="gdk-ask-k" role="radiogroup" aria-label="What's this about?">{KINDS.map((x) => <button key={x.k} type="button" role="radio" aria-checked={kind === x.k} className={"chip" + (kind === x.k ? " on" : "")} onClick={() => pick(x.k)}>{x.label}</button>)}</div>
+          <textarea rows={5} value={text} onChange={(e) => { setText(e.target.value); setErr(""); }} aria-label="Your message" />
+          {err && <div className="pv-err">{err}</div>}
+          {!canAct && <div className="gdk-sm">This is a preview: customers send it from their own login.</div>}
+          <div className="gdk-sg-acts"><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={busy} onClick={send}>{busy ? "Sending…" : "Send"}</button></div>
+        </>}
       </div>
     </div>
   );
