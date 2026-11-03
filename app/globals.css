@@ -18974,3 +18974,21 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
    (the other names were cut to "Receiv…", "Compl…") */
 .pjo-today small{white-space:nowrap;left:4px}
 @media (max-width:520px){.orl-lb li:not(.cur){visibility:hidden}.orl-lb li.cur{overflow:visible;white-space:nowrap}}
+/* the dashboard's proofs waiting for approval, each with its art (Nov 2, Nick: "a little artwork thumbnail") */
+.pdx-pfl{list-style:none;margin:0;padding:6px 16px 12px;display:flex;flex-direction:column}
+.pdx-pfl li{--hk:var(--fbs-violet);display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-2)}
+.pdx-pfl li:last-child{border-bottom:0}
+.pdx-pfl-pic{flex:none;width:64px;height:64px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);display:grid;place-items:center;overflow:hidden;color:var(--ink-4,var(--ink-3))}
+.pdx-pfl-pic img{width:100%;height:100%;object-fit:contain}
+.pdx-pfl-pic:hover{border-color:var(--fbs-violet)}
+.pdx-pfl-t{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.pdx-pfl-n{display:flex;flex-direction:column;text-decoration:none;color:var(--ink);min-width:0}
+.pdx-pfl-n b{font-size:18px;font-weight:700;line-height:1.15;color:var(--ink)}
+.pdx-pfl-n span{font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdx-pfl-n:hover b{color:var(--accent)}
+.pdx-pfl-t small{font-size:12px;color:var(--fbs-violet);font-weight:600;white-space:nowrap}
+@media (max-width:420px){.pdx-pfl li{flex-wrap:wrap}.pdx-pfl li .pdx-hl-do{margin-left:76px}}
+/* the order page: what's waiting on them, by the order number; the one button opens their review page */
+.pod-eb .pod-wait{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--fbs-violet);white-space:nowrap}
+.pod-eb .pod-wait::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--fbs-violet)}
+.pfl-top a.pfl-back{color:var(--accent);font-weight:600;margin-right:16px}

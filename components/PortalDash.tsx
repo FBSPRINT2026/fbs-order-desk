@@ -21,7 +21,7 @@ export type DashTracked = { id: string; href: string; number: number; name: stri
   /** its picture and steps, so a starred order looks like its job below (Nov 2, Nick: "doesn't stand out like the rest") */ pic?: string; steps?: PortalJob["steps"]; done?: boolean };
 
 /** a proof waiting for their OK (Nov 2) */
-export type DashProof = { id: string; number: number; name: string; href: string; orderHref: string; n: number };
+export type DashProof = { id: string; number: number; name: string; href: string; orderHref: string; n: number; pic?: string; what?: string };
 
 /** an order on hold, with why (Oct 24, Nick: "there's got to be an on hold panel on the dashboard for the customer") */
 export type DashHeld = { id: string; href: string; number: number; name: string; msgHref: string; hold: { key?: string; title: string; reason: string; href: string; fixLabel: string } };
@@ -145,10 +145,16 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
             right, let's put that as proofs… the same height as everything on the left") */}
         <section className={"pdx-card pdx-pf" + (proofs.length ? " has" : "")}>
           <div className="pdx-h"><h2>Proofs waiting for approval</h2>{proofs.length > 0 && <span className="pdx-pf-n">{proofs.length}</span>}</div>
-          {proofs.length ? <ul className="pdx-hl">{proofs.map((x) => (
-            <li key={x.id} style={{ ["--hk" as string]: "var(--fbs-violet)" }}>
-              <Link className="pdx-hl-job" href={x.orderHref}><b className="onum">#{x.number}</b>{x.name && <span>{x.name}{x.n > 1 ? ` · ${x.n} proofs` : ""}</span>}</Link>
-              <Link className="pdx-hl-do" href={x.href}>Review proof</Link>
+          {/* each with its art (Nov 2, Nick: "make this look a little better… a little artwork thumbnail"); the button opens
+              the same review page our email does: the proof, then the quote (app/portal/orders/[id]/approve) */}
+          {proofs.length ? <ul className="pdx-pfl">{proofs.map((x) => (
+            <li key={x.id}>
+              <Link className="pdx-pfl-pic" href={x.href} aria-label={`Review #${x.number}`}>{x.pic ? <img src={x.pic} alt="" loading="lazy" /> : <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden><path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3a4 4 0 0 1-8 0z" /></svg>}</Link>
+              <span className="pdx-pfl-t">
+                <Link href={x.orderHref} className="pdx-pfl-n"><b className="onum">#{x.number}</b>{x.name && <span>{x.name}</span>}</Link>
+                <small>{x.what || "Proof"} ready{x.n > 1 ? ` · ${x.n} proofs` : ""}</small>
+              </span>
+              <Link className="pdx-hl-do" href={x.href}>Review and approve</Link>
             </li>))}</ul> : <div className="pdx-hold-ok" role="status">
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <b>No proofs waiting</b>

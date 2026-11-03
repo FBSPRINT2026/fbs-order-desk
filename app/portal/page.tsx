@@ -276,7 +276,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const pickupHref = shopAddr ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(shopAddr)}` : "";
   const jobOf = (o: Order) => {
     const c = conv.get(o.id);
-    return jobFor(o, { href: link(`/portal/orders/${o.id}`), pic: picOf(o), pendingProof: firstPending[o.id] ? link(`/portal/orders/${o.id}/review/${firstPending[o.id]}`) : undefined,
+    return jobFor(o, { href: link(`/portal/orders/${o.id}`), pic: picOf(o), pendingProof: firstPending[o.id] ? link(`/portal/orders/${o.id}/approve`) : undefined,
       approvedArt: !!approvedArt[o.id], goods: goodsOf.get(o.id) || null, customerGoods: o.price_type === "wholesale", newMsgs: c?.unread || 0,
       lastMsg: c ? { from: c.last.author_type === "staff" ? shopName : "you", text: clip(c.last.body, 60), href: msgLink(o.id) } : undefined,
       goodsHref, ship: shipOf.get(o.id) || null, balance: o.type === "invoice" ? bal(o) : 0, payHref: link("/portal?area=payments"), pickup: shopAddr, pickupHref });
@@ -327,7 +327,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         : o.status === "quote" ? { step: 1, label: "Pricing it", tone: "wait" as const, note: "We're putting your quote together." }
         : firstPending[o.id] ? { step: 2, label: "Proof ready", tone: "act" as const, note: "Your proof is ready: please approve it." }
         : { step: 2, label: "Confirmed", tone: "ok" as const, note: "Confirmed. It's in your jobs below." };
-      return { id: o.id, href: firstPending[o.id] && st.label === "Proof ready" ? link(`/portal/orders/${o.id}/review/${firstPending[o.id]}`) : link(`/portal/orders/${o.id}`), number: o.number, name: o.nickname || (simpleO ? "Simple order" : ""), when: short(o.submitted_at), pcs, simple: simpleO, ...st };
+      return { id: o.id, href: firstPending[o.id] && st.label === "Proof ready" ? link(`/portal/orders/${o.id}/approve`) : link(`/portal/orders/${o.id}`), number: o.number, name: o.nickname || (simpleO ? "Simple order" : ""), when: short(o.submitted_at), pcs, simple: simpleO, ...st };
     });
   const IDX_AFTER_ART = ["blanks", "production", "ready"];
   // what's waiting on them, with a picture and one button
@@ -336,7 +336,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const needs: DashNeed[] = attention.map((a, i) => {
     const o = orders.find((x) => x.id === a.order_id);
     const nm = o ? `#${o.number} ${o.nickname || ""}`.trim() : "";
-    if (a.kind === "art") return { key: `a${i}`, kind: a.kind, title: "Approve your artwork", text: `${nm} · proof ready. Printing starts once you approve.`, pic: o ? picOf(o) : "", href: firstPending[a.order_id] ? link(`/portal/orders/${a.order_id}/review/${firstPending[a.order_id]}`) : link(`/portal/orders/${a.order_id}`), cta: "Review art" };
+    if (a.kind === "art") return { key: `a${i}`, kind: a.kind, title: "Approve your artwork", text: `${nm} · proof ready. Printing starts once you approve.`, pic: o ? picOf(o) : "", href: firstPending[a.order_id] ? link(`/portal/orders/${a.order_id}/approve`) : link(`/portal/orders/${a.order_id}`), cta: "Review art" };
     if (a.kind === "quote") return { key: `a${i}`, kind: a.kind, title: "Review your quote", text: `${nm} · approve it to get started.`, pic: o ? picOf(o) : "", href: link(`/portal/orders/${a.order_id}`), cta: "Review quote" };
     if (a.kind === "draft") return { key: `a${i}`, kind: a.kind, title: "Finish your order", text: `${nm} · you started this one but haven't sent it yet.`, pic: o ? picOf(o) : "", href: link(`/portal/request/${a.order_id}`), cta: "Finish it" };
     return { key: `a${i}`, kind: a.kind, title: a.label || "Customer supplied goods", text: nm ? `${nm}` : "Shipments on your account", pic: o ? picOf(o) : "", href: a.href || goodsHref, cta: "Open" };
@@ -403,7 +403,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   };
   // the assistant's shortcuts, from their own jobs
   // proofs out for their OK, for the dashboard's "Proofs waiting for approval" (Nov 2, Nick)
-  const proofsDash: DashProof[] = orders.filter((o) => firstPending[o.id]).sort((a, b) => b.number - a.number).map((o) => ({ id: o.id, number: o.number, name: o.nickname || "", href: link(`/portal/orders/${o.id}/review/${firstPending[o.id]}`), orderHref: link(`/portal/orders/${o.id}`), n: pendingProofs[o.id] || 1 }));
+  const proofsDash: DashProof[] = orders.filter((o) => firstPending[o.id]).sort((a, b) => b.number - a.number).map((o) => ({ id: o.id, number: o.number, name: o.nickname || "", href: link(`/portal/orders/${o.id}/approve`), orderHref: link(`/portal/orders/${o.id}?view=1`), n: pendingProofs[o.id] || 1, pic: picOf(o), what: o.status === "quote_sent" ? "Proof and quote" : "Proof" }));
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
   const dash = (

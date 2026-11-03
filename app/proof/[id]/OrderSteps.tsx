@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { StepView } from "@/lib/customerSend";
 import ProofAnswer from "./ProofAnswer";
+import { PREVIEW_OFF, PreviewCtx, usePreview } from "./previewCtx";
 import { answerProof, answerQuote, approveAll, payByLink } from "./actions";
 
 /**
@@ -17,7 +18,11 @@ const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency
 const whoWhen = (s: StepView) => [s.who, s.when ? new Date(s.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""].filter(Boolean).join(" · ");
 const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
 
-export default function OrderSteps({ id, steps }: { id: string; orderId?: string; steps: StepView[] }) {
+export default function OrderSteps({ id, steps, preview = false }: { id: string; orderId?: string; steps: StepView[]; preview?: boolean }) {
+  return <PreviewCtx.Provider value={preview}><Steps id={id} steps={steps} /></PreviewCtx.Provider>;
+}
+
+function Steps({ id, steps }: { id: string; steps: StepView[] }) {
   const router = useRouter();
   const todo = steps.filter((s) => (s.state === "todo" || s.state === "locked") && s.kind !== "deposit");
   const [cur, setCur] = useState((todo[0] || steps.find((s) => s.state === "todo") || steps[0])?.key || "");
@@ -106,11 +111,13 @@ export default function OrderSteps({ id, steps }: { id: string; orderId?: string
 /** one proof or sew-out: Looks good (a note is a small change, no new proof), or Needs changes (a new one comes) */
 function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { id: string; step: StepView; note0: string; nextLabel: string; isLast: boolean; onGood: (note: string) => void; onChanges: (note: string) => void }) {
   const what = step.kind === "art" ? "proof" : "sew-out";
+  const pv = usePreview();
   const [note, setNote] = useState(note0), [mode, setMode] = useState<"" | "changes">(""), [err, setErr] = useState(""), [sent, setSent] = useState(false);
   const [pending, start] = useTransition();
   if (sent) return <Result tone="chg" title="Changes sent" line={`We'll make them and send you a new ${what} to look over.`} note={note} />;
   const sendChanges = () => start(async () => {
     setErr("");
+    if (pv) { setErr(PREVIEW_OFF); return; }
     const r = await answerProof(id, "changes", "", note, step.kind === "art" ? { kind: "art" } : { kind: "sewout", id: step.sewoutId! });
     if (!r.ok) { setErr(r.error); return; }
     setSent(true); onChanges(note.trim());
@@ -140,6 +147,7 @@ function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { i
 /** the last screen: what they looked over, their name once, Submit approval; under it, Request changes and Decline the
  *  quote (Oct 29, Nick: "two small buttons under submit approval… request changes… decline the quote") */
 function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepView[]; ok: Record<string, string>; goTo: (k: string) => void; onDone: (msg: string) => void; onBack: (kind: "changes" | "declined", note: string) => void }) {
+  const pv = usePreview();
   const [name, setName] = useState(""), [err, setErr] = useState(""), [mode, setMode] = useState<"" | "changes" | "decline">(""), [why, setWhy] = useState(""), [sent, setSent] = useState<"" | "changes" | "declined">("");
   const [pending, start] = useTransition();
   const quote = todo.find((s) => s.kind === "quote" || s.kind === "invoice");
@@ -152,6 +160,7 @@ function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepV
   if (sent) return <Result tone={sent === "declined" ? "no" : "chg"} title={sent === "declined" ? "Quote declined" : "Changes sent"} line={sent === "declined" ? "Thanks for letting us know. We'll look at what you said and get back to you." : `We'll fix the ${priceWord} and send you a new one to approve.`} note={why} />;
   const submit = () => start(async () => {
     setErr("");
+    if (pv) { setErr(PREVIEW_OFF); return; }
     const art = looks.find((s) => s.kind === "art");
     const r = await approveAll(id, name, { art: art ? { note: ok[art.key] || "" } : null, sewouts: looks.filter((s) => s.kind === "sewout").map((s) => ({ id: s.sewoutId!, note: ok[s.key] || "" })), quote: !!quote && !isInv, invoice: isInv });
     if (!r.ok) { setErr(r.error); return; }
@@ -159,6 +168,7 @@ function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepV
   });
   const sendBack = (decision: "changes" | "decline") => start(async () => {
     setErr("");
+    if (pv) { setErr(PREVIEW_OFF); return; }
     const r = await answerQuote(id, decision, name, why);
     if (!r.ok) { setErr(r.error); return; }
     const k = decision === "decline" ? "declined" : "changes";
@@ -210,9 +220,11 @@ function Result({ tone, title, line, note, who }: { tone: "ok" | "chg" | "no"; t
 
 /** pay what's due now by card, right here (no sign-in): opens Stripe, and the payment lands on the order by itself */
 function PayNow({ id, label }: { id: string; label: string }) {
+  const pv = usePreview();
   const [err, setErr] = useState(""), [pending, start] = useTransition();
   const go = () => start(async () => {
     setErr("");
+    if (pv) { setErr(PREVIEW_OFF); return; }
     const r = await payByLink(id);
     if (!r.ok) { setErr(r.error); return; }
     window.location.href = r.url;

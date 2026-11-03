@@ -18,10 +18,11 @@ import { fmtDate, fmtDateLong, money } from "@/lib/format";
 import { pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
-import { MessageThread, OrderActions, PayButton, ProofCard, QuoteApproval } from "./client";
+import { MessageThread, OrderActions, PayButton, ProofCard } from "./client";
 import { OldReorderButton } from "@/components/PortalOldReorder";
 import { fmtPhone } from "@/lib/phone";
 import { orderSteps } from "@/lib/customerSend";
+import { approveHref, REVIEW_KINDS, reviewWords } from "@/lib/portalApprove";
 
 // our garments in words, for the order's details (the customer's own goods use GOODS[…].portal)
 const BLANKS: Record<GoodsStatus, string> = { waiting: "Ordered, not here yet", on_way: "On the way", arrived: "Arrived, checking them in", partial: "Partly here", received: "All here", issue: "Issue with the garments" };
@@ -33,9 +34,9 @@ const garmentName = (g?: string | null, style?: string | null) => {
   return st && t.toLowerCase().endsWith(st) && /(\s-|\.)\s*$/.test(head) ? head.replace(/(\s-|\.)\s*$/, "").trim() : t;
 };
 
-export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string; reviewed?: string; sewout?: string }> }) {
+export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string; reviewed?: string; sewout?: string; view?: string }> }) {
   const { id } = await params;
-  const { as, paid: justPaid, sent: justSent, reviewed, sewout: sewDone } = await searchParams;
+  const { as, paid: justPaid, sent: justSent, reviewed, sewout: sewDone, view } = await searchParams;
   const ctx = await getPortalCtx(as, `/portal/orders/${id}`);
   const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).neq("status", "quote").maybeSingle();
   if (!od) notFound();
@@ -52,7 +53,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   if (!ctx.isStaff && (pr.data || []).length) await proofViewed(createAdminClient(), id).catch(() => null);
   // what's waiting on them on their order page (the link our Send to customer email opens, lib/customerSend.ts)
   const { data: olk } = await createAdminClient().from("proof_links").select("id").eq("kind", "order").eq("order_id", id).limit(1).maybeSingle();
-  const waitingOn = olk?.id ? ((await orderSteps(createAdminClient(), olk.id))?.steps || []).filter((x) => x.state === "todo") : [];
+  const linkSteps = olk?.id ? (await orderSteps(createAdminClient(), olk.id))?.steps || [] : [];
   const payments = (p.data || []) as Payment[];
   const proofs = await signProofs((pr.data || []) as Proof[]);
   // the order's goods record (theirs or ours): their own goods get the tracking panel; every order gets a Garments line
@@ -90,6 +91,16 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const cs = runHere ? customerStatus({ status: o.status, flags: ((o as { flags?: Flag[] }).flags || []) as Flag[], delivery_method: o.delivery_method, simple_order: (o as { simple_order?: { reorder?: unknown } | null }).simple_order }, { proofSent: proofs.length > 0 }) : null;
   const hold = !["completed", "void"].includes(o.status) ? customerHold(((o as { flags?: Flag[] }).flags || []) as Flag[]) : null;
   const pendingProofs = proofs.filter((x) => x.status === "pending");
+  // what they still have to look over and answer: the steps of the review page our email opens (proof, sew-out, quote,
+  // final invoice), or, before that page was ever made, the same things worked out here
+  const reviewKinds = [...new Set(olk?.id
+    ? linkSteps.filter((x) => (REVIEW_KINDS as string[]).includes(x.kind) && (x.state === "todo" || x.state === "locked")).map((x) => x.kind as string)
+    : [...(pendingProofs.some((x) => (x as { sent_at?: string | null }).sent_at) ? ["art"] : []), ...(pendingSew.some((x) => x.sent_at) ? ["sewout"] : []), ...(o.status === "quote_sent" ? ["quote"] : [])])];
+  const reviewHref = reviewKinds.length ? approveHref(o.id, ctx.preview?.id) : "";
+  // (Nov 2, Nick: "you shouldn't be able to get into the quotes page until you've gone through that… you view the proof
+  // and then you review the quote"): an order waiting on their answer opens on its review page first; that page's "See the
+  // whole order" comes back here with view=1
+  if (reviewHref && !view && !reviewed && !sewDone && !justPaid && !justSent) redirect(reviewHref);
   // the customer's payment terms decide what's paid up front (lib/payTerms.ts)
   const terms = ctx.customers.find((x) => x.id === o.customer_id)?.payment_terms || "receipt";
   const tPct = termsPct(terms, ctx.settings.depositPct);
@@ -104,7 +115,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
     goods: goodsAll[0]?.goods.updated_at ? goodsAll[0].goods.status : null, customerGoods: o.price_type === "wholesale", newMsgs: 0 });
   // the full proof, the page they approve from (Nov 2, Nick: "almost like what the customer sees when they approve")
   const latestProof = proofs[0];
-  const proofHref = olk?.id ? `/proof/${olk.id}` : latestProof ? `/portal/orders/${o.id}/review/${latestProof.id}${qsAs}` : "";
+  const proofHref = reviewHref || (latestProof ? `/portal/orders/${o.id}/review/${latestProof.id}${qsAs}` : "");
   const cust = ctx.customers.find((x) => x.id === o.customer_id);
   const approvedProof = proofs.find((x) => x.status === "approved");
   // the garments for this order, in one line (Nov 2, Nick: "add the goods there"): ours or theirs, the same goods record
@@ -135,6 +146,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             <h1>{o.nickname || "Your Order"}</h1>
             <div className="eyebrow pod-eb">
               <span>{o.type === "quote" ? "Quote" : "Order"} #{o.number}{o.due_date ? ` · in hands ${fmtDateLong(o.due_date)}` : ""}</span>
+              {reviewHref && <span className="pod-wait">Waiting on you: your {reviewWords(reviewKinds)}</span>}
             </div>
           </div>
           <div className="row pod-acts">
@@ -145,6 +157,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               const kind = x.status === "request" ? (x.staff_seen_at ? "seen" : "unseen") : x.type === "quote" ? "quote" : x.status === "completed" ? null : "order";
               return kind ? <OrderActions orderId={x.id} kind={kind} archived={!!x.customer_archived_at} cancelAsked={!!x.cancel_requested_at} disabled={preview} /> : null; })()}
             <a className="btn" href={`/print/${o.id}${qsAs}`} target="_blank" rel="noreferrer">Print or save PDF</a>
+            {/* the one way to answer: the same page our email opens (Nov 2, Nick: "small button that says review and approve") */}
+            {reviewHref && <a className="btn primary" href={reviewHref}>Review and approve</a>}
           </div>
         </div>
 
@@ -158,12 +172,6 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <a className="stat" href="#pay"><span className="k">Balance</span><span className={"v" + (c.balance <= 0.004 && c.total > 0 ? " pod-ok" : "")}>{c.balance <= 0.004 && c.total > 0 ? "Paid in full" : money(c.balance)}</span><small>{c.balance > 0.004 ? (canPay ? "Ready to pay" : "Not due yet") : o.type === "quote" ? "After you approve" : "Thank you"}</small></a>
         </div>}
 
-        {/* one place for everything waiting on them: the same page our email's button opens */}
-        {olk?.id && waitingOn.length > 0 && <div className="callout warn po-wait">
-          <h2>Waiting on you: {waitingOn.map((x) => x.kind === "art" ? "your proof" : x.kind === "sewout" ? "your sew-out" : x.kind === "quote" ? "your quote" : "the deposit").filter((v, i, a) => a.indexOf(v) === i).join(", ")}</h2>
-          <div className="muted">Look it over and approve it on one page.</div>
-          <a className="btn primary" style={{ marginTop: 8 }} href={`/proof/${olk.id}`}>Review and approve</a>
-        </div>}
         {hold ? (
           <div className="callout warn po-hold">
             <h2>This order is on hold: {hold.title}</h2>
@@ -176,13 +184,6 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
         ) : cs && (cs.key === "waiting" || cs.key === "delayed") && <div className={"callout" + (cs.key === "waiting" ? " warn" : "")}><h2>{cs.label}</h2><div className="muted">{cs.text}</div></div>}
         {reviewed && <div className="callout good"><h2>{reviewed === "approved" ? "Thanks, your artwork is approved" : reviewed === "approved_changes" ? "Thanks, approved with your changes" : "Thanks, we got your changes"}</h2><div className="muted">{reviewed === "approved" ? "We'll start printing." : reviewed === "approved_changes" ? "We'll make those changes and print. You won't get another proof." : "We'll send you a new proof to look over."}</div></div>}
         {sewDone && <div className="callout good"><h2>{sewDone === "approved" ? "Thanks, your sew-out is approved" : "Thanks, we got your changes"}</h2><div className="muted">{sewDone === "approved" ? "We'll run your order. It's kept on file for reorders." : "We'll fix it and send you a new sew-out."}</div></div>}
-        {pendingSew.length > 0 && (
-          <div className="callout" style={{ borderColor: "color-mix(in srgb, #A152C9 45%, var(--line))", background: "color-mix(in srgb, #A152C9 10%, var(--surface))" }}>
-            <h2>Your sew-out is ready to approve</h2>
-            <div className="muted">Here&apos;s your logo stitched on our machine. Look it over and approve it, or tell us what to change.</div>
-            <a className="btn primary" href={`/portal/orders/${o.id}/sewout/${pendingSew[0].id}${qsAs}`} style={{ alignSelf: "flex-start" }}>Review the sew-out</a>
-          </div>
-        )}
         {justPaid && <div className="callout good"><h2>Thank you, payment received</h2><div className="muted">It can take a minute to show below. You&apos;ll get a receipt by email from our payment processor.</div></div>}
         {isReq && (
           <div className="callout good">
@@ -190,17 +191,6 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             <div className="muted">We&apos;ll check your garments and artwork, price everything and send it back here for your final OK. Questions? Send us a message below.</div>
           </div>
         )}
-        {/* one way to approve: the review page when there is one (the "Waiting on you" box above), else here */}
-        {o.status === "quote_sent" && !waitingOn.some((x) => x.kind === "quote") && <QuoteApproval orderId={o.id} total={money(c.total)} terms={[termsText(terms, o.delivery_method === "pickup"), /deposit|balance|due|pay/i.test(ctx.settings.shop.terms || "") ? "" : ctx.settings.shop.terms].filter(Boolean).join(" ")} disabled={preview} defaultName={cust?.name || ""} />}
-        {/* the proof is already asked for in "Waiting on you" above: not a second box for it */}
-        {pendingProofs.length > 0 && !waitingOn.some((x) => x.kind === "art") && (
-          <div className="callout" style={{ borderColor: "color-mix(in srgb, #A152C9 45%, var(--line))", background: "color-mix(in srgb, #A152C9 10%, var(--surface))" }}>
-            <h2>Artwork ready for your review</h2>
-            <div className="muted">Please approve each proof or tell us what to change. We start printing once artwork is approved.</div>
-            <a className="btn primary" href="#proofs" style={{ alignSelf: "flex-start" }}>Review artwork below</a>
-          </div>
-        )}
-
         <div className="two pod-two">
           <div className="stack" id="items">
             {/* each job like the proof: its mockups, what's printed where (method, size, inks with their colors), then the
@@ -271,7 +261,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-h"><h2>Artwork proofs</h2></div>
               <div className="panel-b stack">
                 {proofs.length ? (
-                  <div className="proofs">{proofs.map((pf) => <ProofCard key={pf.id} proof={pf} reviewHref={`/portal/orders/${o.id}/review/${pf.id}${qsAs}`} />)}</div>
+                  <div className="proofs">{proofs.map((pf) => <ProofCard key={pf.id} proof={pf} reviewHref={pf.status === "pending" && reviewHref ? reviewHref : `/portal/orders/${o.id}/review/${pf.id}${qsAs}`} />)}</div>
                 ) : <div className="muted" style={{ fontSize: 13 }}>{o.type === "quote" ? "Mockups will show up here after you approve the quote." : "We'll post your artwork proof here for approval."}</div>}
               </div>
             </section>}
@@ -363,7 +353,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-h"><h2>Files</h2></div>
               <div className="panel-b pod-files">
                 <a href={`/print/${o.id}${qsAs}`} target="_blank" rel="noreferrer"><span className="pod-fi">PDF</span>{o.type === "quote" ? "Quote" : "Invoice"} #{o.number}</a>
-                {proofs.map((pf) => <a key={pf.id} href={pf.status === "pending" ? `/portal/orders/${o.id}/review/${pf.id}${qsAs}` : pf.url || "#"} target={pf.status === "pending" ? undefined : "_blank"} rel="noreferrer"><span className="pod-fi">{pf.file_type.includes("pdf") ? "PDF" : "IMG"}</span>{pf.title || `Proof v${pf.version || 1}`}<small>{pf.status === "approved" ? "Approved" : pf.status === "changes" ? "Changes asked" : "To review"}</small></a>)}
+                {proofs.map((pf) => <a key={pf.id} href={pf.status === "pending" ? reviewHref || `/portal/orders/${o.id}/review/${pf.id}${qsAs}` : pf.url || "#"} target={pf.status === "pending" ? undefined : "_blank"} rel="noreferrer"><span className="pod-fi">{pf.file_type.includes("pdf") ? "PDF" : "IMG"}</span>{pf.title || `Proof v${pf.version || 1}`}<small>{pf.status === "approved" ? "Approved" : pf.status === "changes" ? "Changes asked" : "To review"}</small></a>)}
                 {mkPaths.filter((x) => mkUrls[x]).slice(0, 8).map((x, i) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><span className="pod-fi">IMG</span>Mockup {i + 1}</a>)}
               </div>
             </section>

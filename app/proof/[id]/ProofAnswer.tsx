@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { answerProof } from "./actions";
+import { PREVIEW_OFF, usePreview } from "./previewCtx";
 
 type Status = "pending" | "approved" | "changes" | "replaced" | "gone";
 
@@ -16,6 +17,7 @@ export default function ProofAnswer({ id, kind, status, decidedName, decidedAt, 
   const [note, setNote] = useState(""), [name, setName] = useState("");
   const [err, setErr] = useState(""), [done, setDone] = useState<"" | "approved" | "approved_changes" | "changes">("");
   const [pending, start] = useTransition();
+  const pv = usePreview();
   const what = kind === "art" ? "proof" : "sew-out";
   const when = (s: string) => (s ? new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
 
@@ -35,6 +37,7 @@ export default function ProofAnswer({ id, kind, status, decidedName, decidedAt, 
 
   const send = (decision: "approved" | "approved_changes" | "changes") => start(async () => {
     setErr("");
+    if (pv) { setErr(PREVIEW_OFF); return; }
     const r = await answerProof(id, decision, name, note, target);
     if (!r.ok) { setErr(r.error); return; }
     setDone(decision);

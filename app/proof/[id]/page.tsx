@@ -16,25 +16,32 @@ export const metadata: Metadata = { title: "Your order · FBS Print", robots: { 
  * can see the PDF on the right. And some basic details on the left… change notes and approve it, requires changes").
  * No sign-in: the link is the key. The PDF is the same one the shop downloads.
  */
-export default async function ProofPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProofPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string; as?: string }> }) {
   const { id } = await params;
+  // opened from their portal (app/portal/orders/[id]/approve): a way back to the order; from staff's Preview of the portal
+  // (as=…): everything shows, nothing is answered, and it isn't marked as seen by the customer
+  const { from, as } = await searchParams;
+  const preview = !!as && /^[\w-]{8,64}$/.test(as);
   const admin = createAdminClient();
   // an order's page: every step waiting on the customer (lib/customerSend.ts)
   const os = await orderSteps(admin, id);
   if (os) {
     const sh0 = os.settings.shop;
     const art = os.steps.find((x) => x.kind === "art" && x.state === "todo");
-    if (art) { const lp = await linkPage(admin, id, { kind: "art" }); if (lp) await linkViewed(admin, lp).catch(() => null); }
-    for (const s0 of os.steps.filter((x) => x.kind === "sewout" && x.state === "todo")) { const lp = await linkPage(admin, id, { kind: "sewout", id: s0.sewoutId! }); if (lp) await linkViewed(admin, lp).catch(() => null); }
+    if (art && !preview) { const lp = await linkPage(admin, id, { kind: "art" }); if (lp) await linkViewed(admin, lp).catch(() => null); }
+    if (!preview) for (const s0 of os.steps.filter((x) => x.kind === "sewout" && x.state === "todo")) { const lp = await linkPage(admin, id, { kind: "sewout", id: s0.sewoutId! }); if (lp) await linkViewed(admin, lp).catch(() => null); }
+    const backHref = from === "portal" ? `/portal/orders/${os.o.id}?view=1${preview ? `&as=${as}` : ""}` : "";
     return (
       <div className="pfl">
         <header className="pfl-top">
           <img src={sh0.logoUrl || "/brand/fbs-logo.svg"} alt={sh0.name} />
           <div className="pfl-ttl" data-page-title={`${os.o.nickname ? `${os.o.nickname} ` : ""}#${os.o.number}`}><b data-notranslate>{os.o.nickname || `Order #${os.o.number}`}</b><span>Order #{os.o.number}</span></div>
           <span className="pfl-sp" />
+          {backHref && <a className="pfl-back" href={backHref}>See the whole order</a>}
           {sh0.phone && <a href={`tel:${sh0.phone.replace(/[^\d+]/g, "")}`}>Questions? {fmtPhone(sh0.phone)}</a>}
         </header>
-        <OrderSteps id={id} orderId={os.o.id} steps={os.steps} />
+        {preview && <div className="preview-bar">Preview of the customer&apos;s review page. Buttons are turned off.</div>}
+        <OrderSteps id={id} orderId={os.o.id} steps={os.steps} preview={preview} />
         <FrameFit />
       </div>
     );
