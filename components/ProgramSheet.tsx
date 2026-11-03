@@ -39,7 +39,7 @@ export default function ProgramSheet({ program, items, images, extras }: {
         {withPics ? <td className="psh-pic">{images[it.id] ? <img src={images[it.id]} alt="" loading="lazy" /> : null}</td> : null}
         <td className="psh-it"><b>{name}</b>{kind ? <span>{kind}</span> : null}</td>
         <td className="psh-st">{styles || "—"}</td>
-        <td className="psh-dec">{methods.map((k) => <span key={k} className={"psh-m " + k}>{METHOD[k] || k}</span>)}{spots.map((x, i) => <small key={i}>{x}</small>)}</td>
+        <td><div className="psh-dec">{methods.map((k) => <span key={k} className={"psh-m " + k}>{METHOD[k] || k}</span>)}{spots.map((x, i) => <small key={i}>{x}</small>)}</div></td>
         <td className="psh-pr">{breaks ? <span className="psh-tiers">{tiers.map((t) => <span key={t.min}><small>{t.min ? `${t.min.toLocaleString()}+` : "Any qty"}</small>{money(+t.price)}</span>)}</span> : <span className="psh-amt">{money(+it.price)}<small>each</small></span>}</td>
       </tr>
     );
