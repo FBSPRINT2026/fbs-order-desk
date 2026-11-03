@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
+import { useColumnWidths } from "@/components/ColumnWidths";
 import Link from "next/link";
 import { requestNotAnOrder, requestsDesk, simpleOrderActivity, type DeskRequest } from "@/app/shop/actions";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
@@ -43,7 +44,7 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { 
   type SortK = "customer" | "number" | "due" | "files" | "sent";
   const [sort, setSort] = useSticky<{ k: SortK; up: boolean }>("jobs.rqSort", { k: "customer", up: true });
   const cmp = (a: DeskRequest, b: DeskRequest) => {
-    const d = sort.k === "customer" ? a.customer.localeCompare(b.customer) || b.sentAt.localeCompare(a.sentAt)
+    const d = sort.k === "customer" ? a.customer.localeCompare(b.customer) || (a.lane || "~").localeCompare(b.lane || "~") || (a.due || "9999").localeCompare(b.due || "9999")
       : sort.k === "number" ? a.number - b.number
       : sort.k === "due" ? (a.due || "9999").localeCompare(b.due || "9999")
       : sort.k === "files" ? a.files.length - b.files.length
@@ -53,7 +54,10 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { 
   const sorted = useMemo(() => [...shown].sort(cmp), [shown, sort]); // eslint-disable-line react-hooks/exhaustive-deps
   const byCust = useMemo(() => { const m = new Map<string, DeskRequest[]>(); for (const r of sorted) m.set(r.customerId, [...(m.get(r.customerId) || []), r]); return [...m.values()]; }, [sorted]);
   const grouped = sort.k === "customer";
-  const th = (k: SortK, l: string) => <th aria-sort={sort.k === k ? (sort.up ? "ascending" : "descending") : "none"}><button type="button" className={"rqd-sort" + (sort.k === k ? " on" : "")} onClick={() => setSort({ k, up: sort.k === k ? !sort.up : true })}>{l}{sort.k === k ? <span aria-hidden>{sort.up ? "▲" : "▼"}</span> : null}</button></th>;
+  // like the ClickUp Jobs list (Nov 2, Nick: "make them kind of look the same"): the customer down the left with its count
+  // and order types, each order type a heading row (Bulk Orders · 7), columns you can drag wider, sorted by a click
+  const cols = useColumnWidths("jobs.rqCols", { cust: 170, due: 96, files: 84, sent: 140 }, "job");
+  const th = (k: SortK, col: string, l: string, cls = "") => cols.th(col, <button type="button" className={"rqd-sort" + (sort.k === k ? " on" : "")} onClick={() => setSort({ k, up: sort.k === k ? !sort.up : true })}>{l}{sort.k === k ? <span aria-hidden>{sort.up ? "▲" : "▼"}</span> : null}</button>, { className: cls, ariaSort: sort.k === k ? (sort.up ? "ascending" : "descending") : "none" });
   const job = (list || []).find((r) => r.id === (only || openId)) || null;
   const open = (id: string) => { setOpenId(id); setMsg(""); setErr(""); setTimeout(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 40); };
   const createOrder = async (r: DeskRequest) => {
@@ -113,19 +117,32 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { 
       {act && <CreateOrderTool activityId={act} text={actText} onClose={() => setAct("")} onCreated={(id, n) => { setAct(""); setMsg(`Order #${n} is filled in.`); setOpenId(null); void load(); onChanged?.(); }} />}
 
       {only ? (!job && <div className="faint">This request isn&apos;t waiting anymore. It may have been made into an order.</div>) : !shown.length ? <div className="faint">{w ? `No requests match “${q}”.` : "No requests waiting. When a customer sends one from their portal, it shows here."}</div> : (
-        <div className="tbl-wrap"><table className="tbl cu-tbl rqd-tbl" data-nofit>
-          <thead><tr>{th("customer", "Customer")}{th("number", "Request")}{th("due", "Due")}{th("files", "Files")}{th("sent", "Sent in")}<th aria-label="Process" /></tr></thead>
-          <tbody>{(grouped ? byCust : sorted.map((r) => [r])).map((rs, gi) => [
-            grouped && gi > 0 ? <tr key={`sep-${rs[0].id}`} className="rqd-sep" aria-hidden><td colSpan={6}><i /></td></tr> : null,
-            ...rs.map((r, i) => { const d = dueTxt(r.due); return (
-            <tr key={r.id} className={"rqd-r" + (openId === r.id ? " on" : "")} onClick={() => open(r.id)}>
-              {i === 0 && <td rowSpan={rs.length} className="rqd-cust"><b>{r.customer}</b>{r.contact && <span>{r.contact}</span>}{grouped && <em>{rs.length} new</em>}</td>}
-              <td><span className="ordno">#{r.number}</span> {r.name || (r.simple ? "Simple order" : "Order request")}{r.lane && <span className={"rqd-lane l-" + r.lane.toLowerCase()}>{r.lane}</span>}</td>
-              <td className={"nowrap" + (d.soon && r.due ? " rqd-soon" : r.due ? "" : " faint")}>{d.t}</td>
-              <td className="nowrap">{r.files.length ? `${r.files.length} file${r.files.length === 1 ? "" : "s"}` : <span className="faint">None</span>}</td>
-              <td className="nowrap">{sent(r.sentAt)}</td>
-              <td className="r"><button type="button" className="btn primary sm" onClick={(e) => { e.stopPropagation(); open(r.id); }}>Process</button></td>
-            </tr>); })])}</tbody>
+        <div className="tbl-wrap cu-fit"><table ref={cols.tableRef} className="tbl cu-tbl rqd-tbl" data-nofit data-keep>
+          <thead><tr>{th("customer", "cust", "Customer", "cu-w-rail")}{th("number", "job", "Request")}{th("due", "due", "Due", "cu-w-due")}{th("files", "files", "Files", "cu-w-files")}{th("sent", "sent", "Sent in", "cu-w-added")}<th className="cu-w-act" data-col="act" aria-label="Process" /></tr></thead>
+          <tbody>{(grouped ? byCust : sorted.map((r) => [r])).flatMap((rs) => {
+            // by customer: each of its order types gets a heading row, like ClickUp's lists
+            const lanes = grouped ? [...new Set(rs.map((r) => r.lane || ""))] : [""];
+            const heads = grouped && (lanes.length > 1 || lanes[0] !== "");
+            const rows: ({ kind: "lane"; lane: string; n: number } | { kind: "req"; r: DeskRequest })[] = [];
+            for (const ln of lanes) { const these = rs.filter((r) => !grouped || (r.lane || "") === ln); if (heads) rows.push({ kind: "lane", lane: ln, n: these.length }); for (const r of these) rows.push({ kind: "req", r }); }
+            const c0 = rs[0];
+            const laneCounts = heads ? lanes.filter(Boolean).map((l) => `${rs.filter((r) => r.lane === l).length} ${l.toLowerCase()}`).join(" · ") : "";
+            const rail = <td className="cu-rail" rowSpan={rows.length} onClick={(e) => e.stopPropagation()}><div className="rqd-rail">
+              <div className="cu-rail-c">{c0.customer}</div>{c0.contact && <div className="sub">{c0.contact}</div>}
+              {grouped && <span className="cu-rail-n">{rs.length} new</span>}{laneCounts && <div className="sub cu-rail-b">{laneCounts}</div>}
+            </div></td>;
+            return rows.map((x, i) => x.kind === "lane"
+              ? <tr key={`l:${c0.customerId}:${x.lane}`} className={"cu-boardrow" + (i === 0 ? " cu-gstart" : "")}>{i === 0 && rail}<td colSpan={5}>{x.lane ? `${x.lane} Orders` : "Other"} <span className="faint">· {x.n}</span></td></tr>
+              : (() => { const r = x.r, d = dueTxt(r.due); return (
+                <tr key={r.id} className={"rqd-r" + (i === 0 ? " cu-gstart" : "") + (openId === r.id ? " picked" : "")} onClick={() => open(r.id)}>
+                  {i === 0 && rail}
+                  <td><span className="ordno">#{r.number}</span> {r.name || (r.simple ? "Simple order" : "Order request")}{!grouped && r.lane && <span className={"rqd-lane l-" + r.lane.toLowerCase()}>{r.lane}</span>}</td>
+                  <td className={"cu-nw" + (d.soon && r.due ? " rqd-soon" : r.due ? "" : " faint")}>{d.t}</td>
+                  <td className="cu-nw">{r.files.length ? `${r.files.length} file${r.files.length === 1 ? "" : "s"}` : <span className="faint">None</span>}</td>
+                  <td className="cu-nw cu-added">{sent(r.sentAt)}</td>
+                  <td className="r cu-nw"><button type="button" className="btn primary sm" onClick={(e) => { e.stopPropagation(); open(r.id); }}>Process</button></td>
+                </tr>); })());
+          })}</tbody>
         </table></div>
       )}
     </div>
