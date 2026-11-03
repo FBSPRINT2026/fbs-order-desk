@@ -5,6 +5,7 @@ import { getCustomer, getOrder, PrintavoError, type PvCustomer } from "@/lib/pri
 import { fileDone, fileUrls, orderFiles, storedPath, type PvAddress, type PvOrder } from "@/lib/archive";
 import { pvHandle } from "@/lib/printavoNames";
 import { fetchFileMeta, saveFileMeta } from "@/lib/printavoFileMeta";
+import { settleCustomerTax } from "@/lib/taxHistory";
 
 /**
  * Bringing Printavo data into our database. Used by the Import page (one customer) and the background sync (everything).
@@ -83,6 +84,8 @@ export async function importCustomer(sb: SupabaseClient, printavoId: string): Pr
     const { error: ce } = await sb.from("customer_contacts").upsert(contacts, { onConflict: "printavo_id" });
     if (ce) console.warn("[printavo] contacts:", ce.message);
   }
+  // Printavo's "tax exempt" box is often unticked for customers never charged tax: their invoices decide (lib/taxHistory.ts)
+  await settleCustomerTax(sb, customerId!).catch(() => false);
   return { customerId: customerId!, how, company: fields.company || fields.name };
 }
 
@@ -127,6 +130,8 @@ export async function importOrder(sb: SupabaseClient, printavoId: string, custom
   };
   const { data, error } = await sb.from("archived_orders").upsert(row, { onConflict: "printavo_id" }).select("id").single();
   if (error || !data) throw new Error("Couldn't save: " + (error?.message || "unknown"));
+  // an invoice without tax: the customer may be one who's never charged it (lib/taxHistory.ts)
+  if (o.kind === "invoice" && !(o.salesTaxAmount > 0.004)) await settleCustomerTax(sb, cid).catch(() => false);
   return { id: data.id, visualId: o.visualId, filesLeft: urls.length - Object.keys(kept).length, warnings: o.warnings || [], order: o };
 }
 

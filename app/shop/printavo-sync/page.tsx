@@ -7,6 +7,7 @@ import { calcOrder, mergeSettings, type Order, type Settings } from "@/lib/prici
 import { cardFix, printavoChanges, sigOf, snapOf, type Change } from "@/lib/printavoChanges";
 import { custLabel } from "@/lib/format";
 import { useRole } from "@/components/RoleContext";
+import { useSticky } from "@/lib/useSticky";
 
 /**
  * Printavo Sync: the 40,000-series orders whose Printavo copy has changes not accepted here yet (quantities, prices,
@@ -40,7 +41,28 @@ export default function PrintavoSyncPage() {
     return { o, calc, snap, changes, info, card: cardFix(o, snap) };
   });
   const waiting = list.filter((x) => x.changes.length || x.card);
-  const shown = showAll ? list : waiting;
+  // every order's total against Printavo's (Nov 3, Nick: McKenna, Nine18, Cedar and Methodist balances didn't match
+  // Printavo's): each gap with why, so it gets fixed on purpose instead of found by a customer
+  const [view, setView] = useSticky<"waiting" | "totals">("printavoSync.view", "waiting");
+  const gaps = list.filter((x) => x.snap && Math.abs(x.calc.total - x.snap.total) > 0.005).map((x) => {
+    const o = x.o as Row & { updated_at?: string };
+    const editedHere = !!o.updated_at && !!x.snap && new Date(o.updated_at).getTime() > new Date(x.snap.at).getTime() + 60_000;
+    const why = x.changes.length || x.card ? "Changed in Printavo: accept or ignore the changes on the Waiting tab to match."
+      : editedHere ? "Changed here since Printavo was last read. Check Printavo now; if it still differs, Reset in Printavo sends ours."
+      : "Hasn't matched since it was sent (a fee or amount didn't arrive in Printavo). Reset in Printavo sends ours again.";
+    return { ...x, gap: Math.round((x.calc.total - (x.snap?.total || 0)) * 100) / 100, why };
+  });
+  const shown = view === "totals" ? gaps : showAll ? list : waiting;
+  const [checking, setChecking] = useState("");
+  /** read every order that differs from Printavo again, one at a time (Printavo limits how fast it answers) */
+  async function checkAll() {
+    const ids = gaps.map((x) => x.o);
+    for (let i = 0; i < ids.length; i++) {
+      setChecking(`Checking ${i + 1} of ${ids.length}…`);
+      await fetch("/api/printavo/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: ids[i].id, action: "refresh" }) }).catch(() => null);
+    }
+    setChecking(""); await load();
+  }
 
   /** apply changes to one order and save it (with its new total), the same as editing it on the order page */
   async function accept(o: Row, picks: Change[]) {
@@ -86,13 +108,34 @@ export default function PrintavoSyncPage() {
           <h1>Printavo Sync</h1>
           <div className="faint">Orders #40000–#49999 run in Printavo until Nov 2. Changes made there wait here until you accept them. The card surcharge is taken automatically.</div>
         </div>
-        <label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show orders that already match</label>
+        {view === "totals" ? <button type="button" className="btn" disabled={!!checking || !gaps.length} onClick={checkAll}>{checking || "Check all in Printavo now"}</button>
+          : <label className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> Show orders that already match</label>}
       </div>
+      <div className="toolbar" data-toolbar><div className="chips">
+        <button type="button" className={"chip" + (view === "waiting" ? " on" : "")} onClick={() => setView("waiting")}>Changes waiting{waiting.length ? <span className="chip-n">{waiting.length}</span> : null}</button>
+        <button type="button" className={"chip" + (view === "totals" ? " on" : "")} onClick={() => setView("totals")}>Totals that differ{gaps.length ? <span className="chip-n">{gaps.length}</span> : null}</button>
+      </div></div>
       {err && <div className="err">{err}</div>}
       {!rows && <div className="faint">Loading…</div>}
-      {rows && !shown.length && <div className="pvsync-empty">Nothing waiting: every order in Printavo matches ours.{list.length ? ` (${list.length} order${list.length === 1 ? "" : "s"} linked.)` : ""}</div>}
+      {rows && !shown.length && <div className="pvsync-empty">{view === "totals" ? "Every order's total matches Printavo's." : "Nothing waiting: every order in Printavo matches ours."}{list.length ? ` (${list.length} order${list.length === 1 ? "" : "s"} linked.)` : ""}</div>}
+      {view === "totals" && gaps.length > 0 && (
+        <div className="tbl-wrap"><table className="tbl pvsg-t">
+          <thead><tr><th>Order</th><th>Customer</th><th className="r">Ours</th><th className="r">Printavo</th><th className="r">Difference</th><th>Why</th><th>Checked</th></tr></thead>
+          <tbody>{gaps.map((x) => (
+            <tr key={x.o.id}>
+              <td><Link href={`/shop/orders/${x.o.id}`} className="ordno">#{x.o.number}</Link><div className="sub">{x.o.nickname || "Untitled"}</div></td>
+              <td>{custLabel(x.o.customers || undefined)}</td>
+              <td className="r num">${x.calc.total.toFixed(2)}</td>
+              <td className="r num">${(x.snap?.total || 0).toFixed(2)}</td>
+              <td className="r num">{x.gap > 0 ? "+" : "−"}${Math.abs(x.gap).toFixed(2)}</td>
+              <td className="pvsg-why">{x.why}</td>
+              <td className="num"><button type="button" className="btn sm" disabled={busy === x.o.id || !!checking} onClick={() => check(x.o)}>{busy === x.o.id ? "Checking…" : when(x.snap?.at)}</button></td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
       <div className="pvsync-list">
-        {shown.map(({ o, snap, changes, info, card }) => (
+        {view === "waiting" && shown.map(({ o, snap, changes, info, card }) => (
           <section key={o.id} className="pvsync-card">
             <div className="pvsync-h">
               <div>

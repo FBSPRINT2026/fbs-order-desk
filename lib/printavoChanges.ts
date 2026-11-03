@@ -7,7 +7,7 @@ import { imprintLabel, shopNotes, lineQty, newGLine, SIZES, type GLine, type Ord
  */
 export type PvSnap = {
   at: string; visualId: string; status: string; total: number; productionNote?: string;
-  customerNote?: string; nickname?: string; po?: string; customerDue?: string; productionDue?: string; discount?: number; discountPct?: boolean; salesTax?: number;
+  customerNote?: string; nickname?: string; po?: string; customerDue?: string; productionDue?: string; discount?: number; discountPct?: boolean; salesTax?: number; salesTaxAmount?: number;
   imprints?: string[][]; payments?: { id: string; kind: string; amount: number; category: string; date: string; processing: boolean }[];
   groups: { lines: { itemNumber: string; color: string; description: string; sizes: Record<string, number>; price: number; mockups?: number }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
@@ -93,8 +93,11 @@ export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null, 
         changes.push({ what: "Discount", key: "disc", text: `${ours ? (oursPct ? `${ours}%` : `$${ours.toFixed(2)}`) : "none"} → ${theirs ? (theirsPct ? `${theirs}%` : `$${theirs.toFixed(2)}`) : "none"}`,
           apply: (d) => { if (theirsPct) { d.discount_type = "pct"; d.discount_pct = theirs; d.discount_amt = 0; } else { d.discount_type = "amt"; d.discount_amt = theirs; d.discount_pct = 0; } } });
     }
-    if (snap.salesTax !== undefined) {
-      const oursRate = o.tax_exempt ? 0 : calc.rate, theirs = +snap.salesTax || 0;
+    // tax by what Printavo charged, not its rate (Nov 3, Nick: Boneyard's orders had a rate of 8.25% in Printavo but $0 tax
+    // on them, since no line was marked taxed; accepting the rate taxed them here). Printavo charging $0 = exempt. A
+    // read-back from before the amount was kept isn't compared until it's read again.
+    if (snap.salesTax !== undefined && snap.salesTaxAmount !== undefined) {
+      const oursRate = o.tax_exempt ? 0 : calc.rate, theirs = +snap.salesTaxAmount > 0.004 ? +snap.salesTax || 0 : 0;
       if (Math.abs(oursRate - theirs) > 0.001) changes.push({ what: "Sales tax", key: "tax", text: `${o.tax_exempt ? "exempt" : `${oursRate}%`} → ${theirs ? `${theirs}%` : "exempt"}`, apply: (d) => { if (theirs) { d.tax_exempt = false; d.tax_rate = theirs; } else d.tax_exempt = true; } });
     }
     // garments: style / color changed, lines added or taken out, print details

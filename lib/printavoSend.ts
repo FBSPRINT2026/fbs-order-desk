@@ -363,6 +363,7 @@ async function fixConfirmationReply(admin: SupabaseClient, orderId: string, numb
 export type PvSnap = {
   at: string; visualId: string; status: string; total: number; kind: string; productionNote: string;
   customerNote: string; nickname: string; po: string; customerDue: string; productionDue: string; discount: number; discountPct: boolean; salesTax: number;
+  /** the tax Printavo actually charged ($): salesTax is only the rate, and Printavo taxes only lines marked taxed */ salesTaxAmount?: number;
   imprints: string[][]; payments: { id: string; kind: string; amount: number; category: string; date: string; processing: boolean }[];
   groups: { lines: { itemNumber: string; color: string; description: string; category: string; sizes: Record<string, number>; price: number; mockups: number; /** Printavo's goods status: received / partially_received / ordered / "" */ goods?: string }[] }[];
   fees: { description: string; amount: number; quantity: number | null; unitPrice: number | null; pct: boolean }[];
@@ -409,7 +410,7 @@ export async function refreshFromPrintavo(admin: SupabaseClient, orderId: string
   const snap: PvSnap = {
     at: new Date().toISOString(), visualId: p.visualId, status: p.status.name, total: p.total, kind: p.kind, productionNote: htmlText(p.productionNote || ""),
     customerNote: htmlText(p.customerNote || ""), nickname: p.nickname || "", po: p.poNumber || "", customerDue: day(p.customerDueAt), productionDue: centralDay(p.dueAt),
-    discount: p.discount || 0, discountPct: !!p.discountAsPercentage, salesTax: p.salesTax || 0,
+    discount: p.discount || 0, discountPct: !!p.discountAsPercentage, salesTax: p.salesTax || 0, salesTaxAmount: p.salesTaxAmount || 0,
     imprints: p.groups.map((g) => g.imprints.map((i) => i.details || "")),
     payments: p.transactions.filter((t) => /^(Payment|Refund|Return)$/.test(t.kind)).map((t) => ({ id: t.id, kind: t.kind, amount: t.amount, category: t.category, date: day(t.date) || t.date, processing: t.processing })),
     groups: p.groups.map((g) => ({ lines: g.lines.map((l) => ({ itemNumber: l.itemNumber, color: l.color, description: l.description, category: l.category, price: l.price, mockups: l.mockups.length, goods: l.status,
