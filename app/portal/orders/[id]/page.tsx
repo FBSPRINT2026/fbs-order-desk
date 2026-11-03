@@ -1,5 +1,6 @@
 import PortalGoods from "@/components/PortalGoods";
 import FileThumb from "@/components/FileThumb";
+import { Fragment } from "react";
 import BackLink from "@/components/BackLink";
 import { termsPct } from "@/lib/payTerms";
 import { StarOrder } from "@/components/PortalDashBits";
@@ -50,6 +51,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   // the order as they sent it in, before we've built it (Nov 2, Nick: "rethink this order intake… just like in ClickUp…
   // exactly what they wrote"): only what they gave us, their message, their attachments, and a way to ask us
   const intake = isReq && !!so && !so.reorder;
+  // the day they sent it, on our clock (an evening send isn't tomorrow)
+  const sentDay = o.submitted_at ? new Date(o.submitted_at).toLocaleDateString("en-CA", { timeZone: "America/Chicago" }) : "";
   const soFiles = so?.files?.length ? await (async () => {
     const { data } = await createAdminClient().storage.from("proofs").createSignedUrls(so.files!.map((f) => f.path), 3600);
     return so.files!.map((f, i) => ({ ...f, url: data?.[i]?.signedUrl || "" }));
@@ -155,7 +158,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <div>
             <h1>{o.nickname || "Your Order"}</h1>
             <div className="eyebrow pod-eb">
-              <span>{o.type === "quote" ? "Quote" : "Order"} #{o.number}{intake && o.submitted_at ? ` · sent ${fmtDate(o.submitted_at)}` : ""}{o.due_date ? ` · in hands ${intake ? fmtDate(o.due_date) : fmtDateLong(o.due_date)}` : ""}</span>
+              <span>{o.type === "quote" ? "Quote" : "Order"} #{o.number}{intake && sentDay ? ` · sent ${fmtDate(sentDay)}` : ""}{o.due_date ? ` · in hands ${intake ? fmtDate(o.due_date) : fmtDateLong(o.due_date)}` : ""}</span>
               {reviewHref && <span className="pod-wait">Waiting on you: your {reviewWords(reviewKinds)}</span>}
             </div>
           </div>
@@ -346,14 +349,14 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-b pod-kv">
                 <span>{o.type === "quote" ? "Quote" : "Order"}</span><b>#{o.number}</b>
                 {o.po_number ? <><span>PO</span><b>{o.po_number}</b></> : null}
-                {intake ? <><span>Sent</span><b>{fmtDateLong(String(o.submitted_at || o.created_at || "").slice(0, 10))}</b></> : <><span>Ordered</span><b>{fmtDateLong(String(o.created_at || "").slice(0, 10))}</b></>}
+                {intake ? <><span>Sent</span><b>{fmtDateLong(sentDay || String(o.created_at || "").slice(0, 10))}</b></> : <><span>Ordered</span><b>{fmtDateLong(String(o.created_at || "").slice(0, 10))}</b></>}
                 {o.due_date ? <><span>In hands</span><b>{fmtDateLong(o.due_date)}</b></> : null}
                 {delivery ? <><span>Delivery</span><b>{delivery}</b></> : null}
                 {o.delivery_method !== "pickup" && o.ship_to ? <><span>{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</span><b className="pod-addr">{o.ship_to}</b></> : null}
                 {o.tracking ? <><span>Tracking</span><b className="pod-addr">{o.tracking}</b></> : null}
                 {cust?.name ? <><span>Contact</span><b>{cust.name}</b></> : null}
                 {/* what they filled in on their side (ClickUp's Customer Name), word for word */}
-                {intake && Object.entries(so?.fields || {}).filter(([, v]) => String(v || "").trim()).map(([k, v]) => <span key={k} style={{ display: "contents" }}><span>{k.replace(/^Customer Name$/i, "Customer")}</span><b>{v}</b></span>)}
+                {intake && Object.entries(so?.fields || {}).filter(([, v]) => String(v || "").trim()).map(([k, v]) => <Fragment key={k}><span>{k.replace(/^Customer Name$/i, "Customer")}</span><b>{v}</b></Fragment>)}
                 {intake ? <><span>Pricing</span><b>On its way</b></> : null}
                 {o.approved_at ? <><span>Approved</span><b>{fmtDate(o.approved_at)}{o.approved_name ? ` by ${o.approved_name}` : ""}</b></> : null}
                 {approvedProof ? <><span>Proof</span><b>Approved {fmtDate(approvedProof.decided_at || approvedProof.created_at)}</b></> : null}
