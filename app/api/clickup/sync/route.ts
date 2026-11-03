@@ -1,7 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getViewer } from "@/lib/supabase/server";
-import { syncClickUp } from "@/lib/clickup";
+import { catchUpClickUpFiles, syncClickUp } from "@/lib/clickup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +19,18 @@ async function run(req: Request) {
     if (!user || !isStaff) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   }
   const r = await syncClickUp(admin, Date.now() + 50_000);
+  // files behind share links (a Dropbox folder) and jobs made into orders read again: a few minutes of their own, one run
+  // at a time
+  after(async () => {
+    try {
+      const { data: lk } = await admin.from("app_keys").select("value").eq("name", "clickup_files").maybeSingle();
+      const at = Date.parse(String((lk?.value as { at?: string } | null)?.at || ""));
+      if (at && Date.now() - at < 4 * 60_000) return;
+      await admin.from("app_keys").upsert({ name: "clickup_files", value: { at: new Date().toISOString() } }, { onConflict: "name" });
+      const c = await catchUpClickUpFiles(admin, 150 * 1024 * 1024, Date.now() + 200_000);
+      await admin.from("app_keys").upsert({ name: "clickup_files", value: { at: null, last: new Date().toISOString(), ...c } }, { onConflict: "name" });
+    } catch (e) { console.warn("clickup files", e); }
+  });
   // new jobs read ahead, like order emails (Oct 27, Nick: "the pre-read… Can you do the same thing with ClickUp orders?"),
   // after answering; one run at a time (the schedule calls every 3 minutes)
   after(async () => {

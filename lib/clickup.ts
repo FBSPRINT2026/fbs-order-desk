@@ -282,20 +282,26 @@ const fileKind = (name: string) => /(^|[\W_])(po|p\.o|purchase|order( ?form)?|in
  * on us is read again in full every few hours (Nov 2, Nick: #2844's notes link to its Dropbox folder, but the job hadn't
  * changed since it was first read, so the link was never seen), so a link put in its notes or comments is found.
  */
-async function catchUpOrderFiles(admin: SupabaseClient, bytes: number, deadline: number) {
-  const { data } = await admin.from("clickup_tasks").select("id, team_id, order_id, attachments, full_read_at").not("order_id", "is", null).neq("status_type", "closed")
-    .order("updated_at_cu", { ascending: false }).order("id").limit(300);
-  const rows = (data || []) as { id: string; team_id: string; order_id: string; attachments: CuFile[] | null; full_read_at: string | null }[];
+/**
+ * Run after each ClickUp check with its own few minutes (app/api/clickup/sync): the check itself has 50 seconds, too
+ * little to open a shared folder (Nov 2: a Dropbox link was never brought in by the check, only when a job was opened).
+ * New jobs' files and files for jobs made into orders still waiting on us.
+ */
+export async function catchUpClickUpFiles(admin: SupabaseClient, bytes: number, deadline: number) {
+  const { data } = await admin.from("clickup_tasks").select("id, team_id, order_id, attachments, full_read_at, waiting").or("waiting.eq.true,order_id.not.is.null").neq("status_type", "closed")
+    .order("updated_at_cu", { ascending: false }).order("id").limit(400);
+  const rows = (data || []) as { id: string; team_id: string; order_id: string | null; attachments: CuFile[] | null; full_read_at: string | null; waiting: boolean }[];
   const reqs = new Set<string>();
-  for (let i = 0; i < rows.length; i += 200) {
-    const { data: os } = await admin.from("orders").select("id").in("id", rows.slice(i, i + 200).map((r) => r.order_id)).eq("status", "request").is("discarded_at", null);
+  const oids = rows.map((r) => r.order_id).filter(Boolean) as string[];
+  for (let i = 0; i < oids.length; i += 200) {
+    const { data: os } = await admin.from("orders").select("id").in("id", oids.slice(i, i + 200)).eq("status", "request").is("discarded_at", null);
     for (const o of (os || []) as { id: string }[]) reqs.add(o.id);
   }
   let left = bytes, orders = 0, reread = 0;
   for (const t of rows) {
     if (left <= 0 || Date.now() > deadline - 55_000) break;
-    if (!reqs.has(t.order_id)) continue;
-    if (reread < 8 && (!t.full_read_at || Date.now() - Date.parse(t.full_read_at) > 4 * 3600e3)) {
+    if (!(t.waiting && !t.order_id) && !(t.order_id && reqs.has(t.order_id))) continue;
+    if (t.order_id && reread < 8 && (!t.full_read_at || Date.now() - Date.parse(t.full_read_at) > 4 * 3600e3)) {
       const fresh = await readClickUpTask(admin, t.id).catch(() => null);
       reread++;
       if (fresh) t.attachments = fresh.attachments;
@@ -308,9 +314,9 @@ async function catchUpOrderFiles(admin: SupabaseClient, bytes: number, deadline:
       left -= r.used;
       if (r.changed) { files = r.files; await admin.from("clickup_tasks").update({ attachments: files }).eq("id", t.id); }
     }
-    if (await filesOntoOrder(admin, t.order_id, files)) orders++;
+    if (t.order_id && await filesOntoOrder(admin, t.order_id, files)) orders++;
   }
-  return { orders };
+  return { orders, reread, bytes: bytes - left };
 }
 
 /** the job panel opened: its files copied into storage now, if the reader hasn't yet */
@@ -520,9 +526,6 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         }
       }
     })(ws).catch((e) => { out.problems.push(`${ws.team.name}: ${e instanceof Error ? e.message : String(e)}`); })));
-    // jobs already made into orders whose files aren't in yet (a share link added later, a big folder that ran out of
-    // time): brought in now and put on the order
-    if (fileBytes > 0 && Date.now() < deadline - 60_000) { const c = await catchUpOrderFiles(admin, fileBytes, deadline - 8000).catch(() => null); if (c?.orders) (out as unknown as Record<string, unknown>).orderFiles = c.orders; }
     // jobs ticked for an order that's gone: unticked and back on New (healOrphanTicks)
     if (Date.now() < deadline - 5000) { const h = await healOrphanTicks(admin, deadline - 3000).catch(() => null); if (h?.healed.length) (out as unknown as Record<string, unknown>).healed = h.healed; if (h?.problems.length) out.problems.push(...h.problems); }
     const stats = { at: new Date().toISOString(), calls: Object.fromEntries([...calls].map(([t, c]) => [tokens.find((x) => x.token === t)?.key || "?", c])), ...out };
