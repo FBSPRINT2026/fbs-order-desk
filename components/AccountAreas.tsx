@@ -184,8 +184,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   const area0: Area = mode === "portal" ? (portalArea[rawArea] || rawArea) : shopArea[rawArea] || rawArea;
   const area: Area = mode === "portal" && !KNOWN.includes(area0) ? "home" : area0;
   // All (quotes and orders, newest first, like Printavo), Quotes, Completed (Oct 21, Nick)
-  const [ordF, setOrdF] = useSticky<"all" | "quotes" | "completed">("customer.orderList", "all");
-  const oFilter: "all" | "quotes" | "completed" = mode === "shop" && rawArea === "quotes" ? "quotes" : ["all", "quotes", "completed"].includes(ordF) ? ordF : "all";
+  const [ordF, setOrdF] = useSticky<"all" | "requests" | "quotes" | "orders" | "completed">("customer.orderList", "all");
+  const oFilter: "all" | "requests" | "quotes" | "orders" | "completed" = mode === "shop" && rawArea === "quotes" ? "quotes" : ["all", "requests", "quotes", "orders", "completed"].includes(ordF) ? ordF : "all";
   const [conv, setConv] = useSticky<"portal" | "texts">("customer.conversations", "portal");
   const convNow = rawArea === "texts" ? "texts" : conv;
   // where the More menu opens: fixed under its button (the tab bar clips anything that drops out of it)
@@ -477,15 +477,15 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
     const dayOf = (o: AOrder) => (o.created_at || o.due_date || "").slice(0, 10);
     const newest = (l: AOrder[]) => l.slice().sort((x, y) => dayOf(y).localeCompare(dayOf(x)) || y.number - x.number);
     const completed = invoices.filter((o) => o.archived || o.status === "completed");
-    const lists = { all: newest(orders.filter((o) => o.type === "invoice" || quotes.includes(o))), quotes: newest(quotes), completed: newest(completed) };
+    // All · Order requests · Quotes · Orders · Completed (Nov 2, Nick: "it should say all, order requests, quote, orders and
+    // completed on this page"); a request isn't a quote yet
+    const lists = { all: newest(orders.filter((o) => o.type === "invoice" || quotes.includes(o))), requests: newest(quotes.filter((o) => o.status === "request")), quotes: newest(quotes.filter((o) => o.status !== "request")), orders: newest(active), completed: newest(completed) };
     const rows = lists[oFilter].filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, o.statusLabel, o.search));
     const P = pageOf("orders:" + oFilter, rows, 25);
     const showBal = rows.some((o) => !o.archived && o.balance > 0.004);
     const waitingOn = new Set(goodsPanel ? receive.map((o) => o.id) : []);
     const owedList = owed.filter((o) => !o.archived);
     const sentQ = quotes.filter((o) => !o.archived && o.status === "quote_sent");
-    const look = attention.filter((a) => a.kind === "request" || a.kind === "draft" || a.kind === "quote" || a.kind === "art");
-    const lookLabel = { request: "Request to price", draft: "Not sent yet", quote: "Quote waiting on them", art: "Art waiting on them", pay: "", receive: "" } as const;
     // what's worth knowing at a glance (Oct 21, Nick: "surely we can put some more pertinent information there"): what's
     // in the works and when it's next due, what they owe, when they last ordered and how often they do, and their sales
     const t0 = today(), dd = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
@@ -509,14 +509,9 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
           <button type="button" className="stat" onClick={() => setOrdF("completed")}><span className="k">Orders about</span><span className="v">{every || "Not enough orders"}</span><small>{nextAround ? (nextAround < t0 ? `Due for one: ${dd(t0, nextAround)} days past usual` : `Next one around ${when(nextAround)}`) : ""}</small></button>
           <button type="button" className="stat money-only" onClick={() => setOrdF("completed")}><span className="k">Sales this year</span><span className="v">{money(sales(yr))}</span><small>{`${lastYr} ${money(sales(lastYr))} · all time ${money(invoices.reduce((a, o) => a + o.total, 0))}`}{firstYr ? ` since ${firstYr}` : ""}</small></button>
         </div>
-        {look.length > 0 && (
-          <div className="cx-look"><span className="k">Needs a look</span>
-            {look.map((a, i) => <Link key={a.kind + a.order_id + i} href={!a.number && a.href ? a.href : orderHref(a.order_id, a.hash)} className="cx-look-i">{lookLabel[a.kind]}{a.number ? ` #${a.number}` : ""}</Link>)}
-          </div>
-        )}
         <div className="toolbar">
           <div className="chips">
-            {(([["all", "All"], ["quotes", "Quotes"], ["completed", "Completed"]]) as const).map(([k, l]) => (
+            {(([["all", "All"], ["requests", "Order requests"], ["quotes", "Quotes"], ["orders", "Orders"], ["completed", "Completed"]]) as const).map(([k, l]) => (
               <button key={k} type="button" className={"chip" + (oFilter === k ? " on" : "")} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l}<span className="chip-n">{lists[k].length}</span></button>
             ))}
           </div>
