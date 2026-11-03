@@ -198,6 +198,13 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
             </div>
           </div>
         )}
+        {/* a bank account isn't kept yet: shown where it'll be, grayed, "Coming soon" (Nov 3, Nick) */}
+        {method === "bank" && (
+          <label className="pp-keep pp-keep-soon" aria-disabled="true">
+            <input type="checkbox" disabled checked={false} readOnly />
+            <span><b>Keep this bank account on file <em className="pp-soon">Coming soon</em></b><small>Soon you&apos;ll be able to save your bank account here and pay with one click.</small></span>
+          </label>
+        )}
         {/* a bank account isn't kept: bank transfers go through QuickBooks Payments one at a time (Nov 3) */}
         {(consent.card || consent.bank) && method !== "bank" && (
           <label className="pp-keep">
