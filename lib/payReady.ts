@@ -29,6 +29,9 @@ export function payState(o: { status: string; type?: string | null; pay_mode?: s
   const later = x.terms !== undefined && pct === 0; // on receipt or net 30: nothing until it's ready
   const later0 = x.terms === "net30" ? "Nothing is due now. Your invoice is on 30-day terms." : "Nothing is due now. Payment is due on receipt.";
   const out = (can: PayCan, why: string): PayState => ({ can, why, notFinal: can !== "none" && notFinal, note, mode });
+  // an order request (sent to FBS, not priced yet) is never paid and never listed to pay (Nov 2, Nick: "they shouldn't be on
+  // the payments page… until it becomes a quote or an order")
+  if (o.status === "request") return out("none", "We're still reviewing this order. You'll get a quote to approve first.");
   if (o.status === "void") return out("none", "This order was canceled.");
   if (mode === "not_yet") return out("none", note || "We're finalizing this order. We'll let you know when it's ready to pay.");
   // asked for by hand: the shop's deposit, whatever the terms

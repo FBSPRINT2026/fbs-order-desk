@@ -668,7 +668,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
     {tableHead(<><h2 className="aa-areat">Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={mode === "shop" && due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders")}
     {orderTable(invoices, "invoice")}</>;
   else if (area === "payments") {
-    const open = liveInvoices.filter((o) => o.balance > 0.004 && has(q, o.number, o.nickname));
+    // never an order request: it isn't a quote or an order yet (Nov 2, Nick; lib/payReady.ts says the same)
+    const open = liveInvoices.filter((o) => o.status !== "request" && o.balance > 0.004 && has(q, o.number, o.nickname));
     const waitingQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent" && has(q, o.number, o.nickname));
     const canPay = mode === "portal" && !!payCfg;
     const item = (o: AOrder): PayItem => ({ id: o.id, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
