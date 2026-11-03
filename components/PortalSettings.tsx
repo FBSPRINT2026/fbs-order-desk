@@ -4,7 +4,6 @@ import { fmtPhone } from "@/lib/phone";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mySavedMethods, removeSavedMethod, setStaffCharge, staffConsentWords, type SavedPM } from "@/app/portal/pay-actions";
-import AddPayMethod from "@/components/AddPayMethod";
 import { brandLogoUploadUrl, myPeople, removePerson, saveBrandLogo, saveMySettings, savePerson, setPortalView, type Person } from "@/app/portal/settings-actions";
 
 type C = { address: string; ship_address: string };
@@ -188,7 +187,7 @@ function People({ customerId, preview, shopName }: { customerId: string; preview
 function SavedCards({ preview, staxToken }: { preview: boolean; staxToken: string }) {
   const [list, setList] = useState<SavedPM[] | null>(null);
   const [consent, setConsent] = useState({ card: "", bank: "" }), [staffWords, setStaffWords] = useState({ card: "", bank: "" });
-  const [armed, setArmed] = useState(""), [err, setErr] = useState(""), [adding, setAdding] = useState(false), [askStaff, setAskStaff] = useState("");
+  const [armed, setArmed] = useState(""), [err, setErr] = useState(""), [askStaff, setAskStaff] = useState("");
   const load = () => void mySavedMethods().then((r) => { setList(r.list); setConsent(r.consent); });
   useEffect(() => { load(); void staffConsentWords().then(setStaffWords).catch(() => null); }, []);
   if (!list) return null;
@@ -213,9 +212,10 @@ function SavedCards({ preview, staxToken }: { preview: boolean; staxToken: strin
               }}>{armed === x.id ? "Delete it?" : "Delete"}</button>
             </li>
           ))}</ul>
-        ) : !adding && <div className="faint">No cards or bank accounts saved.</div>}
-        {adding && staxToken ? <AddPayMethod staxToken={staxToken} consent={consent} staffConsent={staffWords} onCancel={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />
-          : <div><button type="button" className="btn" disabled={preview || !staxToken} title={staxToken ? undefined : "Online payments aren't set up yet"} onClick={() => setAdding(true)}>+ Add a card or bank account</button></div>}
+        ) : <div className="faint">No cards saved.</div>}
+        {/* a card is saved only with a payment that goes through (Nov 3, Nick: "the only way they should be able to add a
+            card is if it goes through when they check out"): no Add here, just how */}
+        <div className="ps-pm-note">To save a card, tick <b>Keep this card on file</b> when you pay. It shows up here after the payment goes through.</div>
       </div>
     </section>
   );

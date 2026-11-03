@@ -20422,3 +20422,5 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .emp-auto{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;border-radius:var(--r);background:color-mix(in srgb,var(--warn) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line));font-size:13px}
 .emp-auto>span{flex:1;min-width:200px}
 .emp-auto.on{background:var(--surface-2);border-color:var(--line)}
+.ps-pm-note{font-size:12.5px;color:var(--ink-3)}
+.ps-pm-note b{color:var(--ink-2);font-weight:700}
