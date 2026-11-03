@@ -7,11 +7,13 @@ import SupportButton from "@/components/SupportButton";
 import SameArtPrompt from "@/components/SameArtPrompt";
 import ArtboardPrompt from "@/components/ArtboardPrompt";
 import { fmtPhone } from "@/lib/phone";
+import { myAccountIds } from "@/app/portal/account-actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const { email } = await getViewer();
+  const accounts = (await myAccountIds()).length;
   const { data } = await createAdminClient().from("settings").select("data").eq("id", 1).maybeSingle();
   const s = mergeSettings(data?.data);
   const addr = s.shop.address.replace(/\s*\n\s*/g, " · ").trim(), phone = fmtPhone(s.shop.phone);
@@ -31,6 +33,8 @@ export default async function PortalLayout({ children }: { children: React.React
           </Link>
           <div className="who">
             {email && <span>{email}</span>}
+            {/* a sign-in on more than one account switches here (Nov 3, Nick) */}
+            {accounts > 1 && <Link className="p-switch" href="/portal/choose">Switch account</Link>}
             {/* Get help: a screenshot and what's wrong, to our Support page (Oct 24, Nick) */}
             {email && <SupportButton email={email} portal />}
             {email && <form action="/auth/signout" method="post"><button className="btn sm" type="submit">Sign out</button></form>}
