@@ -404,6 +404,7 @@ export const feeAmount = (f: { amount: number | ""; free?: boolean; tbd?: boolea
 export type Delivery = "pickup" | "ship" | "deliver" | "tbd";
 
 export type Order = {
+  /** which of the customer's order types it is (customers.order_types, Cedar: Bulk / Cart), or empty */ order_type?: string;
   id: string; number: number; customer_id: string | null; nickname: string; status: StatusKey; type: "quote" | "invoice";
   /** started, not saved or sent yet: no real number, in no list (Oct 24; migration 209) */ draft?: boolean; discarded_at?: string | null;
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;

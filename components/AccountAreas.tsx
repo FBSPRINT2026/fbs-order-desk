@@ -28,7 +28,7 @@ import { heldFiles } from "@/lib/heldFiles";
 import RowLink from "@/components/RowLink";
 import { useUrlSearch } from "@/lib/useUrlSearch";
 
-export type AOrder = { id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
+export type AOrder = { /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_type?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** an old invoice of an account that has moved to the new system: paid here, not on Printavo (Nov 2, Nick) */ payHere?: boolean;
@@ -85,14 +85,14 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", orderTypes = [], dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
   /** the customer's brand colors ("Red" = PMS 199 C), shown under Artwork → Brand standards (Oct 16) */
   brandColors?: BrandColor[];
   /** staff: the brand standards editor (components/CustomerBrandColors.tsx), shown in place of the read-only list */
-  brandEditor?: ReactNode; customerName?: string;
+  brandEditor?: ReactNode; customerName?: string; /** the customer's order types (customers.order_types): a switch on the orders list */ orderTypes?: string[];
   /** the printable statement (open invoices + aging + pay it all) */
   statementHref?: string;
   /** staff: email the customer their statement link */
@@ -218,6 +218,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   // orders… all quotes and orders just like we have on our order screen")
   // our side: a customer's order request asks to open in the Job Center, right here (components/RequestAsk.tsx)
   const [rqAsk, setRqAsk] = useState<AOrder | null>(null);
+  // which order type to show (Nov 2, Nick: "he'll be able to toggle between… all, bulk, or cart")
+  const [lane, setLane] = useSticky<string>("customer.orderLane", "all");
   const [oTab, setOTab] = useSticky<"all" | "drafts" | "quotes" | "sent" | "orders" | "done">("portal.ordersTab", "all");
   // a link can open a tab (the dashboard's "3 more" under Orders sent to FBS opens Sent to FBS, Nov 2, Nick)
   useEffect(() => { const t = sp.get("show") || (mode === "shop" && sp.get("area") === "quotes" ? "quotes" : ""); if (t && ["all", "drafts", "quotes", "sent", "orders", "done"].includes(t)) setOTab(t as typeof oTab); }, [sp]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -394,21 +396,25 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   // the orders list, one card for the customer's portal and our customer page, so both say the same thing (Nov 2, Nick: "it
   // should say exactly the same thing on ours… all, sent to FBS, quotes… same statuses")
   const ordersCard = () => {
+    // one order type at a time, when the customer has them (Cedar: All · Bulk · Cart)
+    const ln = !orderTypes.length || lane === "all" || !orderTypes.includes(lane) ? "all" : lane;
+    const inLane = (l: AOrder[]) => (ln === "all" ? l : l.filter((o) => (o.order_type || "") === ln));
+    const qL = inLane(quotes), iL = inLane(invoices);
     // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
-    const sentQ = quotes.filter((o) => o.status === "request" && o.sent);
-    const quotes2 = quotes.filter((o) => !(o.status === "request" && o.sent));
+    const sentQ = qL.filter((o) => o.status === "request" && o.sent);
+    const quotes2 = qL.filter((o) => !(o.status === "request" && o.sent));
     // archived quotes (not going ahead) and quotes over 60 days old show with "Show older quotes and archived" (Oct 24, Nick)
     const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff && !o.archivedQ), olderN = quotes2.length - recentQ.length;
     const shownQ = oldQuotes ? quotes2 : recentQ;
     const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
     const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
     const tab = oTab === "drafts" && !draftsLive.length ? "all" : oTab;
-    const done = invoices.filter((o) => o.status === "completed");
+    const done = iL.filter((o) => o.status === "completed");
     // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
-    const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...invoices].sort((x, y) => y.number - x.number);
-    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
+    const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...iL].sort((x, y) => y.number - x.number);
+    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", iL.length], ["done", "Completed", done.length]];
     // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
     // following will just be on the main page")
     // one card like the dashboard's Your jobs (Nov 2, Nick: "the floating orders total… should be in the box… like the your
@@ -418,7 +424,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
       drafts: ["Drafts", "Not sent to us yet. Pick one up or discard it."],
       sent: ["Sent to FBS", "We're checking these. You'll get a message when we confirm."],
       quotes: ["Quotes", openQ ? `${openQ} waiting on you` : "Prices we've sent you"],
-      orders: ["Orders", `Total ${money(invoices.reduce((a, o) => a + o.total, 0))}`],
+      orders: ["Orders", `Total ${money(iL.reduce((a, o) => a + o.total, 0))}`],
       done: ["Completed", `${done.length} finished order${done.length === 1 ? "" : "s"}`],
     };
     return <section className="aa-ocard">
@@ -433,6 +439,9 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
           {tabs.map(([k, t, n]) => <option key={k} value={k}>{t}{n ? ` (${n})` : ""}</option>)}
         </select>
         <span className="spacer" />
+        {orderTypes.length > 0 && <div className="aa-lane" role="radiogroup" aria-label="Order type"><span>Show</span><div className="aa-lane-seg" style={{ gridTemplateColumns: `repeat(${orderTypes.length + 1},minmax(0,1fr))` }}>
+          {["all", ...orderTypes].map((k) => { const n = k === "all" ? 0 : [...quotes, ...invoices].filter((o) => o.order_type === k && !o.archived && o.status !== "completed").length; return <button key={k} type="button" role="radio" aria-checked={ln === k} className={ln === k ? "on" : ""} onClick={() => setLane(k)}>{k === "all" ? "All" : k}{n ? <em>{n}</em> : null}</button>; })}
+        </div></div>}
         {/* on the tab bar, at the right (Nov 2, Nick: "causing a spacing issue… move that on the main bar") */}
         {tab === "quotes" && <label className="check aa-oldq aa-oldq-bar"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}
         <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
@@ -470,8 +479,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
         {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
       </>}
       {tab === "orders" && <>
-        <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
-        {orderTable(invoices, "invoice")}
+        <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(iL.reduce((a, o) => a + o.total, 0))}</span></div>
+        {orderTable(iL, "invoice")}
       </>}
       {tab === "done" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Completed</h3></div>

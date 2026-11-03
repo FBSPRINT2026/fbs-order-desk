@@ -19708,3 +19708,18 @@ span.jrl-ring b.jb1,span.jrl-ring b.jb2,span.jrl-ring b.jb3{display:block;inset:
    showed "9....") */
 .gl .a-ea input{min-width:var(--eain,0px)}
 html body .ord .line-b .gl-list .gl .a-ea input,html body .ord .line-b.fit-s .gl-list .gl .a-ea input{min-width:var(--eain,0px)}
+/* a customer's order types (Nov 2, Nick: Cedar's Bulk / Cart): a switch at the right of the orders tab bar, the type on the
+   order builder beside How you'll get it, and on the simple order beside the garments toggle */
+.aa-lane{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-3);flex:none}
+.aa-lane-seg{display:grid;border:1px solid var(--line);border-radius:6px;overflow:hidden;height:34px;min-width:190px}
+.aa-lane-seg button{all:unset;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;padding:0 10px;font-size:13px;font-weight:600;color:var(--ink-2,var(--ink));background:var(--surface);white-space:nowrap}
+.aa-lane-seg button + button{border-left:1px solid var(--line)}
+.aa-lane-seg button em{font-style:normal;font-size:11px;font-weight:700;background:var(--surface-2);color:var(--ink-3);border-radius:999px;padding:0 6px;line-height:17px}
+.aa-lane-seg button.on{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent)}
+.aa-lane-seg button.on em{background:var(--accent);color:#fff}
+.aa-lane-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.so-typerow{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.so-typerow>.so-toggle{margin-bottom:8px}
+.so-otype{min-width:200px;margin:0}
+.so-otype .so-seg,.rq-otype{display:grid;width:100%}
+.so-otype .so-seg button,.rq-otype button{justify-content:center}

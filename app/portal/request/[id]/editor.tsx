@@ -35,7 +35,8 @@ function zeroMoney<T>(x: T): T {
   return x;
 }
 
-export default function RequestEditor({ neckSets = [], initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
+export default function RequestEditor({ orderTypes = [], neckSets = [], initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
+  /** their order types (customers.order_types, Cedar: Bulk / Cart): which one this order is */ orderTypes?: string[];
   /** their tag label sets on file (Tag Print) */ neckSets?: NeckLabelSet[];
   initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
   /** wholesale: where their goods are coming from (null on retail orders) */ goodsInfo?: GoodsInfoValue | null;
@@ -83,7 +84,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     const x = latest.current;
     setState("Saving…");
     const startedAt = Date.now();
-    const r = await saveRequest(x.id, { groups: x.groups, nickname: x.nickname, due_date: x.due_date, notes: x.notes, po_number: x.po_number || "", delivery_method: x.delivery_method || "pickup", ship_to: x.ship_to || "" });
+    const r = await saveRequest(x.id, { groups: x.groups, nickname: x.nickname, due_date: x.due_date, notes: x.notes, po_number: x.po_number || "", delivery_method: x.delivery_method || "pickup", ship_to: x.ship_to || "", order_type: x.order_type || "" });
     setState(r.ok ? "Saved" : "");
     if (r.ok) { if (r.updated_at) baseAt.current = r.updated_at; savedUnsaved(x.id, startedAt, r.updated_at); }
     if (!r.ok) setErr(r.error || "Couldn't save.");
@@ -274,7 +275,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
   // units, upload art, upload PO. If you have it, tell us about the goods")
   const [poBusy, setPoBusy] = useState("");
   const [poRead, setPoRead] = useState<{ read: PoRead; files: RqFile[] } | null>(null);
-  const [simple, setSimple] = useState<{ name: string; about: string; due: string; po: string; method: "" | "screen" | "embroidery" | "transfer" | "mixed"; qty: string; goodsOn: boolean; garments: string; files: RqFile[]; note: string } | null>(null);
+  const [simple, setSimple] = useState<{ name: string; about: string; due: string; po: string; method: "" | "screen" | "embroidery" | "transfer" | "mixed"; qty: string; goodsOn: boolean; garments: string; files: RqFile[]; note: string; otype?: string } | null>(null);
   const [simpleBusy, setSimpleBusy] = useState("");
   async function upFiles(list: File[], kind: RqFile["kind"]): Promise<RqFile[]> {
     const out: RqFile[] = [];
@@ -359,7 +360,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     setSimpleBusy("Sending…"); setErr("");
     await flush();
     if (goods && simple.goodsOn) { const g = await saveGoodsInfo(o.id, cleanGoodsInfo(goods)); if (!g.ok) { setSimpleBusy(""); return setErr(g.error || "Couldn't save the goods info."); } }
-    const r = await sendSimpleOrder(o.id, { name: simple.name, about: simple.about, due: simple.due || null, po: simple.po, method: simple.method, qty: +simple.qty || null, delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "", garments: simple.garments, files: simple.files });
+    const r = await sendSimpleOrder(o.id, { name: simple.name, about: simple.about, due: simple.due || null, po: simple.po, method: simple.method, qty: +simple.qty || null, delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "", garments: simple.garments, files: simple.files, type: simple.otype || "" });
     if (!r.ok) { setSimpleBusy(""); return setErr(r.error || "Couldn't send it."); }
     dropUnsaved(o.id);
     router.push(`/portal/orders/${o.id}?sent=1`);
@@ -453,7 +454,12 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
             <select id="rq-del" value={o.delivery_method || "pickup"} disabled={preview} onChange={(e) => patch((d) => { d.delivery_method = e.target.value as Order["delivery_method"]; })}>
               <option value="pickup">I&apos;ll pick it up</option><option value="ship">Ship it to me</option><option value="deliver">Local delivery</option>
             </select></div>
-          {(o.delivery_method || "pickup") !== "pickup" && <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor="rq-ship">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="rq-ship" rows={2} placeholder="Name, street, city, state, ZIP" value={o.ship_to || ""} disabled={preview} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>}
+          {/* their order type, in the open spot beside How you'll get it (Nov 2, Nick: Cedar's Bulk / Cart) */}
+          {orderTypes.length > 0 && <div className="field"><label>Order type</label>
+            <div className="so-seg rq-otype" role="radiogroup" aria-label="Order type" style={{ gridTemplateColumns: `repeat(${orderTypes.length},minmax(0,1fr))` }}>
+              {orderTypes.map((k) => <button key={k} type="button" role="radio" aria-checked={o.order_type === k} className={o.order_type === k ? "on" : ""} disabled={preview} onClick={() => patch((d) => { d.order_type = k; })}>{k}</button>)}
+            </div></div>}
+          {(o.delivery_method || "pickup") !== "pickup" && <div className="field" style={{ gridColumn: orderTypes.length ? "1 / -1" : "span 2" }}><label htmlFor="rq-ship">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="rq-ship" rows={2} placeholder="Name, street, city, state, ZIP" value={o.ship_to || ""} disabled={preview} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>}
         </div>
         <div className="field"><label htmlFor="rq-notes">Order notes <span className="faint" style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>for production: shipping, packing, who it&apos;s for</span></label><textarea id="rq-notes" rows={2} placeholder="e.g. Ship to our Tulsa store · fold and bag each shirt · these are for our fall event" value={o.notes || ""} disabled={preview} onChange={(e) => patch((d) => { d.notes = e.target.value; })} /></div>
         {/\?/.test(o.notes || "") && <div className="rq-q-hint">Is that a question? Ask it in <b>Questions for us</b> on the right so we can answer it. Order notes are for production details.</div>}
@@ -585,7 +591,14 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
                 <div className="field"><label htmlFor="so-qty">How many pieces</label><input id="so-qty" type="number" min={1} inputMode="numeric" placeholder="e.g. 150" value={simple.qty} onChange={(e) => setSimple({ ...simple, qty: e.target.value })} /></div>
               </div>
               <div className="field"><label htmlFor="so-about">Description</label><textarea id="so-about" rows={3} placeholder="e.g. Black tees, our logo on the front, sponsors on the back" value={simple.about} onChange={(e) => setSimple({ ...simple, about: e.target.value })} /></div>
-              <label className="so-toggle"><input type="checkbox" checked={simple.goodsOn} onChange={(e) => setSimple({ ...simple, goodsOn: e.target.checked })} /><span className="so-sw" aria-hidden /><span>Tell us about the garments{goods ? " you're sending" : ""}</span></label>
+<div className="so-typerow">
+                            <label className="so-toggle"><input type="checkbox" checked={simple.goodsOn} onChange={(e) => setSimple({ ...simple, goodsOn: e.target.checked })} /><span className="so-sw" aria-hidden /><span>Tell us about the garments{goods ? " you're sending" : ""}</span></label>
+              {/* their order type, to the right of the toggle (Nov 2, Nick: "he needs to be able to mark it as bulk or cart") */}
+              {orderTypes.length > 0 && <div className="field so-otype"><label>Order type</label>
+                <div className="so-seg" role="radiogroup" aria-label="Order type" style={{ gridTemplateColumns: `repeat(${orderTypes.length},minmax(0,1fr))` }}>
+                  {orderTypes.map((k) => <button key={k} type="button" role="radio" aria-checked={simple.otype === k} className={simple.otype === k ? "on" : ""} onClick={() => setSimple({ ...simple, otype: k })}>{k}</button>)}
+                </div></div>}
+              </div>
               {simple.goodsOn && (
                 <div className="so-goods stack" style={{ gap: 10 }}>
                   <div className="field"><label htmlFor="so-g">Style and colors</label><input id="so-g" type="text" placeholder={goods ? "e.g. Next Level 6210, Banana Cream" : "e.g. Gildan 5000 in black, or “help me pick”"} value={simple.garments} onChange={(e) => setSimple({ ...simple, garments: e.target.value })} /></div>
@@ -618,7 +631,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
             <div className="dla-acts">
               <span className="faint" style={{ fontSize: 12, marginRight: "auto" }}>{simpleBusy}</span>
               <button type="button" className="btn ghost" disabled={!!simpleBusy} onClick={() => setSimple(null)}>Cancel</button>
-              <button type="button" className="btn primary" disabled={!!simpleBusy || preview || (simple.about.trim().length < 5 && !simple.files.length && !simple.name.trim())} onClick={() => void sendSimple()}>Send to FBS</button>
+              <button type="button" className="btn primary" disabled={!!simpleBusy || preview || (orderTypes.length > 0 && !simple.otype) || (simple.about.trim().length < 5 && !simple.files.length && !simple.name.trim())} title={orderTypes.length > 0 && !simple.otype ? `Pick ${orderTypes.join(" or ")}` : undefined} onClick={() => void sendSimple()}>Send to FBS</button>
             </div>
           </div>
         </div>
