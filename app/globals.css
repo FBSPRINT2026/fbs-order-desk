@@ -19642,3 +19642,10 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jmb-focus .jmb-bar .jmb-send{margin-left:auto}
 .jmb-focus .jmb-rep>small{font-size:11.5px}
 .pod-kv b{overflow-wrap:anywhere;min-width:0}
+/* Requests: click a column's name to sort; by customer, our rainbow line between customers (Nov 2, Nick) */
+.rqd-sort{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit}
+.rqd-sort span{font-size:9px;color:var(--accent)}
+.rqd-sort.on{color:var(--ink)}
+.rqd-sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+.rqd-tbl tr.rqd-sep td{padding:0!important;height:14px;background:var(--surface)!important;border:0!important}
+.rqd-tbl tr.rqd-sep i{display:block;height:3px;margin:5px 0;border-radius:3px;background:var(--fbs-fade)}
