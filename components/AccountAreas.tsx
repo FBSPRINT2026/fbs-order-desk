@@ -166,12 +166,12 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   const orderHref = (id: string, hash?: string) => hrefs[id] || `${hrefBase}${id}${hrefQuery}${hash ? "#" + hash : ""}`;
   const pill = (o: AOrder) => o.archived
     ? <span className="aa-pill" style={{ ["--sc" as string]: o.statusColor || "var(--ink-3)" }}>{o.statusLabel || "Archived"}</span>
-    : o.cancelAsked && mode === "portal" ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--danger)" }}>Cancellation requested</span>
-    : o.archivedQ && mode === "portal" ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--ink-3)" }}>Archived</span>
-    : o.status === "request" && mode === "portal"
+    : o.cancelAsked ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--danger)" }}>Cancellation requested</span>
+    : o.archivedQ ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--ink-3)" }}>Archived</span>
+    : o.status === "request"
       // the customer's own order requests: not sent yet, or sent to us and waiting on our OK (Oct 24, Nick)
       ? <span className="aa-pill" style={{ ["--sc" as string]: o.sent ? "var(--fbs-orange, #F7941D)" : "var(--ink-3)" }}>{o.sent ? "Waiting on FBS" : "Not sent yet"}</span>
-      : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }} title={mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}>{mode === "shop" ? ST[o.status]?.label : ST[o.status]?.portal}</span>;
+      : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }} title={ST[o.status]?.portal || ST[o.status]?.label}>{ST[o.status]?.portal || ST[o.status]?.label}</span>;
   const rawArea = (sp.get("area") as Area) || "home";
   // portal: quotes and orders are one "Orders" tab with a Quotes / Orders switch inside
   // shop (Oct 21, Nick: "the dashboard can be dashboard and orders… it just needs to be simpler"): Quotes and Orders are
@@ -217,7 +217,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   // orders… all quotes and orders just like we have on our order screen")
   const [oTab, setOTab] = useSticky<"all" | "drafts" | "quotes" | "sent" | "orders" | "done">("portal.ordersTab", "all");
   // a link can open a tab (the dashboard's "3 more" under Orders sent to FBS opens Sent to FBS, Nov 2, Nick)
-  useEffect(() => { const t = sp.get("show"); if (t && ["all", "drafts", "quotes", "sent", "orders", "done"].includes(t)) setOTab(t as typeof oTab); }, [sp]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = sp.get("show") || (mode === "shop" && sp.get("area") === "quotes" ? "quotes" : ""); if (t && ["all", "drafts", "quotes", "sent", "orders", "done"].includes(t)) setOTab(t as typeof oTab); }, [sp]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showOldOwed, setShowOldOwed] = useState(false);
   const [viewSet, setViewSet] = useState<AMockup[] | null>(null);
   const [payF, setPayF] = useSticky<"open" | "late" | "later">("portal.payFilter", "open");
@@ -305,8 +305,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
       <div className="aa-card aa-tblcard">
         {/* the same column widths in every list, so Quotes and Orders line up one above the other (Oct 24, Nick) */}
         <table className="aa-tbl aa-tbl-cols">
-          <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" />{mode !== "portal" && <col className="c-m" />}<col className="c-m" /></>}<col className="c-m" />{mode === "portal" && <col className="c-star" />}</colgroup>
-          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && mode !== "portal" && <th className="r paid">Paid</th>}{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
+          <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /></>}<col className="c-m" />{mode === "portal" && <col className="c-star" />}</colgroup>
+          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
           <tbody>
             {rows.map((o) => { return (
               <tr key={o.id} onClick={() => router.push(orderHref(o.id))}>
@@ -318,7 +318,6 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
                 <td>{pill(o)}</td>
                 <td className="dt" data-l={cols === "quote" ? "Created" : "In hands"}>{cols === "quote" ? when(o.created_at) : when(o.due_date) || "—"}</td>
                 {/* customers see only the balance and total (Nov 2, Nick: "you don't need paid… more room for the order description") */}
-                {cols !== "quote" && mode !== "portal" && <td className="r num paid" data-l="Paid">{all && o.type !== "invoice" ? "" : money(o.paid)}</td>}
                 {/* customers: what's left, and what's been paid under it, or "Paid" once it's all paid (Nov 2, Nick: "I can't tell
                     what's been paid, what's not been paid") */}
                 {cols !== "quote" && <td data-l="Balance" className={"r num" + (mode === "shop" && !o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : mode === "portal" && o.total > 0 && o.balance <= 0.004 ? <span className="aa-paidall">Paid</span> : <span className={mode === "portal" && o.paid > 0.004 ? "aa-balpart" : ""} title={mode === "portal" && o.paid > 0.004 ? `${money(o.paid)} paid so far` : undefined}>{money(Math.max(0, o.balance))}</span>}</td>}
@@ -389,6 +388,94 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   const subBar = (subs: [string, string][], cur: string, set: (k: string) => void) => subs.length > 1 ? (
     <div className="toolbar aa-otabs aa-subtabs" data-toolbar><div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => set(k)}>{t}</button>)}</div></div>
   ) : null;
+  // the orders list, one card for the customer's portal and our customer page, so both say the same thing (Nov 2, Nick: "it
+  // should say exactly the same thing on ours… all, sent to FBS, quotes… same statuses")
+  const ordersCard = () => {
+    // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
+    const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
+    const sentQ = quotes.filter((o) => o.status === "request" && o.sent);
+    const quotes2 = quotes.filter((o) => !(o.status === "request" && o.sent));
+    // archived quotes (not going ahead) and quotes over 60 days old show with "Show older quotes and archived" (Oct 24, Nick)
+    const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff && !o.archivedQ), olderN = quotes2.length - recentQ.length;
+    const shownQ = oldQuotes ? quotes2 : recentQ;
+    const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
+    const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
+    const tab = oTab === "drafts" && !draftsLive.length ? "all" : oTab;
+    const done = invoices.filter((o) => o.status === "completed");
+    // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
+    // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
+    const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...invoices].sort((x, y) => y.number - x.number);
+    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
+    // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
+    // following will just be on the main page")
+    // one card like the dashboard's Your jobs (Nov 2, Nick: "the floating orders total… should be in the box… like the your
+    // jobs on the first page… there and then underneath it, what it is"): its header says which list and what it adds up to
+    const secT: Record<string, [string, string]> = {
+      all: ["All orders", `${allRows.length} order${allRows.length === 1 ? "" : "s"} and quotes`],
+      drafts: ["Drafts", "Not sent to us yet. Pick one up or discard it."],
+      sent: ["Sent to FBS", "We're checking these. You'll get a message when we confirm."],
+      quotes: ["Quotes", openQ ? `${openQ} waiting on you` : "Prices we've sent you"],
+      orders: ["Orders", `Total ${money(invoices.reduce((a, o) => a + o.total, 0))}`],
+      done: ["Completed", `${done.length} finished order${done.length === 1 ? "" : "s"}`],
+    };
+    return <section className="aa-ocard">
+      <div className="aa-ocard-h"><h2>{secT[tab]?.[0] || "Orders"}</h2><span className="faint">{secT[tab]?.[1] || ""}</span></div>
+      <div className="toolbar aa-otabs" data-toolbar>
+        <div className="chips">
+          {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}
+        </div>
+        {/* on a phone the five buttons don't fit one row: a dropdown beside the search instead (Oct 24, Nick: "secondary
+            toolbar is bad") */}
+        <select className="aa-osel" aria-label="Show" value={tab} onChange={(e) => setOTab(e.target.value as typeof oTab)}>
+          {tabs.map(([k, t, n]) => <option key={k} value={k}>{t}{n ? ` (${n})` : ""}</option>)}
+        </select>
+        <span className="spacer" />
+        {/* on the tab bar, at the right (Nov 2, Nick: "causing a spacing issue… move that on the main bar") */}
+        {tab === "quotes" && <label className="check aa-oldq aa-oldq-bar"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}
+        <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
+      </div>
+      {tab === "all" && orderTable(allRows, "invoice", true)}
+      {/* drafts: started, never sent, no number yet (Oct 24, Nick: "something before sent to FBS that says drafts") */}
+      {tab === "drafts" && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Drafts</h3><span className="faint">Not sent to us yet. Pick one up or discard it.</span></div>
+        <div className="aa-card aa-tblcard"><table className="aa-tbl">
+          <thead><tr><th>Draft</th><th>Pieces</th><th>Last changed</th><th /></tr></thead>
+          <tbody>{draftsLive.map((d) => (
+            <tr className="rl" key={d.id}>
+              <td className="m"><RowLink href={`/portal/request/${d.id}${hrefQuery}`} /><div className="aa-t">{d.name || "Untitled order"}</div></td>
+              <td>{d.pcs || "—"}</td>
+              <td className="dt">{when(d.updated)}</td>
+              <td className="r" onClick={(e) => e.stopPropagation()}>
+                <Link className="btn sm" href={`/portal/request/${d.id}${hrefQuery}`}>Continue</Link>{" "}
+                {onDiscardDraft && <button type="button" className={"btn sm ghost" + (armedDel === "d" + d.id ? " danger armed" : "")} disabled={!canAct} onClick={async () => {
+                  if (armedDel !== "d" + d.id) { setArmedDel("d" + d.id); setTimeout(() => setArmedDel((x) => (x === "d" + d.id ? "" : x)), 3500); return; }
+                  setArmedDel(""); setGoneDrafts((g) => ({ ...g, [d.id]: true }));
+                  const r = await onDiscardDraft(d.id); if (!r.ok) setGoneDrafts((g) => ({ ...g, [d.id]: false }));
+                }}>{armedDel === "d" + d.id ? "Discard it?" : "Discard"}</button>}
+              </td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      </>}
+      {tab === "sent" && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Sent to FBS</h3><span className="faint">We&apos;re checking these. You&apos;ll get a message when we confirm.</span></div>
+        {sentQ.length ? orderTable(sentQ, "quote") : <div className="aa-none-q faint">Nothing waiting on us. Orders you send show here until we confirm them.</div>}
+      </>}
+      {tab === "quotes" && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
+          {mode !== "portal" && <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}</div>
+        {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
+      </>}
+      {tab === "orders" && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
+        {orderTable(invoices, "invoice")}
+      </>}
+      {tab === "done" && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Completed</h3></div>
+        {orderTable(done, "invoice")}
+      </>}
+    </section>;
+  };
   let body: ReactNode = null;
   if (area === "home" && mode === "portal" && dash) {
     body = dash;
@@ -482,10 +569,6 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
     // All · Order requests · Quotes · Orders · Completed (Nov 2, Nick: "it should say all, order requests, quote, orders and
     // completed on this page"); a request isn't a quote yet
     const lists = { all: newest(orders.filter((o) => o.type === "invoice" || quotes.includes(o))), requests: newest(quotes.filter((o) => o.status === "request")), quotes: newest(quotes.filter((o) => o.status !== "request")), orders: newest(active), completed: newest(completed) };
-    const rows = lists[oFilter].filter((o) => has(q, o.number, o.nickname, ST[o.status]?.label, o.statusLabel, o.search));
-    const P = pageOf("orders:" + oFilter, rows, 25);
-    const showBal = rows.some((o) => !o.archived && o.balance > 0.004);
-    const waitingOn = new Set(goodsPanel ? receive.map((o) => o.id) : []);
     const owedList = owed.filter((o) => !o.archived);
     const sentQ = quotes.filter((o) => !o.archived && o.status === "quote_sent");
     // what's worth knowing at a glance (Oct 21, Nick: "surely we can put some more pertinent information there"): what's
@@ -505,41 +588,13 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
       <>
         {/* the order page's summary card (Oct 21, Nick: "a common theme") */}
         <div className="stats">
-          <button type="button" className="stat" onClick={() => setOrdF("all")}><span className="k">In the works</span><span className="v">{active.length} job{active.length === 1 ? "" : "s"}{sentQ.length ? ` · ${sentQ.length} quote${sentQ.length === 1 ? "" : "s"}` : ""}</span><small>{nextDue ? `Next due ${when(nextDue.due_date)} · #${nextDue.number}` : active.length ? "No in-hands dates yet" : "Nothing in progress"}</small></button>
+          <button type="button" className="stat" onClick={() => setOTab("orders")}><span className="k">In the works</span><span className="v">{active.length} job{active.length === 1 ? "" : "s"}{sentQ.length ? ` · ${sentQ.length} quote${sentQ.length === 1 ? "" : "s"}` : ""}</span><small>{nextDue ? `Next due ${when(nextDue.due_date)} · #${nextDue.number}` : active.length ? "No in-hands dates yet" : "Nothing in progress"}</small></button>
           <button type="button" className="stat money-only" onClick={() => go("payments")}><span className="k">Balance</span><span className="v">{due > 0.004 ? money(due) : "Paid up"}</span><small>{due > 0.004 ? `${owedList.length && owedList.length <= 3 ? owedList.map((o) => "#" + o.number).join(", ") : `${owedList.length} invoices`}${terms ? ` · ${terms}` : ""}` : terms || "Nothing owed"}</small></button>
           <button type="button" className="stat" onClick={() => lastOrder && router.push(orderHref(lastOrder.id))}><span className="k">Last order</span><span className="v">{lastOrder ? when(dayOf(lastOrder)) : "None yet"}</span><small>{lastOrder ? `#${lastOrder.number} · ${dd(t0, dayOf(lastOrder))} days ago` : ""}</small></button>
-          <button type="button" className="stat" onClick={() => setOrdF("completed")}><span className="k">Orders about</span><span className="v">{every || "Not enough orders"}</span><small>{nextAround ? (nextAround < t0 ? `Due for one: ${dd(t0, nextAround)} days past usual` : `Next one around ${when(nextAround)}`) : ""}</small></button>
-          <button type="button" className="stat money-only" onClick={() => setOrdF("completed")}><span className="k">Sales this year</span><span className="v">{money(sales(yr))}</span><small>{`${lastYr} ${money(sales(lastYr))} · all time ${money(invoices.reduce((a, o) => a + o.total, 0))}`}{firstYr ? ` since ${firstYr}` : ""}</small></button>
+          <button type="button" className="stat" onClick={() => setOTab("done")}><span className="k">Orders about</span><span className="v">{every || "Not enough orders"}</span><small>{nextAround ? (nextAround < t0 ? `Due for one: ${dd(t0, nextAround)} days past usual` : `Next one around ${when(nextAround)}`) : ""}</small></button>
+          <button type="button" className="stat money-only" onClick={() => setOTab("done")}><span className="k">Sales this year</span><span className="v">{money(sales(yr))}</span><small>{`${lastYr} ${money(sales(lastYr))} · all time ${money(invoices.reduce((a, o) => a + o.total, 0))}`}{firstYr ? ` since ${firstYr}` : ""}</small></button>
         </div>
-        <div className="toolbar">
-          <div className="chips">
-            {(([["all", "All"], ["requests", "Order requests"], ["quotes", "Quotes"], ["orders", "Orders"], ["completed", "Completed"]]) as const).map(([k, l]) => (
-              <button key={k} type="button" className={"chip" + (oFilter === k ? " on" : "")} onClick={() => { setOrdF(k); if (rawArea !== "home") go("home"); }}>{l}<span className="chip-n">{lists[k].length}</span></button>
-            ))}
-          </div>
-          {search(oFilter === "quotes" ? "Search quotes" : "Search orders")}
-        </div>
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead><tr><th>#</th><th>Job</th><th>Status</th><th>Date</th><th>Due</th><th className="r">Pcs</th>{showBal && <th className="r money-only ol-bal">Balance</th>}<th className="r money-only">Total</th></tr></thead>
-            <tbody>
-              {P.items.map((o) => (
-                <tr className="rl" key={o.id}>
-                  <td><RowLink href={orderHref(o.id)} /><span className="ordno">{o.number}</span> <span className="ol-tags"><span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span>{showBal && o.type !== "quote" && <PaidMark total={o.total} balance={o.archived ? 0 : o.balance} />}{o.archived && <PrintavoMark />}</span></td>
-                  <td><div>{o.nickname || "Untitled Job"}{waitingOn.has(o.id) && <Link className="cx-goods" href={`${path}?area=receive`} onClick={(e) => e.stopPropagation()} title="Customer supplied goods: count in, tracking">Waiting on goods</Link>}</div></td>
-                  <td>{o.archived ? <span className="pv-dot" style={{ ["--sc" as string]: o.statusColor || "#888" }}>{o.statusLabel || "Archived"}</span> : <Pill status={o.status} pv={o.pv} />}</td>
-                  <td>{when(dayOf(o)) || "—"}</td>
-                  <td>{when(o.due_date) || <span className="faint">No date</span>}</td>
-                  <td className="r">{o.qty}</td>
-                  {showBal && <td className="r money-only ol-bal"><span className={"bal" + (o.archived || o.balance <= 0.004 ? " paid" : "")}>{!o.archived && o.balance > 0.004 ? money(o.balance) : "Paid"}</span></td>}
-                  <td className="r money-only">{money(o.total)}</td>
-                </tr>
-              ))}
-              {!rows.length && <tr><td colSpan={8}><div className="empty">{lists[oFilter].length ? `No matches for “${q}”.` : oFilter === "all" ? "No orders or quotes yet." : oFilter === "quotes" ? "No quotes." : "No completed orders yet."}</div></td></tr>}
-            </tbody>
-          </table>
-        </div>
-        {pager("orders:" + oFilter, rows.length, P.p, P.n, 25)}
+        {ordersCard()}
       </>
     );
   } else if (area === "home") {
@@ -596,90 +651,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
     );
   } else if (area === "quotes") body = <>{tableHead(<h2 className="aa-areat">Quotes</h2>, "Search quotes")}{orderTable(quotes, "quote")}</>;
   else if ((area === "orders" || area === "invoices") && mode === "portal") {
-    // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
-    const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
-    const sentQ = quotes.filter((o) => o.status === "request" && o.sent);
-    const quotes2 = quotes.filter((o) => !(o.status === "request" && o.sent));
-    // archived quotes (not going ahead) and quotes over 60 days old show with "Show older quotes and archived" (Oct 24, Nick)
-    const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff && !o.archivedQ), olderN = quotes2.length - recentQ.length;
-    const shownQ = oldQuotes ? quotes2 : recentQ;
-    const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
-    const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
-    const tab = oTab === "drafts" && !draftsLive.length ? "all" : oTab;
-    const done = invoices.filter((o) => o.status === "completed");
-    // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
-    // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
-    const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...invoices].sort((x, y) => y.number - x.number);
-    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", invoices.length], ["done", "Completed", done.length]];
-    // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
-    // following will just be on the main page")
-    // one card like the dashboard's Your jobs (Nov 2, Nick: "the floating orders total… should be in the box… like the your
-    // jobs on the first page… there and then underneath it, what it is"): its header says which list and what it adds up to
-    const secT: Record<string, [string, string]> = {
-      all: ["All orders", `${allRows.length} order${allRows.length === 1 ? "" : "s"} and quotes`],
-      drafts: ["Drafts", "Not sent to us yet. Pick one up or discard it."],
-      sent: ["Sent to FBS", "We're checking these. You'll get a message when we confirm."],
-      quotes: ["Quotes", openQ ? `${openQ} waiting on you` : "Prices we've sent you"],
-      orders: ["Orders", `Total ${money(invoices.reduce((a, o) => a + o.total, 0))}`],
-      done: ["Completed", `${done.length} finished order${done.length === 1 ? "" : "s"}`],
-    };
-    body = <section className="aa-ocard">
-      <div className="aa-ocard-h"><h2>{secT[tab]?.[0] || "Orders"}</h2><span className="faint">{secT[tab]?.[1] || ""}</span></div>
-      <div className="toolbar aa-otabs" data-toolbar>
-        <div className="chips">
-          {tabs.map(([k, t, n]) => <button key={k} type="button" className={"chip" + (tab === k ? " on" : "")} onClick={() => setOTab(k)}>{t}{n ? <span className="chip-n">{n}</span> : null}</button>)}
-        </div>
-        {/* on a phone the five buttons don't fit one row: a dropdown beside the search instead (Oct 24, Nick: "secondary
-            toolbar is bad") */}
-        <select className="aa-osel" aria-label="Show" value={tab} onChange={(e) => setOTab(e.target.value as typeof oTab)}>
-          {tabs.map(([k, t, n]) => <option key={k} value={k}>{t}{n ? ` (${n})` : ""}</option>)}
-        </select>
-        <span className="spacer" />
-        {/* on the tab bar, at the right (Nov 2, Nick: "causing a spacing issue… move that on the main bar") */}
-        {tab === "quotes" && <label className="check aa-oldq aa-oldq-bar"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}
-        <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
-      </div>
-      {tab === "all" && orderTable(allRows, "invoice", true)}
-      {/* drafts: started, never sent, no number yet (Oct 24, Nick: "something before sent to FBS that says drafts") */}
-      {tab === "drafts" && <>
-        <div className="aa-sec-h aa-sec-pad"><h3>Drafts</h3><span className="faint">Not sent to us yet. Pick one up or discard it.</span></div>
-        <div className="aa-card aa-tblcard"><table className="aa-tbl">
-          <thead><tr><th>Draft</th><th>Pieces</th><th>Last changed</th><th /></tr></thead>
-          <tbody>{draftsLive.map((d) => (
-            <tr className="rl" key={d.id}>
-              <td className="m"><RowLink href={`/portal/request/${d.id}${hrefQuery}`} /><div className="aa-t">{d.name || "Untitled order"}</div></td>
-              <td>{d.pcs || "—"}</td>
-              <td className="dt">{when(d.updated)}</td>
-              <td className="r" onClick={(e) => e.stopPropagation()}>
-                <Link className="btn sm" href={`/portal/request/${d.id}${hrefQuery}`}>Continue</Link>{" "}
-                {onDiscardDraft && <button type="button" className={"btn sm ghost" + (armedDel === "d" + d.id ? " danger armed" : "")} disabled={!canAct} onClick={async () => {
-                  if (armedDel !== "d" + d.id) { setArmedDel("d" + d.id); setTimeout(() => setArmedDel((x) => (x === "d" + d.id ? "" : x)), 3500); return; }
-                  setArmedDel(""); setGoneDrafts((g) => ({ ...g, [d.id]: true }));
-                  const r = await onDiscardDraft(d.id); if (!r.ok) setGoneDrafts((g) => ({ ...g, [d.id]: false }));
-                }}>{armedDel === "d" + d.id ? "Discard it?" : "Discard"}</button>}
-              </td>
-            </tr>
-          ))}</tbody>
-        </table></div>
-      </>}
-      {tab === "sent" && <>
-        <div className="aa-sec-h aa-sec-pad"><h3>Sent to FBS</h3><span className="faint">We&apos;re checking these. You&apos;ll get a message when we confirm.</span></div>
-        {sentQ.length ? orderTable(sentQ, "quote") : <div className="aa-none-q faint">Nothing waiting on us. Orders you send show here until we confirm them.</div>}
-      </>}
-      {tab === "quotes" && <>
-        <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
-          {mode !== "portal" && <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}</div>
-        {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
-      </>}
-      {tab === "orders" && <>
-        <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(invoices.reduce((a, o) => a + o.total, 0))}</span></div>
-        {orderTable(invoices, "invoice")}
-      </>}
-      {tab === "done" && <>
-        <div className="aa-sec-h aa-sec-pad"><h3>Completed</h3></div>
-        {orderTable(done, "invoice")}
-      </>}
-    </section>;
+    body = ordersCard();
   } else if (area === "orders" || area === "invoices") body = <>
     {tableHead(<><h2 className="aa-areat">Orders</h2><span className="aa-sum">{invoices.length} order{invoices.length === 1 ? "" : "s"} · Total <b>{money(invoices.reduce((a, o) => a + o.total, 0))}</b> · Balance <b className={mode === "shop" && due > 0.004 ? "aa-due" : ""}>{money(due)}</b></span></>, "Search orders")}
     {orderTable(invoices, "invoice")}</>;
