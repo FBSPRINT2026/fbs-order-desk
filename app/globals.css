@@ -20077,8 +20077,7 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .psm-side > .psm-pay{order:2}
   .psm-main > :nth-child(2){order:3}
   .psm-side > .psm-artp{order:4}
-  .psm-side > .psm-msg{order:5}
-  .psm-side .psm-more{order:6}
+  .psm-side > .psm-acct{order:5}
 }
 @media (max-width:640px){
   .psm-nd{grid-template-columns:40px minmax(0,1fr)}
@@ -20175,3 +20174,32 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .pv .pv-same .pv-same-t{display:inline}
   .pv .pv-same > div:not(.pv-cust):not(.pv-ship){grid-column:1/-1}
 }
+
+/* A job row is laid out by the room its list has, not by the screen (Nov 3, Nick: "why you got all this space?… the
+   little order status… shouldn't be compressed"). The order line gets the room to spell every step out (Quote, Proof,
+   Receiving, Printing, Ready, Completed); when the list is too narrow for that beside the name and button, the line drops
+   to its own full-width row under them, and on a phone-wide list everything stacks. Same in the simple and full portal
+   and wherever a job list sits (a side panel, a tablet). */
+.pjr-list{container:pjr / inline-size}
+.pjr-list > .pjr{grid-template-columns:56px minmax(150px,1fr) minmax(400px,1.9fr) 168px;gap:14px}
+.pjr-list > .pjr .pjr-mid{grid-column:auto;grid-row:auto}
+.pjr-list > .pjr .pjr-act{grid-column:auto}
+.pjr-list > .pjr .orl-lb li{overflow:visible;text-overflow:clip}
+@container pjr (max-width:840px){
+  .pjr-list > .pjr{grid-template-columns:56px minmax(0,1fr) 176px;gap:10px 14px}
+  .pjr-list > .pjr .pjr-mid{grid-column:2 / -1;grid-row:2}
+}
+@container pjr (max-width:560px){
+  .pjr-list > .pjr{grid-template-columns:52px minmax(0,1fr);gap:8px 12px}
+  .pjr-list > .pjr .pjr-mid,.pjr-list > .pjr .pjr-act{grid-column:1 / -1;grid-row:auto}
+}
+
+/* The simple portal's Your account panel: a message to us, the account's links and Simple / Full, together (Nov 3) */
+.psm-acct-b{display:flex;flex-direction:column;gap:12px}
+.psm-acct .psm-msg{padding:0;border:0;background:none;border-radius:0}
+.psm-acct-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding-top:12px;border-top:1px solid var(--line-2,var(--line))}
+.psm-acct-links a{display:flex;align-items:center;justify-content:center;min-height:34px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-weight:600;color:var(--ink);text-decoration:none;white-space:nowrap}
+.psm-acct-links a:hover{border-color:var(--accent);color:var(--accent)}
+.psm-acct-view{padding-top:10px;border-top:1px solid var(--line-2,var(--line))}
+.pvs.in{margin:0;justify-content:space-between}
+.pvs.in > span{margin-right:auto}

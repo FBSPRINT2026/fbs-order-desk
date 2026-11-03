@@ -8,7 +8,7 @@ import { setPortalView } from "@/app/portal/settings-actions";
  * toggle between advanced and simple view… shouldn't be obvious… but it should be on their portal"). The same setting
  * as Settings → Portal layout (customers.portal_view); staff in a preview switch it for that customer.
  */
-export default function PortalViewSwitch({ view, customerId }: { view: "simple" | "advanced"; customerId: string }) {
+export default function PortalViewSwitch({ view, customerId, inPanel = false }: { view: "simple" | "advanced"; customerId: string; /** in the simple view's Your account panel */ inPanel?: boolean }) {
   const router = useRouter();
   const [v, setV] = useState(view);
   const [err, setErr] = useState("");
@@ -19,8 +19,8 @@ export default function PortalViewSwitch({ view, customerId }: { view: "simple" 
     start(async () => { const r = await setPortalView(k, customerId); if (!r.ok) { setV(was); setErr(r.error || "Couldn't switch."); } else router.refresh(); });
   };
   return (
-    <div className="pvs" role="radiogroup" aria-label="Portal view">
-      <span>View</span>
+    <div className={"pvs" + (inPanel ? " in" : "")} role="radiogroup" aria-label="Portal view">
+      <span>{inPanel ? "Page view" : "View"}</span>
       <button type="button" role="radio" aria-checked={v === "simple"} className={v === "simple" ? "on" : ""} onClick={() => pick("simple")}>Simple</button>
       <button type="button" role="radio" aria-checked={v === "advanced"} className={v === "advanced" ? "on" : ""} onClick={() => pick("advanced")}>Full</button>
       {err && <em>{err}</em>}

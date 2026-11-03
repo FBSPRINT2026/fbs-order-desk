@@ -429,7 +429,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     ...archHist.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, total: +a.total || 0, date: a.due_date || a.order_date || "" })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
   const dash = simple ? (
-    <PortalSimple search={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare pop personHref={msgLink(null)}
+    <PortalSimple viewSwitch={acct ? <PortalViewSwitch view="simple" customerId={acct.id} inPanel /> : undefined} search={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare pop personHref={msgLink(null)}
       ideas={["Search my orders", "What do I owe?", "Find my artwork", history[0] ? `Reorder ${history[0].nickname || `#${history[0].number}`}` : "Reorder a past job", jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?"]} />}
       jobs={jobs} proofs={proofsDash} sent={sentDash} past={history} pay={pay} art={designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 9).map((d) => ({ d, shirt: logoShirts[d.id], shown: logoLooks[d.id]?.shown || null, printed: logoLooks[d.id]?.printed || null }))} designUrls={designUrls} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
       artHref={link("/portal?area=artwork")} settingsHref={`/portal/settings${qs}`} canAct={!ctx.preview} />
@@ -475,7 +475,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             payCfg={{ ...ctx.settings.pay, staxToken: (process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim(), depositPct: ctx.settings.depositPct, receiptEmail: ctx.preview ? "" : acct?.email || ctx.email }} />
         )}
         {/* Simple or Full, quietly at the foot of the page (Nov 3, Nick) */}
-        {acct && <PortalViewSwitch view={simple ? "simple" : "advanced"} customerId={acct.id} />}
+        {acct && !simple && <PortalViewSwitch view="advanced" customerId={acct.id} />}
       </main>
     </>
   );
