@@ -24,7 +24,10 @@ type Row = { key: string; contactId?: string; name: string; email: string; phone
 
 export default function UpdateContacts() {
   const [show, setShow] = useSticky<Show>("customers.contacts.show", "missing");
-  const [who, setWho] = useSticky<string>("customers.contacts.owner", "");
+  // whose accounts: "auto" until picked, then the person looking (their own) on first load
+  const [who0, setWho] = useSticky<string>("customers.contacts.owner2", "auto");
+  const [meOwner, setMeOwner] = useState("");
+  const who = who0 === "auto" ? meOwner : who0;
   const [showOthers, setShowOthers] = useSticky<boolean>("customers.contacts.others", false);
   const [rows, setRows] = useState<ContactRow[] | null>(null), [owners, setOwners] = useState<string[]>([]);
   const [q, setQ] = useState(""), [cur, setCur] = useState(""), [err, setErr] = useState("");
@@ -33,7 +36,7 @@ export default function UpdateContacts() {
   // what was found online for this account (Look it up online), and which boxes were filled from it
   const [web, setWeb] = useState<CompanyFound | null | "busy">(null), [webErr, setWebErr] = useState(""), [fromWeb, setFromWeb] = useState<Set<string>>(new Set());
 
-  useEffect(() => { void contactList().then((r) => { if (r.ok) { setRows(r.rows); setOwners(r.owners); } else setErr(r.error); }); }, []);
+  useEffect(() => { void contactList().then((r) => { if (r.ok) { setRows(r.rows); setOwners(r.owners); setMeOwner(r.meOwner); } else setErr(r.error); }); }, []);
   const all = rows || [];
   const mine = (r: ContactRow) => !who || first(r.owner).toLowerCase() === first(who).toLowerCase();
   const list = useMemo(() => {
@@ -137,10 +140,6 @@ export default function UpdateContacts() {
       </div>}
       <div className="toolbar">
         <div className="chips">{(["missing", "check", "done", "all"] as Show[]).map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
-        <div className="chips">
-          <button type="button" className={"chip" + (!who ? " on" : "")} onClick={() => setWho("")}>Everyone</button>
-          {owners.map((o) => <button key={o} type="button" className={"chip" + (who === o ? " on" : "")} onClick={() => setWho(o)}>{first(o)}&apos;s</button>)}
-        </div>
         <input type="search" className="ucx-q" placeholder="Find an account" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {err && <div className="err">{err}</div>}
@@ -149,6 +148,11 @@ export default function UpdateContacts() {
         <div className="ucx">
           <section className="panel ucx-list">
             <div className="panel-h"><h2>Accounts</h2><span className="faint">{list.length}</span></div>
+            {/* whose accounts: each owner works their own (Nov 3, Nick) */}
+            <div className="ucx-who" role="group" aria-label="Whose accounts" style={{ gridTemplateColumns: `repeat(${owners.length + 1},minmax(0,1fr))` }}>
+              {owners.map((o) => <button key={o} type="button" className={who === o ? "on" : ""} onClick={() => setWho(o)}>{o === meOwner ? "Mine" : first(o)}</button>)}
+              <button type="button" className={!who ? "on" : ""} onClick={() => setWho("")}>Everyone</button>
+            </div>
             <div className="ucx-items">
               {list.map((r) => (
                 <button key={r.id} type="button" className={"ucx-i" + (r.id === cur ? " on" : "")} onClick={() => void open(r.id)}>

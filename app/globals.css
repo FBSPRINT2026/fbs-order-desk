@@ -14863,6 +14863,10 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 @media (max-width:900px){.ucx{grid-template-columns:minmax(0,1fr)}}
 .ucx-q{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;min-width:180px;flex:0 1 240px;margin-left:auto}
 .ucx-list{position:sticky;top:8px}
+.ucx-who{display:grid;margin:0 12px 10px;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.ucx-who button{height:34px;border:0;border-right:1px solid var(--line);background:var(--surface);font:inherit;font-size:13px;color:var(--ink-2);cursor:pointer;white-space:nowrap;padding:0 4px;overflow:hidden;text-overflow:ellipsis}
+.ucx-who button:last-child{border-right:0}
+.ucx-who button.on{background:var(--accent);color:var(--accent-ink);font-weight:700}
 .ucx-items{max-height:calc(100vh - 260px);overflow-y:auto}
 .ucx-i{display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;border:0;border-top:1px solid var(--line);background:none;font:inherit;text-align:left;cursor:pointer;color:var(--ink)}
 .ucx-i:hover{background:var(--surface-2)}

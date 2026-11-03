@@ -55,7 +55,9 @@ export async function contactList() {
       .sort((a, b) => b.sales - a.sales || a.name.localeCompare(b.name));
     let n = 0; for (const r of rows) r.rank = r.sales > 0 ? ++n : 0;
     const owners = (((st?.data as { accountOwners?: { name: string }[] } | null)?.accountOwners) || []).map((o) => o.name).filter(Boolean);
-    return { ok: true as const, rows, owners };
+    // whose list opens first: the person looking, when they own accounts (Nov 3, Nick: "Amanda can do hers and I can do mine")
+    const meOwner = owners.find((o) => o.toLowerCase().split(/\s+/)[0] === String(v.email || "").split("@")[0].toLowerCase().replace(/[^a-z]/g, "")) || "";
+    return { ok: true as const, rows, owners, meOwner };
   } catch (e) { return fail(e); }
 }
 
