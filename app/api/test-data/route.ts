@@ -13,7 +13,7 @@ export const maxDuration = 60;
  * POST {customerId, action: "flag", on}: mark a customer as a test account (or not).
  * POST {customerId, action: "generate", count? (25)}: add sample jobs to a test account, and book about half of the ready
  *      ones onto the production calendar (a few earlier this week already done, one running).
- * POST {customerId, action: "clear"}: remove every job on a test account (only ever a test account).
+ * POST {customerId, action: "clear"}: put away every job and message on a test account (only ever a test account; nothing deleted).
  */
 const shopToday = () => { const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).map((x) => [x.type, x.value])); return `${p.year}-${p.month}-${p.day}`; };
 
@@ -35,13 +35,15 @@ export async function POST(req: Request) {
   if (!cust.is_test) return NextResponse.json({ error: "Turn on Test account for this customer first." }, { status: 400 });
 
   if (b.action === "clear") {
-    const { data: os } = await admin.from("orders").select("id").eq("customer_id", id);
-    const ids = (os || []).map((o) => o.id as string);
-    for (let i = 0; i < ids.length; i += 200) {
-      const { error } = await admin.from("orders").delete().in("id", ids.slice(i, i + 200));
-      if (error) return NextResponse.json({ error: error.message, cleared: i }, { status: 500 });
-    }
-    return NextResponse.json({ ok: true, cleared: ids.length });
+    // put away, never deleted (Nov 2, Nick: "clear all their stuff… clear everything out on my side"): every order and
+    // request is thrown away (discarded_at; the orders trigger puts each one's messages away with it), and the account's
+    // own messages are put away (hidden_at). Gone from every list and count; still in the database.
+    const now = new Date().toISOString();
+    const { data: os, error: e1 } = await admin.from("orders").update({ discarded_at: now }).eq("customer_id", id).is("discarded_at", null).select("id");
+    if (e1) return NextResponse.json({ error: e1.message }, { status: 500 });
+    const { data: ms, error: e2 } = await admin.from("messages").update({ hidden_at: now }).eq("customer_id", id).is("hidden_at", null).select("id");
+    if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
+    return NextResponse.json({ ok: true, cleared: (os || []).length, messages: (ms || []).length });
   }
 
   if (b.action === "generate") {

@@ -44,6 +44,7 @@ import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
 import { needsGoods } from "@/lib/goods";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 import CustomerMove, { needsMove } from "@/components/CustomerMove";
+import TestAccount from "@/components/TestAccount";
 import { fmtPhone } from "@/lib/phone";
 
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
@@ -251,7 +252,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           : <div className="mv-strip"><span><b>Not in the new system yet.</b> Their next order here waits for a short checklist (name, contacts, retail / wholesale, pricing, addresses).{steps ? ` ${steps} of 5 done.` : ""}</span><button type="button" className="btn primary sm" onClick={() => setMoveOpen("edit")}>Move to the new system</button></div>;
       })()}
       {moveOpen && <CustomerMove customerId={id} onClose={() => setMoveOpen("")} onMoved={async () => { const go = moveOpen === "quote"; await reloadShop(); const { data: fresh } = await createClient().from("customers").select("*").eq("id", id).maybeSingle(); if (fresh) setC((x) => (x ? { ...x, ...(fresh as object) } : x)); setMoveOpen(""); if (go) setTimeout(() => newQuote(), 300); }} />}
-      {/* the Test account switch (components/TestAccount) is off (Oct 21, Nick: "we're past that point… might come back to it later") */}
+      {/* a test account's Clear everything (Nov 2, Nick: "put that back"); the on/off switch stays off (Oct 21) */}
+      {c?.is_test && <TestAccount key={id} customerId={id} jobs={os.length} onChange={() => { reloadShop(); router.refresh(); }} />}
       {detailsOpen && (
         <div className="cx-dr-bg" onClick={() => { setDetailsOpen(false); if (searchParams.get("area") === "details") router.replace(`/shop/customers/${id}`, { scroll: false }); }}>
           <aside className="cx-dr" role="dialog" aria-modal="true" aria-label="Customer details" onClick={(e) => e.stopPropagation()}>
