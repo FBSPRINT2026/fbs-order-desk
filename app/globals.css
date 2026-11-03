@@ -19689,3 +19689,11 @@ span.jrl-ring b.jb2{background:#F26660;color:#F26660;transform:rotate(120deg) tr
 span.jrl-ring b.jb3{background:#FCB122;color:#FCB122;transform:rotate(240deg) translateY(-22.5px)}
 .jrl-mc-ban>.jrl-sig i img{width:26px;height:26px}
 span.jrl-ring b.jb1,span.jrl-ring b.jb2,span.jrl-ring b.jb3{display:block;inset:auto;left:50%;top:50%}
+/* the ripples start at the ring and spread outward from it, like a drop in water (Nov 2, Nick: "a ripple from the circle…
+   just outward") */
+.jrl-sig>b{inset:2px;border:2px solid rgba(255,255,255,.75);box-shadow:0 0 8px rgba(255,255,255,.35);z-index:0;animation:jrl-drop 20s cubic-bezier(.25,.6,.35,1) infinite}
+.jrl-sig>b:nth-child(2){animation-delay:.8s}
+.jrl-sig.live>b{animation-duration:10s}
+.jrl-sig.live>b:nth-child(2){animation-delay:.8s}
+@keyframes jrl-drop{0%{transform:scale(1);opacity:.85;border-width:2.5px}22%{transform:scale(6.5);opacity:0;border-width:.5px}100%{transform:scale(6.5);opacity:0}}
+@media (prefers-reduced-motion:reduce){.jrl-sig>b{animation:none;opacity:0}}
