@@ -19650,3 +19650,8 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .rqd-tbl tr.rqd-sep td{padding:0!important;height:14px;background:var(--surface)!important;border:0!important}
 .rqd-tbl tr.rqd-sep i{display:block;height:3px;margin:5px 0;border-radius:3px;background:var(--fbs-fade)}
 .pdx-more-link{display:inline-block;font-size:12.5px;font-weight:600;color:var(--accent);padding:6px 0 0;text-decoration:none}.pdx-more-link:hover{text-decoration:underline}
+/* Nov 2, Nick: "put the circle back… fade to our colors, the dark blue to the light blue, the salmon and the orange, and
+   then… that'll be it": one still fade in our colors, dark navy behind the logo; the logo's circle with its white ring */
+.jcx>.jrl-mc .jrl-mc-ban{background:linear-gradient(100deg,#141D2B 0%,#141D2B 24%,#0E9BD8 52%,#F26660 78%,#FCB122 100%);background-size:100% 100%;animation:none}
+.jcx>.jrl-mc .jrl-mc-ban::before{background:none}
+.jrl-sig i{background:#141D2B;box-shadow:0 0 0 2px #fff,0 0 14px 4px rgba(20,29,43,.45)}
