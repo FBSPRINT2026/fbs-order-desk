@@ -4,7 +4,9 @@
  * approvals can't be [off]… at least somebody's got to get it… on Cedar promos, they might say only Peter gets proofs").
  *
  * Kept on the customer (customers.email_prefs): for each kind, whether it's sent at all and to which of their people
- * (by email). Not set yet: the default (sent or not) to the account's main email. Approvals and On hold always go to
+ * (by email). Not set yet: the default (sent or not) to the account's main email. The defaults (Nov 3, Nick): proofs and
+ * approvals, on hold, shipped with tracking, ready for pickup, delivered and payment receipts; the rest off until they
+ * turn them on. Approvals and On hold always go to
  * at least one person. UPS delivered and delivery problems are off until the customer turns them on (Nick: "by default
  * once we ship it, you send the tracking… if they want… send me an email once the UPS delivers… or… a delivery issue").
  *
@@ -18,15 +20,15 @@ export type EmailKindDef = { k: EmailKind; label: string; sub: string; /** can't
 export const EMAIL_KINDS: EmailKindDef[] = [
   { k: "approvals", label: "Proofs and approvals", sub: "Quotes, proofs, sew-outs and final invoices to approve", locked: true, def: true },
   { k: "hold", label: "Order on hold", sub: "When an order is on hold and why", locked: true, def: true, auto: true },
-  { k: "received", label: "Order received", sub: "We got your order or reorder", def: true, auto: true },
+  { k: "received", label: "Order received", sub: "We got your order or reorder", def: false, auto: true },
   { k: "shipped", label: "Shipped", sub: "With tracking", def: true, auto: true },
   { k: "ready", label: "Ready for pickup", sub: "Packed and waiting for you", def: true, auto: true },
   { k: "delivered", label: "Delivered by FBS", sub: "When we drop it off", def: true, auto: true },
   { k: "carrier_delivered", label: "UPS / FedEx delivered", sub: "When the carrier says it's delivered", def: false, auto: true },
   { k: "ship_issue", label: "Delivery problems", sub: "A delay or exception from the carrier", def: false, auto: true },
   { k: "receipts", label: "Payment receipts", sub: "Each payment made online", def: true },
-  { k: "invoices", label: "Invoices and statements", sub: "Balances due and statements", def: true },
-  { k: "messages", label: "Messages from FBS", sub: "Our replies on an order", def: true },
+  { k: "invoices", label: "Invoices and statements", sub: "Balances due and statements", def: false },
+  { k: "messages", label: "Messages from FBS", sub: "Our replies on an order", def: false },
 ];
 export const EMAIL_KIND: Record<EmailKind, EmailKindDef> = Object.fromEntries(EMAIL_KINDS.map((x) => [x.k, x])) as Record<EmailKind, EmailKindDef>;
 
