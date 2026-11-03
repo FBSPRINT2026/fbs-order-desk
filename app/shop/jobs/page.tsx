@@ -237,9 +237,25 @@ export default function JobCenter() {
         <div className="jrl-mc-ban">
           <span className={"jrl-sig" + (waitingNow ? " live" : "")} aria-hidden>
             <b /><b /><b />
-            {/* a ring in our colors fading round and turning around the logo, just the letters inside (Nov 2, Nick) */}
-            <span className="jrl-ring"><b className="jb1" /><b className="jb2" /><b className="jb3" /></span>
-            <i><img src="/brand/fbs-logo-white-plain.svg" alt="" width={30} height={30} /></i>
+            {/* our letters in a dark circle, inside a ring fading through our colors with three balls on it, evenly spaced, all one
+                drawing so everything sits on its center; the ring and balls turn slowly (Nov 2, Nick: "just rethink it") */}
+            <svg className="jrl-logo" viewBox="0 0 60 60" aria-hidden>
+              <defs>
+                <linearGradient id="jrlg1" gradientUnits="userSpaceOnUse" x1="30" y1="6" x2="50.78" y2="42"><stop offset="0" stopColor="#0E9BD8" /><stop offset="1" stopColor="#F26660" /></linearGradient>
+                <linearGradient id="jrlg2" gradientUnits="userSpaceOnUse" x1="50.78" y1="42" x2="9.22" y2="42"><stop offset="0" stopColor="#F26660" /><stop offset="1" stopColor="#FCB122" /></linearGradient>
+                <linearGradient id="jrlg3" gradientUnits="userSpaceOnUse" x1="9.22" y1="42" x2="30" y2="6"><stop offset="0" stopColor="#FCB122" /><stop offset="1" stopColor="#0E9BD8" /></linearGradient>
+              </defs>
+              <circle cx="30" cy="30" r="20" fill="#141D2B" />
+              <image href="/brand/fbs-logo-white-plain.svg" x="17" y="17" width="26" height="26" />
+              <g className="jrl-spin" fill="none" strokeWidth="3" strokeLinecap="round">
+                <path d="M30 6A24 24 0 0 1 50.78 42" stroke="url(#jrlg1)" />
+                <path d="M50.78 42A24 24 0 0 1 9.22 42" stroke="url(#jrlg2)" />
+                <path d="M9.22 42A24 24 0 0 1 30 6" stroke="url(#jrlg3)" />
+                <circle cx="30" cy="6" r="3.6" fill="#0E9BD8" />
+                <circle cx="50.78" cy="42" r="3.6" fill="#F26660" />
+                <circle cx="9.22" cy="42" r="3.6" fill="#FCB122" />
+              </g>
+            </svg>
           </span>
           <span className="jrl-mc-t">Message Center<i aria-hidden /></span>
           {/* who's waiting on us, big, with their initials (Nov 2, Nick picked option C) */}
