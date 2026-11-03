@@ -47,6 +47,7 @@ export async function markDeclined(orderId: string, reason: string) {
     const why = (reason || "").trim().slice(0, 500);
     const { error } = await admin.from("orders").update({ declined_at: new Date().toISOString(), declined_reason: why }).eq("id", orderId);
     if (error) throw new Error(error.message);
+    await (await import("@/lib/closedQuote")).shelveClosedQuoteArt(admin, orderId, true);
     await admin.from("order_events").insert({ order_id: orderId, kind: "job_declined", detail: why || "No reason given", actor: email });
     return { ok: true as const };
   } catch (e) { return fail(e); }
@@ -56,6 +57,7 @@ export async function markDeclined(orderId: string, reason: string) {
 export async function undoDeclined(orderId: string) {
   try {
     const { admin, email } = await me();
+    await (await import("@/lib/closedQuote")).shelveClosedQuoteArt(admin, orderId, false);
     const { error } = await admin.from("orders").update({ declined_at: null, declined_reason: "" }).eq("id", orderId);
     if (error) throw new Error(error.message);
     await admin.from("order_events").insert({ order_id: orderId, kind: "job_reopened", detail: "", actor: email });

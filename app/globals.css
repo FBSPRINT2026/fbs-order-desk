@@ -20343,3 +20343,20 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .rqf-drop b{font-size:14px;color:var(--ink)}
 .rqf-drop small{font-size:12px;color:var(--ink-3)}
 .rqf-note{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:var(--warn-soft,#FFF7E8);color:var(--ink-2);font-size:12.5px}
+
+/* a quote with the customer (Nov 3): one line above the order; the order grayed and locked under it while it's theirs */
+.ql-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border-radius:var(--r,12px);border:1px solid var(--line);background:var(--surface);font-size:13.5px;color:var(--ink-2)}
+.ql-bar > span:nth-child(2){flex:1 1 300px;min-width:0}
+.ql-bar b{color:var(--ink)}
+.ql-ic{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;flex:none;font-size:13px}
+.ql-sent{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+.ql-sent .ql-ic{background:var(--surface);color:var(--accent)}
+.ql-lock .ql-ic,.ql-closed .ql-ic{background:var(--surface-2);color:var(--ink-3)}
+.ql-quick{background:var(--warn-soft,#FFF7E8);border-color:color-mix(in srgb,var(--warn) 35%,var(--line))}
+.ql-quick .ql-ic{background:var(--surface);color:var(--warn)}
+.ed-grid.ql-locked{opacity:.5;filter:grayscale(.6);position:relative}
+.ed-grid{position:relative}
+.ql-stamp{position:absolute;left:50%;top:140px;transform:translateX(-50%) rotate(-6deg);z-index:5;display:flex;flex-direction:column;align-items:center;padding:8px 20px;border:3px solid var(--ink-3);border-radius:8px;background:var(--surface);color:var(--ink-2);pointer-events:none}
+.ql-stamp b{font:900 22px/1.1 var(--display);letter-spacing:.06em;text-transform:uppercase}
+.ql-stamp small{font-size:12px;font-weight:700}
+.ed-grid.ql-locked .ql-stamp{opacity:1}

@@ -39,6 +39,7 @@ import type { NeckLabelSet } from "@/lib/neckLabels";
 import OrderSeparations from "@/components/OrderSeparations";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
+import { undoDeclined } from "@/app/shop/jobs/actions";
 import ProductionPanel from "@/components/ProductionPanel";
 import { isReorder } from "@/components/ReorderPanel";
 import OrderTypeRow, { orderTypeOf, ORDER_TYPE_LABEL } from "@/components/OrderTypeRow";
@@ -207,6 +208,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // the page's tabs (Oct 15, Nick: "too much information on one page… tabs at the top"); ?tab= keeps it on refresh
   type Tab = "order" | "prod" | "goods" | "msg" | "pay" | "act";
   const [tab, setTabS] = useState<Tab>("order");
+  // a sent quote's lock (Nov 3, Nick): "" none, "quick" a change on the phone to the version they opened, "closed" a
+  // declined (closed) quote opened anyway to pull the art
+  const [lockOverride, setLockOverride] = useState<"" | "quick" | "closed">("");
+  const [closedAsk, setClosedAsk] = useState(false);
   // a customer's order request isn't a quote or an invoice yet: it's processed in the Job Center (Nov 2, Nick: "you're
   // clicking on a customer's order request. Would you like to open this in the job center?… filter by that customer… that one
   // selected so that you can hit process"); every link to it lands here, so the question is asked here, once per visit
@@ -1066,6 +1071,25 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     await save();
     return true;
   }
+  /** take the opened version back from the customer to change it: it's a quote again (they can't approve the old one),
+   *  and the next send is the next version */
+  async function makeChanges() {
+    if (!o) return;
+    const { error } = await sb.from("orders").update({ status: "quote" }).eq("id", o.id).eq("status", "quote_sent");
+    if (error) return say(error.message);
+    await sb.from("order_events").insert([{ order_id: o.id, kind: "status", detail: "quote" }, { order_id: o.id, kind: "note", detail: `Making changes: version ${quoteLock.version + 1} (the customer had opened version ${quoteLock.version})` }]);
+    setO((p) => (p ? { ...p, status: "quote" } : p));
+    setLockOverride("");
+    say(`Making changes. Resend to customer sends version ${quoteLock.version + 1}.`);
+  }
+  async function reopenClosed() {
+    if (!o) return;
+    // the Job Center's Put back on: clears the decline and brings its mockups back out of the Archive
+    const r = await undoDeclined(o.id);
+    if (!r.ok) return say(("error" in r && r.error) || "Couldn't reopen it.");
+    setO((p) => (p ? ({ ...p, declined_at: null, declined_reason: "" } as Order) : p));
+    setClosedAsk(false); setLockOverride("");
+  }
   async function afterSend(m: string) {
     say(m);
     if (!o) return;
@@ -1325,6 +1349,30 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     due: o.due_date ? fmtDateLong(o.due_date) : "", tracking: o.tracking || "", days: "", dueLine: "", dueText: "", balanceLine: calc.balance > 0.004 ? ` The balance is ${money(calc.balance)}.` : "" };
   const QUICK: TemplateKey[] = ["proof_ready", "ready_pickup", "shipped", "payment_reminder", "deposit_request", "quote_followup", "request_received", "thanks"];
 
+  // where a quote with the customer stands (Nov 3, Nick): the version they have is the newest proof version sent; it's
+  // opened once they opened it; declined is a closed quote
+  const quoteLock = (() => {
+    const sentV = proofs.filter((p) => p.version != null);
+    const version = sentV.reduce((m, p) => Math.max(m, p.version || 0), 0) || (o.sent_at ? 1 : 0);
+    const cur = sentV.filter((p) => (p.version || 0) === version);
+    const openedAt = cur.map((p) => (p as { viewed_at?: string | null }).viewed_at || "").filter(Boolean).sort()[0] || "";
+    const closed = !!(o as { declined_at?: string | null }).declined_at && o.type === "quote";
+    const opened = o.status === "quote_sent" && !!openedAt;
+    const locked = (closed && lockOverride !== "closed") || (opened && lockOverride !== "quick");
+    const why = (o as { declined_reason?: string | null }).declined_reason || "";
+    const bar = closed ? (
+      <div className="ql-bar ql-closed"><span className="ql-ic" aria-hidden>⊘</span><span><b>Closed quote: declined by the customer.</b>{why ? ` “${why}”` : ""}{lockOverride === "closed" ? " Opened anyway: you can look and pull the art." : " It's grayed out; Open anyway to look at it."}</span>
+        {lockOverride === "closed" && <button type="button" className="linkbtn" onClick={() => void reopenClosed()}>Make it a live quote again</button>}</div>
+    ) : o.status === "quote_sent" ? (
+      opened && lockOverride !== "quick"
+        ? <div className="ql-bar ql-lock"><span className="ql-ic" aria-hidden>🔒</span><span><b>Opened by the customer {fmtStamp(openedAt)}. Version {version} is locked.</b> Make changes starts version {version + 1} and takes it back from them while you work.</span><button type="button" className="linkbtn" title="A change on the phone: it saves to the version they already have" onClick={() => setLockOverride("quick")}>Quick edit this version</button></div>
+        : opened
+          ? <div className="ql-bar ql-quick"><span className="ql-ic" aria-hidden>✎</span><span><b>Quick edit of version {version}</b>, the one the customer already opened: your changes save to it right away. Resend to customer when you&apos;re done if they should see it again.</span><button type="button" className="linkbtn" onClick={() => setLockOverride("")}>Lock it again</button></div>
+          : <div className="ql-bar ql-sent"><span className="ql-ic" aria-hidden>➤</span><span>Sent to the customer{o.sent_at ? ` ${fmtStamp(o.sent_at)}` : ""}{version > 1 ? ` (version ${version})` : ""} · <b>not opened yet</b>, so you can still change it. Saving keeps the same version.</span></div>
+    ) : null;
+    return { version, opened, closed, locked, bar };
+  })();
+
   // a customer's order request: just the question, never its invoice (Nov 2, Nick: "you shouldn't be able to get into that
   // invoice"); the Job Center's "Open the order" for a form request comes with ?stay=1
   if (rqAsk) return <RequestAsk order={o} customer={cust?.company || cust?.name || ""} closeLabel="Go back" onClose={() => (window.history.length > 1 ? router.back() : router.push("/shop/jobs"))} />;
@@ -1447,7 +1495,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {(o.draft || (o.number >= 40000 && o.number < 50000)) && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
             <SendToPrintavo orderId={o.id} onSaved={o.draft ? commitDraft : save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
           {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
-          {o.status === "quote" && <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send to customer" before={beforeSend} onDone={afterSend} />}
+          {quoteLock.closed && !lockOverride ? <button type="button" className="btn" onClick={() => setClosedAsk(true)}>Open anyway</button>
+            : o.status === "quote_sent" && quoteLock.locked ? <button type="button" className="btn primary" onClick={() => void makeChanges()}>Make changes</button>
+            : (o.status === "quote" || o.status === "quote_sent") && <SendProofTool target={{ kind: "order", orderId: o.id }} label={o.sent_at ? "Resend to customer" : "Send to customer"} before={beforeSend} onDone={(m) => { setLockOverride(""); void afterSend(m); }} />}
           </span>
           <span className="ed-menus">
           <details className="ot-more" onBlur={closeSoon}>
@@ -1721,7 +1771,22 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       <div className="ot-panes" inert={(cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>)) || undefined} style={cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) ? { opacity: 0.45 } : undefined}>
 
         {/* Order: what's being made and what it costs (Oct 15, Nick: "too much information on one page… tabs at the top") */}
-        <div className="ed-grid" hidden={tab !== "order"}>
+        {/* a quote with the customer (Nov 3, Nick: "once it's sent to a client, you should be able to edit it until they open
+            it… once they open it, you can't make changes… make changes, resend… version 2"; "declined… closed quote… grayed
+            out… you could still click in it, but you'd have to override it"): one line above the order, the order under it
+            grayed and locked while it's theirs to look at */}
+        {tab === "order" && quoteLock.bar}
+        {closedAsk && (
+          <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Open a closed quote" onClick={() => setClosedAsk(false)}>
+            <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
+              <h3>This quote is closed</h3>
+              <p className="dla-sub">The customer declined it. Open it anyway to look at it or pull the art? It stays closed unless you make it a live quote again.</p>
+              <div className="dla-acts"><button type="button" className="btn ghost" onClick={() => setClosedAsk(false)}>Cancel</button><button type="button" className="btn" onClick={() => void reopenClosed()}>Make it a live quote</button><button type="button" className="btn primary" autoFocus onClick={() => { setLockOverride("closed"); setClosedAsk(false); }}>Open it</button></div>
+            </div>
+          </div>
+        )}
+        <div className={"ed-grid" + (quoteLock.locked ? " ql-locked" : "")} hidden={tab !== "order"} inert={quoteLock.locked || undefined}>
+          {quoteLock.closed && !lockOverride && <div className="ql-stamp" aria-hidden><b>Closed quote</b><small>Order declined by the customer</small></div>}
           <div className="stack">
             {/* the Reorder section (mockup, pricing check, print specs, AI spec history) is gone from the order page (Oct 20,
                 Nick: "get rid of this whole section… it's overbearing… we handled it in the resolution center"): the

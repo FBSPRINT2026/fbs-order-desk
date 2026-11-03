@@ -227,6 +227,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
   if (!why) return { ok: false as const, error: decision === "changes" ? "Tell us what to change." : "Tell us why, so we can fix it." };
   // either way the quote comes back to us to work on; a decline also marks the job declined
   await admin.from("orders").update(decision === "decline" ? { status: "quote", declined_at: now, declined_reason: why.slice(0, 500) } : { status: "quote" }).eq("id", orderId).eq("status", "quote_sent");
+  if (decision === "decline") await (await import("@/lib/closedQuote")).shelveClosedQuoteArt(admin, orderId, true);
   await admin.from("order_events").insert([
     { order_id: orderId, kind: decision === "decline" ? "quote_declined" : "quote_changes", detail: `${who || "The customer"}: ${why.slice(0, 500)}`, actor },
     { order_id: orderId, kind: "status", detail: "quote", actor },
