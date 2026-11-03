@@ -19110,3 +19110,32 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .gdk-grp-b .gdk-row > *{grid-column:1!important;grid-row:auto!important}
   .gdk-ask textarea{font-size:16px}
 }
+/* a card never grows past its column because of something wide inside it (Payment history ran 12px off a phone) */
+.portal .aa-card,.portal .panel,.portal .pdx-card{min-width:0;max-width:100%;box-sizing:border-box}
+@media (max-width:640px){
+  .aa-tbl.ph td.m{min-width:0;flex-basis:100%}
+  .ph .ph-toggle.ph-many,.ph .ph-ids,.ph .ph-many b{white-space:normal}
+  .ph .ph-one{flex-wrap:wrap}
+  /* Pay orders' three tabs on one line, like the order page's switches */
+  .pyl-bar.aa-otabs .chips{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;gap:0}
+  .pyl-bar.aa-otabs .chips .chip{justify-content:center;padding:0 6px;font-size:13px;white-space:nowrap;min-width:0}
+}
+@media (max-width:640px){
+  /* the order's number and date right under its name, then its buttons */
+  .portal .pod .page-head > div:first-child > .eyebrow{order:2!important}
+  .portal .pod .page-head > .pod-acts{order:3!important}
+}
+@media (max-width:420px){
+  /* the price grid gets the panel's full width: no inner frame, no side padding */
+  .pl-sec > .panel-b:has(> .pl-wrap > .pl-grid){padding-left:0;padding-right:0}
+  .pl-sec .pl-wrap:has(> .pl-grid){border-left:0;border-right:0;border-radius:0}
+  .pl-grid th,.pl-grid td{padding:7px 0;font-size:11px;letter-spacing:-.01em}
+  .pl-grid th:first-child{width:66px;padding-left:10px;white-space:normal;line-height:1.2}
+  .pl-grid td:last-child,.pl-grid th:last-child{padding-right:6px}
+}
+/* the Message Center's list on a phone: one column the page scrolls (no scroll box inside a scroll), every row full width */
+@container (max-width:680px){
+  .mh:not(.thread-open) .mh-convos{max-height:none;overflow:visible}
+  .mh-sec{display:flex;flex-direction:column;gap:2px}
+  .mh-convos .mh-c{width:100%;box-sizing:border-box}
+}

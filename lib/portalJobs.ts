@@ -144,7 +144,7 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
     else if (o.delivery_method === "deliver") { nowK = "Ready:"; nowT = "we'll be in touch to deliver it"; action = view; }
     else { nowK = "Ready:"; nowT = "we'll be in touch about pickup or shipping"; action = view; }
   }
-  if (action && !action.sub && inHands && stage !== "out" && stage !== "ready") action.sub = `In hands ${inHands}`;
+  if (action && !action.sub && inHands && stage !== "out" && stage !== "ready" && !nowT.includes(inHands)) action = { ...action, sub: `In hands ${inHands}` }; // not twice: "on schedule for Wed Nov 11" already says it
   const owe = x.balance && x.balance > 0.004 && x.payHref ? { text: `$${x.balance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} due`, href: x.payHref, external: x.payExternal } : undefined;
 
   const badge = done ? { text: "Done", tone: "ok" as const } : stage === "need" ? { text: "Needs you", tone: "wait" as const }
