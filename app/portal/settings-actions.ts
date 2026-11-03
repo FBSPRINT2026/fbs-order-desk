@@ -175,3 +175,25 @@ export async function removePerson(id: string): Promise<Result> {
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't remove them." }; }
 }
+
+/**
+ * How their portal looks (Nov 3, Nick: "a toggle… so customers can do that on their own… shouldn't be obvious where to
+ * get to it, but it should be on their portal"): simple (one page) or the full portal. Staff can set it for a customer
+ * from the portal preview.
+ */
+export async function setPortalView(view: "simple" | "advanced", customerId?: string): Promise<Result> {
+  try {
+    if (view !== "simple" && view !== "advanced") return { ok: false, error: "Pick simple or full." };
+    const { user, isStaff } = await getViewer();
+    if (!user) return { ok: false, error: "Please sign in again." };
+    let id = "";
+    if (isStaff) {
+      if (!customerId) return { ok: false, error: "Which customer?" };
+      id = customerId;
+    } else id = (await me()).cust.id;
+    const { error } = await createAdminClient().from("customers").update({ portal_view: view }).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/portal");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't save." }; }
+}

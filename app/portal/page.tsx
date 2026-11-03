@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { finishingList, orderGroups, PAY_TERMS, priceList, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import PortalPricing from "@/components/PortalPricing";
+import PortalSimple from "@/components/PortalSimple";
 import PortalDash, { type DashNeed, type DashPast, type DashProof, type DashThread } from "@/components/PortalDash";
 import { customerHold, customerStatus } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
@@ -413,7 +414,12 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const proofsDash: DashProof[] = orders.filter((o) => firstPending[o.id]).sort((a, b) => b.number - a.number).map((o) => ({ id: o.id, number: o.number, name: o.nickname || "", href: link(`/portal/orders/${o.id}/approve`), orderHref: link(`/portal/orders/${o.id}?view=1`), n: pendingProofs[o.id] || 1, pic: picOf(o), what: o.status === "quote_sent" ? "Proof and quote" : "Proof" }));
   const ideas = [jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?", past[0] ? `Reorder ${past[0].nickname || `#${past[0].number}`}` : "Reorder a past job",
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
-  const dash = (
+  // the simple portal (Nov 3, Nick): one page in place of the dashboard and its tabs, for accounts not set to the full one
+  const simple = (acct as { portal_view?: string | null } | undefined)?.portal_view !== "advanced";
+  const dash = simple ? (
+    <PortalSimple jobs={jobs} proofs={proofsDash} sent={sentDash} past={past} pay={pay} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
+      artHref={link("/portal?area=artwork")} settingsHref={`/portal/settings${qs}`} canAct={!ctx.preview} />
+  ) : (
     <PortalDash held={held} tracked={tracked} sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
       proofs={proofsDash}
       threads={threads} newMsgs={newMsgs} msgHref={msgHref} needs={needs} jobs={jobs} pastJobs={pastJobs} past={past} art={art} mocks={mocks} mockupHref={link("/portal/mockup")} artHref={link("/portal?area=artwork")}
@@ -436,7 +442,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${fmtPhone(ctx.settings.shop.phone)}` : ""}.</p>
           </div></div>
         ) : (
-          <AccountAreas mode="portal" orderTypes={(acct as { order_types?: string[] } | undefined)?.order_types || []} dash={dash} brandColors={(acct as { brand_portal?: boolean } | undefined)?.brand_portal === false ? [] : acct?.brand_colors || []}
+          <AccountAreas mode="portal" simple={simple} orderTypes={(acct as { order_types?: string[] } | undefined)?.order_types || []} dash={dash} brandColors={(acct as { brand_portal?: boolean } | undefined)?.brand_portal === false ? [] : acct?.brand_colors || []}
             designsPanel={acct?.design_catalog && (acct as { design_catalog_portal?: boolean }).design_catalog_portal ? <PortalDesignCatalog customerId={acct.id} qs={qs} /> : undefined}
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={program ? <ProgramSheet program={program} items={programItems} images={programImages} extras={programExtras} /> : undefined} hasProgram={!!program && program.active && (programItems.length > 0 || cardHasPrices(program.rate_card))}

@@ -92,7 +92,7 @@ export function StarOrder({ id, on, canAct, label = false }: { id: string; on: b
   );
 }
 
-function JobRow({ j, canAct, detail = false }: { j: PortalJob; canAct: boolean; /** the On hold tab: why, in full, under the row */ detail?: boolean }) {
+export function JobRow({ j, canAct, detail = false }: { j: PortalJob; canAct: boolean; /** the On hold tab: why, in full, under the row */ detail?: boolean }) {
   // on hold, the button is what fixes it (Nov 2, Nick: the stamp right above it, the row in salmon)
   // a held job's button says what to do, plainly: Reply, Pay now, Send art, Check goods (Nov 2, Nick: no "see why and reply")
   const a: JobAction | undefined = j.hold ? { label: j.hold.fixLabel, href: j.hold.href, tone: "need" } : j.action;

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mySavedMethods, removeSavedMethod, setStaffCharge, staffConsentWords, type SavedPM } from "@/app/portal/pay-actions";
 import AddPayMethod from "@/components/AddPayMethod";
-import { brandLogoUploadUrl, myPeople, removePerson, saveBrandLogo, saveMySettings, savePerson, setMessageEmail, type Person } from "@/app/portal/settings-actions";
+import { brandLogoUploadUrl, myPeople, removePerson, saveBrandLogo, saveMySettings, savePerson, setMessageEmail, setPortalView, type Person } from "@/app/portal/settings-actions";
 
 type C = { address: string; ship_address: string };
 
@@ -12,8 +12,9 @@ type C = { address: string; ship_address: string };
  * The customer's Settings (app/portal/settings): the people at the company (everyone signs in with their own email),
  * addresses, and their company logo for their sales sheets. The company name is ours to set.
  */
-export default function PortalSettings({ staxToken = "", c, customerId, logoUrl, preview, shopName, mailOn }: { /** Stax.js web payments token, to add a card */ staxToken?: string; c: C; customerId: string; logoUrl: string; preview: boolean; shopName: string; /** our messages emailed to them too */ mailOn: boolean }) {
+export default function PortalSettings({ staxToken = "", c, customerId, logoUrl, preview, shopName, mailOn, view: view0 = "simple" }: { /** simple or full portal */ view?: "simple" | "advanced"; /** Stax.js web payments token, to add a card */ staxToken?: string; c: C; customerId: string; logoUrl: string; preview: boolean; shopName: string; /** our messages emailed to them too */ mailOn: boolean }) {
   const [mail, setMail] = useState(mailOn);
+  const [view, setView] = useState(view0), [viewNote, setViewNote] = useState("");
   const [v, setV] = useState(c);
   const [logo, setLogo] = useState(logoUrl);
   const [state, setState] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState(false), [up, setUp] = useState(false);
@@ -48,6 +49,22 @@ export default function PortalSettings({ staxToken = "", c, customerId, logoUrl,
         <div className="panel-b">
           <label className="check"><input type="checkbox" checked={mail} disabled={preview} onChange={async (e) => { const on = e.target.checked; setMail(on); const r = await setMessageEmail(on); if (!r.ok) { setMail(!on); setErr(r.error || ""); } }} /> Email me when {shopName} sends a message</label>
           <div className="faint" style={{ fontSize: 12.5, marginTop: 4 }}>Off: messages wait for you in your Messages tab here.</div>
+        </div>
+      </section>
+      {/* simple or full (Nov 3, Nick): here in Settings, not on the page itself */}
+      <section className="panel ps-view">
+        <div className="panel-h"><h2>Portal layout</h2></div>
+        <div className="panel-b">
+          <div className="ps-view-seg" role="radiogroup" aria-label="Portal layout">
+            {([["simple", "Simple", "One page: your jobs, proofs, payments and reorders"], ["advanced", "Full", "Every tool: dashboard, tabs, goods, payments desk"]] as const).map(([k, t, d]) => (
+              <button key={k} type="button" role="radio" aria-checked={view === k} className={view === k ? "on" : ""} onClick={async () => {
+                if (view === k) return; const was = view; setView(k); setViewNote("");
+                const r = await setPortalView(k, customerId);
+                setViewNote(r.ok ? "Saved. Your home page uses it now." : r.error || "Couldn't save."); if (!r.ok) setView(was);
+              }}><b>{t}</b><small>{d}</small></button>
+            ))}
+          </div>
+          {viewNote && <div className="faint" style={{ fontSize: 12.5, marginTop: 6 }}>{viewNote}</div>}
         </div>
       </section>
       <section className="panel">
