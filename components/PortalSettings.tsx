@@ -74,7 +74,7 @@ export default function PortalSettings({ staxToken = "", c, customerId, logoUrl,
           </div>
           {viewNote && <div className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>{viewNote}</div>}
           {/* the tutorial again (Nov 3, Nick: "reset tutorial, like view tutorial again") */}
-          <div className="psv-tour"><span className="faint">New here, or want a refresher?</span><a className="btn sm" href={`/portal?tour=1${preview ? `&as=${customerId}` : ""}`}>View tutorial again</a></div>
+          <div className="psv-tour"><span className="faint">New here, or want a refresher?</span><span className="row" style={{ gap: 8 }}><a className="btn sm" href={`/portal/mockup?tour=1${preview ? `&as=${customerId}` : ""}`}>Mockup Creator tutorial</a><a className="btn sm" href={`/portal?tour=1${preview ? `&as=${customerId}` : ""}`}>View tutorial again</a></span></div>
         </div>
       </section>
       <section className="panel">

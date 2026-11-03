@@ -9,7 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * the customer's tour_reset_at, and anyone there whose tour was seen before that sees it again.
  */
 type Result = { ok: boolean; error?: string };
-type View = "simple" | "advanced";
+type View = "simple" | "advanced" | "mockup";
 
 /** they finished or skipped it (staff previewing: nothing is kept) */
 export async function tourDone(view: View): Promise<Result> {
@@ -17,7 +17,7 @@ export async function tourDone(view: View): Promise<Result> {
     const { user, email, isStaff } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
     if (isStaff || !email) return { ok: true };
-    const { error } = await createAdminClient().from("portal_tour_seen").upsert({ email: email.toLowerCase(), view: view === "advanced" ? "advanced" : "simple", seen_at: new Date().toISOString() });
+    const { error } = await createAdminClient().from("portal_tour_seen").upsert({ email: email.toLowerCase(), view: view === "advanced" || view === "mockup" ? view : "simple", seen_at: new Date().toISOString() });
     return error ? { ok: false, error: error.message } : { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't save." }; }
 }

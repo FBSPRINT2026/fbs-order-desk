@@ -23,12 +23,27 @@ const CLICKUP: Step[] = [
 ];
 const NEW_THINGS: Step = { t: "A few new things", b: "We're rolling out the rest of the new site soon. For now, here are some new things you can do." };
 const START: Step = { sel: '[data-tour="start"]', t: "Start an order", b: "Send us what you need and we'll confirm it. The Mockup Creator puts your logo on a shirt." };
+// the Mockup Creator is one of the new things (Nov 3, Nick: "show the Mockup Creator button, and then a clip of what it
+// looks like… the logo on it and the imprint")
+const MOCKUP: Step = { sel: '[data-tour="start"] a.pd-act', t: "Mockup Creator", b: "Put your logo on a shirt before you order: pick the garment and color, add your logo, and see its size and ink colors. It walks you through it the first time you open it.", img: "/tour/mockup-creator.png" };
 const ASK: Step = { sel: '[data-tour="ask"], [data-tour="ask"] > *', t: "Ask FBS AI", b: "Ask it anything: where's my order, what do I owe, reorder the volunteer shirts." };
 // help is the last thing they hear (Nov 3, Nick: "we built this software for y'all… if you do have an issue… a screenshot
 // and tell us what's going on and we'll fix it immediately")
 const help = (sel: string): Step => ({ sel, t: "Something not right? Tell us", b: "We built this new site for you. If anything doesn't work the way it should, click Report an issue, take a screenshot and tell us what's going on. We'll fix it right away.", foot: "You can watch this tour again any time in Settings, under Portal layout." });
 
-const STEPS: Record<"simple" | "advanced", Step[]> = {
+type TourView = "simple" | "advanced" | "mockup";
+const STEPS: Record<TourView, Step[]> = {
+  // the Mockup Creator's own walk-through, the first time they open it (Nov 3, Nick: "a tutorial for the mockup creator
+  // also… the first time, how to use")
+  mockup: [
+    { t: "Welcome to the Mockup Creator", b: "See your logo on a shirt before you order. Here's how it works." },
+    { sel: ".mk-setup", t: "1. Pick the garment", b: "Type a style number or a kind of shirt, then pick its colors. Not sure what to get? Help me pick suggests some. Name it so you can find it later." },
+    { sel: ".mk-side > section.panel:first-child", t: "2. Add your logo", b: "Add a location (front, back or sleeves), then pick one of your logos or upload a new one. Set the size, and we show how it prints and which ink colors it uses." },
+    { sel: ".mk-stage-wrap", t: "3. See it on the shirt", b: "Your logo on the front and back, at its real size. Tick Print areas or Measure to check where it sits." },
+    { sel: ".mk-mini", t: "A close look", b: "Each print up close, with its size and its ink colors." },
+    { sel: ".mk-more-box", t: "Need more than a logo?", b: "Add words, start from a ready-made design, have AI create one, or open the Design Lab for names and numbers." },
+    { sel: ".mk-head .row", t: "Save it and share it", b: "Save mockup keeps it in your Artwork. Export PDF makes a sheet you can send around, and Sales tools makes sales sheets with your logo.", foot: "You can watch this again from Settings, under Portal layout." },
+  ],
   simple: [
     OLD_SITE,
     { sel: '[data-tour="orders"]', t: "Your orders", b: "Every order we're working on for you and where it is, from quote to completed. Click one to see everything: tracking, its art and proofs, and what's due." },
@@ -39,6 +54,7 @@ const STEPS: Record<"simple" | "advanced", Step[]> = {
     { sel: '[data-tour="art"]', t: "Your artwork", b: "Your logos on file with us. All artwork shows every logo and mockup." },
     NEW_THINGS,
     START,
+    MOCKUP,
     ASK,
     { sel: '[data-tour="account"] .psm-msg, [data-tour="account"]', t: "Messages and settings", b: "Message us any time; we reply here and by email. Settings has your contacts, addresses and how this page looks." },
     help('[data-tour="account"] .psm-acct-help'),
@@ -56,6 +72,7 @@ const STEPS: Record<"simple" | "advanced", Step[]> = {
     { sel: '.aa-nav [data-area="receive"]', t: "Your goods", b: "When you send us the garments, tell us what's coming and add tracking here, and see when it arrives." },
     NEW_THINGS,
     START,
+    MOCKUP,
     ASK,
     help(".psup-foot-row"),
   ],
@@ -63,7 +80,7 @@ const STEPS: Record<"simple" | "advanced", Step[]> = {
 
 const shown = (el: Element | null): el is HTMLElement => !!el && (el as HTMLElement).getClientRects().length > 0 && (el as HTMLElement).getBoundingClientRect().width > 0;
 
-export default function PortalTour({ view, auto, clickup = false }: { view: "simple" | "advanced"; /** start by itself (first time, or ?tour=1) */ auto: boolean; /** they sent us orders through ClickUp before */ clickup?: boolean }) {
+export default function PortalTour({ view, auto, clickup = false }: { view: TourView; /** start by itself (first time, or ?tour=1) */ auto: boolean; /** they sent us orders through ClickUp before */ clickup?: boolean }) {
   const [steps] = useState(() => clickup ? STEPS[view].flatMap((x) => (x === START ? [START, ...CLICKUP] : [x])) : STEPS[view]);
   const [i, setI] = useState(-1);
   const [box, setBox] = useState<DOMRect | null>(null);
