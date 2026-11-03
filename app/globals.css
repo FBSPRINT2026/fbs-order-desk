@@ -19571,3 +19571,12 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jmb-stat button:hover{background:rgba(255,255,255,.32)}
 .jmb-stat button:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .jmb-gen{display:flex;flex-direction:column;gap:12px}
+/* their original message: white, its title bold with a short rainbow under it, their words line by line (Nov 2, Nick: "I
+   don't like the extra box… just white with the original message… bold it and put the little rainbow separator") */
+.pod-om{background:none;border:0;border-radius:0;padding:0;margin-bottom:18px}
+.pod-om-h{display:block;width:fit-content;font-size:14px;font-weight:700;color:var(--ink);padding-bottom:5px;margin-bottom:8px;position:relative}
+.pod-om-h::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:calc(100% + 24px);border-radius:3px;background:var(--fbs-fade)}
+.pod-om ul,.pod-om p{font-size:14.5px;font-weight:600;color:var(--ink)}
+.pod-so-sec{font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px;padding-top:14px;border-top:1px solid var(--line-2)}
+.pod-om + .pod-so-sec{border-top:0;padding-top:0}
+.pod-so .panel-b>.pod-so-sec:first-child{border-top:0;padding-top:0}

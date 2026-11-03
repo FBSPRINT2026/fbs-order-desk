@@ -1,5 +1,5 @@
 import PortalGoods from "@/components/PortalGoods";
-import FileThumb from "@/components/FileThumb";
+import PortalAttachments from "@/components/PortalAttachments";
 import { Fragment } from "react";
 import BackLink from "@/components/BackLink";
 import { termsPct } from "@/lib/payTerms";
@@ -225,7 +225,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 <section className="panel pod-so">
                   <div className="panel-h"><h2>What you sent us</h2><span className="faint">Exactly as you sent it</span></div>
                   <div className="panel-b">
-                    {lines.length > 0 && <div className="pod-om"><span>Original message</span>{lines.length > 1 ? <ul>{lines.map((x, i) => <li key={i}>{x}</li>)}</ul> : <p>{lines[0]}</p>}</div>}
+                    {lines.length > 0 && <div className="pod-om"><b className="pod-om-h">Original message</b>{lines.length > 1 ? <ul>{lines.map((x, i) => <li key={i}>{x}</li>)}</ul> : <p>{lines[0]}</p>}</div>}
                     {rows.length > 0 && <><div className="pod-so-sec">Order form</div><div className="pod-so-rows">{rows.map(([k, v]) => <Fragment key={k}><span>{k}</span><b>{v}</b></Fragment>)}</div></>}
                     {sz.length > 0 && <><div className="pod-so-sec">Sizes</div>
                       <div className="tbl-wrap pod-so-szw"><table className="tbl pod-so-sz" data-nofit>
@@ -236,11 +236,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                         </tbody>
                       </table></div></>}
                     <div className="pod-so-sec">Attachments</div>
-                    {soFiles.length > 0 ? <div className="pod-att">{soFiles.map((f) => (
-                      <a key={f.path} className="pod-att-t" href={f.url || undefined} target="_blank" rel="noreferrer">
-                        <span className="pod-att-i"><FileThumb name={f.name} url={f.url || undefined} /></span>
-                        <span className="pod-att-c"><b>{f.name}</b><small>{f.kind === "po" ? "PO" : f.kind === "art" ? "Art" : "File"}</small></span>
-                      </a>))}</div> : <div className="faint">No attachments.</div>}
+                    <PortalAttachments files={soFiles} />
                   </div>
                 </section>
               );
