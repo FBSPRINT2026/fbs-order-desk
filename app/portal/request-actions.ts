@@ -69,12 +69,16 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
     const { admin, cust } = await myDraft(id);
     const row: Record<string, unknown> = {};
     if (patch.groups) {
+      // a picture is theirs when it's in their folder, or it's the picture of a mockup on their account (one we made too)
+      const asked = [...new Set(patch.groups.flatMap((g) => (g.customerMockups || []).map((m) => m?.path)).filter((x): x is string => typeof x === "string" && !x.startsWith(`mockups/${cust.id}/`)))];
+      const { data: theirs } = asked.length ? await admin.from("mockups").select("file_path").eq("customer_id", cust.id).in("file_path", asked.slice(0, 50)) : { data: [] };
+      const okPath = new Set(((theirs || []) as { file_path: string }[]).map((x) => x.file_path));
       // customers never set prices: drop any overrides and costs that came along
       const groups = patch.groups.map((g) => ({
         ...g,
         lines: g.lines.map((l) => ({ ...l, priceOverride: null, cost: "" as const, sizeUpSet: undefined })),
         // only files from their own account
-        customerMockups: (g.customerMockups || []).filter((m) => typeof m.path === "string" && m.path.startsWith(`mockups/${cust.id}/`)).slice(0, 10),
+        customerMockups: (g.customerMockups || []).filter((m) => typeof m.path === "string" && (m.path.startsWith(`mockups/${cust.id}/`) || okPath.has(m.path))).slice(0, 10),
         // their tag art (Tag Print, no tag on file): only files they uploaded to this order
         tagArt: g.tagArt && typeof g.tagArt.path === "string" && g.tagArt.path.startsWith(`requests/${cust.id}/${id}/`) ? { path: g.tagArt.path, name: String(g.tagArt.name || "Tag").slice(0, 120) } : undefined,
       }));
@@ -390,7 +394,10 @@ async function groupFromMockup(supabase: Awaited<ReturnType<typeof me>>["supabas
     ? { id: uid(), name, lines: snap.lines.map((l) => ({ ...newGLine(), style: l.style || "", brand: l.brand || "", garment: l.garment || "", color: l.color || "" })),
         imprints: (snap.imprints || []).map((d) => ({ ...d })), mockupOffsets: snap.offsets || undefined, mockupSize: snap.mockupSize || undefined }
     : await fromPictures(admin, name, all);
-  const own = all.filter((r) => r.file_path.startsWith(`mockups/${mk.customer_id}/`));
+  // every picture of the mockup, whoever made it (Nov 3, Nick: "when I click order from the mockups area… it doesn't actually
+  // paint the mockup": an FBS-made mockup's pictures live in the order's folder, not the customer's, and were left out). The
+  // rows are read with their own row security, so they're theirs.
+  const own = all.filter((r) => typeof r.file_path === "string" && r.file_path);
   g.customerMockups = own.map((r) => ({ path: r.file_path, name: r.title })).slice(0, 10);
   // shown like our order screen: the shirts with the prints, read only (Oct 24, Nick)
   if (snap?.lines?.length) {

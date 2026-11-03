@@ -122,7 +122,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null; shelved_at?: string | null }[]);
     if (ml.length) {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]), 3600);
-      mockups = ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, shelved: !!x.shelved_at, created_at: x.created_at, url: sg?.[i * 2]?.signedUrl || "", thumb: sg?.[i * 2 + 1]?.signedUrl || sg?.[i * 2]?.signedUrl || "", detail: mockupDetail(x.snapshot as never) }));
+      const { data: stf } = await admin.from("staff").select("email");
+      const staff = new Set(((stf || []) as { email: string }[]).map((x) => String(x.email || "").toLowerCase()));
+      mockups = ml.map((x, i) => ({ byFbs: staff.has(String((x as { created_by?: string | null }).created_by || "").toLowerCase()), id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, shelved: !!x.shelved_at, created_at: x.created_at, url: sg?.[i * 2]?.signedUrl || "", thumb: sg?.[i * 2 + 1]?.signedUrl || sg?.[i * 2]?.signedUrl || "", detail: mockupDetail(x.snapshot as never) }));
     }
     messages = ((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) }));
     hubMsgs = await withFiles((msg.data || []) as never[], async (paths) => {

@@ -20304,3 +20304,11 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .pac-t small{font-size:12.5px;color:var(--ink-3)}
 .pac-err{color:var(--danger);font-size:13px;margin:4px 0 0}
 .p-switch{color:inherit;font-size:12.5px;text-decoration:underline;white-space:nowrap}
+
+/* Mockups by who made them (Nov 3): your own and FBS's in their own sections, each card says who made it */
+.mkx-sec + .mkx-sec{margin-top:18px;padding-top:14px;border-top:1px solid var(--line-2,var(--line))}
+.mkx-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.mkx-h b{font-size:14px;color:var(--ink)}
+.mkx-h .faint{font-size:12.5px}
+.mkx-by{display:inline-block;align-self:flex-start;margin:2px 0;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--surface-2);color:var(--ink-3);white-space:nowrap}
+.mkx-by.fbs{background:var(--accent-soft);color:var(--accent)}

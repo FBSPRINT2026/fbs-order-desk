@@ -224,7 +224,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** staff previewing a customer's Mockup Creator (?as=): reads that customer's garments and logos */
   const asId = portal ? sp.get("as") || "" : "";
   /** a saved mockup FBS made, or one already on an order: opened to look at, copied to change (Oct 24, Nick) */
-  const [lock, setLock] = useState<null | { fbs: boolean; orderNo: number | null }>(null);
+  const [lock, setLock] = useState<null | { fbs: boolean; orderNo: number | null; /** the shop opening one the customer made */ customer?: boolean }>(null);
   /** a customer making the mockup for an order they're building (Oct 24, Nick: "create mockup… in the imprint screen"):
    *  starts from that group's garments and prints, and goes back into it when saved */
   const requestId = portal ? sp.get("request") || "" : "";
@@ -566,7 +566,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
 
   // a saved mockup opened again to edit, in the shop or the customer's portal (row security: a customer only reads their own)
   async function reopenMockup() {
-    const { data: mk } = await sb.from("mockups").select("customer_id, title, snapshot").eq("id", reopenId).maybeSingle();
+    const { data: mk } = await sb.from("mockups").select("customer_id, title, snapshot, created_by").eq("id", reopenId).maybeSingle();
     const snap = (mk?.snapshot || null) as { set?: string; name?: string; lines?: Line[]; imprints?: Imprint[]; offsets?: Record<string, Offset>; mockupSize?: string | null } | null;
     if (!mk || !snap?.lines?.length) { wbInk.current = "done"; setMsg(mk ? "This mockup was saved before mockups kept their setup, so it can't be opened to edit. Make it again and save: from now on it can be." : "That mockup isn't there anymore."); }
     else {
@@ -583,6 +583,12 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (portal) {
         const l = await mockupLock(reopenId, asId);
         if (l.ok && (l.fbs || l.orderNo)) { setLock({ fbs: !!l.fbs, orderNo: l.orderNo ?? null }); setMsg(""); }
+      } else {
+        // the other way round (Nov 3, Nick: "we can't edit a mockup created by a customer and a customer can't edit a mockup
+        // created by us"): one the customer made opens to look at, and a copy is ours to change
+        const by = String((mk as { created_by?: string | null }).created_by || "").toLowerCase();
+        const { data: st } = by ? await sb.from("staff").select("email").ilike("email", by).maybeSingle() : { data: null };
+        if (by && !st) { setLock({ fbs: false, orderNo: null, customer: true }); setMsg(""); }
       }
     }
   }
@@ -4055,9 +4061,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       {/* back to the order: a full load, so mockups saved here show (a client-side link showed the order as it was) */}
       {!portal && orderId ? <BackLink href={`/shop/orders/${orderId}`} label={`Order #${order?.number || ""}`} hard trail={false} />
         : <BackLink href={portal ? (requestId ? `/portal/request/${requestId}` : backHref || "/portal") : "/shop/artwork"} label={portal ? (requestId ? "the order" : "Dashboard") : "Artwork"} trail={!portal} />}
-      {portal && lock && <div className="mk-lockbar" role="note">
-        <span className="mk-lockbar-l"><span className="mk-lockbar-fbs" aria-hidden>fbs</span><b>{lock.fbs ? "FBS made mockup" : "Ordered mockup"}</b></span>
-        <span className="mk-lockbar-m"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>{lock.orderNo ? `On order #${lock.orderNo}` : "Only editable by FBS staff"}</span>
+      {lock && <div className="mk-lockbar" role="note">
+        <span className="mk-lockbar-l">{!lock.customer && <span className="mk-lockbar-fbs" aria-hidden>fbs</span>}<b>{lock.customer ? "Customer's mockup" : lock.fbs ? "FBS made mockup" : "Ordered mockup"}</b></span>
+        <span className="mk-lockbar-m"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>{lock.customer ? "They made it, so only they can change it" : lock.orderNo ? `On order #${lock.orderNo}` : "Only editable by FBS staff"}</span>
         <button type="button" className="btn sm primary" onClick={copyLocked}>Make a copy to edit</button>
       </div>}
       {portal && change && viewId && <div className="callout mk-change"><b>Your proof for order #{change.orderNumber}</b> This is the shirt and prints exactly as we set them up. Turn it, zoom in, look at each print. To change something, go back and choose Make changes. <a href={`/portal/orders/${change.orderId}/review/${viewId}`}>Back to the review</a></div>}

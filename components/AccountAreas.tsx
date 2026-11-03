@@ -41,6 +41,7 @@ export type AOrder = { /** which of the customer's order types it is (Cedar: Bul
 export type APayment = { id: string; order_id: string; number: number; amount: number; method: string; paid_on: string | null; created_at: string; href?: string;
   /** the invoice's name, and whether it's an old-system (Printavo) one: shown in the payment history (Nov 2) */ nickname?: string; archived?: boolean; /** one online payment can cover many orders: same processor id / "paid together" note */ processor_id?: string | null; note?: string | null; fee?: number | null };
 export type AMockup = { id: string; title: string; url: string; thumb: string; number: number | null; order_id: string | null; created_at: string; starred?: boolean;
+  /** made by the shop (staff), not the customer: each side edits only its own (Nov 3) */ byFbs?: boolean;
   /** the mockup's own number, M-1001 (one per set: every shirt color saved together shares it) */ mno?: number | null;
   /** saved with its setup (garments, prints, inks), so it can be opened to edit or ordered */ setup?: boolean;
   /** archived by the customer or the shop: shown under Archive */ shelved?: boolean;
@@ -990,7 +991,10 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
         <div className="aa-sec-h"><h3>Mockups</h3>{mode === "shop" && newMockup && <span className="aa-sec-acts"><a className="btn sm" href={newMockup}>New mockup</a><a className="btn sm" href={`${newMockup}&logo=1`} title="Just the logo on its colors, no garment and no order">New logo mockup</a></span>}</div>
         {/* one card per mockup set, with its number (Oct 24, Nick: "Mockups all need a number… they click on the mockup and
             they can either edit it or they can order it") */}
-        {mSets.length ? (() => { const P = pageOf("mock", mSets, 12); return <>
+        {/* who made it, in its own section (Nov 3, Nick: "you should be able to see your mockups and then FBS mockups… different
+            sections"); each side edits only its own, the other's opens to look at and copy (components/MockupBuilder.tsx) */}
+        {(() => {
+          const grid = (sets: AMockup[][], key: string) => (() => { const P = pageOf(key, sets, 12); return <>
           <div className="design-grid aa-grid6">
             {P.items.map((set) => { const m = set[0], name = m.title.split(" — ")[0].replace(/^Group \d+$/, "Mockup"); return (
               <div key={m.id} className={"design-card mk-card" + (m.starred ? " starred" : "")}>
@@ -1002,19 +1006,27 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
                 </div>
                 <div className="dc-b">
                   <b data-notranslate>{m.mno ? `M-${m.mno}` : name}</b>
+                  <span className={"mkx-by" + (m.byFbs ? " fbs" : "")}>{m.byFbs ? "Made by FBS" : mode === "portal" ? "Made by you" : "Made by the customer"}</span>
                   <span className="faint" title={m.title}>{[m.mno ? name : "", m.number ? `Order #${m.number}` : when(m.created_at)].filter(Boolean).join(" · ")}</span>
                   {m.shelved ? <div className="mk-card-acts"><button type="button" className="btn sm" onClick={() => shelveMock(m, false)}>Restore</button></div>
                   : !m.number && (m.setup || mode === "portal") && (
                     <div className="mk-card-acts">
-                      {m.setup && <a className="btn sm" href={mode === "portal" ? `/portal/mockup?mockup=${m.id}${hrefQuery ? "&" + hrefQuery.replace(/^\?/, "") : ""}` : `/shop/artwork/mockup?mockup=${m.id}`}>Edit</a>}
+                      {m.setup && <a className="btn sm" title={(mode === "portal" ? !m.byFbs : !!m.byFbs) ? undefined : "Made by the other side: open it to look, or make your own copy to change"} href={mode === "portal" ? `/portal/mockup?mockup=${m.id}${hrefQuery ? "&" + hrefQuery.replace(/^\?/, "") : ""}` : `/shop/artwork/mockup?mockup=${m.id}`}>{(mode === "portal" ? !m.byFbs : !!m.byFbs) ? "Edit" : "View"}</a>}
                       {mode === "portal" && <MockupOrderButton id={m.id} canAct={canAct} />}
                     </div>
                   )}
                 </div>
               </div>
             ); })}{slots(P.pad)}
-          </div>{pager("mock", mSets.length, P.p, P.n, 12)}</>; })()
-        : <div className="aa-empty">{showArch ? "No archived mockups." : mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>}
+          </div>{pager(key, sets.length, P.p, P.n, 12)}</>; })();
+          const mine = mSets.filter((x) => !x[0].byFbs), ours = mSets.filter((x) => !!x[0].byFbs);
+          const parts: [string, string, AMockup[][], string][] = mode === "portal"
+            ? [["Your mockups", "Made by you. Edit them, order them or share them.", mine, "mock"], ["From FBS", "Made by us for you. Open one to look, or make your own copy to change it.", ours, "mockf"]]
+            : [["FBS mockups", "Made by us. Ours to change.", ours, "mockf"], ["Customer's mockups", "Made by the customer in their portal. Only they change these; we can make a copy.", mine, "mock"]];
+          const shown = parts.filter((x) => x[2].length);
+          if (!shown.length) return <div className="aa-empty">{showArch ? "No archived mockups." : mockups.length ? `No mockups match “${q}”.` : "No mockups yet."}</div>;
+          return shown.map(([t, sub, sets, key]) => <div key={key} className="mkx-sec"><div className="mkx-h"><b>{t}</b><span className="faint">{sub}</span></div>{grid(sets, key)}</div>);
+        })()}
       </div>
       {viewSet && (() => { const m0 = viewSet[0], name = m0.title.split(" — ")[0].replace(/^Group \d+$/, "Mockup"); return (
         <MockupViewer set={viewSet} name={name} onClose={() => setViewSet(null)}

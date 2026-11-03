@@ -149,7 +149,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
       const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null; shelved_at?: string | null }[]);
       const paths = ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]);
       const { data: signed } = paths.length ? await sb.storage.from("proofs").createSignedUrls(paths, 3600) : { data: [] };
-      setMockups(ml.map((x, i) => ({ id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, shelved: !!x.shelved_at, created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "", detail: mockupDetail(x.snapshot as never) })));
+      const { data: stf } = await sb.from("staff").select("email");
+      const staff = new Set(((stf || []) as { email: string }[]).map((x) => String(x.email || "").toLowerCase()));
+      setMockups(ml.map((x, i) => ({ byFbs: staff.has(String((x as { created_by?: string | null }).created_by || "").toLowerCase()), id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, shelved: !!x.shelved_at, created_at: x.created_at, url: signed?.[i * 2]?.signedUrl || "", thumb: signed?.[i * 2 + 1]?.signedUrl || signed?.[i * 2]?.signedUrl || "", detail: mockupDetail(x.snapshot as never) })));
       setMessages(((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) })));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
