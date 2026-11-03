@@ -417,8 +417,14 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     ...(due > 0.004 ? ["Pay my balance"] : []), "Start a new order", ...(wholesale ? ["Where are my goods?"] : ["Upload a logo"])];
   // the simple portal (Nov 3, Nick): one page in place of the dashboard and its tabs, for accounts not set to the full one
   const simple = (acct as { portal_view?: string | null } | undefined)?.portal_view !== "advanced";
+  // its order history: their last finished orders, new system and old, newest first, with the total (Nov 3, Nick)
+  const history = [
+    ...pastPortal.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", when: short(o.completed_at || o.due_date || o.created_at), qty: o.qty, pic: picOf(o), href: link(`/portal/orders/${o.id}`), total: +((o as { total?: number }).total || 0), date: o.completed_at || o.due_date || o.created_at || "" })),
+    ...archived.filter((a) => a.kind === "invoice" && !pvOpen.some((x) => x.a.id === a.id) && (ourStatusFor(a.status_name || "", "invoice") === "completed" || (a.order_date || "") < since))
+      .slice(0, 12).map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, total: +a.total || 0, date: a.due_date || a.order_date || "" })),
+  ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
   const dash = simple ? (
-    <PortalSimple jobs={jobs} proofs={proofsDash} sent={sentDash} past={past} pay={pay} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
+    <PortalSimple jobs={jobs} proofs={proofsDash} sent={sentDash} past={history} pay={pay} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
       artHref={link("/portal?area=artwork")} settingsHref={`/portal/settings${qs}`} canAct={!ctx.preview} />
   ) : (
     <PortalDash held={held} tracked={tracked} sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}

@@ -20020,62 +20020,64 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .portal .aa-paylay .aa-payside > .pyb:has(.pyb-sum){position:static}
 }
 /* ── The simple portal (components/PortalSimple.tsx; customers.portal_view, Nov 3, Nick: the 80/20 rule) ──
-   its home is one page: no tab bar, no "Dashboard" title or ask bar; the other pages it links to keep the tab bar */
+   its home is one page: no tab bar, no "Dashboard" title or ask bar; the other pages it links to keep the tab bar.
+   Open orders, then order history on the left; payments on the right (Nov 3, Nick: "not too many panels"). */
 .aa-simple[data-area="home"] > .aa-nav,.aa-simple[data-area="home"] > .aa-ptop{display:none!important}
-.psm{display:flex;flex-direction:column;gap:14px;max-width:880px}
-.psm-card{display:block;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 18px;color:inherit;text-decoration:none}
-.psm-h{font-family:var(--display);font-size:18px;font-weight:800;margin:0 0 10px;color:var(--ink)}
-.psm-hr{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-.psm-hr .psm-h{margin-bottom:8px}
-.psm-need{border-color:color-mix(in srgb,var(--accent) 35%,var(--line));background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
-.psm-needs{display:flex;flex-direction:column;gap:10px}
-.psm-nd{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center}
+.psm{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
+.psm-main,.psm-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.psm-p{margin:0}
+.psm-p > .panel-h{display:flex;align-items:baseline;gap:10px}
+.psm-hl{margin-left:auto;white-space:nowrap}
+.psm-pb{display:flex;flex-direction:column}
+.psm-nd{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;margin:0 0 8px;border-radius:10px;background:color-mix(in srgb,var(--accent) 7%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line))}
 .psm-nd-pic{width:44px;height:44px;border-radius:8px;border:1px solid var(--line);background:#fff;overflow:hidden;display:grid;place-items:center;font-size:11px;color:var(--ink-3)}
 .psm-nd-pic img{width:100%;height:100%;object-fit:contain}
-.psm-nd-ico{width:44px;height:44px;border-radius:999px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
-.psm-nd-t{display:flex;flex-direction:column;min-width:0}
-.psm-nd-t b{font-size:15px;color:var(--ink)}
+.psm-nd-ico{width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);flex:0 0 auto}
+.psm-nd-t{display:flex;flex-direction:column;min-width:0;color:inherit;text-decoration:none}
+.psm-nd-t b{font-size:14.5px;color:var(--ink)}
 .psm-nd-t small{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psm-nd .btn{white-space:nowrap}
-.psm-sent{display:flex;flex-direction:column;margin-bottom:6px}
 .psm-sent-r{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-2,var(--line));color:inherit;text-decoration:none}
 .psm-sent-r > span:first-child{display:flex;flex-direction:column;min-width:0}
 .psm-sent-r b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psm-sent-r small{font-size:12.5px;color:var(--ink-3)}
 .psm-pill{flex:0 0 auto;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--warn-soft,#FFF4DC);color:var(--warn)}
-.psm-none{margin:4px 0 0;font-size:14px;color:var(--ink-3)}
-.psm-again{display:flex;flex-direction:column}
-.psm-ag{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line-2,var(--line))}
-.psm-ag:first-child{border-top:0}
-.psm-ag-pic{width:48px;height:48px;border-radius:8px;border:1px solid var(--line);background:#fff;overflow:hidden;display:grid;place-items:center;font-size:11px;color:var(--ink-3);text-decoration:none}
+.psm-none{margin:2px 0;font-size:14px;color:var(--ink-3)}
+.psm-ag{display:grid;grid-template-columns:44px minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:9px 0;border-top:1px solid var(--line-2,var(--line))}
+.psm-ag:first-child{border-top:0;padding-top:0}
+.psm-ag-pic{width:44px;height:44px;border-radius:8px;border:1px solid var(--line);background:#fff;overflow:hidden;display:grid;place-items:center;font-size:10.5px;color:var(--ink-3);text-decoration:none}
 .psm-ag-pic img{width:100%;height:100%;object-fit:contain}
-.psm-ag-t{display:flex;flex-direction:column;min-width:0}
-.psm-ag-t b{font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psm-ag-t{display:flex;flex-direction:column;min-width:0;color:inherit;text-decoration:none}
+.psm-ag-t b{font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .psm-ag-t small{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.psm-msg{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center}
+.psm-ag-m{font-weight:700;white-space:nowrap;color:var(--ink)}
+.psm-bal{display:flex;flex-direction:column}
+.psm-bal small{font-size:12px;color:var(--ink-3)}
+.psm-bal b{font-size:28px;font-weight:800;color:var(--ink);white-space:nowrap}
+.psm-bal b.late{color:var(--danger)}
+.psm-late{font-size:13px;font-weight:700;color:var(--danger);margin-top:2px}
+.psm-kv{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line-2,var(--line))}
+.psm-kv span{color:var(--ink-3)}
+.psm-kv b{font-weight:600;text-align:right}
+.psm-pay-acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.psm-pay-acts .btn{justify-content:center}
+.psm-pay-acts .btn:only-child{grid-column:1 / -1}
+.psm-msg{display:grid;grid-template-columns:40px minmax(0,1fr);gap:10px;align-items:center;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r,12px);color:inherit;text-decoration:none}
 .psm-msg:hover{border-color:var(--accent)}
-.psm-go{font-size:26px;color:var(--ink-3);line-height:1}
-.psm-more{display:flex;flex-wrap:wrap;gap:6px 18px;padding:4px 4px 12px;font-size:13.5px}
+.psm-more{display:flex;flex-wrap:wrap;gap:6px 16px;padding:0 4px;font-size:13px}
 .psm-more a{color:var(--ink-3);text-decoration:none}
 .psm-more a:hover{color:var(--accent);text-decoration:underline}
+@media (max-width:900px){
+  .psm{grid-template-columns:minmax(0,1fr)}
+  .psm-side{order:-1}
+  .psm-side .psm-more{display:none}
+}
 @media (max-width:640px){
-  .psm-card{padding:14px}
   .psm-nd{grid-template-columns:40px minmax(0,1fr)}
   .psm-nd > .btn{grid-column:1 / -1;width:100%;justify-content:center}
-  .psm-nd-pic,.psm-nd-ico{width:40px;height:40px}
-  .psm-more{justify-content:center}
-}
-.ps-view-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.ps-view-seg button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:3px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
-.ps-view-seg button b{font-size:14.5px;color:var(--ink)}
-.ps-view-seg button small{font-size:12.5px;color:var(--ink-3)}
-.ps-view-seg button.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
-.ps-view-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-/* the simple portal on a computer: the full width, your jobs on the left and order again beside them */
-@media (min-width:900px){
-  .psm{max-width:none;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start}
-  .psm > .psm-need,.psm > .psm-msg,.psm > .psm-more{grid-column:1 / -1}
-  .psm > .psm-card:not(.psm-need):not(.psm-msg):only-of-type{grid-column:1 / -1}
+  .psm-ag{grid-template-columns:40px minmax(0,1fr) auto}
+  .psm-ag-m{display:none}
+  .psm-bal b{font-size:24px}
 }
 /* Simple / Full at the foot of the portal (components/PortalViewSwitch.tsx) */
 .pvs{display:flex;align-items:center;justify-content:center;gap:4px;margin:18px auto 4px;font-size:12.5px;color:var(--ink-3)}
