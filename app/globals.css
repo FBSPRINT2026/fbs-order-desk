@@ -20477,3 +20477,5 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .emp-dlg{width:min(980px,100%);padding:12px 14px}
 .emp-dlg-h{display:flex;margin-bottom:6px}
 .emp-dlg .panel.emp{border:0;box-shadow:none;margin:0}
+.sci-file span .sub{display:block}
+.sci-l{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}

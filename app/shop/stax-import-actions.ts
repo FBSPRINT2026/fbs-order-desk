@@ -36,3 +36,26 @@ export async function importStaxMethod(customerId: string, staxPmId: string): Pr
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/** the customer's cards and bank accounts on file, for the shop (no numbers: brand, last four, expiry) */
+export async function cardsOnFile(customerId: string): Promise<{ ok: true; list: { id: string; method: string; brand: string; last4: string; exp: string; holder: string; ok: boolean; from: string }[] } | { ok: false; error: string }> {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff) return { ok: false, error: "Staff only." };
+    if (!(await (await import("@/lib/access")).viewerPerms(createAdminClient(), v.email, v.role)).takePayments) return { ok: false, error: "Only Nick and Amanda see cards." };
+    const { data } = await createAdminClient().from("saved_payment_methods").select("id, method, brand, last4, exp, holder, staff_charge_ok, consent_text").eq("customer_id", customerId).is("removed_at", null).order("created_at", { ascending: false });
+    return { ok: true, list: ((data || []) as { id: string; method: string; brand: string; last4: string; exp: string; holder: string; staff_charge_ok: boolean; consent_text: string }[]).map((m) => ({ id: m.id, method: m.method, brand: m.brand, last4: m.last4, exp: m.exp || "", holder: m.holder || "", ok: !!m.staff_charge_ok, from: /Stax account/.test(m.consent_text || "") ? "Brought in from Stax" : /phone/.test(m.consent_text || "") ? "Given on the phone" : "Saved by the customer" })) };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** take a card off the customer (it stays in Stax; it's just not on file here any more) */
+export async function removeCardOnFile(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff) return { ok: false, error: "Staff only." };
+    const admin = createAdminClient();
+    if (!(await (await import("@/lib/access")).viewerPerms(admin, v.email, v.role)).takePayments) return { ok: false, error: "Only Nick and Amanda can remove cards." };
+    const { error } = await admin.from("saved_payment_methods").update({ removed_at: new Date().toISOString(), removed_by: v.email }).eq("id", id).is("removed_at", null);
+    return error ? { ok: false, error: error.message } : { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
