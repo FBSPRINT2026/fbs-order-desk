@@ -238,7 +238,7 @@ export default function JobCenter() {
           <span className={"jrl-sig" + (waitingNow ? " live" : "")} aria-hidden>
             <b /><b /><b />
             {/* a ring in our colors fading round and turning around the logo, just the letters inside (Nov 2, Nick) */}
-            <span className="jrl-ring" />
+            <span className="jrl-ring"><b className="jb1" /><b className="jb2" /><b className="jb3" /></span>
             <i><img src="/brand/fbs-logo-white-plain.svg" alt="" width={30} height={30} /></i>
           </span>
           <span className="jrl-mc-t">Message Center<i aria-hidden /></span>

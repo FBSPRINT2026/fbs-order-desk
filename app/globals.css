@@ -19679,3 +19679,13 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 span.jrl-ring{position:absolute;inset:2px;border-radius:50%;background:conic-gradient(#0E9BD8,#F26660,#FCB122,#0E9BD8);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));animation:jrl-turn2 6s linear infinite;z-index:1}
 .jrl-mc-ban>.jrl-sig i{width:36px;height:36px}
 .jrl-mc-ban>.jrl-sig i img{width:24px;height:24px}
+/* three balls, evenly spaced, part of the ring: each in the ring's own color where it sits, turning with it, slowly (Nov 2,
+   Nick: "evenly spaced… rotate slower… little accents to the rainbow that's already there") */
+span.jrl-ring{inset:2px;-webkit-mask:none;mask:none;background:none;animation:jrl-turn2 14s linear infinite}
+span.jrl-ring::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(#0E9BD8,#F26660,#FCB122,#0E9BD8);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3.5px),#000 calc(100% - 3px));mask:radial-gradient(farthest-side,transparent calc(100% - 3.5px),#000 calc(100% - 3px))}
+span.jrl-ring b{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;animation:none;border:0;box-shadow:0 0 6px currentColor;opacity:1}
+span.jrl-ring b.jb1{background:#0E9BD8;color:#0E9BD8;transform:rotate(0deg) translateY(-22.5px)}
+span.jrl-ring b.jb2{background:#F26660;color:#F26660;transform:rotate(120deg) translateY(-22.5px)}
+span.jrl-ring b.jb3{background:#FCB122;color:#FCB122;transform:rotate(240deg) translateY(-22.5px)}
+.jrl-mc-ban>.jrl-sig i img{width:26px;height:26px}
+span.jrl-ring b.jb1,span.jrl-ring b.jb2,span.jrl-ring b.jb3{display:block;inset:auto;left:50%;top:50%}
