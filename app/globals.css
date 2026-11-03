@@ -20108,3 +20108,6 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 .psm-art-i img{width:100%;height:100%;object-fit:contain}
 .psm-art-i:hover{border-color:var(--accent)}
 @media (max-width:640px){.psm-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+/* the simple portal's one search, across the top */
+.psm-search{grid-column:1 / -1;min-width:0}
+@media (max-width:900px){.psm-search{order:0}}

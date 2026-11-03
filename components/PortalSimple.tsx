@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { money } from "@/lib/format";
 import type { PortalJob } from "@/lib/portalJobs";
 import type { DashPay, DashProof, DashSent } from "@/components/PortalDash";
@@ -15,7 +16,8 @@ export type SimplePast = { id: string; number: number; nickname: string; when: s
  * message). The rest (all orders, artwork, settings) are quiet links at the foot, opening the full portal's pages.
  * Customers with many jobs at once get the full portal (customers.portal_view; View: Simple / Full at the foot).
  */
-export default function PortalSimple({ jobs, proofs, sent, past, pay, art = [], newMsgs, msgHref, ordersHref, artHref, settingsHref, canAct }: {
+export default function PortalSimple({ search, jobs, proofs, sent, past, pay, art = [], newMsgs, msgHref, ordersHref, artHref, settingsHref, canAct }: {
+  /** one search for everything (orders, payments, artwork), the portal's AI search bar */ search?: ReactNode;
   jobs: PortalJob[]; proofs: DashProof[]; sent: DashSent[]; past: SimplePast[]; pay: DashPay; /** their logos, small, under payments */ art?: { id: string; url: string; name: string }[]; newMsgs: number;
   msgHref: string; ordersHref: string; artHref: string; settingsHref: string; canAct: boolean;
 }) {
@@ -23,6 +25,9 @@ export default function PortalSimple({ jobs, proofs, sent, past, pay, art = [], 
   const open = proofs.length + sent.length + jobs.length;
   return (
     <div className="psm">
+      {/* one search at the top for everything, its examples rolling through (Nov 3, Nick: "search like everything, orders,
+          payments, all that stuff… like the AI search where it rotates through") */}
+      {search && <div className="psm-search">{search}</div>}
       <div className="psm-main">
         <section className="panel psm-p">
           <div className="panel-h"><h2>Open orders</h2><span className="faint">{open ? `${jobs.length + sent.length} in the works` : ""}</span><Link className="pd-link psm-hl" href={ordersHref}>All orders</Link></div>

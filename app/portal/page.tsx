@@ -425,7 +425,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     ...archHist.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, total: +a.total || 0, date: a.due_date || a.order_date || "" })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
   const dash = simple ? (
-    <PortalSimple jobs={jobs} proofs={proofsDash} sent={sentDash} past={history} pay={pay} art={designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 9).map((d) => ({ id: d.id, url: designUrls[d.id], name: d.name }))} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
+    <PortalSimple search={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare pop personHref={msgLink(null)}
+      ideas={["Search my orders", "What do I owe?", "Find my artwork", history[0] ? `Reorder ${history[0].nickname || `#${history[0].number}`}` : "Reorder a past job", jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?"]} />}
+      jobs={jobs} proofs={proofsDash} sent={sentDash} past={history} pay={pay} art={designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 9).map((d) => ({ id: d.id, url: designUrls[d.id], name: d.name }))} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
       artHref={link("/portal?area=artwork")} settingsHref={`/portal/settings${qs}`} canAct={!ctx.preview} />
   ) : (
     <PortalDash held={held} tracked={tracked} sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}
