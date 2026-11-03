@@ -16,6 +16,7 @@ import { jobFor, kindFromWords, type PortalJob, type JobKind, type JobShip } fro
 import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
 import { ourStatusFor } from "@/lib/printavoSend";
 import StartPanel from "@/components/StartPanel";
+import SupportButton from "@/components/SupportButton";
 import { mockupDetail } from "@/lib/mockupDetail";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { archiveMyMockup, customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
@@ -447,7 +448,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         {/* the customer's name with Start an order / Mockup Creator, above the tabs (Oct 15, Nick) */}
         <div className="pdx-hello">
           <div><h1 className="pdx-h1">{company || "Your Account"}</h1><div className="pdx-sub">Your quotes, orders, artwork and payments with {ctx.settings.shop.name}</div></div>
-          {ctx.customerIds.length > 0 && <div className="pdx-acts"><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} /></div>}
+          {ctx.customerIds.length > 0 && <div className="pdx-acts"><SupportButton email={ctx.email} portal look="tile" /><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} /></div>}
         </div>
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">

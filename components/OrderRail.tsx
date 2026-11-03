@@ -36,7 +36,9 @@ export default function OrderRail({ steps, done = false }: { steps: JobStep[]; d
         {at < n - 1 && <span className="orl-end e"><svg viewBox="0 0 24 24"><path d={PATHS.check} /></svg></span>}
         <span className="orl-mk"><svg viewBox="0 0 24 24"><path d={PATHS[icon] || PATHS.placed} /></svg></span>
       </div>
-      <ol className="orl-lb">{steps.map((s, i) => <li key={s.key + i} className={i < at || done ? "done" : i === at ? "cur" : ""} title={s.sub ? `${s.label}: ${s.sub}` : s.label}>{s.label}</li>)}</ol>
+      {/* the step it's on is the one a phone shows under the line, "Completed" too once it's done (Nov 3, Nick: "it should
+          say completed… might not understand what that is") */}
+      <ol className="orl-lb">{steps.map((s, i) => <li key={s.key + i} className={i === at ? "cur" : i < at || done ? "done" : ""} title={s.sub ? `${s.label}: ${s.sub}` : s.label}>{s.label}</li>)}</ol>
     </div>
   );
 }

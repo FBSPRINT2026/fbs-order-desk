@@ -20131,3 +20131,19 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 .psm-art-i{padding:0!important}
 .psm-art-i > *{width:100%;height:100%;max-width:100%;max-height:100%}
 .psm-art-i img{object-fit:contain}
+
+/* Customer support in the portal (Nov 3): a quiet tile left of Start an order/quote on a computer, a line of text at the
+   foot of the page on a phone. Both open the same Get help box (components/SupportButton.tsx). */
+.psup-tile{padding:8px 14px 8px 8px;background:transparent;border-style:dashed}
+.psup-tile .ic{background:var(--surface-2,var(--accent-soft));color:var(--ink-3)}
+.psup-tile:hover .ic{color:var(--accent)}
+.psup-foot{display:none}
+.psup-link{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:6px 4px;font:500 12.5px/1.3 var(--body);color:var(--ink-3);cursor:pointer}
+.psup-link:hover{color:var(--accent)}
+.psup-link svg{width:15px;height:15px;flex:none}
+@media (max-width:640px){
+  .pdx-acts .psup-tile{display:none}
+  .psup-foot{display:flex;justify-content:center;padding:4px 16px 14px}
+}
+/* the order line on a phone shows only the step it's on; the first and last don't hang off the edge */
+@media (max-width:520px){.orl-lb li.cur:last-child{text-align:right}.orl-lb li.cur:first-child{text-align:left}}

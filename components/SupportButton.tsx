@@ -53,8 +53,15 @@ async function drawPage(): Promise<Blob | null> {
   return null;
 }
 
+/** a support ticket */
+const TICKET = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z" /><path d="M10 6v12" strokeDasharray="2 2.5" /></svg>;
+
 /** `portal`: a customer's "Get help" in their portal (Oct 24): saved for them by the server, under Customers on Support */
-export default function SupportButton({ email, portal = false }: { email: string; portal?: boolean }) {
+/** `look` (portal only): "icon" the small ? in the header, "tile" a quiet tile beside Start an order/quote, "link" a line of
+ *  text at the foot of the page on a phone (Nov 3, Nick: "submit a support ticket like a screenshot… just like our staff
+ *  does… at the bottom of the page somewhere indiscreet on the mobile view and at the top… to the left of… start a new
+ *  quote"). Each is the same Get help box. */
+export default function SupportButton({ email, portal = false, look = "icon" }: { email: string; portal?: boolean; look?: "icon" | "tile" | "link" }) {
   const sb = useMemo(() => createClient(), []);
   const { role, viewAs, realRole } = useRole();
   const [open, setOpen] = useState(false), [shot, setShot] = useState<Blob | null>(null), [url, setUrl] = useState("");
@@ -136,7 +143,16 @@ export default function SupportButton({ email, portal = false }: { email: string
 
   return (
     <>
-      {portal ? (
+      {portal && look === "tile" ? (
+        <button type="button" className="pd-act psup-tile" onClick={start} disabled={!!busy && !open} aria-label="Support: report a problem or ask for help">
+          <span className="ic">{TICKET}</span>
+          <span><b>Support</b><small>Report a problem</small></span>
+        </button>
+      ) : portal && look === "link" ? (
+        <button type="button" className="psup-link" onClick={start} disabled={!!busy && !open}>
+          {TICKET}<span>Report a problem or get help</span>
+        </button>
+      ) : portal ? (
         <button type="button" className="p-help" onClick={start} disabled={!!busy && !open} title="Need help?" aria-label="Need help? Tell us what's going on">
           {busy && !open ? <span className="p-help-busy">…</span> : "?"}
         </button>
