@@ -178,3 +178,68 @@ export async function savePin(p: { email?: string; pin: string; old?: string }) 
     return await lib.setPin(admin, target, p.pin, by);
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/** the customer's credit, and refunds waiting for approval (lib/credits.ts) */
+export async function shopCredit(customerId: string) {
+  try {
+    const { admin } = await allowed();
+    const { creditsOf } = await import("@/lib/credits");
+    const [cr, { data: rq }] = await Promise.all([creditsOf(admin, customerId), admin.from("refund_requests").select("id, order_id, amount, requested_by, requested_at").eq("customer_id", customerId).eq("status", "pending").order("requested_at")]);
+    return { ok: true as const, total: cr.total, from: cr.list, pending: (rq || []) as { id: string; order_id: string; amount: number; requested_by: string; requested_at: string }[] };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** put their credit on invoices (no money moves; no PIN: nothing is charged) */
+export async function shopApplyCredit(customerId: string, orderIds: string[]) {
+  try {
+    const { admin, v } = await allowed();
+    const lib = await import("@/lib/credits");
+    let applied = 0;
+    for (const id of orderIds) {
+      const r = await lib.applyCredit(admin, customerId, id, 1e9, v.email);
+      if (r.ok) applied += r.applied; else if (!applied) return r;
+    }
+    return { ok: true as const, applied: Math.round(applied * 100) / 100 };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** a refund that was waiting: approve (with your PIN) or decline */
+export async function decideRefund(requestId: string, approve: boolean, pin: string) {
+  try {
+    const { admin, v } = await allowed();
+    const { data: rq } = await admin.from("refund_requests").select("*").eq("id", requestId).eq("status", "pending").maybeSingle();
+    if (!rq) return { ok: false as const, error: "That refund was already handled." };
+    if (!approve) {
+      await admin.from("refund_requests").update({ status: "declined", decided_by: v.email, decided_at: new Date().toISOString() }).eq("id", requestId);
+      return { ok: true as const };
+    }
+    const pc = await (await import("@/lib/payPin")).checkPin(admin, v.email, pin);
+    if (!pc.ok) return { ok: false as const, error: pc.error, pin: true };
+    // the request itself no longer holds the credit back while it's refunded
+    await admin.from("refund_requests").update({ status: "done", decided_by: v.email, decided_at: new Date().toISOString() }).eq("id", requestId);
+    const r = await (await import("@/lib/credits")).refundCredit(admin, rq.customer_id, rq.order_id, +rq.amount, v.email);
+    if (!r.ok) { await admin.from("refund_requests").update({ status: "pending", error: r.error }).eq("id", requestId); return r; }
+    await admin.from("refund_requests").update({ stax_refund_id: r.ids.join(",") }).eq("id", requestId);
+    return { ok: true as const, refunded: r.refunded };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** refund some of their credit to the card it was paid with, from the shop (PIN) */
+export async function shopRefundCredit(customerId: string, amount: number, pin: string) {
+  try {
+    const { admin, v } = await allowed();
+    const pc = await (await import("@/lib/payPin")).checkPin(admin, v.email, pin);
+    if (!pc.ok) return { ok: false as const, error: pc.error, pin: true };
+    const lib = await import("@/lib/credits");
+    const cr = await lib.creditsOf(admin, customerId);
+    let left = Math.round(Math.min(+amount || 0, cr.total) * 100) / 100, done = 0;
+    for (const c of cr.list) {
+      if (left <= 0.004) break;
+      const take = Math.round(Math.min(c.credit, left) * 100) / 100;
+      const r = await lib.refundCredit(admin, customerId, c.id, take, v.email);
+      if (!r.ok) { if (!done) return r; break; }
+      done += r.refunded; left = Math.round((left - r.refunded) * 100) / 100;
+    }
+    return { ok: true as const, refunded: Math.round(done * 100) / 100 };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
+}

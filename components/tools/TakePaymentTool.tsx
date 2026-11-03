@@ -5,7 +5,7 @@ import BillAddressFields from "@/components/BillAddressFields";
 import { billMissing, emptyBill, staxAddress } from "@/lib/billAddress";
 import { staxReason } from "@/lib/staxReason";
 import { fmtDate, money } from "@/lib/format";
-import { paymentContext, pinInfo, savePin, setPayOptions, takePayment, type TPInvoice, type TPMethod, type TPResult } from "@/app/shop/take-payment-actions";
+import { decideRefund, paymentContext, pinInfo, savePin, setPayOptions, shopApplyCredit, shopCredit, shopRefundCredit, takePayment, type TPInvoice, type TPMethod, type TPResult } from "@/app/shop/take-payment-actions";
 
 /**
  * Take a Payment (Nov 3, Nick; app/shop/take-payment-actions.ts): pick the customer, tick invoices from their statement,
@@ -30,6 +30,10 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
   // the PIN (Nov 3, Nick: "once you hit go, you have to put in the PIN"): asked for at every charge
   const [pins, setPins] = useState<{ mine: boolean; owner: boolean; people: { email: string; name: string; has: boolean }[] } | null>(null);
   const [pinsOpen, setPinsOpen] = useState(false);
+  // their credit (lib/credits.ts): put it on the ticked invoices, refund it, and refunds waiting for approval
+  const [cr, setCr] = useState<{ total: number; from: { id: string; number: number; credit: number }[]; pending: { id: string; order_id: string; amount: number; requested_by: string; requested_at: string }[] } | null>(null);
+  const [crPin, setCrPin] = useState(""), [crAmt, setCrAmt] = useState(""), [crMsg, setCrMsg] = useState(""), [crBusy, setCrBusy] = useState(false);
+  const loadCr = (id: string) => void shopCredit(id).then((r) => { if (r.ok) setCr(r); });
   const [pinAsk, setPinAsk] = useState(false), [pin, setPin] = useState(""), [pinErr, setPinErr] = useState("");
   const loadPins = () => void pinInfo().then((r) => { if (r.ok) setPins(r); });
   useEffect(loadPins, []);
@@ -39,7 +43,7 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
     if (!id) return;
     void paymentContext(id).then((r) => {
       if (!r.ok) return setErr(r.error);
-      setCtx(r); setCLabel(r.customer.company || r.customer.name);
+      setCtx(r); setCLabel(r.customer.company || r.customer.name); loadCr(id);
       setSplit(r.customer.charge_split); setFee(!r.customer.no_card_fee);
       // the order it was opened from, else everything owed
       setPick(new Set(orderId && r.invoices.some((o) => o.id === orderId) ? [orderId] : r.invoices.map((o) => o.id)));
@@ -142,6 +146,29 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
               ))}</tbody>
             </table></div>
           </> : <p className="faint" style={{ margin: 0 }}>Nothing is owed right now.</p>)}
+          {cr && (cr.total > 0.004 || cr.pending.length > 0) && ctx && (
+            <div className="tpy-cr">
+              {cr.total > 0.004 && <>
+                <div><b>Credit: {money(cr.total)}</b> <span className="faint">from {cr.from.map((x) => `#${x.number}`).join(", ")}</span></div>
+                <div className="tpy-cr-row">
+                  <button type="button" className="btn sm" disabled={crBusy || !chosen.length} onClick={async () => { setCrBusy(true); setCrMsg(""); const r = await shopApplyCredit(ctx.customer.id, chosen.map((o) => o.id)); setCrBusy(false); setCrMsg(r.ok ? `${money(r.applied)} of credit applied.` : r.error); load(ctx.customer.id); }}>Apply to the ticked invoices</button>
+                  <span className="faint">or refund</span>
+                  <input inputMode="decimal" placeholder={cr.total.toFixed(2)} value={crAmt} onChange={(e) => setCrAmt(e.target.value.replace(/[^\d.]/g, ""))} aria-label="Refund amount" />
+                  <input type="password" inputMode="numeric" placeholder="PIN" maxLength={8} value={crPin} onChange={(e) => setCrPin(e.target.value.replace(/\D/g, ""))} aria-label="PIN" />
+                  <button type="button" className="btn sm" disabled={crBusy || crPin.length < 4} onClick={async () => { setCrBusy(true); setCrMsg(""); const r = await shopRefundCredit(ctx.customer.id, +(crAmt || cr.total), crPin); setCrBusy(false); setCrPin(""); setCrMsg(r.ok ? `${money(r.refunded)} refunded to the card it was paid with.` : r.error); if (r.ok) { setCrAmt(""); load(ctx.customer.id); } }}>Refund to their card</button>
+                </div>
+              </>}
+              {cr.pending.map((q) => (
+                <div key={q.id} className="tpy-rq">
+                  <span style={{ flex: 1, minWidth: 180 }}><b>Refund pending: {money(+q.amount)}</b> <span className="faint">asked by {q.requested_by} · {fmtDate(q.requested_at.slice(0, 10))}</span></span>
+                  <input type="password" inputMode="numeric" placeholder="PIN" maxLength={8} value={crPin} onChange={(e) => setCrPin(e.target.value.replace(/\D/g, ""))} aria-label="PIN" />
+                  <button type="button" className="btn sm primary" disabled={crBusy || crPin.length < 4} onClick={async () => { setCrBusy(true); setCrMsg(""); const r = await decideRefund(q.id, true, crPin); setCrBusy(false); setCrPin(""); setCrMsg(r.ok ? `Refunded ${money(+q.amount)} to their card.` : r.error); load(ctx.customer.id); }}>Approve</button>
+                  <button type="button" className="btn sm ghost" disabled={crBusy} onClick={async () => { const r = await decideRefund(q.id, false, ""); setCrMsg(r.ok ? "Declined. The credit stays on their account." : r.error); load(ctx.customer.id); }}>Decline</button>
+                </div>
+              ))}
+              {crMsg && <div className="faint" role="status">{crMsg}</div>}
+            </div>
+          )}
           {results && (
             <div className="tpy-res" role="status">
               {results.map((r) => (

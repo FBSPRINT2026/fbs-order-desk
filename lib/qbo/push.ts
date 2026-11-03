@@ -436,6 +436,15 @@ export class Pusher {
       if (qa && qa !== r2(+p.amount)) return { status: "needs_review", reason: `Our payment is now ${r2(+p.amount).toFixed(2)}, but its QuickBooks copy (#${link.qbo_id}, made by Printavo or in QuickBooks) is ${qa.toFixed(2)}. Fix it in QuickBooks, then Skip.` };
       return { status: "done", reason: `Matched to QuickBooks payment #${link.qbo_id}; not changed.` };
     }
+    // credits (lib/credits.ts, Nov 3): a credit moved between invoices is two payments that cancel out (no money moved), and
+    // a refund is a negative payment on the invoice it came from. Neither is made as a new QuickBooks payment (that would
+    // count the money twice): each is listed here with what to do in QuickBooks.
+    const pid = String((p as { processor_id?: string | null }).processor_id || "");
+    if (!link && pid.startsWith("credit:")) {
+      if (r2(+p.amount) < 0) return { status: "skipped", reason: `The other half of a credit moved to another invoice (${(p as { note?: string }).note || ""}); see that invoice's payment.` };
+      return { status: "needs_review", reason: `${(p as { note?: string }).note || "A credit"} on #${n}: no money moved. In QuickBooks, Receive Payment for this customer and apply ${r2(+p.amount).toFixed(2)} of their credit (the overpayment) to invoice #${n}, then Skip.` };
+    }
+    if (!link && pid.startsWith("stax-refund:")) return { status: "needs_review", reason: `Refund of ${Math.abs(r2(+p.amount)).toFixed(2)} on #${n} back to the card (Stax refund ${pid.slice(12, 20)}): record it in QuickBooks as a Refund Receipt (or refund of the overpayment), then Skip.` };
     // Printavo's own refunds / returns: Printavo sends them to QuickBooks itself; never made (or reviewed) here
     if (r2(+p.amount) <= 0 && !link && fromPrintavo(p)) return { status: "skipped", reason: `A ${r2(+p.amount) < 0 ? "refund / return" : "zero payment"} that came from Printavo, which sends its own to QuickBooks. Never made by us.` };
     if (r2(+p.amount) <= 0 && !link) return { status: "needs_review", reason: paymentPayload({ payment: p, orderNumber: n, invoiceId: "", customerRef: "", qs: this.qs }).problems.join(" ") };

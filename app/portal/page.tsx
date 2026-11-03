@@ -1,4 +1,5 @@
 import { allRows } from "@/lib/readAll";
+import CreditBox from "@/components/CreditBox";
 import { discardRequest } from "@/app/portal/request-actions";
 import { getPortalCtx, seesPriceList } from "@/lib/portal";
 import type { HubOrder } from "@/lib/messages";
@@ -461,7 +462,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             <p className="muted" style={{ marginBottom: 0 }}>If you were expecting a quote, it may be under a different email address. Contact {ctx.settings.shop.name}{ctx.settings.shop.email ? ` at ${ctx.settings.shop.email}` : ""}{ctx.settings.shop.phone ? ` or ${fmtPhone(ctx.settings.shop.phone)}` : ""}.</p>
           </div></div>
         ) : (
-          <AccountAreas mode="portal" simple={simple} orderTypes={(acct as { order_types?: string[] } | undefined)?.order_types || []} dash={dash} brandColors={(acct as { brand_portal?: boolean } | undefined)?.brand_portal === false ? [] : acct?.brand_colors || []}
+          <AccountAreas mode="portal" creditBox={acct?.id ? <CreditBox customerId={String(acct.id)} preview={!!ctx.preview} /> : undefined} simple={simple} orderTypes={(acct as { order_types?: string[] } | undefined)?.order_types || []} dash={dash} brandColors={(acct as { brand_portal?: boolean } | undefined)?.brand_portal === false ? [] : acct?.brand_colors || []}
             designsPanel={acct?.design_catalog && (acct as { design_catalog_portal?: boolean }).design_catalog_portal ? <PortalDesignCatalog customerId={acct.id} qs={qs} /> : undefined}
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={program ? <ProgramSheet program={program} items={programItems} images={programImages} extras={programExtras} /> : undefined} hasProgram={!!program && program.active && (programItems.length > 0 || cardHasPrices(program.rate_card))}

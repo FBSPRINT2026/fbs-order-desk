@@ -1407,7 +1407,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       : !isQuote ? { tone: "ok", text: "Approved", sub: pvStatusOf(o as never) ? "In Printavo as an invoice" : "Invoice" }
       : o.status === "quote_sent" ? { tone: "wait", text: "Waiting on the customer's approval" } : { tone: "info", text: "Quote not sent yet" });
     // paid
-    if (seesMoney && calc.total > 0) out.push(calc.balance <= 0.004 ? { tone: "ok", text: "Paid in full" } : calc.paid > 0 ? { tone: "wait", text: `${money(calc.balance)} still due`, sub: `${money(calc.paid)} paid` } : { tone: isQuote ? "info" : "wait", text: `${money(calc.balance)} due`, sub: "Nothing paid yet" });
+    if (seesMoney && calc.total > 0) out.push(calc.balance < -0.004 ? { tone: "info", text: `${money(-calc.balance)} credit`, sub: "Overpaid: the customer can use it or get it back (Take a Payment)" } : calc.balance <= 0.004 ? { tone: "ok", text: "Paid in full" } : calc.paid > 0 ? { tone: "wait", text: `${money(calc.balance)} still due`, sub: `${money(calc.paid)} paid` } : { tone: isQuote ? "info" : "wait", text: `${money(calc.balance)} due`, sub: "Nothing paid yet" });
     return out;
   })();
   const tv = { first: firstName(cust?.name), number: o.number, job: o.nickname ? `"${o.nickname}"` : "your order", total: money(calc.total), balance: money(calc.balance),
@@ -2041,7 +2041,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
                 <div className="tr big"><span>Total{calc.shippingTbd ? <small className="faint" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>+ shipping TBD</small> : null}</span><span>{money(calc.total)}</span></div>
                 <div className="tr"><span>Paid</span><span>{money(calc.paid)}</span></div>
-                <div className="tr bal"><span>Balance due</span><span style={{ color: calc.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(calc.balance)}</span></div>
+                <div className="tr bal"><span>{calc.balance < -0.004 ? "Credit (overpaid)" : "Balance due"}</span><span style={{ color: calc.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(calc.balance)}</span></div>
               </div>
             </div>
           </section>
@@ -2313,7 +2313,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={o.tax_exempt} onChange={(e) => patch((d) => { d.tax_exempt = e.target.checked; })} /> Tax exempt</label>
                 <div className="tr big"><span>Total{calc.shippingTbd ? <small className="faint" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>+ shipping TBD</small> : null}</span><span>{money(calc.total)}</span></div>
                 <div className="tr"><span>Paid</span><span>{money(calc.paid)}</span></div>
-                <div className="tr bal"><span>Balance due</span><span style={{ color: calc.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(calc.balance)}</span></div>
+                <div className="tr bal"><span>{calc.balance < -0.004 ? "Credit (overpaid)" : "Balance due"}</span><span style={{ color: calc.balance > 0.004 ? "var(--ink)" : "var(--ok)" }}>{money(calc.balance)}</span></div>
               </div>
             </div>
           </section>

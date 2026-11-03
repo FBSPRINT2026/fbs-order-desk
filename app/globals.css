@@ -20479,3 +20479,18 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .emp-dlg .panel.emp{border:0;box-shadow:none;margin:0}
 .sci-file span .sub{display:block}
 .sci-l{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+
+/* Credits (components/CreditBox.tsx; Take a Payment's credit row) */
+.crb{display:flex;flex-direction:column;gap:10px;padding:12px 14px;border:1px solid color-mix(in srgb,var(--ok) 40%,var(--line));border-radius:var(--r);background:color-mix(in srgb,var(--ok) 7%,var(--surface))}
+.crb-h b{font-size:15px;font-weight:700;color:var(--ink);display:block}
+.crb-h small{font-size:12.5px;color:var(--ink-3)}
+.crb-acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.crb-apply{display:flex;gap:8px;flex:1 1 320px;flex-wrap:wrap}
+.crb-apply select{flex:1 1 200px;min-width:0}
+.crb-ask{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+.crb-ok{font-size:13px;color:var(--ok)}
+.tpy-cr{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--ok) 40%,var(--line));border-radius:var(--r);background:color-mix(in srgb,var(--ok) 7%,var(--surface));font-size:13px}
+.tpy-cr-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tpy-cr-row input{width:90px}
+.tpy-rq{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line-2,var(--line))}
+.tpy-rq input{width:90px}

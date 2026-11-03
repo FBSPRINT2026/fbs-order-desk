@@ -182,7 +182,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <a className="stat" href="#items"><span className="k">Pieces</span><span className="v">{c.qty.toLocaleString("en-US")}</span><small>{orderGroups(o).length === 1 ? "1 job" : `${orderGroups(o).length} jobs`}</small></a>
           <a className="stat" href="#pay"><span className="k">Total</span><span className="v">{money(c.total)}</span><small>with tax{c.tax ? ` (${money(c.tax)})` : o.tax_exempt ? " exempt" : ""}</small></a>
           <a className="stat" href="#pay"><span className="k">Paid</span><span className="v">{money(c.paid)}</span><small>{payments.length ? `${payments.length} payment${payments.length === 1 ? "" : "s"}` : "Nothing yet"}</small></a>
-          <a className="stat" href="#pay"><span className="k">Balance</span><span className={"v" + (c.balance <= 0.004 && c.total > 0 ? " pod-ok" : "")}>{c.balance <= 0.004 && c.total > 0 ? "Paid in full" : money(c.balance)}</span><small>{c.balance > 0.004 ? (canPay ? "Ready to pay" : "Not due yet") : o.type === "quote" ? "After you approve" : "Thank you"}</small></a>
+          <a className="stat" href="#pay"><span className="k">Balance</span><span className={"v" + (c.balance <= 0.004 && c.total > 0 ? " pod-ok" : "")}>{c.balance < -0.004 ? `${money(-c.balance)} credit` : c.balance <= 0.004 && c.total > 0 ? "Paid in full" : money(c.balance)}</span><small>{c.balance > 0.004 ? (canPay ? "Ready to pay" : "Not due yet") : o.type === "quote" ? "After you approve" : "Thank you"}</small></a>
         </div>}
 
         {hold ? (
@@ -398,7 +398,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                     <div className="pod-row"><span>Tax{o.tax_exempt ? " (exempt)" : ""}</span><b>{money(c.tax)}</b></div>
                     <div className="pod-row pod-tot"><span>Total</span><b>{money(c.total)}</b></div>
                     {payments.map((x) => <div key={x.id} className="pod-row pod-pd"><span>Paid {fmtDate(x.paid_on)} · {x.method}</span><b>−{money(+x.amount)}</b></div>)}
-                    <div className={"pod-row pod-tot" + (c.balance <= 0.004 && c.total > 0 ? " pod-zero" : "")}><span>Balance</span><b>{money(Math.max(0, c.balance))}</b></div>
+                    <div className={"pod-row pod-tot" + (c.balance <= 0.004 && c.total > 0 ? " pod-zero" : "")}><span>{c.balance < -0.004 ? "Your credit" : "Balance"}</span><b>{c.balance < -0.004 ? money(-c.balance) : money(Math.max(0, c.balance))}</b></div>
                     {(() => { const d = o.type === "invoice" ? payDueDate(o, terms) : null; return <div className="pod-row pod-terms"><span>Terms</span><b>{PAY_TERMS[terms]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
                   </div>
                   {canPay ? (

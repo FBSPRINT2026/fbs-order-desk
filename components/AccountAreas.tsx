@@ -87,7 +87,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ simple = false, titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", orderTypes = [], dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ simple = false, titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", orderTypes = [], dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, creditBox, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
@@ -133,6 +133,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   homeTop?: ReactNode;
   /** staff only: the customer details form */
   details?: ReactNode;
+  /** the customer's credit, at the top of Payments (components/CreditBox.tsx) */ creditBox?: ReactNode;
   /** order links: hrefBase + id + hrefQuery (e.g. "/portal/orders/" + id + "?as=…") */
   hrefBase: string; hrefQuery?: string;
   onSend?: (body: string) => Promise<{ ok: boolean; error?: string; emailed?: boolean }>;
@@ -743,6 +744,8 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
       </div>
       <div className={canPay ? "aa-home aa-paylay" : ""}><div className="aa-home-main stack">
       {mode === "shop" && onRecordPayment && recOpen && <RecordPayment record={onRecordPayment} onDone={() => { setRecOpen(false); router.refresh(); }} />}
+      {/* their credit: use it or get it back (components/CreditBox.tsx) */}
+      {creditBox}
       {/* the numbers in one summary card (Nov 2, Nick: "it looks busy") */}
       <div className="stats pyl-stats">
         {/* Balance due = Not due yet + Ready to pay; over a week (red) last; no paid this year (Nov 2, Nick: "how can your
