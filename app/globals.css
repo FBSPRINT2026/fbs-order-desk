@@ -19378,3 +19378,47 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .rqd-cust em{display:inline-block;margin-top:6px;font-style:normal;font-size:12px;font-weight:700;color:var(--fbs-blue)}
 .rqd-soon{color:var(--warn);font-weight:700}
 .rqd-g{margin-top:-4px}
+/* Job Center header, cards + solid bar (Nov 2, Nick: "the title should be on the top… small number in the top right…
+   small number underneath the bubble… make that whole top bar whatever that color is… FBS in the center and make it radiate") */
+.jrl-mc-ban{overflow:hidden;gap:14px}
+.jrl-sig{width:52px;height:52px}
+.jrl-sig i{width:42px;height:42px;background:#141D2B;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.jrl-sig i img{width:30px;height:30px;display:block}
+.jrl-sig b{position:absolute;inset:0;border-radius:50%;border:2px solid #0E9BD8;opacity:0;animation:jrl-wave 3s cubic-bezier(.2,.6,.3,1) infinite;pointer-events:none}
+.jrl-sig b:nth-child(2){border-color:#F26660;animation-delay:.5s}
+.jrl-sig b:nth-child(3){border-color:#FCB122;animation-delay:1s}
+.jrl-sig.live b{animation-duration:1.6s}
+.jrl-sig.live b:nth-child(2){animation-delay:.27s}
+.jrl-sig.live b:nth-child(3){animation-delay:.54s}
+@keyframes jrl-wave{0%{transform:scale(1);opacity:.85}80%,100%{transform:scale(1.9);opacity:0}}
+@media (prefers-reduced-motion:reduce){.jrl-sig b{animation:none}}
+.jcx>.jrl{background:none;border:0;padding:0;gap:8px;margin-bottom:14px;overflow:visible}
+.jrl-sec{background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:inset 0 3px 0 var(--c);padding:10px 10px 10px;gap:8px;align-items:stretch}
+.jrl-sec + .jrl-sec::before{content:none}
+.jrl-sec:hover{background:color-mix(in srgb,var(--c) 5%,var(--surface))}
+.jrl-sec.on{background:color-mix(in srgb,var(--c) 10%,var(--surface));border-color:color-mix(in srgb,var(--c) 45%,var(--line))}
+.jrl-sec.on::after{content:"";position:absolute;left:50%;right:auto;bottom:-10px;height:0;border-radius:0;transform:translateX(-50%);background:none;border:9px solid transparent;border-bottom:0;border-top-color:var(--c)}
+.jrl-h{height:auto;flex-direction:row;align-items:baseline;justify-content:space-between;gap:6px;min-width:0}
+.jrl-t{font-size:13px;font-weight:700;color:var(--ink)}
+.jrl-n{font-family:var(--body);font-size:14px;font-weight:700;color:var(--c)}
+.jrl-nm{font-size:11.5px;color:var(--danger);font-weight:600;margin-top:-6px;white-space:nowrap}
+.jrl-ss{justify-content:space-around;gap:8px}
+.jrl-ic{width:34px;height:34px}
+.jrl-st{gap:2px}
+.jrl-st>em{font-style:normal;font-size:12px;font-weight:700;color:var(--ink);line-height:1.2;margin-top:2px}
+.jrl-st>em.z{color:var(--ink-3);font-weight:600}
+.jrl-st.pick .jrl-sl{text-decoration:none;color:var(--c)}
+.jcx>.jct-body .jc-list{border-top:0}
+.jc-sbar{background:var(--c);border-radius:8px;padding:8px 10px;gap:10px;border:0}
+.jc-sbar .jc-dseg{background:rgba(255,255,255,.18);border:0;padding:2px;gap:2px;height:36px;box-sizing:border-box}
+.jc-sbar .jc-dseg .prf-dept,.jc-sbar .jc-dseg .prf-dept.embroidery,.jc-sbar .jc-dseg .prf-dept.heat,.jc-sbar .jc-dseg .prf-dept.all{height:32px!important;border-radius:6px!important;background:transparent;color:#fff;border:0!important;box-shadow:none;opacity:1}
+.jc-sbar .jc-dseg .prf-dept.z{opacity:.55}
+.jc-sbar .jc-dseg .prf-dept.on,.jc-sbar .jc-dseg .prf-dept.all.on{background:#fff;color:var(--c);box-shadow:none;opacity:1}
+.jc-sbar .chip{background:rgba(255,255,255,.18);color:#fff;border-color:transparent}
+.jc-sbar .chip.on{background:#fff;color:var(--c)}
+.jc-sbar input{background:#fff;border-color:transparent}
+.jc-swhere{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;font-size:13px;margin-top:-4px;color:var(--ink-3)}
+.jc-swhere b{color:var(--ink);font-weight:700}
+.jc-swhere b:nth-of-type(2){color:var(--c)}
+.jc-swhere small{font-size:12px;color:var(--ink-3);margin-left:4px}
+@media (max-width:900px){.jcx>.jrl{flex-wrap:wrap}.jrl-sec{flex:1 1 150px}}

@@ -211,35 +211,35 @@ export default function JobCenter() {
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
       <div className="jcx">
-      {/* the FBS Message Center (Nov 2, Nick: "put our logo on there… some sort of flashing icon on the top with the rainbow
-          effect"): our logo on the navy, a chat icon in a ring of our colors that turns, and flashes when a message is
-          waiting on us */}
+      {/* the FBS Message Center (Nov 2, Nick: "the messaging center round logo around an FBS… just FBS in the center and make
+          it radiate"): our logo in a ring of our colors that sends out rings, quicker when a message is waiting on us */}
       <div className={"jrl-mc" + (solo ? " on" : "") + (signal ? " go" : "")}>
         <div className="jrl-mc-ban">
-          <img src="/brand/fbs-logo-white.svg" alt="FBS" width={40} height={40} />
-          <span className="jrl-mc-t">Message Center</span>
           <span className={"jrl-sig" + (waitingNow ? " live" : "")} aria-hidden>
-            <i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M21 14l-3-3h-7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1z" /><path d="M14 15v2a1 1 0 0 1-1 1H6l-3 3V11a1 1 0 0 1 1-1h2" /></svg></i>
-            {waitingNow > 0 && <em>{Math.min(99, waitingNow)}</em>}
+            <b /><b /><b />
+            <i><img src="/brand/fbs-logo-white.svg" alt="" width={30} height={30} /></i>
           </span>
+          <span className="jrl-mc-t">Message Center</span>
         </div>
         <div className="jrl-mc-n"><span><b className="nw">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</b> new</span><span><b className="wt">{waitingNow}</b> waiting on us</span></div>
         <i className="jrl-strip" aria-hidden />
       </div>
-      {/* the one rail (Nov 2, Nick picked "Rail 4 · Stage totals"): one card, each stage with its total big in its color over
-          its steps, light dividers between, the open stage softly tinted, one line of our colors running under every step */}
+      {/* the stages as cards (Nov 2, Nick: "the title should be on the top… a small number in the top right of each card…
+          small number underneath the bubble. I don't like the notification style bubble"): the picked one tinted, with an
+          arrow down to its list */}
       <div className="jrl" role="tablist" aria-label="Steps">
-        <i className="jrl-line" aria-hidden />
         {GROUPS.map((g) => { const on = !solo && curG?.t === g.t; const nm = newIn(g); const tot = items ? g.steps.reduce((a0, [k]) => a0 + (k === "declined" ? 0 : count(k)), 0) : null; return (
           <div key={g.t} role="tab" aria-selected={on} className={"jrl-sec" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--f" as string]: g.steps.length > 1 ? 2 : 1 }}>
             <button type="button" className="jrl-h" onClick={() => go(g.steps[0][0])} title={g.line}>
+              <span className="jrl-t">{g.t}</span>
               <span className="jrl-n">{tot ?? "…"}</span>
-              <span className="jrl-t">{g.t}{nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}</span>
             </button>
+            {nm > 0 && <span className="jrl-nm">{nm} new message{nm === 1 ? "" : "s"}</span>}
             <div className="jrl-ss">
               {g.steps.map(([k, l, icon]) => { const nn = count(k); return (
                 <button key={k} type="button" className={"jrl-st" + (!all && !solo && step === k ? " pick" : "")} onClick={() => go(k)} aria-label={`${l}: ${items ? nn : "loading"}`}>
-                  <span className="jrl-ic">{icon}<em className={items && !nn ? "z" : ""}>{items ? nn : "…"}</em></span>
+                  <span className="jrl-ic">{icon}</span>
+                  <em className={items && !nn ? "z" : ""}>{items ? nn : "…"}</em>
                   <span className="jrl-sl">{l}</span>
                 </button>); })}
             </div>
@@ -285,7 +285,10 @@ export default function JobCenter() {
                 <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} />
               </div>
             </div> : <>
-            <div className="toolbar" data-toolbar>
+            {/* one solid bar in the picked stage's color (Nov 2, Nick: "make that whole top bar whatever that color is… screen print
+                embroidery and heat press live in that… along with the search… solid blue bar"), and under it which stage and step
+                is showing ("depending on which bubble you click… indicate that below") */}
+            <div className="toolbar jc-sbar" data-toolbar>
               {/* the departments as small SP / EMB / HP buttons beside the search, like the Dept column's tags (Nov 2, Nick: "just
                   do a small, the SP, EMB, and HP buttons next to the search… get rid of came back with changes"); one picked
                   shows only its jobs, picked again shows all */}
@@ -296,6 +299,7 @@ export default function JobCenter() {
               {step === "mockups" && !all && <div className="chips"><button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button></div>}
               <span className="jc-search"><SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} /></span>
             </div>
+            <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{curG?.t}</b><span>›</span><b>{(curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && step !== "requests" ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}</div>
             {/* Requests: laid out like ClickUp Jobs' New list, the picked one opened on top (components/RequestsDesk.tsx) */}
             {step === "requests" && !all ? <RequestsDesk q={q} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
