@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import RequestsDesk from "@/components/RequestsDesk";
 import { useSticky } from "@/lib/useSticky";
 import SearchInput from "@/components/SearchInput";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
@@ -295,7 +296,8 @@ export default function JobCenter() {
               {step === "mockups" && !all && <div className="chips"><button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button></div>}
               <span className="jc-search"><SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} /></span>
             </div>
-            {!items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
+            {/* Requests: laid out like ClickUp Jobs' New list, the picked one opened on top (components/RequestsDesk.tsx) */}
+            {step === "requests" && !all ? <RequestsDesk q={q} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
                 <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
                 <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [

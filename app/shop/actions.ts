@@ -207,7 +207,10 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
     if (!o?.simple_order) return { ok: false, error: "This isn't a simple order." };
     const s = o.simple_order as { about?: string; qty?: number | null; garments?: string; method?: string; by?: string };
     const { data: cust } = await admin.from("customers").select("company, name, email").eq("id", o.customer_id).maybeSingle();
-    const { data: files } = await admin.from("art_files").select("name, file_path, file_type, category").eq("order_id", orderId).like("file_path", "requests/%");
+    // the files they sent with it (simple_order.files: uploaded in the portal, or brought in from their ClickUp job)
+    const sent = new Set(((s as { files?: { path: string }[] }).files || []).map((f) => f.path));
+    const { data: all } = await admin.from("art_files").select("name, file_path, file_type, category").eq("order_id", orderId);
+    const files = (all || []).filter((f) => sent.has(String(f.file_path)) || String(f.file_path).startsWith("requests/"));
     const sizes = await Promise.all((files || []).map(async (f) => {
       const dir = String(f.file_path).replace(/\/[^/]+$/, ""), base = String(f.file_path).split("/").pop() || "";
       const { data: l } = await admin.storage.from("proofs").list(dir, { search: base, limit: 5 });
@@ -236,5 +239,61 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
     const { data: made, error } = await admin.from("activities").insert(row).select("id").single();
     if (error || !made) return { ok: false, error: error?.message || "Couldn't bring it in." };
     return { ok: true, activityId: made.id as string, text: row.subject };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
+
+/** Job Center → Requests (Nov 2, Nick: "it should look exactly like what you built for ClickUp new… when you click on
+ *  them, it brings up the screen… hit the create order button"): every request a customer sent in from their portal and
+ *  we haven't built yet, with what they told us and their files (a simple order's answers, or a form they filled in). */
+export type DeskRequest = { id: string; number: number; name: string; customerId: string; customer: string; contact: string; sentAt: string; due: string | null; po: string;
+  delivery: string; shipTo: string; simple: boolean; method: string; qty: number | null; garments: string; about: string; pieces: number;
+  files: { name: string; path: string; type: string; kind: string; size: number }[] };
+export async function requestsDesk(): Promise<{ ok: true; list: DeskRequest[] } | { ok: false; error: string }> {
+  try {
+    await requireStaff();
+    const admin = createAdminClient();
+    const { data: os } = await admin.from("orders").select("id, number, customer_id, nickname, due_date, po_number, delivery_method, ship_to, submitted_at, simple_order, groups, qty")
+      .eq("status", "request").not("submitted_at", "is", null).is("discarded_at", null).order("submitted_at", { ascending: false }).limit(200);
+    const rows = (os || []) as { id: string; number: number; customer_id: string; nickname: string | null; due_date: string | null; po_number: string | null; delivery_method: string | null; ship_to: string | null; submitted_at: string; simple_order: { about?: string; qty?: number | null; garments?: string; method?: string; files?: { path: string; name: string; kind?: string }[] } | null; groups: Order["groups"]; qty: number | null }[];
+    const custIds = [...new Set(rows.map((r) => r.customer_id))];
+    const ids = rows.map((r) => r.id);
+    const [{ data: cs }, { data: af }] = await Promise.all([
+      custIds.length ? admin.from("customers").select("id, name, company").in("id", custIds) : Promise.resolve({ data: [] }),
+      ids.length ? admin.from("art_files").select("order_id, name, file_path, file_type, category").in("order_id", ids).order("id") : Promise.resolve({ data: [] }),
+    ]);
+    const cust = new Map(((cs || []) as { id: string; name: string | null; company: string | null }[]).map((c) => [c.id, c]));
+    const filesOf = new Map<string, { order_id: string; name: string; file_path: string; file_type: string | null; category: string | null }[]>();
+    for (const f of (af || []) as { order_id: string; name: string; file_path: string; file_type: string | null; category: string | null }[]) filesOf.set(f.order_id, [...(filesOf.get(f.order_id) || []), f]);
+    // file sizes for the tiles, from storage (one listing per folder)
+    const dirs = new Map<string, Set<string>>();
+    for (const list of filesOf.values()) for (const f of list) { const d = f.file_path.replace(/\/[^/]+$/, ""); dirs.set(d, (dirs.get(d) || new Set()).add(f.file_path.split("/").pop() || "")); }
+    const size = new Map<string, number>();
+    await Promise.all([...dirs.entries()].slice(0, 60).map(async ([d, names]) => {
+      const { data: l } = await admin.storage.from("proofs").list(d, { limit: 100 });
+      for (const x of l || []) if (names.has(x.name)) size.set(`${d}/${x.name}`, +(x.metadata?.size || 0));
+    }));
+    const list: DeskRequest[] = rows.map((r) => {
+      const c = cust.get(r.customer_id), so = r.simple_order;
+      const pieces = orderGroups(r as unknown as Order).reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((x, v) => x + (+v || 0), 0), 0), 0);
+      return {
+        id: r.id, number: r.number, name: r.nickname || "", customerId: r.customer_id, customer: c?.company || c?.name || "Customer", contact: c?.company && c?.name ? c.name : "",
+        sentAt: r.submitted_at, due: r.due_date, po: r.po_number || "", delivery: r.delivery_method || "pickup", shipTo: r.ship_to || "",
+        simple: !!so, method: so?.method || "", qty: so?.qty ?? r.qty ?? null, garments: so?.garments || "", about: so?.about || "", pieces,
+        files: (filesOf.get(r.id) || []).map((f) => ({ name: f.name, path: f.file_path, type: f.file_type || "", kind: f.category === "order_sheet" ? "po" : f.category || "", size: size.get(f.file_path) || 0 })),
+      };
+    });
+    return { ok: true, list };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
+
+/** "Not an order" on a request in the Job Center: put away (soft: discarded_at, kept on file), noted on the order */
+export async function requestNotAnOrder(orderId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { email } = await requireStaff();
+    const admin = createAdminClient();
+    const { error } = await admin.from("orders").update({ discarded_at: new Date().toISOString() }).eq("id", orderId).eq("status", "request");
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "request_put_away", detail: "Marked not an order in the Job Center", actor: email });
+    return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
 }

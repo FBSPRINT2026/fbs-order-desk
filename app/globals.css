@@ -19367,3 +19367,14 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media (max-width:900px){.jcx>.jrl{flex-wrap:wrap;row-gap:8px}.jrl-sec{flex:1 1 30%}.jrl-sec + .jrl-sec::before{display:none}.jrl-line{display:none}}
 @media (prefers-reduced-motion:reduce){.jrl-sig::before,.jrl-sig.live::after{animation:none}}
 @media (max-width:900px){.jcx>.jrl,.jcx>.jrl-mc{grid-column:1;grid-row:auto}}
+/* Job Center → Requests, like ClickUp Jobs' New list (components/RequestsDesk.tsx) */
+.rqd{display:flex;flex-direction:column;gap:12px}
+.rqd-tbl tbody tr.rqd-r{cursor:pointer}
+.rqd-tbl tbody tr.rqd-r:hover td:not(.rqd-cust){background:var(--surface-2)}
+.rqd-tbl tbody tr.rqd-r.on td:not(.rqd-cust){background:color-mix(in srgb,var(--danger) 7%,var(--surface))}
+.rqd-cust{vertical-align:top;background:var(--surface-2);border-left:3px solid var(--fbs-violet);min-width:150px}
+.rqd-cust b{display:block;font-size:14px}
+.rqd-cust span{display:block;font-size:12px;color:var(--ink-3)}
+.rqd-cust em{display:inline-block;margin-top:6px;font-style:normal;font-size:12px;font-weight:700;color:var(--fbs-blue)}
+.rqd-soon{color:var(--warn);font-weight:700}
+.rqd-g{margin-top:-4px}

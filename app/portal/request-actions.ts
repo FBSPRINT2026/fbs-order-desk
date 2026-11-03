@@ -620,6 +620,8 @@ export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<
     const { error: ue } = await admin.from("orders").update({
       nickname: (String(s.name || "").trim() || o0.nickname || "").slice(0, 120) || null, due_date: due, delivery_method: delivery, ship_to: shipTo, ...(qty ? { qty } : {}),
       ...(String(s.po || "").trim() ? { po_number: String(s.po).trim().slice(0, 60) } : {}),
+      // no starting print and no price: the shop builds the job from what they sent (Nov 2, Nick: "I have no idea where you're getting the pricing from")
+      groups: [{ ...newGroup(), imprints: [] }], total: 0,
       simple_order: { about, qty, garments, method, files: files.map((f) => ({ path: f.path, name: f.name, kind: f.kind })), at: new Date().toISOString(), by: email },
     }).eq("id", orderId);
     if (ue) return { ok: false, error: ue.message };

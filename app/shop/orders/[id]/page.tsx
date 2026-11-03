@@ -46,8 +46,7 @@ import { labelFileName } from "@/lib/printavoNames";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
 import SendProofTool from "@/components/tools/SendProofTool";
-import { acceptRequest, requestProofApproval, sendToCustomer, simpleOrderActivity, staffMessage } from "../../actions";
-import CreateOrderTool from "@/components/tools/CreateOrderTool";
+import { acceptRequest, requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
 import MenuItem from "@/components/MenuItem";
 import ChargeOnFile from "@/components/ChargeOnFile";
@@ -1013,18 +1012,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
 
   const [recover, setRecover] = useState<{ at: number; o: Order } | null>(null);
-  // a simple order from the portal: Create order (the one tool) reads their answers and files and fills this order in
-  const [simpleAct, setSimpleAct] = useState<{ id: string; text: string } | null>(null);
   /** a customer's portal reorder of an old-system job: the Create reorder tool, filling in this order (Nov 1) */
   const [pvReorder, setPvReorder] = useState(false);
-  const [simpleBusy, setSimpleBusy] = useState("");
-  const buildSimple = async () => {
-    setSimpleBusy("Bringing in what they sent…");
-    if (!o) return;
-    const r = await simpleOrderActivity(o.id);
-    setSimpleBusy(r.ok ? "" : r.error);
-    if (r.ok) setSimpleAct({ id: r.activityId, text: r.text });
-  };
   // ---- drafts: Save gives it its number; Discard sets it aside (never deleted; it never had a number) ----
   const [leaveTo, setLeaveTo] = useState<string | null>(null);
   async function commitDraft() {
@@ -1368,18 +1357,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         const lines = orderGroups(o).flatMap((g) => g.lines.map((l) => ({ style: l.style, color: l.color, sizes: Object.fromEntries(Object.entries(l.sizes || {}).filter(([, v]) => +v! > 0).map(([z, v]) => [z, +v!])) })));
         return <ReorderPick archivedId={re.archived_id} into={o.id} given={lines.some((l) => Object.keys(l.sizes).length) ? { source: "the customer's reorder", lines } : undefined} onClose={() => setPvReorder(false)} />;
       })()}
-      {(o as Order & { simple_order?: { reorder?: unknown } | null }).simple_order != null && !(o as Order & { simple_order?: { reorder?: unknown } | null }).simple_order?.reorder && o.status === "request" && (() => {
-        const so = (o as Order & { simple_order: { about?: string; qty?: number | null; garments?: string; method?: string; files?: { name: string }[] } }).simple_order;
-        return (
-          <div className="draft-bar" role="status">
-            <span><b>Simple order{so.method ? ` (${({ screen: "screen printing", embroidery: "embroidery", transfer: "transfers", mixed: "mixed" } as Record<string, string>)[so.method] || so.method})` : ""}.</b> They sent the details instead of filling in the form{so.qty ? ` (about ${so.qty} pcs)` : ""}{so.files?.length ? `, with ${so.files.length} file${so.files.length === 1 ? "" : "s"}` : ""}.{so.about ? <> &ldquo;{so.about.slice(0, 220)}{so.about.length > 220 ? "…" : ""}&rdquo;</> : null}{so.garments ? <> Garments: {so.garments.slice(0, 120)}</> : null}{simpleBusy ? <> <i>{simpleBusy}</i></> : null}</span>
-            <span className="spacer" />
-            <button type="button" className="btn primary" disabled={!!simpleBusy && simpleBusy.endsWith("…")} onClick={() => void buildSimple()}>Build it with Create order</button>
-          </div>
-        );
-      })()}
       {digitize != null && o && <DigitizerTool orderId={o.id} imprintId={digitize || undefined} onClose={() => setDigitize(null)} />}
-      {simpleAct && <CreateOrderTool activityId={simpleAct.id} text={simpleAct.text} guess="new" onClose={() => setSimpleAct(null)} onCreated={() => { setSimpleAct(null); window.location.reload(); }} />}
       {(o as Order & { cancel_requested_at?: string | null }).cancel_requested_at && (
         <div className="draft-bar" role="alert">
           <span><b>The customer asked to cancel</b> ({(o as Order & { cancel_reason?: string }).cancel_reason || "no reason given"}) on {new Date(String((o as Order & { cancel_requested_at?: string | null }).cancel_requested_at)).toLocaleDateString()}. Their note is in Messages; reply there and change the status if you cancel it.</span>
@@ -1576,7 +1554,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
       )}
-      {o.status === "request" && (
+      {o.status === "request" && !((o as Order & { simple_order?: { reorder?: unknown } | null }).simple_order != null && !(o as Order & { simple_order?: { reorder?: unknown } | null }).simple_order?.reorder) && (
         <div className="callout req-callout">
           <h2>Order request from the customer{o.submitted_at ? ` · sent ${new Date(o.submitted_at).toLocaleDateString()}` : " · still being built by the customer"}</h2>
           <div className="muted">They built this in their portal without prices. Prices below are <b>suggested from your pricing matrix</b>, with blank costs filled in from the garment catalog. Adjust anything, answer their questions in Messages, then finalize. They&apos;ll get it back as a quote for their final approval.</div>
