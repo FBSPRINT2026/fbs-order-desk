@@ -157,6 +157,8 @@ async function accessToken(admin: SupabaseClient, force = false): Promise<{ real
   })();
   try { return await refreshing; } finally { refreshing = null; }
 }
+/** a current access token, for the other QuickBooks APIs (Payments) */
+export async function qboAccess(admin: SupabaseClient) { return accessToken(admin); }
 /** Refresh the sign-in now (keeps the 100-day refresh token from lapsing while the sync is off). */
 export async function keepAlive(admin: SupabaseClient) { await accessToken(admin, true); }
 

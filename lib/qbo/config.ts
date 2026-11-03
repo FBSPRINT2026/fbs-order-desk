@@ -9,7 +9,9 @@ import { SITE_URL } from "@/lib/config";
  *   QBO_WEBHOOK_TOKEN                 optional; the webhook "verifier token", to accept QuickBooks' change notices
  * Nothing here returns a secret: only whether each one is set.
  */
-export const QBO_SCOPE = "com.intuit.quickbooks.accounting";
+// accounting (the books) and payment (QuickBooks Payments: bank transfers taken in the portal, Nov 3, Nick: "I can take ACH
+// through QuickBooks Payments"); a sign-in from before has only accounting until QuickBooks is connected again
+export const QBO_SCOPE = "com.intuit.quickbooks.accounting com.intuit.quickbooks.payment";
 export const QBO_AUTH_URL = "https://appcenter.intuit.com/connect/oauth2";
 export const QBO_TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 export const QBO_REVOKE_URL = "https://developer.api.intuit.com/v2/oauth2/tokens/revoke";

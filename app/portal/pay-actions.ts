@@ -84,9 +84,11 @@ const cardFee = (sum: number, pct: number) => r2((sum * Math.max(0, pct)) / 100)
  */
 export async function payOrders(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "card" | "bank"; paymentMethodId: string; applyAmount?: number; receiptTo?: string;
   /** keep this card / bank account on file (they ticked the box and saw the authorization) */ save?: boolean;
-  /** pay with one of their saved ones (our id; the server looks up Stax's) */ savedId?: string }): Promise<Result> {
+  /** pay with one of their saved ones (our id; the server looks up Stax's) */ savedId?: string;
+  /** a bank transfer through QuickBooks Payments (Nov 3): the account typed in, charged once, never kept */ bank?: import("@/lib/qbo/payments").BankIn }): Promise<Result> {
   try {
-    if (!process.env.STAX_API_KEY) return { ok: false, error: "Online payments aren't set up yet. Please contact the shop." };
+    const viaQbo = input.method === "bank" && !!input.bank && !input.savedId;
+    if (!viaQbo && !process.env.STAX_API_KEY) return { ok: false, error: "Online payments aren't set up yet. Please contact the shop." };
     const { admin, email, settings, lines, customer } = await owed(input.items, input.applyAmount);
     // a run of failed tries locks the pay form for a while (a bot testing stolen cards)
     const since = new Date(Date.now() - 30 * 60000).toISOString();
@@ -101,41 +103,54 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
       pmId = sp.stax_pm_id; saved = { id: sp.id, method: sp.method };
       input.method = sp.method === "bank" ? "bank" : "card";
     }
-    if (!/^[\w-]{6,}$/.test(pmId)) return { ok: false, error: "Enter your payment details again." };
+    if (!viaQbo && !/^[\w-]{6,}$/.test(pmId)) return { ok: false, error: "Enter your payment details again." };
+    if (viaQbo && (!/^\d{9}$/.test(input.bank!.routing) || !/^\d{4,17}$/.test(input.bank!.account) || !input.bank!.name.trim())) return { ok: false, error: "Check the name, routing number and account number." };
     const sum = r2(lines.reduce((a, l) => a + l.amount, 0));
     const fee = input.method === "card" ? cardFee(sum, settings.pay.cardFeePct) : 0;
     const total = r2(sum + fee);
     const ref = lines.map((l) => `#${l.o.number}`).join(", ");
-    const res = await fetch(`${STAX_API}/charge`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.STAX_API_KEY}`, "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        payment_method_id: pmId,
-        total,
-        pre_auth: 0,
-        meta: {
-          reference: ref.slice(0, 200),
-          memo: `${settings.shop.name} ${lines.length > 1 ? "orders" : "order"} ${ref}`.slice(0, 200),
-          subtotal: sum,
-          ...(fee ? { surcharge: fee } : {}),
-          lineItems: lines.map((l) => ({ item: `Order #${l.o.number}`, details: l.o.nickname || "", quantity: 1, price: l.amount })),
-          transaction_initiation_type: "CIT",
-          transaction_schedule_type: "unscheduled",
-        },
-      }),
-    });
-    const txn = await res.json().catch(() => ({} as Record<string, unknown>));
-    if (!res.ok || !txn || txn.success === false) {
-      const why = (txn && (txn.message || (Array.isArray(txn.error) ? txn.error.join(" ") : txn.error))) || `The payment didn't go through (${res.status}).`;
-      await admin.from("pay_attempts").insert({ customer_id: customer?.id || null, email, ok: false, amount: total, error: String(why).slice(0, 300) });
-      return { ok: false, error: String(why) };
+    let txn: Record<string, unknown> = {};
+    if (viaQbo) {
+      // the bank transfer through QuickBooks Payments
+      const { qboEcheck } = await import("@/lib/qbo/payments");
+      const r = await qboEcheck(admin, total, { ...input.bank!, phone: input.bank!.phone || (customer as { phone?: string } | undefined)?.phone || "" }, `${settings.shop.name} ${ref}`);
+      if (!r.ok) {
+        await admin.from("pay_attempts").insert({ customer_id: customer?.id || null, email, ok: false, amount: total, error: r.error.slice(0, 300) });
+        return { ok: false, error: r.error };
+      }
+      txn = { id: `qbo-echeck:${r.id}`, status: r.status };
+    } else {
+      const res = await fetch(`${STAX_API}/charge`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.STAX_API_KEY}`, "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          payment_method_id: pmId,
+          total,
+          pre_auth: 0,
+          meta: {
+            reference: ref.slice(0, 200),
+            memo: `${settings.shop.name} ${lines.length > 1 ? "orders" : "order"} ${ref}`.slice(0, 200),
+            subtotal: sum,
+            ...(fee ? { surcharge: fee } : {}),
+            lineItems: lines.map((l) => ({ item: `Order #${l.o.number}`, details: l.o.nickname || "", quantity: 1, price: l.amount })),
+            transaction_initiation_type: "CIT",
+            transaction_schedule_type: "unscheduled",
+          },
+        }),
+      });
+      txn = await res.json().catch(() => ({} as Record<string, unknown>));
+      if (!res.ok || !txn || txn.success === false) {
+        const why = (txn && (txn.message || (Array.isArray(txn.error) ? txn.error.join(" ") : txn.error))) || `The payment didn't go through (${res.status}).`;
+        await admin.from("pay_attempts").insert({ customer_id: customer?.id || null, email, ok: false, amount: total, error: String(why).slice(0, 300) });
+        return { ok: false, error: String(why) };
+      }
     }
     await admin.from("pay_attempts").insert({ customer_id: customer?.id || null, email, ok: true, amount: total });
     if (saved) await admin.from("saved_payment_methods").update({ last_used_at: new Date().toISOString() }).eq("id", saved.id);
     // kept on file: Stax's id and what's on a receipt (brand, last 4, expiry), read from Stax itself
-    if (input.save && !saved && customer?.id) await keepOnFile(admin, customer.id, pmId, input.method, email, settings.shop.name).catch(() => null);
+    if (input.save && !saved && !viaQbo && customer?.id) await keepOnFile(admin, customer.id, pmId, input.method, email, settings.shop.name).catch(() => null);
     // record it on each order; the card fee is split across them so the order balances stay exact
-    const methodName = input.method === "card" ? "Credit card" : "ACH";
+    const methodName = input.method === "card" ? "Credit card" : viaQbo ? "ACH (QuickBooks)" : "ACH";
     let feeLeft = fee;
     const today = new Date().toISOString().slice(0, 10);
     const rows = lines.map((l, i) => {
