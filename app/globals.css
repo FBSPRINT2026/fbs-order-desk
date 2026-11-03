@@ -19887,3 +19887,15 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .pdx .pjt > .chips > .chip{white-space:nowrap!important;font-size:12.5px;gap:5px}
   .pdx .pjt > .chips > .chip .chip-n{min-width:16px;padding:0 5px}
 }
+/* a customer's logos on the shop side, on a phone (Nov 3, Nick: "Shop side artwork is weird"): each sew file is one short
+   line (its name, size and stitches); the goods picker, EMB / Worksheet links, remove and the brand mover stay on a
+   computer, where they're set. Add sew file stays, small. */
+@media (max-width:640px){
+  .cb-tbl .cb-sews{gap:2px}
+  .cb-tbl .cb-sew{flex-wrap:nowrap;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-size:12.5px}
+  .cb-tbl .cb-sew > a:first-child{margin-right:4px}
+  .cb-tbl .cb-sew > :is(select,button,a:not(:first-child)){display:none}
+  .cb-tbl .cb-row-acts > select{display:none}
+  .cb-tbl .cb-row-acts .btn.sm{height:30px;font-size:12.5px;padding:0 10px}
+  .cb-tbl .cb-pic{width:56px}
+}
