@@ -40,7 +40,18 @@ async function stax(): Promise<Check> {
     const status = m.status ? `, account ${String(m.status).toLowerCase()}` : "";
     const hosted = m.hosted_payments_token;
     const webNote = !web ? "; STAX_WEB_PAYMENTS_TOKEN is missing" : hosted ? (hosted === web ? "; web payments token matches" : "; web payments token does NOT match this merchant") : "; web payments token is set";
-    return { ok: !!web && (!hosted || hosted === web), detail: `connected to ${name}${status}${webNote}` };
+    // which kinds of payment the merchant can take (Nov 3: bank transfers came back "no tokenization gateway found"): the
+    // merchant's ACH / bank / gateway settings and its gateways, names and kinds only (never a key or token)
+    const safe = (o: Record<string, unknown>) => Object.entries(o || {}).filter(([k, v]) => /ach|bank|gateway|echeck|tokeniz|card|type|default|processor|name/i.test(k) && !/token|key|secret|pass|cred|account_number|routing/i.test(k) && (typeof v === "boolean" || (typeof v === "string" && v.length < 60) || typeof v === "number")).map(([k, v]) => `${k}=${v}`);
+    const flags = safe(m).filter((x) => /ach|bank|gateway|echeck|tokeniz/i.test(x));
+    let gws = "";
+    if (m.id) {
+      const g = await fetch(`https://apiprod.fattlabs.com/merchant/${m.id}/gateway`, { headers: { Authorization: `Bearer ${key}`, Accept: "application/json" } }).catch(() => null);
+      const gj = g ? await g.json().catch(() => null) : null;
+      const list = Array.isArray(gj) ? gj : Array.isArray(gj?.data) ? gj.data : null;
+      gws = g ? (list ? `; gateways: ${list.map((x: Record<string, unknown>) => `[${safe(x).join(" ")}]`).join(" ") || "none"}` : `; gateways: HTTP ${g.status}`) : "";
+    }
+    return { ok: !!web && (!hosted || hosted === web), detail: `connected to ${name}${status}${webNote}${flags.length ? `; ${flags.join(" ")}` : ""}${gws}`.slice(0, 1500) };
   } catch (e) { return { ok: false, detail: clip(e instanceof Error ? e.message : String(e)) }; }
 }
 
