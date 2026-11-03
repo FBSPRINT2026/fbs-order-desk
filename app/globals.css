@@ -19734,3 +19734,4 @@ html body .ord .line-b .gl-list .gl .a-ea input,html body .ord .line-b.fit-s .gl
 .tbl.cu-tbl.rqd-tbl td{vertical-align:middle}
 .tbl.cu-tbl.rqd-tbl td.cu-rail{vertical-align:top}
 .rqd-tbl .rqd-sort{white-space:nowrap}
+.pod-om p.pod-om-t{white-space:pre-wrap;font-weight:400;font-size:14px;line-height:1.55;color:var(--ink);margin:0;overflow-wrap:anywhere}

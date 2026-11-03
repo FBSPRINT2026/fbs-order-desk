@@ -225,7 +225,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 <section className="panel pod-so">
                   <div className="panel-h"><h2>What you sent us</h2><span className="faint">Exactly as you sent it</span></div>
                   <div className="panel-b">
-                    {lines.length > 0 && <div className="pod-om"><b className="pod-om-h">Original message</b>{lines.length > 1 ? <ul>{lines.map((x, i) => <li key={i}>{x}</li>)}</ul> : <p>{lines[0]}</p>}</div>}
+                    {/* their words with their own line breaks and spacing, like ClickUp shows them (Nov 2, Nick: "it can't all be bullet points") */}
+                    {lines.length > 0 && <div className="pod-om"><b className="pod-om-h">Original message</b><p className="pod-om-t">{String(so.about || "").trim()}</p></div>}
                     {rows.length > 0 && <><div className="pod-so-sec">Order form</div><div className="pod-so-rows">{rows.map(([k, v]) => <Fragment key={k}><span>{k}</span><b>{v}</b></Fragment>)}</div></>}
                     {sz.length > 0 && <><div className="pod-so-sec">Sizes</div>
                       <div className="tbl-wrap pod-so-szw"><table className="tbl pod-so-sz" data-nofit>
