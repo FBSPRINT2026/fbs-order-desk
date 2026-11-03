@@ -279,6 +279,7 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
   // confirm all the details… And there's just upload a simple order… when's it due, where's it going, about how many
   // units, upload art, upload PO. If you have it, tell us about the goods")
   const [poBusy, setPoBusy] = useState("");
+  const [poAsk, setPoAsk] = useState(false);
   const [poRead, setPoRead] = useState<{ read: PoRead; files: RqFile[] } | null>(null);
   const [simple, setSimple] = useState<{ name: string; about: string; due: string; po: string; method: "" | "screen" | "embroidery" | "transfer" | "mixed"; qty: string; goodsOn: boolean; garments: string; files: RqFile[]; note: string; otype?: string } | null>(null);
   const [simpleBusy, setSimpleBusy] = useState("");
@@ -499,21 +500,39 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
       {/* the side cards: a short title, one line under it (Oct 24, Nick: "these side panels look really bad… just says have PO or simple order") */}
       <section className="rq-card">
         <h3>Skip the form</h3>
-        <div className="rq-fast rq-fast3">
-          <label className={"rq-fast-o" + (preview || poBusy ? " off" : "")} title="We read your PO and fill in the form; you check it before it's sent">
-            <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M12 17v-6M9 14l3-3 3 3" /></svg></span>
-            <b>{poBusy ? "Reading…" : "Upload PO"}</b>
-            <input type="file" hidden multiple disabled={preview || !!poBusy} accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xlsm,.csv,.tsv,.txt,.docx,.zip,application/pdf,image/*" onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; void uploadPo(l); }} />
-          </label>
-          <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => openSimple()} title="A few questions and your files; we build it for you">
+        {/* Simple order on top and highlighted, Upload PO and Place a reorder smaller under it (Nov 3, Nick) */}
+        <div className="rqf">
+          <button type="button" className="rqf-main" disabled={preview || !!poBusy} onClick={() => openSimple()} title="A few questions and your files; we build it for you">
             <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></svg></span>
-            <b>Simple order / quote</b>
+            <span className="rqf-t"><b>Simple order / quote</b><small>Tell us the basics, we build it</small></span>
           </button>
-        <button type="button" className="rq-fast-o" disabled={preview || !!poBusy} onClick={() => setRe({ q: "", list: null, pick: "", busy: "", text: "" })} title="Pick a past order; it fills in the form and you change the quantities">
-          <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5" /></svg></span>
-          <b>Place a reorder</b>
-        </button>
+          <div className="rqf-two">
+            <button type="button" className="rqf-sm" disabled={preview || !!poBusy} onClick={() => setPoAsk(true)} title="I read your PO and fill in the form; you check it before it's sent">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M12 17v-6M9 14l3-3 3 3" /></svg>
+              {poBusy ? "Reading…" : "Upload PO"}
+            </button>
+            <button type="button" className="rqf-sm" disabled={preview || !!poBusy} onClick={() => setRe({ q: "", list: null, pick: "", busy: "", text: "" })} title="Pick a past order; it fills in the form and you change the quantities">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.2L3 16M3 21v-5h5" /></svg>
+              Place a reorder
+            </button>
+          </div>
         </div>
+        {/* Upload PO asks first, in the AI's own words (Nov 3, Nick: "just have it read like an AI") */}
+        {poAsk && (
+          <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Upload a PO" onClick={() => setPoAsk(false)}>
+            <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+              <h3>Upload a PO</h3>
+              <p className="dla-sub">Upload your PO and I&apos;ll try to fill in the order form for you. I&apos;m trained to read POs and invoices from systems like CommonSKU and QuickBooks.</p>
+              <label className="rqf-drop">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg>
+                <span><b>Choose your PO</b><small>PDF, picture or spreadsheet</small></span>
+                <input type="file" hidden multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xlsm,.csv,.tsv,.txt,.docx,.zip,application/pdf,image/*" onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; if (!l.length) return; setPoAsk(false); void uploadPo(l); }} />
+              </label>
+              <p className="rqf-note">Please check every detail before you send the request. If anything&apos;s wrong, send a Simple order instead, like always.</p>
+              <div className="dla-acts"><button type="button" className="btn ghost" onClick={() => setPoAsk(false)}>Cancel</button></div>
+            </div>
+          </div>
+        )}
         {poBusy && <p className="rq-card-busy">{poBusy}</p>}
       </section>
       {goods && (
