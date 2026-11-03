@@ -191,8 +191,9 @@ export function OrderActions({ orderId, kind, archived, cancelAsked, disabled }:
  * Pay this order (Oct 24, Nick: "get rid of that payment tab the way it is… exactly the same panel and button that's on the
  * payment screen"): what's owed and one Pay button; the pay window opens over the page, same as the Payments tab.
  */
-export function PayButton({ item, pay, staxToken, canAct, receiptEmail, due = true }: { item: PayItem; pay: { cardFeePct: number; zelle: string; venmo: string }; staxToken: string; canAct: boolean; receiptEmail: string; /** show "Balance due" above the button (off where the balance is already shown) */ due?: boolean }) {
-  const [open, setOpen] = useState(false);
+export function PayButton({ item, pay, staxToken, canAct, receiptEmail, due = true, autoOpen = false }: { item: PayItem; pay: { cardFeePct: number; zelle: string; venmo: string }; staxToken: string; canAct: boolean; receiptEmail: string; /** show "Balance due" above the button (off where the balance is already shown) */ due?: boolean;
+  /** open the pay window at once (the review page's Pay now / Approve and proceed to payment: ?pay=1) */ autoOpen?: boolean }) {
+  const [open, setOpen] = useState(!!autoOpen);
   return (
     <>
       {due && <div className="pb-due"><span>Balance due</span><b className="num">{fmtMoney(item.balance)}</b></div>}

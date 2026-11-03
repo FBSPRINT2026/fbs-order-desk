@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import type { StepView } from "@/lib/customerSend";
 import ProofAnswer from "./ProofAnswer";
 import { PREVIEW_OFF, PreviewCtx, usePreview } from "./previewCtx";
-import { answerProof, answerQuote, approveAll, payByLink } from "./actions";
+import { answerProof, answerQuote, approveAll } from "./actions";
 
 /**
  * The order's customer page, one screen at a time (Oct 29, Nick: "you would click on the first thing, the proof, when it
@@ -18,11 +18,11 @@ const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency
 const whoWhen = (s: StepView) => [s.who, s.when ? new Date(s.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""].filter(Boolean).join(" · ");
 const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
 
-export default function OrderSteps({ id, steps, preview = false }: { id: string; orderId?: string; steps: StepView[]; preview?: boolean }) {
-  return <PreviewCtx.Provider value={preview}><Steps id={id} steps={steps} /></PreviewCtx.Provider>;
+export default function OrderSteps({ id, orderId = "", steps, preview = false }: { id: string; orderId?: string; steps: StepView[]; preview?: boolean }) {
+  return <PreviewCtx.Provider value={preview}><Steps id={id} orderId={orderId} steps={steps} /></PreviewCtx.Provider>;
 }
 
-function Steps({ id, steps }: { id: string; steps: StepView[] }) {
+function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: StepView[] }) {
   const router = useRouter();
   const todo = steps.filter((s) => (s.state === "todo" || s.state === "locked") && s.kind !== "deposit");
   const [cur, setCur] = useState((todo[0] || steps.find((s) => s.state === "todo") || steps[0])?.key || "");
@@ -74,9 +74,9 @@ function Steps({ id, steps }: { id: string; steps: StepView[] }) {
         </ol>
         <div className="pfl-ans-wrap">
           {doneMsg ? (() => { const dp = steps.find((s) => s.kind === "deposit" && s.state === "todo"); return dp
-              ? <><Result tone="ok" title="Thank you for your approval!" line={`Here's your ${dp.title === "Pay now" ? "payment" : "deposit"} of ${m(dp.amount || 0)}. Once we have it, we'll get started.`} /><PayNow id={id} label={`${dp.title} · ${m(dp.amount || 0)}`} /></>
+              ? <><Result tone="ok" title="Thank you for your approval!" line={`Here's your ${dp.title === "Pay now" ? "payment" : "deposit"} of ${m(dp.amount || 0)}. Once we have it, we'll get started.`} /><PayNow orderId={orderId} label={`${dp.title} · ${m(dp.amount || 0)}`} /></>
               : <Result tone="ok" title="You're all set. Thank you!" line={doneMsg} />; })()
-            : showFinal ? <Final key="final" id={id} todo={todo} ok={ok} goTo={(k) => { setCur(k); setFinal(false); }} onDone={(msg) => { setDoneMsg(msg); router.refresh(); }} onBack={(kind, note) => { if (quote) setBack((b) => ({ ...b, [quote.key]: { kind, note } })); router.refresh(); }} />
+            : showFinal ? <Final key="final" id={id} orderId={orderId} todo={todo} ok={ok} goTo={(k) => { setCur(k); setFinal(false); }} onDone={(msg) => { setDoneMsg(msg); router.refresh(); }} onBack={(kind, note) => { if (quote) setBack((b) => ({ ...b, [quote.key]: { kind, note } })); router.refresh(); }} />
             : (step.kind === "art" || step.kind === "sewout") && step.state === "todo"
               ? <LookOver key={step.key} id={id} step={step} note0={ok[step.key] || ""} nextLabel={next ? (next.kind === "quote" || next.kind === "invoice" ? `review ${name0(next)}` : `see ${name0(next)}`) : ""} isLast={!next} onGood={goNext} onChanges={(note) => { setBack((b) => ({ ...b, [step.key]: { kind: "changes", note } })); router.refresh(); }} />
             : (step.kind === "art" || step.kind === "sewout")
@@ -88,7 +88,7 @@ function Steps({ id, steps }: { id: string; steps: StepView[] }) {
             : step.kind === "deposit" && (step.state === "done"
               ? <Result tone="ok" title={step.title} line={step.sub} />
               : <div className="pfl-ans"><div style={{ fontSize: 14 }}><b>{m(step.amount || 0)}</b> {step.title === "Pay now" ? "is due to start your order" : "starts production"}.</div>
-                  <PayNow id={id} label={step.title} /></div>)}
+                  <PayNow orderId={orderId} label={step.title} /></div>)}
           {!doneMsg && !showFinal && last && !(step.key in ok) && idx >= 0 && <div className="pfl-fine" style={{ marginTop: 8 }}>Step {idx + 1} of {todo.length}. You&apos;ll approve everything together at the end.</div>}
         </div>
       </aside>
@@ -146,12 +146,13 @@ function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { i
 
 /** the last screen: what they looked over, their name once, Submit approval; under it, Request changes and Decline the
  *  quote (Oct 29, Nick: "two small buttons under submit approval… request changes… decline the quote") */
-function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepView[]; ok: Record<string, string>; goTo: (k: string) => void; onDone: (msg: string) => void; onBack: (kind: "changes" | "declined", note: string) => void }) {
+function Final({ id, orderId, todo, ok, goTo, onDone, onBack }: { id: string; orderId: string; todo: StepView[]; ok: Record<string, string>; goTo: (k: string) => void; onDone: (msg: string) => void; onBack: (kind: "changes" | "declined", note: string) => void }) {
   const pv = usePreview();
   const [name, setName] = useState(""), [err, setErr] = useState(""), [mode, setMode] = useState<"" | "changes" | "decline">(""), [why, setWhy] = useState(""), [sent, setSent] = useState<"" | "changes" | "declined">("");
   const [pending, start] = useTransition();
   const quote = todo.find((s) => s.kind === "quote" || s.kind === "invoice");
   const isInv = quote?.kind === "invoice";
+  const payFirst = !!quote?.payFirst && !isInv;
   const looks = todo.filter((s) => s.kind !== "quote" && s.kind !== "invoice");
   const missing = looks.find((s) => !(s.key in ok));
   const parts = [...(looks.some((s) => s.kind === "art") ? ["art"] : []), ...(looks.some((s) => s.kind === "sewout") ? ["sew-out"] : [])];
@@ -165,6 +166,8 @@ function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepV
     const r = await approveAll(id, name, { art: art ? { note: ok[art.key] || "" } : null, sewouts: looks.filter((s) => s.kind === "sewout").map((s) => ({ id: s.sewoutId!, note: ok[s.key] || "" })), quote: !!quote && !isInv, invoice: isInv });
     if (!r.ok) { setErr(r.error); return; }
     onDone(`We've got your approval for the ${label}. We'll take it from here.`);
+    // paid up front: straight on to the payment (Nov 3, Nick: "approve and proceed to payment")
+    if (payFirst && orderId) window.location.href = payHref(orderId);
   });
   const sendBack = (decision: "changes" | "decline") => start(async () => {
     setErr("");
@@ -188,7 +191,7 @@ function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepV
         </ul>
         <label className="pfl-lbl" htmlFor="pfl-fn">Your name</label>
         <input id="pfl-fn" type="text" autoComplete="name" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} />
-        <button type="button" className="btn primary pfl-ok pfl-big" disabled={pending || name.trim().length < 2} onClick={submit}>{pending ? "Sending…" : "Submit approval"}</button>
+        <button type="button" className="btn primary pfl-ok pfl-big" disabled={pending || name.trim().length < 2} onClick={submit}>{pending ? "Sending…" : payFirst ? "Approve and proceed to payment" : "Submit approval"}</button>
         {/* short on the button, what it means under it (Oct 29, Nick: "just say submit for approve, and something says below… submit final approval for invoice") */}
         <div className="pfl-sub-ok">Final approval for the {label}</div>
         <div className="pfl-fine">Typing your name approves {quote ? `the ${priceWord} and says the art is ready to make as shown` : "it as shown"}.</div>
@@ -222,21 +225,23 @@ function Result({ tone, title, line, note, who }: { tone: "ok" | "chg" | "no"; t
   );
 }
 
-/** pay what's due now by card, right here (no sign-in): opens Stripe, and the payment lands on the order by itself */
-function PayNow({ id, label }: { id: string; label: string }) {
+/** where they pay: the order in their portal with the pay window open (the same one as the Payments tab: card through Stax,
+ *  bank through QuickBooks, Zelle, Venmo). Nov 3, Nick: "this says online payments aren't set up yet" (it still went to
+ *  Stripe, which isn't used). Signs them in first if needed, and comes back to it. */
+export const payHref = (orderId: string) => `/portal/orders/${orderId}?view=1&pay=1`;
+function PayNow({ orderId, label }: { orderId: string; label: string }) {
   const pv = usePreview();
-  const [err, setErr] = useState(""), [pending, start] = useTransition();
-  const go = () => start(async () => {
+  const [err, setErr] = useState(""), [going, setGoing] = useState(false);
+  const go = () => {
     setErr("");
     if (pv) { setErr(PREVIEW_OFF); return; }
-    const r = await payByLink(id);
-    if (!r.ok) { setErr(r.error); return; }
-    window.location.href = r.url;
-  });
+    if (!orderId) { setErr("Open your portal to pay, or call us."); return; }
+    setGoing(true); window.location.href = payHref(orderId);
+  };
   return (
     <div className="pfl-pay">
-      <button type="button" className="btn primary pfl-ok pfl-big" disabled={pending} onClick={go}>{pending ? "Opening the payment page…" : label}</button>
-      <div className="pfl-fine">Secure card payment through Stripe.</div>
+      <button type="button" className="btn primary pfl-ok pfl-big" disabled={going} onClick={go}>{going ? "Opening payment…" : label}</button>
+      <div className="pfl-fine">Pay by card, bank transfer, Zelle or Venmo in your secure portal.</div>
       {err && <div className="pv-err">{err}</div>}
     </div>
   );

@@ -1157,6 +1157,20 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setQbNote(r.ok ? "" : r.message);
     qboOrderState(o.id).then((x) => setQbSt(x.ok ? x : null), () => null);
   }
+  // what the customer did while this page was open (approved, asked for changes, declined, paid) shows when you come back
+  // to the tab, without a reload (Nov 3, Nick: approved in another tab, and Separations still said "waiting on the
+  // customer"). Only the fields they change: nothing being typed here is touched.
+  useEffect(() => {
+    if (!o?.id) return;
+    const back = async () => {
+      if (document.visibilityState !== "visible") return;
+      const { data } = await sb.from("orders").select("status, type, approved_at, approved_name, sent_at, declined_at, declined_reason").eq("id", o.id).maybeSingle();
+      if (data) setO((p) => (p && (p.status !== data.status || p.type !== data.type || (p as { declined_at?: string | null }).declined_at !== data.declined_at || p.approved_at !== data.approved_at) ? ({ ...p, ...data } as Order) : p));
+      loadSide();
+    };
+    document.addEventListener("visibilitychange", back);
+    return () => document.removeEventListener("visibilitychange", back);
+  }, [o?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!qbMenu) return; const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest?.(".qb-wrap")) setQbMenu(false); }; document.addEventListener("click", h); return () => document.removeEventListener("click", h); }, [qbMenu]);
   const qbDeep = useRef("");
   useEffect(() => {
@@ -2105,7 +2119,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <div className="stack">
             {["quote", "request"].includes(o.status) && <DraftArtKeep key={`${o.id}:${drafts.logos}:${drafts.mockups}`} orderId={o.id} customerId={o.customer_id} customer={(() => { const c = customers.find((x) => x.id === o.customer_id); return c ? custLabel(c) : "the customer"; })()} onKept={(m) => { setDrafts({ logos: 0, mockups: 0 }); say(m); }} />}
             <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
-            <OrderSeparations o={o} />
+            <OrderSeparations o={o} stamp={proofs.map((p) => `${p.id}:${p.status}`).join(",")} />
           <ProductionPanel note={prodNotes} onNote={onProdNotes} noteState={noteState} uploading={artUploading}
             files={[...art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note, ...(plain[a.id] ? { plain: plain[a.id] } : {}) })), ...jobPics.map((x) => ({ id: x.id, name: x.name, url: x.url, mime: x.mime, fileName: x.name, category: "photo", note: x.note, readOnly: true }))]}
             onFileNote={(f, t) => { if (f.id.startsWith("jf-")) return; setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, note: t || null } : x))); void sb.from("art_files").update({ note: t || null }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the note: " + error.message); }); }}

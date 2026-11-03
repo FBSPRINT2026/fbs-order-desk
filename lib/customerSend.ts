@@ -243,6 +243,7 @@ export type StepView = {
   key: string; kind: "art" | "sewout" | "quote" | "invoice" | "deposit"; title: string; sub: string;
   state: "todo" | "done" | "changes" | "locked"; pdf: string; sewoutId?: string;
   who?: string; when?: string; comment?: string; amount?: number;
+  /** the quote is paid (in full or a deposit) as soon as it's approved: its button says so (Nov 3, Nick) */ payFirst?: boolean;
 };
 /** The order's customer page (an order link): every step waiting on the customer, in order, and where each stands. */
 export async function orderSteps(admin: SupabaseClient, linkId: string) {
@@ -285,7 +286,7 @@ export async function orderSteps(admin: SupabaseClient, linkId: string) {
   }
   if (quoted || (approved && raw.approved_at)) {
     const up = upFront(customer?.payment_terms, c.total, settings.depositPct);
-    steps.push({ key: "quote", kind: "quote", title: approved ? "Quote approved" : "Approve your quote", sub: approved ? money(c.total) : `${money(c.total)} · ${up.line}`, state: approved ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: raw.approved_name || "", when: raw.approved_at || "", amount: c.total });
+    steps.push({ key: "quote", kind: "quote", title: approved ? "Quote approved" : "Approve your quote", sub: approved ? money(c.total) : `${money(c.total)} · ${up.line}`, state: approved ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: raw.approved_name || "", when: raw.approved_at || "", amount: c.total, payFirst: !approved && up.kind !== "none" && c.total > 0 });
   }
   // the final invoice, once it's been sent after approval (embroidery: the price is final with the sew-out's stitch count)
   if (approved && !["completed", "void"].includes(o.status)) {

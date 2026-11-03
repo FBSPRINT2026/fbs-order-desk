@@ -36,9 +36,9 @@ const garmentName = (g?: string | null, style?: string | null) => {
   return st && t.toLowerCase().endsWith(st) && /(\s-|\.)\s*$/.test(head) ? head.replace(/(\s-|\.)\s*$/, "").trim() : t;
 };
 
-export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string; reviewed?: string; sewout?: string; view?: string }> }) {
+export default async function PortalOrder({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ as?: string; paid?: string; sent?: string; reviewed?: string; sewout?: string; view?: string; pay?: string }> }) {
   const { id } = await params;
-  const { as, paid: justPaid, sent: justSent, reviewed, sewout: sewDone, view } = await searchParams;
+  const { as, paid: justPaid, sent: justSent, reviewed, sewout: sewDone, view, pay: payOpen } = await searchParams;
   const ctx = await getPortalCtx(as, `/portal/orders/${id}`);
   const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).neq("status", "quote").maybeSingle();
   if (!od) notFound();
@@ -403,7 +403,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                   </div>
                   {canPay ? (
                     <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: o.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note }}
-                      pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : cust?.email || ctx.email} due={false} />
+                      pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : cust?.email || ctx.email} due={false} autoOpen={payOpen === "1" && !preview} />
                   ) : c.balance > 0.004 && String(o.status) !== "void" ? (
                     <div className="pay-notready"><b>Not ready to pay yet</b><span>{o.type === "quote" && o.status !== "quote_sent" ? "You can pay once we send your quote." : ps.why}</span></div>
                   ) : o.type === "quote" ? (

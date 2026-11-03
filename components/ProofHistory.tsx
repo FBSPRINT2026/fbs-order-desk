@@ -99,7 +99,7 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
   return (
     <section className="panel ph-panel">
       <div className="panel-h"><h2>Versions</h2><span className="faint">{versions.length ? `${versions.length} sent to the customer, newest first` : "nothing sent yet"}</span></div>
-      <div className="panel-b ph-list">
+      <div className="panel-b ph-list pvr-list">
         {err && <div className="err">{err}</div>}
         {/* the current mockup, when it isn't the version out with the customer: the next version */}
         {unsent.length > 0 && (
@@ -117,8 +117,8 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
           const s = versionState(ps);
           const theirs = ps.find((p) => p.customer_change?.imprints && p.customer_change.imprints.length);
           return (
-            <div className={"ph-row" + (s.old ? " old" : "")} key={v}>
-              <div className="ph-pics">
+            <div className={"pvr-row" + (s.old ? " old" : "")} key={v}>
+              <div className="pvr-pics">
                 {ps.map((r) => (
                   <a key={r.id} className="ph-pic" href={urls[r.file_path] || undefined} target="_blank" rel="noreferrer" title={`${r.title}: open full size`}>
                     {r.file_type.startsWith("image/") && urls[r.file_path] ? <img src={urls[r.file_path]} alt="" /> : <FileThumb name={r.file_path.split("/").pop() || "file"} url={urls[r.file_path]} mime={r.file_type} />}
@@ -126,17 +126,14 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
                 ))}
               </div>
               <div className="ph-body">
-                <div className="ph-top"><b>Version {v}</b>{i === 0 && !s.old && !unsent.length && <span className="ph-cur">Current</span>}</div>
-                <div className="faint ph-sent">{s.sent ? <>Sent {fmtStamp(s.sent)}{s.to ? ` to ${s.to}` : ""}</> : "Not emailed: approved another way"}</div>
-                <div className="ph-title">{ps.map((p) => p.title).join(" · ")}</div>
-                {s.sent && (
-                  <div className="ph-chips">
-                    {s.viewed ? <span className="ph-chip seen">Opened {fmtStamp(s.viewed)}</span> : <span className="ph-chip unseen">Not opened</span>}
-                    {s.views > 1 && <span className="ph-chip">Viewed {s.views} times{s.last ? `, last ${fmtStamp(s.last)}` : ""}</span>}
-                    {s.reminded && <span className="ph-chip">Reminder sent {fmtStamp(s.reminded)}</span>}
-                  </div>
-                )}
-                <div className={"ph-st " + s.tone}>{s.text}{s.dec?.decided_at ? <> · <b>{s.dec.decided_name || "customer"}</b> · {fmtStamp(s.dec.decided_at)}</> : null}</div>
+                {/* one line per version, the same four things in the same place every time (Nov 3, Nick: "hard to read…
+                    version, status, viewed"): which version, where it stands, when it went, whether they've seen it */}
+                <div className="pvr-head">
+                  <div className="pvr-c"><span>Version</span><b>Version {v}{i === 0 && !s.old && !unsent.length && <em className="ph-cur">Current</em>}</b><small>{ps.map((p) => p.title).join(" · ")}</small></div>
+                  <div className="pvr-c"><span>Status</span><b className={"pvr-st " + s.tone}>{s.text}</b>{s.dec?.decided_at ? <small>{s.dec.decided_name || "customer"} · {fmtStamp(s.dec.decided_at)}</small> : null}</div>
+                  <div className="pvr-c"><span>Sent</span>{s.sent ? <><b>{fmtStamp(s.sent)}</b>{s.to ? <small>to {s.to}</small> : null}</> : <><b>Not emailed</b><small>Approved another way</small></>}</div>
+                  <div className="pvr-c"><span>Viewed</span>{!s.sent ? <b className="pvr-st off">—</b> : s.viewed ? <><b>{s.views > 1 ? `${s.views} times` : "Opened"}</b><small>{s.views > 1 && s.last ? `Last ${fmtStamp(s.last)}` : fmtStamp(s.viewed)}</small></> : <b className="pvr-st wait">Not opened</b>}{s.reminded ? <small>Reminder sent {fmtStamp(s.reminded)}</small> : null}</div>
+                </div>
                 {ps.filter((p) => p.customer_comment).map((p) => <div className="ph-note" key={p.id}>{p.customer_comment}</div>)}
                 {ps.map((p) => (p.customer_change?.mockups || []).length ? <div className="ph-own" key={p.id}><span>Their version:</span>{(p.customer_change?.mockups || []).map((m) => urls[m] ? <a key={m} href={urls[m]} target="_blank" rel="noreferrer"><img src={urls[m]} alt="The customer's mockup" /></a> : null)}</div> : null)}
                 {/* what was said while this version was out */}

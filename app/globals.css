@@ -20365,3 +20365,21 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .pfl-top a.pfl-portal{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;margin-left:8px}
 .pfl-top a.pfl-portal:hover{border-color:var(--accent);color:var(--accent)}
 @media (max-width:700px){.pfl-top a.pfl-portal{height:32px;padding:0 10px;margin-left:0}}
+
+/* Versions (Art & production): each version one row: picture, then Version / Status / Sent / Viewed in columns (Nov 3, Nick) */
+.pvr-list{container:pvr / inline-size}
+.pvr-row{display:grid;grid-template-columns:64px minmax(0,1fr);gap:14px;padding:12px 0;border-bottom:1px solid var(--line-2,var(--line))}
+.pvr-row:last-child{border-bottom:0}
+.pvr-pics{display:flex;flex-direction:column;gap:6px}
+.pvr-row .ph-pic{width:64px;height:64px}
+.pvr-row.old .ph-pic{opacity:.7}
+.pvr-row .ph-body{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:13px}
+.pvr-head{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(3,minmax(0,1fr));gap:8px 18px;align-items:start}
+.pvr-c{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pvr-c>span{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.pvr-c>b{font-size:14px;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:6px;flex-wrap:wrap;white-space:nowrap}
+.pvr-c>b em{font-style:normal}
+.pvr-c>small{font-size:12px;color:var(--ink-3);overflow-wrap:anywhere}
+.pvr-st.ok{color:var(--ok)}.pvr-st.bad{color:var(--danger)}.pvr-st.wait{color:var(--warn)}.pvr-st.off{color:var(--ink-3)}
+@container pvr (max-width:600px){.pvr-head{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container pvr (max-width:300px){.pvr-head{grid-template-columns:minmax(0,1fr)}.pvr-row{grid-template-columns:minmax(0,1fr)}.pvr-pics{flex-direction:row}}
