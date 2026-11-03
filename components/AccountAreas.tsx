@@ -447,8 +447,6 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
         {orderTypes.length > 0 && <div className="aa-lane" role="radiogroup" aria-label="Order type"><span>Show</span><div className="aa-lane-seg" style={{ gridTemplateColumns: `repeat(${orderTypes.length + 1},minmax(0,1fr))` }}>
           {["all", ...orderTypes].map((k) => { const n = k === "all" ? 0 : [...quotes, ...invoices].filter((o) => o.order_lane === k && !o.archived && o.status !== "completed").length; return <button key={k} type="button" role="radio" aria-checked={ln === k} className={ln === k ? "on" : ""} onClick={() => setLane(k)}>{k === "all" ? "All" : k}{n ? <em>{n}</em> : null}</button>; })}
         </div></div>}
-        {/* on the tab bar, at the right (Nov 2, Nick: "causing a spacing issue… move that on the main bar") */}
-        {tab === "quotes" && <label className="check aa-oldq aa-oldq-bar"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}
         <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
       </div>
       {tab === "all" && orderTable(allRows, "invoice", true)}
@@ -480,8 +478,11 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
       </>}
       {tab === "quotes" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
-          {mode !== "portal" && <label className="check aa-oldq"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}</div>
+</div>
         {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
+        {/* under the list, never on a toolbar (Nov 3, Nick: "that show older quotes needs to go somewhere else… it's gonna
+            create issues"): one line to bring in the older and archived ones, and to put them away again */}
+        {(olderN > 0 || oldQuotes) && <button type="button" className="aa-oldq-more" aria-pressed={oldQuotes} onClick={() => setOldQuotes(!oldQuotes)}>{oldQuotes ? "Hide older quotes and archived" : `Show older quotes and archived (${olderN})`}</button>}
       </>}
       {tab === "orders" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(iL.reduce((a, o) => a + o.total, 0))}</span></div>
