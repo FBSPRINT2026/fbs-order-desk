@@ -19479,3 +19479,25 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jrl-sig.live::after{opacity:0;animation:none}
 @media (prefers-reduced-motion:reduce){.jcx>.jrl-mc .jrl-mc-ban,.jcx>.jrl-mc .jrl-mc-ban::after,.jrl-sig b{animation:none}}
 .jcx>.jrl-mc .jrl-sig{z-index:1}
+/* stage cards v3 (Nov 2, Nick): a solid title strip in the stage's color, the steps joined by a line, each step's count in
+   the card's corner on its side; the list's bar a light tint of that color with the department buttons solid in it */
+.jrl-sec{padding:0 0 26px;gap:0;box-shadow:none;overflow:visible}
+.jrl-sec.on{box-shadow:0 0 0 2px var(--c);border-color:transparent}
+.jrl-h{background:var(--c);border-radius:7px 7px 0 0;padding:6px 30px;box-sizing:border-box;width:100%}
+.jrl-h .jrl-t{color:#fff}
+.jrl-h .jrl-n{color:#fff;right:9px;top:6px;font-size:13px}
+.jrl-nm{text-align:center;margin:4px 0 -6px}
+.jrl-ss{position:relative;padding:12px 8px 0;justify-content:space-around}
+.jrl-ss.two::before{content:"";position:absolute;left:25%;right:25%;top:27px;height:3px;border-radius:3px;background:var(--c);opacity:.35}
+.jrl-st{position:relative;z-index:1}
+.jrl-cn{position:absolute;bottom:6px;font-size:13px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.jrl-cn.l{left:10px}.jrl-cn.r{right:10px}
+.jrl-cn.z{color:var(--ink-3);font-weight:600}
+.jc-sbar{background:color-mix(in srgb,var(--c) 15%,var(--surface))}
+.jc-sbar .jc-dseg{background:none;padding:0;gap:4px}
+.jc-sbar .jc-dseg .prf-dept,.jc-sbar .jc-dseg .prf-dept.embroidery,.jc-sbar .jc-dseg .prf-dept.heat,.jc-sbar .jc-dseg .prf-dept.all{background:var(--c);color:#fff;opacity:.55;height:36px!important;min-width:52px}
+.jc-sbar .jc-dseg .prf-dept.z{opacity:.4}
+.jc-sbar .jc-dseg .prf-dept.on,.jc-sbar .jc-dseg .prf-dept.all.on{background:var(--c);color:#fff;opacity:1;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--c)}
+.jc-sbar .chip{background:var(--surface);color:var(--c);border-color:color-mix(in srgb,var(--c) 40%,var(--line))}
+.jc-sbar .chip.on{background:var(--c);color:#fff}
+.jc-sbar input{border-color:var(--line)}

@@ -237,14 +237,16 @@ export default function JobCenter() {
               <span className="jrl-n">{tot ?? "…"}</span>
             </button>
             {nm > 0 && <span className="jrl-nm">{nm} new message{nm === 1 ? "" : "s"}</span>}
-            <div className="jrl-ss">
+            {/* the steps joined by a line, each step's count in the card's corner on its side (Nov 2, Nick: "leads would have a
+                46 all the way on the left side, and requests would have a 2 on the right side… and then we need the line") */}
+            <div className={"jrl-ss" + (g.steps.length > 1 ? " two" : "")}>
               {g.steps.map(([k, l, icon]) => { const nn = count(k); return (
                 <button key={k} type="button" className={"jrl-st" + (!all && !solo && step === k ? " pick" : "")} onClick={() => go(k)} aria-label={`${l}: ${items ? nn : "loading"}`}>
                   <span className="jrl-ic">{icon}</span>
-                  <em className={items && !nn ? "z" : ""}>{items ? nn : "…"}</em>
                   <span className="jrl-sl">{l}</span>
                 </button>); })}
             </div>
+            {g.steps.map(([k, l], i) => { const nn = count(k); return <span key={k} className={"jrl-cn " + (g.steps.length > 1 && i === 0 ? "l" : "r") + (items && !nn ? " z" : "")} title={l}>{items ? nn : "…"}</span>; })}
           </div>
         ); })}
       </div>
