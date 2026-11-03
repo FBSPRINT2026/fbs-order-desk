@@ -56,7 +56,10 @@ const STEPS: Record<TourView, Step[]> = {
     { sel: ".mk-side > section.panel:first-child", t: "Embroidery? Pick your threads", b: "Switch it to embroidery and it finds the closest threads we carry for each color, with a stitch estimate.", img: "/tour/mk-threads.png" },
     { sel: ".mk-more-box", t: "Need more than a logo?", b: "Add words, start from a ready-made design, have AI create one, or open the Design Lab for names and numbers." },
     { sel: ".mk-head .btn.primary", t: "6. Save it to your files", b: "Save mockup keeps it in your Artwork, ready to order from." },
-    { sel: ".mk-head .row", t: "7. Share it with your customers", b: "Sales tools makes a sales sheet: every color on one page, your text and logo on top, ready to download as a picture or PDF. Export PDF makes a sheet you can send.", img: "/tour/mk-sales.png", foot: "You can watch this again from Settings, under Portal layout." },
+    { sel: ".mk-head .row", t: "7. Share it with your customers", b: "Sales tools makes a sales sheet: every color on one page, your text and logo on top, ready to download as a picture or PDF. Export PDF makes a sheet you can send.", img: "/tour/mk-sales.png" },
+    // the last part: from a mockup to an order (Nov 3, Nick: "at the last part of the tutorial… order from the mockup")
+    { t: "8. Order it from your mockup", b: "Every mockup you save is in your Artwork under Your mockups. Click Order on the one you want.", img: "/tour/mk-order-card.png" },
+    { t: "Your order is filled in for you", b: "It opens with the garment, color, print, size and inks from your mockup, and its picture. Add your sizes and send it to us; we price it and send you a confirmation.", img: "/tour/mk-order-built.png", foot: "You can watch this again from Settings, under Portal layout." },
   ],
   simple: [
     OLD_SITE,
