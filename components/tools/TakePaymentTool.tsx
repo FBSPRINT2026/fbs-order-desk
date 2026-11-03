@@ -29,6 +29,7 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
   const stax = useRef<StaxJsT | null>(null), [ready, setReady] = useState(false);
   // the PIN (Nov 3, Nick: "once you hit go, you have to put in the PIN"): asked for at every charge
   const [pins, setPins] = useState<{ mine: boolean; owner: boolean; people: { email: string; name: string; has: boolean }[] } | null>(null);
+  const [pinsOpen, setPinsOpen] = useState(false);
   const [pinAsk, setPinAsk] = useState(false), [pin, setPin] = useState(""), [pinErr, setPinErr] = useState("");
   const loadPins = () => void pinInfo().then((r) => { if (r.ok) setPins(r); });
   useEffect(loadPins, []);
@@ -102,9 +103,26 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
 
   const toggle = (id: string) => setPick((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   return (
+    <div className="stack">
+    {/* the page's top: the title, and the PINs at the far right (Nov 3, Nick: "all the way to the right… set the pin") */}
+    <div className="page-head">
+      <div><h1>Take a Payment</h1><div className="eyebrow">Run a customer&apos;s card for their open invoices: one charge, or one per invoice</div></div>
+      <div className="row" style={{ gap: 8 }}>{pins && <button type="button" className="btn" onClick={() => setPinsOpen(true)}>{pins.owner ? "Payment PINs" : pins.mine ? "Change my PIN" : "Set my PIN"}</button>}</div>
+    </div>
+    {pinsOpen && pins && (
+      <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Payment PINs" onClick={() => setPinsOpen(false)}>
+        <div className="dla tpy-pin" onClick={(e) => e.stopPropagation()}>
+          <h3>{pins.owner ? "Payment PINs" : "Your payment PIN"}</h3>
+          <p className="dla-sub">{pins.owner ? "Everyone who can take payments. Each types their own PIN at every charge." : "4 to 8 numbers, typed at every charge."}</p>
+          {pins.owner ? pins.people.map((p) => <SetPin key={p.email} email={p.email} title={`${p.name}${p.has ? " · PIN set" : " · no PIN yet"}`} button={p.has ? "Change PIN" : "Set PIN"} onDone={loadPins} compact />)
+            : <SetPin title={pins.mine ? "Change your PIN" : "Set your PIN"} onDone={() => { loadPins(); setPinsOpen(false); }} />}
+          <div className="dla-acts"><button type="button" className="btn" onClick={() => setPinsOpen(false)}>Done</button></div>
+        </div>
+      </div>
+    )}
     <div className="tpy">
       <section className="panel tpy-left">
-        <div className="panel-h"><h2>Take a payment</h2><span className="faint">Run a customer&apos;s card for their invoices</span></div>
+        <div className="panel-h"><h2>Customer</h2><span className="faint">Their open invoices</span></div>
         <div className="panel-b stack" style={{ gap: 12 }}>
           <div className="field"><label>Customer</label><CustomerPick field value={cid || null} label={cLabel} onPick={(id, l) => { setCid(id || ""); setCLabel(l); }} /></div>
           {err && !ctx && <div className="err">{err}</div>}
@@ -148,17 +166,9 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
           </form>
         </div>
       )}
-      {pins?.owner && (
-        <section className="panel tpy-pins">
-          <div className="panel-h"><h2>Payment PINs</h2><span className="faint">Who can take payments, and their PIN (only you see this)</span></div>
-          <div className="panel-b stack" style={{ gap: 8 }}>
-            {pins.people.map((p) => <SetPin key={p.email} email={p.email} title={`${p.name}${p.has ? " · PIN set" : " · no PIN yet"}`} button={p.has ? "Change PIN" : "Set PIN"} onDone={loadPins} compact />)}
-          </div>
-        </section>
-      )}
-      {ctx && ctx.invoices.length > 0 && (
-        <section className="panel tpy-right">
+      <section className="panel tpy-right">
           <div className="panel-h"><h2>Charge</h2></div>
+          {!ctx || !ctx.invoices.length ? <div className="panel-b faint">{!ctx ? "Pick a customer to see their cards and what's owed." : "Nothing to charge: they don't owe anything."}</div> : (
           <div className="panel-b stack" style={{ gap: 12 }}>
             <div className="tpy-pms" role="radiogroup" aria-label="Card">
               {ctx.methods.map((m) => (
@@ -216,9 +226,9 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
               {busy ? "Charging…" : `Charge ${groups.length > 1 ? `${groups.length} invoices separately` : `${chosen.length} invoice${chosen.length === 1 ? "" : "s"}`} · ${money(total)}`}
             </button>
             <div className="faint tpy-hint" style={{ textAlign: "center" }}>Receipts go to whoever gets receipts at {ctx.customer.company || ctx.customer.name}.</div>
-          </div>
+          </div>)}
         </section>
-      )}
+    </div>
     </div>
   );
 }
