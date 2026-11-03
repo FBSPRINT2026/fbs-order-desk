@@ -93,14 +93,15 @@ export async function staffMessage(orderId: string, body: string, files: Attachm
   const { error } = await admin.from("messages").insert({ order_id: orderId, topic: tp, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
   if (error) return { ok: false, error: error.message };
   let emailed = false;
-  // the customer can keep messages in their portal only (Settings: "Email me our messages", Oct 24)
-  if (customer?.email && order.status !== "quote" && customer.message_email !== false) {
-    emailed = await sendEmail({
-      to: customer.email,
-      replyTo: SHOP_NOTIFY_EMAIL,
+  // to whoever at the customer gets Messages (their email settings, lib/customerEmails.ts; off: it waits in their portal)
+  if (customer?.id && order.status !== "quote") {
+    const m = await import("@/lib/customerEmailServer");
+    const r = await m.sendCustomerEmail(admin, {
+      customerId: customer.id, kind: "messages", orderId, actor: staffEmail,
       subject: orderSubject(order.number, tp ? "New message about the goods" : "New message", order.nickname),
-      html: emailLayout(settings.shop.name, `Message about #${order.number}`, (text || "") + attachNote(attachments), "Reply in your portal", `${siteUrl()}/portal?area=messages&c=${orderId}${tp ? ":goods" : ""}`),
+      html: m.customerEmailHtml({ shop: settings.shop, chip: { text: "Message", tone: "blue" }, head: `A message about ${order.nickname || `order #${order.number}`}`, lines: [text, ...(attachments.length ? [`${attachments.length} file${attachments.length === 1 ? "" : "s"} attached: open it in your portal.`] : [])], button: { label: "Reply in your portal", url: `${siteUrl()}/portal?area=messages&c=${orderId}${tp ? ":goods" : ""}` }, after: "Replies in the portal go straight onto your order." }),
     });
+    emailed = r.sent.length > 0;
   }
   return { ok: true, emailed };
 }
@@ -121,13 +122,14 @@ export async function staffCustomerMessage(customerId: string, body: string, fil
   const { error } = await admin.from("messages").insert({ customer_id: customerId, project_id: projectId, author_type: "staff", author_email: staffEmail, author_name: settings.shop.name, body: text, attachments });
   if (error) return { ok: false, error: error.message };
   let emailed = false;
-  if (customer.email && customer.message_email !== false) {
-    emailed = await sendEmail({
-      to: customer.email,
-      replyTo: SHOP_NOTIFY_EMAIL,
+  {
+    const m = await import("@/lib/customerEmailServer");
+    const r = await m.sendCustomerEmail(admin, {
+      customerId, kind: "messages", actor: staffEmail,
       subject: projectId ? `New message about your project` : `New message from ${settings.shop.name}`,
-      html: emailLayout(settings.shop.name, `A message from ${settings.shop.name}`, (text || "") + attachNote(attachments), "Reply in your portal", projectId ? `${siteUrl()}/portal/projects/${projectId}` : `${siteUrl()}/portal?area=messages`),
+      html: m.customerEmailHtml({ shop: settings.shop, chip: { text: "Message", tone: "blue" }, head: `A message from ${settings.shop.name}`, lines: [text, ...(attachments.length ? [`${attachments.length} file${attachments.length === 1 ? "" : "s"} attached: open it in your portal.`] : [])], button: { label: "Reply in your portal", url: projectId ? `${siteUrl()}/portal/projects/${projectId}` : `${siteUrl()}/portal?area=messages` } }),
     });
+    emailed = r.sent.length > 0;
   }
   return { ok: true, emailed };
 }

@@ -1,4 +1,5 @@
 "use client";
+import { shipmentShipped } from "@/app/shop/customer-email-actions";
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ShipAddress, ShipSettings } from "@/lib/pricing";
@@ -53,7 +54,8 @@ export default function MobileShip({ t: tg, existing, settings, box }: { t: Ship
       cost: chosen && bill === "fbs" ? chosen.cost : existing?.cost ?? null, price: chosen ? chosen.price : existing?.price ?? null, note: existing?.note || "",
       status, updated_at: new Date().toISOString(), ...(status === "shipped" ? { shipped_at: new Date().toISOString() } : {}),
     };
-    const { error } = existing ? await sb.from("shipments").update(row).eq("id", existing.id) : await sb.from("shipments").insert(row);
+    const { data: saved, error } = existing ? await sb.from("shipments").update(row).eq("id", existing.id).select("id").maybeSingle() : await sb.from("shipments").insert(row).select("id").maybeSingle();
+    if (!error && status === "shipped" && tg.kind === "order") { const sid = (saved as { id?: string } | null)?.id || existing?.id; if (sid) void shipmentShipped(sid).catch(() => null); }
     if (!error && status === "shipped" && tg.kind === "order") await sb.from("orders").update({ tracking: boxes.map((b) => (b.tracking || "").trim()).filter(Boolean).join(", "), ship_method: chosen ? `${chosen.carrier} ${chosen.service}` : tg.service }).eq("id", tg.id);
     setBusy("");
     setMsg(error ? { ok: false, text: error.message } : { ok: true, text: t(status === "shipped" ? "Marked shipped." : "Saved. It's ready in the Shipping Center.") });

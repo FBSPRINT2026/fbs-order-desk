@@ -42,6 +42,7 @@ import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/li
 import { markDeclined, undoDeclined } from "@/app/shop/jobs/actions";
 import { autoSepsNow } from "@/app/shop/sep-auto-actions";
 import { takeOffHold } from "@/app/shop/hold-order-actions";
+import { orderStatusEmail } from "@/app/shop/customer-email-actions";
 import HoldDialog from "@/components/HoldDialog";
 import { holdOf, holdsOf } from "@/lib/holds";
 import { upFront } from "@/lib/payTerms";
@@ -1030,6 +1031,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (latest.current) latest.current = { ...latest.current, status: k, type: ST[k].type };
     loadSide();
     if (ST[k].type === "invoice") sepsIfReady("status");
+    // Ready (pickup) / Completed (our delivery): the customer's email, if they get it (lib/customerEmailServer.ts)
+    if (k === "ready" || k === "completed") void orderStatusEmail(o.id, k).catch(() => null);
   }
 
   const [accepting, setAccepting] = useState<string | null>(null), [acceptBusy, setAcceptBusy] = useState(false);

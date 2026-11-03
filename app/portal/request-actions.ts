@@ -121,6 +121,8 @@ export async function submitRequest(id: string): Promise<Result> {
     const { error } = await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", id);
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert({ order_id: id, kind: "request_submitted", detail: `${pieces} pcs`, actor: email });
+    // "we got your order", to whoever gets it (lib/customerEmailServer.ts)
+    await (await import("@/lib/customerEmailServer")).emailReceived(admin, id, email).catch(() => null);
     const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const settings = mergeSettings(s?.data);
     if (SHOP_NOTIFY_EMAIL) await sendEmail({
@@ -644,6 +646,8 @@ export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<
     const { error } = await admin.from("orders").update({ submitted_at: new Date().toISOString() }).eq("id", orderId);
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert({ order_id: orderId, kind: "request_submitted", detail: `Simple order${qty ? `, about ${qty} pcs` : ""}${files.length ? `, ${files.length} file${files.length === 1 ? "" : "s"}` : ""}`, actor: email });
+    // "we got your order", to whoever gets it (lib/customerEmailServer.ts)
+    await (await import("@/lib/customerEmailServer")).emailReceived(admin, orderId, email).catch(() => null);
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const settings = mergeSettings(st?.data);
     if (SHOP_NOTIFY_EMAIL) await sendEmail({
@@ -992,6 +996,8 @@ export async function sendOldReorder(orderId: string, s: OldReorderSend): Promis
       }
     }
     await admin.from("order_events").insert({ order_id: orderId, kind: "request_submitted", detail: `Reorder of #${re.visual}: ${qty} pcs${offNames.length ? `, ${offNames.length} left off` : ""}${art === "new" ? ", new art" : ""}`, actor: email });
+    // "we got your order", to whoever gets it (lib/customerEmailServer.ts)
+    await (await import("@/lib/customerEmailServer")).emailReceived(admin, orderId, email).catch(() => null);
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const settings = mergeSettings(st?.data);
     if (SHOP_NOTIFY_EMAIL) await sendEmail({

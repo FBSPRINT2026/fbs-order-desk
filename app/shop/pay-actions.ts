@@ -57,8 +57,16 @@ export async function emailStatement(customerId: string): Promise<{ ok: boolean;
     if (!open.length) return { ok: false, error: "Nothing is owed right now." };
     const shop = mergeSettings(s?.data).shop.name;
     const total = open.reduce((a, o) => a + o.balance, 0);
-    const emailed = await sendEmail({ to: c.email, replyTo: SHOP_NOTIFY_EMAIL, subject: `Your statement from ${shop}: ${money(total)}`,
-      html: emailLayout(shop, `Statement for ${c.company || c.name}`, `You have ${open.length} open invoice${open.length === 1 ? "" : "s"} totaling ${money(total)}. You can see them all, print the statement, and pay everything at once in your portal.`, "View and pay statement", `${siteUrl()}/portal/statement`) });
+    // to whoever at the customer gets invoices (lib/customerEmails.ts); sent by hand, so the main email if nobody does
+    const m = await import("@/lib/customerEmailServer"); const { recipientsOf } = await import("@/lib/customerEmails");
+    const pp = await m.peopleOf(admin, customerId);
+    const to = recipientsOf({ ...pp.prefs, invoices: { ...(pp.prefs.invoices || {}), on: true } }, "invoices", pp.people);
+    const html = m.customerEmailHtml({ shop: mergeSettings(s?.data).shop, chip: { text: "Statement", tone: "blue" }, head: `Your statement`, big: money(total),
+      lines: [`${c.company || c.name}, you have ${open.length} open invoice${open.length === 1 ? "" : "s"}. See them all, print the statement, and pay everything at once in your portal.`],
+      rows: open.slice(0, 8).map((o): [string, string] => [`#${o.number}${(o as { nickname?: string }).nickname ? ` ${(o as { nickname?: string }).nickname}` : ""}`, money(o.balance)]),
+      button: { label: "View and pay statement", url: `${siteUrl()}/portal/statement` } });
+    let emailed = false;
+    for (const t of to.length ? to : [c.email]) if (await sendEmail({ to: t, replyTo: SHOP_NOTIFY_EMAIL, subject: `Your statement from ${shop}: ${money(total)}`, html })) emailed = true;
     return { ok: true, emailed };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

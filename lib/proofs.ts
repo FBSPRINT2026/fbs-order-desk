@@ -65,7 +65,10 @@ async function linkEmail(admin: SupabaseClient, x: { order: { id: string; number
   const { data: su } = m0 ? await admin.storage.from("proofs").createSignedUrl(String(m0.file_path).replace(/\.png$/, "-thumb.png"), 60 * 60 * 24 * 30) : { data: null };
   const em = proofEmail({ settings: x.settings, first: firstName(x.customer), kind: "art", o, picture: su?.signedUrl || undefined, rows: proofRows(o, "art"), url, reminder: x.reminder, note: x.note });
   if (x.send === false) return { url, emailed: false, ...em };
-  const emailed = await sendEmail({ to: x.customer.email, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html });
+  // to whoever at the customer gets proofs and approvals (lib/customerEmails.ts)
+  const list = await (await import("@/lib/customerEmailServer")).approvalsList(admin, o.customer_id, x.customer.email);
+  let emailed = false;
+  for (const t of list) if (await sendEmail({ to: t, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html })) emailed = true;
   return { url, emailed, ...em };
 }
 

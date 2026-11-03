@@ -62,6 +62,7 @@ export async function placeProgramOrder(input: { lines: ProgramCartLine[]; due_d
     }).select("id, number").single();
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert({ order_id: data.id, kind: "created", detail: "Program order from the portal", actor: email });
+    await (await import("@/lib/customerEmailServer")).emailReceived(admin, data.id, email).catch(() => null);
     if (SHOP_NOTIFY_EMAIL) {
       const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Program order #${data.number} from ${cust.company || cust.name}: ${money(total)}`,

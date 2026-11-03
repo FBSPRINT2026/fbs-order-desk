@@ -1,5 +1,6 @@
 "use client";
 import { holdLabel } from "@/lib/holds";
+import EmailPrefs from "@/components/EmailPrefs";
 import { archiveMyMockup } from "@/app/portal/actions";
 import { oneOfEach } from "@/lib/mockupList";
 import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/lib/logoShirts";
@@ -370,6 +371,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           </div>}
         </div>
             </fieldset>
+            {/* who at the customer gets which email (lib/customerEmails.ts), the same panel as their portal Settings */}
+            <EmailPrefs customerId={id} shop />
           </aside>
         </div>
       )}

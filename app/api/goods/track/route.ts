@@ -26,8 +26,10 @@ export async function GET(req: Request) {
     // tracking gone wrong (no scan by the morning after the label, delayed, damaged…): a goods issue (lib/goodsIssues.ts)
     const { scanTracking } = await import("@/lib/goodsIssues");
     const issues = await scanTracking(admin, Date.now() + 6000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-    const goods = await goodsCheck(admin, end - 4000);
-    return NextResponse.json({ ...goods, links, issues });
+    const goods = await goodsCheck(admin, end - 9000);
+    // our shipments to customers: delivered / problem emails, for customers who asked for them (lib/customerEmailServer.ts)
+    const out = await (await import("@/lib/customerEmailServer")).outboundCheck(admin, end - 3000).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    return NextResponse.json({ ...goods, links, issues, out });
   }
   catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   finally { await admin.rpc("printavo_sync_release", { p_job: "goods-track" }); }

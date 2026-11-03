@@ -43,6 +43,14 @@ function invoiceTerms(terms: PayTerms | null | undefined, c: { total: number; pa
   return terms === "net30" ? "Net 30 terms" : up.kind === "full" ? "Paid up front" : up.kind === "deposit" ? `${up.pct === 50 ? "Half" : `${up.pct}%`} to start, the rest when it's ready` : "Due on receipt";
 }
 
+/** who at the customer gets proofs and approvals, as one line ("a@x.com, b@x.com"; lib/customerEmails.ts) */
+async function approvalsTo(admin: SupabaseClient, o: Order, customer: { email?: string | null } | null) {
+  if (!o.customer_id) return customer?.email || "";
+  const { peopleOf } = await import("@/lib/customerEmailServer"); const { recipientsOf } = await import("@/lib/customerEmails");
+  const pp = await peopleOf(admin, o.customer_id);
+  return recipientsOf(pp.prefs, "approvals", pp.people).join(", ") || customer?.email || "";
+}
+
 /** what could go to the customer now, and what's ticked to start with (what's ready) */
 export async function sendOptions(admin: SupabaseClient, orderId: string) {
   const { o, customer, settings, pays } = await load(admin, orderId);
@@ -64,7 +72,7 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
   const where = (imprintId: string) => { for (const g of orderGroups(o)) for (const im of g.imprints || []) if (im.id === imprintId) return `${im.location}${im.size ? `, ${im.size}` : ""}`; return "Sew-out"; };
   const sews = ((sw || []) as SewRow[]).filter((x) => x.status === "pending").map((x) => ({ id: x.id, label: `Sew-out v${x.version} · ${where(x.imprint_id)}`, sent: !!x.sent_at }));
   return {
-    to: customer?.email || "", name: customer?.name || customer?.company || "",
+    to: await approvalsTo(admin, o, customer), name: customer?.name || customer?.company || "",
     proof: mocks.length ? { version: unsent ? nextV : live[0]?.version || nextV, mockups: mocks.length, unsent, waiting: !unsent && live.some((p) => p.status === "pending") } : null,
     // what's due when they approve, by their terms (lib/payTerms.ts)
     quote: quoteOpen ? { kind: "quote" as const, total: c.total, status: o.status, sent: o.status === "quote_sent", deposit: upFront(customer?.payment_terms, c.total, settings.depositPct).amount, due: upFront(customer?.payment_terms, c.total, settings.depositPct).line }
@@ -137,7 +145,7 @@ export async function previewSend(admin: SupabaseClient, orderId: string, pick: 
   const { o, customer, settings } = await load(admin, orderId);
   if (!pick.proof && !pick.quote && !(pick.sewouts || []).length) return { ok: false as const, error: "Tick what to send." };
   const em = await emailFor(admin, withoutShopPieces(o), customer, settings, pick, `${siteUrl()}/proof/preview`);
-  return { ok: true as const, to: customer?.email || "", ...em };
+  return { ok: true as const, to: await approvalsTo(admin, o, customer), ...em };
 }
 
 /**
@@ -147,7 +155,14 @@ export async function previewSend(admin: SupabaseClient, orderId: string, pick: 
 export async function sendTogether(admin: SupabaseClient, orderId: string, pick: Pick3, me: Staff, email = true) {
   const { o, customer, settings } = await load(admin, orderId);
   if (!pick.proof && !pick.quote && !(pick.sewouts || []).length) return { ok: false as const, error: "Tick what to send." };
-  const to = customer?.email || "";
+  // who at the customer gets proofs and approvals (their email settings, lib/customerEmails.ts; the main email if unset)
+  let list: string[] = [];
+  if (o.customer_id) {
+    const { peopleOf } = await import("@/lib/customerEmailServer"); const { recipientsOf } = await import("@/lib/customerEmails");
+    const pp = await peopleOf(admin, o.customer_id); list = recipientsOf(pp.prefs, "approvals", pp.people);
+  }
+  if (!list.length && customer?.email) list = [customer.email];
+  const to = list.join(", ");
   if (email && !to) return { ok: false as const, error: "This customer has no email address. Add one, or copy the link and send it yourself." };
   const sentTo = email ? to : "link copied";
   // a full color print waits for production's colors (and so the price) before the quote goes out (Oct 26, Nick)
@@ -184,11 +199,12 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   matchGoodsSoon();
   // a note starts the message thread they see too (not already said with the proof)
   if (pick.note?.trim() && !pick.proof) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: me.email, author_name: settings.shop.name, body: pick.note.trim().slice(0, 2000) });
-  const url = proofUrl(await proofLinkFor(admin, { kind: "order", orderId, to: email ? to : undefined, by: me.email }));
+  const url = proofUrl(await proofLinkFor(admin, { kind: "order", orderId, to: email ? list[0] : undefined, by: me.email }));
   if (!email) return { ok: true as const, url, emailed: false, done };
   const { data: fresh } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   const em = await emailFor(admin, withoutShopPieces(fresh as Order), customer, settings, pick, url);
-  const emailed = await sendEmail({ to, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html });
+  let emailed = false;
+  for (const t of list) if (await sendEmail({ to: t, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html })) emailed = true;
   return { ok: true as const, url, emailed, done };
 }
 

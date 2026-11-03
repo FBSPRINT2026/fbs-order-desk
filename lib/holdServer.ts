@@ -26,6 +26,8 @@ export async function setHold(admin: SupabaseClient, orderId: string, h: { key: 
   const { error } = await admin.from("orders").update({ flags: next }).eq("id", orderId);
   if (error) return { ok: false as const, error: error.message };
   await admin.from("order_events").insert({ order_id: orderId, kind: "hold", detail: `${reasonOf(h.key)}${f.note ? `: ${f.note}` : ""}`, actor: h.by });
+  // the customer hears about it, as much as they're shown (Nick: "on hold should just go out"; lib/customerEmailServer.ts)
+  if (h.show !== "none") await (await import("@/lib/customerEmailServer")).emailOnHold(admin, orderId, h.by).catch(() => null);
   return { ok: true as const, flags: next };
 }
 

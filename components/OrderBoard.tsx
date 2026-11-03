@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ST, STATUSES, isClosedQuote, isMe, type StatusKey } from "@/lib/pricing";
+import { orderStatusEmail } from "@/app/shop/customer-email-actions";
 import { custLabel, money, moneyHidden } from "@/lib/format";
 import { useShopData, type OrderRow } from "@/lib/shopData";
 import { Due } from "@/components/bits";
@@ -49,6 +50,7 @@ export default function OrderBoard({ mine: mineProp }: { mine?: boolean }) {
     setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, status: k, type: ST[k].type } : x)));
     const sb = createClient();
     const { error } = await sb.from("orders").update({ status: k, type: ST[k].type }).eq("id", id);
+    if (!error && (k === "ready" || k === "completed")) void orderStatusEmail(id, k).catch(() => null);
     if (error) { setMsg("Couldn't move #" + o.number + ": " + error.message); return; }
     await sb.from("order_events").insert({ order_id: id, kind: "status", detail: k, actor: "shop" });
     setMsg(`#${o.number} moved to ${ST[k].label}`);

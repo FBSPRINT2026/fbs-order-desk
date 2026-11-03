@@ -171,15 +171,19 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     // paid: anything now ready asks for its separations (lib/autoSeps.ts)
     for (const l of newLines) await (await import("@/lib/autoSeps")).autoSeparations(admin, l.o.id, "paid");
     if (newLines.length) await admin.from("order_events").insert(newLines.map((l) => ({ order_id: l.o.id, kind: "payment", detail: `${money(l.amount)} ${methodName}${fee ? ` + ${money(rows.find((r) => r.order_id === l.o.id)?.fee)} card fee` : ""}`, actor: email })));
-    if (SHOP_NOTIFY_EMAIL) await sendEmail({
-      to: SHOP_NOTIFY_EMAIL,
-      subject: `Payment received: ${money(total)} for ${ref}`,
-      html: emailLayout(settings.shop.name, `${customer?.company || customer?.name || email} paid ${money(total)}`, `${methodName} payment for ${ref}: ${money(sum)}${fee ? ` + ${money(fee)} card fee` : ""}. Stax transaction ${txn.id || ""}.`, "Open orders", `${siteUrl()}/shop`),
-    });
-    // a detailed receipt for their records (every invoice it paid, what's still owed on each)
-    const to = (input.receiptTo || "").split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).slice(0, 3);
+    const { receiptEmailHtml } = await import("@/lib/customerEmailServer");
+    const day = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    // a detailed receipt for their records (every invoice it paid, what's still owed on each): to who they typed in the pay
+    // window, and to whoever at the customer gets receipts (lib/customerEmails.ts)
+    let to = (input.receiptTo || "").split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).slice(0, 3);
+    if (customer?.id) {
+      const { peopleOf } = await import("@/lib/customerEmailServer"); const { recipientsOf } = await import("@/lib/customerEmails");
+      const pp = await peopleOf(admin, customer.id);
+      to = [...new Set([...to, ...recipientsOf(pp.prefs, "receipts", pp.people)])].slice(0, 6);
+    }
     let receiptTo = "";
-    if (to.length) {
+    let shopLines: { number: number; nickname: string; amount: number; balanceAfter: number }[] = lines.map((l) => ({ number: l.o.number, nickname: l.o.nickname || "", amount: l.amount, balanceAfter: 0 }));
+    if (to.length || SHOP_NOTIFY_EMAIL) {
       const nIds = lines.filter((l) => !l.old).map((l) => l.o.id), oIds = lines.filter((l) => l.old).map((l) => l.o.id);
       const [{ data: pays2 }, { data: olds2 }] = await Promise.all([
         nIds.length ? admin.from("payments").select("order_id, amount").in("order_id", nIds) : Promise.resolve({ data: [] }),
@@ -188,14 +192,20 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
       const paidNow: Record<string, number> = {};
       ((pays2 || []) as { order_id: string; amount: number }[]).forEach((p) => { paidNow[p.order_id] = (paidNow[p.order_id] || 0) + (+p.amount || 0); });
       const oldLeft = Object.fromEntries(((olds2 || []) as { id: string; balance: number }[]).map((a) => [a.id, +a.balance || 0]));
-      const html = receiptHtml({
-        shop: settings.shop, customer: customer?.company || customer?.name || email, date: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
-        method: methodName, txn: String(txn.id || ""), subtotal: sum, fee, total, url: `${siteUrl()}/portal?area=payments`,
-        lines: lines.map((l) => ({ number: l.o.number, nickname: l.o.nickname || "", amount: l.amount, balanceAfter: l.old ? r2(oldLeft[l.o.id] || 0) : r2((+l.o.total || 0) - (paidNow[l.o.id] || 0)) })),
+      shopLines = lines.map((l) => ({ number: l.o.number, nickname: l.o.nickname || "", amount: l.amount, balanceAfter: l.old ? r2(oldLeft[l.o.id] || 0) : r2((+l.o.total || 0) - (paidNow[l.o.id] || 0)) }));
+      const html = receiptEmailHtml({
+        shop: settings.shop, customer: customer?.company || customer?.name || email, date: day,
+        method: methodName, txn: String(txn.id || ""), subtotal: sum, fee, total, url: `${siteUrl()}/portal?area=payments`, lines: shopLines,
       });
       const sent = await Promise.all(to.map((addr) => sendEmail({ to: addr, replyTo: SHOP_NOTIFY_EMAIL, subject: `Receipt: ${money(total)} paid to ${settings.shop.name}`, html })));
       receiptTo = to.filter((_, i) => sent[i]).join(", ");
     }
+    // the shop's own heads-up, in the same look (Nov 3, Nick: "the payment received is pretty plain")
+    if (SHOP_NOTIFY_EMAIL) await sendEmail({
+      to: SHOP_NOTIFY_EMAIL,
+      subject: `Payment received: ${money(total)} for ${ref}`,
+      html: receiptEmailHtml({ shop: settings.shop, customer: customer?.company || customer?.name || email, date: day, method: methodName, txn: String(txn.id || ""), subtotal: sum, fee, total, url: `${siteUrl()}/shop`, lines: shopLines, forShop: true }),
+    });
     revalidatePath("/portal");
     lines.forEach((l) => revalidatePath(l.old ? `/portal/archive/${l.o.id}` : `/portal/orders/${l.o.id}`));
     return { ok: true, paid: total, fee, receiptTo };

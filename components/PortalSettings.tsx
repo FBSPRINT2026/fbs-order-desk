@@ -1,10 +1,11 @@
 "use client";
+import EmailPrefs from "@/components/EmailPrefs";
 import { fmtPhone } from "@/lib/phone";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { mySavedMethods, removeSavedMethod, setStaffCharge, staffConsentWords, type SavedPM } from "@/app/portal/pay-actions";
 import AddPayMethod from "@/components/AddPayMethod";
-import { brandLogoUploadUrl, myPeople, removePerson, saveBrandLogo, saveMySettings, savePerson, setMessageEmail, setPortalView, type Person } from "@/app/portal/settings-actions";
+import { brandLogoUploadUrl, myPeople, removePerson, saveBrandLogo, saveMySettings, savePerson, setPortalView, type Person } from "@/app/portal/settings-actions";
 
 type C = { address: string; ship_address: string };
 
@@ -13,7 +14,6 @@ type C = { address: string; ship_address: string };
  * addresses, and their company logo for their sales sheets. The company name is ours to set.
  */
 export default function PortalSettings({ staxToken = "", c, customerId, logoUrl, preview, shopName, mailOn, view: view0 = "simple" }: { /** simple or full portal */ view?: "simple" | "advanced"; /** Stax.js web payments token, to add a card */ staxToken?: string; c: C; customerId: string; logoUrl: string; preview: boolean; shopName: string; /** our messages emailed to them too */ mailOn: boolean }) {
-  const [mail, setMail] = useState(mailOn);
   const [view, setView] = useState(view0), [viewNote, setViewNote] = useState("");
   const [v, setV] = useState(c);
   const [logo, setLogo] = useState(logoUrl);
@@ -44,13 +44,8 @@ export default function PortalSettings({ staxToken = "", c, customerId, logoUrl,
       {err && <div className="banner" role="alert">{err}</div>}
       <People customerId={customerId} preview={preview} shopName={shopName} />
       <SavedCards preview={preview} staxToken={staxToken} />
-      <section className="panel">
-        <div className="panel-h"><h2>Messages</h2></div>
-        <div className="panel-b">
-          <label className="check"><input type="checkbox" checked={mail} disabled={preview} onChange={async (e) => { const on = e.target.checked; setMail(on); const r = await setMessageEmail(on); if (!r.ok) { setMail(!on); setErr(r.error || ""); } }} /> Email me when {shopName} sends a message</label>
-          <div className="faint" style={{ fontSize: 12.5, marginTop: 4 }}>Off: messages wait for you in your Messages tab here.</div>
-        </div>
-      </section>
+      {/* who gets which email (Nov 3, Nick), Messages included (it was its own switch here) */}
+      <EmailPrefs customerId={customerId} preview={preview} />
       {/* simple or full (Nov 3, Nick): here in Settings, not on the page itself */}
       <section className="panel psv">
         <div className="panel-h"><h2>Portal layout</h2><span className="faint">How your dashboard looks. Switch any time; nothing about your orders changes.</span></div>

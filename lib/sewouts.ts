@@ -191,7 +191,10 @@ async function emailSewout(admin: SupabaseClient, p: { o: Order; to: string; sho
   const { settings } = await load(admin, p.o.id);
   const em = proofEmail({ settings, first: p.first || "", kind: "sewout", o: p.o, picture: su?.signedUrl || undefined, rows: proofRows(p.o, "sewout", sw as never), url, reminder: p.reminder, note: p.note });
   if (p.send === false) return { ok: false, url, ...em };
-  const ok = await sendEmail({ to: p.to, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html });
+  // to whoever at the customer gets proofs and approvals (lib/customerEmails.ts)
+  const list = await (await import("@/lib/customerEmailServer")).approvalsList(admin, p.o.customer_id, p.to);
+  let ok = false;
+  for (const t of list) if (await sendEmail({ to: t, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html })) ok = true;
   return { ok, url, ...em };
 }
 

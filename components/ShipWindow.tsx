@@ -1,4 +1,5 @@
 "use client";
+import { shipmentShipped } from "@/app/shop/customer-email-actions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
@@ -181,13 +182,16 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   async function save(status: Shipment["status"] = "draft") {
     setBusy("save"); setErr("");
     const r = { ...row(), status, ...(status === "shipped" ? { shipped_at: new Date().toISOString() } : {}) };
-    const q = existing ? sb.from("shipments").update(r).eq("id", existing.id) : sb.from("shipments").insert(r);
-    const { error } = await q;
+    const q = existing ? sb.from("shipments").update(r).eq("id", existing.id).select("id").maybeSingle() : sb.from("shipments").insert(r).select("id").maybeSingle();
+    const { data: saved, error } = await q;
     if (error) { setBusy(""); setErr(error.message); return false; }
     await saveCustomer();
     if (status === "shipped" && t.kind === "order") {
       const nums = boxes.map((b) => (b.tracking || "").trim()).filter(Boolean);
       await sb.from("orders").update({ tracking: nums.join(", "), ship_method: chosen?.service ? `${chosen.carrier} ${chosen.service}` : service }).eq("id", t.id);
+      // the customer's Shipped email with tracking, if they get it (lib/customerEmailServer.ts)
+      const sid = (saved as { id?: string } | null)?.id || existing?.id;
+      if (sid) void shipmentShipped(sid).catch(() => null);
     }
     setBusy("");
     return true;

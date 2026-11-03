@@ -20408,3 +20408,17 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .ohd-seg button{height:36px;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:inherit;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px}
 .ohd-seg button:first-child{border-left:0}
 .ohd-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+
+/* Emails: who at the customer gets each email (components/EmailPrefs.tsx) */
+.emp-t td,.emp-t th{vertical-align:middle}
+.emp-t .emp-c{text-align:center;width:1%;white-space:nowrap}
+.emp-t tr.off td:first-child b{color:var(--ink-3)}
+.emp-t input[type=checkbox]{width:18px;height:18px;margin:0;cursor:pointer}
+.emp-lock{font-size:12px;color:var(--ink-3)}
+.emp-sw{position:relative;width:34px;height:20px;border-radius:99px;border:0;background:var(--line);cursor:pointer;padding:0;vertical-align:middle}
+.emp-sw span{position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+.emp-sw.on{background:var(--accent)}
+.emp-sw.on span{left:16px}
+.emp-auto{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;border-radius:var(--r);background:color-mix(in srgb,var(--warn) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line));font-size:13px}
+.emp-auto>span{flex:1;min-width:200px}
+.emp-auto.on{background:var(--surface-2);border-color:var(--line)}
