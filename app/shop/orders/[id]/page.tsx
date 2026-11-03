@@ -22,6 +22,7 @@ import { type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, 
 import { useSticky } from "@/lib/useSticky";
 import { openOrderCheck } from "@/components/tools/OrderReview";
 import Link from "next/link";
+import RequestAsk from "@/components/RequestAsk";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -1324,6 +1325,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     due: o.due_date ? fmtDateLong(o.due_date) : "", tracking: o.tracking || "", days: "", dueLine: "", dueText: "", balanceLine: calc.balance > 0.004 ? ` The balance is ${money(calc.balance)}.` : "" };
   const QUICK: TemplateKey[] = ["proof_ready", "ready_pickup", "shipped", "payment_reminder", "deposit_request", "quote_followup", "request_received", "thanks"];
 
+  // a customer's order request: just the question, never its invoice (Nov 2, Nick: "you shouldn't be able to get into that
+  // invoice"); the Job Center's "Open the order" for a form request comes with ?stay=1
+  if (rqAsk) return <RequestAsk order={o} customer={cust?.company || cust?.name || ""} closeLabel="Go back" onClose={() => (window.history.length > 1 ? router.back() : router.push("/shop/jobs"))} />;
   return (
     <div className="ord">
       {/* back to where you came from (Oct 23, Nick: "it's just supposed to go from wherever you were last… I was in the
@@ -1382,17 +1386,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <button type="button" className="btn primary" onClick={() => { const r = recover; setRecover(null); patch((d) => { Object.assign(d, { ...r.o, id: d.id, number: d.number, draft: d.draft, status: d.status, type: d.type }); }); }}>Bring them back</button>
         </div>
       )}
-      {rqAsk && (() => { const who = cust?.company || cust?.name || ""; return (
-        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Open this request in the Job Center?" onClick={() => setRqAsk(false)}>
-          <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
-            <h3>This is {who ? `${who}'s` : "a customer's"} order request</h3>
-            <p className="dla-sub">#{o.number}{o.nickname ? ` ${o.nickname}` : ""} isn&apos;t a quote or an invoice yet. Open it in the Job Center to look it over and process it.</p>
-            <div className="dla-acts">
-              <button type="button" className="btn ghost" onClick={() => setRqAsk(false)}>Stay here</button>
-              <button type="button" className="btn primary" autoFocus onClick={() => router.push(`/shop/jobs?${new URLSearchParams({ step: "requests", q: who, req: o.id })}`)}>Open in the Job Center</button>
-            </div>
-          </div>
-        </div>); })()}
       {leaveTo && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Save this draft?" onClick={() => setLeaveTo(null)}>
           <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>

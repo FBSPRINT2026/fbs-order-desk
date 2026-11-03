@@ -22,17 +22,19 @@ const dueTxt = (d: string | null) => {
   const t = new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return { t: days >= 0 && days <= 7 ? `${t} · ${days === 0 ? "today" : days === 1 ? "tomorrow" : `${days}d`}` : t, soon: days <= 3 };
 };
+/** the last list, kept while this tab is open, so the Requests list shows at once and refreshes behind */
+let rqMem: DeskRequest[] | null = null;
 const asMail = (r: DeskRequest): MailFile[] => r.files.map((f) => ({ key: f.path, name: f.name, size: f.size, type: f.type, href: `/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}` }));
 
 export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { q: string; onChanged?: () => void; /** open a conversation about this request in the Message Center */ onMessage?: (orderId: string) => void; /** just this request, opened (a customer's message about it in the Message Center) */ only?: string; /** open this one when the list loads (a link from its order page) */ pick?: string }) {
-  const [list, setList] = useState<DeskRequest[] | null>(null);
+  const [list, setList] = useState<DeskRequest[] | null>(rqMem);
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
   const [openId, setOpenId] = useState<string | null>(only || null);
   useEffect(() => { if (only) setOpenId(only); }, [only]);
   useEffect(() => { if (pick && list?.some((r) => r.id === pick)) open(pick); }, [pick, list?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [act, setAct] = useState(""), [actText, setActText] = useState("");
   const panel = useRef<HTMLDivElement | null>(null);
-  const load = async () => { const r = await requestsDesk(); if (r.ok) setList(r.list); else setErr(r.error); };
+  const load = async () => { const r = await requestsDesk(); if (r.ok) { rqMem = r.list; setList(r.list); } else setErr(r.error); };
   useEffect(() => { void load(); }, []);
   const w = q.trim().toLowerCase().replace(/^#/, "");
   const shown = useMemo(() => (list || []).filter((r) => !w || [String(r.number), r.name, r.customer, r.contact, r.po, r.about].some((x) => x.toLowerCase().includes(w))), [list, w]);

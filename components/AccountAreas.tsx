@@ -3,6 +3,7 @@ import PrintavoMark from "@/components/PrintavoMark";
 import type { BrandColor } from "@/lib/pricing";
 import { colorHex } from "@/lib/inkColors";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import RequestAsk, { isSentRequest } from "@/components/RequestAsk";
 import { ArtSearchContext, PageSearchContext } from "@/components/ArtSearchContext";
 import Link from "next/link";
 import { LogoFace, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
@@ -215,6 +216,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   const [oldQuotes, setOldQuotes] = useSticky("portal.oldQuotes", false);
   // the Orders tab's own tabs (Oct 24, Nick: "if they've got a bunch of quotes sitting there, they don't even get to the
   // orders… all quotes and orders just like we have on our order screen")
+  // our side: a customer's order request asks to open in the Job Center, right here (components/RequestAsk.tsx)
+  const [rqAsk, setRqAsk] = useState<AOrder | null>(null);
   const [oTab, setOTab] = useSticky<"all" | "drafts" | "quotes" | "sent" | "orders" | "done">("portal.ordersTab", "all");
   // a link can open a tab (the dashboard's "3 more" under Orders sent to FBS opens Sent to FBS, Nov 2, Nick)
   useEffect(() => { const t = sp.get("show") || (mode === "shop" && sp.get("area") === "quotes" ? "quotes" : ""); if (t && ["all", "drafts", "quotes", "sent", "orders", "done"].includes(t)) setOTab(t as typeof oTab); }, [sp]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -309,8 +312,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
           <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
           <tbody>
             {rows.map((o) => { return (
-              <tr key={o.id} onClick={() => router.push(orderHref(o.id))}>
-                <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link>{o.archived && <PrintavoMark />}</td>
+              <tr key={o.id} onClick={() => (mode === "shop" && isSentRequest(o) ? setRqAsk(o) : router.push(orderHref(o.id)))}>
+                <td className="num"><Link href={orderHref(o.id)} onClick={(e) => { e.stopPropagation(); if (mode === "shop" && isSentRequest(o)) { e.preventDefault(); setRqAsk(o); } }}>{o.number}</Link>{o.archived && <PrintavoMark />}</td>
                 {/* All: what it is, in its own column (Oct 24, Nick: "don't have it impact the job name") */}
                 {all && <td data-l="Type"><span className={"aa-kind k-" + kindOf(o).split(" ")[0].toLowerCase()}>{kindOf(o)}</span></td>}
                 <td className="m"><div className="aa-t aa-t1"><span className="aa-tn" title={o.nickname || undefined}>{o.nickname || (cols === "quote" ? "Quote" : "Order")}</span></div></td>
@@ -1106,6 +1109,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
 
   return (
     <div className={"aa" + (mode === "shop" ? " aa-shop" : "")}>
+      {rqAsk && <RequestAsk order={rqAsk} customer={customerName} onClose={() => setRqAsk(null)} />}
       {mode === "shop" ? (
         <nav className="toolbar aa-shopnav" aria-label="Customer sections">
           <div className="chips">

@@ -60,9 +60,19 @@ const day = (s?: string | null) => (s ? new Date(s.length === 10 ? s + "T12:00:0
 const ago = (s: string) => { const d = Math.floor((Date.now() - new Date(s).getTime()) / 864e5); return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
 const DEPT_TAG: Record<Dept, string> = { screen: "SP", embroidery: "EMB", heat: "HP" };
 
+// the last board and conversations, kept for this browser tab, so coming back shows them at once and they refresh behind
+// (Nov 2, Nick: "every time I click into it… it has to paint all the numbers")
+type JcSnap = { items: JobItem[]; me: string; hasAcc: boolean; chats: ChatSummary[] };
+let jcMem: Partial<JcSnap> | null = null;
+const jcRead = (): Partial<JcSnap> => { if (jcMem) return jcMem; try { jcMem = JSON.parse(sessionStorage.getItem("fbs:jc.snap") || "null") || {}; } catch { jcMem = {}; } return jcMem!; };
+const jcKeep = (x: Partial<JcSnap>) => { jcMem = { ...(jcMem || {}), ...x }; try { sessionStorage.setItem("fbs:jc.snap", JSON.stringify(jcMem)); } catch { /* full or off */ } };
+
 export default function JobCenter() {
-  const [items, setItems] = useState<JobItem[] | null>(null);
+  const [items, setItems0] = useState<JobItem[] | null>(null);
   const [me, setMe] = useState(""), [hasAcc, setHasAcc] = useState(false);
+  const setItems = (x: JobItem[]) => { setItems0(x); jcKeep({ items: x }); };
+  // what we had last time, right away (sessionStorage is read after the page is up, so the server render matches)
+  useEffect(() => { const c = jcRead(); if (c.items) setItems0((cur) => cur || c.items!); if (c.me) setMe(c.me); if (c.hasAcc != null) setHasAcc(c.hasAcc); if (c.chats) setChats((cur) => (cur.length ? cur : c.chats!)); }, []);
   const [err, setErr] = useState(""), [msg, setMsg] = useState("");
   const [step, setStep] = useSticky<Step>("jobs.step", "mockups");
   const [dept, setDept] = useSticky<Dept | "all">("jobs.dept", "all");
@@ -96,13 +106,13 @@ export default function JobCenter() {
   useEffect(() => { try { const u = new URL(window.location.href).searchParams; const s = u.get("step") as Step | null; if (s && ALL_STEPS.includes(s)) setStep(s); const c = u.get("chat"); if (c) setChat(c); const rq = u.get("req"); if (rq) { setStep("requests"); setAll(false); setChat(null); setReqPick(rq); const qq = u.get("q"); if (qq) setQ(qq); } } catch { /* */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let live = true;
-    const get = () => void loadJobChats().then((r) => { if (live && r.ok) setChats(r.chats); });
+    const get = () => void loadJobChats().then((r) => { if (live && r.ok) { setChats(r.chats); jcKeep({ chats: r.chats }); } });
     get(); const t = setInterval(get, 30_000);
     return () => { live = false; clearInterval(t); };
   }, [cn]);
   useEffect(() => {
     let live = true;
-    void loadJobs().then((r) => { if (!live) return; if (!r.ok) { setErr(r.error); return; } setItems(r.items); setMe(r.me); setHasAcc(r.hasAccounts); });
+    void loadJobs().then((r) => { if (!live) return; if (!r.ok) { setErr(r.error); return; } setItems(r.items); setMe(r.me); setHasAcc(r.hasAccounts); jcKeep({ me: r.me, hasAcc: r.hasAccounts }); });
     return () => { live = false; };
   }, [n]);
 
