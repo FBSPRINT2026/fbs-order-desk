@@ -18952,3 +18952,16 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pyb-ex-btn{margin-top:4px;height:32px;border-radius:6px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
 .pyb .pyb-ex .pyb-row{border:0;background:none;border-radius:0;padding:3px 0}
 .pyb .pyb-ex .pyb-row b{margin-left:0}
+/* a goods issue's items by kind: Missing, Damaged, Wrong items, each a short list (Nov 2, Nick) */
+.gis-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.gis-grp{border:1px solid var(--line);border-radius:8px;overflow:hidden;--gc:var(--danger)}
+.gis-grp.dmg{--gc:var(--warn)}
+.gis-grp.wrong{--gc:var(--fbs-violet)}
+.gis-grp.owed{--gc:var(--ink-3)}
+.gis-grp-h{display:block;padding:7px 12px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--gc);background:color-mix(in srgb,var(--gc) 9%,var(--surface));border-bottom:1px solid var(--line-2)}
+.gis-grp ul{list-style:none;margin:0;padding:0}
+.gis-grp li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:8px 12px;border-top:1px solid var(--line-2)}
+.gis-grp li:first-child{border-top:0}
+.gis-grp-w{font-size:14px;font-weight:600;color:var(--ink)}
+.gis-grp-n{font-size:14px;font-weight:700;color:var(--gc);white-space:nowrap}
+.gis-grp li small{grid-column:1/-1;font-size:12.5px;color:var(--ink-3)}

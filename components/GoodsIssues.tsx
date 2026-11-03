@@ -47,16 +47,6 @@ export default function GoodsIssues({ as, customerId, href }: { /** the customer
   );
 }
 
-/** each item in words: "4 short", "1 damaged", "2 wrong", then what it is and what came (Nov 2, Nick: "I don't like how it
- *  reads with the expected 40") */
-function itemLine(it: GoodsIssue["items"][number]) {
-  const short = Math.max(0, (it.expected || 0) - (it.received || 0));
-  const bad = it.bad || 0;
-  const head = [short ? `${short} short` : "", bad ? `${bad} ${it.issue === "mispick" ? "wrong" : "damaged"}` : ""].filter(Boolean).join(", ") || (it.owed ? `${it.owed} owed` : "Checked");
-  const came = it.expected ? `came ${it.received} of ${it.expected}` : "";
-  return { head, what: [it.style, it.color].filter(Boolean).join(" ") + (it.size ? ` · ${it.size}` : ""), detail: [short ? came : "", it.note || ""].filter(Boolean).join(" · ") };
-}
-
 function Row({ i, d, portal, as, open, onToggle, onDone, href }: { i: GoodsIssue; d: IssueCtx; portal: boolean; as?: string; open: boolean; onToggle: () => void; onDone: () => void; href?: (i: GoodsIssue) => string }) {
   const sup = supplierName(i.supplier);
   const theirs = i.owner === "customer";
@@ -81,7 +71,7 @@ function Row({ i, d, portal, as, open, onToggle, onDone, href }: { i: GoodsIssue
       <div className="gis-top">
         <span className="gis-bar" aria-hidden />
         <div className="gis-what">
-          <b>{i.number ? `#${i.number}` : "Order"}{i.nickname ? ` ${i.nickname}` : ""} · {i.title}</b>
+          <b>{i.number ? `#${i.number}` : "Order"}{i.nickname ? ` ${i.nickname}` : ""}{i.kind === "tracking" ? ` · ${i.title}` : ""}</b>
           <small>{[i.supplier_order && `${sup} order ${i.supplier_order}`, i.tracking && i.kind === "tracking" && `tracking ${i.tracking}`].filter(Boolean).join(" · ")}</small>
         </div>
         <span className={"gis-tag gis-tag-" + (closed ? "done" : theirs && i.kind !== "tracking" ? "you" : "us")}>{tag}</span>
@@ -89,7 +79,7 @@ function Row({ i, d, portal, as, open, onToggle, onDone, href }: { i: GoodsIssue
       {!closed && <div className="gis-body">
         {i.kind === "tracking"
           ? <p className="gis-p">{i.detail}{i.tracking ? <> · <a href={trackingUrl("", i.tracking)} target="_blank" rel="noreferrer">See the tracking</a></> : null}</p>
-          : <ul className="gis-items">{i.items.map((it, k) => { const x = itemLine(it); return <li key={k}><span className="gis-q">{x.head}</span><span className="gis-it" data-notranslate>{x.what}</span>{x.detail ? <span className="gis-dt">{x.detail}</span> : null}</li>; })}</ul>}
+          : <IssueGroups items={i.items} />}
         <ol className="gis-steps" aria-label="Where it is">{steps.map((s0, k) => <li key={s0.k} className={k < at ? "done" : k === at ? "on" : ""}>{s0.label}</li>)}</ol>
         <div className="gis-acts">
           {(portal ? theirs && i.kind !== "tracking" : i.kind !== "tracking") && <button type="button" className={"btn sm" + (i.status === "open" ? " primary" : "")} onClick={onToggle} aria-expanded={open}>{open ? "Hide the email" : `Write the email to ${sup}`}</button>}
@@ -152,6 +142,35 @@ function Detail({ i, d, portal, as, mail, onDone }: { i: GoodsIssue; d: IssueCtx
         </div>
       )}
       {msg && <p className="gis-note">{msg}</p>}
+    </div>
+  );
+}
+
+/**
+ * What's wrong, by kind (Nov 2, Nick: "say missing, and then a list of what's missing… then say damaged, what's damaged…
+ * like missing 5000 Safety Orange, four XLs, and then the little descriptor… box 2 of 3 was short"): Missing, Damaged and
+ * Wrong items, each its own short list: the garment, how many, and what we noticed.
+ */
+function IssueGroups({ items }: { items: GoodsIssue["items"] }) {
+  const what = (it: GoodsIssue["items"][number]) => [it.style, it.color].filter(Boolean).join(" ");
+  const groups: { k: string; title: string; rows: { what: string; size: string; n: number; note: string }[] }[] = [
+    { k: "miss", title: "Missing", rows: [] }, { k: "dmg", title: "Damaged", rows: [] }, { k: "wrong", title: "Wrong items", rows: [] }, { k: "owed", title: "Still owed", rows: [] },
+  ];
+  for (const it of items) {
+    const short = Math.max(0, (it.expected || 0) - (it.received || 0)), bad = it.bad || 0;
+    const came = it.expected ? `Came ${it.received} of ${it.expected}` : "";
+    if (short) groups[0].rows.push({ what: what(it), size: it.size, n: short, note: [came, bad ? "" : it.note || ""].filter(Boolean).join(" · ") });
+    if (bad) groups[it.issue === "mispick" ? 2 : 1].rows.push({ what: what(it), size: it.size, n: bad, note: it.note || "" });
+    if (!short && !bad && it.owed) groups[3].rows.push({ what: what(it), size: it.size, n: it.owed, note: it.note || "" });
+  }
+  return (
+    <div className="gis-groups">
+      {groups.filter((g) => g.rows.length).map((g) => (
+        <div key={g.k} className={"gis-grp " + g.k}>
+          <b className="gis-grp-h">{g.title}</b>
+          <ul>{g.rows.map((r, k) => (
+            <li key={k}><span className="gis-grp-w" data-notranslate>{r.what}{r.size ? ` · ${r.size}` : ""}</span><span className="gis-grp-n">{r.n} pc{r.n === 1 ? "" : "s"}</span>{r.note ? <small>{r.note}</small> : null}</li>))}</ul>
+        </div>))}
     </div>
   );
 }
