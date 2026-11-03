@@ -10,7 +10,7 @@ import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
 import { groupsFromPrintavo, readFiles } from "@/lib/ai/emailOrder";
-import { storedPath } from "@/lib/archive";
+import { storedPath, archivePicPath } from "@/lib/archive";
 
 type Result = { ok: boolean; error?: string; id?: string; updated_at?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -668,8 +668,7 @@ export async function myReorderables(q = ""): Promise<Reorderable[]> {
     for (const o of (os || []) as { id: string; groups: Group[] | null }[]) { const g = (o.groups || [])[0]; const p = g?.mockupThumbs?.[0] || g?.customerMockups?.[0]?.path || ""; if (p) picOf.set(`o:${o.id}`, p); }
     type PvFile = { thumb?: string; full?: string; mime?: string; name?: string };
     for (const r of (as || []) as { id: string; files: Record<string, string> | null; data: { groups?: { imprints?: { mockups?: PvFile[] }[]; lines?: { mockups?: PvFile[] }[] }[] } | null }[]) {
-      const f = (r.data?.groups || []).flatMap((g) => [...(g.imprints || []).flatMap((im) => im.mockups || []), ...(g.lines || []).flatMap((l) => l.mockups || [])]).filter((x) => /^image\//.test(x.mime || "") && !/barcode|label/i.test(x.name || ""));
-      const hit = f.map((x) => (x.thumb && r.files?.[x.thumb]) || (x.full && r.files?.[x.full]) || "").find((p) => storedPath(p));
+      const hit = archivePicPath(r);
       if (hit) picOf.set(`a:${r.id}`, hit);
     }
     const paths = [...new Set(picOf.values())];

@@ -117,3 +117,26 @@ export function archivePayments(r: ArchiveSummary & { transactions?: PvTransacti
   return (r.transactions || []).filter((t) => t.kind === "Payment" && !t.processing).map((t) => ({
     id: `pv-${t.id}`, order_id: r.id, number: +r.visual_id || 0, amount: +t.amount || 0, method: METHOD_NAMES[t.category] || t.category || "", paid_on: t.date || null, created_at: t.date || "", href, nickname: r.nickname || "", archived: true }));
 }
+
+/**
+ * An old (Printavo) order's picture: the stored path of its best mockup (Nov 3, Nick: "a lot of the orders aren't
+ * painting"). Picture mockups first; then a PDF or Illustrator mockup's rendered picture (Printavo's "output=format:png"
+ * render of it, kept with the order's files), which is how most of our mockups were uploaded. Never a barcode or label,
+ * and never Printavo's generic document icon. One rule for every place that shows an old order's picture.
+ */
+type MockFile = { thumb?: string | null; full?: string | null; mime?: string | null; name?: string | null };
+export function archivePicPath(r: { files: Record<string, string> | null; data: { groups?: { imprints?: { mockups?: MockFile[] | null }[] | null; lines?: { mockups?: MockFile[] | null }[] | null }[] | null } | null }): string {
+  const all = (r.data?.groups || []).flatMap((g) => [...(g.imprints || []).flatMap((im) => im.mockups || []), ...(g.lines || []).flatMap((l) => l.mockups || [])])
+    .filter((x) => !/barcode|label/i.test(x.name || ""));
+  const stored = (u?: string | null) => (u ? storedPath(r.files?.[u]) : "");
+  const icon = (u?: string | null) => /ico-document|\/assets\/app\//i.test(u || "");
+  for (const x of all) if (/^image\//.test(x.mime || "")) { const p = stored(x.thumb) || stored(x.full); if (p) return p; }
+  for (const x of all) if (x.thumb && !icon(x.thumb) && /output=format:(png|jpe?g)/i.test(x.thumb)) { const p = stored(x.thumb); if (p) return p; }
+  // nothing on its lines: any picture from the job (Nov 3, Nick: "just grab something from the job if you can't find it
+  // on the line… just don't use barcodes"): a stored picture or a rendered PDF, not an icon, barcode, label or packing slip
+  const pics = Object.entries(r.files || {}).filter(([src, path]) => storedPath(path) && !icon(src) && !/barcode|label|packing|slip|invoice|shipping/i.test(`${src} ${path}`)
+    && (/\.(png|jpe?g|webp|gif)$/i.test(path) || /output=format:(png|jpe?g)/i.test(src)));
+  // full pictures before the small renders
+  pics.sort((a, b) => Number(/resize=width:100/.test(a[0])) - Number(/resize=width:100/.test(b[0])));
+  return pics[0]?.[1] || "";
+}

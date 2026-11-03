@@ -36,7 +36,7 @@ import { cardHasPrices, type Program, type ProgramItem } from "@/lib/programs";
 import { aiPaySelect } from "@/app/portal/pay-select";
 import { customerSendsGoods, needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
-import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction, storedPath } from "@/lib/archive";
+import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction, storedPath, archivePicPath } from "@/lib/archive";
 import { fmtPhone } from "@/lib/phone";
 import PortalDesignCatalog from "@/components/PortalDesignCatalog";
 import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/lib/logoShirts";
@@ -366,8 +366,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const want: { id: string; path: string }[] = [];
     ((ad || []) as { id: string; files: Record<string, string> | null; data: PvOrder }[]).forEach((r) => {
       // the imprint mockups first (the shirt with the art), pictures only (not barcodes or file icons)
-      const f = (r.data?.groups?.flatMap((g) => [...g.imprints.flatMap((im) => im.mockups), ...g.lines.flatMap((l) => l.mockups)]) || []).filter((x) => /^image\//.test(x.mime || "") && !/barcode|label/i.test(x.name || ""));
-      const hit = f.map((x) => (x.thumb && r.files?.[x.thumb]) || (x.full && r.files?.[x.full]) || "").find((p) => storedPath(p));
+      const hit = archivePicPath(r as never);
       pvKind[r.id] = kindFromWords([...(r.data?.groups || []).flatMap((g) => [...g.lines.map((l) => l.category), ...g.imprints.map((im) => im.typeOfWork)])]);
       if (hit) want.push({ id: r.id, path: hit });
     });
