@@ -237,6 +237,8 @@ export default function JobCenter() {
         <div className="jrl-mc-ban">
           <span className={"jrl-sig" + (waitingNow ? " live" : "")} aria-hidden>
             <b /><b /><b />
+            {/* a ring of three arrows in our colors turning around the logo (Nov 2, Nick) */}
+            <svg className="jrl-ring" viewBox="0 0 50 50" aria-hidden><path d="M25 3A22 22 0 0 1 44.1 14" stroke="#0E9BD8" /><path d="M44.1 14l-1.2-6.2-4.6 4.4z" fill="#0E9BD8" stroke="none" /><path d="M44.1 36A22 22 0 0 1 25 47" stroke="#F26660" /><path d="M25 47l5.4-3.4-5.6-3z" fill="#F26660" stroke="none" /><path d="M5.9 36A22 22 0 0 1 5.9 14" stroke="#FCB122" /><path d="M5.9 14l-.6 6.3 5.5-2.9z" fill="#FCB122" stroke="none" /></svg>
             <i><img src="/brand/fbs-logo-white.svg" alt="" width={30} height={30} /></i>
           </span>
           <span className="jrl-mc-t">Message Center<i aria-hidden /></span>
