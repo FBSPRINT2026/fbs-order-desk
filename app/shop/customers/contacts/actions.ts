@@ -152,7 +152,7 @@ export async function saveContacts(input: { id: string; company: string; phone: 
     let added = 0, removed = 0;
     for (const p of people) {
       const id = p.contactId || (p.email ? byEmail.get(p.email) : undefined);
-      const row = { name: p.name, email: p.email || null, phone: p.phone || null, portal_access: p.contact && p.portal, is_primary: !!main && p === main, roles: p.roles };
+      const row = { name: p.name, email: p.email || "", phone: p.phone || "", portal_access: p.contact && p.portal, is_primary: !!main && p === main, roles: p.roles };
       if (p.contact) {
         if (id) { const { error: ue } = await admin.from("customer_contacts").update(row).eq("id", id); if (ue) throw new Error(ue.message); }
         else if (p.email || p.name) { const { error: ie } = await admin.from("customer_contacts").insert({ customer_id: input.id, ...row }); if (ie) throw new Error(ie.message); added++; if (p.email) byEmail.set(p.email, "new"); }
