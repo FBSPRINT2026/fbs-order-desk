@@ -34,7 +34,7 @@ export default function WholesalePricing({ pl, upd }: { pl: PriceList; upd: (fn:
   return (
     <div className="ws">
       <div className="row ws-load">
-        <button type="button" className="btn sm" onClick={() => upd((d) => { Object.assign(d, JSON.parse(JSON.stringify(FBS_CONTRACT_2024))); })}>Load the FBS contract price list (2024v1r1)</button>
+        <button type="button" className="btn sm" onClick={() => upd((d) => { Object.assign(d, JSON.parse(JSON.stringify(FBS_CONTRACT_2024))); })}>Load the FBS contract price list (2026 V1)</button>
         <span className="faint">Fills this tab from the contract sheet. Check it, then Save changes at the top.</span>
       </div>
 

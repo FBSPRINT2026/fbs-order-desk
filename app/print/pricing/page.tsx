@@ -24,9 +24,8 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
   if (!seesPriceList(ctx.customers)) notFound();
   const pl = priceList(ctx.settings, "wholesale");
   const sh = ctx.settings.shop;
-  const company = ctx.customers[0]?.company || ctx.customers[0]?.name || "";
   const notes = String(pl.contractNotes || "");
-  const version = pick(notes, /FBS Contract Pricing List\s+([^\s.]+)/i);
+  const version = pick(notes, /FBS Contract Pricing List\s+([^.]+)/i);
   const tiers = pl.tiers || [];
   const cols = Math.max(...(pl.screen || []).map((r) => r.length), 0);
   const embT = pl.embTiers?.length ? pl.embTiers : tiers;
@@ -58,15 +57,16 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
     <div className="pls">
       <SheetPrint auto={print === "1"} />
       <article className="pls-page">
-        <header className="pls-h">
+        {/* divs, not header/footer: the print styles hide page headers and footers */}
+        <div className="pls-h">
           <img src="/brand/fbs-logo-white.svg" alt={sh.name} className="pls-logo" />
-          <div className="pls-ttl"><b>Contract pricing</b><span>{["Prepared for", company].filter(Boolean).join(" ")}{version ? ` · ${version}` : ""}</span></div>
+          <div className="pls-ttl"><b>Contract pricing</b></div>
           <div className="pls-c">
             {sh.phone && <b>{fmtPhone(sh.phone)}</b>}
             <span>{sh.email || "info@fbsprint.com"}</span>
             {sh.address && <span>{sh.address}</span>}
           </div>
-        </header>
+        </div>
         <div className="pls-b">
           <h2>Contract screen printing</h2>
           <table className="pls-t pls-grid">
@@ -99,7 +99,7 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
             </div>
           </div>
         </div>
-        <footer className="pls-f"><span>{sh.name}{sh.address ? ` · ${sh.address}` : ""}</span><span>Your quotes and orders are priced from this list.</span></footer>
+        <div className="pls-f"><span>{sh.name}</span><b>{version}</b><span>Your quotes and orders are priced from this list.</span></div>
       </article>
     </div>
   );
