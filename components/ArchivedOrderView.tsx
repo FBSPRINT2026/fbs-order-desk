@@ -56,6 +56,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
   const itemTotal = o.groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + l.items * l.price, 0), 0);
   const feeTotal = o.fees.reduce((a, f) => a + f.amount, 0);
   const bill = addressLines(o.billingAddress), ship = addressLines(o.shippingAddress);
+  const sameAddr = bill.length > 0 && bill.join("|").toLowerCase() === ship.join("|").toLowerCase();
   const label = o.kind === "quote" ? "Quote" : "Invoice";
   const approval = approvalBadge(o);
   // fees & totals: under the line items for customers; at the top of the side column on the shop's page (Oct 15, Nick)
@@ -120,17 +121,20 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             {cash && <div className="pv-bal"><span>Balance</span><b className={o.amountOutstanding > 0.004 ? "due" : ""}>{money(o.amountOutstanding)}</b></div>}
           </div>
         </header>
+        {/* phones: the old-system note as one quiet line under the title, with Reorder (Nov 3, Nick: "really not liking how
+            a Printavo order looks… it is all mobile") */}
+        {audience !== "shop" && <div className="pv-note-ph"><span>From our old system <PrintavoMark className="pv-note-mark" /></span>{actions}</div>}
 
-        <section className="pv-info">
-          <div>
+        <section className={"pv-info" + (audience !== "shop" ? " pv-info-c" : "") + (sameAddr ? " pv-same" : "")}>
+          <div className="pv-cust">
             <h4>Customer</h4>
             {customerHref ? <a className="pv-strong" href={customerHref}>{o.customer.companyName || o.contact.fullName}</a> : <div className="pv-strong">{o.customer.companyName || o.contact.fullName}</div>}
             {o.customer.companyName && o.contact.fullName && <div>{o.contact.fullName}</div>}
             {o.contact.email && <div><a href={`mailto:${o.contact.email}`}>{o.contact.email}</a></div>}
             {o.contact.phone && <div>{fmtPhone(o.contact.phone)}</div>}
           </div>
-          <div><h4>Billing address</h4>{bill.length ? bill.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
-          <div><h4>Shipping address</h4>{ship.length ? ship.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
+          <div><h4>Billing<span className="pv-same-t"> &amp; shipping</span> address</h4>{bill.length ? bill.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
+          <div className="pv-ship"><h4>Shipping address</h4>{ship.length ? ship.map((l, i) => <div key={i}>{l}</div>) : <div className="faint">—</div>}</div>
           <dl className="pv-dates">
             <dt>Created</dt><dd>{d(o.createdAt)}</dd>
             {o.kind === "invoice" && o.invoiceAt && <><dt>Invoice date</dt><dd>{d(o.invoiceAt)}</dd></>}

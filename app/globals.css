@@ -20147,3 +20147,30 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 }
 /* the order line on a phone shows only the step it's on; the first and last don't hang off the edge */
 @media (max-width:520px){.orl-lb li.cur:last-child{text-align:right}.orl-lb li.cur:first-child{text-align:left}}
+
+/* An order from the old system (Printavo) on a phone (Nov 3, Nick: "really not liking how a printer order looks… it is
+   all mobile"): the title first with a small status, total and balance on one row; the old-system note as one quiet line
+   with Reorder under it (Print and the big note box are for a computer); the customer's own name left off; the two
+   addresses side by side (one when they're the same); the dates in tight rows. Computers are unchanged. */
+.pv-note-ph,.pv-same-t{display:none}
+@media (max-width:640px){
+  .pv > .pv-note{display:none}
+  .pv .pv-head{padding:14px 16px;gap:12px}
+  .pv .pv-kind{font-size:22px}
+  .pv .pv-nick{font-size:14px;margin-top:2px}
+  .pv .pv-head-r{width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:end;gap:6px 18px}
+  .pv .pv-head-r .pv-appr{grid-column:1/-1;justify-self:start}
+  .pv .pv-status{justify-self:start;align-self:center;padding:4px 10px;font-size:11px;border-radius:999px;white-space:nowrap}
+  .pv .pv-bal span{font-size:10.5px}
+  .pv .pv-bal b{font-size:17px;white-space:nowrap}
+  .pv-note-ph{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 4px;font-size:12.5px;color:var(--ink-3)}
+  .pv-note-ph > span{display:inline-flex;align-items:center;gap:2px;white-space:nowrap}
+  .pv-note-ph .btn{min-height:32px;padding:4px 12px;font-size:13px}
+  html body .pv .pv-info{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;padding:14px 16px;font-size:13px}
+  .pv .pv-info h4{font-size:10.5px;margin-bottom:4px}
+  .pv .pv-info-c .pv-cust{display:none}
+  .pv .pv-info .pv-dates{grid-column:1/-1;gap:2px 14px;padding-top:12px;border-top:1px solid var(--line)}
+  .pv .pv-info .pv-dates dd{white-space:nowrap}
+  .pv .pv-same .pv-ship{display:none}
+  .pv .pv-same .pv-same-t{display:inline}
+}
