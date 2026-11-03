@@ -35,8 +35,9 @@ function zeroMoney<T>(x: T): T {
   return x;
 }
 
-export default function RequestEditor({ orderTypes = [], neckSets = [], initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
+export default function RequestEditor({ orderTypes = [], orderTypeLabel = "", neckSets = [], initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
   /** their order types (customers.order_types, Cedar: Bulk / Cart): which one this order is */ orderTypes?: string[];
+  /** what those are called (customers.order_type_label, Nine18: Entered by); empty: Order type */ orderTypeLabel?: string;
   /** their tag label sets on file (Tag Print) */ neckSets?: NeckLabelSet[];
   initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
   /** wholesale: where their goods are coming from (null on retail orders) */ goodsInfo?: GoodsInfoValue | null;
@@ -455,8 +456,8 @@ export default function RequestEditor({ orderTypes = [], neckSets = [], initial,
               <option value="pickup">I&apos;ll pick it up</option><option value="ship">Ship it to me</option><option value="deliver">Local delivery</option>
             </select></div>
           {/* their order type, in the open spot beside How you'll get it (Nov 2, Nick: Cedar's Bulk / Cart) */}
-          {orderTypes.length > 0 && <div className="field"><label>Order type</label>
-            <div className="so-seg rq-otype" role="radiogroup" aria-label="Order type" style={{ gridTemplateColumns: `repeat(${orderTypes.length},minmax(0,1fr))` }}>
+          {orderTypes.length > 0 && <div className="field"><label>{orderTypeLabel || "Order type"}</label>
+            <div className="so-seg rq-otype" role="radiogroup" aria-label={orderTypeLabel || "Order type"} style={{ gridTemplateColumns: `repeat(${orderTypes.length},minmax(0,1fr))` }}>
               {orderTypes.map((k) => <button key={k} type="button" role="radio" aria-checked={o.order_lane === k} className={o.order_lane === k ? "on" : ""} disabled={preview} onClick={() => patch((d) => { d.order_lane = k; })}>{k}</button>)}
             </div></div>}
           {(o.delivery_method || "pickup") !== "pickup" && <div className="field" style={{ gridColumn: orderTypes.length ? "1 / -1" : "span 2" }}><label htmlFor="rq-ship">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="rq-ship" rows={2} placeholder="Name, street, city, state, ZIP" value={o.ship_to || ""} disabled={preview} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>}
@@ -594,8 +595,8 @@ export default function RequestEditor({ orderTypes = [], neckSets = [], initial,
 <div className="so-typerow">
                             <label className="so-toggle"><input type="checkbox" checked={simple.goodsOn} onChange={(e) => setSimple({ ...simple, goodsOn: e.target.checked })} /><span className="so-sw" aria-hidden /><span>Tell us about the garments{goods ? " you're sending" : ""}</span></label>
               {/* their order type, to the right of the toggle (Nov 2, Nick: "he needs to be able to mark it as bulk or cart") */}
-              {orderTypes.length > 0 && <div className="field so-otype"><label>Order type</label>
-                <div className="so-seg" role="radiogroup" aria-label="Order type" style={{ gridTemplateColumns: `repeat(${orderTypes.length},minmax(0,1fr))` }}>
+              {orderTypes.length > 0 && <div className="field so-otype"><label>{orderTypeLabel || "Order type"}</label>
+                <div className="so-seg" role="radiogroup" aria-label={orderTypeLabel || "Order type"} style={{ gridTemplateColumns: `repeat(${orderTypes.length},minmax(0,1fr))` }}>
                   {orderTypes.map((k) => <button key={k} type="button" role="radio" aria-checked={simple.otype === k} className={simple.otype === k ? "on" : ""} onClick={() => setSimple({ ...simple, otype: k })}>{k}</button>)}
                 </div></div>}
               </div>

@@ -132,7 +132,7 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { 
               {grouped && <span className="cu-rail-n">{rs.length} new</span>}{laneCounts && <div className="sub cu-rail-b">{laneCounts}</div>}
             </div></td>;
             return rows.map((x, i) => x.kind === "lane"
-              ? <tr key={`l:${c0.customerId}:${x.lane}`} className={"cu-boardrow" + (i === 0 ? " cu-gstart" : "")}>{i === 0 && rail}<td colSpan={5}>{x.lane ? `${x.lane} Orders` : "Other"} <span className="faint">· {x.n}</span></td></tr>
+              ? <tr key={`l:${c0.customerId}:${x.lane}`} className={"cu-boardrow" + (i === 0 ? " cu-gstart" : "")}>{i === 0 && rail}<td colSpan={5}>{!x.lane ? "Other" : c0.laneLabel ? `${c0.laneLabel} ${x.lane}` : `${x.lane} Orders`} <span className="faint">· {x.n}</span></td></tr>
               : (() => { const r = x.r, d = dueTxt(r.due); return (
                 <tr key={r.id} className={"rqd-r" + (i === 0 ? " cu-gstart" : "") + (openId === r.id ? " picked" : "")} onClick={() => open(r.id)}>
                   {i === 0 && rail}
