@@ -94,7 +94,8 @@ export function StarOrder({ id, on, canAct, label = false }: { id: string; on: b
 
 function JobRow({ j, canAct, detail = false }: { j: PortalJob; canAct: boolean; /** the On hold tab: why, in full, under the row */ detail?: boolean }) {
   // on hold, the button is what fixes it (Nov 2, Nick: the stamp right above it, the row in salmon)
-  const a: JobAction | undefined = j.hold ? { label: j.hold.fixLabel === "Reply" ? "See why and reply" : j.hold.fixLabel, href: j.hold.href, tone: "need" } : j.action;
+  // a held job's button says what to do, plainly: Reply, Pay now, Send art, Check goods (Nov 2, Nick: no "see why and reply")
+  const a: JobAction | undefined = j.hold ? { label: j.hold.fixLabel, href: j.hold.href, tone: "need" } : j.action;
   return (
     <div className={"pjr" + (j.stage === "need" ? " need" : "") + (j.hold ? " held" : "")}>
       <span className="pjr-picw"><Link href={j.href} className="pjr-pic">{j.pic ? <img src={j.pic} alt="" loading="lazy" /> : <span>#{j.number}</span>}</Link><StarOrder id={j.id} on={!!j.starred} canAct={canAct} /></span>
@@ -102,11 +103,12 @@ function JobRow({ j, canAct, detail = false }: { j: PortalJob; canAct: boolean; 
       <div className={"pjr-mid" + (j.hold ? " held" : "")}>
         <OrderRail steps={j.steps} done={j.done} />
         {j.hold
-          ? <div className={"pjr-now hold" + (detail ? " full" : "")}><b>{holdShort(j.hold.key)}:</b> {detail ? j.hold.reason || j.hold.title : <>{j.hold.title}. <details className="hold-why"><summary>See why</summary><p>{j.hold.reason}</p></details></>}</div>
+          ? <div className={"pjr-now hold" + (detail ? " full" : "")}><b>{holdShort(j.hold.key)}:</b> {j.hold.reason || j.hold.title}</div>
           : (j.nowK || j.nowT) && <div className="pjr-now"><b>{j.nowK}</b> {j.nowT}</div>}
       </div>
       <div className="pjr-act">
-        {j.hold && <span className="hold-stamp">{holdShort(j.hold.key)}</span>}
+        {/* the stamp says ON HOLD; why is on the line under the order's steps; the button says what to do (Nov 2, Nick) */}
+        {j.hold && <span className="hold-stamp">On hold</span>}
         {a && (a.external
           ? <a className={"btn pjr-btn " + a.tone} href={a.href} target="_blank" rel="noreferrer">{a.label}</a>
           : <Link className={"btn pjr-btn " + a.tone} href={a.href}>{a.label}</Link>)}
