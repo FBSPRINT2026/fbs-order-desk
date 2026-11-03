@@ -20,6 +20,9 @@ const PROOF_EMAIL: Step = { t: "New: proofs come by email", b: "When a proof or 
 const CLICKUP: Step[] = [
   { sel: '[data-tour="start"]', t: "Used to send orders in ClickUp?", b: "Everything you did there now happens right here. Click Start an order/quote, then Simple order / quote.", img: "/tour/simple-order-button.png" },
   { t: "Fill it in and send it to us", b: "Give it a name and a date, say what it is, and drop in your PO and art. Click Send to FBS: we build it and send you a confirmation.", img: "/tour/simple-order.png" },
+  // so they know we got it (Nov 3, Nick: "a screenshot of the sent to FBS… so that it shows it in there, like they know
+  // we got it"): lit where their own sent orders show (the full dashboard's panel, the simple view's open orders)
+  { sel: '.pdx-sent, [data-tour="orders"]', t: "We've got it", b: "Once you send it, it shows here as Waiting on FBS, so you know we have it. When we confirm it, it becomes one of your jobs.", img: "/tour/sent-to-fbs.png" },
 ];
 const NEW_THINGS: Step = { t: "A few new things", b: "We're rolling out the rest of the new site soon. For now, here are some new things you can do." };
 const START: Step = { sel: '[data-tour="start"]', t: "Start an order", b: "Send us what you need and we'll confirm it. The Mockup Creator puts your logo on a shirt." };
