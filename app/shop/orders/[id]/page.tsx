@@ -206,6 +206,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // the page's tabs (Oct 15, Nick: "too much information on one page… tabs at the top"); ?tab= keeps it on refresh
   type Tab = "order" | "prod" | "goods" | "msg" | "pay" | "act";
   const [tab, setTabS] = useState<Tab>("order");
+  // a customer's order request isn't a quote or an invoice yet: it's processed in the Job Center (Nov 2, Nick: "you're
+  // clicking on a customer's order request. Would you like to open this in the job center?… filter by that customer… that one
+  // selected so that you can hit process"); every link to it lands here, so the question is asked here, once per visit
+  const [rqAsk, setRqAsk] = useState(false);
+  useEffect(() => {
+    if (!o || o.status !== "request" || !(o as Order & { submitted_at?: string | null }).submitted_at) return;
+    try { if (new URL(window.location.href).searchParams.get("stay") === "1") return; } catch { /* */ }
+    setRqAsk(true);
+  }, [o?.id, o?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const setTab = (t: Tab) => { setTabS(t); try { const u = new URL(window.location.href); if (t === "order") u.searchParams.delete("tab"); else u.searchParams.set("tab", t); window.history.replaceState(window.history.state, "", u.toString()); } catch { /* */ } };
   useEffect(() => { try { const t = new URL(window.location.href).searchParams.get("tab"); if (t && ["order", "prod", "goods", "msg", "pay", "act"].includes(t)) setTabS(t as Tab); else if (window.location.hash === "#messages") setTabS("msg"); } catch { /* */ } }, []);
   const [talkN, setTalkN] = useState(0);
@@ -1373,6 +1382,17 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <button type="button" className="btn primary" onClick={() => { const r = recover; setRecover(null); patch((d) => { Object.assign(d, { ...r.o, id: d.id, number: d.number, draft: d.draft, status: d.status, type: d.type }); }); }}>Bring them back</button>
         </div>
       )}
+      {rqAsk && (() => { const who = cust?.company || cust?.name || ""; return (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Open this request in the Job Center?" onClick={() => setRqAsk(false)}>
+          <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <h3>This is {who ? `${who}'s` : "a customer's"} order request</h3>
+            <p className="dla-sub">#{o.number}{o.nickname ? ` ${o.nickname}` : ""} isn&apos;t a quote or an invoice yet. Open it in the Job Center to look it over and process it.</p>
+            <div className="dla-acts">
+              <button type="button" className="btn ghost" onClick={() => setRqAsk(false)}>Stay here</button>
+              <button type="button" className="btn primary" autoFocus onClick={() => router.push(`/shop/jobs?${new URLSearchParams({ step: "requests", q: who, req: o.id })}`)}>Open in the Job Center</button>
+            </div>
+          </div>
+        </div>); })()}
       {leaveTo && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Save this draft?" onClick={() => setLeaveTo(null)}>
           <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>

@@ -24,11 +24,12 @@ const dueTxt = (d: string | null) => {
 };
 const asMail = (r: DeskRequest): MailFile[] => r.files.map((f) => ({ key: f.path, name: f.name, size: f.size, type: f.type, href: `/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}` }));
 
-export default function RequestsDesk({ q, onChanged, onMessage, only }: { q: string; onChanged?: () => void; /** open a conversation about this request in the Message Center */ onMessage?: (orderId: string) => void; /** just this request, opened (a customer's message about it in the Message Center) */ only?: string }) {
+export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { q: string; onChanged?: () => void; /** open a conversation about this request in the Message Center */ onMessage?: (orderId: string) => void; /** just this request, opened (a customer's message about it in the Message Center) */ only?: string; /** open this one when the list loads (a link from its order page) */ pick?: string }) {
   const [list, setList] = useState<DeskRequest[] | null>(null);
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
   const [openId, setOpenId] = useState<string | null>(only || null);
   useEffect(() => { if (only) setOpenId(only); }, [only]);
+  useEffect(() => { if (pick && list?.some((r) => r.id === pick)) open(pick); }, [pick, list?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [act, setAct] = useState(""), [actText, setActText] = useState("");
   const panel = useRef<HTMLDivElement | null>(null);
   const load = async () => { const r = await requestsDesk(); if (r.ok) setList(r.list); else setErr(r.error); };
@@ -97,7 +98,7 @@ export default function RequestsDesk({ q, onChanged, onMessage, only }: { q: str
             <div className="cu-acts">
               {job.simple
                 ? <button type="button" className="btn primary" disabled={!!busy} title="The AI reads what they sent, their PO and art, and fills in this order (it keeps its number)" onClick={() => void createOrder(job)}>Process</button>
-                : <Link className="btn primary" href={`/shop/orders/${job.id}`}>Open the order</Link>}
+                : <Link className="btn primary" href={`/shop/orders/${job.id}?stay=1`}>Open the order</Link>}
               <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void notOrder(job)}>Not an order</button>
               {/* a question about it in the Message Center, beside the list (Nov 2, Nick: "ask him a question in the messaging
                   center… about this") */}

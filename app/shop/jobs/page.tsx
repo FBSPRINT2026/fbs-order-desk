@@ -84,6 +84,8 @@ export default function JobCenter() {
   // the Message Center (Nov 2, Nick: "just have the message center… search and then have it say messages… that should
   // exactly line up with the word job"): its Messages heading sits level with the job table's heading
   const [mq, setMq] = useState("");
+  // a request opened from its order page: the Requests list, that customer, that one opened (Nov 2, Nick)
+  const [reqPick, setReqPick] = useState<string | null>(null);
   // which conversations the column shows: all, the ones waiting on us, or the ones with something new (Nov 2, Nick)
   const [mShow, setMShow] = useSticky<"all" | "waiting" | "new">("jobs.msgShow", "all");
   const padRef = useRef<HTMLDivElement | null>(null);
@@ -91,7 +93,7 @@ export default function JobCenter() {
 
   // a link straight to a step (the old Incoming Orders and Proof Center pages open here), or to a conversation (the
   // live message pop-up's Open chat)
-  useEffect(() => { try { const u = new URL(window.location.href).searchParams; const s = u.get("step") as Step | null; if (s && ALL_STEPS.includes(s)) setStep(s); const c = u.get("chat"); if (c) setChat(c); } catch { /* */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { try { const u = new URL(window.location.href).searchParams; const s = u.get("step") as Step | null; if (s && ALL_STEPS.includes(s)) setStep(s); const c = u.get("chat"); if (c) setChat(c); const rq = u.get("req"); if (rq) { setStep("requests"); setAll(false); setChat(null); setReqPick(rq); const qq = u.get("q"); if (qq) setQ(qq); } } catch { /* */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let live = true;
     const get = () => void loadJobChats().then((r) => { if (live && r.ok) setChats(r.chats); });
@@ -322,7 +324,7 @@ export default function JobCenter() {
             </div>
             <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{curG?.t}</b><span>›</span><b>{(curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && step !== "requests" ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}</div>
             {/* Requests: laid out like ClickUp Jobs' New list, the picked one opened on top (components/RequestsDesk.tsx) */}
-            {step === "requests" && !all ? <RequestsDesk q={q} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
+            {step === "requests" && !all ? <RequestsDesk q={q} pick={reqPick || undefined} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
                 <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
                 <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [
