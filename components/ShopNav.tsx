@@ -240,7 +240,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     // the menu's counts at most every 15 seconds: clicking through pages read them all again on each page (Nov 1, speed)
     if (Date.now() - fastAt.current > 15_000) {
     fastAt.current = Date.now();
-    sb.from("messages").select("id", { count: "exact", head: true }).eq("author_type", "customer").is("read_at", null)
+    sb.from("messages").select("id", { count: "exact", head: true }).is("hidden_at", null).eq("author_type", "customer").is("read_at", null)
       .then(({ count }) => setUnread(count || 0));
     sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
       .then(({ count }) => setIncoming(count || 0));

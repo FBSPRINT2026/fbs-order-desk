@@ -42,7 +42,7 @@ export async function portalMessages(as?: string): Promise<{ ok: boolean; error?
     // sending shows the same list the page opened with (Nov 2, Nick: "it looks different… after you type in it")
     const { data: os } = await admin.from("orders").select("id, draft").in("customer_id", ids).neq("status", "quote").is("discarded_at", null);
     const oids = ((os || []) as { id: string; draft?: boolean | null }[]).filter((o) => !o.draft).map((o) => o.id);
-    const { data } = await allRows((ra, rb) => admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
+    const { data } = await allRows((ra, rb) => admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments").is("hidden_at", null)
       .or(`customer_id.in.(${ids.join(",")})${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").order("id").range(ra, rb));
     return { ok: true, messages: await withFiles(data || [], sign(admin)) };
   } catch (e) { return fail(e); }

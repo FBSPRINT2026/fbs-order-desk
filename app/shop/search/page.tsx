@@ -137,7 +137,7 @@ function SearchInner() {
       setArt(ds); done();
       if (ds.length) { const u = await previewUrls(sb, ds); if (live) setArtUrls(u); }
     });
-    sb.from("messages").select("id, body, author_name, created_at, order_id, customer_id").ilike("body", like).order("created_at", { ascending: false }).limit(15).then(({ data }) => {
+    sb.from("messages").select("id, body, author_name, created_at, order_id, customer_id").is("hidden_at", null).ilike("body", like).order("created_at", { ascending: false }).limit(15).then(({ data }) => {
       const rows = (data || []) as { id: string; body: string; author_name: string; created_at: string; order_id: string | null; customer_id: string | null }[];
       if (live) setMsgs((m) => [...m, ...rows.map((x) => ({ key: "m" + x.id, href: x.order_id ? `/shop/orders/${x.order_id}#messages` : x.customer_id ? `/shop/customers/${x.customer_id}?area=messages` : "/shop/inbox", who: x.author_name || "Portal", when: x.created_at, text: x.body, kind: "Portal" }))].sort((a, b) => b.when.localeCompare(a.when)));
       done();

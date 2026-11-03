@@ -30,7 +30,7 @@ export async function loadGoodsItems(admin: SupabaseClient, orders: O[], viewer:
   const [g, s, m, ml] = await Promise.all([
     admin.from("order_goods").select("*").in("order_id", ids),
     admin.from("goods_shipments").select("*").in("order_id", ids).order("created_at"),
-    admin.from("messages").select("order_id, author_type, author_name, body, created_at, read_at").in("order_id", ids).eq("topic", "goods").order("created_at"),
+    admin.from("messages").select("order_id, author_type, author_name, body, created_at, read_at").is("hidden_at", null).in("order_id", ids).eq("topic", "goods").order("created_at"),
     allRows((r0, r1) => admin.from("supplier_manifest_lines").select("order_id, qty_shipped").in("order_id", ids).eq("kind", "goods").order("id").range(r0, r1), 20000),
   ]);
   const pcsOn = new Map<string, number>();

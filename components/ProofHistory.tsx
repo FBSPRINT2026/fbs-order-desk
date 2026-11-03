@@ -52,7 +52,7 @@ export default function ProofHistory({ orderId, bump }: { orderId: string; bump?
       const [{ data: pr }, { data: ms }, { data: mm }] = await Promise.all([
         sb.from("proofs").select(PROOF_COLS).eq("order_id", orderId).not("version", "is", null).order("version", { ascending: false }).order("created_at"),
         sb.from("mockups").select("id, file_path").eq("order_id", orderId).is("archived_at", null).order("created_at"),
-        sb.from("messages").select("id, author_type, author_name, body, created_at").eq("order_id", orderId).neq("topic", "goods").order("created_at").limit(300),
+        sb.from("messages").select("id, author_type, author_name, body, created_at").is("hidden_at", null).eq("order_id", orderId).neq("topic", "goods").order("created_at").limit(300),
       ]);
       const list = (pr || []) as unknown as ProofRow[];
       setRows(list);

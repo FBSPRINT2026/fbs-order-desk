@@ -90,7 +90,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       ids.length ? ctx.db.from("proofs").select("id, order_id, status").in("order_id", ids).is("archived_at", null) : Promise.resolve({ data: [] }),
       ctx.db.from("designs").select("*").in("customer_id", ctx.customerIds).eq("draft", false).order("number", { ascending: false }),
       ctx.db.from("mockups").select("*").in("customer_id", ctx.customerIds).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
-      ctx.db.from("messages").select("*").or(`customer_id.in.(${ctx.customerIds.join(",")})${ids.length ? `,order_id.in.(${ids.join(",")})` : ""}`).order("created_at"),
+      ctx.db.from("messages").select("*").is("hidden_at", null).or(`customer_id.in.(${ctx.customerIds.join(",")})${ids.length ? `,order_id.in.(${ids.join(",")})` : ""}`).order("created_at"),
     ]);
     const pays = (p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[];
     pays.forEach((x) => { paid[x.order_id] = (paid[x.order_id] || 0) + (+x.amount || 0); });

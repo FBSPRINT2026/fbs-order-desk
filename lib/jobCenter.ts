@@ -263,7 +263,7 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
     admin.from("mockups").select("id, file_path, group_id").eq("order_id", orderId).is("archived_at", null).order("created_at"),
     admin.from("sewouts").select("id, imprint_id, version, status, photo_path, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, created_at").eq("order_id", orderId).is("archived_at", null).order("version", { ascending: false }),
     admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", ["sent", "proofs_requested", "sewout_sent", "quote_declined", "quote_changes", "approved", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at"),
-    admin.from("messages").select("author_type, author_name, author_email, body, created_at").eq("order_id", orderId).order("created_at", { ascending: false }).limit(8),
+    admin.from("messages").select("author_type, author_name, author_email, body, created_at").is("hidden_at", null).eq("order_id", orderId).order("created_at", { ascending: false }).limit(8),
     admin.from("proof_links").select("id").eq("order_id", orderId).eq("kind", "order").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const settings = mergeSettings(s?.data);

@@ -28,7 +28,7 @@ export function useShopData(opts?: { orders?: boolean; customerId?: string }) {
       !want ? Promise.resolve({ data: [] as never[], error: null }) : allRows((a, b) => { const q = sb.from("orders").select("id,number,nickname,status,type,due_date,total,qty,customer_id,lines,groups,created_at,rush,po_number,price_type,submitted_at,order_lane,approved_at,sent_at,completed_at,project_id,printavo_id,pv_status:printavo_state->>status").eq("draft", false).is("discarded_at", null); return (only ? q.eq("customer_id", only) : q).order("number", { ascending: false }).order("id").range(a, b); }),
       allRows((a, b) => sb.from("customers").select("*").order("id").range(a, b)),
       want ? allRows((a, b) => sb.from("payments").select("order_id,amount").order("id").range(a, b)) : Promise.resolve({ data: [] as never[], error: null }),
-      sb.from("messages").select("order_id").eq("author_type", "customer").is("read_at", null),
+      sb.from("messages").select("order_id").is("hidden_at", null).eq("author_type", "customer").is("read_at", null),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     const err = o.error || c.error || p.error;

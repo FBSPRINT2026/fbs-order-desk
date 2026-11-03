@@ -29,7 +29,7 @@ export function parseKey(key: string): { orderId: string | null; topic: string; 
 /** the conversations of the last 60 days the customer wrote in */
 export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
   const since = new Date(Date.now() - 60 * 864e5).toISOString();
-  const { data } = await allRows<Row>((r0, r1) => admin.from("messages").select("id, order_id, customer_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments")
+  const { data } = await allRows<Row>((r0, r1) => admin.from("messages").select("id, order_id, customer_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments").is("hidden_at", null)
     .gte("created_at", since).order("created_at").order("id").range(r0, r1), 20000);
   const rows = (data || []) as Row[];
   const by = new Map<string, Row[]>();
@@ -70,7 +70,7 @@ export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
 /** one conversation, oldest first */
 export async function loadThread(admin: SupabaseClient, key: string): Promise<ChatMsg[]> {
   const p = parseKey(key);
-  const base = () => { const q = admin.from("messages").select("id, author_type, author_name, body, created_at, attachments"); return p.orderId ? q.eq("order_id", p.orderId).eq("topic", p.topic) : q.is("order_id", null).eq("customer_id", p.customerId || ""); };
+  const base = () => { const q = admin.from("messages").select("id, author_type, author_name, body, created_at, attachments").is("hidden_at", null); return p.orderId ? q.eq("order_id", p.orderId).eq("topic", p.topic) : q.is("order_id", null).eq("customer_id", p.customerId || ""); };
   const { data } = await allRows((r0, r1) => base().order("created_at").order("id").range(r0, r1), 2000);
   const rows = (data || []) as { id: string; author_type: string; author_name: string | null; body: string | null; created_at: string; attachments: { path?: string; name?: string }[] | null }[];
   const paths = rows.flatMap((m) => (m.attachments || []).map((a) => a.path || "").filter(Boolean));

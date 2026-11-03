@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const [o, a, m, sml, bal] = await Promise.all([
     admin.from("orders").select("id, number, nickname, status, type, due_date, total, po_number, customers(company, name)").not("status", "in", "(completed)").order("number", { ascending: false }).limit(150),
     admin.from("archived_orders").select("id, visual_id, nickname, status_name, kind, due_date, total, balance, po_number, customers(company, name)").is("removed_at", null).not("status_name", "in", '("Job Completed","Quote - Closed")').order("visual_id", { ascending: false }).limit(200),
-    admin.from("messages").select("id, order_id, customer_id, author_name, body, created_at, customers(company, name)").eq("author_type", "customer").is("read_at", null).order("created_at", { ascending: false }).limit(25),
+    admin.from("messages").select("id, order_id, customer_id, author_name, body, created_at, customers(company, name)").is("hidden_at", null).eq("author_type", "customer").is("read_at", null).order("created_at", { ascending: false }).limit(25),
     admin.from("supplier_manifest_lines").select("supplier, supplier_order, customer_name, customer_po, tracking, method, track_status, est_delivery, delivered_at, qty_shipped, order_id, archived_order_id, kind").neq("kind", "ignored").order("created_at", { ascending: false }).limit(400),
     admin.from("archived_orders").select("id, visual_id, nickname, balance, customers(company, name)").is("removed_at", null).eq("kind", "invoice").gt("balance", 1).order("balance", { ascending: false }).limit(25),
   ]);

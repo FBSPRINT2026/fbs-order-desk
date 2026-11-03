@@ -29,7 +29,7 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const [{ data: g }, { data: d }, { data: m }, { data: gd }] = await Promise.all([
     admin.from("garments").select("*").order("style"),
     ctx.db.from("designs").select("*").eq("customer_id", order.customer_id).is("archived_at", null).eq("draft", false).order("number", { ascending: false }),
-    look ? Promise.resolve({ data: [] }) : ctx.db.from("messages").select("*").eq("order_id", id).order("created_at"),
+    look ? Promise.resolve({ data: [] }) : ctx.db.from("messages").select("*").is("hidden_at", null).eq("order_id", id).order("created_at"),
     look ? Promise.resolve({ data: null }) : ctx.db.from("order_goods").select("supplier, supplier_po, ship_date").eq("order_id", id).maybeSingle(),
   ]);
   // customers never see our blank costs

@@ -14,7 +14,7 @@ export async function chatPing(since: string) {
     const v = await getViewer(", name");
     if (!v.user || !v.isStaff) return { ok: false as const, error: "Shop staff only." };
     const admin = createAdminClient();
-    const { data } = await admin.from("messages").select("id, order_id, customer_id, topic, author_name, body, created_at")
+    const { data } = await admin.from("messages").select("id, order_id, customer_id, topic, author_name, body, created_at").is("hidden_at", null)
       .eq("author_type", "customer").gt("created_at", since).order("created_at").limit(10);
     const rows = (data || []) as { id: string; order_id: string | null; customer_id: string | null; topic: string | null; author_name: string | null; body: string | null; created_at: string }[];
     if (!rows.length) return { ok: true as const, items: [], at: new Date().toISOString() };

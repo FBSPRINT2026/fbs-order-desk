@@ -116,7 +116,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         ids.length ? sb.from("payments").select("*").in("order_id", ids).order("paid_on", { ascending: false }) : Promise.resolve({ data: [] }),
         sb.from("designs").select("*").eq("customer_id", id).eq("draft", false).order("number", { ascending: false }),
         sb.from("mockups").select("*").eq("customer_id", id).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
-        sb.from("messages").select("*").or(ids.length ? `customer_id.eq.${id},order_id.in.(${ids.join(",")})` : `customer_id.eq.${id}`).order("created_at"),
+        sb.from("messages").select("*").is("hidden_at", null).or(ids.length ? `customer_id.eq.${id},order_id.in.(${ids.join(",")})` : `customer_id.eq.${id}`).order("created_at"),
         ids.length ? sb.from("proofs").select("order_id,created_at").in("order_id", ids).is("archived_at", null).eq("status", "pending") : Promise.resolve({ data: [] }),
         // old invoices paid in the portal (migration 260)
         sb.from("payments").select("*, ao:archived_orders!inner(id, visual_id, nickname, customer_id)").eq("ao.customer_id", id).order("paid_on", { ascending: false }),

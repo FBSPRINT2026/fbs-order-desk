@@ -60,7 +60,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const [p, pr, m] = await Promise.all([
     ctx.db.from("payments").select("*").eq("order_id", id).order("paid_on"),
     ctx.db.from("proofs").select("*").eq("order_id", id).not("version", "is", null).is("archived_at", null).order("created_at", { ascending: false }),
-    ctx.db.from("messages").select("*").eq("order_id", id).order("created_at"),
+    ctx.db.from("messages").select("*").is("hidden_at", null).eq("order_id", id).order("created_at"),
   ]);
   // the customer opened their proof (not staff looking at their portal): shown to the shop on the order (lib/proofs.ts)
   if (!ctx.isStaff && (pr.data || []).length) await proofViewed(createAdminClient(), id).catch(() => null);
