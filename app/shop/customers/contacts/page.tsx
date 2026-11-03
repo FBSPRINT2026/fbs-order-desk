@@ -49,6 +49,9 @@ export default function UpdateContacts() {
       contact: true, portal: c.portal, main: c.isPrimary || (!!x.email && c.email === x.email), roles: c.roles }));
     if (x.email && !list.some((p) => p.email === x.email)) list.unshift({ key: "main", name: x.name, email: x.email, phone: "", phoneFound: false, contact: true, portal: true, main: true, roles: [] });
     for (const p of x.found) {
+      // a contact on file by name only (Printavo often had no email for them) is the same person found by name in the mail
+      const nameOnly = list.find((y) => !y.email && y.name && y.name.toLowerCase() === p.name.toLowerCase());
+      if (nameOnly) { nameOnly.email = p.email; nameOnly.phoneFound = nameOnly.phoneFound || (!nameOnly.phone && !!p.phone); if (!nameOnly.phone) nameOnly.phone = p.phone; }
       const have = list.find((y) => y.email === p.email);
       if (have) { Object.assign(have, { n: p.n, last: p.last, boxes: p.boxes, same: p.sameCompany }); if (!have.phone && p.phone) { have.phone = p.phone; have.phoneFound = true; } continue; }
       const regular = p.sameCompany && p.n >= REGULAR;

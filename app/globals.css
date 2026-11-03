@@ -14889,7 +14889,7 @@ input.ucx-sug{border-color:var(--accent);background:var(--accent-soft)}
 .ucx-c{text-align:center;width:64px}
 .ucx-t td.ucx-c{padding-top:16px}
 .ucx-t td.ucx-c input{width:18px;height:18px}
-.ucx-in{width:100%;min-width:140px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 9px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.ucx-in{display:block;box-sizing:border-box;width:100%;min-width:140px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 9px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
 .ucx-in.ucx-em{margin-top:6px}
 .ucx-t tr.ucx-off td{background:var(--surface-2)}
 .ucx-t tr.ucx-off .ucx-in{color:var(--ink-3)}
