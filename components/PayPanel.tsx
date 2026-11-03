@@ -76,8 +76,8 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     const start = () => {
       if (dead || !window.StaxJs || stax.current) return;
       stax.current = new window.StaxJs(staxToken, {
-        number: { id: "stax-card-number", placeholder: "Card number", style: "height:34px;width:100%;font-size:15px;border:0;outline:0;", type: "text", format: "prettyFormat" },
-        cvv: { id: "stax-card-cvv", placeholder: "CVV", style: "height:34px;width:100%;font-size:15px;border:0;outline:0;", type: "text" },
+        number: { id: "stax-card-number", placeholder: "Card number", style: "height:34px;width:100%;font-size:16px;border:0;outline:0;", type: "text", format: "prettyFormat" },
+        cvv: { id: "stax-card-cvv", placeholder: "CVV", style: "height:34px;width:100%;font-size:16px;border:0;outline:0;", type: "text" },
       });
       stax.current.showCardForm().then(() => { if (!dead) setReady(true); }).catch(() => setMsg({ ok: false, text: "Couldn't load the secure card form. Refresh and try again." }));
     };
