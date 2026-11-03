@@ -37,10 +37,13 @@ function pdfThumb(url: string, name: string): Promise<string> {
 export default function FileThumb({ name, url, mime }: { name: string; url?: string; mime?: string }) {
   const [u, setU] = useState("");
   const pdf = /\.(pdf|ai)$/i.test(name) || /pdf/i.test(mime || "");
+  const pic = /\.(png|jpe?g|gif|webp|svg)$/i.test(name) || /^image\//i.test(mime || "");
   const sheet = /\.(xlsx?|csv|numbers)$/i.test(name) || /sheet|excel|csv/i.test(mime || "");
   useEffect(() => { let off = false; if (pdf && url) void pdfThumb(url, name).then((x) => { if (!off) setU(x); }); return () => { off = true; }; }, [pdf, url, name]);
   // eslint-disable-next-line @next/next/no-img-element
   if (u) return <img src={u} alt={name} className="prod-page" />;
+  // a picture shows itself (Nov 2: the portal's Attachments)
+  if (pic && url) return <img src={url} alt={name} className="prod-page" loading="lazy" />;
   if (sheet) return <span className="prod-sheet" aria-hidden><i /><i /><i /><i /><i /><i /><i /><i /><i /><b>{ext(name)}</b></span>;
   return <span>{ext(name)}</span>;
 }

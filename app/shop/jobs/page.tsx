@@ -168,7 +168,11 @@ export default function JobCenter() {
   };
   const unreadOf = (orderId?: string) => (orderId ? chats.filter((c) => c.orderId === orderId).reduce((a, c) => a + c.unread, 0) : 0);
   const chatOrder = chat ? chats.find((c) => c.key === chat)?.orderId || null : null;
-  const curChat = chat ? chats.find((c) => c.key === chat) || null : null;
+  // a job with no conversation yet opens a new one (Nov 2, Nick: "ask him a question in the messaging center… about this")
+  const curChat: ChatSummary | null = chat ? chats.find((c) => c.key === chat) || (() => {
+    const oid = chat.startsWith("o:") ? chat.split(":")[1] : "", it = oid ? byOrder.get(oid) : null;
+    return it ? { key: chat, orderId: oid, topic: "", customerId: it.customerId || null, projectId: null, number: it.number ?? null, nickname: it.title, customer: it.customer, status: it.type === "request" ? "request" : "", last: { body: "", from: "staff" as const, who: "", at: it.at }, unread: 0, waiting: false, owner: "" } : null;
+  })() : null;
   const mWant = mq.trim().toLowerCase();
   const boardChats = myChats.filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
   const chatOfJob = (orderId: string) => myChats.find((c) => c.orderId === orderId) || null;
@@ -221,8 +225,6 @@ export default function JobCenter() {
           </span>
           <span className="jrl-mc-t">Message Center</span>
         </div>
-        <div className="jrl-mc-n"><span><b className="nw">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</b> new</span><span><b className="wt">{waitingNow}</b> waiting on us</span></div>
-        <i className="jrl-strip" aria-hidden />
       </div>
       {/* the stages as cards (Nov 2, Nick: "the title should be on the top… a small number in the top right of each card…
           small number underneath the bubble. I don't like the notification style bubble"): the picked one tinted, with an
@@ -249,6 +251,8 @@ export default function JobCenter() {
       {/* the messages: search, then the Messages heading level with Job on the right; picking one brings its job forward on
           its tab and opens the conversation under it (Nov 2, Nick) */}
       <div className="jmb">
+        {/* the counts on the line of the list's colored bar, the search under them (Nov 2, Nick) */}
+        <div className="jrl-mc-n"><span><b className="nw">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</b> new</span><span><b className="wt">{waitingNow}</b> waiting on us</span></div>
         <input className="jmb-s" value={mq} onChange={(e) => setMq(e.target.value)} placeholder="Search messages" aria-label="Search messages" />
         <div ref={padRef} style={{ height: lvl.pad }} aria-hidden />
         <div className="jmb-head" style={lvl.h ? { height: lvl.h } : undefined}>Messages</div>
@@ -301,7 +305,7 @@ export default function JobCenter() {
             </div>
             <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{curG?.t}</b><span>›</span><b>{(curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && step !== "requests" ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}</div>
             {/* Requests: laid out like ClickUp Jobs' New list, the picked one opened on top (components/RequestsDesk.tsx) */}
-            {step === "requests" && !all ? <RequestsDesk q={q} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
+            {step === "requests" && !all ? <RequestsDesk q={q} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
                 <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
                 <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [

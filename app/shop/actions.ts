@@ -246,7 +246,7 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
  *  them, it brings up the screen… hit the create order button"): every request a customer sent in from their portal and
  *  we haven't built yet, with what they told us and their files (a simple order's answers, or a form they filled in). */
 export type DeskRequest = { id: string; number: number; name: string; customerId: string; customer: string; contact: string; sentAt: string; due: string | null; po: string;
-  delivery: string; shipTo: string; simple: boolean; method: string; qty: number | null; garments: string; about: string; pieces: number;
+  delivery: string; shipTo: string; simple: boolean; method: string; qty: number | null; garments: string; about: string; pieces: number; /** what they filled in on their side, word for word (ClickUp's Customer Name) */ fields: Record<string, string>;
   files: { name: string; path: string; type: string; kind: string; size: number }[] };
 export async function requestsDesk(): Promise<{ ok: true; list: DeskRequest[] } | { ok: false; error: string }> {
   try {
@@ -278,7 +278,7 @@ export async function requestsDesk(): Promise<{ ok: true; list: DeskRequest[] } 
       return {
         id: r.id, number: r.number, name: r.nickname || "", customerId: r.customer_id, customer: c?.company || c?.name || "Customer", contact: c?.company && c?.name ? c.name : "",
         sentAt: r.submitted_at, due: r.due_date, po: r.po_number || "", delivery: r.delivery_method || "pickup", shipTo: r.ship_to || "",
-        simple: !!so, method: so?.method || "", qty: so?.qty ?? r.qty ?? null, garments: so?.garments || "", about: so?.about || "", pieces,
+        simple: !!so, method: so?.method || "", qty: so?.qty ?? r.qty ?? null, garments: so?.garments || "", about: so?.about || "", pieces, fields: ((so as { fields?: Record<string, string> } | null)?.fields) || {},
         files: (filesOf.get(r.id) || []).map((f) => ({ name: f.name, path: f.file_path, type: f.file_type || "", kind: f.category === "order_sheet" ? "po" : f.category || "", size: size.get(f.file_path) || 0 })),
       };
     });

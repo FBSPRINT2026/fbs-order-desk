@@ -23,7 +23,7 @@ const dueTxt = (d: string | null) => {
 };
 const asMail = (r: DeskRequest): MailFile[] => r.files.map((f) => ({ key: f.path, name: f.name, size: f.size, type: f.type, href: `/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}` }));
 
-export default function RequestsDesk({ q, onChanged }: { q: string; onChanged?: () => void }) {
+export default function RequestsDesk({ q, onChanged, onMessage }: { q: string; onChanged?: () => void; /** open a conversation about this request in the Message Center */ onMessage?: (orderId: string) => void }) {
   const [list, setList] = useState<DeskRequest[] | null>(null);
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -71,8 +71,9 @@ export default function RequestsDesk({ q, onChanged }: { q: string; onChanged?: 
             {(job.qty || job.pieces) ? <><span className="faint">·</span><span>about {(job.qty || job.pieces).toLocaleString("en-US")} pcs</span></> : null}
             <span className="faint">·</span><span>{job.delivery === "ship" ? `Ship to ${job.shipTo}` : job.delivery === "deliver" ? `Deliver to ${job.shipTo}` : "Pickup"}</span>
             {job.contact && <><span className="faint">·</span><span>{job.contact}</span></>}
+            {Object.entries(job.fields).filter(([, v]) => String(v || "").trim()).map(([k, v]) => <span key={k} style={{ display: "contents" }}><span className="faint">·</span><span>{k}: {v}</span></span>)}
           </div>
-          {job.about ? <p className="cu-notes">{job.about}</p> : !job.simple ? <p className="cu-notes faint">They filled in the order form: {job.pieces.toLocaleString("en-US")} pieces. Open the order to see their garments and prints.</p> : null}
+          {job.about ? <div className="cu-notes"><span className="lbl">Original message</span><p style={{ margin: "2px 0 0", whiteSpace: "pre-wrap" }}>{job.about}</p></div> : !job.simple ? <p className="cu-notes faint">They filled in the order form: {job.pieces.toLocaleString("en-US")} pieces. Open the order to see their garments and prints.</p> : null}
           {job.garments && <p className="cu-notes rqd-g"><b>Garments:</b> {job.garments}</p>}
           {job.files.length > 0 ? <div className="cu-sec"><FileTray files={asMail(job)} /></div> : <div className="cu-sec faint">No files with this request.</div>}
           <div className="cu-ask">
@@ -82,7 +83,9 @@ export default function RequestsDesk({ q, onChanged }: { q: string; onChanged?: 
                 ? <button type="button" className="btn primary" disabled={!!busy} title="The AI reads what they sent, their PO and art, and fills in this order (it keeps its number)" onClick={() => void createOrder(job)}>Create order</button>
                 : <Link className="btn primary" href={`/shop/orders/${job.id}`}>Open the order</Link>}
               <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void notOrder(job)}>Not an order</button>
-              <Link className="btn ghost" href={`/shop/orders/${job.id}#messages`}>Message them</Link>
+              {/* a question about it in the Message Center, beside the list (Nov 2, Nick: "ask him a question in the messaging
+                  center… about this") */}
+              {onMessage ? <button type="button" className="btn ghost" onClick={() => onMessage(job.id)}>Message them</button> : <Link className="btn ghost" href={`/shop/orders/${job.id}#messages`}>Message them</Link>}
             </div>
             {busy && <div className="faint">{busy}</div>}
           </div>

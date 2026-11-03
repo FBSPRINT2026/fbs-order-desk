@@ -19422,3 +19422,39 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jc-swhere b:nth-of-type(2){color:var(--c)}
 .jc-swhere small{font-size:12px;color:var(--ink-3);margin-left:4px}
 @media (max-width:900px){.jcx>.jrl{flex-wrap:wrap}.jrl-sec{flex:1 1 150px}}
+/* the Message Center's banner the height of the stage cards; its counts on the line of the list's bar, the search under
+   (Nov 2, Nick); the stage titles centered with the total in the corner */
+.jcx>.jrl-mc{border:0;border-radius:12px;margin-bottom:14px;background:#141D2B}
+.jcx>.jrl-mc .jrl-mc-ban{border-radius:12px;min-height:0}
+.jcx>.jmb{border-top:1px solid var(--line);border-radius:12px;padding-top:12px}
+.jcx>.jmb .jrl-mc-n{padding:0;height:52px;align-items:stretch;margin-bottom:12px;flex:none}
+.jcx>.jmb .jrl-mc-n span{display:flex;align-items:center;justify-content:center;gap:4px;border-radius:8px;font-size:13px}
+.jcx>.jmb .jrl-mc-n b{font-size:16px}
+.jrl-h{position:relative;justify-content:center;padding:0 22px}
+.jrl-h .jrl-n{position:absolute;right:0;top:0}
+/* the Message Center ripples across the whole banner, like water, every 15 seconds (every 6 when a message is waiting on
+   us) (Nov 2, Nick: "ripples of water would go throughout… every 15 seconds") */
+.jrl-sig b{animation:jrl-ripple 15s cubic-bezier(.15,.55,.35,1) infinite;border-width:2px}
+.jrl-sig b:nth-child(2){animation-delay:.35s}
+.jrl-sig b:nth-child(3){animation-delay:.7s}
+.jrl-sig.live b{animation-duration:6s}
+.jrl-sig.live b:nth-child(2){animation-delay:.35s}
+.jrl-sig.live b:nth-child(3){animation-delay:.7s}
+@keyframes jrl-ripple{0%{transform:scale(1);opacity:.9}18%{transform:scale(7.5);opacity:0}100%{transform:scale(7.5);opacity:0}}
+@media (prefers-reduced-motion:reduce){.jrl-sig b{animation:none}}
+.jrl-mc-t{margin-left:6px;position:relative;z-index:1}
+.jrl-sig i{z-index:1}
+/* the portal's order intake (Nov 2, Nick picked A): a slim status line, Attachments with their pictures, the facts on the side */
+.pod-in-st{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px;font-size:14px;color:var(--ink-2,var(--ink))}
+.pod-in-st i{width:9px;height:9px;border-radius:50%;background:var(--ok);flex:none}
+.pod-so-msg{margin-bottom:14px}
+.pod-so-msg .lbl{display:block;margin-bottom:4px}
+.pod-so-msg p{margin:0;white-space:pre-wrap;font-size:14px;color:var(--ink)}
+.pod-att{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.pod-att-t{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface);color:var(--ink);text-decoration:none;min-width:0}
+.pod-att-t:hover{border-color:var(--accent)}
+.pod-att-i{height:130px;display:flex;align-items:center;justify-content:center;background:var(--surface-2);padding:8px;box-sizing:border-box;font-weight:700;color:var(--ink-3);font-size:13px}
+.pod-att-i img{max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 0 0 1px var(--line)}
+.pod-att-c{display:flex;flex-direction:column;padding:8px 10px;border-top:1px solid var(--line-2);min-width:0}
+.pod-att-c b{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.pod-att-c small{font-size:12px;color:var(--ink-3)}

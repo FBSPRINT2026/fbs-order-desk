@@ -1,4 +1,5 @@
 import PortalGoods from "@/components/PortalGoods";
+import FileThumb from "@/components/FileThumb";
 import BackLink from "@/components/BackLink";
 import { termsPct } from "@/lib/payTerms";
 import { StarOrder } from "@/components/PortalDashBits";
@@ -45,7 +46,10 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   if (o.status === "request" && !o.submitted_at) redirect(`/portal/request/${id}${as ? `?as=${as}` : ""}`);
   const isReq = o.status === "request";
   // a simple order: what they sent (Nov 2, Nick: the McKenna job brought in from ClickUp "as if they had filled it out")
-  const so = (o as typeof o & { simple_order?: { about?: string; garments?: string; qty?: number | null; method?: string; files?: { path: string; name: string; kind?: string }[] } | null }).simple_order || null;
+  const so = (o as typeof o & { simple_order?: { about?: string; garments?: string; qty?: number | null; method?: string; reorder?: unknown; fields?: Record<string, string>; files?: { path: string; name: string; kind?: string }[] } | null }).simple_order || null;
+  // the order as they sent it in, before we've built it (Nov 2, Nick: "rethink this order intake… just like in ClickUp…
+  // exactly what they wrote"): only what they gave us, their message, their attachments, and a way to ask us
+  const intake = isReq && !!so && !so.reorder;
   const soFiles = so?.files?.length ? await (async () => {
     const { data } = await createAdminClient().storage.from("proofs").createSignedUrls(so.files!.map((f) => f.path), 3600);
     return so.files!.map((f, i) => ({ ...f, url: data?.[i]?.signedUrl || "" }));
@@ -151,7 +155,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           <div>
             <h1>{o.nickname || "Your Order"}</h1>
             <div className="eyebrow pod-eb">
-              <span>{o.type === "quote" ? "Quote" : "Order"} #{o.number}{o.due_date ? ` · in hands ${fmtDateLong(o.due_date)}` : ""}</span>
+              <span>{o.type === "quote" ? "Quote" : "Order"} #{o.number}{intake && o.submitted_at ? ` · sent ${fmtDate(o.submitted_at)}` : ""}{o.due_date ? ` · in hands ${intake ? fmtDate(o.due_date) : fmtDateLong(o.due_date)}` : ""}</span>
               {reviewHref && <span className="pod-wait">Waiting on you: your {reviewWords(reviewKinds)}</span>}
             </div>
           </div>
@@ -162,13 +166,13 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             {(() => { const x = o as typeof o & { submitted_at?: string | null; staff_seen_at?: string | null; customer_archived_at?: string | null; cancel_requested_at?: string | null };
               const kind = x.status === "request" ? (x.staff_seen_at ? "seen" : "unseen") : x.type === "quote" ? "quote" : x.status === "completed" ? null : "order";
               return kind ? <OrderActions orderId={x.id} kind={kind} archived={!!x.customer_archived_at} cancelAsked={!!x.cancel_requested_at} disabled={preview} /> : null; })()}
-            <a className="btn" href={`/print/${o.id}${qsAs}`} target="_blank" rel="noreferrer">Print or save PDF</a>
+            {!intake && <a className="btn" href={`/print/${o.id}${qsAs}`} target="_blank" rel="noreferrer">Print or save PDF</a>}
             {/* the one way to answer: the same page our email opens (Nov 2, Nick: "small button that says review and approve") */}
             {reviewHref && <a className="btn primary" href={reviewHref}>Review and approve</a>}
           </div>
         </div>
 
-        {String(o.status) !== "void" && <div className="pod-railw"><OrderRail steps={job.steps} done={o.status === "completed"} />{hold && <span className="hold-stamp">On hold</span>}</div>}
+        {String(o.status) !== "void" && !intake && <div className="pod-railw"><OrderRail steps={job.steps} done={o.status === "completed"} />{hold && <span className="hold-stamp">On hold</span>}</div>}
 
         {/* the numbers in one summary card, like the shop's pages: what it costs, what's paid, what's left */}
         {!isReq && <div className="stats pod-stats">
@@ -191,7 +195,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
         {reviewed && <div className="callout good"><h2>{reviewed === "approved" ? "Thanks, your artwork is approved" : reviewed === "approved_changes" ? "Thanks, approved with your changes" : "Thanks, we got your changes"}</h2><div className="muted">{reviewed === "approved" ? "We'll start printing." : reviewed === "approved_changes" ? "We'll make those changes and print. You won't get another proof." : "We'll send you a new proof to look over."}</div></div>}
         {sewDone && <div className="callout good"><h2>{sewDone === "approved" ? "Thanks, your sew-out is approved" : "Thanks, we got your changes"}</h2><div className="muted">{sewDone === "approved" ? "We'll run your order. It's kept on file for reorders." : "We'll fix it and send you a new sew-out."}</div></div>}
         {justPaid && <div className="callout good"><h2>Thank you, payment received</h2><div className="muted">It can take a minute to show below. You&apos;ll get a receipt by email from our payment processor.</div></div>}
-        {isReq && (
+        {intake && <div className="pod-in-st" role="status"><i aria-hidden />{justSent ? "Thanks, we got it." : "We got it."} We&apos;re reviewing your order and will send you a quote to approve. Questions? Message us below.</div>}
+        {isReq && !intake && (
           <div className="callout good">
             <h2>{(o as { simple_order?: { reorder?: unknown } | null }).simple_order?.reorder ? "Reorder pending approval" : justSent ? "Thanks! Your order is in." : "We're reviewing your order"}</h2>
             <div className="muted">We&apos;ll check your garments and artwork, price everything and send it back here for your final OK. Questions? Send us a message below.</div>
@@ -199,17 +204,21 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
         )}
         <div className="two pod-two">
           <div className="stack" id="items">
-            {isReq && so && (
+            {intake && so && (
               <section className="panel pod-so">
-                <div className="panel-h"><h2>What you sent us</h2><span className="faint">We&apos;ll build your order from this</span></div>
+                <div className="panel-h"><h2>Attachments</h2></div>
                 <div className="panel-b">
-                  <dl className="pod-so-dl">
+                  {so.about ? <div className="pod-so-msg"><span className="lbl">Original message</span><p>{so.about}</p></div> : null}
+                  {(so.method || so.qty || so.garments) ? <dl className="pod-so-dl">
                     {so.method ? <div><dt>Decoration</dt><dd>{({ screen: "Screen printing", embroidery: "Embroidery", transfer: "Transfers", mixed: "Mixed" } as Record<string, string>)[so.method] || so.method}</dd></div> : null}
                     {so.qty ? <div><dt>Pieces</dt><dd>{so.qty.toLocaleString("en-US")}</dd></div> : null}
                     {so.garments ? <div><dt>Garments</dt><dd>{so.garments}</dd></div> : null}
-                  </dl>
-                  {so.about ? <p className="pod-so-about">{so.about}</p> : null}
-                  {soFiles.length > 0 && <ul className="pod-so-files">{soFiles.map((f) => <li key={f.path}><span className="pill">{f.kind === "po" ? "PO" : f.kind === "art" ? "Art" : "File"}</span>{f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a> : <span>{f.name}</span>}</li>)}</ul>}
+                  </dl> : null}
+                  {soFiles.length > 0 ? <div className="pod-att">{soFiles.map((f) => (
+                    <a key={f.path} className="pod-att-t" href={f.url || undefined} target="_blank" rel="noreferrer">
+                      <span className="pod-att-i"><FileThumb name={f.name} url={f.url || undefined} /></span>
+                      <span className="pod-att-c"><b>{f.name}</b><small>{f.kind === "po" ? "PO" : f.kind === "art" ? "Art" : "File"}</small></span>
+                    </a>))}</div> : <div className="faint">No attachments.</div>}
                 </div>
               </section>
             )}
@@ -217,7 +226,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                 garments by size with their prices */}
             {orderGroups(o).map((g, gi) => {
               // a simple order's blank starting job isn't shown: "What you sent us" says it all until we build it
-              if (isReq && so && !g.lines.some((l) => l.style || Object.values(l.sizes || {}).some((v) => +v > 0))) return null;
+              if (intake && !g.lines.some((l) => l.style || Object.values(l.sizes || {}).some((v) => +v > 0))) return null;
               const cg = c.groups[gi];
               const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]);
               const used = SIZES.filter((s) => g.lines.some((l) => +(l.sizes?.[s] || 0) > 0));
@@ -300,7 +309,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               </section>
             )}
 
-            {(proofs.length > 0 || mkGroups.length === 0) && <section className="panel" id="proofs">
+            {(proofs.length > 0 || (mkGroups.length === 0 && !intake)) && <section className="panel" id="proofs">
               <div className="panel-h"><h2>Artwork proofs</h2></div>
               <div className="panel-b stack">
                 {proofs.length ? (
@@ -337,19 +346,22 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               <div className="panel-b pod-kv">
                 <span>{o.type === "quote" ? "Quote" : "Order"}</span><b>#{o.number}</b>
                 {o.po_number ? <><span>PO</span><b>{o.po_number}</b></> : null}
-                <span>Ordered</span><b>{fmtDateLong(String(o.created_at || "").slice(0, 10))}</b>
+                {intake ? <><span>Sent</span><b>{fmtDateLong(String(o.submitted_at || o.created_at || "").slice(0, 10))}</b></> : <><span>Ordered</span><b>{fmtDateLong(String(o.created_at || "").slice(0, 10))}</b></>}
                 {o.due_date ? <><span>In hands</span><b>{fmtDateLong(o.due_date)}</b></> : null}
                 {delivery ? <><span>Delivery</span><b>{delivery}</b></> : null}
                 {o.delivery_method !== "pickup" && o.ship_to ? <><span>{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</span><b className="pod-addr">{o.ship_to}</b></> : null}
                 {o.tracking ? <><span>Tracking</span><b className="pod-addr">{o.tracking}</b></> : null}
                 {cust?.name ? <><span>Contact</span><b>{cust.name}</b></> : null}
+                {/* what they filled in on their side (ClickUp's Customer Name), word for word */}
+                {intake && Object.entries(so?.fields || {}).filter(([, v]) => String(v || "").trim()).map(([k, v]) => <span key={k} style={{ display: "contents" }}><span>{k.replace(/^Customer Name$/i, "Customer")}</span><b>{v}</b></span>)}
+                {intake ? <><span>Pricing</span><b>On its way</b></> : null}
                 {o.approved_at ? <><span>Approved</span><b>{fmtDate(o.approved_at)}{o.approved_name ? ` by ${o.approved_name}` : ""}</b></> : null}
                 {approvedProof ? <><span>Proof</span><b>Approved {fmtDate(approvedProof.decided_at || approvedProof.created_at)}</b></> : null}
                 {garmentsLine ? <><span>Garments</span><b><a href={goodsHere.length ? "#goods" : `/portal?area=goods${preview ? `&as=${ctx.preview!.id}` : ""}`}>{garmentsLine}</a></b></> : null}
               </div>
             </section>
 
-            {isReq ? (
+            {intake ? null : isReq ? (
               <section className="panel">
                 <div className="panel-h"><h2>Pricing</h2></div>
                 <div className="panel-b muted" style={{ fontSize: 13 }}><b>TBD.</b> We&apos;re pricing your order now. You&apos;ll get an email when it&apos;s ready to approve.</div>
@@ -392,23 +404,23 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             )}
 
             {/* the papers for this order: the invoice, each proof, each mockup */}
-            <section className="panel">
+            {!intake && <section className="panel">
               <div className="panel-h"><h2>Files</h2></div>
               <div className="panel-b pod-files">
                 <a href={`/print/${o.id}${qsAs}`} target="_blank" rel="noreferrer"><span className="pod-fi">PDF</span>{o.type === "quote" ? "Quote" : "Invoice"} #{o.number}</a>
                 {proofs.map((pf) => <a key={pf.id} href={pf.status === "pending" ? reviewHref || `/portal/orders/${o.id}/review/${pf.id}${qsAs}` : pf.url || "#"} target={pf.status === "pending" ? undefined : "_blank"} rel="noreferrer"><span className="pod-fi">{pf.file_type.includes("pdf") ? "PDF" : "IMG"}</span>{pf.title || `Proof v${pf.version || 1}`}<small>{pf.status === "approved" ? "Approved" : pf.status === "changes" ? "Changes asked" : "To review"}</small></a>)}
                 {mkPaths.filter((x) => mkUrls[x]).slice(0, 8).map((x, i) => <a key={x} href={mkUrls[x]} target="_blank" rel="noreferrer"><span className="pod-fi">IMG</span>Mockup {i + 1}</a>)}
               </div>
-            </section>
+            </section>}
 
-            <section className="panel">
+            {!intake && <section className="panel">
               <div className="panel-h"><h2>Questions?</h2></div>
               <div className="panel-b stack" style={{ fontSize: 13 }}>
                 <span className="muted">Send us a message on this page, or reach {ctx.settings.shop.name} directly:</span>
                 {ctx.settings.shop.phone && <span>{fmtPhone(ctx.settings.shop.phone)}</span>}
                 {ctx.settings.shop.email && <span>{ctx.settings.shop.email}</span>}
               </div>
-            </section>
+            </section>}
           </aside>
         </div>
       </main>
