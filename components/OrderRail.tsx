@@ -2,6 +2,7 @@ import type { JobStep } from "@/lib/portalJobs";
 
 const PATHS: Record<string, string> = {
   check: "M5 12l4 4 10-10",
+  review: "M10 4a6 6 0 1 0 0 12 6 6 0 1 0 0-12zM14.5 14.5L20 20",
   placed: "M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5",
   art: "M4 20l4-1 11-11-3-3L5 16zM14 7l3 3",
   goods: "M8 3L3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z",

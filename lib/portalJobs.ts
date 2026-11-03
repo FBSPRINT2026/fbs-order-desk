@@ -95,6 +95,12 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
   const keys = ["placed", "art", "goods", "print", "ready", shipped ? "ship" : o.delivery_method === "ship" ? "ship" : o.delivery_method === "pickup" ? "pickup" : "out"];
   const steps: JobStep[] = labels.map((label, i) => ({ key: keys[i], label, state: done || i < at ? "done" : i === at ? "cur" : "todo", sub: sub[i] }));
   if (done) steps.forEach((s) => { s.state = "done"; });
+  // an order they sent in that we haven't quoted yet (Nov 2, Nick: "it shouldn't be quote yet… a pre thing before quote…
+  // information sent, FBS review"): FBS review comes first, with the day they sent it, and Quote is next
+  if (asked) {
+    steps[0] = { ...steps[0], state: "todo", sub: "" };
+    steps.unshift({ key: "review", label: "FBS review", state: "cur", sub: o.submitted_at ? `sent ${short(o.submitted_at)}` : "" });
+  }
 
   const inHands = o.due_date ? day(o.due_date) : "";
   const NOW = [
