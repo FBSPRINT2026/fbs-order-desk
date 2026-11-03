@@ -19562,3 +19562,12 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jrl-mf button.on{background:var(--ink);color:#fff}
 .jrl-mf button.on em{color:#fff}
 .jrl-mf button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* a customer's message opened: where its job is, across the top in that stage's color (Nov 2, Nick: "current status
+   request mode") */
+.jmb-stat{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--c);color:#fff;border-radius:8px;padding:0 10px 0 14px;min-height:52px;box-sizing:border-box}
+.jmb-stat b{font-size:15px;font-weight:800}
+.jmb-stat span{font-size:13px;opacity:.92;min-width:0}
+.jmb-stat button{all:unset;cursor:pointer;margin-left:auto;background:rgba(255,255,255,.2);border-radius:6px;padding:6px 12px;font-size:13px;font-weight:700}
+.jmb-stat button:hover{background:rgba(255,255,255,.32)}
+.jmb-stat button:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.jmb-gen{display:flex;flex-direction:column;gap:12px}

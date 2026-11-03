@@ -12,7 +12,6 @@ export const ago = (s: string) => {
 const initials = (s: string) => s.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
 export const whoOf = (c: ChatSummary) => (c.last.from === "customer" ? c.last.who || c.customer : "You");
 // the short answers we send most (Nov 2, Nick: "approved, not approved, looks good, where's my tracking")
-const QUICK = ["Thanks!", "Got it, we're on it.", "New proof coming today.", "Tracking sent.", "It's ready for pickup."];
 
 /** a conversation in one line: who, how long ago, what they said; colored by the stage its job is at */
 export function ChatLine({ c, color, on, onClick, full = false }: { c: ChatSummary; color: string; on: boolean; onClick: () => void; full?: boolean }) {
@@ -86,7 +85,6 @@ export function ChatThread({ c, color, onSent, onClose, narrow = false }: { c: C
         </div>
       </div>
       <div className="jmb-rep">
-        <div className="jmb-quick">{QUICK.map((q) => <button key={q} type="button" disabled={busy} onClick={() => void send(q)}>{q}</button>)}</div>
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder={`Write a reply${c.last.from === "customer" && c.last.who ? ` to ${c.last.who.split(/\s+/)[0]}` : ""}…`} aria-label="Reply"
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(text); } }} />
         {files.length > 0 && <div className="jmb-files">{files.map((f, i) => <span key={f.path}>📎 {f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((x) => x.filter((_, k) => k !== i))}>×</button></span>)}</div>}

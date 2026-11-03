@@ -121,7 +121,7 @@ export default function JobCenter() {
   [items, step, dept, q, mine, me, cameBack, artOnly]);
   const deptCount = (d: Dept | "all") => pool(step).filter((it) => it.steps.includes(step) && (d === "all" || it.depts.includes(d))).length;
   const after = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 6000); setN((x) => x + 1); };
-  const picked = (items || []).find((it) => it.key === pick) || null;
+  const picked = (items || []).find((it) => it.key === pick && it.type !== "request") || null;
   const go = (s: Step, key?: string) => { setStep(s); setAll(false); setPick(key || null); };
   // the All tab is gone (Nov 2, Nick: "get rid of all jobs"): a step is always picked
   useEffect(() => { if (all) setAll(false); }, [all, setAll]);
@@ -131,6 +131,8 @@ export default function JobCenter() {
     setChat(key);
     const c = key ? chats.find((x) => x.key === key) : null;
     const it = c?.orderId ? byOrder.get(c.orderId) : null;
+    // an order opens its panel on the right; a request is processed in the middle, no panel
+    if (it) setPick(it.type === "request" ? null : it.key);
     if (it) { const st = it.steps.find((x) => x !== "leads") || it.steps[0]; if (st && st !== step) setStep(st); setTimeout(() => document.querySelector(".jc-hl")?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 80); }
   };
   // View all: each job once, in the first step it's at (Requests through Declined; not Leads)
@@ -281,25 +283,29 @@ export default function JobCenter() {
           <div className="panel-b stack" style={{ gap: 12 }}>
             {/* a message with no job in the Job Center (a general question, or an order past it) opens on its own, as a general
                 inquiry, with no tab picked (Nov 2, Nick: "it should go back as a general inquiry and not go to a tab") */}
-            {curChat ? <div className="jmb-gen">
-              <div className="toolbar jmb-gen-h" data-toolbar>
-                <button type="button" className="btn sm" onClick={() => setChat(null)}>← All jobs</button>
-                <span className="faint">{focusJob ? `Just this job and its conversation with ${whoOf(curChat) === "You" ? curChat.customer : whoOf(curChat)}` : "A message that isn't about a job on the board"}</span>
+            {/* a customer's message (Nov 2, Nick: "when you click on… a message on the left… view the message, show it clearly…
+                when it's a request, just click it and we can quickly go into the process… once it's created into an order, the
+                right panel is great"): where the job is across the top, the conversation, then the request to process or the job */}
+            {curChat ? (() => {
+              const fst = focusJob ? (focusJob.steps.includes(step) ? step : (focusJob.steps.find((x) => x !== "leads") || step)) : null;
+              const fg = fst ? GROUPS.find((g) => g.steps.some((x) => x[0] === fst)) || null : null;
+              const isRq = focusJob?.type === "request";
+              const stl = fg?.steps.find((x) => x[0] === fst)?.[1] || "";
+              return <div className="jmb-gen">
+              <div className="jmb-stat" style={{ ["--c" as string]: isRq ? GROUPS[0].c : fg?.c || "var(--ink-3)" }}>
+                <b>{isRq ? "Request" : focusJob ? fg?.t || "Job" : "General question"}</b>
+                <span>{isRq ? "Incoming › Requests · not an order yet" : focusJob ? `${fg?.t || ""} › ${stl}` : curChat.number ? `#${curChat.number}${curChat.nickname ? ` ${curChat.nickname}` : ""} · ${ST[curChat.status]?.label || curChat.status || "not on the board"}` : "Not about an order"}</span>
+                <button type="button" onClick={() => setChat(null)}>Close</button>
               </div>
-              <div className="tbl-wrap"><table className="tbl jc" data-nofit>
-                {focusJob ? <>
-                  <thead><tr><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></tr></thead>
-                  <tbody><Row it={focusJob} step={focusJob.steps.includes(step) ? step : (focusJob.steps.find((x) => x !== "leads") || step)} msgs={unreadOf(focusJob.orderId)} on={pick === focusJob.key} onPick={() => setPick(pick === focusJob.key ? null : focusJob.key)} after={after} onLead={() => setLead(focusJob)} /></tbody>
-                </> : <>
-                  <thead><tr><th>General inquiry</th><th>Where it is</th></tr></thead>
-                  <tbody><tr><td><b>{curChat.customer || "No customer"}</b><div className="sub">{curChat.number ? `#${curChat.number}${curChat.nickname ? ` ${curChat.nickname}` : ""}` : "Not about an order"}</div></td>
-                    <td>{curChat.number ? <span className="pill" style={{ ["--sc" as string]: ST[curChat.status]?.c || "var(--ink-3)" }}><span className="pill-t">{ST[curChat.status]?.label || curChat.status}</span></span> : <span className="faint">General question</span>}</td></tr></tbody>
-                </>}
-              </table></div>
               <div className="jmb-focus" style={{ ["--mc" as string]: focusJob ? colorOfChat(curChat) : "var(--ink-3)" }}>
                 <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} />
               </div>
-            </div> : <>
+              {isRq && focusJob?.orderId ? <RequestsDesk q="" only={focusJob.orderId} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} />
+                : focusJob ? <div className="tbl-wrap"><table className="tbl jc" data-nofit>
+                  <thead><tr><th>Job</th><th>Dept</th><th>{fst === "approved" ? "Where it is" : "Needs"}</th><th>Also</th><th>Due</th></tr></thead>
+                  <tbody><Row it={focusJob} step={fst || step} msgs={unreadOf(focusJob.orderId)} on={pick === focusJob.key} onPick={() => setPick(pick === focusJob.key ? null : focusJob.key)} after={after} onLead={() => setLead(focusJob)} /></tbody>
+                </table></div> : null}
+            </div>; })() : <>
             {/* one solid bar in the picked stage's color (Nov 2, Nick: "make that whole top bar whatever that color is… screen print
                 embroidery and heat press live in that… along with the search… solid blue bar"), and under it which stage and step
                 is showing ("depending on which bubble you click… indicate that below") */}

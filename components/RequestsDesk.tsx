@@ -23,10 +23,11 @@ const dueTxt = (d: string | null) => {
 };
 const asMail = (r: DeskRequest): MailFile[] => r.files.map((f) => ({ key: f.path, name: f.name, size: f.size, type: f.type, href: `/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}` }));
 
-export default function RequestsDesk({ q, onChanged, onMessage }: { q: string; onChanged?: () => void; /** open a conversation about this request in the Message Center */ onMessage?: (orderId: string) => void }) {
+export default function RequestsDesk({ q, onChanged, onMessage, only }: { q: string; onChanged?: () => void; /** open a conversation about this request in the Message Center */ onMessage?: (orderId: string) => void; /** just this request, opened (a customer's message about it in the Message Center) */ only?: string }) {
   const [list, setList] = useState<DeskRequest[] | null>(null);
   const [err, setErr] = useState(""), [busy, setBusy] = useState(""), [msg, setMsg] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(only || null);
+  useEffect(() => { if (only) setOpenId(only); }, [only]);
   const [act, setAct] = useState(""), [actText, setActText] = useState("");
   const panel = useRef<HTMLDivElement | null>(null);
   const load = async () => { const r = await requestsDesk(); if (r.ok) setList(r.list); else setErr(r.error); };
@@ -35,7 +36,7 @@ export default function RequestsDesk({ q, onChanged, onMessage }: { q: string; o
   const shown = useMemo(() => (list || []).filter((r) => !w || [String(r.number), r.name, r.customer, r.contact, r.po, r.about].some((x) => x.toLowerCase().includes(w))), [list, w]);
   // grouped by customer, like ClickUp's workspaces
   const byCust = useMemo(() => { const m = new Map<string, DeskRequest[]>(); for (const r of shown) m.set(r.customerId, [...(m.get(r.customerId) || []), r]); return [...m.values()]; }, [shown]);
-  const job = (list || []).find((r) => r.id === openId) || null;
+  const job = (list || []).find((r) => r.id === (only || openId)) || null;
   const open = (id: string) => { setOpenId(id); setMsg(""); setErr(""); setTimeout(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 40); };
   const createOrder = async (r: DeskRequest) => {
     setBusy("Bringing in what they sent…"); setErr("");
@@ -60,7 +61,7 @@ export default function RequestsDesk({ q, onChanged, onMessage }: { q: string; o
         <div className="panel-h">
           <h2>{job.customer} · request #{job.number}</h2>
           <span className="cu-upl">Sent from their portal {sent(job.sentAt)}</span>
-          <button type="button" className="cu-x" aria-label="Close this request" title="Close" onClick={() => setOpenId(null)}>✕</button>
+          {!only && <button type="button" className="cu-x" aria-label="Close this request" title="Close" onClick={() => setOpenId(null)}>✕</button>}
         </div>
         <div className="panel-b">
           <div className="cu-title">{job.name || `Request #${job.number}`}</div>
@@ -80,12 +81,12 @@ export default function RequestsDesk({ q, onChanged, onMessage }: { q: string; o
             <b>Would you like to process this request?</b>
             <div className="cu-acts">
               {job.simple
-                ? <button type="button" className="btn primary" disabled={!!busy} title="The AI reads what they sent, their PO and art, and fills in this order (it keeps its number)" onClick={() => void createOrder(job)}>Create order</button>
+                ? <button type="button" className="btn primary" disabled={!!busy} title="The AI reads what they sent, their PO and art, and fills in this order (it keeps its number)" onClick={() => void createOrder(job)}>Process</button>
                 : <Link className="btn primary" href={`/shop/orders/${job.id}`}>Open the order</Link>}
               <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void notOrder(job)}>Not an order</button>
               {/* a question about it in the Message Center, beside the list (Nov 2, Nick: "ask him a question in the messaging
                   center… about this") */}
-              {onMessage ? <button type="button" className="btn ghost" onClick={() => onMessage(job.id)}>Message them</button> : <Link className="btn ghost" href={`/shop/orders/${job.id}#messages`}>Message them</Link>}
+              {only ? null : onMessage ? <button type="button" className="btn ghost" onClick={() => onMessage(job.id)}>Message them</button> : <Link className="btn ghost" href={`/shop/orders/${job.id}#messages`}>Message them</Link>}
             </div>
             {busy && <div className="faint">{busy}</div>}
           </div>
@@ -93,7 +94,7 @@ export default function RequestsDesk({ q, onChanged, onMessage }: { q: string; o
       </div>}
       {act && <CreateOrderTool activityId={act} text={actText} onClose={() => setAct("")} onCreated={(id, n) => { setAct(""); setMsg(`Order #${n} is filled in.`); setOpenId(null); void load(); onChanged?.(); }} />}
 
-      {!shown.length ? <div className="faint">{w ? `No requests match “${q}”.` : "No requests waiting. When a customer sends one from their portal, it shows here."}</div> : (
+      {only ? (!job && <div className="faint">This request isn&apos;t waiting anymore. It may have been made into an order.</div>) : !shown.length ? <div className="faint">{w ? `No requests match “${q}”.` : "No requests waiting. When a customer sends one from their portal, it shows here."}</div> : (
         <div className="tbl-wrap"><table className="tbl cu-tbl rqd-tbl" data-nofit>
           <thead><tr><th>Customer</th><th>Request</th><th>Due</th><th>Files</th><th>Sent in</th><th aria-label="Process" /></tr></thead>
           <tbody>{byCust.map((rs) => rs.map((r, i) => { const d = dueTxt(r.due); return (
