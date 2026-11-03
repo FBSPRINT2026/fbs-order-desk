@@ -49,7 +49,7 @@ export default function ProgramSheet({ program, items, images, extras }: {
       {items.length > 0 ? [...groups.entries()].map(([who, list]) => (
         <section key={who || "all"} className="panel psh-card">
           {/* the navy bar with our colors under it (Nov 2, Nick: "like the blue header… a little pizzazz") */}
-          <div className="psh-h"><div><span className="psh-k">Program pricing</span><h2>{who || program.name || "Your program"}</h2></div>{program.notes ? <p>{program.notes}</p> : null}<span className="psh-n">{list.length} item{list.length === 1 ? "" : "s"}</span></div>
+          <div className="psh-h"><div><span className="psh-k">Program pricing</span><h2>{who || program.name || "Your program"}</h2></div>{program.notes && groups.size === 1 ? <p>{program.notes}</p> : null}<span className="psh-n">{list.length} item{list.length === 1 ? "" : "s"}</span></div>
           <div className="panel-b psh-b">
             <table className="psh-t">
               <thead><tr>{withPics ? <th aria-label="Picture" /> : null}<th>Item</th><th>Styles</th><th>Decoration</th><th className="r">Price</th></tr></thead>
