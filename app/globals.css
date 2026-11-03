@@ -19541,3 +19541,24 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pod-so-szw{margin-bottom:16px}
 .pod-so-sz td.num,.pod-so-sz th.r{white-space:nowrap}
 .pod-so-all td{background:var(--surface-2)}
+/* Message Center option C (Nov 2, Nick): the title up top, the waiting count big with "n new" beside it and the initials of
+   who's waiting; under it, on the list bar's line, All / Waiting / New */
+.jcx>.jrl-mc .jrl-mc-ban{flex-wrap:wrap;align-content:space-between;row-gap:8px;padding:12px 14px}
+.jrl-mc-ban>.jrl-sig{width:40px;height:40px}
+.jrl-mc-ban>.jrl-sig i{width:36px;height:36px}
+.jrl-mc-ban>.jrl-sig i img{width:26px;height:26px}
+.jrl-mc-big{position:relative;z-index:1;flex:1 1 100%;display:flex;align-items:flex-end;justify-content:space-between;gap:8px;min-width:0}
+.jrl-mc-w{all:unset;cursor:pointer;display:flex;align-items:flex-end;gap:8px;color:#fff;text-shadow:0 1px 3px rgba(20,29,43,.45)}
+.jrl-mc-w b{font-family:var(--display);font-size:32px;font-weight:800;line-height:.9}
+.jrl-mc-w span{display:flex;flex-direction:column;font-size:12.5px;font-weight:700;line-height:1.2;white-space:nowrap}
+.jrl-mc-w small{font-size:11.5px;font-weight:600;opacity:.9}
+.jrl-mc-w:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:6px}
+.jrl-mc-av{display:flex;padding-left:6px}
+.jrl-mc-av i{width:26px;height:26px;border-radius:50%;margin-left:-7px;display:grid;place-items:center;background:#141D2B;color:#fff;font-style:normal;font-size:10.5px;font-weight:700;box-shadow:0 0 0 2px #fff}
+.jrl-mf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));height:52px;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:12px;flex:none}
+.jrl-mf button{all:unset;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;font-weight:600;color:var(--ink-2,var(--ink));background:var(--surface)}
+.jrl-mf button + button{border-left:1px solid var(--line)}
+.jrl-mf button em{font-style:normal;font-size:12px;font-weight:700;color:var(--ink-3)}
+.jrl-mf button.on{background:var(--ink);color:#fff}
+.jrl-mf button.on em{color:#fff}
+.jrl-mf button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
