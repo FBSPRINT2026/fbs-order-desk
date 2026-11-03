@@ -19837,3 +19837,19 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .pl-tabs > .chips > .chip{justify-content:center;text-align:center;white-space:normal!important;line-height:1.15;padding:8px 6px!important;min-width:0}
   .pl-tabs > .pl-tabs-r{align-self:flex-start}
 }
+/* the orders list (portal and the shop's customer page) on a narrower screen (Nov 3: on a tablet the order's name was
+   cut to "Sh…" while the fixed columns kept their full widths): under 960px of table the Balance column goes, its words
+   ("$120.00 due" / "Paid") under the total, and the other fixed columns tighten, so the name keeps its room */
+.aa-tbal{display:none}
+.aa-tblcard:has(> table.aa-tbl-cols),.aa-ocard{container-type:inline-size}
+@container (max-width:960px){
+  /* a fixed table keeps its columns in step with its cols, so the Balance column is narrowed to nothing, not removed */
+  .aa-tbl.aa-tbl-cols:not(.tbl-stack) col.c-m:has(+ col.c-m){width:0!important}
+  .aa-tbl.aa-tbl-cols:not(.tbl-stack) th.aa-thbal,.aa-tbl.aa-tbl-cols:not(.tbl-stack) td[data-l="Balance"]{padding:0!important;border-left:0;border-right:0;overflow:hidden;font-size:0;width:0;max-width:0}
+  .aa-tbl.aa-tbl-cols:not(.tbl-stack) td[data-l="Balance"] *{display:none}
+  .aa-tbl.aa-tbl-cols col.c-ty{width:86px!important}
+  .aa-tbl.aa-tbl-cols col.c-st{width:132px!important}
+  .aa-tbl.aa-tbl-cols col.c-dt{width:108px!important}
+  .aa-tbl.aa-tbl-cols col.c-no{width:80px!important}
+  .aa-tbl.aa-tbl-cols .aa-tbal{display:block;font-size:12px;font-weight:600;color:var(--ink-3);white-space:nowrap;margin-top:2px}
+}

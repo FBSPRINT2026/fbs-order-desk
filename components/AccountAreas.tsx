@@ -311,7 +311,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
         {/* the same column widths in every list, so Quotes and Orders line up one above the other (Oct 24, Nick) */}
         <table className="aa-tbl aa-tbl-cols">
           <colgroup><col className="c-no" />{all && <col className="c-ty" />}<col /><col className="c-st" />{cols === "quote" ? <col className="c-dt wide" /> : <><col className="c-dt" /><col className="c-m" /></>}<col className="c-m" />{mode === "portal" && <col className="c-star" />}</colgroup>
-          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
+          <thead><tr><th>#</th>{all && <th>Type</th>}<th>{cols === "quote" ? "Quote" : "Order"}</th><th>Status</th><th>{cols === "quote" ? "Created" : "In-hands date"}</th>{cols !== "quote" && <th className="r aa-thbal">Balance</th>}<th className="r">Total</th>{mode === "portal" && <th aria-label="Track" />}</tr></thead>
           <tbody>
             {rows.map((o) => { return (
               <tr key={o.id} onClick={() => (mode === "shop" && isSentRequest(o) ? setRqAsk(o) : router.push(orderHref(o.id)))}>
@@ -326,7 +326,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
                 {/* customers: what's left, and what's been paid under it, or "Paid" once it's all paid (Nov 2, Nick: "I can't tell
                     what's been paid, what's not been paid") */}
                 {cols !== "quote" && <td data-l="Balance" className={"r num" + (mode === "shop" && !o.archived && o.balance > 0.004 ? " aa-due" : "")}>{all && o.type !== "invoice" ? "" : mode === "portal" && o.total > 0 && o.balance <= 0.004 ? <span className="aa-paidall">Paid</span> : <span className={mode === "portal" && o.paid > 0.004 ? "aa-balpart" : ""} title={mode === "portal" && o.paid > 0.004 ? `${money(o.paid)} paid so far` : undefined}>{money(Math.max(0, o.balance))}</span>}</td>}
-                <td className="r num b" data-l="Total">{money(o.total)}</td>
+                {/* on a narrower screen the Balance column goes and its words sit under the total (globals.css aa-tbal) */}
+                <td className="r num b" data-l="Total">{money(o.total)}{cols !== "quote" && !(all && o.type !== "invoice") && <span className="aa-tbal">{o.total > 0 && o.balance <= 0.004 ? "Paid" : o.balance > 0.004 ? `${money(o.balance)} due` : ""}</span>}</td>
                 {/* the star on the right (Oct 24, Nick) */}
                 {mode === "portal" && <td className="aa-starc" onClick={(e) => e.stopPropagation()}>{!o.archived && <StarOrder id={o.id} on={!!o.starred} canAct={canAct} />}</td>}
               </tr>
