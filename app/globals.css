@@ -19641,3 +19641,4 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jmb-focus .jmb-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .jmb-focus .jmb-bar .jmb-send{margin-left:auto}
 .jmb-focus .jmb-rep>small{font-size:11.5px}
+.pod-kv b{overflow-wrap:anywhere;min-width:0}
