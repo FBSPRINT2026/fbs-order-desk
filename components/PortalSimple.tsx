@@ -27,7 +27,6 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
     <div className="psm">
       {/* one search at the top for everything, its examples rolling through (Nov 3, Nick: "search like everything, orders,
           payments, all that stuff… like the AI search where it rotates through") */}
-      {search && <div className="psm-search">{search}</div>}
       <div className="psm-main">
         <section className="panel psm-p">
           <div className="panel-h"><h2>Open orders</h2><span className="faint">{open ? `${jobs.length + sent.length} in the works` : ""}</span><Link className="pd-link psm-hl" href={ordersHref}>All orders</Link></div>
@@ -66,6 +65,8 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
       </div>
 
       <aside className="psm-side">
+        {/* right above payments (Nov 3, Nick) */}
+        {search && <div className="psm-search">{search}</div>}
         <section className="panel psm-p psm-pay">
           <div className="panel-h"><h2>Payments</h2><Link className="pd-link psm-hl" href={pay.href}>History</Link></div>
           <div className="panel-b psm-pb">
