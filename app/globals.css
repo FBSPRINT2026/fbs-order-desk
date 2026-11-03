@@ -20071,3 +20071,9 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 .ps-view-seg button small{font-size:12.5px;color:var(--ink-3)}
 .ps-view-seg button.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
 .ps-view-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* the simple portal on a computer: the full width, your jobs on the left and order again beside them */
+@media (min-width:900px){
+  .psm{max-width:none;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start}
+  .psm > .psm-need,.psm > .psm-msg,.psm > .psm-more{grid-column:1 / -1}
+  .psm > .psm-card:not(.psm-need):not(.psm-msg):only-of-type{grid-column:1 / -1}
+}
