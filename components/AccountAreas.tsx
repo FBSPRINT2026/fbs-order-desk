@@ -810,22 +810,21 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
                           invoices… it should show paid $10,588 and these invoices") */}
                       <td className="m">{many ? <button type="button" className="ph-toggle ph-many" aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpenPay(open ? null : g.key); }}>
                           <b>{g.lines.length} invoices paid together <span aria-hidden="true">{open ? "▴" : "▾"}</span></b>
-                          <span className="ph-ids">{g.lines.slice(0, 4).map((l, k) => <span key={l.id}>{k ? ", " : ""}#{l.number}{l.archived && <PrintavoMark />}</span>)}{g.lines.length > 4 ? ` +${g.lines.length - 4} more` : ""}</span>
                         </button>
                         : <span className="ph-one"><Link className="num" href={g.lines[0].href || orderHref(g.lines[0].order_id)} onClick={(e) => e.stopPropagation()}>#{g.lines[0].number}</Link>{g.lines[0].archived && <PrintavoMark />}{g.lines[0].nickname ? <span className="ph-nm">{g.lines[0].nickname}</span> : null}</span>}</td>
                       <td className="mt">{g.method || "—"}{g.fee > 0.004 ? <small className="faint"> (+{money(g.fee)} card fee)</small> : null}</td>
                       <td className="r num b amt">{money(g.total + g.fee)}</td>
                     </tr>,
-                    many && open ? (
-                      <tr key={g.key + "-d"} className="ph-d"><td colSpan={4}>
-                        <div className="ph-lines">
-                          {g.lines.slice().sort((a, b) => b.number - a.number).map((l) => (
-                            <Link key={l.id} href={l.href || orderHref(l.order_id)} className="ph-line"><span className="num">#{l.number}{l.archived && <PrintavoMark />}</span>{l.nickname ? <span className="ph-nm">{l.nickname}</span> : null}<b className="num">{money(l.amount)}</b></Link>
-                          ))}
-                        </div>
-                        <div className="ph-sum">{g.lines.length} invoices <b>{money(g.total)}</b>{g.fee > 0.004 ? <> + card fee <b>{money(g.fee)}</b> = <b>{money(g.total + g.fee)}</b></> : null}</div>
-                      </td></tr>
-                    ) : null,
+                    // opened: each invoice on its own line, like a single payment's line (Nov 3, Nick: "two invoices paid
+                    // together, and then we click down, it should show a long list of everything like that")
+                    ...(many && open ? g.lines.slice().sort((a, b) => b.number - a.number).map((l) => (
+                      <tr key={g.key + "-" + l.id} className="rl ph-sub">
+                        <td className="dt"><RowLink href={l.href || orderHref(l.order_id)} /></td>
+                        <td className="m"><span className="ph-one"><Link className="num" href={l.href || orderHref(l.order_id)} onClick={(e) => e.stopPropagation()}>#{l.number}</Link>{l.archived && <PrintavoMark />}{l.nickname ? <span className="ph-nm">{l.nickname}</span> : null}</span></td>
+                        <td className="mt" />
+                        <td className="r num amt">{money(l.amount)}</td>
+                      </tr>
+                    )) : []),
                   ];
                 })}
                 {!shown.length && <tr><td colSpan={4}><div className="aa-empty">{payments.length ? `No payments match “${mode === "portal" ? q : hq}”.` : "No payments yet."}</div></td></tr>}

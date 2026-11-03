@@ -20321,3 +20321,6 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .pp-keep-soon{opacity:.6;cursor:not-allowed}
 .pp-keep-soon input{cursor:not-allowed}
 .pp-soon{font-style:normal;font-size:11px;font-weight:700;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--surface-2);color:var(--ink-3);white-space:nowrap}
+/* the invoices of a payment paid together, each on its own line under it (Nov 3) */
+.ph tr.ph-sub td{background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface))}
+.ph tr.ph-sub td.m{padding-left:22px}
