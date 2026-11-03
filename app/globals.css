@@ -18968,3 +18968,9 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* On hold's buttons all one size, whatever they say (Nov 2, Nick) */
 .pdx-hl-do{min-width:104px;justify-content:center;box-sizing:border-box}
 .pjr-now.hold{white-space:normal}
+/* phones: the title line's right side wraps, the search on its own full-width line under the terms and statement button */
+@media (max-width:640px){.aa-ptop-r{flex-wrap:wrap;width:100%}.aa-ptop-r>.aa-search{flex:1 1 100%;width:100%;order:3}.aa-ptop-r .pa-pop{flex:1 1 100%}}
+/* screen-size pass (Nov 2): the timeline's "Today" stays one word; on a phone the order line names only the step it's on
+   (the other names were cut to "Receiv…", "Compl…") */
+.pjo-today small{white-space:nowrap;left:4px}
+@media (max-width:520px){.orl-lb li:not(.cur){visibility:hidden}.orl-lb li.cur{overflow:visible;white-space:nowrap}}
