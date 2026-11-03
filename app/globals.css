@@ -19909,3 +19909,11 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .aa-bsc:not(.open) > .aa-bsb{display:none}
   .aa-bsc:not(.open) > .aa-sec-h{margin-bottom:0;padding-bottom:0;border-bottom:0}
 }
+/* a customer's page in the shop, on a phone: its sections as a grid like the portal's menu, all in one spot instead of a
+   strip that scrolls sideways (Nov 3, Nick) */
+@media (max-width:640px){
+  main.main nav.aa-shopnav{overflow:visible!important}
+  main.main nav.aa-shopnav .chips{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;padding:4px;width:100%;overflow:visible!important;flex-wrap:nowrap}
+  main.main nav.aa-shopnav .chips .chip{flex:none!important;min-width:0;justify-content:space-between;padding:10px 12px!important;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:8px}
+  main.main nav.aa-shopnav .chips .chip .chip-n{flex:0 0 auto;margin-left:6px}
+}
