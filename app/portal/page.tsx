@@ -424,7 +424,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       .slice(0, 12).map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, total: +a.total || 0, date: a.due_date || a.order_date || "" })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
   const dash = simple ? (
-    <PortalSimple jobs={jobs} proofs={proofsDash} sent={sentDash} past={history} pay={pay} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
+    <PortalSimple jobs={jobs} proofs={proofsDash} sent={sentDash} past={history} pay={pay} art={designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 9).map((d) => ({ id: d.id, url: designUrls[d.id], name: d.name }))} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
       artHref={link("/portal?area=artwork")} settingsHref={`/portal/settings${qs}`} canAct={!ctx.preview} />
   ) : (
     <PortalDash held={held} tracked={tracked} sent={sentDash} draft={drafts[0] ? { href: link(`/portal/request/${drafts[0].id}`), name: drafts[0].name, when: short(drafts[0].updated) } : null}

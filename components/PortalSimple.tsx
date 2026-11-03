@@ -15,8 +15,8 @@ export type SimplePast = { id: string; number: number; nickname: string; when: s
  * message). The rest (all orders, artwork, settings) are quiet links at the foot, opening the full portal's pages.
  * Customers with many jobs at once get the full portal (customers.portal_view; View: Simple / Full at the foot).
  */
-export default function PortalSimple({ jobs, proofs, sent, past, pay, newMsgs, msgHref, ordersHref, artHref, settingsHref, canAct }: {
-  jobs: PortalJob[]; proofs: DashProof[]; sent: DashSent[]; past: SimplePast[]; pay: DashPay; newMsgs: number;
+export default function PortalSimple({ jobs, proofs, sent, past, pay, art = [], newMsgs, msgHref, ordersHref, artHref, settingsHref, canAct }: {
+  jobs: PortalJob[]; proofs: DashProof[]; sent: DashSent[]; past: SimplePast[]; pay: DashPay; /** their logos, small, under payments */ art?: { id: string; url: string; name: string }[]; newMsgs: number;
   msgHref: string; ordersHref: string; artHref: string; settingsHref: string; canAct: boolean;
 }) {
   const owed = pay.due > 0.004;
@@ -42,16 +42,17 @@ export default function PortalSimple({ jobs, proofs, sent, past, pay, newMsgs, m
           </div>
         </section>
 
+        {/* past orders as picture tiles, each with Reorder (Nov 3, Nick: option B) */}
         {past.length > 0 && (
           <section className="panel psm-p">
             <div className="panel-h"><h2>Order history</h2><Link className="pd-link psm-hl" href={ordersHref}>All past orders</Link></div>
-            <div className="panel-b psm-pb">
+            <div className="panel-b psm-tiles">
               {past.map((p) => (
-                <div key={p.id} className="psm-ag">
-                  <Link href={p.href} className="psm-ag-pic">{p.pic ? <img src={p.pic} alt="" loading="lazy" /> : <span>#{p.number}</span>}</Link>
-                  <Link href={p.href} className="psm-ag-t"><b>{p.nickname || `#${p.number}`}</b><small>#{p.number}{p.qty ? ` · ${p.qty.toLocaleString("en-US")} pcs` : ""}{p.when ? ` · ${p.when}` : ""}</small></Link>
-                  <span className="psm-ag-m num">{p.total ? money(p.total) : ""}</span>
-                  <DashReorder id={p.id} archived={p.archived} canAct={canAct} />
+                <div key={p.id} className="psm-tile">
+                  <Link href={p.href} className="psm-tile-pic" aria-label={`Open ${p.nickname || `#${p.number}`}`}>{p.pic ? <img src={p.pic} alt="" loading="lazy" />
+                    : <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" aria-hidden><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.5-2 2.5-4 2.5S8.5 4.5 8 3z" /></svg>}</Link>
+                  <Link href={p.href} className="psm-tile-t"><b title={p.nickname || undefined}>{p.nickname || `#${p.number}`}</b><small>#{p.number}{p.when ? ` · ${p.when}` : ""}</small></Link>
+                  <div className="psm-tile-b"><span className="num">{p.total ? money(p.total) : ""}</span><DashReorder id={p.id} archived={p.archived} canAct={canAct} /></div>
                 </div>
               ))}
             </div>
@@ -73,12 +74,19 @@ export default function PortalSimple({ jobs, proofs, sent, past, pay, newMsgs, m
             </div>
           </div>
         </section>
+        {/* their logos, small (Nov 3, Nick: "the smaller artwork… on the bottom right") */}
+        {art.length > 0 && (
+          <section className="panel psm-p">
+            <div className="panel-h"><h2>Your artwork</h2><Link className="pd-link psm-hl" href={artHref}>All artwork</Link></div>
+            <div className="panel-b psm-art">{art.map((d) => <Link key={d.id} href={artHref} className="psm-art-i" title={d.name}><img src={d.url} alt={d.name} loading="lazy" /></Link>)}</div>
+          </section>
+        )}
         <Link href={msgHref} className="psm-msg">
           <span className="psm-nd-ico" aria-hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z" /></svg></span>
           <span className="psm-nd-t"><b>{newMsgs ? `${newMsgs} new message${newMsgs === 1 ? "" : "s"}` : "Send us a message"}</b><small>We reply here and by email.</small></span>
         </Link>
         <nav className="psm-more" aria-label="More">
-          <Link href={ordersHref}>All orders</Link><Link href={artHref}>Artwork</Link><Link href={msgHref}>Messages</Link><Link href={settingsHref}>Settings</Link>
+          <Link href={ordersHref}>All orders</Link><Link href={msgHref}>Messages</Link><Link href={settingsHref}>Settings</Link>
         </nav>
       </aside>
     </div>
