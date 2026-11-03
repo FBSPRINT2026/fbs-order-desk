@@ -79,9 +79,6 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
     list.push(mk("general"));
     for (const k of by.keys()) if (k !== "general") list.push(mk(k));
     const sorted = list.sort((a, b) => (b.last?.created_at || (b.key === "general" ? "0" : "")).localeCompare(a.last?.created_at || (a.key === "general" ? "0" : "")));
-    // the customer's jobs still being worked on, each ready to write about even before anyone has (Nov 2, Nick on his phone:
-    // the Message Center "doesn't… nothing to do there": only the general chat showed), newest first after the ones with messages
-    if (mode === "portal") for (const o of [...orders].filter((x) => x.live && !by.has(x.id)).sort((a, b) => b.number - a.number)) sorted.push(mk(o.id));
     return sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [msgs, ordersById, mode, shopName, only, projects, orders]);
@@ -175,7 +172,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
       <div className="mh-list">
         <div className="mh-list-h">
           <div className="mh-list-top"><h2>Messages{totalUnread ? <span className="mh-badge">{totalUnread}</span> : null}</h2>
-            {canAct && !only && <button type="button" className="btn sm primary mh-newbtn" aria-expanded={newOpen} onClick={() => setNewOpen((x) => !x)}>+ New message</button>}</div>
+            {canAct && !only && mode !== "portal" && <button type="button" className="btn sm primary mh-newbtn" aria-expanded={newOpen} onClick={() => setNewOpen((x) => !x)}>+ New message</button>}</div>
           {outerQ === null && <SearchInput placeholder="Search messages" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search messages" />}
         </div>
         {/* a new conversation starts from the top (Nov 2, Nick): a general question, or which order it's about */}
@@ -186,6 +183,16 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
             {orders.slice(0, 80).map((o) => <option key={o.id} value={o.id}>#{o.number}{o.nickname ? ` · ${o.nickname}` : ""}</option>)}
           </select>}
         </div>}
+        {/* the customer's list stays short (Nov 2, Nick: "he's got 30 open orders… that just gets overwhelming"): the chat with
+            us, the orders already talked about, and this one picker to ask about any other order */}
+        {mode === "portal" && !only && orders.length > 0 && <label className="mh-ask">
+          <span>Ask about an order</span>
+          <select value="" onChange={(e) => { if (e.target.value) openConvo(e.target.value); }} aria-label="Ask about an order">
+            <option value="">Pick the order…</option>
+            {([["In progress", orders.filter((o) => o.live)], ["Earlier orders", orders.filter((o) => !o.live)]] as const).map(([g, list]) => list.length > 0 && (
+              <optgroup key={g} label={g}>{[...list].sort((a, b) => b.number - a.number).slice(0, 200).map((o) => <option key={o.id} value={o.id}>#{o.number}{o.nickname ? ` · ${o.nickname}` : ""}</option>)}</optgroup>))}
+          </select>
+        </label>}
         <div className="mh-convos">
           {/* in parts, so it reads at a glance (Nov 2, Nick: "it just looks like a big mess"): the general chat on top, then
               each order's conversation with its number, name and where the order is, then goods, then projects */}

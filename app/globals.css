@@ -19159,3 +19159,13 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pdx-pfl-t small{font-size:12.5px}
 .pdx-pfl-t .pdx-pfl-go{align-self:flex-start;margin-top:8px;height:34px;padding:0 16px}
 @media (max-width:420px){.pdx-pfl li{grid-template-columns:84px minmax(0,1fr);gap:12px}.pdx-pfl-pic{width:84px;height:84px}.pdx-pfl li .pdx-hl-do{margin-left:0}}
+/* the customer's Message Center: one picker to ask about any order (Nov 2, Nick) */
+.mh-ask{display:flex;flex-direction:column;gap:4px;margin:0 14px 10px}
+.mh-ask > span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.mh-ask select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);width:100%;box-sizing:border-box}
+.mh-convos .mh-c{width:100%;box-sizing:border-box}
+@media (max-width:640px){.mh-ask select{font-size:16px}}
+/* Price list / Your program pricing at the right of the Pricing title, where the search sits on the other pages */
+.aa-ptop-r > .aa-ptop-sw{margin:0;padding:0;border:0;background:none;box-shadow:none;flex:0 0 auto}
+.aa-ptop-r > .aa-ptop-sw .chips{flex-wrap:nowrap}
+@media (max-width:640px){.aa-ptop-r > .aa-ptop-sw{flex:1 1 100%}.aa-ptop-r > .aa-ptop-sw .chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.aa-ptop-r > .aa-ptop-sw .chip{justify-content:center}}

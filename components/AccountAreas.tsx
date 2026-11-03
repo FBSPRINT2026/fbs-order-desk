@@ -1112,7 +1112,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   else if (area === "pricing" && (pricingPanel || (programPanel && hasProgram))) {
     const subs: [string, string][] = [...(pricingPanel ? [["list", "Price list"] as [string, string]] : []), ...(programPanel && hasProgram ? [["program", "Your program pricing"] as [string, string]] : [])];
     const cur = subs.find((x) => x[0] === priceTab)?.[0] || subs[0][0];
-    body = <>{subBar(subs, cur, setPriceTab)}{cur === "program" ? programPanel : pricingPanel}</>;
+    // the portal puts Price list / Your program pricing at the right of the title, where the search sits on other pages
+    body = <>{mode === "portal" ? null : subBar(subs, cur, setPriceTab)}{cur === "program" ? programPanel : pricingPanel}</>;
   }
   else if (area === "designs" && designsPanel) body = designsPanel;
   // portal Artwork: Logos and mockups · Design catalog · Brand standards, as tabs under it (Oct 24, Nick)
@@ -1175,6 +1176,12 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
         {/* the page's search, on the title's line at the right; it filters what this page shows. On Payments the statement
             sits just left of it (Nov 2, Nick) */}
         <span className="aa-ptop-r">{area === "payments" && terms && <span className="aa-ptop-terms">Terms: <b>{terms}</b></span>}{area === "payments" && statementHref && <a className="btn sm" href={statementHref}>View / print statement</a>}
+        {area === "pricing" && (() => {
+          const subs: [string, string][] = [...(pricingPanel ? [["list", "Price list"] as [string, string]] : []), ...(programPanel && hasProgram ? [["program", "Your program pricing"] as [string, string]] : [])];
+          if (subs.length < 2) return null;
+          const cur = subs.find((x) => x[0] === priceTab)?.[0] || subs[0][0];
+          return <div className="toolbar aa-otabs aa-ptop-sw" data-toolbar><div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => setPriceTab(k)}>{t}</button>)}</div></div>;
+        })()}
         {area === "home" && titleAsk ? titleAsk : area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}</span>
       </div>}
       <section className="aa-body">{mode === "portal" ? <PageSearchContext.Provider value={q}>{body}</PageSearchContext.Provider> : body}</section>
