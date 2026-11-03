@@ -19667,3 +19667,10 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jrl-mc-ban>.jrl-sig i{width:38px;height:38px;background:#141D2B;box-shadow:none;z-index:2}
 .jrl-mc-ban>.jrl-sig i img{width:26px;height:26px}
 @media (prefers-reduced-motion:reduce){.jcx>.jrl-mc .jrl-mc-ban,.jrl-ring{animation:none}}
+/* Nov 2, Nick: "I really liked our original fade. It just should have moved a little bit more… the left side… at a slight
+   tilt… make them look more like arrows": the original fade (navy, blue, salmon, orange) on a slant, the navy held on the left
+   while the colors on the right move gently; three clear arrows chasing around the logo */
+.jcx>.jrl-mc .jrl-mc-ban{background:linear-gradient(112deg,#141D2B 0%,#141D2B 26%,rgba(20,29,43,0) 46%),linear-gradient(112deg,#0E9BD8 0%,#F26660 30%,#FCB122 50%,#F26660 70%,#0E9BD8 100%);background-size:100% 100%,220% 100%;background-position:0 0,0% 0;animation:jrl-drift 40s ease-in-out infinite alternate}
+.jrl-ring{stroke-width:3.5}
+.jrl-mc-ban>.jrl-sig i{width:30px;height:30px}
+.jrl-mc-ban>.jrl-sig i img{width:22px;height:22px}

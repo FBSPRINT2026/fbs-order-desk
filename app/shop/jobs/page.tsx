@@ -238,7 +238,7 @@ export default function JobCenter() {
           <span className={"jrl-sig" + (waitingNow ? " live" : "")} aria-hidden>
             <b /><b /><b />
             {/* a ring of three arrows in our colors turning around the logo (Nov 2, Nick) */}
-            <svg className="jrl-ring" viewBox="0 0 50 50" aria-hidden><path d="M25 3A22 22 0 0 1 44.1 14" stroke="#0E9BD8" /><path d="M44.1 14l-1.2-6.2-4.6 4.4z" fill="#0E9BD8" stroke="none" /><path d="M44.1 36A22 22 0 0 1 25 47" stroke="#F26660" /><path d="M25 47l5.4-3.4-5.6-3z" fill="#F26660" stroke="none" /><path d="M5.9 36A22 22 0 0 1 5.9 14" stroke="#FCB122" /><path d="M5.9 14l-.6 6.3 5.5-2.9z" fill="#FCB122" stroke="none" /></svg>
+            <svg className="jrl-ring" viewBox="0 0 50 50" aria-hidden><path d="M28.1 7.3A18 18 0 0 1 43.0 25.6" stroke="#0E9BD8" /><path d="M48.5 25.8L42.3 30.0L37.5 25.4z" fill="#0E9BD8" stroke="none" /><path d="M38.8 36.6A18 18 0 0 1 15.5 40.3" stroke="#F26660" /><path d="M12.5 44.9L12.1 37.5L18.4 35.6z" fill="#F26660" stroke="none" /><path d="M8.1 31.2A18 18 0 0 1 16.5 9.1" stroke="#FCB122" /><path d="M14.0 4.3L20.6 7.5L19.1 14.0z" fill="#FCB122" stroke="none" /></svg>
             <i><img src="/brand/fbs-logo-white.svg" alt="" width={30} height={30} /></i>
           </span>
           <span className="jrl-mc-t">Message Center<i aria-hidden /></span>
