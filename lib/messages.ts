@@ -5,7 +5,7 @@ export type HubMsg = {
   id: string; order_id: string | null; /** the project this conversation is about */ project_id: string | null; /** "goods": about the customer supplied goods on the order */ topic: string; author_type: "staff" | "customer"; author_name: string; body: string;
   created_at: string; read_at: string | null; files: HubFile[];
 };
-export type HubOrder = { id: string; number: number; nickname: string; status?: string; href: string };
+export type HubOrder = { id: string; number: number; nickname: string; status?: string; href: string; /** still being worked on: listed in the customer's Message Center even before anyone wrote about it */ live?: boolean };
 export const MAX_ATTACH = 25 * 1024 * 1024;
 
 type Row = { id: string; order_id: string | null; project_id?: string | null; topic?: string | null; author_type: string; author_name: string | null; body: string; created_at: string; read_at: string | null; attachments?: Attachment[] | null };

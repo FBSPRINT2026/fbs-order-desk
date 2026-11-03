@@ -78,9 +78,13 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
     if (only) return [mk(only)];
     list.push(mk("general"));
     for (const k of by.keys()) if (k !== "general") list.push(mk(k));
-    return list.sort((a, b) => (b.last?.created_at || (b.key === "general" ? "0" : "")).localeCompare(a.last?.created_at || (a.key === "general" ? "0" : "")));
+    const sorted = list.sort((a, b) => (b.last?.created_at || (b.key === "general" ? "0" : "")).localeCompare(a.last?.created_at || (a.key === "general" ? "0" : "")));
+    // the customer's jobs still being worked on, each ready to write about even before anyone has (Nov 2, Nick on his phone:
+    // the Message Center "doesn't… nothing to do there": only the general chat showed), newest first after the ones with messages
+    if (mode === "portal") for (const o of [...orders].filter((x) => x.live && !by.has(x.id)).sort((a, b) => b.number - a.number)) sorted.push(mk(o.id));
+    return sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [msgs, ordersById, mode, shopName, only, projects]);
+  }, [msgs, ordersById, mode, shopName, only, projects, orders]);
 
   const valid = (k?: string | null) => !!k && (k === "general" || k.startsWith("p:") || ordersById.has(k.split(":")[0]));
   const [open, setOpen] = useState<string>(valid(start) ? start! : "");

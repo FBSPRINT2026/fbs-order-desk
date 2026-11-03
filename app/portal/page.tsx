@@ -264,7 +264,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // looks like a big mess"; a quote's or an older order's chat showed as "An order"): orders the page doesn't list are read
   // by the ids their messages carry
   const hubStatus = (o: Order) => customerStatus(o, { proofSent: !!firstPending[o.id], shipped: !!shipOf.get(o.id) }).label;
-  const hubOrders: HubOrder[] = orders.filter((o) => o.status !== "request" || o.submitted_at).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: hubStatus(o), href: `/portal/orders/${o.id}${qs}` }));
+  const hubOrders: HubOrder[] = orders.filter((o) => o.status !== "request" || o.submitted_at).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", status: hubStatus(o), href: `/portal/orders/${o.id}${qs}`, live: !["completed", "void"].includes(String(o.status)) }));
   {
     const missing = [...new Set(hubMsgs.map((m) => m.order_id).filter((x): x is string => !!x && !hubOrders.some((o) => o.id === x)))];
     if (missing.length) {
