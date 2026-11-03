@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { oneOfEach } from "@/lib/mockupList";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { orderGroups, type Design, type Garment, type Message, type Order } from "@/lib/pricing";
+import { newGroup, orderGroups, type Design, type Garment, type Message, type Order } from "@/lib/pricing";
 import RequestEditor from "./editor";
 import type { NeckLabelSet } from "@/lib/neckLabels";
 import { hasAiKey } from "@/lib/ai/claude";
@@ -15,7 +15,13 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const { as } = await searchParams;
   const ctx = await getPortalCtx(as, `/portal/request/${id}`);
-  const { data: o } = await ctx.db.from("orders").select("*").eq("id", id).maybeSingle();
+  // staff previewing a customer: their blank order form to look at and click through, nothing saved (Nov 2, Nick: "see
+  // what these two clients look like without logging into their account")
+  const look = id === "preview";
+  if (look && !ctx.preview) redirect("/portal");
+  const pc = ctx.preview ? (ctx.customers.find((c) => c.id === ctx.preview!.id) || ctx.customers[0]) : null;
+  const o = look ? ({ id: "preview", number: 0, customer_id: pc?.id || ctx.customerIds[0], nickname: "", status: "request", type: "quote", groups: [newGroup()], lines: [], fees: [], due_date: null, delivery_method: "pickup", ship_to: "", notes: "", po_number: "", price_type: (pc as { price_type?: string } | null)?.price_type || "retail", tax_exempt: !!(pc as { tax_exempt?: boolean } | null)?.tax_exempt, created_at: new Date().toISOString(), submitted_at: null } as unknown as Order)
+    : (await ctx.db.from("orders").select("*").eq("id", id).maybeSingle()).data;
   if (!o || !ctx.customerIds.includes(o.customer_id)) redirect("/portal");
   const order = { ...(o as Order), groups: orderGroups(o as Order) };
   if (order.status !== "request" || order.submitted_at) redirect(`/portal/orders/${id}${as ? `?as=${as}` : ""}`);
@@ -23,8 +29,8 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   const [{ data: g }, { data: d }, { data: m }, { data: gd }] = await Promise.all([
     admin.from("garments").select("*").order("style"),
     ctx.db.from("designs").select("*").eq("customer_id", order.customer_id).is("archived_at", null).eq("draft", false).order("number", { ascending: false }),
-    ctx.db.from("messages").select("*").eq("order_id", id).order("created_at"),
-    ctx.db.from("order_goods").select("supplier, supplier_po, ship_date").eq("order_id", id).maybeSingle(),
+    look ? Promise.resolve({ data: [] }) : ctx.db.from("messages").select("*").eq("order_id", id).order("created_at"),
+    look ? Promise.resolve({ data: null }) : ctx.db.from("order_goods").select("supplier, supplier_po, ship_date").eq("order_id", id).maybeSingle(),
   ]);
   // customers never see our blank costs
   const catalog = ((g || []) as Garment[]).map((x) => ({ ...x, cost: 0, size_costs: {}, color_size_costs: {} }));
@@ -54,8 +60,8 @@ export default async function RequestPage({ params, searchParams }: { params: Pr
   }
   return (
     <>
-      {ctx.preview && <div className="preview-bar">Preview of {ctx.preview.company || ctx.preview.name}&apos;s order request. Editing is turned off in preview.</div>}
-      <RequestEditor orderTypes={((ctx.customers.find((c) => c.id === order.customer_id) || ctx.customers[0]) as unknown as { order_types?: string[] } | undefined)?.order_types || []} orderTypeLabel={((ctx.customers.find((c) => c.id === order.customer_id) || ctx.customers[0]) as unknown as { order_type_label?: string } | undefined)?.order_type_label || ""} neckSets={((ctx.customers.find((c) => c.id === order.customer_id) || ctx.customers[0]) as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels || []} initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} pickMockups={pickMockups} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview} goodsInfo={order.price_type === "wholesale" ? { supplier: gd?.supplier || "", supplier_po: gd?.supplier_po || "", ship_date: gd?.ship_date || null } : null} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
+      {ctx.preview && <div className="preview-bar">{look ? <>A look at {ctx.preview.company || ctx.preview.name}&apos;s order form: click and fill in anything; nothing is saved or sent.</> : <>Preview of {ctx.preview.company || ctx.preview.name}&apos;s order request. Editing is turned off in preview.</>}</div>}
+      <RequestEditor orderTypes={((ctx.customers.find((c) => c.id === order.customer_id) || ctx.customers[0]) as unknown as { order_types?: string[] } | undefined)?.order_types || []} orderTypeLabel={((ctx.customers.find((c) => c.id === order.customer_id) || ctx.customers[0]) as unknown as { order_type_label?: string } | undefined)?.order_type_label || ""} neckSets={((ctx.customers.find((c) => c.id === order.customer_id) || ctx.customers[0]) as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels || []} initial={order} settings={ctx.settings} catalog={catalog} designs={designs} designUrls={urls} messages={(m || []) as Message[]} savedMockups={savedList.map((m) => ({ path: m.file_path, name: m.title }))} pickMockups={pickMockups} mockupUrls={mockupUrls} mockupHref={`/portal/mockup${as ? `?as=${as}` : ""}`} preview={!!ctx.preview && !look} look={look} goodsInfo={order.price_type === "wholesale" ? { supplier: gd?.supplier || "", supplier_po: gd?.supplier_po || "", ship_date: gd?.ship_date || null } : null} aiAssist={hasAiKey() && ctx.settings.assistant.ai.enabled && ctx.settings.assistant.ai.customerAssist} backHref={`/portal${as ? `?as=${as}` : ""}`} />
     </>
   );
 }

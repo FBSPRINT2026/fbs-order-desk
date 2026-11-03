@@ -35,9 +35,11 @@ function zeroMoney<T>(x: T): T {
   return x;
 }
 
-export default function RequestEditor({ orderTypes = [], orderTypeLabel = "", neckSets = [], initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
+export default function RequestEditor({ look = false, orderTypes = [], orderTypeLabel = "", neckSets = [], initial, settings, catalog: cat0, designs: d0, designUrls: u0, messages: m0, savedMockups, pickMockups = [], mockupUrls: mu0, mockupHref, preview, backHref, aiAssist, goodsInfo: gi0 }: {
   /** their order types (customers.order_types, Cedar: Bulk / Cart): which one this order is */ orderTypes?: string[];
   /** what those are called (customers.order_type_label, Nine18: Entered by); empty: Order type */ orderTypeLabel?: string;
+  /** staff looking at a customer's forms (Nov 2, Nick: "see what these two clients look like without logging into their
+   *  account"): everything can be clicked and filled in, nothing is saved or sent */ look?: boolean;
   /** their tag label sets on file (Tag Print) */ neckSets?: NeckLabelSet[];
   initial: Order; settings: Settings; catalog: Garment[]; designs: Design[]; designUrls: Record<string, string>; messages: Message[];
   /** wholesale: where their goods are coming from (null on retail orders) */ goodsInfo?: GoodsInfoValue | null;
@@ -80,7 +82,7 @@ export default function RequestEditor({ orderTypes = [], orderTypeLabel = "", ne
   const arm = (k: string) => { setArmed(k); setTimeout(() => setArmed((a) => (a === k ? "" : a)), 3500); };
 
   async function flush() {
-    if (preview) return;
+    if (preview || look) return;
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const x = latest.current;
     setState("Saving…");
@@ -95,7 +97,7 @@ export default function RequestEditor({ orderTypes = [], orderTypeLabel = "", ne
       const n = structuredClone(prev); fn(n); latest.current = n;
       // a copy in this browser until the server has it (Oct 24, Nick: a dropped connection shouldn't lose their order):
       // only what the customer did, on the version they're looking at (lib/unsavedCopy)
-      keepUnsaved(n, baseAt.current);
+      if (!look) keepUnsaved(n, baseAt.current);
       return n;
     });
     setState("Editing…");
@@ -357,6 +359,7 @@ export default function RequestEditor({ orderTypes = [], orderTypeLabel = "", ne
     setSimpleBusy("");
   }
   async function sendSimple() {
+    if (look) return setErr("This is a look at their form: nothing is sent.");
     if (!simple) return;
     setSimpleBusy("Sending…"); setErr("");
     await flush();
@@ -372,6 +375,7 @@ export default function RequestEditor({ orderTypes = [], orderTypeLabel = "", ne
   const [missing, setMissing] = useState<string[] | null>(null);
   function trySend() { if (problems.length) { setMissing(problems); return; } void send(); }
   async function send() {
+    if (look) return setErr("This is a look at their form: nothing is sent.");
     setBusy(true); setErr("");
     await flush();
     // wholesale: where the goods come from (optional) goes into the order's goods conversation

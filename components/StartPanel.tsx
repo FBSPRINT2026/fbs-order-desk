@@ -9,10 +9,10 @@ export default function StartPanel({ preview, mockupHref, settingsHref, compact 
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const start = async () => { setBusy(true); setErr(""); const r = await startRequest(); if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else { setBusy(false); setErr(r.error || "Couldn't start an order."); } };
+  const start = async () => { if (preview) { const as = new URLSearchParams(window.location.search).get("as") || ""; router.push(`/portal/request/preview${as ? `?as=${encodeURIComponent(as)}` : ""}`); return; } setBusy(true); setErr(""); const r = await startRequest(); if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else { setBusy(false); setErr(r.error || "Couldn't start an order."); } };
   if (compact) return (
     <>
-      <button type="button" className="pd-act main" disabled={preview || busy} onClick={start}>
+      <button type="button" className="pd-act main" disabled={busy} onClick={start}>
         <span className="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg></span>
         <span><b>{busy ? "Starting…" : "Start an order/quote"}</b><small>{err || "Send details, we'll confirm"}</small></span>
       </button>
@@ -33,7 +33,7 @@ export default function StartPanel({ preview, mockupHref, settingsHref, compact 
       <div className="sp-card">
         <span className="sp-ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16v13H4zM8 7V4h8v3M12 11v6M9 14h6" /></svg></span>
         <div><b>Start an order/quote</b><span>Send us the details and we&apos;ll send you a confirmation.</span></div>
-        <button type="button" className="btn primary" disabled={preview || busy} onClick={async () => { setBusy(true); setErr(""); const r = await startRequest(); if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else { setBusy(false); setErr(r.error || "Couldn't start an order."); } }}>{busy ? "Starting…" : "Start an order/quote"}</button>
+        <button type="button" className="btn primary" disabled={busy} title={preview ? "Look at their order form: nothing is saved or sent" : undefined} onClick={async () => { if (preview) { const as = new URLSearchParams(window.location.search).get("as") || ""; router.push(`/portal/request/preview${as ? `?as=${encodeURIComponent(as)}` : ""}`); return; } setBusy(true); setErr(""); const r = await startRequest(); if (r.ok && r.id) router.push(`/portal/request/${r.id}`); else { setBusy(false); setErr(r.error || "Couldn't start an order."); } }}>{busy ? "Starting…" : "Start an order/quote"}</button>
       </div>
       <div className="sp-card">
         <span className="sp-ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M8 3 3 6l2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.7-2 3-4 3S8.5 4.7 8 3z" /></svg></span>
