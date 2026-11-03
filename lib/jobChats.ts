@@ -38,7 +38,8 @@ export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
   const oids = [...new Set(keys.map((k) => parseKey(k).orderId).filter(Boolean))] as string[];
   const orders = new Map<string, { id: string; number: number; nickname: string | null; status: string; customer_id: string | null }>();
   for (let i = 0; i < oids.length; i += 200) {
-    const { data: os } = await admin.from("orders").select("id, number, nickname, status, customer_id").in("id", oids.slice(i, i + 200));
+    // a thrown-away order's conversation goes with it (Nov 2, Nick: "hide the messages and jobs from XYZ test company")
+    const { data: os } = await admin.from("orders").select("id, number, nickname, status, customer_id").in("id", oids.slice(i, i + 200)).is("discarded_at", null);
     for (const o of (os || []) as { id: string; number: number; nickname: string | null; status: string; customer_id: string | null }[]) orders.set(o.id, o);
   }
   const cids = [...new Set(keys.map((k) => { const p = parseKey(k); return p.orderId ? orders.get(p.orderId)?.customer_id || null : p.customerId; }).filter(Boolean))] as string[];
