@@ -76,7 +76,7 @@ export default function PortalSimple({ jobs, proofs, sent, past, pay, art = [], 
         </section>
         {/* their logos, small (Nov 3, Nick: "the smaller artwork… on the bottom right") */}
         {art.length > 0 && (
-          <section className="panel psm-p">
+          <section className="panel psm-p psm-artp">
             <div className="panel-h"><h2>Your artwork</h2><Link className="pd-link psm-hl" href={artHref}>All artwork</Link></div>
             <div className="panel-b psm-art">{art.map((d) => <Link key={d.id} href={artHref} className="psm-art-i" title={d.name}><img src={d.url} alt={d.name} loading="lazy" /></Link>)}</div>
           </section>
