@@ -70,6 +70,8 @@ function sewTrack(im: Imprint, d: { specs: unknown } | undefined, sws: { imprint
 }
 
 export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
+  // how long each part takes, in the server log (Nov 2: the board took ~5s to load)
+  const t00 = Date.now(), tms: Record<string, number> = {}; let tl = t00; const tm = (k: string) => { const t = Date.now(); tms[k] = t - tl; tl = t; };
   const now = Date.now();
   const since = new Date(now - TWO_WEEKS).toISOString();
   const [{ data: os }, { data: dec }, { data: s }, { data: leads }, { data: am }] = await Promise.all([
@@ -79,10 +81,12 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     admin.from("ai_suggestions").select("id, title, body, customer_id, activity_id, created_at, customers(company, name)").eq("kind", "draft_order").eq("status", "open").gte("created_at", new Date(now - 30 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
     admin.from("mockups").select("id, customer_id, title, created_at, customers(company, name)").is("order_id", null).is("archived_at", null).is("shelved_at", null).gte("created_at", new Date(now - 45 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
   ]);
+  tm("first");
   const settings = mergeSettings(s?.data);
   type O = Order & { customers?: { company?: string; name?: string } | null };
   const orders = (os || []) as unknown as O[];
   const ids = orders.map((o) => o.id);
+  tm("main");
   const [mks, pfs, sws, evs] = await Promise.all([
     inChunks<{ id: string; order_id: string; group_id: string | null }>(ids, (p) => admin.from("mockups").select("id, order_id, group_id").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; version: number; status: string; mockup_id: string | null; sent_at: string | null; decided_at: string | null; customer_comment: string; archived_at: string | null }>(ids, (p) => admin.from("proofs").select("order_id, version, status, mockup_id, sent_at, decided_at, customer_comment, archived_at").in("order_id", p).not("version", "is", null)),
@@ -92,6 +96,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   // the logos on embroidered prints: where each is in digitizing comes from them (lib/digitizeStatus.ts)
   const embDesignIds = [...new Set(orders.flatMap((o) => orderGroups(o).flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id)))))];
   const embDesigns = new Map((await inChunks<{ id: string; specs: unknown }>(embDesignIds, (p) => admin.from("designs").select("id, specs").in("id", p), 100)).map((d) => [d.id, d]));
+  tm("designs");
   const cust = (c?: { company?: string; name?: string } | null) => c?.company || c?.name || "";
   const out: JobItem[] = [];
 
@@ -110,6 +115,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   const needs = new Set(mailRows([...mails, ...((outs || []) as MailAct[])], [] as MailSug[]).filter((r) => !r.answered && !r.archived && !r.ccOnly && !r.x.meta?.no_reply).map((r) => r.x.id));
   const cuIds = acts.filter((a) => a.kind === "clickup").map((a) => String((a.meta as { clickup?: { id?: string } } | null)?.clickup?.id || "")).filter(Boolean);
   const cuWaiting = new Set((await inChunks<{ id: string }>(cuIds, (p) => admin.from("clickup_tasks").select("id").in("id", p).eq("waiting", true), 100)).map((t) => t.id));
+  tm("leads");
   const stillOpen = (a?: Act) => !a ? true : a.order_id ? false : a.kind === "clickup" ? cuWaiting.has(String((a.meta as { clickup?: { id?: string } } | null)?.clickup?.id || "")) : a.kind === "email" ? needs.has(a.id) : true;
   for (const l of ls) {
     const a = l.activity_id ? actOf.get(l.activity_id) : undefined;
@@ -203,6 +209,8 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   }
   // whose account each one is
   const acct = await accountOwners(admin, out.map((x) => x.customerId || ""));
+  tm("owners");
+  console.log(`[jc-time] ${JSON.stringify(tms)}`);
   for (const x of out) x.owner = (x.customerId && acct.get(x.customerId)) || "";
   return out;
 }

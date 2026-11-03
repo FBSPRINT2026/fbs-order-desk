@@ -24,8 +24,11 @@ const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? 
 
 export async function loadJobs() {
   try {
+    const t0 = Date.now();
     const { admin, who } = await me();
+    const t1 = Date.now();
     const items = await loadJobCenter(admin);
+    console.log(`[jc-time] me ${t1 - t0}ms, board ${Date.now() - t1}ms, ${items.length} items`);
     return { ok: true as const, items, me: who, hasAccounts: !!who && items.some((x) => x.owner === who) };
   } catch (e) { return fail(e); }
 }
