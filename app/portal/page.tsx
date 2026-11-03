@@ -357,10 +357,12 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const pvOpen = archived.filter((a) => a.kind === "invoice" && (a.order_date || "") >= since).map((a) => ({ a, st: ourStatusFor(a.status_name || "", "invoice") }))
     .filter((x) => x.st !== "completed" && !/complete|picked up|delivered|cancel/i.test(x.a.status_name || "")).slice(0, 40);
   const archTop = archived.filter((a) => a.kind === "invoice" && !pvOpen.some((x) => x.a.id === a.id) && (ourStatusFor(a.status_name || "", "invoice") === "completed" || (a.order_date || "") < since)).slice(0, 3);
+  // the simple portal's order history shows up to 12 old jobs as pictures, so theirs are looked up too (Nov 3)
+  const archHist = archived.filter((a) => a.kind === "invoice" && !pvOpen.some((x) => x.a.id === a.id) && (ourStatusFor(a.status_name || "", "invoice") === "completed" || (a.order_date || "") < since)).slice(0, 12);
   const archPics: Record<string, string> = {};
   const pvKind: Record<string, JobKind> = {};
-  if (archTop.length || pvOpen.length) {
-    const { data: ad } = await admin.from("archived_orders").select("id, files, data").is("removed_at", null).in("id", [...archTop.map((a) => a.id), ...pvOpen.map((x) => x.a.id)]);
+  if (archTop.length || pvOpen.length || archHist.length) {
+    const { data: ad } = await admin.from("archived_orders").select("id, files, data").is("removed_at", null).in("id", [...new Set([...archTop.map((a) => a.id), ...archHist.map((a) => a.id), ...pvOpen.map((x) => x.a.id)])]);
     const want: { id: string; path: string }[] = [];
     ((ad || []) as { id: string; files: Record<string, string> | null; data: PvOrder }[]).forEach((r) => {
       // the imprint mockups first (the shirt with the art), pictures only (not barcodes or file icons)
@@ -420,8 +422,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // its order history: their last finished orders, new system and old, newest first, with the total (Nov 3, Nick)
   const history = [
     ...pastPortal.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", when: short(o.completed_at || o.due_date || o.created_at), qty: o.qty, pic: picOf(o), href: link(`/portal/orders/${o.id}`), total: +((o as { total?: number }).total || 0), date: o.completed_at || o.due_date || o.created_at || "" })),
-    ...archived.filter((a) => a.kind === "invoice" && !pvOpen.some((x) => x.a.id === a.id) && (ourStatusFor(a.status_name || "", "invoice") === "completed" || (a.order_date || "") < since))
-      .slice(0, 12).map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, total: +a.total || 0, date: a.due_date || a.order_date || "" })),
+    ...archHist.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, total: +a.total || 0, date: a.due_date || a.order_date || "" })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
   const dash = simple ? (
     <PortalSimple jobs={jobs} proofs={proofsDash} sent={sentDash} past={history} pay={pay} art={designs.filter((d) => !d.archived_at && designUrls[d.id]).sort((a, b) => Number(!!b.starred) - Number(!!a.starred)).slice(0, 9).map((d) => ({ id: d.id, url: designUrls[d.id], name: d.name }))} newMsgs={newMsgs} msgHref={msgHref} ordersHref={link("/portal?area=orders")}
