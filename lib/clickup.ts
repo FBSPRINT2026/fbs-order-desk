@@ -212,7 +212,7 @@ export async function readClickUpTask(admin: SupabaseClient, id: string): Promis
   const { data: team } = teamId ? await admin.from("clickup_teams").select("hidden, hidden_fields").eq("id", teamId).maybeSingle() : { data: null };
   const row = rowOf(t, teamId, comments, String(st?.user_email || ""), (team?.hidden_fields as string[] | null) || []);
   row.attachments = keepPaths(row.attachments, old?.attachments as CuFile[] | null);
-  await admin.from("clickup_tasks").upsert({ ...row, waiting: waitingOf({ ...row, order_id: old?.order_id, dismissed_at: old?.dismissed_at, pv_number: old?.pv_number }, !!team?.hidden) });
+  await admin.from("clickup_tasks").upsert({ ...row, full_read_at: new Date().toISOString(), waiting: waitingOf({ ...row, order_id: old?.order_id, dismissed_at: old?.dismissed_at, pv_number: old?.pv_number }, !!team?.hidden) });
   const { data } = await admin.from("clickup_tasks").select("*").eq("id", id).maybeSingle();
   return (data as ClickUpTaskRow | null) || null;
 }
@@ -277,13 +277,29 @@ export async function filesOntoOrder(admin: SupabaseClient, orderId: string, fil
 }
 const fileKind = (name: string) => /(^|[\W_])(po|p\.o|purchase|order( ?form)?|invoice)([\W_]|$)/i.test(name) ? "po" : /\.(ai|eps|svg|pdf|png|jpe?g|psd|tiff?|cdr|dst|emb|webp|gif)$/i.test(name) ? "art" : "other";
 
-/** jobs made into orders that still have files to bring in (newest first), each run while there's time */
+/**
+ * Jobs made into orders that still have files to bring in, each run while there's time. A job whose order still waits
+ * on us is read again in full every few hours (Nov 2, Nick: #2844's notes link to its Dropbox folder, but the job hadn't
+ * changed since it was first read, so the link was never seen), so a link put in its notes or comments is found.
+ */
 async function catchUpOrderFiles(admin: SupabaseClient, bytes: number, deadline: number) {
-  const { data } = await admin.from("clickup_tasks").select("id, team_id, order_id, attachments").not("order_id", "is", null).neq("status_type", "closed")
+  const { data } = await admin.from("clickup_tasks").select("id, team_id, order_id, attachments, full_read_at").not("order_id", "is", null).neq("status_type", "closed")
     .order("updated_at_cu", { ascending: false }).order("id").limit(300);
-  let left = bytes, orders = 0;
-  for (const t of (data || []) as { id: string; team_id: string; order_id: string; attachments: CuFile[] | null }[]) {
+  const rows = (data || []) as { id: string; team_id: string; order_id: string; attachments: CuFile[] | null; full_read_at: string | null }[];
+  const reqs = new Set<string>();
+  for (let i = 0; i < rows.length; i += 200) {
+    const { data: os } = await admin.from("orders").select("id").in("id", rows.slice(i, i + 200).map((r) => r.order_id)).eq("status", "request").is("discarded_at", null);
+    for (const o of (os || []) as { id: string }[]) reqs.add(o.id);
+  }
+  let left = bytes, orders = 0, reread = 0;
+  for (const t of rows) {
     if (left <= 0 || Date.now() > deadline - 55_000) break;
+    if (!reqs.has(t.order_id)) continue;
+    if (reread < 8 && (!t.full_read_at || Date.now() - Date.parse(t.full_read_at) > 4 * 3600e3)) {
+      const fresh = await readClickUpTask(admin, t.id).catch(() => null);
+      reread++;
+      if (fresh) t.attachments = fresh.attachments;
+    }
     const atts = t.attachments || [];
     const todo = atts.some((f) => !f.path && !(f.tried && Date.now() - Date.parse(f.tried) < 6 * 3600e3));
     let files = atts;
@@ -446,7 +462,7 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
           row.attachments = r.files; fileBytes -= r.used;
         }
         if (k?.order_id) await filesOntoOrder(admin, k.order_id, row.attachments).catch(() => null);
-        if (full) await admin.from("clickup_tasks").upsert({ ...row, waiting });
+        if (full) await admin.from("clickup_tasks").upsert({ ...row, waiting, full_read_at: new Date().toISOString() });
         else { const { attachments: _a, comments: _c, ...info } = row; void _a; void _c; await admin.from("clickup_tasks").upsert({ ...info, waiting: false }); }
         if (waiting && !k?.waiting) out.newJobs.push(`${team.name}: ${row.name}`);
         out.read!++;
