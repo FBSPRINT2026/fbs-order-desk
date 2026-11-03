@@ -19501,3 +19501,24 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jc-sbar .chip{background:var(--surface);color:var(--c);border-color:color-mix(in srgb,var(--c) 40%,var(--line))}
 .jc-sbar .chip.on{background:var(--c);color:#fff}
 .jc-sbar input{border-color:var(--line)}
+/* calmer (Nov 2, Nick: "a little too much and a little too often… our logo and messaging center… the full version… just make
+   it turn on, turn off"): the colors drift slower with a light sheen now and then, two soft ripples every 40s (12s when a
+   message is waiting), the logo and title solid; the department switch joined, the picked one dark, the rest light */
+.jcx>.jrl-mc .jrl-mc-ban{animation-duration:40s}
+.jcx>.jrl-mc .jrl-mc-ban::after{animation-duration:24s;background:linear-gradient(100deg,transparent,rgba(255,255,255,.16),transparent)}
+@keyframes jrl-sheen{0%,88%{left:-50%}100%{left:120%}}
+.jrl-sig i{background:#141D2B;backdrop-filter:none;box-shadow:0 0 0 2px #fff}
+.jrl-sig i img{opacity:1}
+.jrl-mc-t{color:#fff;text-shadow:0 1px 3px rgba(20,29,43,.5)}
+.jrl-sig b{animation:jrl-water2 40s cubic-bezier(.2,.65,.3,1) infinite;border-color:rgba(255,255,255,.55);box-shadow:0 0 8px rgba(255,255,255,.2)}
+.jrl-sig b:nth-child(2){animation-delay:.7s}
+.jrl-sig b:nth-child(3){display:none}
+.jrl-sig.live b{animation-duration:12s}
+.jrl-sig.live b:nth-child(2){animation-delay:.7s}
+@keyframes jrl-water2{0%{transform:scale(1);opacity:0;border-width:2.5px}1.5%{opacity:.7}9%{transform:scale(8);opacity:0;border-width:.5px}100%{transform:scale(8);opacity:0}}
+.jcx>.jrl-mc .jrl-mc-ban::before{background:linear-gradient(180deg,rgba(20,29,43,0),rgba(20,29,43,.25))}
+.jc-sbar .jc-dseg{gap:0;border-radius:6px;overflow:hidden;height:36px}
+.jc-sbar .jc-dseg .prf-dept,.jc-sbar .jc-dseg .prf-dept.embroidery,.jc-sbar .jc-dseg .prf-dept.heat,.jc-sbar .jc-dseg .prf-dept.all{background:color-mix(in srgb,var(--c) 22%,var(--surface));color:var(--c);opacity:1;border-radius:0!important;box-shadow:none}
+.jc-sbar .jc-dseg .prf-dept.z{color:color-mix(in srgb,var(--c) 50%,var(--surface))}
+.jc-sbar .jc-dseg .prf-dept.on,.jc-sbar .jc-dseg .prf-dept.all.on{background:var(--c);color:#fff;box-shadow:none}
+.jc-sbar .jc-dseg .prf-dept + .prf-dept{border-left:1px solid color-mix(in srgb,var(--c) 30%,var(--surface))!important}
