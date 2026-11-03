@@ -19279,3 +19279,23 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* Job Center's stage tabs: the portal's header fade, light gray running into the stage's own color on the right (Nov 2, Nick) */
 .jct-tab:not(.on),.jct-all:not(.on){background:linear-gradient(90deg,color-mix(in srgb,var(--surface-2) 70%,var(--line-2)) 55%,color-mix(in srgb,var(--c,var(--fbs-blue)) 16%,var(--surface-2)))}
 .jct-tab:not(.on):hover,.jct-all:not(.on):hover{background:linear-gradient(90deg,var(--surface-2) 45%,color-mix(in srgb,var(--c,var(--fbs-blue)) 22%,var(--surface-2)))}
+/* program pricing, dressed up (Nov 2, Nick): the navy bar with the color seam, method badges, prices as a bold column */
+.psh-card{overflow:hidden}
+.psh-h{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:#141D2B;color:#fff;padding:16px 20px;border-bottom:4px solid transparent;border-image:var(--fbs-fade) 1;border-image-slice:0 0 1 0}
+.psh-h > div{display:flex;flex-direction:column;gap:2px}
+.psh-k{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7FC8EA}
+.psh-h h2{margin:0;font-family:var(--display);font-size:22px;font-weight:800;color:#fff}
+.psh-h p{margin:0;flex:1 1 240px;font-size:13px;color:#B8C2D3}
+.psh-n{margin-left:auto;font-size:12px;font-weight:700;color:#141D2B;background:#fff;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.psh-t tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--surface-2) 55%,var(--surface))}
+.psh-t tbody tr:hover td{background:var(--accent-soft)}
+.psh-dec{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.psh-dec small{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.psh-m{display:inline-block;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;margin-bottom:2px}
+.psh-m.screen{background:color-mix(in srgb,var(--fbs-blue) 14%,transparent);color:color-mix(in srgb,var(--fbs-blue) 75%,var(--ink))}
+.psh-m.embroidery{background:color-mix(in srgb,var(--fbs-violet) 14%,transparent);color:color-mix(in srgb,var(--fbs-violet) 80%,var(--ink))}
+.psh-m.dtf{background:color-mix(in srgb,var(--fbs-orange) 18%,transparent);color:color-mix(in srgb,var(--fbs-orange) 60%,var(--ink))}
+.psh-amt{display:inline-flex;flex-direction:column;align-items:flex-end;font-family:var(--display);font-size:20px;font-weight:800;color:var(--ink);line-height:1.1}
+.psh-amt small{font-family:var(--body);font-size:11px;font-weight:600;color:var(--ink-3)}
+.psh-x{background:color-mix(in srgb,var(--fbs-violet) 6%,var(--surface))}
+.psh-x b{font-family:var(--display);font-size:16px;color:var(--ink)}
