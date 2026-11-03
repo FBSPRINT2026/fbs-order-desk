@@ -20250,3 +20250,27 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 /* in the narrow Your account panel the button sits under the words, not squeezing them */
 .psm-acct-help .psup-row{grid-template-columns:32px minmax(0,1fr);row-gap:8px}
 .psm-acct-help .psup-row .btn{grid-column:2;justify-self:start}
+
+/* The portal tutorial (components/PortalTour.tsx, Nov 3): the page grayed, one part lit, a small card beside it */
+.ptour{position:fixed;inset:0;z-index:1200}
+.ptour-dim{position:absolute;inset:0;background:rgba(15,18,24,.55)}
+.ptour-hole{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(15,18,24,.55);outline:2px solid var(--fbs-blue,var(--accent));transition:top .25s,left .25s,width .25s,height .25s;pointer-events:none}
+.ptour-card{position:fixed;width:min(360px,calc(100vw - 32px));background:var(--surface);border-radius:12px;padding:14px 16px;box-shadow:0 10px 30px rgba(15,18,24,.25)}
+.ptour.mid .ptour-card{top:50%;left:50%;transform:translate(-50%,-50%)}
+.ptour-n{font-size:12px;color:var(--ink-3)}
+.ptour-card h3{margin:4px 0;font:700 16px/1.25 var(--display);color:var(--ink)}
+.ptour-card p{margin:0;font-size:13.5px;line-height:1.5;color:var(--ink-2)}
+.ptour-acts{display:flex;align-items:center;gap:8px;margin-top:12px}
+.ptour-skip{margin-right:auto;font-size:12.5px;color:var(--ink-3)}
+.ptour-acts .btn.primary{margin-left:auto}
+.ptour-skip + .btn, .ptour-skip ~ .btn.primary{margin-left:0}
+.ptour-askw{display:contents}
+/* phones: the card sits at the bottom like the portal's other sheets */
+@media (max-width:640px){.ptour:not(.mid) .ptour-card{top:auto!important;left:16px!important;right:16px;bottom:16px;width:auto}}
+.psv-tour{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line-2,var(--line));font-size:12.5px}
+/* the simple view's proofs panel */
+.psm-pf{display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--line-2,var(--line))}
+.psm-pf:first-child{border-top:0;padding-top:0}
+.psm-pf > .btn{grid-column:1/-1;justify-content:center}
+.psm-pf-n{margin-left:auto;min-width:22px;height:22px;padding:0 7px;border-radius:999px;background:var(--fbs-salmon,var(--warn));color:#fff;font-size:12px;font-weight:700;display:inline-grid;place-items:center}
+@media (max-width:900px){.psm-side > .psm-proofs{order:2}}

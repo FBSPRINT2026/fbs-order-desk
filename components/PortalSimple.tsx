@@ -25,7 +25,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
   /** "Have a support issue?" with its button (Simple / Full is in Settings) */ support?: ReactNode;
 }) {
   const owed = pay.due > 0.004;
-  const open = proofs.length + sent.length + jobs.length;
+  const open = sent.length + jobs.length;
   return (
     <>
     {/* the page's title, like the full portal's Dashboard (Nov 3, Nick: "add the dashboard header to the top and space it
@@ -35,16 +35,9 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
       {/* one search at the top for everything, its examples rolling through (Nov 3, Nick: "search like everything, orders,
           payments, all that stuff… like the AI search where it rotates through") */}
       <div className="psm-main">
-        <section className="panel psm-p">
+        <section className="panel psm-p" data-tour="orders">
           <div className="panel-h"><div className="psm-ht"><h2>Open orders</h2><span className="faint">What we&apos;re working on for you, and where each one is</span></div><Link className="pd-link psm-hl" href={ordersHref}>All orders</Link></div>
           <div className="panel-b psm-pb">
-            {proofs.map((p) => (
-              <div key={p.id} className="psm-nd">
-                <span className="psm-nd-pic">{p.pic ? <img src={p.pic} alt="" loading="lazy" /> : <span>#{p.number}</span>}</span>
-                <span className="psm-nd-t"><b>{p.what || "Proof"} ready to look over</b><small>#{p.number}{p.name ? ` · ${p.name}` : ""}</small></span>
-                <Link className="btn primary" href={p.href}>Review and approve</Link>
-              </div>
-            ))}
             {sent.map((x) => (
               <Link key={x.id} href={x.href} className="psm-sent-r"><span><b>#{x.number}{x.name ? ` ${x.name}` : ""}</b><small>Sent {x.when} · {x.note || x.label}</small></span><span className="psm-pill">{x.label}</span></Link>
             ))}
@@ -55,7 +48,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
 
         {/* past orders as picture tiles, each with Reorder (Nov 3, Nick: option B) */}
         {past.length > 0 && (
-          <section className="panel psm-p">
+          <section className="panel psm-p" data-tour="history">
             <div className="panel-h"><div className="psm-ht"><h2>Order history</h2><span className="faint">Your past orders. Reorder runs one again.</span></div><Link className="pd-link psm-hl" href={ordersHref}>All past orders</Link></div>
             <div className="panel-b psm-tiles">
               {past.map((p) => (
@@ -73,8 +66,22 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
 
       <aside className="psm-side">
         {/* right above payments (Nov 3, Nick) */}
-        {search && <div className="psm-search">{search}</div>}
-        <section className="panel psm-p psm-pay">
+        {search && <div className="psm-search" data-tour="ask">{search}</div>}
+        {/* proofs have their own panel, empty or not (Nov 3, Nick: "there's no proof section on the simple version… it
+            should say oh no proofs for you right now") */}
+        <section className="panel psm-p psm-proofs" data-tour="proofs">
+          <div className="panel-h"><div className="psm-ht"><h2>Proofs to approve</h2><span className="faint">Look over your art before we print</span></div>{proofs.length > 0 && <span className="psm-pf-n">{proofs.length}</span>}</div>
+          <div className="panel-b psm-pb">
+            {proofs.length ? proofs.map((p) => (
+              <div key={p.id} className="psm-pf">
+                <span className="psm-nd-pic">{p.pic ? <img src={p.pic} alt="" loading="lazy" /> : <span>#{p.number}</span>}</span>
+                <span className="psm-nd-t"><b>{p.what || "Proof"} ready to look over</b><small>#{p.number}{p.name ? ` · ${p.name}` : ""}</small></span>
+                <Link className="btn primary" href={p.href}>Review and approve</Link>
+              </div>
+            )) : <p className="psm-none">No proofs waiting on you right now. When one&apos;s ready, it shows here and we email you.</p>}
+          </div>
+        </section>
+        <section className="panel psm-p psm-pay" data-tour="pay">
           <div className="panel-h"><div className="psm-ht"><h2>Payments</h2><span className="faint">What&apos;s due and how to pay it</span></div><Link className="pd-link psm-hl" href={pay.href}>History</Link></div>
           <div className="panel-b psm-pb">
             <div className="psm-bal"><small>Balance due</small><b className={"num" + (pay.pastDue > 0.004 ? " late" : "")}>{money(pay.due)}</b></div>
@@ -89,7 +96,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
         </section>
         {/* their logos, small (Nov 3, Nick: "the smaller artwork… on the bottom right") */}
         {art.length > 0 && (
-          <section className="panel psm-p psm-artp">
+          <section className="panel psm-p psm-artp" data-tour="art">
             <div className="panel-h"><div className="psm-ht"><h2>Your artwork</h2><span className="faint">Your logos on file with us</span></div><Link className="pd-link psm-hl" href={artHref}>All artwork</Link></div>
             <div className="panel-b psm-art">{art.map((a) => <Link key={a.d.id} href={artHref} className="psm-art-i" title={a.d.name}><LogoFace d={a.d} urls={designUrls} shirt={a.shirt} shown={a.shown || null} printed={a.printed || null} /></Link>)}</div>
           </section>
@@ -97,7 +104,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
         {/* everything about the account in one small panel: a message to us, all orders, messages, settings and Simple /
             Full (Nov 3, Nick: "part of it under the artwork on the right, part of it at the bottom… just have a little panel
             where that's all in there") */}
-        <section className="panel psm-p psm-acct">
+        <section className="panel psm-p psm-acct" data-tour="account">
           <div className="panel-h"><div className="psm-ht"><h2>Your account</h2><span className="faint">Messages, settings and help</span></div></div>
           <div className="panel-b psm-acct-b">
             <Link href={msgHref} className="psm-msg">

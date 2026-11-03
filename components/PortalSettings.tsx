@@ -73,6 +73,8 @@ export default function PortalSettings({ staxToken = "", c, customerId, logoUrl,
             ))}
           </div>
           {viewNote && <div className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>{viewNote}</div>}
+          {/* the tutorial again (Nov 3, Nick: "reset tutorial, like view tutorial again") */}
+          <div className="psv-tour"><span className="faint">New here, or want a refresher?</span><a className="btn sm" href={`/portal?tour=1${preview ? `&as=${customerId}` : ""}`}>View tutorial again</a></div>
         </div>
       </section>
       <section className="panel">

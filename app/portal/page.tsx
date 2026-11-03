@@ -16,6 +16,8 @@ import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
 import { ourStatusFor } from "@/lib/printavoSend";
 import StartPanel from "@/components/StartPanel";
 import SupportButton from "@/components/SupportButton";
+import PortalTour from "@/components/PortalTour";
+import { tourDue } from "@/lib/portalTour";
 import { mockupDetail } from "@/lib/mockupDetail";
 import AccountAreas, { type AAttn, type AMessage, type AMockup, type AOrder, type APayment } from "@/components/AccountAreas";
 import { archiveMyMockup, customerGeneralMessage, starMyDesign, starMyMockup } from "@/app/portal/actions";
@@ -43,8 +45,8 @@ import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { guessHex } from "@/lib/mockup";
 
-export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string; c?: string }> }) {
-  const { as, c: startConvo } = await searchParams;
+export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string; c?: string; tour?: string }> }) {
+  const { as, c: startConvo, tour } = await searchParams;
   const ctx = await getPortalCtx(as);
   const qs = ctx.preview ? `?as=${ctx.preview.id}` : "";
   const admin = createAdminClient();
@@ -447,7 +449,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         {/* the customer's name with Start an order / Mockup Creator, above the tabs (Oct 15, Nick) */}
         <div className="pdx-hello">
           <div><h1 className="pdx-h1">{company || "Your Account"}</h1><div className="pdx-sub">Your quotes, orders, artwork and payments with {ctx.settings.shop.name}</div></div>
-          {ctx.customerIds.length > 0 && <div className="pdx-acts"><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} /></div>}
+          {ctx.customerIds.length > 0 && <div className="pdx-acts" data-tour="start"><StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} /></div>}
         </div>
         {!ctx.customerIds.length ? (
           <div className="panel"><div className="panel-b">
@@ -460,7 +462,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
             programPanel={program ? <ProgramSheet program={program} items={programItems} images={programImages} extras={programExtras} /> : undefined} hasProgram={!!program && program.active && (programItems.length > 0 || cardHasPrices(program.rate_card))}
             assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
-            titleAsk={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare pop ideas={ideas} personHref={msgLink(null)} />}
+            titleAsk={<div data-tour="ask" className="ptour-askw"><PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare pop ideas={ideas} personHref={msgLink(null)} /></div>}
             goodsPanel={wholesale ? <PortalGoodsDesk items={goodsAll} incoming={incoming} told={told} canAct={!ctx.preview} canLink={!ctx.preview || ctx.isStaff} qs={qs} as={ctx.preview?.id} addTracking={addTracking} linkIncoming={linkIncoming} sendGoods={sendGoods} linkTold={linkToldShipment} /> : undefined}
             goodsHome={wholesale ? <PortalGoods items={goodsOpen.slice(0, 4)} incoming={incoming} canAct={!ctx.preview} qs={qs} compact hub empty="Nothing waiting on your goods right now. When a job needs garments from you, it shows up here." /> : undefined}
             goodsCount={goodsOpen.length + incoming.length}
@@ -475,6 +477,9 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         )}
         {/* Simple or Full, quietly at the foot of the page (Nov 3, Nick) */}
         {/* the full dashboard's foot: help, where Simple / Full used to be (that's in Settings now; Nov 3, Nick) */}
+        {/* the tutorial: by itself the first time each person signs in (and after the shop's Reset tutorial), or from
+            Settings → View tutorial again (?tour=1); a staff preview shows it only when asked */}
+        {acct && <PortalTour view={simple ? "simple" : "advanced"} auto={tour === "1" || (!ctx.preview && await tourDue(ctx.email, simple ? "simple" : "advanced", (acct as { tour_reset_at?: string | null }).tour_reset_at))} />}
         {acct && !simple && <div className="psup-foot-row"><SupportButton email={ctx.email} portal look="row" /></div>}
       </main>
     </>
