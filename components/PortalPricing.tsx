@@ -35,11 +35,10 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             <h2>Your wholesale pricing</h2>
             <div className="eyebrow">{title}{company ? <> · for <span data-notranslate>{company}</span></> : null}</div>
           </div>
-          <div className="row"><PrintButton /></div>
         </div>
         <p className="pl-lead">Prices are per piece, per print location, on garments you supply. Your quotes and orders are priced from this list automatically; you&apos;ll see the total on every order before you confirm it.</p>
 
-        <PricingTabs tabs={[
+        <PricingTabs right={<PrintButton />} tabs={[
           { k: "screen", label: "Screen printing", body: <>
         <section className="panel pl-sec">
           <div className="panel-h"><h2>Screen printing</h2><span className="faint">Per location, per piece, in dollars, by the number of ink colors</span></div>
