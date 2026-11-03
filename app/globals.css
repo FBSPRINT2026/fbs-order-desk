@@ -20007,3 +20007,15 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .aa .aa-otabs:has(> .aa-osel) > .aa-lane{flex:1 1 100%!important}
   .aa .aa-otabs:has(> .aa-osel) > .aa-lane .aa-lane-seg{width:100%}
 }
+/* a phone turned sideways (Nov 3, Nick: "if I turn my phone sideways… the site is pretty much unusable"): the screen is
+   only ~390px tall, and the sticky top bars (the shop's dark bar, the portal's header, the order page's tabs) plus the
+   page's own pinned toolbars took most of it. On a short landscape screen nothing is pinned to the top: the bars scroll
+   away with the page, so the whole height is the page; pop-ups and sheets use the full height. */
+@media (orientation:landscape) and (max-height:520px) and (pointer:coarse){
+  .side,.p-top,.ot-nav,.md-tabs,.eh-bar,.eh-bar.has-pn,.jrl-mc,.cu-rail,.rqd-rail,.toolbar,[data-toolbar],thead th{position:static!important}
+  .side{max-height:none!important}
+  .dla{max-height:calc(100dvh - 16px)!important}
+  .dla-bg{padding:8px!important}
+  .portal .dla-bg:not(.dock) > .dla,.pcs-w.open > .pcs-in{max-height:calc(100dvh - 8px)!important}
+  .portal .aa-paylay .aa-payside > .pyb:has(.pyb-sum){position:static}
+}
