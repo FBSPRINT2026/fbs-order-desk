@@ -188,6 +188,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   const [ordF, setOrdF] = useSticky<"all" | "requests" | "quotes" | "orders" | "completed">("customer.orderList", "all");
   const oFilter: "all" | "requests" | "quotes" | "orders" | "completed" = mode === "shop" && rawArea === "quotes" ? "quotes" : ["all", "requests", "quotes", "orders", "completed"].includes(ordF) ? ordF : "all";
   const [conv, setConv] = useSticky<"portal" | "texts">("customer.conversations", "portal");
+  const [bsOpen, setBsOpen] = useSticky<boolean>("customer.brandOpen", false);
   const convNow = rawArea === "texts" ? "texts" : conv;
   // where the More menu opens: fixed under its button (the tab bar clips anything that drops out of it)
   const [moreOpen, setMoreOpen] = useState<{ top: number; right: number } | null>(null);
@@ -368,10 +369,11 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
 
   // brand standards (Oct 16): in the shop on the Artwork tab; in the portal on its own tab under Artwork (Oct 24, Nick)
   const brandCardEl = (brandColors.length > 0 || brandEditor) ? (
-        <div className="aa-card">
-          <div className="aa-sec-h"><h3>Brand standards</h3>{mode === "shop" ? null : <span className="faint">{"Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span>}
+        <div className={"aa-card aa-bsc" + (bsOpen ? " open" : "")}>
+          {/* on a phone it folds up under its title (Nov 3, Nick: "Brand standards can be like a drop-down… in phone view") */}
+          <div className="aa-sec-h"><button type="button" className="aa-bstog" aria-expanded={bsOpen} onClick={() => setBsOpen(!bsOpen)}><h3>Brand standards</h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m6 9 6 6 6-6" /></svg></button>{mode === "shop" ? null : <span className="faint">{"Your colors, matched to the exact ink every time we print for you. To change one, send us a message."}</span>}
             {mode === "shop" && onBrandPortal && <><span className="spacer" style={{ flex: 1 }} /><PortalSwitch on={brandPortal} onChange={onBrandPortal} what="their brand standards" /></>}</div>
-          {brandEditor || [...new Set(brandColors.map((x) => x.group || ""))].sort((x, y) => (x ? 1 : 0) - (y ? 1 : 0) || x.localeCompare(y)).map((g) => (
+          <div className="aa-bsb">{brandEditor || [...new Set(brandColors.map((x) => x.group || ""))].sort((x, y) => (x ? 1 : 0) - (y ? 1 : 0) || x.localeCompare(y)).map((g) => (
             <div key={g || "_"} className="bs-group">
               {(g || [...new Set(brandColors.map((x) => x.group || ""))].length > 1) && <div className="bs-gh">{g || (mode === "portal" ? "Your colors" : `${customerName || "Their"} colors`)}</div>}
               <div className="bs-list">
@@ -383,7 +385,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
                 ); })}
               </div>
             </div>
-          ))}
+          ))}</div>
         </div>
   ) : null;
   // the portal's main tabs never change (Oct 24, Nick: "the toolbar shouldn't change"): extras are tabs inside Artwork and Pricing

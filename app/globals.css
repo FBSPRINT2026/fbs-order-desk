@@ -19899,3 +19899,13 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .cb-tbl .cb-row-acts .btn.sm{height:30px;font-size:12.5px;padding:0 10px}
   .cb-tbl .cb-pic{width:56px}
 }
+/* Brand standards: the title is a plain heading on a computer; on a phone it's a fold-up, closed until tapped (Nov 3) */
+.aa-bstog{all:unset;display:inline-flex;align-items:center;gap:8px;cursor:default}
+.aa-bstog > svg{display:none}
+@media (max-width:640px){
+  .aa-bstog{cursor:pointer}
+  .aa-bstog > svg{display:block;color:var(--ink-3);transition:transform .15s}
+  .aa-bsc.open .aa-bstog > svg{transform:rotate(180deg)}
+  .aa-bsc:not(.open) > .aa-bsb{display:none}
+  .aa-bsc:not(.open) > .aa-sec-h{margin-bottom:0;padding-bottom:0;border-bottom:0}
+}
