@@ -231,14 +231,16 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const msgLink = (orderId: string | null) => link(`/portal?area=messages&c=${orderId || "general"}`);
   // sent to us and not confirmed yet: in "Orders sent to FBS" above the jobs, not in the jobs (Oct 24, Nick)
   const isJob = (o: Order) => o.status !== "completed" && o.status !== "request";
-  const doneRecent = orders.filter((o) => o.status === "completed").slice(0, 1);
+  // finished jobs; a closed quote (declined) isn't a job: it's under Orders → Completed only
+  const finished = (o: Order) => o.status === "completed" && o.type !== "quote";
+  const doneRecent = orders.filter(finished).slice(0, 1);
   // recently completed (the last 60 days, up to 10): a tab beside Ready on the dashboard (Oct 24, Nick)
   const sixty = new Date(Date.now() - 60 * 864e5).toISOString();
-  const recentDone = orders.filter((o) => o.status === "completed" && String((o as Order & { completed_at?: string | null }).completed_at || o.created_at || "") >= sixty).slice(0, 10);
+  const recentDone = orders.filter((o) => finished(o) && String((o as Order & { completed_at?: string | null }).completed_at || o.created_at || "") >= sixty).slice(0, 10);
   // the newest 20, plus every order on hold however old, so the On hold panel and tab never miss one
   const jobOrders0 = orders.filter(isJob).slice(0, 20);
   const jobOrders = [...jobOrders0, ...orders.filter((o) => isJob(o) && !jobOrders0.includes(o) && customerHold((o as Order & { flags?: unknown }).flags as never))];
-  const pastPortal = orders.filter((o) => o.status === "completed" && !doneRecent.includes(o));
+  const pastPortal = orders.filter((o) => finished(o) && !doneRecent.includes(o));
   // pictures: each order's first mockup (photos only), else the customer's own mockup
   const picPath = (o: Order) => { const g = orderGroups(o)[0]; return g?.mockupThumbs?.[0] || g?.customerMockups?.[0]?.path || ""; };
   const picOrders = [...jobOrders, ...doneRecent, ...recentDone, ...pastPortal.slice(0, 3)];

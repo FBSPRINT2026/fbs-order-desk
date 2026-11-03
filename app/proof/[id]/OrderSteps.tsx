@@ -83,7 +83,7 @@ function Steps({ id, steps }: { id: string; steps: StepView[] }) {
               ? <ProofAnswer key={step.key} id={id} kind={step.kind} status={step.state === "done" ? "approved" : step.state === "changes" ? "changes" : "pending"} decidedName={step.who || ""} decidedAt={step.when || ""} comment={step.comment || ""}
                   target={step.kind === "art" ? { kind: "art" } : { kind: "sewout", id: step.sewoutId! }} onAnswered={() => router.refresh()} />
             : step.kind === "quote" || step.kind === "invoice" ? (step.state === "changes"
-              ? <Result tone={/declined/i.test(step.title) ? "no" : "chg"} title={step.title} line={/declined/i.test(step.title) ? "We'll look at what you said and get back to you." : `We're making the changes and will send you a new ${step.kind === "invoice" ? "invoice" : "quote"}.`} note={step.comment} who={whoWhen(step)} />
+              ? <Result tone={/declined/i.test(step.title) ? "no" : "chg"} title={step.title} line={/declined/i.test(step.title) ? THANKS : `We're making the changes and will send you a new ${step.kind === "invoice" ? "invoice" : "quote"}.`} note={/declined/i.test(step.title) ? "" : step.comment} who={whoWhen(step)} />
               : <Result tone="ok" title="All approved" line="Thank you!" who={whoWhen(step)} />)
             : step.kind === "deposit" && (step.state === "done"
               ? <Result tone="ok" title={step.title} line={step.sub} />
@@ -99,8 +99,8 @@ function Steps({ id, steps }: { id: string; steps: StepView[] }) {
           {(pane === "changes" || pane === "declined") && <div className="pfl-over" role="status">
             <span className="pfl-over-i" aria-hidden>{pane === "declined" ? "×" : "✎"}</span>
             <b>{pane === "declined" ? "Quote declined" : "Changes requested"}</b>
-            {sentBack?.note && <q>{sentBack.note}</q>}
-            <span>{pane === "declined" ? "We'll look at what you said and get back to you." : `We'll make the changes and send you a new ${what0} to look over.`}</span>
+            {pane !== "declined" && sentBack?.note && <q>{sentBack.note}</q>}
+            <span>{pane === "declined" ? THANKS : `We'll make the changes and send you a new ${what0} to look over.`}</span>
           </div>}
         </div>
       </section>
@@ -157,7 +157,7 @@ function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepV
   const parts = [...(looks.some((s) => s.kind === "art") ? ["art"] : []), ...(looks.some((s) => s.kind === "sewout") ? ["sew-out"] : [])];
   const priceWord = isInv ? "invoice" : "quote";
   const label = quote ? (parts.length ? `${priceWord} and ${listOf(parts)}` : priceWord) : listOf(parts);
-  if (sent) return <Result tone={sent === "declined" ? "no" : "chg"} title={sent === "declined" ? "Quote declined" : "Changes sent"} line={sent === "declined" ? "Thanks for letting us know. We'll look at what you said and get back to you." : `We'll fix the ${priceWord} and send you a new one to approve.`} note={why} />;
+  if (sent) return <Result tone={sent === "declined" ? "no" : "chg"} title={sent === "declined" ? "Quote declined" : "Changes sent"} line={sent === "declined" ? THANKS : `We'll fix the ${priceWord} and send you a new one to approve.`} note={sent === "declined" ? "" : why} />;
   const submit = () => start(async () => {
     setErr("");
     if (pv) { setErr(PREVIEW_OFF); return; }
@@ -209,6 +209,10 @@ function Final({ id, todo, ok, goTo, onDone, onBack }: { id: string; todo: StepV
 }
 
 /** what happened, after they answer: an icon, one line, their note (Oct 29, Nick: "don't love this little box… rethink") */
+/** a declined quote is closed for good (Nov 3, Nick: "instead of too late, just say thank you for the opportunity"): no
+ *  promise to come back to them, and their reason isn't repeated back to them */
+const THANKS = "Thank you for the opportunity. We hope to hear from you again soon.";
+
 function Result({ tone, title, line, note, who }: { tone: "ok" | "chg" | "no"; title: string; line: string; note?: string; who?: string }) {
   return (
     <div className={"pfl-res " + tone} role="status">

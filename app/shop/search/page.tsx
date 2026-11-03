@@ -12,7 +12,7 @@ import { useSticky } from "@/lib/useSticky";
 import { quickJump } from "@/app/shop/search-actions";
 import { previewUrls } from "@/lib/designs";
 import { ARCHIVE_LIST_COLS, type ArchiveSummary } from "@/lib/archive";
-import { PAY_TERMS, type Design, type PayTerms } from "@/lib/pricing";
+import { PAY_TERMS, statusKey, type Design, type PayTerms } from "@/lib/pricing";
 import { allRows } from "@/lib/readAll";
 import RowLink from "@/components/RowLink";
 
@@ -182,7 +182,7 @@ function SearchInner() {
   const rows: Row[] = useMemo(() => {
     if (t.length < 2) return [];
     const mine = ours.filter((o) => (num && String(o.number) === num) || `${o.nickname || ""} ${o.po_number || ""}`.toLowerCase().includes(num || low) || (!num && o.customer_id && custIds.has(o.customer_id)));
-    const a: Row[] = mine.map((o) => ({ key: o.id, href: `/shop/orders/${o.id}`, number: o.number, quote: o.type === "quote", name: o.nickname || "Untitled Job", customer: custName(custMap[o.customer_id || ""]), customerId: o.customer_id, status: o.status, pv: pvStatusOf(o as never), archived: false, due: o.due_date, day: (o.created_at || "").slice(0, 10), pcs: o.qty, total: o.total, balance: o.type === "invoice" ? o.balance : 0 }));
+    const a: Row[] = mine.map((o) => ({ key: o.id, href: `/shop/orders/${o.id}`, number: o.number, quote: o.type === "quote", name: o.nickname || "Untitled Job", customer: custName(custMap[o.customer_id || ""]), customerId: o.customer_id, status: statusKey(o), pv: pvStatusOf(o as never), archived: false, due: o.due_date, day: (o.created_at || "").slice(0, 10), pcs: o.qty, total: o.total, balance: o.type === "invoice" ? o.balance : 0 }));
     const b: Row[] = arch.map((r) => ({ key: r.id, href: `/shop/archive/${r.id}`, number: +r.visual_id || 0, quote: r.kind === "quote", name: r.nickname || "Untitled Job", customer: custName(r.customers), customerId: r.customer_id, status: "archived", label: r.status_name || "", color: r.status_color || "#888", archived: true, due: r.due_date, day: (r.order_date || "").slice(0, 10), pcs: r.qty || 0, total: +r.total || 0, balance: r.kind === "quote" ? 0 : +r.balance || 0 }));
     return [...a, ...b].sort((x, y) => y.day.localeCompare(x.day) || y.number - x.number);
   }, [ours, arch, custIds, custMap, t, num, low]);
@@ -287,8 +287,8 @@ function SearchInner() {
         const many = new Set(rows.map((r) => r.customerId || r.customer)).size > 1;
         const groups: { k: string; title: string; note: string; list: Row[]; first: number }[] = [
           { k: "open", title: "In the works", note: "due soonest first", list: rows.filter((r) => !r.archived && !r.quote && r.status !== "completed").sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || b.number - a.number), first: 8 },
-          { k: "quotes", title: "Quotes", note: "newest first", list: rows.filter((r) => !r.archived && r.quote), first: 5 },
-          { k: "done", title: "Finished", note: "newest first", list: rows.filter((r) => !r.archived && !r.quote && r.status === "completed"), first: 5 },
+          { k: "quotes", title: "Quotes", note: "newest first", list: rows.filter((r) => !r.archived && r.quote && r.status !== "closed"), first: 5 },
+          { k: "done", title: "Finished", note: "newest first", list: rows.filter((r) => !r.archived && ((!r.quote && r.status === "completed") || r.status === "closed")), first: 5 },
           { k: "pv", title: "Printavo history", note: "newest first", list: rows.filter((r) => r.archived), first: 5 },
         ];
         return groups.filter((g) => g.list.length).map((g) => {

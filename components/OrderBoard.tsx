@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { ST, STATUSES, isMe, type StatusKey } from "@/lib/pricing";
+import { ST, STATUSES, isClosedQuote, isMe, type StatusKey } from "@/lib/pricing";
 import { custLabel, money, moneyHidden } from "@/lib/format";
 import { useShopData, type OrderRow } from "@/lib/shopData";
 import { Due } from "@/components/bits";
@@ -68,7 +68,7 @@ export default function OrderBoard({ mine: mineProp }: { mine?: boolean }) {
       {loading ? <div className="empty">Loading…</div> : (
         <div className="board bd-compact" style={{ gridTemplateColumns: `repeat(${cols.length}, minmax(0,1fr))` }}>
           {cols.map((s) => {
-            let list = shown.filter((o) => o.status === s.k).sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"));
+            let list = shown.filter((o) => o.status === s.k && !isClosedQuote(o)).sort((a, b) => (a.due_date || "9999").localeCompare(b.due_date || "9999"));
             if (s.k === "completed") list = list.sort((a, b) => (b.due_date || "").localeCompare(a.due_date || "")).slice(0, 12);
             const pcs = list.reduce((a, o) => a + (o.qty || 0), 0);
             const all = !!open[s.k] || !!q.trim();

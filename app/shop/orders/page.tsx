@@ -6,7 +6,7 @@ import { matches, orderSearchText, words } from "@/lib/search";
 import { ARCHIVE_LIST_COLS, type ArchiveSummary } from "@/lib/archive";
 import { fmtDateLong } from "@/lib/format";
 import { useRouter } from "next/navigation";
-import { STATUSES } from "@/lib/pricing";
+import { CLOSED_QUOTE, STATUSES, isClosedQuote, statusKey } from "@/lib/pricing";
 import { custLabel, daysUntil, money } from "@/lib/format";
 import { summaryLine, useShopData } from "@/lib/shopData";
 import { Due, Pill, pvStatusOf, PaidMark } from "@/components/bits";
@@ -73,7 +73,7 @@ export default function OrdersPage() {
     });
   }, []);
   const stats = useMemo(() => {
-    const quotes = orders.filter((o) => o.type === "quote");
+    const quotes = orders.filter((o) => o.type === "quote" && !isClosedQuote(o));
     const active = orders.filter((o) => o.type === "invoice" && o.status !== "completed");
     const dueWeek = active.filter((o) => { const n = daysUntil(o.due_date); return n !== null && n <= 7; });
     const late = active.filter((o) => { const n = daysUntil(o.due_date); return n !== null && n < 0; }).length;
@@ -91,12 +91,13 @@ export default function OrdersPage() {
   const list = useMemo(() => {
     const qq = q.trim().toLowerCase();
     return orders.filter((o) => {
-      if (type === "quotes" && o.type !== "quote") return false;
+      if (type === "quotes" && (o.type !== "quote" || isClosedQuote(o))) return false;
       if (type === "invoices" && o.type !== "invoice") return false;
       if (type === "open" && (o.type !== "invoice" || o.status === "completed")) return false;
       if (type === "unpaid" && (o.type !== "invoice" || o.balance <= 0.004)) return false;
       if (type === "messages" && !o.unread) return false;
-      if (status && o.status !== status) return false;
+      // a closed quote is finished too: under Completed, and on its own under Closed Quote
+      if (status && (status === "completed" ? o.status !== "completed" : statusKey(o) !== status)) return false;
       if (qq) {
         const c = customers[o.customer_id || ""];
         if (!matches(qq, o.number, o.nickname, o.po_number, c?.company, c?.name, c?.email, summaryLine(o), orderSearchText(o))) return false;
@@ -177,7 +178,7 @@ export default function OrdersPage() {
         </div>
         <select aria-label="Filter by status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">Any status</option>
-          {STATUSES.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
+          {[...STATUSES, CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
         </select>
         <SearchInput placeholder="Search orders" value={q} onChange={(e) => setQ(e.target.value)} />
         {canBulk && !picking && <button type="button" className="btn" onClick={() => { setPicking(true); setBulkMsg(""); }}>Select</button>}
@@ -208,7 +209,7 @@ export default function OrdersPage() {
                     <td><RowLink href={`/shop/orders/${o.id}`} label={`Open #${o.number}`} off={picking} /><span className="ordno">{o.number}</span> <span className="ol-tags"><span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span><PaidMark total={o.total} balance={o.balance} /></span>{o.unread > 0 && <span className="unread" title="Unread customer message" />}</td>
                     <td><div>{o.nickname || "Untitled Job"}{o.rush && <span className="tag" style={{ marginLeft: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}</div><div className="sub">{summaryLine(o)}{o.po_number ? ` · PO ${o.po_number}` : ""}</div></td>
                     <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
-                    <td><Pill status={o.status} pv={pvStatusOf(o as never)} />{orderNeedsDetails(o.groups) && <div className="pdn-tag" title="Production confirms the print size and inks from the old job">Reorder Details Needed</div>}</td>
+                    <td><Pill status={statusKey(o)} pv={pvStatusOf(o as never)} />{orderNeedsDetails(o.groups) && <div className="pdn-tag" title="Production confirms the print size and inks from the old job">Reorder Details Needed</div>}</td>
                     <td><Due date={o.due_date} status={o.status} /></td>
                     <td className="r">{o.qty}</td>
                     <td className="r money-only">{money(o.total)}</td>

@@ -39,6 +39,8 @@ export default async function ProofPage({ params, searchParams }: { params: Prom
           <span className="pfl-sp" />
           {backHref && <a className="pfl-back" href={backHref}>See the whole order</a>}
           {sh0.phone && <a href={`tel:${sh0.phone.replace(/[^\d+]/g, "")}`}>Questions? {fmtPhone(sh0.phone)}</a>}
+          {/* back to their portal, from an email link too (Nov 3, Nick: "a button… return to customer portal"); signs in if needed */}
+          <a className="pfl-portal" href={preview ? `/portal?as=${as}` : "/portal"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg>Back to your portal</a>
         </header>
         {preview && <div className="preview-bar">Preview of the customer&apos;s review page. Buttons are turned off.</div>}
         <OrderSteps id={id} orderId={os.o.id} steps={os.steps} preview={preview} />
@@ -68,6 +70,7 @@ export default async function ProofPage({ params, searchParams }: { params: Prom
         <img src={sh.logoUrl || "/brand/fbs-logo.svg"} alt={sh.name} />
         <span className="pfl-sp" />
         {sh.phone && <a href={`tel:${sh.phone.replace(/[^\d+]/g, "")}`}>Questions? {fmtPhone(sh.phone)}</a>}
+        <a className="pfl-portal" href="/portal"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg>Back to your portal</a>
       </header>
       <div className="pfl-body">
         <aside className="pfl-side">

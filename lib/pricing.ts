@@ -44,7 +44,17 @@ export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quo
   { k: "ready", label: "Ready for Pickup", portal: "Ready for pickup", type: "invoice", c: "#2E9D5B" },
   { k: "completed", label: "Completed", portal: "Completed", type: "invoice", c: "#6B7688" },
 ];
-export const ST: Record<string, (typeof STATUSES)[number]> = Object.fromEntries(STATUSES.map((s) => [s.k, s]));
+/**
+ * A closed quote (Nov 3, Nick: "it needs to be complete, like moved to completed, and it should say closed quote… as the
+ * status"): a quote the customer declined (or the shop marked declined). It's stored as status `completed` and stays
+ * type `quote` (with `declined_at`), so everything that skips finished jobs skips it too; wherever a status is shown or
+ * picked it's "Closed Quote" (`statusKey(o)` → "closed", and `ST.closed`). Never written to the database as "closed".
+ */
+export const CLOSED_QUOTE = { k: "closed" as StatusKey, label: "Closed Quote", portal: "Closed quote", type: "quote" as const, c: "#8A93A3" };
+export const isClosedQuote = (o: { status?: string | null; type?: string | null } | null | undefined) => !!o && o.status === "completed" && o.type === "quote";
+/** the status to show for an order: its own, or "closed" for a closed quote (look it up in ST) */
+export const statusKey = (o: { status?: string | null; type?: string | null }) => (isClosedQuote(o) ? "closed" : String(o.status || ""));
+export const ST: Record<string, (typeof STATUSES)[number]> = { ...Object.fromEntries(STATUSES.map((s) => [s.k, s])), closed: CLOSED_QUOTE };
 
 export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "Heat press (DTF)" };
 /** what a print's way of decorating is called: a patch pressed on is "Heat press patch" (Oct 31, Nick: "instead of

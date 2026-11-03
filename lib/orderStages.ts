@@ -93,6 +93,7 @@ export function customerStatus(o: { status: string; flags?: Flag[] | null; deliv
   if (o.status === "request") return say("request", "Sent to FBS", "We got your order and we're checking it. You'll get a message when we confirm.");
   if (o.status === "quote") return say("quote", "Quote in progress", "We're putting your quote together.");
   if (o.status === "quote_sent") return extra.changesRequested ? say("changes", "Changes requested", "We're updating your quote.") : say("quote_sent", "Quote sent", "Your quote is ready to review and approve.");
+  if (o.status === "completed" && o.type === "quote") return say("closed", "Closed quote", "Thank you for the opportunity. We hope to hear from you again soon.");
   if (o.status === "completed") return say("completed", "Completed", "Completed. Thank you!");
   // a hold the customer must act on, or a delay, comes first
   for (const k of ["hold_customer", "art_problem", "goods_wrong", "hold_payment", "customer_goods", "delayed"] as FlagKey[]) {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useShopData } from "@/lib/shopData";
 import { custLabel } from "@/lib/format";
-import { ST } from "@/lib/pricing";
+import { ST, statusKey } from "@/lib/pricing";
 import ProjectView from "@/components/ProjectView";
 import ShopMessages from "@/components/ShopMessages";
 import type { Project, ProjectOrder, ProjectTask } from "@/lib/projects";
@@ -42,7 +42,7 @@ export default function ShopProject({ params }: { params: Promise<{ id: string }
   const mine = all.filter((o) => o.customer_id === p.customer_id);
   const projOf = (o: { id: string; project_id?: string | null }) => (o.id in links ? links[o.id] : (o as { project_id?: string | null }).project_id ?? null);
   const inProj: ProjectOrder[] = [
-    ...mine.filter((o) => projOf(o as never) === id).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", type: o.type, statusLabel: ST[o.status]?.label || o.status, statusColor: ST[o.status]?.c, total: o.total, balance: o.type === "invoice" ? o.balance : 0, due_date: o.due_date, href: `/shop/orders/${o.id}` })),
+    ...mine.filter((o) => projOf(o as never) === id).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", type: o.type, statusLabel: ST[statusKey(o)]?.label || o.status, statusColor: ST[statusKey(o)]?.c, total: o.total, balance: o.type === "invoice" ? o.balance : 0, due_date: o.due_date, href: `/shop/orders/${o.id}` })),
     ...arch.filter((a) => a.project_id === id).map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname, type: a.kind, statusLabel: a.status_name, statusColor: a.status_color, total: +a.total || 0, balance: 0, due_date: a.due_date, href: `/shop/archive/${a.id}`, archived: true })),
   ];
   const linkable = [

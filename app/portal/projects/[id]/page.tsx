@@ -2,7 +2,7 @@ import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ST } from "@/lib/pricing";
+import { ST, statusKey } from "@/lib/pricing";
 import { withFiles } from "@/lib/messages";
 import type { Project, ProjectOrder, ProjectTask } from "@/lib/projects";
 import PortalProject from "./client";
@@ -29,7 +29,7 @@ export default async function PortalProjectPage({ params, searchParams }: { para
   const paid: Record<string, number> = {};
   (pays || []).forEach((p) => { paid[p.order_id] = (paid[p.order_id] || 0) + (+p.amount || 0); });
   const orders: ProjectOrder[] = [
-    ...visible.filter((o) => o.project_id === id).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", type: o.type, statusLabel: ST[o.status as keyof typeof ST]?.portal || o.status, statusColor: ST[o.status as keyof typeof ST]?.c, total: +o.total || 0, balance: o.type === "invoice" ? (+o.total || 0) - (paid[o.id] || 0) : 0, due_date: o.due_date, href: `/portal/orders/${o.id}${qs}` })),
+    ...visible.filter((o) => o.project_id === id).map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", type: o.type, statusLabel: ST[statusKey(o)]?.portal || o.status, statusColor: ST[statusKey(o)]?.c, total: +o.total || 0, balance: o.type === "invoice" ? (+o.total || 0) - (paid[o.id] || 0) : 0, due_date: o.due_date, href: `/portal/orders/${o.id}${qs}` })),
     ...(ar || []).filter((a) => a.project_id === id).map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", type: a.kind, statusLabel: a.status_name, statusColor: a.status_color, total: +a.total || 0, balance: 0, due_date: a.due_date, href: `/portal/archive/${a.id}${qs}`, archived: true })),
   ];
   const linkable = [

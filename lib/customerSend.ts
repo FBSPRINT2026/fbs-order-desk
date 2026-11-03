@@ -197,7 +197,8 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
  * that should say request changes and one that should say decline the quote… you got the sizes wrong"):
  *  approve  · the quote signed (the order's approved)
  *  changes  · the quote, or the final invoice, back to us with what to change (Revisions in the Job Center)
- *  decline  · they don't want it: back to us as a quote, marked declined with why (Declined in the Job Center)
+ *  decline  · they don't want it: a closed quote (completed, still a quote; lib/pricing.ts statusKey), marked declined
+ *             with why (Declined in the Job Center)
  */
 export async function decideQuote(admin: SupabaseClient, orderId: string, decision: "approve" | "changes" | "decline", name: string, reason: string, actor: string, /** the caller sends one shop email for everything */ quiet = false) {
   const { o, settings } = await load(admin, orderId);
@@ -225,12 +226,12 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     return { ok: true as const };
   }
   if (!why) return { ok: false as const, error: decision === "changes" ? "Tell us what to change." : "Tell us why, so we can fix it." };
-  // either way the quote comes back to us to work on; a decline also marks the job declined
-  await admin.from("orders").update(decision === "decline" ? { status: "quote", declined_at: now, declined_reason: why.slice(0, 500) } : { status: "quote" }).eq("id", orderId).eq("status", "quote_sent");
+  // changes: the quote comes back to us to work on; a decline closes it (a closed quote) and marks the job declined
+  await admin.from("orders").update(decision === "decline" ? { status: "completed", declined_at: now, declined_reason: why.slice(0, 500) } : { status: "quote" }).eq("id", orderId).eq("status", "quote_sent");
   if (decision === "decline") await (await import("@/lib/closedQuote")).shelveClosedQuoteArt(admin, orderId, true);
   await admin.from("order_events").insert([
     { order_id: orderId, kind: decision === "decline" ? "quote_declined" : "quote_changes", detail: `${who || "The customer"}: ${why.slice(0, 500)}`, actor },
-    { order_id: orderId, kind: "status", detail: "quote", actor },
+    { order_id: orderId, kind: "status", detail: decision === "decline" ? "closed" : "quote", actor },
     ...(decision === "decline" ? [{ order_id: orderId, kind: "job_declined", detail: `By the customer: ${why.slice(0, 300)}`, actor }] : []),
   ]);
   await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `${decision === "decline" ? "Declined the quote" : "Changes to the quote"}: ${why}` });
@@ -271,13 +272,15 @@ export async function orderSteps(admin: SupabaseClient, linkId: string) {
   const proofOpen = steps.some((x) => x.state === "todo");
   const c = calcOrder(o, settings, pays);
   const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-  const quoted = o.status === "quote_sent", approved = !["quote", "request", "quote_sent"].includes(o.status);
+  // a closed quote (declined) was never approved: it shows as declined, with nothing to pay
+  const closedQ = o.status === "completed" && o.type === "quote";
+  const quoted = o.status === "quote_sent", approved = !closedQ && !["quote", "request", "quote_sent"].includes(o.status);
   // the quote sent back (changes asked, or declined): the customer's page says so rather than dropping the step
   const { data: qev } = await admin.from("order_events").select("kind, detail, created_at").eq("order_id", o.id).in("kind", ["sent", "quote_changes", "quote_declined", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at");
   const qevs = (qev || []) as { kind: string; detail: string; created_at: string }[];
   const qSent = [...qevs].reverse().find((e) => e.kind === "sent");
   const qBack = [...qevs].reverse().find((e) => (e.kind === "quote_changes" || e.kind === "quote_declined") && (!qSent || e.created_at > qSent.created_at));
-  if (o.status === "quote" && qSent && qBack) {
+  if ((o.status === "quote" || closedQ) && qSent && qBack) {
     steps.push({ key: "quote", kind: "quote", title: qBack.kind === "quote_declined" ? "Quote declined" : "Quote: changes requested", sub: money(c.total), state: "changes", pdf: `${base}?${q}`, who: qBack.detail.split(":")[0], when: qBack.created_at, comment: qBack.detail.replace(/^[^:]*:\s*/, "") });
   }
   if (quoted || (approved && raw.approved_at)) {

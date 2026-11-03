@@ -26,7 +26,7 @@ import RequestAsk from "@/components/RequestAsk";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, CLOSED_QUOTE, isClosedQuote, statusKey, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -39,7 +39,7 @@ import type { NeckLabelSet } from "@/lib/neckLabels";
 import OrderSeparations from "@/components/OrderSeparations";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
-import { undoDeclined } from "@/app/shop/jobs/actions";
+import { markDeclined, undoDeclined } from "@/app/shop/jobs/actions";
 import ProductionPanel from "@/components/ProductionPanel";
 import { isReorder } from "@/components/ReorderPanel";
 import OrderTypeRow, { orderTypeOf, ORDER_TYPE_LABEL } from "@/components/OrderTypeRow";
@@ -997,9 +997,26 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
   const numOr = (v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
-  async function setStatus(k: StatusKey) {
-    if (!o || o.status === k) return;
+  async function setStatus(k: StatusKey | "closed") {
+    if (!o || statusKey(o) === k) return;
     await save();
+    // Closed Quote: the same as the Job Center's Mark declined (stored as completed, its mockups to the Archive)
+    if (k === "closed") {
+      const r = await markDeclined(o.id, "Closed by the shop");
+      if (!r.ok) return say(("error" in r && r.error) || "Couldn't close it.");
+      const now = new Date().toISOString();
+      setO((p) => (p ? ({ ...p, status: "completed", type: "quote", declined_at: now, declined_reason: "Closed by the shop" } as Order) : p));
+      if (latest.current) latest.current = { ...latest.current, status: "completed", type: "quote" };
+      setLockOverride("");
+      return loadSide();
+    }
+    // out of a closed quote: put it back on first (clears the decline, brings its mockups back)
+    if (isClosedQuote(o)) {
+      const r = await undoDeclined(o.id);
+      if (!r.ok) return say(("error" in r && r.error) || "Couldn't reopen it.");
+      setO((p) => (p ? ({ ...p, status: "quote", declined_at: null, declined_reason: "" } as Order) : p));
+      if (k === "quote") { if (latest.current) latest.current = { ...latest.current, status: "quote", type: "quote" }; return loadSide(); }
+    }
     const { error } = await sb.from("orders").update({ status: k, type: ST[k].type }).eq("id", o.id);
     if (error) return say("Couldn't change status: " + error.message);
     await sb.from("order_events").insert({ order_id: o.id, kind: "status", detail: k, actor: "shop" });
@@ -1087,7 +1104,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     // the Job Center's Put back on: clears the decline and brings its mockups back out of the Archive
     const r = await undoDeclined(o.id);
     if (!r.ok) return say(("error" in r && r.error) || "Couldn't reopen it.");
-    setO((p) => (p ? ({ ...p, declined_at: null, declined_reason: "" } as Order) : p));
+    setO((p) => (p ? ({ ...p, status: p.status === "completed" && p.type === "quote" ? "quote" : p.status, declined_at: null, declined_reason: "" } as Order) : p));
     setClosedAsk(false); setLockOverride("");
   }
   async function afterSend(m: string) {
@@ -1300,7 +1317,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   if (missing) return <><BackLink href="/shop/orders" label="Orders" /><div className="empty">This order was deleted or doesn&apos;t exist.</div></>;
   if (!o || !calc) return <div className="empty">Loading…</div>;
 
-  const st = ST[o.status] || ST.quote;
+  const st = ST[statusKey(o)] || ST.quote;
   const cust = customers.find((c) => c.id === o.customer_id);
   const portalLink = typeof window !== "undefined" ? `${SITE_URL || window.location.origin}/portal/orders/${o.id}` : "";
   const pendingProofs = proofs.filter((p) => p.status === "pending").length;
@@ -1315,7 +1332,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const done = o.status === "completed";
     const isQuote = o.type === "quote";
     // on time
-    if (done) out.push({ tone: "ok", text: "Done", sub: o.completed_at ? `Completed ${fmtDate(o.completed_at.slice(0, 10))}` : undefined });
+    if (isClosedQuote(o)) out.push({ tone: "wait", text: "Closed quote", sub: "The customer declined it" });
+    else if (done) out.push({ tone: "ok", text: "Done", sub: o.completed_at ? `Completed ${fmtDate(o.completed_at.slice(0, 10))}` : undefined });
     else if (!o.due_date) out.push({ tone: "wait", text: "No in-hands date yet" });
     else {
       const n = Math.round((new Date(o.due_date + "T12:00:00").getTime() - new Date(new Date().toDateString()).getTime()) / 864e5);
@@ -1361,7 +1379,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const locked = (closed && lockOverride !== "closed") || (opened && lockOverride !== "quick");
     const why = (o as { declined_reason?: string | null }).declined_reason || "";
     const bar = closed ? (
-      <div className="ql-bar ql-closed"><span className="ql-ic" aria-hidden>⊘</span><span><b>Closed quote: declined by the customer.</b>{why ? ` “${why}”` : ""}{lockOverride === "closed" ? " Opened anyway: you can look and pull the art." : " It's grayed out; Open anyway to look at it."}</span>
+      <div className="ql-bar ql-closed"><span className="ql-ic" aria-hidden>⊘</span><span><b>Closed quote{/^closed by the shop$/i.test(why) ? "." : ": declined by the customer."}</b>{why && !/^closed by the shop$/i.test(why) ? ` “${why}”` : ""}{lockOverride === "closed" ? " Opened anyway: you can look and pull the art." : " It's grayed out; Open anyway to look at it."}</span>
         {lockOverride === "closed" && <button type="button" className="linkbtn" onClick={() => void reopenClosed()}>Make it a live quote again</button>}</div>
     ) : o.status === "quote_sent" ? (
       opened && lockOverride !== "quick"
@@ -1475,8 +1493,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             </span>;
           })()}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
-          : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={o.status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
-            <optgroup label="Quote">{STATUSES.filter((s) => s.type === "quote").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
+          : <select className="status-select" style={{ ["--sc" as string]: st.c }} aria-label="Status" value={statusKey(o)} onChange={(e) => setStatus(e.target.value as StatusKey | "closed")}>
+            <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote"), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
           {/* phone only: Documents, Production, Ask AI and More behind one button (the next step stays showing under it) */}
@@ -1786,7 +1804,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
         <div className={"ed-grid" + (quoteLock.locked ? " ql-locked" : "")} hidden={tab !== "order"} inert={quoteLock.locked || undefined}>
-          {quoteLock.closed && !lockOverride && <div className="ql-stamp" aria-hidden><b>Closed quote</b><small>Order declined by the customer</small></div>}
+          {quoteLock.closed && !lockOverride && <div className="ql-stamp" aria-hidden><b>Closed quote</b><small>{/^closed by the shop$/i.test((o as { declined_reason?: string | null }).declined_reason || "") ? "Closed by the shop" : "Declined by the customer"}</small></div>}
           <div className="stack">
             {/* the Reorder section (mockup, pricing check, print specs, AI spec history) is gone from the order page (Oct 20,
                 Nick: "get rid of this whole section… it's overbearing… we handled it in the resolution center"): the
@@ -2127,7 +2145,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </div>
           <aside className="ed-aside">
           <section className="panel" id="messages">
-            <div className="panel-h"><h2>Customer portal</h2><Pill status={o.status} portal /></div>
+            <div className="panel-h"><h2>Customer portal</h2><Pill status={statusKey(o)} portal /></div>
             <div className="panel-b stack">
               {o.status !== "quote" && <div className="comm-sum">
                 <div><span>Quote</span><b>{o.approved_at ? `Approved by ${o.approved_name || "customer"}` : o.sent_at ? `Sent ${fmtStamp(o.sent_at)}` : "In portal"}</b></div>

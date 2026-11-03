@@ -9,7 +9,7 @@ import Link from "next/link";
 import { LogoFace, ShirtView, onShirtsOf } from "@/components/LogoOnShirts";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import MockupOrderButton from "@/components/MockupOrderButton";
-import { ST, type Design } from "@/lib/pricing";
+import { ST, isClosedQuote, statusKey, type Design } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import { designMatches } from "@/components/DesignSearch";
 import PayPanel, { type PayItem } from "@/components/PayPanel";
@@ -174,7 +174,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     : o.status === "request"
       // the customer's own order requests: not sent yet, or sent to us and waiting on our OK (Oct 24, Nick)
       ? <span className="aa-pill" style={{ ["--sc" as string]: o.sent ? "var(--fbs-orange, #F7941D)" : "var(--ink-3)" }}>{o.sent ? "Waiting on FBS" : "Not sent yet"}</span>
-      : <span className="aa-pill" style={{ ["--sc" as string]: ST[o.status]?.c }} title={ST[o.status]?.portal || ST[o.status]?.label}>{ST[o.status]?.portal || ST[o.status]?.label}</span>;
+      : <span className="aa-pill" style={{ ["--sc" as string]: ST[statusKey(o)]?.c }} title={ST[statusKey(o)]?.portal || ST[statusKey(o)]?.label}>{ST[statusKey(o)]?.portal || ST[statusKey(o)]?.label}</span>;
   const rawArea = (sp.get("area") as Area) || "home";
   // portal: quotes and orders are one "Orders" tab with a Quotes / Orders switch inside
   // shop (Oct 21, Nick: "the dashboard can be dashboard and orders… it just needs to be simpler"): Quotes and Orders are
@@ -412,17 +412,19 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
     const sentQ = qL.filter((o) => o.status === "request" && o.sent);
-    const quotes2 = qL.filter((o) => !(o.status === "request" && o.sent));
+    // a closed quote (declined) is finished: under Completed, not Quotes (Nov 3, Nick)
+    const closedQ = qL.filter((o) => isClosedQuote(o));
+    const quotes2 = qL.filter((o) => !(o.status === "request" && o.sent) && !isClosedQuote(o));
     // archived quotes (not going ahead) and quotes over 60 days old show with "Show older quotes and archived" (Oct 24, Nick)
     const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff && !o.archivedQ), olderN = quotes2.length - recentQ.length;
     const shownQ = oldQuotes ? quotes2 : recentQ;
     const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
     const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
     const tab = oTab === "drafts" && !draftsLive.length ? "all" : oTab;
-    const done = iL.filter((o) => o.status === "completed");
+    const done = [...iL.filter((o) => o.status === "completed"), ...closedQ].sort((x, y) => y.number - x.number);
     // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
-    const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...iL].sort((x, y) => y.number - x.number);
+    const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...iL, ...closedQ].sort((x, y) => y.number - x.number);
     const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", iL.length], ["done", "Completed", done.length]];
     // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
     // following will just be on the main page")

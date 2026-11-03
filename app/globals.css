@@ -20360,3 +20360,8 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .ql-stamp b{font:900 22px/1.1 var(--display);letter-spacing:.06em;text-transform:uppercase}
 .ql-stamp small{font-size:12px;font-weight:700}
 .ed-grid.ql-locked .ql-stamp{opacity:1}
+
+/* the review page's way back to the customer's portal (Nov 3, Nick) */
+.pfl-top a.pfl-portal{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font-size:13px;font-weight:600;margin-left:8px}
+.pfl-top a.pfl-portal:hover{border-color:var(--accent);color:var(--accent)}
+@media (max-width:700px){.pfl-top a.pfl-portal{height:32px;padding:0 10px;margin-left:0}}

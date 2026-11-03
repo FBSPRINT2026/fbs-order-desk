@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { allRows } from "@/lib/readAll";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
-import { ST, type Order } from "@/lib/pricing";
+import { ST, statusKey, type Order } from "@/lib/pricing";
 import { customerHold, type Flag } from "@/lib/orderStages";
 import { portalSend } from "@/app/portal/message-actions";
 import { GOODS, trackingUrl, type GoodsStatus } from "@/lib/goods";
@@ -97,7 +97,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const stage = (o: Order & { submitted_at: string | null }) =>
       o.status === "request" ? "sent to us; NOT confirmed by the shop yet (we're checking it; nothing is ordered, printed or waiting on goods until we confirm)"
       : o.status === "quote_sent" ? "quote sent; waiting on the customer's approval"
-      : `${ST[o.status as keyof typeof ST]?.portal || o.status}${o.approved_at ? ` (confirmed ${String(o.approved_at).slice(0, 10)})` : ""}`;
+      : `${ST[statusKey(o)]?.portal || o.status}${o.approved_at ? ` (confirmed ${String(o.approved_at).slice(0, 10)})` : ""}`;
     const story = (o: Order & { submitted_at: string | null; groups?: unknown; approved_at?: string | null }) => {
       const out: string[] = [`#${o.number} ${o.nickname || "(no name)"}: ${stage(o)}`];
       const gs = Array.isArray(o.groups) ? (o.groups as { name?: string; fromMockup?: { number: number | null }; customerMockups?: unknown[]; mockupThumbs?: unknown[]; mockupAt?: string; imprints?: { location?: string; design_id?: string; inks?: string }[]; lines?: { style?: string; color?: string; sizes?: Record<string, number> }[] }[]) : [];
@@ -131,7 +131,7 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
       const g = gmap.get(o.id);
       // on hold, and why: the same hold the order page and the dashboard show (lib/orderStages.ts customerHold)
       const held = o.status !== "completed" ? customerHold(((o as { flags?: Flag[] }).flags || []) as Flag[]) : null;
-      return `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.nickname || "(no name)"} | ${held ? `ON HOLD (${held.title}${held.reason && held.reason !== held.title ? `: ${held.reason}` : ""}) | ` : ""}${o.status === "request" ? "sent to us, not confirmed yet" : `${o.type === "quote" ? "quote: " : ""}${ST[o.status as keyof typeof ST]?.portal || o.status}`} | total $${(+o.total || 0).toFixed(2)}${bal > 0.004 ? ` | owes $${bal.toFixed(2)}` : ""}${o.due_date ? ` | in-hands ${o.due_date}` : ""}${o.qty ? ` | ${o.qty} pcs` : ""}${o.po_number ? ` | PO ${o.po_number}` : ""}${o.delivery_method === "ship" ? ` | shipping${o.ship_method ? ` ${o.ship_method}` : ""}${o.tracking ? ` tracking ${o.tracking}` : " (no tracking yet)"}` : o.delivery_method === "deliver" ? " | we deliver" : " | pickup"}${wholesale && g && o.status !== "request" ? ` | goods: ${GOODS[g.status]?.portal}${g.issue_type ? ` (${g.issue_type})` : ""}` : ""}`;
+      return `#${o.number} | ${(o.created_at || "").slice(0, 10)} | ${o.nickname || "(no name)"} | ${held ? `ON HOLD (${held.title}${held.reason && held.reason !== held.title ? `: ${held.reason}` : ""}) | ` : ""}${o.status === "request" ? "sent to us, not confirmed yet" : `${o.type === "quote" ? "quote: " : ""}${ST[statusKey(o)]?.portal || o.status}`} | total $${(+o.total || 0).toFixed(2)}${bal > 0.004 ? ` | owes $${bal.toFixed(2)}` : ""}${o.due_date ? ` | in-hands ${o.due_date}` : ""}${o.qty ? ` | ${o.qty} pcs` : ""}${o.po_number ? ` | PO ${o.po_number}` : ""}${o.delivery_method === "ship" ? ` | shipping${o.ship_method ? ` ${o.ship_method}` : ""}${o.tracking ? ` tracking ${o.tracking}` : " (no tracking yet)"}` : o.delivery_method === "deliver" ? " | we deliver" : " | pickup"}${wholesale && g && o.status !== "request" ? ` | goods: ${GOODS[g.status]?.portal}${g.issue_type ? ` (${g.issue_type})` : ""}` : ""}`;
     });
     const old = ((arch || []) as { id: string; visual_id: string; nickname: string; status_name: string; order_date: string | null; total: number; qty: number }[])
       .map((a) => `#${a.visual_id} | ${a.order_date || ""} | ${a.nickname || "(no name)"} | past order (${a.status_name}) | total $${(+a.total || 0).toFixed(2)}${a.qty ? ` | ${a.qty} pcs` : ""}`);

@@ -31,7 +31,7 @@ export async function stageView(admin: SupabaseClient, orderId: string): Promise
   const auto: AutoFacts = {};
   const sys = (when?: string | null, note?: string): Check => ({ by: "auto", at: at(when), auto: true, ...(note ? { note } : {}) });
   const st = order.status;
-  if (!["request", "quote", "quote_sent"].includes(st)) auto.approved = sys(order.approved_at, "the order was approved");
+  if (!["request", "quote", "quote_sent"].includes(st) && order.type !== "quote") auto.approved = sys(order.approved_at, "the order was approved");
   const pa = (ev || []).find((e) => e.kind === "proof_approved" || e.kind === "art_approved");
   if (pa || ["blanks", "production", "ready", "completed"].includes(st)) auto.proof = sys(pa?.created_at, pa ? "proof approved" : "past the art step");
   if ((slots || []).length) auto.scheduled = sys((slots || [])[0].created_at, `on the schedule: ${(slots || []).map((x) => `${x.machine} ${x.day}`).join(", ")}`);

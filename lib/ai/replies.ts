@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { aiState } from "@/lib/ai/claude";
 import { replyOptions } from "@/lib/ai/tasks";
-import { calcOrder, mergeSettings, PAY_TERMS, ST, type Order, type Payment } from "@/lib/pricing";
+import { calcOrder, mergeSettings, PAY_TERMS, ST, statusKey, type Order, type Payment } from "@/lib/pricing";
 import { custLabel, fmtDateLong, money } from "@/lib/format";
 
 /**
@@ -22,7 +22,7 @@ export async function orderFacts(admin: SupabaseClient, orderId?: string | null,
       const { data: pays } = await admin.from("payments").select("amount").eq("order_id", orderId);
       const c = calcOrder(o as Order, settings, (pays || []) as Payment[]);
       customerId = customerId || o.customer_id;
-      lines.push(`Order #${o.number}${o.nickname ? ` "${o.nickname}"` : ""}, status: ${ST[o.status]?.portal || o.status}, ${c.qty} pieces, total ${money(c.total)}, paid ${money(c.paid)}, balance ${money(c.balance)}.`);
+      lines.push(`Order #${o.number}${o.nickname ? ` "${o.nickname}"` : ""}, status: ${ST[statusKey(o)]?.portal || o.status}, ${c.qty} pieces, total ${money(c.total)}, paid ${money(c.paid)}, balance ${money(c.balance)}.`);
       if (o.due_date) lines.push(`In-hands date: ${fmtDateLong(o.due_date)}.`);
       if (o.sent_at) lines.push(`Quote sent: ${fmtDateLong(o.sent_at.slice(0, 10))}.`);
       if (o.delivery_method) lines.push(`Delivery: ${o.delivery_method}${o.tracking ? `, tracking ${o.tracking}` : ""}.`);
@@ -49,7 +49,7 @@ export async function emailContext(admin: SupabaseClient, activityId: string) {
   const lines = [facts];
   if (!a.order_id && a.customer_id) {
     const { data: os } = await admin.from("orders").select("number, nickname, status, due_date").eq("customer_id", a.customer_id).not("status", "in", "(completed,cancelled)").order("number", { ascending: false }).limit(6);
-    if (os?.length) lines.push(`Their open orders: ${os.map((o) => `#${o.number}${o.nickname ? ` "${o.nickname}"` : ""} (${ST[o.status as keyof typeof ST]?.portal || o.status}${o.due_date ? `, in-hands ${fmtDateLong(o.due_date as string)}` : ""})`).join("; ")}.`);
+    if (os?.length) lines.push(`Their open orders: ${os.map((o) => `#${o.number}${o.nickname ? ` "${o.nickname}"` : ""} (${ST[statusKey(o as { status?: string; type?: string })]?.portal || o.status}${o.due_date ? `, in-hands ${fmtDateLong(o.due_date as string)}` : ""})`).join("; ")}.`);
   }
   // the email thread so far (both directions), oldest first: the emails this one references that we have on file
   const refs = (((a.meta || {}) as { references?: string[] }).references || []).slice(-10);

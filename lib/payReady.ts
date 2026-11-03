@@ -33,6 +33,7 @@ export function payState(o: { status: string; type?: string | null; pay_mode?: s
   // the payments page… until it becomes a quote or an order")
   if (o.status === "request") return out("none", "We're still reviewing this order. You'll get a quote to approve first.");
   if (o.status === "void") return out("none", "This order was canceled.");
+  if (o.status === "completed" && o.type === "quote") return out("none", "This quote was declined, so nothing is due.");
   if (mode === "not_yet") return out("none", note || "We're finalizing this order. We'll let you know when it's ready to pay.");
   // asked for by hand: the shop's deposit, whatever the terms
   if (mode === "deposit") return x.depositPct > 0 && x.paid < 0.005 ? out("deposit", "We're asking for the deposit now.") : out("none", note || "We'll let you know when the balance is ready to pay.");

@@ -175,7 +175,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
         </div>
 
-        {String(o.status) !== "void" && <div className="pod-railw"><OrderRail steps={job.steps} done={o.status === "completed"} />{hold && <span className="hold-stamp">On hold</span>}</div>}
+        {String(o.status) !== "void" && !(o.status === "completed" && o.type === "quote") && <div className="pod-railw"><OrderRail steps={job.steps} done={o.status === "completed"} />{hold && <span className="hold-stamp">On hold</span>}</div>}
 
         {/* the numbers in one summary card, like the shop's pages: what it costs, what's paid, what's left */}
         {!isReq && <div className="stats pod-stats">

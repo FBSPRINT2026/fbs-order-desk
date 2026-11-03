@@ -40,13 +40,20 @@ export async function jobHistory(orderId: string) {
   } catch (e) { return fail(e); }
 }
 
-/** The customer walked away: off the steps, under Declined for two weeks. Nothing else on the order changes. */
+/**
+ * The customer walked away: off the steps, under Declined for two weeks. A quote becomes a closed quote (Nov 3, Nick:
+ * "it needs to be complete… it should say closed quote": stored as completed, still a quote; lib/pricing.ts statusKey);
+ * an approved job keeps its status.
+ */
 export async function markDeclined(orderId: string, reason: string) {
   try {
     const { admin, email } = await me();
     const why = (reason || "").trim().slice(0, 500);
-    const { error } = await admin.from("orders").update({ declined_at: new Date().toISOString(), declined_reason: why }).eq("id", orderId);
+    const { data: o0 } = await admin.from("orders").select("type").eq("id", orderId).maybeSingle();
+    const quote = (o0 as { type?: string } | null)?.type === "quote";
+    const { error } = await admin.from("orders").update({ declined_at: new Date().toISOString(), declined_reason: why, ...(quote ? { status: "completed" } : {}) }).eq("id", orderId);
     if (error) throw new Error(error.message);
+    if (quote) await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "closed", actor: email });
     await (await import("@/lib/closedQuote")).shelveClosedQuoteArt(admin, orderId, true);
     await admin.from("order_events").insert({ order_id: orderId, kind: "job_declined", detail: why || "No reason given", actor: email });
     return { ok: true as const };
@@ -58,8 +65,12 @@ export async function undoDeclined(orderId: string) {
   try {
     const { admin, email } = await me();
     await (await import("@/lib/closedQuote")).shelveClosedQuoteArt(admin, orderId, false);
-    const { error } = await admin.from("orders").update({ declined_at: null, declined_reason: "" }).eq("id", orderId);
+    // a closed quote is a live quote again
+    const { data: o0 } = await admin.from("orders").select("status, type").eq("id", orderId).maybeSingle();
+    const closed = (o0 as { status?: string; type?: string } | null)?.status === "completed" && (o0 as { type?: string }).type === "quote";
+    const { error } = await admin.from("orders").update({ declined_at: null, declined_reason: "", ...(closed ? { status: "quote" } : {}) }).eq("id", orderId);
     if (error) throw new Error(error.message);
+    if (closed) await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "quote", actor: email });
     await admin.from("order_events").insert({ order_id: orderId, kind: "job_reopened", detail: "", actor: email });
     return { ok: true as const };
   } catch (e) { return fail(e); }
