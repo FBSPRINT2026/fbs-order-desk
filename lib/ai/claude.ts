@@ -13,6 +13,33 @@ import { mergeSettings, type Settings } from "@/lib/pricing";
 const API = "https://api.anthropic.com/v1/messages";
 const VERSION = "2023-06-01";
 
+/** a picture's width and height from its first bytes (PNG, JPEG, GIF, WebP); null when it can't tell */
+function imageDims(b: Buffer): { w: number; h: number } | null {
+  try {
+    if (b.length > 24 && b.readUInt32BE(0) === 0x89504e47) return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+    if (b.length > 10 && b.toString("ascii", 0, 3) === "GIF") return { w: b.readUInt16LE(6), h: b.readUInt16LE(8) };
+    if (b.length > 30 && b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP") {
+      const k = b.toString("ascii", 12, 16);
+      if (k === "VP8X") return { w: 1 + b.readUIntLE(24, 3), h: 1 + b.readUIntLE(27, 3) };
+      if (k === "VP8 ") return { w: b.readUInt16LE(26) & 0x3fff, h: b.readUInt16LE(28) & 0x3fff };
+      if (k === "VP8L") { const n = b.readUInt32LE(21); return { w: (n & 0x3fff) + 1, h: ((n >> 14) & 0x3fff) + 1 }; }
+    }
+    if (b[0] === 0xff && b[1] === 0xd8) {
+      let i = 2;
+      while (i + 9 < b.length) {
+        if (b[i] !== 0xff) { i++; continue; }
+        const m = b[i + 1], len = b.readUInt16BE(i + 2);
+        if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { w: b.readUInt16BE(i + 7), h: b.readUInt16BE(i + 5) };
+        i += 2 + len;
+      }
+    }
+  } catch { /* not a picture we can read */ }
+  return null;
+}
+
+/** models that turned down a temperature (kept for the life of the server) */
+const NO_TEMP = new Set<string>();
+
 export type AiTool = { name: string; description: string; input_schema: Record<string, unknown> };
 export type AiCtx = { order_id?: string | null; customer_id?: string | null; activity_id?: string | null; by?: string };
 export type AiResult<T> = { ok: true; data: T; model: string; runId: string | null } | { ok: false; error: string; off?: boolean };
@@ -73,7 +100,9 @@ export async function askClaude<T>(opts: {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs || 50_000);
   try {
-    let pics = opts.images || [];
+    // a picture over 8,000 pixels on a side is refused by the API and used to take every picture down with it (Nov 3: a
+    // tall PO scan on Create order); those few are left out up front and the rest are read
+    let pics = (opts.images || []).filter((im) => { const d = imageDims(Buffer.from(im.data.slice(0, 120_000), "base64")); return !d || (d.w <= 8000 && d.h <= 8000); });
     const send = (temp: boolean) => fetch(API, {
       method: "POST",
       signal: ctrl.signal,
@@ -99,17 +128,21 @@ export async function askClaude<T>(opts: {
         tool_choice: { type: "tool", name: opts.tool.name },
       }),
     });
-    let res = await send(true);
+    // a model that doesn't take a temperature is asked without one, and remembered, so no later ask (the second try below
+    // after a bad picture, the next call) sends it again (Nov 3: Create order failed with "`temperature` is deprecated for
+    // this model": the picture retry put the temperature back)
+    let temp = !NO_TEMP.has(opts.model);
+    let res = await send(temp);
     let j = await res.json().catch(() => ({}));
-    // a model that doesn't take a temperature: asked again without one
-    if (res.status === 400 && /temperature/i.test(String(j?.error?.message || ""))) { res = await send(false); j = await res.json().catch(() => ({})); }
+    if (temp && res.status === 400 && /temperature/i.test(String(j?.error?.message || ""))) { NO_TEMP.add(opts.model); temp = false; res = await send(false); j = await res.json().catch(() => ({})); }
     // a picture the API can't open (Oct 28: an SVG logo sent as a picture made Claudia's ClickUp order fail with "Could not
     // process image"): only the pictures that open are sent again, or none, so the rest of the reading still happens
     if (res.status === 400 && pics.length && /image/i.test(String(j?.error?.message || ""))) {
       await log({ status: "error", error: `${j?.error?.message || "image error"} (asked again without the bad pictures)` });
       pics = pics.filter((im) => imageTypeOf(Buffer.from(im.data.slice(0, 64), "base64")) === im.media_type);
       if (pics.length === (opts.images || []).length) pics = [];
-      res = await send(true); j = await res.json().catch(() => ({}));
+      res = await send(temp); j = await res.json().catch(() => ({}));
+      if (temp && res.status === 400 && /temperature/i.test(String(j?.error?.message || ""))) { NO_TEMP.add(opts.model); temp = false; res = await send(false); j = await res.json().catch(() => ({})); }
     }
     if (!res.ok) {
       const error = j?.error?.message || `Claude API error ${res.status}`;
