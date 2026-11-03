@@ -766,7 +766,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
           </div>
           {canPay && searchBox}
         </div>
-        <table className="aa-tbl pyl-tbl">
+        <table className="aa-tbl pyl-tbl" data-nofit>
           <thead><tr>{canPay && <th className="pyl-ck"><input type="checkbox" aria-label="Check all" checked={listAll.filter(payable).length > 0 && listAll.filter(payable).every((o) => paySel.includes(o.id))} onChange={(e) => listAll.filter(payable).forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>Inv.</th><th>Order</th><th><button type="button" className="pyl-sort" onClick={() => setDueSort(dueSort === "asc" ? "desc" : "asc")} title={dueSort === "asc" ? "Oldest first: press for newest first" : "Newest first: press for oldest first"}>Due date <span aria-hidden>{dueSort === "asc" ? "▲" : "▼"}</span></button></th><th className="r">Balance</th></tr></thead>
           <tbody>
             {listShown.map((o) => {
