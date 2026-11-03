@@ -93,7 +93,7 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
         </section>
         {/* Orders sent to FBS, under tracking (Oct 24, Nick: "move the orders sent to FBS up underneath the order tracking") */}
       <section className={"pdx-card pdx-sent" + (sent.length ? "" : " pdx-empty")}>
-        <div className="pdx-h"><h2>Orders sent to FBS</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
+        <div className="pdx-h"><h2>Orders sent to FBS</h2></div>
         {!sent.length && (
           <div className="pdx-caught">
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -101,7 +101,7 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
           </div>
         )}
         {sent.length > 0 && <div className="pdx-sent-list">
-          {sent.slice(0, 3).map((x) => sentRow(x))}{sent.length > 3 && <details className="pdx-more-fold"><summary>{sent.length - 3} more</summary><div className="pdx-sent-list">{sent.slice(3).map((x) => sentRow(x))}</div></details>}
+          {sent.slice(0, 3).map((x) => sentRow(x))}{/* the rest on their Orders page, Sent to FBS picked (Nov 2, Nick) */}{sent.length > 3 && <Link className="pdx-more-link" href={`${ordersHref}${ordersHref.includes("?") ? "&" : "?"}show=sent`}>{sent.length - 3} more</Link>}
         </div>}
       </section>
 

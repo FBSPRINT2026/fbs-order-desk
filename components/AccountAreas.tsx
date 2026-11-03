@@ -216,6 +216,8 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   // the Orders tab's own tabs (Oct 24, Nick: "if they've got a bunch of quotes sitting there, they don't even get to the
   // orders… all quotes and orders just like we have on our order screen")
   const [oTab, setOTab] = useSticky<"all" | "drafts" | "quotes" | "sent" | "orders" | "done">("portal.ordersTab", "all");
+  // a link can open a tab (the dashboard's "3 more" under Orders sent to FBS opens Sent to FBS, Nov 2, Nick)
+  useEffect(() => { const t = sp.get("show"); if (t && ["all", "drafts", "quotes", "sent", "orders", "done"].includes(t)) setOTab(t as typeof oTab); }, [sp]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showOldOwed, setShowOldOwed] = useState(false);
   const [viewSet, setViewSet] = useState<AMockup[] | null>(null);
   const [payF, setPayF] = useSticky<"open" | "late" | "later">("portal.payFilter", "open");

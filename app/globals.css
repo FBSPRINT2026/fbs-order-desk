@@ -19649,3 +19649,4 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .rqd-sort:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 .rqd-tbl tr.rqd-sep td{padding:0!important;height:14px;background:var(--surface)!important;border:0!important}
 .rqd-tbl tr.rqd-sep i{display:block;height:3px;margin:5px 0;border-radius:3px;background:var(--fbs-fade)}
+.pdx-more-link{display:inline-block;font-size:12.5px;font-weight:600;color:var(--accent);padding:6px 0 0;text-decoration:none}.pdx-more-link:hover{text-decoration:underline}
