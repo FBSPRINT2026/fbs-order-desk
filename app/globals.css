@@ -20247,3 +20247,6 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .psv-t b{font-size:14px;color:var(--ink);display:flex;align-items:center;gap:8px}
 .psv-t em{font-style:normal;font-size:11.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:6px}
 .psv-t small{font-size:12.5px;line-height:1.45;color:var(--ink-3)}
+/* in the narrow Your account panel the button sits under the words, not squeezing them */
+.psm-acct-help .psup-row{grid-template-columns:32px minmax(0,1fr);row-gap:8px}
+.psm-acct-help .psup-row .btn{grid-column:2;justify-self:start}
