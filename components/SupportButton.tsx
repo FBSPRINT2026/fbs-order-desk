@@ -60,8 +60,9 @@ const TICKET = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strok
 /** `look` (portal only): "icon" the small ? in the header, "tile" a quiet tile beside Start an order/quote, "link" a line of
  *  text at the foot of the page on a phone (Nov 3, Nick: "submit a support ticket like a screenshot… just like our staff
  *  does… at the bottom of the page somewhere indiscreet on the mobile view and at the top… to the left of… start a new
- *  quote"). Each is the same Get help box. */
-export default function SupportButton({ email, portal = false, look = "icon" }: { email: string; portal?: boolean; look?: "icon" | "tile" | "link" }) {
+ *  quote"); then "row", the line with a button in the simple view's Your account panel and at the foot of the full
+ *  dashboard (Nov 3, Nick: "have a support issue… a little button there"). Each is the same Get help box. */
+export default function SupportButton({ email, portal = false, look = "icon" }: { email: string; portal?: boolean; look?: "icon" | "tile" | "link" | "row" }) {
   const sb = useMemo(() => createClient(), []);
   const { role, viewAs, realRole } = useRole();
   const [open, setOpen] = useState(false), [shot, setShot] = useState<Blob | null>(null), [url, setUrl] = useState("");
@@ -143,7 +144,13 @@ export default function SupportButton({ email, portal = false, look = "icon" }: 
 
   return (
     <>
-      {portal && look === "tile" ? (
+      {portal && look === "row" ? (
+        <div className="psup-row">
+          <span className="psup-row-ic" aria-hidden>{TICKET}</span>
+          <span className="psup-row-t"><b>Have a support issue?</b><small>Send a screenshot and tell us what happened.</small></span>
+          <button type="button" className="btn sm" onClick={start} disabled={!!busy && !open}>{busy && !open ? busy : "Report an issue"}</button>
+        </div>
+      ) : portal && look === "tile" ? (
         <button type="button" className="pd-act psup-tile" onClick={start} disabled={!!busy && !open} aria-label="Support: report a problem or ask for help">
           <span className="ic">{TICKET}</span>
           <span><b>Support</b><small>Report a problem</small></span>

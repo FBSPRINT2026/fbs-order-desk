@@ -20216,3 +20216,34 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 /* a customer's details seen by someone who can't change them (Nov 3) */
 fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .cx-ro{padding:8px 16px 0;font-size:12.5px}
+
+/* "Have a support issue?" with its button: in the simple view's Your account panel and at the foot of the full
+   dashboard (Nov 3, Nick); the phone's foot line isn't needed on a page that has it */
+.psup-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto;gap:10px;align-items:center}
+.psup-row-ic{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.psup-row-t{display:flex;flex-direction:column;min-width:0}
+.psup-row-t b{font-size:13.5px;color:var(--ink)}
+.psup-row-t small{font-size:12px;color:var(--ink-3)}
+.psup-row .btn{white-space:nowrap}
+.psm-acct-help{padding-top:12px;border-top:1px solid var(--line-2,var(--line))}
+.psup-foot-row{display:flex;justify-content:flex-end;margin:18px 0 4px}
+.psup-foot-row .psup-row{background:var(--surface);border:1px solid var(--line);border-radius:var(--r,12px);padding:10px 12px 10px 10px;max-width:440px;width:100%}
+.portal:has(.psup-row) .psup-foot{display:none}
+@media (max-width:420px){.psup-row{grid-template-columns:32px minmax(0,1fr)}.psup-row .btn{grid-column:1/-1;width:100%;justify-content:center}}
+
+/* Settings → Portal layout: each choice with a sketch of the page and who it's for (Nov 3, Nick) */
+.psv .panel-h{flex-wrap:wrap}
+.psv-opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:12px}
+.psv-opt{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;align-items:start;text-align:left;padding:12px;border:1px solid var(--line);border-radius:var(--r,12px);background:var(--surface);color:inherit;font:inherit;cursor:pointer}
+.psv-opt:hover{border-color:var(--accent)}
+.psv-opt.on{border:2px solid var(--accent);padding:11px}
+.psv-sk{display:grid;gap:3px;height:64px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2)}
+.psv-sk i{display:block;border-radius:2px;background:var(--line)}
+.psv-sk.simple{grid-template-columns:2fr 1fr;grid-template-rows:1fr 1fr}
+.psv-sk.advanced{grid-template-columns:repeat(3,1fr);grid-template-rows:10px 1fr}
+.psv-sk.advanced .bar{grid-column:1/-1}
+.psv-opt.on .psv-sk i{background:color-mix(in srgb,var(--accent) 30%,var(--line))}
+.psv-t{display:flex;flex-direction:column;gap:4px;min-width:0}
+.psv-t b{font-size:14px;color:var(--ink);display:flex;align-items:center;gap:8px}
+.psv-t em{font-style:normal;font-size:11.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:2px 8px;border-radius:6px}
+.psv-t small{font-size:12.5px;line-height:1.45;color:var(--ink-3)}

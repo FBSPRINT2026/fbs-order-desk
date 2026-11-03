@@ -52,19 +52,27 @@ export default function PortalSettings({ staxToken = "", c, customerId, logoUrl,
         </div>
       </section>
       {/* simple or full (Nov 3, Nick): here in Settings, not on the page itself */}
-      <section className="panel ps-view">
-        <div className="panel-h"><h2>Portal layout</h2></div>
+      <section className="panel psv">
+        <div className="panel-h"><h2>Portal layout</h2><span className="faint">How your dashboard looks. Switch any time; nothing about your orders changes.</span></div>
         <div className="panel-b">
-          <div className="ps-view-seg" role="radiogroup" aria-label="Portal layout">
-            {([["simple", "Simple", "One page: your jobs, proofs, payments and reorders"], ["advanced", "Full", "Every tool: dashboard, tabs, goods, payments desk"]] as const).map(([k, t, d]) => (
-              <button key={k} type="button" role="radio" aria-checked={view === k} className={view === k ? "on" : ""} onClick={async () => {
+          {/* each choice with a little sketch of the page and who it's for (Nov 3, Nick: "described better… a little
+              explanation view") */}
+          <div className="psv-opts" role="radiogroup" aria-label="Portal layout">
+            {([
+              ["simple", "Simple", "One page with your open orders, past orders to reorder, payments and artwork. Best if you have a few jobs going at a time."],
+              ["advanced", "Full", "Every tool in tabs: all your jobs with filters, goods you send us, a payments desk, projects and pricing. Best if you run many jobs at once."],
+            ] as const).map(([k, t, d]) => (
+              <button key={k} type="button" role="radio" aria-checked={view === k} className={"psv-opt" + (view === k ? " on" : "")} onClick={async () => {
                 if (view === k) return; const was = view; setView(k); setViewNote("");
                 const r = await setPortalView(k, customerId);
-                setViewNote(r.ok ? "Saved. Your home page uses it now." : r.error || "Couldn't save."); if (!r.ok) setView(was);
-              }}><b>{t}</b><small>{d}</small></button>
+                setViewNote(r.ok ? "Saved. Your dashboard uses it now." : r.error || "Couldn't save."); if (!r.ok) setView(was);
+              }}>
+                <span className={"psv-sk " + k} aria-hidden>{k === "simple" ? <><i /><i /><i /><i /></> : <><i className="bar" /><i /><i /><i /></>}</span>
+                <span className="psv-t"><b>{t}{view === k && <em>Selected</em>}</b><small>{d}</small></span>
+              </button>
             ))}
           </div>
-          {viewNote && <div className="faint" style={{ fontSize: 12.5, marginTop: 6 }}>{viewNote}</div>}
+          {viewNote && <div className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>{viewNote}</div>}
         </div>
       </section>
       <section className="panel">

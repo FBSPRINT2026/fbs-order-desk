@@ -18,11 +18,11 @@ export type SimplePast = { id: string; number: number; nickname: string; when: s
  * message). The rest (all orders, artwork, settings) are quiet links at the foot, opening the full portal's pages.
  * Customers with many jobs at once get the full portal (customers.portal_view; View: Simple / Full at the foot).
  */
-export default function PortalSimple({ search, jobs, proofs, sent, past, pay, art = [], designUrls = {}, newMsgs, msgHref, ordersHref, artHref, settingsHref, canAct, viewSwitch }: {
+export default function PortalSimple({ search, jobs, proofs, sent, past, pay, art = [], designUrls = {}, newMsgs, msgHref, ordersHref, artHref, settingsHref, canAct, support }: {
   /** one search for everything (orders, payments, artwork), the portal's AI search bar */ search?: ReactNode;
   jobs: PortalJob[]; proofs: DashProof[]; sent: DashSent[]; past: SimplePast[]; pay: DashPay; /** their logos, small, under payments, drawn as the Artwork page draws them (on the shirt color they print on) */ art?: { d: Design; shirt?: string; shown?: { url: string; shirt: string } | null; printed?: Parameters<typeof LogoFace>[0]["printed"] }[]; designUrls?: Record<string, string>; newMsgs: number;
   msgHref: string; ordersHref: string; artHref: string; settingsHref: string; canAct: boolean;
-  /** Simple / Full, inside the account panel */ viewSwitch?: ReactNode;
+  /** "Have a support issue?" with its button (Simple / Full is in Settings) */ support?: ReactNode;
 }) {
   const owed = pay.due > 0.004;
   const open = proofs.length + sent.length + jobs.length;
@@ -98,7 +98,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
             Full (Nov 3, Nick: "part of it under the artwork on the right, part of it at the bottom… just have a little panel
             where that's all in there") */}
         <section className="panel psm-p psm-acct">
-          <div className="panel-h"><div className="psm-ht"><h2>Your account</h2><span className="faint">Messages, settings and how this page looks</span></div></div>
+          <div className="panel-h"><div className="psm-ht"><h2>Your account</h2><span className="faint">Messages, settings and help</span></div></div>
           <div className="panel-b psm-acct-b">
             <Link href={msgHref} className="psm-msg">
               <span className="psm-nd-ico" aria-hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z" /></svg></span>
@@ -107,7 +107,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
             <nav className="psm-acct-links" aria-label="Your account">
               <Link href={ordersHref}>All orders</Link><Link href={msgHref}>Messages</Link><Link href={settingsHref}>Settings</Link>
             </nav>
-            {viewSwitch && <div className="psm-acct-view">{viewSwitch}</div>}
+            {support && <div className="psm-acct-help">{support}</div>}
           </div>
         </section>
       </aside>
