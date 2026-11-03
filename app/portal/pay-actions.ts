@@ -106,7 +106,9 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     if (!viaQbo && !/^[\w-]{6,}$/.test(pmId)) return { ok: false, error: "Enter your payment details again." };
     if (viaQbo && (!/^\d{9}$/.test(input.bank!.routing) || !/^\d{4,17}$/.test(input.bank!.account) || !input.bank!.name.trim())) return { ok: false, error: "Check the name, routing number and account number." };
     const sum = r2(lines.reduce((a, l) => a + l.amount, 0));
-    const fee = input.method === "card" ? cardFee(sum, settings.pay.cardFeePct) : 0;
+    // a customer we don't charge the card fee (customers.no_card_fee; Nov 3, Nick)
+    const noFee = customer?.id ? !!(await admin.from("customers").select("no_card_fee").eq("id", customer.id).maybeSingle()).data?.no_card_fee : false;
+    const fee = input.method === "card" && !noFee ? cardFee(sum, settings.pay.cardFeePct) : 0;
     const total = r2(sum + fee);
     const ref = lines.map((l) => `#${l.o.number}`).join(", ");
     let txn: Record<string, unknown> = {};

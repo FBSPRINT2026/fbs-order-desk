@@ -1,6 +1,7 @@
 "use client";
 import { holdLabel } from "@/lib/holds";
 import EmailPrefs from "@/components/EmailPrefs";
+import StaxCardImport from "@/components/StaxCardImport";
 import { archiveMyMockup } from "@/app/portal/actions";
 import { oneOfEach } from "@/lib/mockupList";
 import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/lib/logoShirts";
@@ -54,7 +55,7 @@ import { fmtPhone } from "@/lib/phone";
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const canEdit = useCan("editCustomers"), canQuote = useCan("quotes");
+  const canEdit = useCan("editCustomers"), canQuote = useCan("quotes"), canTake = useCan("takePayments");
   const [tourMsg, setTourMsg] = useState("");
   const searchParams = useSearchParams();
   const isNew = searchParams.get("new") === "1";
@@ -249,6 +250,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         <div className="row">
           <button className="btn" type="button" onClick={() => setDetailsOpen(true)}>Details</button>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">Their portal</a>
+          {canTake && <a className="btn" href={`/shop/take-payment?customer=${id}`} title="Run their card for open invoices (Nick and Amanda)">Take a payment</a>}
           {/* after a call: their portal's tutorial shows again next time anyone there signs in (Nov 3, Nick) */}
           <button className="btn" type="button" disabled={tourMsg === "…"} title="Show their portal's tutorial again the next time anyone there signs in" onClick={async () => { setTourMsg("…"); const r = await resetTour(id); setTourMsg(r.ok ? "Tutorial reset" : r.error || "Couldn't reset"); setTimeout(() => setTourMsg(""), 4000); }}>{tourMsg && tourMsg !== "…" ? tourMsg : "Reset tutorial"}</button>
           {canQuote && <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>}
@@ -373,6 +375,8 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             </fieldset>
             {/* who at the customer gets which email (lib/customerEmails.ts), the same panel as their portal Settings */}
             <EmailPrefs customerId={id} shop />
+            {/* Nick and Amanda: cards already saved in Stax, brought onto this customer (Take a Payment uses them) */}
+            <StaxCardImport customerId={id} search0={c.company || c.name || ""} />
           </aside>
         </div>
       )}

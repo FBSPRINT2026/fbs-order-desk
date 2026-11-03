@@ -37,6 +37,7 @@ const ICONS: Record<string, React.ReactNode> = {
   qb: <QbLogo />,
   // a bank check: the Payroll Center (Oct 30, Nick: "a little dollar sign or a check symbol")
   // payday: a calendar page with a dollar sign (Oct 30, Nick picked it; the bill icon looked like the Artwork Builder's)
+  takepay: <svg viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="2" /><path d="M2.5 9.5h19M6 14.5h4" /></svg>,
   payroll: <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 9.5h17M8 3v4M16 3v4" /><path d="M13.7 12.3c-.3-.4-.9-.6-1.5-.6-.9 0-1.5.4-1.5 1.1 0 1.5 3.1.8 3.1 2.3 0 .7-.7 1.1-1.6 1.1-.7 0-1.2-.3-1.6-.7M12.2 11v.7M12.2 16.2v.7" /></svg>,
   pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
@@ -289,7 +290,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/jobs", "proof", "Job Center"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Wall"], ["/shop/digitizing", "needle", "Digitizing"], ["/shop/gang-sheet", "gang", "Gang Sheets"]] },
-    { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"], ["/shop/clickup", "clickup", "ClickUp Jobs"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"], ["/shop/art-builder", "artbuild", "Customer Artwork Builder"]] },
+    { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"], ["/shop/clickup", "clickup", "ClickUp Jobs"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"], ["/shop/art-builder", "artbuild", "Customer Artwork Builder"], ["/shop/take-payment", "takepay", "Take a Payment"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 

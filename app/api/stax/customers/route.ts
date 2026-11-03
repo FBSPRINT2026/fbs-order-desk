@@ -20,10 +20,25 @@ export async function GET(req: Request) {
   if (!key) return NextResponse.json({ error: "Stax isn't connected." }, { status: 400 });
   const q = (new URL(req.url).searchParams.get("q") || "").trim().slice(0, 80);
   const h = { Authorization: `Bearer ${key}`, Accept: "application/json" };
-  const r = await fetch(`${STAX}/customer?${new URLSearchParams({ keywords: q, per_page: "25" })}`, { headers: h, cache: "no-store" });
+  // Stax's search wants keywords[]; when it won't search, their customer list is read a page at a time and matched here
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = (c: Cu) => words.every((w) => `${c.firstname || ""} ${c.lastname || ""} ${c.company || ""} ${c.email || ""}`.toLowerCase().includes(w));
+  let list: Cu[] = [];
+  const sp = new URLSearchParams({ per_page: "50" }); sp.append("keywords[]", q);
+  const r = await fetch(`${STAX}/customer?${sp}`, { headers: h, cache: "no-store" });
   const j = (await r.json().catch(() => null)) as { data?: Cu[] } | Cu[] | null;
-  if (!r.ok) return NextResponse.json({ error: `Stax answered ${r.status}` }, { status: 502 });
-  const list = (Array.isArray(j) ? j : j?.data || []).filter((c) => !c.deleted_at).slice(0, 25);
+  if (r.ok) list = (Array.isArray(j) ? j : j?.data || []);
+  if (!r.ok || !list.some(hit)) {
+    list = [];
+    for (let page = 1; page <= 10; page++) {
+      const pr = await fetch(`${STAX}/customer?${new URLSearchParams({ per_page: "200", page: String(page) })}`, { headers: h, cache: "no-store" });
+      if (!pr.ok) { if (page === 1) return NextResponse.json({ error: `Stax answered ${pr.status}: ${JSON.stringify(await pr.json().catch(() => "")).slice(0, 200)}` }, { status: 502 }); break; }
+      const pj = (await pr.json().catch(() => null)) as { data?: Cu[]; last_page?: number } | null;
+      list.push(...(pj?.data || []).filter(hit));
+      if (!pj?.data?.length || (pj.last_page && page >= pj.last_page)) break;
+    }
+  }
+  list = list.filter((c) => !c.deleted_at && (!words.length || hit(c))).slice(0, 25);
   const out = [];
   for (const c of list) {
     const pr = await fetch(`${STAX}/customer/${encodeURIComponent(c.id)}/payment-method`, { headers: h, cache: "no-store" });

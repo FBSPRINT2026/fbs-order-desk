@@ -58,7 +58,6 @@ import SendProofTool from "@/components/tools/SendProofTool";
 import { acceptRequest, requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
 import MenuItem from "@/components/MenuItem";
-import ChargeOnFile from "@/components/ChargeOnFile";
 import PayReadiness from "@/components/PayReadiness";
 import { checkOrder } from "@/lib/orderChecks";
 import { ADJUST } from "@/lib/printavoChanges";
@@ -124,6 +123,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const sb = useMemo(() => createClient(), []);
   const [o, setO] = useState<Order | null>(null);
   const canPay = useCan("payments");
+  const canTake = useCan("takePayments");
   const seesMoney = useSeesMoney(); // crew (production, receiving, shipping): quantities and what's ordered, no money
   // the production mockup (Oct 21, Nick: "a production view of the mock-up… confirm details, look at the last order, what we
   // did"): Nick and Jose open it from the order; the order page itself is the same for everyone
@@ -2286,7 +2286,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </div>
               )}
               {canPay && String(o.status) !== "void" && <PayReadiness order={o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }} paid={calc.paid} depositPct={settings.depositPct} terms={cust?.payment_terms || "receipt"} deposit={Math.min(calc.balance, Math.round(calc.total * settings.depositPct) / 100)} />}
-              {canPay && calc.balance > 0.004 && <ChargeOnFile orderId={o.id} customerId={o.customer_id} balance={calc.balance} feePct={settings.pay.cardFeePct} onDone={() => window.location.reload()} />}
+              {/* running their card: the one Take a Payment tool, opened on this order (Nov 3, Nick; Nick and Amanda only) */}
+              {canTake && calc.balance > 0.004 && o.customer_id && <a className="btn sm" href={`/shop/take-payment?customer=${o.customer_id}&order=${o.id}`}>Take a payment</a>}
             </div>
           </section>
           </div>

@@ -21,6 +21,8 @@ export type PortalCtx = {
  * Customers read through their own session, so row security limits them to their records.
  * Staff can preview a customer with ?as=<customerId>; that view is read-only.
  */
+/** a customer we've agreed not to charge the card fee (customers.no_card_fee, set in Take a Payment): no fee shown or charged */
+const feeFor = (s: ReturnType<typeof mergeSettings>, cs: Customer[]) => (cs.length && cs.every((c) => (c as { no_card_fee?: boolean }).no_card_fee) ? { ...s, pay: { ...s.pay, cardFeePct: 0 } } : s);
 export async function getPortalCtx(as?: string, next = "/portal"): Promise<PortalCtx> {
   const { supabase, user, email, isStaff } = await getViewer();
   if (!user) redirect(`/login?next=${encodeURIComponent(next)}`);
@@ -35,13 +37,13 @@ export async function getPortalCtx(as?: string, next = "/portal"): Promise<Porta
     }
     const { data: c } = await admin.from("customers").select("*").eq("id", as).maybeSingle();
     if (!c) redirect("/shop/customers");
-    return { db: admin, email, isStaff, preview: c as Customer, customerIds: [c.id], customers: [c as Customer], settings };
+    return { db: admin, email, isStaff, preview: c as Customer, customerIds: [c.id], customers: [c as Customer], settings: feeFor(settings, [c as Customer]) };
   }
   const { data: cs } = await allRows((a, b) => supabase.from("customers").select("*").order("id").range(a, b));
   const customers = (cs || []) as Customer[];
   // on more than one account and none picked yet: pick one first (Nov 3, Nick); my_customer_ids() answers with the pick
   if (customers.length > 1) redirect("/portal/choose");
-  return { db: supabase as unknown as SupabaseClient, email, isStaff, preview: null, customerIds: customers.map((c) => c.id), customers, settings };
+  return { db: supabase as unknown as SupabaseClient, email, isStaff, preview: null, customerIds: customers.map((c) => c.id), customers, settings: feeFor(settings, customers) };
 }
 
 /** Signed links for proof files, valid for one hour. */
