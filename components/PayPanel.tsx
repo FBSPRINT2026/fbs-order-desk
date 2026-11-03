@@ -119,18 +119,8 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
       return;
     }
     if (!f.first.trim() || !f.last.trim()) return setMsg({ ok: false, text: "Enter the name on the account." });
-    // a bank transfer goes through QuickBooks Payments (Nov 3, Nick): the numbers go to the server once, for this charge
-    if (method === "bank") {
-      if (!/^\d{9}$/.test(f.routing)) return setMsg({ ok: false, text: "The routing number should be 9 digits." });
-      if (!/^\d{4,17}$/.test(f.account)) return setMsg({ ok: false, text: "Check the account number." });
-      setBusy(true); busyRef.current = true;
-      const r = await payOrders({ items: itemsReq, method: "bank", paymentMethodId: "", applyAmount: amount, receiptTo: receipt.trim(),
-        bank: { name: `${f.first} ${f.last}`.trim(), routing: f.routing, account: f.account, type: f.bankType === "savings" ? "savings" : "checking", holder: f.holder === "business" ? "business" : "personal" } });
-      if (!r.ok) setMsg({ ok: false, text: r.error || "The bank payment didn't go through." });
-      else { setSentTo(r.receiptTo || ""); setMsg({ ok: true, text: `Bank payment of ${money(r.paid)} sent. It takes a few business days to clear. Thank you!` }); router.refresh(); }
-      setBusy(false); busyRef.current = false;
-      return;
-    }
+    // a bank transfer goes through Stax again, like cards (Nov 3, Nick: "Stax is saying their ACH is now working… switch it
+    // over to Stax… enable… save your bank account"); QuickBooks Payments (lib/qbo/payments.ts) stays for a fallback
     if (!stax.current) return setMsg({ ok: false, text: "The secure payment form is still loading." });
     const details: Record<string, unknown> = { firstname: f.first.trim(), lastname: f.last.trim(), total, match_customer: false, validate: false };
     if (method === "card") {
@@ -198,15 +188,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
             </div>
           </div>
         )}
-        {/* a bank account isn't kept yet: shown where it'll be, grayed, "Coming soon" (Nov 3, Nick) */}
-        {method === "bank" && (
-          <label className="pp-keep pp-keep-soon" aria-disabled="true">
-            <input type="checkbox" disabled checked={false} readOnly />
-            <span><b>Keep this bank account on file <em className="pp-soon">Coming soon</em></b><small>Soon you&apos;ll be able to save your bank account here and pay with one click.</small></span>
-          </label>
-        )}
-        {/* a bank account isn't kept: bank transfers go through QuickBooks Payments one at a time (Nov 3) */}
-        {(consent.card || consent.bank) && method !== "bank" && (
+        {(consent.card || consent.bank) && (
           <label className="pp-keep">
             <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
             <span><b>Keep this {method === "bank" ? "bank account" : "card"} on file</b><small>{method === "bank" ? consent.bank : consent.card}</small></span>
@@ -279,7 +261,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
               {forms()}
               {msg && <div className={msg.ok ? "okmsg" : "banner"} role={msg.ok ? "status" : "alert"}>{msg.text}</div>}
               {payButton()}
-              <div className="pp-secure">🔒 {method === "bank" ? "Your bank details go to QuickBooks Payments for this one payment. We never store them." : "Card numbers go straight to our payment processor (Stax). We never see or store them."}</div>
+              <div className="pp-secure">🔒 {method === "bank" ? "Bank details go straight to our payment processor (Stax). We never see or store them." : "Card numbers go straight to our payment processor (Stax). We never see or store them."}</div>
             </section>
           </div>
         )}

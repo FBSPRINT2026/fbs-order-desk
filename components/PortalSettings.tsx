@@ -212,10 +212,10 @@ function SavedCards({ preview, staxToken }: { preview: boolean; staxToken: strin
               }}>{armed === x.id ? "Delete it?" : "Delete"}</button>
             </li>
           ))}</ul>
-        ) : <div className="faint">No cards saved.</div>}
+        ) : <div className="faint">No cards or bank accounts saved.</div>}
         {/* a card is saved only with a payment that goes through (Nov 3, Nick: "the only way they should be able to add a
             card is if it goes through when they check out"): no Add here, just how */}
-        <div className="ps-pm-note">To save a card, tick <b>Keep this card on file</b> when you pay. It shows up here after the payment goes through.</div>
+        <div className="ps-pm-note">To save a card or bank account, tick <b>Keep this on file</b> when you pay. It shows up here after the payment goes through.</div>
       </div>
     </section>
   );
