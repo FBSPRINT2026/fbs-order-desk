@@ -125,16 +125,17 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
         <div className="gdk-c1"><Link className="gdk-on" href={o.href}>#{o.number}</Link><b className="gdk-jnm">{o.nickname || "Order"}</b>
           <div className="gdk-sm">{[o.due_date ? `In hands ${when(o.due_date)}` : "", o.qty ? pcsOf(o.qty) : ""].filter(Boolean).join(" · ")}</div></div>
         <div className="gdk-c2">{groups.length ? groups.map((g, k) => <div key={k}><b>{g.supplier ? `${g.supplier.replace(/ Activewear$/, "")} ${g.order}` : "Your shipment"}</b>{!g.supplier && g.ships[0]?.added_by === "customer" ? <> {youTold}</> : null}{g.ships[0]?.note && g.supplier ? <span className="gdk-sm gdk-c2-sub">{g.ships[0].note.split(" · ").slice(2).join(" · ") || ""}</span> : g.ships[0]?.note ? <span className="gdk-sm gdk-c2-sub">{g.ships[0].note}</span> : null}</div>)
-          : <span className="gdk-sm">No shipment yet</span>}</div>
+          : <span className="gdk-sm">{r.done ? "Checked in at FBS · no tracking on file" : "No shipment yet"}</span>}</div>
         {/* one plain status, the tracking folded under it, and a way to ask only when something's off (no message button) */}
         <div className="gdk-c3">
-          {r.boxes ? <span className={"gdk-stx " + (r.done ? "gdk-ok" : late || r.short || r.st === "issue" ? "gdk-warn" : "")}>{r.done ? "All here" : r.here >= r.boxes ? "All linked boxes here" : `${r.here} of ${r.boxes} boxes here`}</span>
+          {r.done ? <span className="gdk-stx gdk-ok">All here</span>
+            : r.boxes ? <span className={"gdk-stx " + (late || r.short || r.st === "issue" ? "gdk-warn" : "")}>{r.here >= r.boxes ? "All linked boxes here" : `${r.here} of ${r.boxes} boxes here`}</span>
             : <span className="gdk-stx gdk-warn">Waiting on tracking</span>}
           {r.short ? <span className="gdk-sm gdk-c3-sub">{pcsOf(r.short)} not shipped yet</span> : null}
           {!r.done && r.eta ? <span className="gdk-sm gdk-c3-sub">{late ? "Was due" : "Expected"} {when(r.eta)}</span> : null}
           <span className="gdk-c3-acts">
             {trk.length > 0 && <button type="button" className="gdk-trk" aria-expanded={trkOpen === o.id} onClick={() => setTrkOpen(trkOpen === o.id ? null : o.id)}>{trk.length} tracking {trkOpen === o.id ? "▴" : "▾"}</button>}
-            {!r.boxes && canAct && <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>Add tracking</button>}
+            {!r.boxes && !r.done && canAct && <button type="button" className="linkbtn" onClick={() => setAddFor(addFor === o.id ? null : o.id)}>Add tracking</button>}
             {(late || r.short > 0 || r.st === "issue") && <button type="button" className="linkbtn" onClick={() => setAsk(r)}>Ask about this</button>}
           </span>
         </div>
