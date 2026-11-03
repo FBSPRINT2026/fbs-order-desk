@@ -46,9 +46,17 @@ function label(t: HTMLTableElement) {
     const next = carry.map((n) => Math.max(0, n - 1));
     for (const c of [...tr.cells]) {
       while ((carry[col] || 0) > 0) col++;
-      if (!c.hasAttribute("data-label") || c.dataset.autolabel) { c.setAttribute("data-label", c.colSpan > 1 ? "" : names[col] || ""); c.dataset.autolabel = "1"; }
+      // written only when it changes, and the cell's words read from its text, not its laid-out text: reading innerText
+      // after a write lays the whole table out again, once per cell (Nov 2: Cedar's 2,397 orders froze the portal on a
+      // phone-width screen, a full layout per cell)
+      if (!c.hasAttribute("data-label") || c.dataset.autolabel) {
+        const want = c.colSpan > 1 ? "" : names[col] || "";
+        if (c.getAttribute("data-label") !== want) c.setAttribute("data-label", want);
+        if (c.dataset.autolabel !== "1") c.dataset.autolabel = "1";
+      }
       // stacked in a grid (a table of many columns), a cell with a sentence in it takes the whole line
-      if ((c.innerText || "").trim().length > 32 || c.colSpan > 1) c.dataset.wide = "1"; else delete c.dataset.wide;
+      const wide = (c.textContent || "").trim().length > 32 || c.colSpan > 1;
+      if (wide && c.dataset.wide !== "1") c.dataset.wide = "1"; else if (!wide && c.dataset.wide) delete c.dataset.wide;
       if (c.rowSpan > 1) for (let k = 0; k < c.colSpan; k++) next[col + k] = c.rowSpan - 1;
       col += c.colSpan;
     }
