@@ -20111,3 +20111,14 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 /* the simple portal's one search, across the top */
 .psm-search{min-width:0}
 @media (max-width:900px){.psm-side > .psm-search{order:2}.psm-side > .psm-pay{order:2}}
+/* the simple portal's title and headings, spaced out (Nov 3, Nick) */
+.psm-top{margin:6px 0 18px}
+.psm-top .psm-title{margin:0 0 0 8px}
+.psm-desc{margin:12px 0 0 8px;font-size:14px;color:var(--ink-3)}
+.psm{gap:20px}
+.psm-main,.psm-side{gap:20px}
+.psm-p > .panel-h{align-items:flex-start}
+.psm-ht{display:flex;flex-direction:column;gap:4px;min-width:0}
+.psm-ht > .faint{font-size:12.5px;line-height:1.35}
+.psm-pb{padding-top:14px}
+@media (max-width:900px){.psm{align-items:stretch}.psm > *,.psm-side > *,.psm-main > *{width:auto;max-width:none}}

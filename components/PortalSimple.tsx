@@ -24,12 +24,16 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
   const owed = pay.due > 0.004;
   const open = proofs.length + sent.length + jobs.length;
   return (
+    <>
+    {/* the page's title, like the full portal's Dashboard (Nov 3, Nick: "add the dashboard header to the top and space it
+        out some with description and headings") */}
+    <div className="psm-top"><h2 className="aa-ptitle psm-title">Dashboard</h2><p className="psm-desc">Your open orders, payments and past work with us, all on one page.</p></div>
     <div className="psm">
       {/* one search at the top for everything, its examples rolling through (Nov 3, Nick: "search like everything, orders,
           payments, all that stuff… like the AI search where it rotates through") */}
       <div className="psm-main">
         <section className="panel psm-p">
-          <div className="panel-h"><h2>Open orders</h2><span className="faint">{open ? `${jobs.length + sent.length} in the works` : ""}</span><Link className="pd-link psm-hl" href={ordersHref}>All orders</Link></div>
+          <div className="panel-h"><div className="psm-ht"><h2>Open orders</h2><span className="faint">What we&apos;re working on for you, and where each one is</span></div><Link className="pd-link psm-hl" href={ordersHref}>All orders</Link></div>
           <div className="panel-b psm-pb">
             {proofs.map((p) => (
               <div key={p.id} className="psm-nd">
@@ -49,7 +53,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
         {/* past orders as picture tiles, each with Reorder (Nov 3, Nick: option B) */}
         {past.length > 0 && (
           <section className="panel psm-p">
-            <div className="panel-h"><h2>Order history</h2><Link className="pd-link psm-hl" href={ordersHref}>All past orders</Link></div>
+            <div className="panel-h"><div className="psm-ht"><h2>Order history</h2><span className="faint">Your past orders. Reorder runs one again.</span></div><Link className="pd-link psm-hl" href={ordersHref}>All past orders</Link></div>
             <div className="panel-b psm-tiles">
               {past.map((p) => (
                 <div key={p.id} className="psm-tile">
@@ -68,7 +72,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
         {/* right above payments (Nov 3, Nick) */}
         {search && <div className="psm-search">{search}</div>}
         <section className="panel psm-p psm-pay">
-          <div className="panel-h"><h2>Payments</h2><Link className="pd-link psm-hl" href={pay.href}>History</Link></div>
+          <div className="panel-h"><div className="psm-ht"><h2>Payments</h2><span className="faint">What&apos;s due and how to pay it</span></div><Link className="pd-link psm-hl" href={pay.href}>History</Link></div>
           <div className="panel-b psm-pb">
             <div className="psm-bal"><small>Balance due</small><b className={"num" + (pay.pastDue > 0.004 ? " late" : "")}>{money(pay.due)}</b></div>
             {pay.pastDue > 0.004 && <div className="psm-late">{money(pay.pastDue)} past due</div>}
@@ -83,7 +87,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
         {/* their logos, small (Nov 3, Nick: "the smaller artwork… on the bottom right") */}
         {art.length > 0 && (
           <section className="panel psm-p psm-artp">
-            <div className="panel-h"><h2>Your artwork</h2><Link className="pd-link psm-hl" href={artHref}>All artwork</Link></div>
+            <div className="panel-h"><div className="psm-ht"><h2>Your artwork</h2><span className="faint">Your logos on file with us</span></div><Link className="pd-link psm-hl" href={artHref}>All artwork</Link></div>
             <div className="panel-b psm-art">{art.map((d) => <Link key={d.id} href={artHref} className="psm-art-i" title={d.name}><img src={d.url} alt={d.name} loading="lazy" /></Link>)}</div>
           </section>
         )}
@@ -96,5 +100,6 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
         </nav>
       </aside>
     </div>
+    </>
   );
 }
