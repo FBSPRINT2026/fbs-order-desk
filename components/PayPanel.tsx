@@ -1,4 +1,5 @@
 "use client";
+import { stateFromZip } from "@/lib/zipState";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -120,7 +121,8 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     const details: Record<string, unknown> = { firstname: f.first.trim(), lastname: f.last.trim(), total, match_customer: false, validate: false };
     if (method === "card") {
       if (!/^\d{1,2}$/.test(f.month) || !/^\d{2,4}$/.test(f.year)) return setMsg({ ok: false, text: "Enter the card's expiration month and year." });
-      Object.assign(details, { method: "card", month: f.month, year: f.year.length === 2 ? `20${f.year}` : f.year, address_zip: f.zip });
+      if (!stateFromZip(f.zip)) return setMsg({ ok: false, text: "Enter the card's 5-digit billing ZIP code." });
+      Object.assign(details, { method: "card", month: f.month, year: f.year.length === 2 ? `20${f.year}` : f.year, address_zip: f.zip.trim(), address_state: stateFromZip(f.zip) });
     } else {
       if (!/^\d{9}$/.test(f.routing)) return setMsg({ ok: false, text: "The routing number should be 9 digits." });
       if (!/^\d{4,17}$/.test(f.account)) return setMsg({ ok: false, text: "Check the account number." });
