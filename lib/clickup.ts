@@ -257,6 +257,46 @@ async function saveFiles(admin: SupabaseClient, taskId: string, files: CuFile[],
   return { files: out, changed, used: o.bytes - left };
 }
 
+/**
+ * A ClickUp job's files on the order made from it (Nov 2, Nick: "bring them in automatically… so we can just process
+ * orders automatically"): every stored file not already on the order's "What you sent us" is added (kind from its name:
+ * a PO, art, or other), so files that arrive after the order was made (a Dropbox link added later) show up there too.
+ * Only an order still waiting on us (a request) is touched; once it's priced, new files are for staff to look at.
+ */
+export async function filesOntoOrder(admin: SupabaseClient, orderId: string, files: CuFile[]) {
+  const stored = files.filter((f) => f.path);
+  if (!stored.length) return 0;
+  const { data: o } = await admin.from("orders").select("id, status, simple_order").eq("id", orderId).maybeSingle();
+  const so = (o?.simple_order || null) as { files?: { kind: string; name: string; path: string }[] } | null;
+  if (!o || !so || o.status !== "request") return 0;
+  const have = new Set((so.files || []).map((f) => f.path));
+  const add = stored.filter((f) => !have.has(f.path!)).map((f) => ({ kind: fileKind(f.name), name: f.name, path: f.path! }));
+  if (!add.length) return 0;
+  await admin.from("orders").update({ simple_order: { ...so, files: [...(so.files || []), ...add] } }).eq("id", orderId);
+  return add.length;
+}
+const fileKind = (name: string) => /(^|[\W_])(po|p\.o|purchase|order( ?form)?|invoice)([\W_]|$)/i.test(name) ? "po" : /\.(ai|eps|svg|pdf|png|jpe?g|psd|tiff?|cdr|dst|emb|webp|gif)$/i.test(name) ? "art" : "other";
+
+/** jobs made into orders that still have files to bring in (newest first), each run while there's time */
+async function catchUpOrderFiles(admin: SupabaseClient, bytes: number, deadline: number) {
+  const { data } = await admin.from("clickup_tasks").select("id, team_id, order_id, attachments").not("order_id", "is", null).neq("status_type", "closed")
+    .order("updated_at_cu", { ascending: false }).order("id").limit(300);
+  let left = bytes, orders = 0;
+  for (const t of (data || []) as { id: string; team_id: string; order_id: string; attachments: CuFile[] | null }[]) {
+    if (left <= 0 || Date.now() > deadline - 55_000) break;
+    const atts = t.attachments || [];
+    const todo = atts.some((f) => !f.path && !(f.tried && Date.now() - Date.parse(f.tried) < 6 * 3600e3));
+    let files = atts;
+    if (todo) {
+      const r = await saveFiles(admin, t.id, atts, await tokenFor(admin, t.team_id), { bytes: left, deadline });
+      left -= r.used;
+      if (r.changed) { files = r.files; await admin.from("clickup_tasks").update({ attachments: files }).eq("id", t.id); }
+    }
+    if (await filesOntoOrder(admin, t.order_id, files)) orders++;
+  }
+  return { orders };
+}
+
 /** the job panel opened: its files copied into storage now, if the reader hasn't yet */
 export async function ensureClickUpFiles(admin: SupabaseClient, id: string): Promise<ClickUpTaskRow | null> {
   const { data: t } = await admin.from("clickup_tasks").select("*").eq("id", id).maybeSingle();
@@ -399,11 +439,13 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         const row = rowOf(full || t0, team.id, comments, me || myEmail, teamRow.get(team.id)?.hidden_fields || []);
         row.attachments = keepPaths(row.attachments, k?.attachments);
         const waiting = waitingOf({ ...row, order_id: k?.order_id, dismissed_at: k?.dismissed_at, pv_number: k?.pv_number }, hidden);
-        // a new job's files come into storage now, so they're there when it's opened
-        if (waiting && fileBytes > 0 && row.attachments.some((f) => !f.path)) {
+        // a job's files come into storage now, so they're there when it's opened; a job already made into an order keeps
+        // getting its files too (Nov 2, Nick: Tiger Blue adds the Dropbox link after the job is up), onto the order
+        if ((waiting || k?.order_id) && fileBytes > 0 && row.attachments.some((f) => !f.path)) {
           const r = await saveFiles(admin, row.id, row.attachments, tok, { bytes: fileBytes, deadline: deadline - 8000 });
           row.attachments = r.files; fileBytes -= r.used;
         }
+        if (k?.order_id) await filesOntoOrder(admin, k.order_id, row.attachments).catch(() => null);
         if (full) await admin.from("clickup_tasks").upsert({ ...row, waiting });
         else { const { attachments: _a, comments: _c, ...info } = row; void _a; void _c; await admin.from("clickup_tasks").upsert({ ...info, waiting: false }); }
         if (waiting && !k?.waiting) out.newJobs.push(`${team.name}: ${row.name}`);
@@ -462,6 +504,9 @@ export async function syncClickUp(admin: SupabaseClient, deadline: number): Prom
         }
       }
     })(ws).catch((e) => { out.problems.push(`${ws.team.name}: ${e instanceof Error ? e.message : String(e)}`); })));
+    // jobs already made into orders whose files aren't in yet (a share link added later, a big folder that ran out of
+    // time): brought in now and put on the order
+    if (fileBytes > 0 && Date.now() < deadline - 60_000) { const c = await catchUpOrderFiles(admin, fileBytes, deadline - 8000).catch(() => null); if (c?.orders) (out as unknown as Record<string, unknown>).orderFiles = c.orders; }
     // jobs ticked for an order that's gone: unticked and back on New (healOrphanTicks)
     if (Date.now() < deadline - 5000) { const h = await healOrphanTicks(admin, deadline - 3000).catch(() => null); if (h?.healed.length) (out as unknown as Record<string, unknown>).healed = h.healed; if (h?.problems.length) out.problems.push(...h.problems); }
     const stats = { at: new Date().toISOString(), calls: Object.fromEntries([...calls].map(([t, c]) => [tokens.find((x) => x.token === t)?.key || "?", c])), ...out };
