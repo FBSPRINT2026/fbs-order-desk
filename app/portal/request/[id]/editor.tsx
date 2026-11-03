@@ -300,6 +300,14 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
     return out;
   }
   const openSimple = (files: RqFile[] = [], note = "") => setSimple({ name: o.nickname || "", about: "", due: o.due_date || "", po: o.po_number || "", method: "", qty: "", goodsOn: false, garments: "", files, note });
+  // on a phone, a new order opens on the simple form first: a few answers and your files (Nov 2, Nick: "when you click it
+  // from your phone, it should do simple order form so that you can just fill it out real quick"); close it for the full form
+  useEffect(() => {
+    try {
+      const blank = !o.nickname && !o.groups.some((g) => g.lines.some((l) => l.style || Object.values(l.sizes || {}).some((v) => +v > 0)) || g.customerMockups?.length);
+      if (blank && !preview && window.matchMedia("(max-width:760px)").matches) openSimple();
+    } catch { /* */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Place a reorder (Oct 24, Nick: "search and click… update the quantities… pull it into the form… or they can just copy
   // and paste like, hey, let's reorder")
   const asQ = (backHref.match(/[?&]as=([^&]+)/) || [])[1] || "";
@@ -410,16 +418,16 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
           </div>
         </div>
       )}
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div className="row rq-head" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
         <div>
           <BackLink href={backHref} label="Dashboard" trail={false} />
           <h1 style={{ margin: "6px 0 0" }}>Build Your Order</h1>
         </div>
-        <div className="row"><span className="save-state">{state}</span>
+        <div className="row rq-head-acts">{state ? <span className="save-state">{state}</span> : null}
           {/* Draft beside Discard (Oct 24, Nick: "put the word draft… right next to discard") */}
-          {o.draft ? <span className="pill" style={{ ["--sc" as string]: "var(--ink-3)" }} title="Not sent to us yet"><span className="pill-t">Draft</span></span> : <span className="faint" style={{ fontSize: 12.5 }}>#{o.number}</span>}
+          {o.draft ? <span className="pill" style={{ ["--sc" as string]: "var(--ink-3)" }} title="Not sent to us yet"><span className="pill-t">Draft</span></span> : o.number ? <span className="faint" style={{ fontSize: 12.5 }}>#{o.number}</span> : null}
           <button type="button" className={"btn ghost danger" + (armed === "discard" ? " armed" : "")} disabled={preview} onClick={async () => { if (armed !== "discard") return arm("discard"); const r = await discardRequest(o.id); if (r.ok) router.push(backHref); else setErr(r.error || ""); }}>{armed === "discard" ? (o.draft ? "Discard this draft?" : "Delete this order?") : o.draft ? "Discard" : "Delete"}</button>
-          <button type="button" className="btn primary" disabled={preview || busy} onClick={trySend}>{busy ? "Sending…" : sendLabel}</button>
+          <button type="button" className="btn primary rq-head-send" disabled={preview || busy} onClick={trySend}>{busy ? "Sending…" : sendLabel}</button>
         </div>
       </div>
       <div className="rq-note">{ws
