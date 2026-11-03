@@ -374,7 +374,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         </div>
             </fieldset>
             {/* who at the customer gets which email (lib/customerEmails.ts), the same panel as their portal Settings */}
-            <EmailPrefs customerId={id} shop />
+            <EmailPrefs customerId={id} shop compact />
             {/* Nick and Amanda: cards already saved in Stax, brought onto this customer (Take a Payment uses them) */}
             <StaxCardImport customerId={id} search0={c.company || c.name || ""} />
           </aside>

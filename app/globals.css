@@ -20473,3 +20473,7 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .tpy-setpin-h{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;font-size:14px}
 .tpy-setpin-f{display:flex;gap:8px;flex-wrap:wrap}
 .tpy-setpin-f input{flex:1 1 110px;min-width:0;max-width:160px}
+.emp-sum{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.emp-dlg{width:min(980px,100%);padding:12px 14px}
+.emp-dlg-h{display:flex;margin-bottom:6px}
+.emp-dlg .panel.emp{border:0;box-shadow:none;margin:0}

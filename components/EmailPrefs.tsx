@@ -9,7 +9,10 @@ import { loadEmailPrefs, saveEmailPrefs, setAutoEmails } from "@/app/portal/emai
  * column per person, a switch to stop an email for everyone. Proofs and approvals and On hold can't be turned off and
  * keep at least one person. The portal's Settings and the shop's customer page show this same panel.
  */
-export default function EmailPrefs({ customerId, preview = false, shop = false }: { customerId: string; preview?: boolean; /** the shop's customer page: the automatic-emails switch shows */ shop?: boolean }) {
+export default function EmailPrefs({ customerId, preview = false, shop = false, compact = false }: { customerId: string; preview?: boolean; /** the shop's customer page: the automatic-emails switch shows */ shop?: boolean;
+  /** a narrow side panel (the shop's customer details): one summary line, the grid in a window of its own (Nov 3, Nick: "this
+   *  new email thing is blocking… I can't get to the bottom") */ compact?: boolean }) {
+  const [open, setOpen] = useState(false);
   const [people, setPeople] = useState<EmailPerson[] | null>(null);
   const [prefs, setPrefs] = useState<Prefs>({});
   const [auto, setAuto] = useState(true), [owner, setOwner] = useState(false);
@@ -41,7 +44,20 @@ export default function EmailPrefs({ customerId, preview = false, shop = false }
   };
   const onOff = (k: EmailKind, on: boolean) => void save({ ...prefs, [k]: { on, to: prefs[k]?.to || recipientsOf({ ...prefs, [k]: { on: true } }, k, people) } });
   const first = (p: EmailPerson) => (p.name && p.name !== p.email ? p.name.split(/\s+/)[0] : p.email.split("@")[0]);
-  return (
+  if (compact && !open) {
+    const on = EMAIL_KINDS.filter((d) => kindOn(prefs, d.k));
+    const who = [...new Set(on.flatMap((d) => recipientsOf(prefs, d.k, people)))].map((e) => first(people.find((p) => p.email === e) || { email: e, name: "" }));
+    return (
+      <section className="panel emp">
+        <div className="panel-h"><h2>Emails</h2><button type="button" className="btn sm" onClick={() => setOpen(true)}>Who gets what</button></div>
+        <div className="panel-b emp-sum">
+          <span>{on.length} of {EMAIL_KINDS.length} emails on{who.length ? `, to ${who.slice(0, 3).join(", ")}${who.length > 3 ? ` +${who.length - 3}` : ""}` : ""}.</span>
+          {shop && !auto && <span className="faint">Automatic emails are off for every customer.</span>}
+        </div>
+      </section>
+    );
+  }
+  const grid = (
     <section className="panel emp">
       <div className="panel-h"><h2>Emails</h2><span className="faint">Who gets each email{saved ? ` · ${saved}` : ""}</span></div>
       <div className="panel-b">
@@ -80,5 +96,14 @@ export default function EmailPrefs({ customerId, preview = false, shop = false }
         <div className="faint" style={{ fontSize: 12.5, marginTop: 8 }}>Proofs and approvals and On hold always go to at least one person. Turning an email off stops it for everyone.</div>
       </div>
     </section>
+  );
+  if (!compact) return grid;
+  return (
+    <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Who gets each email" onClick={() => setOpen(false)}>
+      <div className="dla emp-dlg" onClick={(e) => e.stopPropagation()}>
+        <div className="emp-dlg-h"><span className="spacer" /><button type="button" className="btn sm" onClick={() => setOpen(false)}>Done</button></div>
+        {grid}
+      </div>
+    </div>
   );
 }
