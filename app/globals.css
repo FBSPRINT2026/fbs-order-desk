@@ -19723,3 +19723,7 @@ html body .ord .line-b .gl-list .gl .a-ea input,html body .ord .line-b.fit-s .gl
 .so-otype{min-width:200px;margin:0}
 .so-otype .so-seg,.rq-otype{display:grid;width:100%}
 .so-otype .so-seg button,.rq-otype button{justify-content:center}
+/* a request's order type on the Requests list (Cedar: Bulk / Cart) */
+.rqd-lane{display:inline-block;margin-left:8px;font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;border:1px solid var(--line);color:var(--ink-3);vertical-align:1px;white-space:nowrap}
+.rqd-lane.l-bulk{background:color-mix(in srgb,var(--fbs-blue) 12%,var(--surface));color:color-mix(in srgb,var(--fbs-blue) 75%,var(--ink));border-color:color-mix(in srgb,var(--fbs-blue) 35%,var(--line))}
+.rqd-lane.l-cart{background:color-mix(in srgb,var(--fbs-orange) 14%,var(--surface));color:color-mix(in srgb,var(--fbs-orange) 60%,var(--ink));border-color:color-mix(in srgb,var(--fbs-orange) 40%,var(--line))}

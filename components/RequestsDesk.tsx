@@ -120,7 +120,7 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick }: { 
             ...rs.map((r, i) => { const d = dueTxt(r.due); return (
             <tr key={r.id} className={"rqd-r" + (openId === r.id ? " on" : "")} onClick={() => open(r.id)}>
               {i === 0 && <td rowSpan={rs.length} className="rqd-cust"><b>{r.customer}</b>{r.contact && <span>{r.contact}</span>}{grouped && <em>{rs.length} new</em>}</td>}
-              <td><span className="ordno">#{r.number}</span> {r.name || (r.simple ? "Simple order" : "Order request")}</td>
+              <td><span className="ordno">#{r.number}</span> {r.name || (r.simple ? "Simple order" : "Order request")}{r.lane && <span className={"rqd-lane l-" + r.lane.toLowerCase()}>{r.lane}</span>}</td>
               <td className={"nowrap" + (d.soon && r.due ? " rqd-soon" : r.due ? "" : " faint")}>{d.t}</td>
               <td className="nowrap">{r.files.length ? `${r.files.length} file${r.files.length === 1 ? "" : "s"}` : <span className="faint">None</span>}</td>
               <td className="nowrap">{sent(r.sentAt)}</td>
