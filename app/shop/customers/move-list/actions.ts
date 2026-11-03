@@ -18,7 +18,7 @@ async function me() {
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 const okEmail = (e: string) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e);
 
-export type MoveRow = { id: string; name: string; contact: string; email: string; sales: number; orders: number; rank: number; terms: PayTerms; priceType: string; owner: string; movedAt: string | null; launchSent: string | null };
+export type MoveRow = { id: string; name: string; contact: string; email: string; sales: number; orders: number; rank: number; terms: PayTerms; priceType: string; owner: string; movedAt: string | null; launchSent: string | null; /** moved without the launch email */ quiet: boolean };
 
 export async function moveList() {
   try {
@@ -27,7 +27,7 @@ export async function moveList() {
     const to = new Date(Date.now() + 864e5).toISOString().slice(0, 10), from = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
     const [{ data: top, error }, { data: cs, error: ce }, { data: pr }, { data: sent }] = await Promise.all([
       v.supabase.rpc("shop_top_customers", { p_from: from, p_to: to, p_limit: 5000 }),
-      allRows((a, b) => admin.from("customers").select("id, company, name, email, payment_terms, price_type, moved_at, is_test").order("id").range(a, b)),
+      allRows((a, b) => admin.from("customers").select("id, company, name, email, payment_terms, price_type, moved_at, is_test, launch_quiet").order("id").range(a, b)),
       allRows((a, b) => admin.from("customer_private").select("customer_id, account_owner").order("customer_id").range(a, b)),
       allRows((a, b) => admin.from("launch_email_sends").select("customer_id, sent_at").eq("ok", true).order("sent_at", { ascending: false }).order("id").range(a, b)),
     ]);
@@ -37,13 +37,13 @@ export async function moveList() {
     const own = new Map(((pr || []) as { customer_id: string; account_owner: string | null }[]).map((p) => [p.customer_id, p.account_owner || ""]));
     const last = new Map<string, string>();
     for (const r of (sent || []) as { customer_id: string | null; sent_at: string }[]) if (r.customer_id && !last.has(r.customer_id)) last.set(r.customer_id, r.sent_at);
-    const rows = ((cs || []) as { id: string; company: string | null; name: string | null; email: string | null; payment_terms: PayTerms | null; price_type: string | null; moved_at: string | null; is_test: boolean | null }[])
+    const rows = ((cs || []) as { id: string; company: string | null; name: string | null; email: string | null; payment_terms: PayTerms | null; price_type: string | null; moved_at: string | null; is_test: boolean | null; launch_quiet: boolean | null }[])
       .filter((c) => !c.is_test)
       .map((c): MoveRow => {
         const s = sales.get(c.id), email = String(c.email || "").trim().toLowerCase();
         return { id: c.id, name: String(c.company || "").trim() || String(c.name || "").trim() || "(no name)", contact: String(c.name || "").trim(), email: okEmail(email) ? email : "",
           sales: s?.sales || 0, orders: s?.orders || 0, rank: s?.rank || 0, terms: (c.payment_terms || "receipt") as PayTerms, priceType: c.price_type || "retail",
-          owner: own.get(c.id) || "", movedAt: c.moved_at, launchSent: last.get(c.id) || null };
+          owner: own.get(c.id) || "", movedAt: c.moved_at, launchSent: last.get(c.id) || null, quiet: !!c.launch_quiet };
       })
       .sort((a, b) => (a.rank && b.rank ? a.rank - b.rank : a.rank ? -1 : b.rank ? 1 : a.name.localeCompare(b.name)));
     // their order: 1, 2, 3… for the ones with sales in the last 12 months
@@ -66,18 +66,30 @@ export async function setTerms(ids: string[], terms: PayTerms) {
   } catch (e) { return fail(e); }
 }
 
-/** move these customers to the portal (the same mark the move checklist's last step makes: moved_at / moved_by) */
-export async function moveCustomers(ids: string[]) {
+/** move these customers to the portal (the same mark the move checklist's last step makes: moved_at / moved_by).
+ *  `quiet`: they're left off the launch email (Nov 3, Nick: "move to portal, but don't notify… a once a year client") */
+export async function moveCustomers(ids: string[], quiet = false) {
   try {
     const v = await me();
     const admin = createAdminClient();
     const ok = ids.filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 500);
     const at = new Date().toISOString();
-    const { data, error } = await admin.from("customers").update({ moved_at: at, moved_by: v.user?.email || "" }).in("id", ok).is("moved_at", null).select("id");
+    const { data, error } = await admin.from("customers").update({ moved_at: at, moved_by: v.user?.email || "", launch_quiet: quiet }).in("id", ok).is("moved_at", null).select("id");
     if (error) throw new Error(error.message);
     const moved = ((data || []) as { id: string }[]).map((x) => x.id);
     if (moved.length) await admin.from("activities").insert(moved.map((id) => ({ customer_id: id, kind: "note", direction: "none", subject: "Moved to the new system",
-      body: "Moved from the customer list (Customers → Move to the portal). New orders are 40,000-series; their portal is open.", occurred_at: at })));
+      body: `Moved from the customer list (Customers → Move to the portal)${quiet ? ", without the launch email" : ""}. New orders are 40,000-series; their portal is open.`, occurred_at: at })));
     return { ok: true as const, moved: moved.length, at };
+  } catch (e) { return fail(e); }
+}
+
+/** leave these customers off the launch email, or put them back on it */
+export async function setQuiet(ids: string[], quiet: boolean) {
+  try {
+    await me();
+    const ok = ids.filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 1000);
+    const { error } = await createAdminClient().from("customers").update({ launch_quiet: quiet }).in("id", ok);
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
   } catch (e) { return fail(e); }
 }

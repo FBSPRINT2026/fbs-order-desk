@@ -14867,6 +14867,8 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .mvl-terms .chip{white-space:nowrap}
 .mvl-noemail{color:var(--warn)}
 .mvl-in{color:var(--ok);font-weight:700}
+.mvl-tbl .linkbtn{font-size:13px}
+.mvl-tbl .linkbtn.mvl-quiet{color:var(--ink-3)}
 .mvl-q{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;min-width:200px;flex:0 1 260px;margin-left:auto}
 .mvl-bulk{position:sticky;top:8px;z-index:20;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--accent);border-radius:var(--r);background:var(--surface);box-shadow:0 6px 18px rgba(0,0,0,.08)}
 .mvl-bulk-t{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}

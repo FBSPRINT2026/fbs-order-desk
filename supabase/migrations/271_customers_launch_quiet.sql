@@ -1,0 +1,3 @@
+-- Moved to the portal without the launch email (Nov 3, Nick: "move to portal, but don't notify… a once a year client…
+-- when they reach out to us again… here's our link"). The launch email list leaves them out of "Not sent yet".
+alter table public.customers add column if not exists launch_quiet boolean not null default false;

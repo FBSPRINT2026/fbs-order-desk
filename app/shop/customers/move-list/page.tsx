@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
 import { PAY_TERMS, type PayTerms } from "@/lib/pricing";
-import { moveCustomers, moveList, setTerms, type MoveRow } from "./actions";
+import { moveCustomers, moveList, setQuiet, setTerms, type MoveRow } from "./actions";
 
 /**
  * Move to the portal (Nov 3, Nick): every customer, biggest first. Set terms with one click (or for every ticked one at
@@ -52,14 +52,22 @@ export default function MoveList() {
     if (!r.ok) { setRows(before); return setErr(r.error); }
     if (ids.length > 1) setNote(`${PAY_TERMS[t]} set for ${ids.length} customers.`);
   };
-  const move = async () => {
+  const move = async (quiet = false) => {
     if (!toMove.length) return;
-    setBusy("move"); setNote("");
-    const r = await moveCustomers(toMove.map((x) => x.id));
+    setBusy(quiet ? "quiet" : "move"); setNote("");
+    const r = await moveCustomers(toMove.map((x) => x.id), quiet);
     setBusy("");
     if (!r.ok) return setErr(r.error);
-    setNote(`${r.moved} customer${r.moved === 1 ? "" : "s"} moved to the portal.`);
+    setNote(`${r.moved} customer${r.moved === 1 ? "" : "s"} moved to the portal${quiet ? ", left off the launch email" : ""}.`);
     await load();
+  };
+  /** on or off the launch email, one customer */
+  const quiet = async (r: MoveRow, q: boolean) => {
+    setBusy(r.id);
+    setRows((rs) => (rs || []).map((x) => (x.id === r.id ? { ...x, quiet: q } : x)));
+    const res = await setQuiet([r.id], q);
+    setBusy("");
+    if (!res.ok) { setErr(res.error); setRows((rs) => (rs || []).map((x) => (x.id === r.id ? { ...x, quiet: r.quiet } : x))); }
   };
 
   const moved = all.filter((r) => r.movedAt).length;
@@ -95,7 +103,8 @@ export default function MoveList() {
           </span>
           <span className="spacer" />
           <button type="button" className="btn ghost sm" onClick={() => setPicked(new Set())}>Clear</button>
-          <button type="button" className="btn primary" disabled={!toMove.length || busy === "move"} onClick={() => void move()}>{busy === "move" ? "Moving…" : toMove.length ? `Move ${toMove.length} to the portal` : "All ticked are moved"}</button>
+          {toMove.length > 0 && <button type="button" className="btn" disabled={!!busy} title="Moved to the portal, but left off the launch email" onClick={() => void move(true)}>{busy === "quiet" ? "Moving…" : `Move ${toMove.length}, don't notify`}</button>}
+          <button type="button" className="btn primary" disabled={!toMove.length || !!busy} onClick={() => void move()}>{busy === "move" ? "Moving…" : toMove.length ? `Move ${toMove.length} to the portal` : "All ticked are moved"}</button>
         </div>
       )}
       {note && <div className="ok-note">{note}</div>}
@@ -118,7 +127,9 @@ export default function MoveList() {
                   {TERMS.map((t) => <button key={t} type="button" className={"chip" + (r.terms === t ? " on" : "")} disabled={busy === r.id} onClick={() => r.terms !== t && void terms([r.id], t)}>{SHORT[t]}</button>)}
                 </div></td>
                 <td className="nowrap">{r.movedAt ? <span className="mvl-in">In since {day(r.movedAt)}</span> : <span className="faint">Not yet</span>}</td>
-                <td className="nowrap">{r.launchSent ? `Sent ${day(r.launchSent)}` : !r.email ? <span className="faint">No email</span> : r.movedAt ? "Not sent" : <span className="faint">—</span>}</td>
+                <td className="nowrap">{r.launchSent ? `Sent ${day(r.launchSent)}` : !r.email ? <span className="faint">No email</span> : !r.movedAt ? <span className="faint">—</span>
+                  : r.quiet ? <button type="button" className="linkbtn mvl-quiet" disabled={busy === r.id} title="Put them back on the launch email" onClick={() => void quiet(r, false)}>Not notifying</button>
+                  : <button type="button" className="linkbtn" disabled={busy === r.id} title="Leave them off the launch email" onClick={() => void quiet(r, true)}>Will get it</button>}</td>
               </tr>
             ))}</tbody>
           </table>

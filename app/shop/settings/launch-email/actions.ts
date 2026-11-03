@@ -26,16 +26,16 @@ export async function sendLaunchTest(company = "", toAddr = ""): Promise<{ ok: b
   return r.ok ? { ok: true, to } : { ok: false, error: `Not sent from ${r.from}. ${r.why || ""}`.trim() };
 }
 
-export type LaunchRecipient = { id: string; company: string; name: string; email: string; moved: boolean; sentAt: string | null };
+export type LaunchRecipient = { id: string; company: string; name: string; email: string; moved: boolean; sentAt: string | null; /** moved without the launch email (Customers → Move to the portal) */ quiet: boolean };
 
 /** Customers it can go to: an email on file, not a test account; with when they last got it */
 export async function listLaunchRecipients(): Promise<{ ok: boolean; rows?: LaunchRecipient[]; from?: string; error?: string }> {
   const v = await getViewer();
   if (!v.user || v.role !== "owner") return { ok: false, error: "Only the owner can see this." };
   const admin = createAdminClient();
-  const rows: { id: string; company: string | null; name: string | null; email: string | null; is_test: boolean | null; moved_at: string | null }[] = [];
+  const rows: { id: string; company: string | null; name: string | null; email: string | null; is_test: boolean | null; moved_at: string | null; launch_quiet: boolean | null }[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await admin.from("customers").select("id, company, name, email, is_test, moved_at").order("company").range(from, from + 999);
+    const { data, error } = await admin.from("customers").select("id, company, name, email, is_test, moved_at, launch_quiet").order("company").range(from, from + 999);
     if (error) return { ok: false, error: error.message };
     rows.push(...((data || []) as typeof rows));
     if (!data || data.length < 1000) break;
@@ -46,7 +46,7 @@ export async function listLaunchRecipients(): Promise<{ ok: boolean; rows?: Laun
   const ok = (e: string) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e);
   return {
     ok: true, from: await siteFrom(),
-    rows: rows.filter((r) => !r.is_test && ok(String(r.email || "").trim())).map((r) => ({ id: r.id, company: String(r.company || "").trim(), name: String(r.name || "").trim(), email: String(r.email).trim().toLowerCase(), moved: !!r.moved_at, sentAt: last.get(r.id) || null })),
+    rows: rows.filter((r) => !r.is_test && ok(String(r.email || "").trim())).map((r) => ({ id: r.id, company: String(r.company || "").trim(), name: String(r.name || "").trim(), email: String(r.email).trim().toLowerCase(), moved: !!r.moved_at, sentAt: last.get(r.id) || null, quiet: !!r.launch_quiet })),
   };
 }
 

@@ -7,7 +7,7 @@ import { listLaunchRecipients, sendLaunchBatch, type LaunchRecipient } from "./a
  * one more click to confirm, then it goes a few at a time with a running count. Each customer gets it once unless you
  * pick them again from Sent.
  */
-type Show = "todo" | "sent" | "all";
+type Show = "todo" | "sent" | "quiet" | "all";
 export default function LaunchSend() {
   const [rows, setRows] = useState<LaunchRecipient[] | null>(null);
   const [from, setFrom] = useState(""), [err, setErr] = useState("");
@@ -16,8 +16,8 @@ export default function LaunchSend() {
   const [confirm, setConfirm] = useState(false), [prog, setProg] = useState<{ done: number; of: number; sent: number; failed: { email: string; why: string }[] } | null>(null);
   const load = async () => { const r = await listLaunchRecipients(); if (r.ok) { setRows(r.rows || []); setFrom(r.from || ""); } else setErr(r.error || "Couldn't load customers."); };
   useEffect(() => { void load(); }, []);
-  const list = useMemo(() => (rows || []).filter((r) => (show === "todo" ? !r.sentAt : show === "sent" ? !!r.sentAt : true) && (!onlyMoved || r.moved) && (!q.trim() || `${r.company} ${r.name} ${r.email}`.toLowerCase().includes(q.trim().toLowerCase()))), [rows, show, q, onlyMoved]);
-  const n = (k: Show) => (rows || []).filter((r) => (k === "todo" ? !r.sentAt : k === "sent" ? !!r.sentAt : true)).length;
+  const list = useMemo(() => (rows || []).filter((r) => (show === "todo" ? !r.sentAt && !r.quiet : show === "sent" ? !!r.sentAt : show === "quiet" ? !r.sentAt && r.quiet : true) && (!onlyMoved || r.moved) && (!q.trim() || `${r.company} ${r.name} ${r.email}`.toLowerCase().includes(q.trim().toLowerCase()))), [rows, show, q, onlyMoved]);
+  const n = (k: Show) => (rows || []).filter((r) => (k === "todo" ? !r.sentAt && !r.quiet : k === "sent" ? !!r.sentAt : k === "quiet" ? !r.sentAt && r.quiet : true)).length;
   const allOn = list.length > 0 && list.every((r) => picked.has(r.id));
   const toggle = (id: string) => setPicked((s) => { const x = new Set(s); if (x.has(id)) x.delete(id); else x.add(id); return x; });
   const go = async () => {
@@ -39,7 +39,7 @@ export default function LaunchSend() {
       <div className="panel-b stack">
         {!/portal@/i.test(from) && <div className="gang-warn">It sends from <b data-notranslate>{from || "nothing yet"}</b>. Set the site&apos;s address (portal@fbsprint.com) in Settings → Connections → Site email first if you want it from there.</div>}
         <div className="toolbar" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <div className="chips">{(["todo", "sent", "all"] as Show[]).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "todo" ? "Not sent yet" : k === "sent" ? "Sent" : "All"} <span className="pill-n">{n(k)}</span></button>)}</div>
+          <div className="chips">{(["todo", "sent", "quiet", "all"] as Show[]).map((k) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{k === "todo" ? "Not sent yet" : k === "sent" ? "Sent" : k === "quiet" ? "Not notifying" : "All"} <span className="pill-n">{n(k)}</span></button>)}</div>
           <input type="search" placeholder="Search customers" value={q} onChange={(e) => setQ(e.target.value)} style={{ height: 36, border: "1px solid var(--line)", borderRadius: 6, padding: "0 10px", minWidth: 200 }} />
           <label className="check" style={{ fontSize: 13 }}><input type="checkbox" checked={onlyMoved} onChange={(e) => setOnlyMoved(e.target.checked)} /> Only customers moved to the new system</label>
         </div>
