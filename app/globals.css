@@ -19674,3 +19674,8 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jrl-ring{stroke-width:3.5}
 .jrl-mc-ban>.jrl-sig i{width:30px;height:30px}
 .jrl-mc-ban>.jrl-sig i img{width:22px;height:22px}
+/* the logo's ring: one circle fading through our colors, turning (Nov 2, Nick: "a conjoined rotating circle that just fades,
+   like the rainbow"); just the letters inside, no color bars */
+span.jrl-ring{position:absolute;inset:2px;border-radius:50%;background:conic-gradient(#0E9BD8,#F26660,#FCB122,#0E9BD8);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3.5px));animation:jrl-turn2 6s linear infinite;z-index:1}
+.jrl-mc-ban>.jrl-sig i{width:36px;height:36px}
+.jrl-mc-ban>.jrl-sig i img{width:24px;height:24px}
