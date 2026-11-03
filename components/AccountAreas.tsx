@@ -1102,7 +1102,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
     </>;
   } else if (area === "receive") {
     body = <>
-      {tableHead(<><h2>{mode === "shop" ? "Waiting to receive" : "Garments to send us"}</h2><span className="aa-sum">{mode === "shop" ? "Customer-supplied garments we need before these jobs can print" : "These orders print on garments you supply"}</span></>, "Search orders")}
+      {tableHead(<><h2 className="aa-areat">{mode === "shop" ? "Waiting to receive" : "Garments to send us"}</h2><span className="aa-sum">{mode === "shop" ? "Customer-supplied garments we need before these jobs can print" : "These orders print on garments you supply"}</span></>, "Search orders")}
       {orderTable(receive, "work")}</>;
   } else if (area === "details") body = details;
   else if (area === "projects" && projectsPanel) body = <>
