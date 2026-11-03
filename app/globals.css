@@ -20077,3 +20077,10 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .psm > .psm-need,.psm > .psm-msg,.psm > .psm-more{grid-column:1 / -1}
   .psm > .psm-card:not(.psm-need):not(.psm-msg):only-of-type{grid-column:1 / -1}
 }
+/* Simple / Full at the foot of the portal (components/PortalViewSwitch.tsx) */
+.pvs{display:flex;align-items:center;justify-content:center;gap:4px;margin:18px auto 4px;font-size:12.5px;color:var(--ink-3)}
+.pvs > span{margin-right:4px}
+.pvs button{all:unset;cursor:pointer;padding:4px 10px;border-radius:999px;color:var(--ink-3);border:1px solid transparent}
+.pvs button.on{color:var(--ink);border-color:var(--line);background:var(--surface);font-weight:700}
+.pvs button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.pvs em{font-style:normal;color:var(--danger);margin-left:6px}

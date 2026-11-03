@@ -8,6 +8,7 @@ import { finishingList, orderGroups, PAY_TERMS, priceList, payDueDate, type Desi
 import { fmtDateLong, money } from "@/lib/format";
 import PortalPricing from "@/components/PortalPricing";
 import PortalSimple from "@/components/PortalSimple";
+import PortalViewSwitch from "@/components/PortalViewSwitch";
 import PortalDash, { type DashNeed, type DashPast, type DashProof, type DashThread } from "@/components/PortalDash";
 import { customerHold, customerStatus } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
@@ -460,6 +461,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             terms={PAY_TERMS[acct?.payment_terms || "receipt"]}
             payCfg={{ ...ctx.settings.pay, staxToken: (process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim(), depositPct: ctx.settings.depositPct, receiptEmail: ctx.preview ? "" : acct?.email || ctx.email }} />
         )}
+        {/* Simple or Full, quietly at the foot of the page (Nov 3, Nick) */}
+        {acct && <PortalViewSwitch view={simple ? "simple" : "advanced"} customerId={acct.id} />}
       </main>
     </>
   );
