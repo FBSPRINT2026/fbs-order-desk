@@ -17,7 +17,10 @@ const OLD_SITE: Step = { t: "Welcome to your new portal", b: "Everything you did
 const PROOF_EMAIL: Step = { t: "New: proofs come by email", b: "When a proof or quote is ready, we email it to you. One button takes you to it to approve or ask for changes.", img: "/tour/proof-email.png" };
 // for customers who sent us orders through ClickUp before (Nov 3, Nick: "all the functionality of ClickUp… right into
 // your portal… submit simple order"): only when the account came to us that way (customer_used_clickup)
-const CLICKUP: Step = { sel: '[data-tour="start"]', t: "Used to send orders in ClickUp?", b: "Everything you did there now happens right here. Click Start an order/quote, then Simple order: give it a name and a date, say what it is, and drop in your PO and art. We build it and send you a confirmation.", img: "/tour/simple-order.png" };
+const CLICKUP: Step[] = [
+  { sel: '[data-tour="start"]', t: "Used to send orders in ClickUp?", b: "Everything you did there now happens right here. Click Start an order/quote, then Simple order / quote.", img: "/tour/simple-order-button.png" },
+  { t: "Fill it in and send it to us", b: "Give it a name and a date, say what it is, and drop in your PO and art. Click Send to FBS: we build it and send you a confirmation.", img: "/tour/simple-order.png" },
+];
 const NEW_THINGS: Step = { t: "A few new things", b: "We're rolling out the rest of the new site soon. For now, here are some new things you can do." };
 const START: Step = { sel: '[data-tour="start"]', t: "Start an order", b: "Send us what you need and we'll confirm it. The Mockup Creator puts your logo on a shirt." };
 const ASK: Step = { sel: '[data-tour="ask"], [data-tour="ask"] > *', t: "Ask FBS AI", b: "Ask it anything: where's my order, what do I owe, reorder the volunteer shirts." };
@@ -61,7 +64,7 @@ const STEPS: Record<"simple" | "advanced", Step[]> = {
 const shown = (el: Element | null): el is HTMLElement => !!el && (el as HTMLElement).getClientRects().length > 0 && (el as HTMLElement).getBoundingClientRect().width > 0;
 
 export default function PortalTour({ view, auto, clickup = false }: { view: "simple" | "advanced"; /** start by itself (first time, or ?tour=1) */ auto: boolean; /** they sent us orders through ClickUp before */ clickup?: boolean }) {
-  const [steps] = useState(() => clickup ? STEPS[view].flatMap((x) => (x === START ? [START, CLICKUP] : [x])) : STEPS[view]);
+  const [steps] = useState(() => clickup ? STEPS[view].flatMap((x) => (x === START ? [START, ...CLICKUP] : [x])) : STEPS[view]);
   const [i, setI] = useState(-1);
   const [box, setBox] = useState<DOMRect | null>(null);
   useEffect(() => { if (auto) { const t = setTimeout(() => setI(0), 600); return () => clearTimeout(t); } }, [auto]);
