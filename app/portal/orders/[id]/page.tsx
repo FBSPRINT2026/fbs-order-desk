@@ -360,8 +360,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
           </div>
 
           <aside className="stack">
-            {/* the order's facts in one place, like the top of the proof */}
-            <section className="panel">
+            {/* the order's facts in one place, like the top of the proof (first thing under the title on a phone) */}
+            <section className="panel pod-det">
               <div className="panel-h"><h2>Order details</h2></div>
               <div className="panel-b pod-kv">
                 <span>{o.type === "quote" ? "Quote" : "Order"}</span><b>#{o.number}</b>

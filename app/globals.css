@@ -19855,22 +19855,26 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 }
 /* an order on a phone (Nov 3, Nick: "The first thing you should see on a mobile order is the job details… you shouldn't
    see the reorder, request cancellation or print and save PDF buttons. Maybe a star by the job name to follow the
-   order… no text"): the title with a plain star beside it, then the job (garments, art, sizes), then where it is and
+   order… no text"): the title with a plain star beside it, then Order details, then the job (garments, art, sizes), then where it is and
    the numbers, then messages, details and payment. Only a button that needs them (Review and approve) stays up top. */
 @media (max-width:640px){
   .portal main.pod{display:flex;flex-direction:column}
   .portal main.pod > .pod-two{display:contents}
   .portal main.pod > .back{order:0}
   .portal main.pod > .page-head{order:1;position:relative}
-  .portal main.pod > :is(.callout,.pod-in-st,.hold-box,.banner){order:2}
+  /* Order details (order #, dates, delivery, contact, garments) right under the title (Nov 3, Nick: "This is what
+     should be at the top of the order view customer portal on their phone") */
+  .portal main.pod > .pod-two > :nth-child(2){display:contents}
+  .portal main.pod > .pod-two > :nth-child(2) > *{order:8;margin:0 0 14px!important}
+  .portal main.pod > .pod-two > :nth-child(2) > .pod-det{order:2}
+  .portal main.pod > :is(.callout,.pod-in-st,.hold-box,.banner){order:3}
   /* the job's own panels (garments, charges, proofs), then where it is, then messages and the rest */
   .portal main.pod > .pod-two > :first-child{display:contents}
-  .portal main.pod > .pod-two > :first-child > *{order:3;margin:0 0 14px!important}
-  .portal main.pod > .pod-railw{order:4;margin:2px 0 14px!important}
-  .portal main.pod > .pod-stats{order:5;margin:0 0 14px!important}
-  .portal main.pod > .pod-two > :first-child > #messages{order:6}
-  .portal main.pod > .pod-two > :nth-child(2){order:7}
-  .portal main.pod > *{order:8}
+  .portal main.pod > .pod-two > :first-child > *{order:4;margin:0 0 14px!important}
+  .portal main.pod > .pod-railw{order:5;margin:2px 0 14px!important}
+  .portal main.pod > .pod-stats{order:6;margin:0 0 14px!important}
+  .portal main.pod > .pod-two > :first-child > #messages{order:7}
+  .portal main.pod > *{order:9}
   .portal .pod .page-head h1{padding-right:46px}
   .portal .pod .page-head .pod-acts > :not(.ostar-w):not(.btn.primary){display:none!important}
   .portal .pod .page-head .pod-acts:not(:has(> .btn.primary)){height:0;min-height:0;margin:0!important;padding:0;gap:0}
