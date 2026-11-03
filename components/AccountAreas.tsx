@@ -337,15 +337,17 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
         </table>
         {/* on a phone the table becomes these cards (Oct 24, Nick: "Orders screen is still cumbersome"): the job's name
             and star, one line of number · pieces · in-hands, then its status and the one amount that matters */}
-        {mode === "portal" && <ul className="aa-ocards">
+        {/* the same cards on the shop's customer page (Nov 3, Nick: "I don't like how the order list looks on the shop site on
+            the phone"): one list, both sides */}
+        <ul className="aa-ocards">
           {rows.map((o) => {
             const owes = !o.archived && o.balance > 0.004 && !(all && o.type !== "invoice") && cols !== "quote";
             const dt = cols === "quote" ? when(o.created_at) : when(o.due_date);
             return (
-              <li key={o.id} className="rl aa-oc">
-                <RowLink href={orderHref(o.id)} label={`Open ${o.nickname || `#${o.number}`}`} />
+              <li key={o.id} className="rl aa-oc" onClick={mode === "shop" && isSentRequest(o) ? () => setRqAsk(o) : undefined}>
+                <RowLink href={orderHref(o.id)} off={mode === "shop" && isSentRequest(o)} label={`Open ${o.nickname || `#${o.number}`}`} />
                 <div className="aa-oc-top">
-                  <Link href={orderHref(o.id)} className="aa-oc-n" onClick={(e) => e.stopPropagation()}>{o.nickname || (o.type === "invoice" ? "Order" : "Quote")}</Link>
+                  <Link href={orderHref(o.id)} className="aa-oc-n" onClick={(e) => { e.stopPropagation(); if (mode === "shop" && isSentRequest(o)) { e.preventDefault(); setRqAsk(o); } }}>{o.nickname || (o.type === "invoice" ? "Order" : "Quote")}</Link>
                   {o.archived ? <PrintavoMark /> : mode === "portal" && <span onClick={(e) => e.stopPropagation()}><StarOrder id={o.id} on={!!o.starred} canAct={canAct} /></span>}
                 </div>
                 <div className="aa-oc-sub">#{o.number}{o.qty ? ` · ${o.qty.toLocaleString("en-US")} pcs` : ""}{dt ? ` · ${cols === "quote" ? "Created" : "In hands"} ${dt}` : ""}</div>
@@ -358,7 +360,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
             );
           })}
           {!rows.length && <li className="aa-empty">{list.length ? `No matches for “${q}”.` : "Nothing here yet."}</li>}
-        </ul>}
+        </ul>
       </div>
     );
   };

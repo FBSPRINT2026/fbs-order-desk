@@ -14464,15 +14464,15 @@ html body .ord .line-b .gl-list .gl.ver{padding-left:16px}
 .aa-ocards,.aa-osel{display:none}
 @media (max-width:640px){
   /* Orders: one row, a dropdown for the five views and the search beside it */
-  .portal .aa-otabs:has(> .aa-osel){flex-wrap:nowrap;gap:8px;align-items:stretch}
-  .portal .aa-otabs:has(> .aa-osel) > .chips,.portal .aa-otabs:has(> .aa-osel) > .spacer{display:none!important}
-  .portal .aa-otabs > .aa-osel{display:block;flex:0 0 auto;width:auto;max-width:46%;height:40px;padding:0 30px 0 12px;font:inherit;font-size:14px;font-weight:700;color:var(--ink);background-color:var(--surface);border:1px solid var(--line);border-radius:10px}
-  .portal .aa-otabs:has(> .aa-osel) > .aa-search{flex:1 1 0!important;width:auto!important;min-width:0;height:40px}
-  .portal .aa-otabs:has(> .aa-osel) > .aa-search input{padding:0;height:100%}
-  /* Orders: cards instead of the table */
-  .portal .aa-tblcard:has(> .aa-ocards) > table{display:none}
-  .portal .aa-tblcard:has(> .aa-ocards){overflow:hidden}
-  .portal .aa-ocards{display:block;list-style:none;margin:0;padding:0}
+  .aa .aa-otabs:has(> .aa-osel){flex-wrap:nowrap;gap:8px;align-items:stretch}
+  .aa .aa-otabs:has(> .aa-osel) > .chips,.aa .aa-otabs:has(> .aa-osel) > .spacer{display:none!important}
+  .aa .aa-otabs > .aa-osel{display:block;flex:0 0 auto;width:auto;max-width:46%;height:40px;padding:0 30px 0 12px;font:inherit;font-size:14px;font-weight:700;color:var(--ink);background-color:var(--surface);border:1px solid var(--line);border-radius:10px}
+  .aa .aa-otabs:has(> .aa-osel) > .aa-search{flex:1 1 0!important;width:auto!important;min-width:0;height:40px}
+  .aa .aa-otabs:has(> .aa-osel) > .aa-search input{padding:0;height:100%}
+  /* Orders: cards instead of the table (the portal and the shop's customer page, Nov 3) */
+  .aa .aa-tblcard:has(> .aa-ocards) > table{display:none}
+  .aa .aa-tblcard:has(> .aa-ocards){overflow:hidden}
+  .aa .aa-ocards{display:block;list-style:none;margin:0;padding:0}
   .aa-oc{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-top:1px solid var(--line);cursor:pointer}
   .aa-oc:first-child{border-top:0}
   .aa-oc-top{display:flex;align-items:center;gap:8px;min-height:28px}
@@ -19759,8 +19759,8 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   /* their order type switch beside the list's dropdown, one line (Nov 2, Nick: Nine18 / Cedar on a phone) */
   /* only the Orders bar with its dropdown: the dashboard's job switches wrap as before (Nov 3: "In progress / Ready /
      Completed" had been squeezed into a column beside "On hold / All") */
-  .portal .aa-otabs:has(> .aa-osel){flex-wrap:nowrap}
-  .portal .aa-otabs .aa-osel{flex:1 1 auto;min-width:0}
+  .aa .aa-otabs:has(> .aa-osel){flex-wrap:nowrap}
+  .aa .aa-otabs .aa-osel{flex:1 1 auto;min-width:0}
   .aa-lane{flex:0 1 auto;min-width:0}
   .aa-lane>span{display:none}
   .aa-lane-seg{min-width:0}
