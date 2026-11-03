@@ -19458,3 +19458,24 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pod-att-c{display:flex;flex-direction:column;padding:8px 10px;border-top:1px solid var(--line-2);min-width:0}
 .pod-att-c b{font-size:13px;font-weight:600;overflow-wrap:anywhere}
 .pod-att-c small{font-size:12px;color:var(--ink-3)}
+/* the Message Center banner in our colors like a hologram, shifting slowly, with a sheen passing over; the rings are water
+   ripples, soft white, spreading across it (Nov 2, Nick: "a rainbow iridescent effect… more like a ripple of water") */
+.jcx>.jrl-mc,.jcx>.jrl-mc .jrl-mc-ban{background:transparent}
+.jcx>.jrl-mc .jrl-mc-ban{background:linear-gradient(115deg,#0E9BD8 0%,#7A5AF8 22%,#F26660 44%,#FCB122 62%,#1F9D6B 80%,#0E9BD8 100%);background-size:300% 300%;animation:jrl-iri 18s ease-in-out infinite alternate;isolation:isolate}
+.jcx>.jrl-mc .jrl-mc-ban::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 140% at 20% 0%,rgba(255,255,255,.35),transparent 55%),linear-gradient(180deg,rgba(20,29,43,.05),rgba(20,29,43,.35));z-index:0;pointer-events:none}
+.jcx>.jrl-mc .jrl-mc-ban::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-50%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.28),transparent);animation:jrl-sheen 9s ease-in-out infinite;z-index:0;pointer-events:none}
+@keyframes jrl-iri{0%{background-position:0% 50%}100%{background-position:100% 50%}}
+@keyframes jrl-sheen{0%,70%{left:-50%}100%{left:120%}}
+.jrl-mc-t{text-shadow:0 1px 8px rgba(20,29,43,.45)}
+.jrl-sig::before{opacity:0}
+.jrl-sig i{background:rgba(20,29,43,.55);box-shadow:0 0 0 2px rgba(255,255,255,.75),0 4px 14px rgba(20,29,43,.3);backdrop-filter:blur(4px)}
+.jrl-sig b{border:1.5px solid rgba(255,255,255,.8);box-shadow:0 0 10px rgba(255,255,255,.35),inset 0 0 10px rgba(255,255,255,.25);animation:jrl-water 15s cubic-bezier(.2,.65,.3,1) infinite}
+.jrl-sig b:nth-child(2){border-color:rgba(255,255,255,.8);animation-delay:.55s}
+.jrl-sig b:nth-child(3){border-color:rgba(255,255,255,.8);animation-delay:1.1s}
+.jrl-sig.live b{animation-duration:6s}
+.jrl-sig.live b:nth-child(2){animation-delay:.55s}
+.jrl-sig.live b:nth-child(3){animation-delay:1.1s}
+@keyframes jrl-water{0%{transform:scale(1);opacity:0;border-width:3px}3%{opacity:.95}22%{transform:scale(8);opacity:0;border-width:.5px}100%{transform:scale(8);opacity:0}}
+.jrl-sig.live::after{opacity:0;animation:none}
+@media (prefers-reduced-motion:reduce){.jcx>.jrl-mc .jrl-mc-ban,.jcx>.jrl-mc .jrl-mc-ban::after,.jrl-sig b{animation:none}}
+.jcx>.jrl-mc .jrl-sig{z-index:1}
