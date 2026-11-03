@@ -119,12 +119,12 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
     action = { label: "Track package", href: s.url, tone: "go", sub: `${s.carrier ? s.carrier + " " : ""}${s.tracking}`, external: true };
   } else if (quote) {
     stage = "need"; nowK = "Waiting on you:"; nowT = "your quote is ready to approve";
-    action = { label: "Review quote", href: x.href, tone: "need", sub: inHands ? `In hands ${inHands}` : "" };
+    action = { label: "Review and approve", href: x.pendingProof || x.href, tone: "need", sub: inHands ? `In hands ${inHands}` : "" };
   } else if (asked) {
     nowK = "We're on it:"; nowT = "putting your quote together"; action = view;
   } else if (x.pendingProof && at <= 1) {
     stage = "need"; nowK = "Waiting on you:"; nowT = "your proof is ready to look over";
-    action = { label: "Approve proof", href: x.pendingProof, tone: "need", sub: inHands ? `In hands ${inHands}` : "" };
+    action = { label: "Review and approve", href: x.pendingProof, tone: "need", sub: inHands ? `In hands ${inHands}` : "" };
   } else if (at === 1) {
     nowK = "Artwork:"; nowT = "we're getting your proof ready"; action = view;
   } else if (at === 2 && x.customerGoods && (x.goods === "waiting" || x.goods === "issue" || !x.goods)) {
@@ -132,9 +132,9 @@ export function jobFor(o: Order, x: JobExtra): PortalJob {
     action = { label: x.goods === "issue" ? "See the garment issue" : "Add tracking for your garments", href: x.goodsHref || x.href, tone: "need", sub: x.goods === "issue" ? "" : "Tell us what's coming and when" };
   } else if (at === 2) {
     nowK = "Garments:"; nowT = x.customerGoods ? (x.goods === "partial" ? "some of your garments are here" : "your garments are on the way to us") : "on the way to us";
-    action = x.customerGoods ? { label: "See your garments", href: x.goodsHref || x.href, tone: "" } : view;
+    action = view;
   } else if (at === 3) {
-    nowK = "In production"; nowT = inHands ? `on schedule for ${inHands}` : ""; action = { label: "View approved art", href: x.href, tone: "" };
+    nowK = "In production"; nowT = inHands ? `on schedule for ${inHands}` : ""; action = view;
   } else if (at === 4) {
     if (o.delivery_method === "pickup") {
       // no pickup info or address (Nov 2, Nick: "people are gonna know where we're at")

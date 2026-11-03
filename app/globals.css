@@ -2388,7 +2388,7 @@ a.as-ai{text-decoration:none}
 .p-brand-t{white-space:nowrap}
 
 /* page titles: the small label moves under the title (below the color bar) as a quiet subtitle */
-.page-head > div:first-child{display:flex;flex-direction:column;align-items:flex-start}
+.page-head > div:first-child{display:flex;flex-direction:column;align-items:flex-start;flex:1 1 280px;min-width:min(100%,280px)}
 .page-head > div:first-child > .eyebrow{order:2;margin-top:8px;font-family:inherit;font-size:13px;letter-spacing:0;text-transform:none;color:var(--ink-3)}
 /* portal tabs: the chosen tab in a solid logo color (blue, salmon, orange in turn) */
 .portal .aa-tab.on{box-shadow:none}
@@ -18992,3 +18992,9 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pod-eb .pod-wait{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--fbs-violet);white-space:nowrap}
 .pod-eb .pod-wait::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--fbs-violet)}
 .pfl-top a.pfl-back{color:var(--accent);font-weight:600;margin-right:16px}
+/* phones: the dashboard skips what's empty (Nov 2, Nick: "orders sent to FBS, on hold and proofs waiting… can just hide if
+   they're not needed… go right into the orders"); Orders I'm following and Payments always show */
+@media (max-width:900px){.pdx-card.pdx-empty{display:none}}
+/* (Nov 2, Nick's phone: an order's name broke one letter per line beside its buttons) a page's title keeps its room: when
+   the buttons don't fit beside it they go on the line under it (the min-width above); a long name wraps between words */
+.page-head > div:first-child > h1{overflow-wrap:normal;word-break:normal;hyphens:manual}

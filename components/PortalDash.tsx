@@ -92,7 +92,7 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
           </div>}
         </section>
         {/* Orders sent to FBS, under tracking (Oct 24, Nick: "move the orders sent to FBS up underneath the order tracking") */}
-      <section className="pdx-card pdx-sent">
+      <section className={"pdx-card pdx-sent" + (sent.length ? "" : " pdx-empty")}>
         <div className="pdx-h"><h2>Orders sent to FBS</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
         {!sent.length && (
           <div className="pdx-caught">
@@ -107,7 +107,7 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
 
         {/* on hold: a short list and why, one line each (Nov 2, Nick: "just be like a list and like a quick thing of why
             they're on hold… zero orders on hold, everything's good to go… when you click it… an on hold section" in Your jobs) */}
-        <section className={"pdx-card pdx-hs" + (held.length ? " has" : "")}>
+        <section className={"pdx-card pdx-hs" + (held.length ? " has" : " pdx-empty")}>
           <div className="pdx-h"><h2>On hold</h2>{held.length > 0 && <span className="pdx-hold-n">{held.length}</span>}</div>
           {held.length ? <>
             {/* one line per held job (Nov 2, Nick: "the job numbers… large… the main line… no art problem or no issues… just
@@ -143,7 +143,7 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
         </section>
         {/* proofs waiting for their OK, where On hold was, filling the column (Nov 2, Nick: "where orders on hold are on the
             right, let's put that as proofs… the same height as everything on the left") */}
-        <section className={"pdx-card pdx-pf" + (proofs.length ? " has" : "")}>
+        <section className={"pdx-card pdx-pf" + (proofs.length ? " has" : " pdx-empty")}>
           <div className="pdx-h"><h2>Proofs waiting for approval</h2>{proofs.length > 0 && <span className="pdx-pf-n">{proofs.length}</span>}</div>
           {/* each with its art (Nov 2, Nick: "make this look a little better… a little artwork thumbnail"); the button opens
               the same review page our email does: the proof, then the quote (app/portal/orders/[id]/approve) */}
