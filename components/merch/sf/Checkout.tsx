@@ -1,4 +1,5 @@
 "use client";
+import { staxReason } from "@/lib/staxReason";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { checkout } from "@/app/s/actions";
 import type { PublicStore } from "@/lib/merchServer";
@@ -102,7 +103,7 @@ export default function Checkout({ store, bag, preview, staxToken, onEditBag, on
       if (!r.ok) throw new Error(r.error);
       onDone(r.token);
     } catch (e) {
-      setErr(e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "Check your payment details and try again.");
+      console.error("[checkout] Stax:", e); setErr(staxReason(e) || "Check your payment details and try again.");
       setBusy(false);
     }
   }

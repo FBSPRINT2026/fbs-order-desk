@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { staxReason } from "@/lib/staxReason";
 import { money } from "@/lib/format";
 import { mySavedMethods, payOrders, sentPaymentNotice, type SavedPM } from "@/app/portal/pay-actions";
 
@@ -133,8 +134,10 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
       if (!r.ok) setMsg({ ok: false, text: r.error || "The payment didn't go through." });
       else { setSentTo(r.receiptTo || ""); setMsg({ ok: true, text: `Payment of ${money(r.paid)} received. Thank you!` }); router.refresh(); }
     } catch (e) {
-      const m = e && typeof e === "object" && "message" in e ? String((e as { message: unknown }).message) : "Check your payment details and try again.";
-      setMsg({ ok: false, text: m });
+      // Stax's own reason, wherever it put it (Nov 3: a card was turned down with only "Check your payment details"):
+      // its message, or the field errors it sends back ({ card_number: ["…"] }, { errors: […] })
+      console.error("[pay] Stax tokenize:", e);
+      setMsg({ ok: false, text: staxReason(e) || "Check your payment details and try again." });
     }
     setBusy(false); busyRef.current = false;
   }
@@ -332,3 +335,4 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
 function portalTo(node: ReactNode) {
   return typeof document === "undefined" ? null : createPortal(node, document.body);
 }
+
