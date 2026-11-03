@@ -29,7 +29,9 @@ export async function sendEmailWhy(opts: { to: string; subject: string; html: st
     } catch (e) {
       const why = e instanceof Error ? e.message : String(e);
       console.error(`[email] portal mailbox ${box.email} failed: ${why}`);
-      return { ok: false, service: "the portal mailbox", from: box.email, why };
+      // the mailbox wouldn't send (Nov 3: SMTP not allowed on it yet): the email service in Vercel sends it instead, so a
+      // proof or a receipt still goes out
+      if (!process.env.BREVO_API_KEY && !process.env.RESEND_API_KEY) return { ok: false, service: "the portal mailbox", from: box.email, why };
     }
   }
   const service = process.env.BREVO_API_KEY ? "Brevo" : process.env.RESEND_API_KEY ? "Resend" : "";
