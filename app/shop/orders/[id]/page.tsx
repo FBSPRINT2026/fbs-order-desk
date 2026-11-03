@@ -1538,7 +1538,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           })()}
           {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
           : <select className={"status-select" + (holdOf((o as { flags?: unknown }).flags) ? " ohs-held" : "")} style={{ ["--sc" as string]: holdOf((o as { flags?: unknown }).flags) ? "var(--warn)" : st.c }} aria-label="Status" value={holdOf((o as { flags?: unknown }).flags) ? "hold" : statusKey(o)} onChange={(e) => void statusPicked(e.target.value)}>
-            <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>
+            {/* a hold is for an order (Nov 3, Nick: "once it goes to invoice, it should say on hold"); a quote isn't held */}
+            {(o.type === "invoice" || !!holdOf((o as { flags?: unknown }).flags)) && <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>}
             <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote"), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}

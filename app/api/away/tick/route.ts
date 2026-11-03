@@ -13,7 +13,7 @@ export const maxDuration = 60;
 
 /**
  * Away mode + the Job watcher, every 5 minutes (away_tick, migration 133, with the sync token):
- *  0. Payment holds: approved pre-pay / deposit jobs not paid after 10 minutes go On hold · Payment (lib/holdServer.ts).
+ *  0. Payment holds: pre-pay / deposit jobs waiting only on the money for 10 minutes go On hold · Payment (lib/holdServer.ts).
  *  1. Away mode: new email in an away person's Inbox is read for "does something have to happen today?" (lib/away).
  *  2. Needs you today (every 30 minutes): job steps due today or late (lib/jobWatch) and orders still in email whose
  *     goods have to be ordered today (lib/emailDeadlines), for the dashboard and as alerts. No to-dos.
