@@ -19149,3 +19149,13 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .pfl-top > a.pfl-back{margin-right:auto}
 }
 .pdx-pfl-n b.onum{color:var(--ink)}
+/* proofs waiting (Nov 2, Nick: "this doesn't look good"): the art bigger on the left, the job and the button stacked beside it */
+.pdx-pfl{padding:4px 18px 10px}
+.pdx-pfl li{display:grid;grid-template-columns:104px minmax(0,1fr);gap:16px;align-items:center;padding:14px 0}
+.pdx-pfl-pic{width:104px;height:104px;border-radius:10px}
+.pdx-pfl-t{gap:3px}
+.pdx-pfl-n b{font-size:20px;font-weight:700;color:var(--ink)!important;line-height:1.1}
+.pdx-pfl-n span{font-size:14px;font-weight:600;color:var(--ink);white-space:normal}
+.pdx-pfl-t small{font-size:12.5px}
+.pdx-pfl-t .pdx-pfl-go{align-self:flex-start;margin-top:8px;height:34px;padding:0 16px}
+@media (max-width:420px){.pdx-pfl li{grid-template-columns:84px minmax(0,1fr);gap:12px}.pdx-pfl-pic{width:84px;height:84px}.pdx-pfl li .pdx-hl-do{margin-left:0}}

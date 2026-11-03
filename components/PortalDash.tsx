@@ -151,10 +151,10 @@ export default function PortalDash({ proofs = [], held = [], tracked = [], sent 
             <li key={x.id}>
               <Link className="pdx-pfl-pic" href={x.href} aria-label={`Review #${x.number}`}>{x.pic ? <img src={x.pic} alt="" loading="lazy" /> : <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden><path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3a4 4 0 0 1-8 0z" /></svg>}</Link>
               <span className="pdx-pfl-t">
-                <Link href={x.orderHref} className="pdx-pfl-n"><b className="onum">#{x.number}</b>{x.name && <span>{x.name}</span>}</Link>
+                <Link href={x.orderHref} className="pdx-pfl-n"><b>#{x.number}</b>{x.name && <span>{x.name}</span>}</Link>
                 <small>{x.what || "Proof"} ready{x.n > 1 ? ` · ${x.n} proofs` : ""}</small>
+                <Link className="pdx-hl-do pdx-pfl-go" href={x.href}>Review and approve</Link>
               </span>
-              <Link className="pdx-hl-do" href={x.href}>Review and approve</Link>
             </li>))}</ul> : <div className="pdx-hold-ok" role="status">
             <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden><circle cx="28" cy="28" r="26" fill="color-mix(in srgb, var(--ok) 12%, transparent)" /><circle cx="28" cy="28" r="18" fill="var(--ok)" /><path d="m20 28.5 5.5 5.5L37 22.5" fill="none" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <b>No proofs waiting</b>
