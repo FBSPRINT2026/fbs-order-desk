@@ -8980,7 +8980,7 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 
 /* portal Payments on a phone: the AI payment helper (and pay box) comes before the payment history (Oct 15, Nick) */
 @media (max-width:900px){
-  .aa-home.aa-paylay{display:flex!important;flex-direction:column;gap:14px}
+  .aa-home.aa-paylay{display:flex!important;flex-direction:column;gap:14px;align-items:stretch}
   .aa-paylay > .aa-home-main{display:contents}
   .aa-paylay > .aa-payside{order:2}
   .aa-paylay .aa-ph-card{order:3}
@@ -19802,3 +19802,17 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .portal .dla .so-otype{min-width:0;width:100%}
   .portal .dla .so-otype .so-seg{display:grid}
 }
+
+/* a tablet (Nov 2, Nick: "some of the panels aren't filling the screen… all the panels should fill to the right"):
+   Payments stacks into one column there and every panel now runs the full width (the grid's align-items:start had
+   shrunk them to their contents); an empty project list's note spans the whole row instead of one card's slot */
+.pj-cards > .gb-empty{grid-column:1 / -1}
+/* the portal's area tabs when their names don't fit on one line (a tablet, a narrow window): the same 3 × 3 grid with
+   names as on a phone, never a row of bare icons (Nov 2, Nick: "on the phone… a menu with all the descriptions, but
+   we're in a much bigger screen and we go to the menu without description") */
+.portal .aa-nav.tb-icons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;padding:5px;flex-wrap:nowrap}
+.portal .aa-nav.tb-icons > .aa-tab{flex-direction:row;justify-content:flex-start;gap:7px;padding:9px 10px!important;font-size:12.5px;letter-spacing:0;min-width:0}
+.portal .aa-nav.tb-icons > .aa-tab > span:not(.aa-n){display:inline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.portal .aa-nav.tb-icons > .aa-tab > .aa-n{position:static;margin-left:auto}
+.portal .aa-nav.tb-icons > .aa-tab svg{width:17px;height:17px;flex:0 0 auto}
+.portal .aa-nav.tb-icons > .aa-tab-end{margin-left:0!important;justify-content:flex-start!important}
