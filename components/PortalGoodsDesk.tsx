@@ -199,7 +199,7 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
           </div>
         </div>
       )}
-      {ask && <AskGoods item={ask.it} short={ask.short} eta={ask.eta} canAct={canAct} messagesHref={`/portal${qs ? qs + "&" : "?"}area=messages&c=${ask.it.order.id}:goods`} onClose={() => setAsk(null)} />}
+      {ask && <AskGoods item={ask.it} done={ask.done} short={ask.short} eta={ask.eta} canAct={canAct} messagesHref={`/portal${qs ? qs + "&" : "?"}area=messages&c=${ask.it.order.id}:goods`} onClose={() => setAsk(null)} />}
       {tell && <SendGoodsDialog orders={rows.filter((r) => !r.done).map((r) => ({ id: r.it.order.id, label: `#${r.it.order.number} ${r.it.order.nickname}` }))} canAct={canAct}
         send={sendGoods} onClose={() => setTell(false)} onDone={() => { setTell(false); router.refresh(); }} />}
       {notLinked > 0 && (
@@ -448,9 +448,9 @@ function SendGoodsDialog({ orders, canAct, send, onClose, onDone }: { orders: { 
  * order, the tracking, when it was due), with a few short choices that change the wording. It goes into that order's
  * goods conversation in the Message Center, where the shop answers (Nov 2, Nick).
  */
-function AskGoods({ item, short, eta, canAct, messagesHref, onClose }: { item: GoodsItem; short: number; eta: string | null; canAct: boolean; messagesHref: string; onClose: () => void }) {
+function AskGoods({ item, done, short, eta, canAct, messagesHref, onClose }: { item: GoodsItem; /** checked in at FBS: nothing is out */ done: boolean; short: number; eta: string | null; canAct: boolean; messagesHref: string; onClose: () => void }) {
   const o = item.order;
-  const out = item.shipments.filter((s) => !(s.track_status === "delivered" || s.delivered_at));
+  const out = done ? [] : item.shipments.filter((s) => !(s.track_status === "delivered" || s.delivered_at));
   const facts = shipGroups(out).map((g) => {
     const trk = g.ships.filter((x) => x.tracking).map((x) => `${x.carrier ? x.carrier + " " : ""}${x.tracking}`);
     return `${g.supplier ? `${g.supplier.replace(/ Activewear$/, "")} ${g.order}` : "our shipment"}${trk.length ? `, tracking ${trk.join(", ")}` : ""}`;
@@ -458,7 +458,7 @@ function AskGoods({ item, short, eta, canAct, messagesHref, onClose }: { item: G
   const job = `#${o.number}${o.nickname ? ` (${o.nickname})` : ""}`;
   const due = eta ? `, expected ${when(eta)}` : "";
   const KINDS = [
-    { k: "late", label: "It's late", text: `Hi FBS, we haven't seen ${out.length ? "these" : "our goods"} checked in for ${job} yet${facts ? `: ${facts}${due}` : ""}. Can you take a look?` },
+    ...(out.length ? [{ k: "late", label: "It's late", text: `Hi FBS, we haven't seen ${out.length ? "these" : "our goods"} checked in for ${job} yet${facts ? `: ${facts}${due}` : ""}. Can you take a look?` }] : []),
     ...(short > 0 ? [{ k: "short", label: "Some haven't shipped", text: `Hi FBS, the supplier shows ${pcsOf(short)} for ${job} haven't shipped yet${facts ? ` (${facts})` : ""}. Can you check on them?` }] : []),
     { k: "trk", label: "Here's new tracking", text: `Hi FBS, here's new tracking for ${job}: ` },
     { k: "wrong", label: "Something's wrong", text: `Hi FBS, something's not right with the goods for ${job}: ` },
