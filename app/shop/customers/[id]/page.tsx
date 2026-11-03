@@ -5,6 +5,7 @@ import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { guessHex } from "@/lib/mockup";
 import BackLink from "@/components/BackLink";
+import { useCan } from "@/components/RoleContext";
 import CustomerProductionFiles from "@/components/CustomerProductionFiles";
 import CustomerBrands from "@/components/CustomerBrands";
 import { use, useEffect, useRef, useState } from "react";
@@ -50,6 +51,7 @@ import { fmtPhone } from "@/lib/phone";
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const canEdit = useCan("editCustomers"), canQuote = useCan("quotes");
   const searchParams = useSearchParams();
   const isNew = searchParams.get("new") === "1";
   const { orders, customers, settings, loading, reload: reloadShop } = useShopData({ customerId: id });
@@ -172,6 +174,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
     setState(error ? "Save failed: " + error.message : "Saved");
   }
   function set<K extends keyof Customer>(k: K, v: Customer[K]) {
+    if (!canEdit) return;
     setC((prev) => {
       const n = { ...(prev as Customer), [k]: v };
       latest.current = n;
@@ -240,7 +243,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         <div className="row">
           <button className="btn" type="button" onClick={() => setDetailsOpen(true)}>Details</button>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">Their portal</a>
-          <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>
+          {canQuote && <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>}
         </div>
       </div>
       {c && "moved_at" in (c as object) && !c.is_test && (() => {
@@ -258,7 +261,9 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         <div className="cx-dr-bg" onClick={() => { setDetailsOpen(false); if (searchParams.get("area") === "details") router.replace(`/shop/customers/${id}`, { scroll: false }); }}>
           <aside className="cx-dr" role="dialog" aria-modal="true" aria-label="Customer details" onClick={(e) => e.stopPropagation()}>
             <div className="cx-dr-h"><h2>{c.company || c.name || "New customer"}</h2><span className="faint" style={{ fontSize: 12 }}>{state || "Saves as you type"}</span><span className="spacer" /><button type="button" className="btn sm" onClick={() => { setDetailsOpen(false); if (searchParams.get("area") === "details") router.replace(`/shop/customers/${id}`, { scroll: false }); }}>Done</button></div>
-            <div className="cx-dr-b">
+            {/* seen, not changed, by someone who can't edit customers (Nov 3, Nick) */}
+            {!canEdit && <div className="cx-ro faint">View only: you can see these details but not change them.</div>}
+            <fieldset className="cx-dr-b" disabled={!canEdit}>
         {(c as unknown as { moved_at?: string | null }).moved_at ? <div className="faint cx-moved">In the new system since {new Date(String((c as unknown as { moved_at: string }).moved_at)).toLocaleDateString()}{(c as unknown as { moved_by?: string }).moved_by ? ` (${(c as unknown as { moved_by?: string }).moved_by})` : ""}. New orders are 40,000-series. <button type="button" className="linkbtn" onClick={() => { setDetailsOpen(false); setMoveOpen("edit"); }}>Checklist</button></div> : null}
       <div className="cust-grid">
           <form className="panel" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
@@ -357,7 +362,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             </div>
           </div>}
         </div>
-            </div>
+            </fieldset>
           </aside>
         </div>
       )}

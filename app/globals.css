@@ -20213,3 +20213,6 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 .pr:has(> .pr-main > .pr-dgz-find) > .pr-vis-stamp{bottom:30px}
 .pr-dgz-pf{font-size:12.5px;color:var(--ink-2);margin-top:2px}
 .pr-dgz-pf .linkbtn{margin-left:8px}
+/* a customer's details seen by someone who can't change them (Nov 3) */
+fieldset.cx-dr-b{border:0;margin:0;min-width:0}
+.cx-ro{padding:8px 16px 0;font-size:12.5px}

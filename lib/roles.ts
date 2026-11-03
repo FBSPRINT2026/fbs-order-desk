@@ -23,6 +23,9 @@ export const PERMS = [
   { k: "payments", group: "Money", label: "Can record and remove payments" },
   { k: "quotes", group: "Sales", label: "Can create new quotes" },
   { k: "customers", group: "Sales", label: "Can open Customers" },
+  /* seeing a customer isn't changing one (Nov 3, Nick: "Jose… sees add customer. He shouldn't see add customer or add
+     quote. You shouldn't be able to edit anything like that") */
+  { k: "editCustomers", group: "Sales", label: "Can add customers and change their details (contacts, pricing, terms, addresses)" },
   { k: "incoming", group: "Sales", label: "Can open Incoming Orders" },
   { k: "projects", group: "Sales", label: "Can open Projects" },
   { k: "stores", group: "Sales", label: "Can open Merch Stores (packing included)" },
@@ -51,7 +54,7 @@ export type Perms = Record<PermKey, boolean>;
 export type AccessOverrides = Record<string, Partial<Perms>>;
 
 const ALL = Object.fromEntries(PERMS.map((p) => [p.k, true])) as Perms;
-const CREW: Perms = { ...ALL, masterLogos: false, money: false, payments: false, quotes: false, customers: false, incoming: false, projects: false, assistant: false, settings: false, inkStock: false, pay: false, workbench: false };
+const CREW: Perms = { ...ALL, masterLogos: false, money: false, payments: false, quotes: false, customers: false, editCustomers: false, incoming: false, projects: false, assistant: false, settings: false, inkStock: false, pay: false, workbench: false };
 /** what each role starts with */
 export const roleDefaults = (role?: string | null): Perms => {
   if (!role || role === "owner") return { ...ALL };

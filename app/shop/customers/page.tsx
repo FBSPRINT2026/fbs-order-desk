@@ -1,5 +1,6 @@
 "use client";
 import { newCustomer } from "@/lib/quickNew";
+import { useCan } from "@/components/RoleContext";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -14,6 +15,7 @@ import { useUrlSearch } from "@/lib/useUrlSearch";
 
 export default function CustomersPage() {
   const router = useRouter();
+  const canEdit = useCan("editCustomers");
   const { orders, customers, loading } = useShopData();
   const [q, setQ] = useUrlSearch("q");
   const [busy, setBusy] = useState(false);
@@ -65,8 +67,8 @@ export default function CustomersPage() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">{Object.values(customers).filter((c) => !c.is_test).length} on file</div><h1>Customers</h1></div>
-        <div className="row"><Link className="btn" href="/shop/customers/owners">Account owners</Link><Link className="btn" href="/shop/customers/import">Import from Printavo</Link>
-        <button className="btn primary" type="button" onClick={add} disabled={busy}>+ New customer</button></div>
+        <div className="row"><Link className="btn" href="/shop/customers/owners">Account owners</Link>{canEdit && <><Link className="btn" href="/shop/customers/import">Import from Printavo</Link>
+        <button className="btn primary" type="button" onClick={add} disabled={busy}>+ New customer</button></>}</div>
       </div>
       <div className="toolbar">
         <SearchInput placeholder="Search customers" value={q} onChange={(e) => setQ(e.target.value)} />

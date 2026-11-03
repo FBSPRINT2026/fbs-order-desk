@@ -453,7 +453,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
             the version at the right; a new version shows as its number in blue */}
         <span className="nav-foot">
           {perms.quotes && <button type="button" className="nav-qk q" title="New quote" aria-label="New quote" disabled={!!quick} onClick={() => { setQuick("q"); newQuote((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ Q</button>}
-          {canOpen("/shop/customers", perms) && <button type="button" className="nav-qk c" title="New customer" aria-label="New customer" disabled={!!quick} onClick={() => { setQuick("c"); newCustomer((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ C</button>}
+          {canOpen("/shop/customers", perms) && perms.editCustomers && <button type="button" className="nav-qk c" title="New customer" aria-label="New customer" disabled={!!quick} onClick={() => { setQuick("c"); newCustomer((h) => router.push(h)).catch((e) => alert(e instanceof Error ? e.message : String(e))).finally(() => setQuick("")); }}>+ C</button>}
           <span className="nav-ver-all"><VersionTag /></span>
         </span>
         {/* you: your initials in a circle (Oct 16, Nick: "NM for Nick McCoy… don't put the email") */}
