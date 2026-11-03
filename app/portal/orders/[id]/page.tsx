@@ -44,6 +44,12 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   // a request the customer hasn't sent in yet opens in the order builder
   if (o.status === "request" && !o.submitted_at) redirect(`/portal/request/${id}${as ? `?as=${as}` : ""}`);
   const isReq = o.status === "request";
+  // a simple order: what they sent (Nov 2, Nick: the McKenna job brought in from ClickUp "as if they had filled it out")
+  const so = (o as typeof o & { simple_order?: { about?: string; garments?: string; qty?: number | null; method?: string; files?: { path: string; name: string; kind?: string }[] } | null }).simple_order || null;
+  const soFiles = so?.files?.length ? await (async () => {
+    const { data } = await createAdminClient().storage.from("proofs").createSignedUrls(so.files!.map((f) => f.path), 3600);
+    return so.files!.map((f, i) => ({ ...f, url: data?.[i]?.signedUrl || "" }));
+  })() : [];
   const [p, pr, m] = await Promise.all([
     ctx.db.from("payments").select("*").eq("order_id", id).order("paid_on"),
     ctx.db.from("proofs").select("*").eq("order_id", id).not("version", "is", null).is("archived_at", null).order("created_at", { ascending: false }),
@@ -193,9 +199,25 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
         )}
         <div className="two pod-two">
           <div className="stack" id="items">
+            {isReq && so && (
+              <section className="panel pod-so">
+                <div className="panel-h"><h2>What you sent us</h2><span className="faint">We&apos;ll build your order from this</span></div>
+                <div className="panel-b">
+                  <dl className="pod-so-dl">
+                    {so.method ? <div><dt>Decoration</dt><dd>{({ screen: "Screen printing", embroidery: "Embroidery", transfer: "Transfers", mixed: "Mixed" } as Record<string, string>)[so.method] || so.method}</dd></div> : null}
+                    {so.qty ? <div><dt>Pieces</dt><dd>{so.qty.toLocaleString("en-US")}</dd></div> : null}
+                    {so.garments ? <div><dt>Garments</dt><dd>{so.garments}</dd></div> : null}
+                  </dl>
+                  {so.about ? <p className="pod-so-about">{so.about}</p> : null}
+                  {soFiles.length > 0 && <ul className="pod-so-files">{soFiles.map((f) => <li key={f.path}><span className="pill">{f.kind === "po" ? "PO" : f.kind === "art" ? "Art" : "File"}</span>{f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.name}</a> : <span>{f.name}</span>}</li>)}</ul>}
+                </div>
+              </section>
+            )}
             {/* each job like the proof: its mockups, what's printed where (method, size, inks with their colors), then the
                 garments by size with their prices */}
             {orderGroups(o).map((g, gi) => {
+              // a simple order's blank starting job isn't shown: "What you sent us" says it all until we build it
+              if (isReq && so && !g.lines.some((l) => l.style || Object.values(l.sizes || {}).some((v) => +v > 0))) return null;
               const cg = c.groups[gi];
               const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]);
               const used = SIZES.filter((s) => g.lines.some((l) => +(l.sizes?.[s] || 0) > 0));
