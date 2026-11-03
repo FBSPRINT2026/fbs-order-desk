@@ -1110,7 +1110,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
     {projectsPanel}</>;
   else if (area === "program" && programPanel) body = programPanel;
   else if (area === "pricing" && (pricingPanel || (programPanel && hasProgram))) {
-    const subs: [string, string][] = [...(pricingPanel ? [["list", "Price list"] as [string, string]] : []), ...(programPanel && hasProgram ? [["program", "Your program pricing"] as [string, string]] : [])];
+    const subs: [string, string][] = [...(programPanel && hasProgram ? [["program", "Your program pricing"] as [string, string]] : []), ...(pricingPanel ? [["list", "Price list"] as [string, string]] : [])]; // their own prices first
     const cur = subs.find((x) => x[0] === priceTab)?.[0] || subs[0][0];
     // the portal puts Price list / Your program pricing at the right of the title, where the search sits on other pages
     body = <>{mode === "portal" ? null : subBar(subs, cur, setPriceTab)}{cur === "program" ? programPanel : pricingPanel}</>;
@@ -1177,7 +1177,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
             sits just left of it (Nov 2, Nick) */}
         <span className="aa-ptop-r">{area === "payments" && terms && <span className="aa-ptop-terms">Terms: <b>{terms}</b></span>}{area === "payments" && statementHref && <a className="btn sm" href={statementHref}>View / print statement</a>}
         {area === "pricing" && (() => {
-          const subs: [string, string][] = [...(pricingPanel ? [["list", "Price list"] as [string, string]] : []), ...(programPanel && hasProgram ? [["program", "Your program pricing"] as [string, string]] : [])];
+          const subs: [string, string][] = [...(programPanel && hasProgram ? [["program", "Your program pricing"] as [string, string]] : []), ...(pricingPanel ? [["list", "Price list"] as [string, string]] : [])]; // their own prices first
           if (subs.length < 2) return null;
           const cur = subs.find((x) => x[0] === priceTab)?.[0] || subs[0][0];
           return <div className="toolbar aa-otabs aa-ptop-sw" data-toolbar><div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => setPriceTab(k)}>{t}</button>)}</div></div>;
