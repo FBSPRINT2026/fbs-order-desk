@@ -27,6 +27,7 @@ import PortalSwitch from "@/components/PortalSwitch";
 import { heldFiles } from "@/lib/heldFiles";
 import RowLink from "@/components/RowLink";
 import { useUrlSearch } from "@/lib/useUrlSearch";
+import PortalSimpleMenu, { SimpleBack, SimpleMenuContext } from "@/components/PortalSimpleMenu";
 
 export type AOrder = { /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_lane?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
@@ -1150,7 +1151,14 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     body = <>{subBar(subs, cur, setArtTab)}{cur === "catalog" ? designsPanel : cur === "brand" ? brandCardEl : body}</>;
   }
 
+  // the simple portal's Menu and "← Dashboard" (components/PortalSimpleMenu.tsx): the same pages as the tab bar it replaces
+  const simpleNav = mode === "portal" && simple;
+  const simpleCtx = simpleNav ? {
+    go: (id: string) => { go(id as Area); setQ(""); }, current: area, settingsHref, settingsIcon: <Ico d={I.settings} />,
+    items: AREAS.filter((a) => a.show !== false && !(a.id === "program" && !hasProgram)).map((a) => ({ id: a.id, label: a.label, icon: <Ico d={a.icon} />, n: a.id === "messages" ? a.n : undefined })),
+  } : null;
   return (
+    <SimpleMenuContext.Provider value={simpleCtx}>
     <div className={"aa" + (mode === "shop" ? " aa-shop" : "") + (simple ? " aa-simple" : "")} data-area={area}>
       {rqAsk && <RequestAsk order={rqAsk} customer={customerName} onClose={() => setRqAsk(null)} />}
       {mode === "shop" ? (
@@ -1188,7 +1196,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
       {/* every portal page opens with its name in one place, one font, one rainbow (Nov 2, Nick: "all the pages in the
           customer portal should have the exact same look as payments… just slightly in"); the areas' own titles step aside */}
       {mode === "portal" && <div className="aa-ptop">
-        <h1 className="aa-ptitle">{AREAS.find((a) => a.id === area)?.label || ""}</h1>
+        {simpleNav ? <span className="psmn-tl"><SimpleBack /><h1 className="aa-ptitle">{AREAS.find((a) => a.id === area)?.label || ""}</h1></span> : <h1 className="aa-ptitle">{AREAS.find((a) => a.id === area)?.label || ""}</h1>}
         {/* the page's search, on the title's line at the right; it filters what this page shows. On Payments the statement
             sits just left of it (Nov 2, Nick) */}
         <span className="aa-ptop-r">{area === "payments" && terms && <span className="aa-ptop-terms">Terms: <b>{terms}</b></span>}{area === "payments" && statementHref && <a className="btn sm" href={statementHref}>View / print statement</a>}
@@ -1198,10 +1206,11 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
           const cur = subs.find((x) => x[0] === priceTab)?.[0] || subs[0][0];
           return <div className="toolbar aa-otabs aa-ptop-sw" data-toolbar><div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => setPriceTab(k)}>{t}</button>)}</div></div>;
         })()}
-        {area === "home" && titleAsk ? titleAsk : area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}</span>
+        {area === "home" && titleAsk ? titleAsk : area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}{simpleNav && <PortalSimpleMenu />}</span>
       </div>}
       <section className="aa-body">{mode === "portal" ? <PageSearchContext.Provider value={q}>{body}</PageSearchContext.Provider> : body}</section>
     </div>
+    </SimpleMenuContext.Provider>
   );
 }
 

@@ -20024,7 +20024,19 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 /* ── The simple portal (components/PortalSimple.tsx; customers.portal_view, Nov 3, Nick: the 80/20 rule) ──
    its home is one page: no tab bar, no "Dashboard" title or ask bar; the other pages it links to keep the tab bar.
    Open orders, then order history on the left; payments on the right (Nov 3, Nick: "not too many panels"). */
-.aa-simple[data-area="home"] > .aa-nav,.aa-simple[data-area="home"] > .aa-ptop{display:none!important}
+.aa-simple > .aa-nav,.aa-simple[data-area="home"] > .aa-ptop{display:none!important}
+/* every simple page: "← Dashboard" before the title, the Menu at the top right (components/PortalSimpleMenu.tsx) */
+.psmn{position:relative;display:inline-flex;flex:0 0 auto}
+.psmn-btn,.psmn-back{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.psmn-tl{display:inline-flex;align-items:center;gap:12px;min-width:0;flex-wrap:wrap}
+.psmn-tl .aa-ptitle{margin:0}
+.psmn-m{position:absolute;right:0;top:calc(100% + 6px);z-index:60;display:flex;flex-direction:column;min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 30px rgba(0,0,0,.12);padding:4px}
+.psmn-i{display:flex;align-items:center;gap:10px;padding:9px 12px;border:0;background:none;border-radius:6px;font:inherit;font-size:14px;color:var(--ink);text-align:left;text-decoration:none;cursor:pointer;white-space:nowrap}
+.psmn-i:hover{background:var(--surface-2)}
+.psmn-i.on{background:var(--accent-soft,var(--surface-2));color:var(--accent);font-weight:700}
+.psmn-i svg{flex:0 0 auto;color:var(--ink-3)}
+.psmn-i.on svg{color:var(--accent)}
+.psmn-n{margin-left:auto;font-size:12px;font-weight:700;color:var(--accent)}
 .psm{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;align-items:start}
 .psm-main,.psm-side{display:flex;flex-direction:column;gap:16px;min-width:0}
 .psm-p{margin:0}
@@ -20113,7 +20125,8 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 .psm-search{min-width:0}
 @media (max-width:900px){.psm-side > .psm-search{order:2}.psm-side > .psm-pay{order:2}}
 /* the simple portal's title and headings, spaced out (Nov 3, Nick) */
-.psm-top{margin:6px 0 18px}
+.psm-top{margin:6px 0 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.psm-top-t{min-width:0}
 .psm-top .psm-title{margin:0 0 0 8px}
 .psm-desc{margin:12px 0 0 8px;font-size:14px;color:var(--ink-3)}
 .psm{gap:20px}

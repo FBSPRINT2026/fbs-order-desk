@@ -6,6 +6,7 @@ import type { DashPay, DashProof, DashSent } from "@/components/PortalDash";
 import { DashReorder, JobRow } from "@/components/PortalDashBits";
 import { LogoFace } from "@/components/LogoOnShirts";
 import type { Design } from "@/lib/pricing";
+import PortalSimpleMenu from "@/components/PortalSimpleMenu";
 
 /** a finished order in the simple portal's order history */
 export type SimplePast = { id: string; number: number; nickname: string; when: string; qty: number; pic: string; href: string; archived?: boolean; total: number };
@@ -30,7 +31,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
     <>
     {/* the page's title, like the full portal's Dashboard (Nov 3, Nick: "add the dashboard header to the top and space it
         out some with description and headings") */}
-    <div className="psm-top"><h2 className="aa-ptitle psm-title">Dashboard</h2><p className="psm-desc">Your open orders, payments and past work with us, all on one page.</p></div>
+    <div className="psm-top"><div className="psm-top-t"><h2 className="aa-ptitle psm-title">Dashboard</h2><p className="psm-desc">Your open orders, payments and past work with us, all on one page.</p></div><PortalSimpleMenu /></div>
     <div className="psm">
       {/* one search at the top for everything, its examples rolling through (Nov 3, Nick: "search like everything, orders,
           payments, all that stuff… like the AI search where it rotates through") */}
