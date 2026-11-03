@@ -19169,3 +19169,7 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aa-ptop-r > .aa-ptop-sw{margin:0;padding:0;border:0;background:none;box-shadow:none;flex:0 0 auto}
 .aa-ptop-r > .aa-ptop-sw .chips{flex-wrap:nowrap}
 @media (max-width:640px){.aa-ptop-r > .aa-ptop-sw{flex:1 1 100%}.aa-ptop-r > .aa-ptop-sw .chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.aa-ptop-r > .aa-ptop-sw .chip{justify-content:center}}
+/* Pay orders reads like the Orders list (Nov 2, Nick: "relax the type… exactly the same as the orders page"): dates in
+   regular weight at the list's size (late ones still red), only the amount bold */
+.pyl-tbl td.pyl-due{font-size:14px}
+.pyl-tbl .pyl-late,.pyl-tbl .pyl-ext,.pyl-tbl .pyl-ok{font-weight:400}
