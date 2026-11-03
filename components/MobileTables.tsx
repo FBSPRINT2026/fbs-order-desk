@@ -29,6 +29,9 @@ function pass() {
   const phone = window.innerWidth <= PHONE;
   for (const t of Array.from(document.querySelectorAll<HTMLTableElement>("main table, .portal table"))) {
     if (t.matches(KEEP) || t.closest("[data-keep]")) { if (phone) label(t); continue; } // grids keep their own phone layout, but get the column names
+    // a table marked to stay a table (the house rule's data-nofit, which TableFit honors) is never made into cards here
+    // either (Nov 2, Nick's phone: the price list's grid came out as "2 colors2: 4.85" cards)
+    if (t.closest("[data-nofit]")) { t.classList.remove("m-card"); continue; }
     if (!phone) { t.classList.remove("m-card"); continue; }
     if (t.classList.contains("m-card")) { label(t); continue; }
     const box = t.parentElement;

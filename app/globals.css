@@ -19080,3 +19080,9 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .pyl-tbl td[data-l].r::before{content:none}
   .pyl-tbl td[colspan]{grid-column:1 / -1}
 }
+/* the price list's grid on a phone: every column fits the screen (Nov 2, Nick: "it just needs to be the grid") */
+@media (max-width:420px){
+  .pl-grid th,.pl-grid td{padding:7px 1px;font-size:11.5px}
+  .pl-grid th:first-child{width:56px;padding-left:6px}
+  .pl-wrap{overflow:visible}
+}
