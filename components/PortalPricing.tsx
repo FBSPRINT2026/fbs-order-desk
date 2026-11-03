@@ -40,6 +40,8 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
 
         <PricingTabs right={<PrintButton />} tabs={[
           { k: "screen", label: "Screen printing", body: <>
+        {/* the calculator first, above the grids (Nov 3, Nick) */}
+        <CalcSheet><ScreenCalc pl={pl} /></CalcSheet>
         <section className="panel pl-sec">
           <div className="panel-h"><h2>Screen printing</h2><span className="faint">Per location, per piece, in dollars, by the number of ink colors</span></div>
           <div className="panel-b">
@@ -76,10 +78,9 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             <div className="panel-b"><dl className="pl-dl">{fin.map((f) => <div key={f.id}><dt>{f.name}</dt><dd>{m(f.price)}</dd></div>)}</dl></div>
           </section>}
         </div>
-        <CalcSheet><ScreenCalc pl={pl} /></CalcSheet>
-
           </> },
           { k: "emb", label: "Embroidery", body: <>
+        <CalcSheet><EmbCalc pl={pl} /></CalcSheet>
         <section className="panel pl-sec">
           <div className="panel-h"><h2>Embroidery</h2><span className="faint">Per location, per piece, up to {(pl.embStitches || 0).toLocaleString()} stitches</span></div>
           <div className="panel-b">
@@ -97,7 +98,6 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
           </div>
         </section>
 
-        <CalcSheet><EmbCalc pl={pl} /></CalcSheet>
           </> },
           ...(dtfOk ? [{ k: "dtf", label: "DTF heat transfers", body: <>
         <section className="panel pl-sec">
