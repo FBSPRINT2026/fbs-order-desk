@@ -580,7 +580,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const sepOf = (sg: number) => (hasSep ? sg * 2 + 4 : 0);
     const BOX = 36, BOXMAX = 46, BOXPHONE = 40;
     let X = 22; // the remove button's column, measured below
-    type M = { deB: number; st: number; br: number; co: number; cs: number; qt: number; ea: number; to: number; boxMin: number; own: number };
+    type M = { deB: number; st: number; br: number; co: number; cs: number; qt: number; ea: number; eaIn: number; to: number; boxMin: number; own: number };
     let m: M | null = null, mPhone: boolean | null = null;
     const measure = (): M => {
       // the words of each row sit close together ("245 Tultex White/ Royal", Nick: "shrink between 245 Tultex and the
@@ -606,6 +606,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
       // no prices shown (retail builder): no room kept for them, so the qty sits at the right end (Oct 24, Nick)
       const ea = hidePrices ? 150 : widest(".gl .a-ea input", 28, 54, 120);
+      // the price box itself: its number, its own padding and border, whatever layout its cell is in when this runs (the
+      // cell's "×" can come and go with the layout, Nov 2: a suggested price showed "9....")
+      let eaIn = 0;
+      el.querySelectorAll<HTMLInputElement>(".gl .a-ea input").forEach((node) => { const cs = getComputedStyle(node), px = (v: string) => parseFloat(v || "0") || 0; eaIn = Math.max(eaIn, textW(node, node.value || node.placeholder || "") + Math.max(12, px(cs.paddingLeft) + px(cs.paddingRight)) + 2 + 8); });
       const to = hidePrices ? 0 : Math.max(widest(".gl .a-to b", 4, 52, 150), widest(".grp-total > .a-to", 4, 52, 150));
       // a size box is never narrower than its number (+6 for the border and room to spare; +8 for a phone's tap button,
       // which has 2px of padding), its size name, or its 2XL+ charge underneath (which may use the gap)
@@ -622,7 +626,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       let xw = 0;
       el.querySelectorAll<HTMLElement>(".gl .a-x").forEach((c) => { const bs = [...c.querySelectorAll<HTMLElement>("button")]; xw = Math.max(xw, bs.reduce((a, b) => a + Math.ceil(b.getBoundingClientRect().width), 0) + Math.max(0, bs.length - 1) * 2); });
       X = Math.max(22, xw);
-      return { deB, st, br, co, cs, qt, ea, to, boxMin, own };
+      return { deB, st, br, co, cs, qt, ea: Math.max(ea, eaIn + 20), eaIn, to, boxMin, own };
     };
     const fit = () => {
       const list = el.querySelector<HTMLElement>(".gl-list") || el;
@@ -631,7 +635,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       const phone = typeof window.matchMedia === "function" && window.matchMedia("(max-width:760px)").matches;
       // measured once per change (and again when the phone layout comes or goes: its fonts differ a little)
       if (!m || mPhone !== phone) { m = measure(); mPhone = phone; }
-      const { deB, st, br, co, cs, qt, ea, to, boxMin, own } = m;
+      const { deB, st, br, co, cs, qt, ea, eaIn, to, boxMin, own } = m;
       const run = (b: number, sg: number) => n * b + (n - 1) * sg + sepOf(sg);
       // everything but the size boxes on one line, at a gap of g between columns and sg between sizes
       // w0 has the description on the shirt line too: one more column and gap
@@ -673,7 +677,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
         dew = st + br + co + 3 * gap + Math.max(0, Math.floor((W - other - run(box, sg)) / 2)) - 12;
       }
       const px = (k: string, v: number) => el.style.setProperty(k, `${v}px`);
-      px("--st", st); px("--br", br); px("--co", co); px("--cs", cs); px("--qt", qt); px("--ea", ea); px("--to", to); px("--x", X);
+      px("--st", st); px("--br", br); px("--co", co); px("--cs", cs); px("--qt", qt); px("--ea", ea); px("--eain", eaIn); px("--to", to); px("--x", X);
       px("--gap", gap); px("--sg", sg); px("--szw", box); px("--dew", dew); px("--sep", sepOf(sg) || 12);
       setGlFit(mode);
     };

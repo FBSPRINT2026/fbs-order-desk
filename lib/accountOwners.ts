@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { allRows } from "@/lib/readAll";
 
 /**
  * Whose account a customer is: the account owner set on the customer (Settings → Staff → Account owners), else the
@@ -13,8 +12,10 @@ export async function accountOwners(admin: SupabaseClient, customerIds: string[]
   const acct = new Map<string, string>();
   for (let i = 0; i < all.length; i += 200) {
     const ids = all.slice(i, i + 200);
+    // the latest Printavo owner per customer in one row each (archived_owners: DISTINCT ON in the database), not every past
+    // order (Nov 2: reading all of them made the Job Center take ~3 seconds)
     const [{ data: last }, { data: ao }] = await Promise.all([
-      allRows((r0, r1) => admin.from("archived_orders").select("customer_id, owner:data->>owner").is("removed_at", null).in("customer_id", ids).not("data->>owner", "is", null).order("order_date", { ascending: false }).order("id").range(r0, r1), 4000),
+      admin.rpc("archived_owners", { p_ids: ids }),
       admin.from("customer_private").select("customer_id, account_owner").in("customer_id", ids).neq("account_owner", ""),
     ]);
     for (const r of (last || []) as { customer_id: string; owner: string | null }[]) if (r.owner && !acct.has(r.customer_id)) acct.set(r.customer_id, firstName(r.owner));

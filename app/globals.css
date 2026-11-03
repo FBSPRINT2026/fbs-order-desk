@@ -11944,7 +11944,7 @@ html body .ord .gl .a-st input[aria-label="Style number"]:not(:placeholder-shown
   html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-to{order:7;flex:none;display:block!important;min-width:var(--to,84px);text-align:right;font-size:14px;font-weight:700;line-height:30px!important}
   html body .ord .line-b .gl-list .gl .a-cs input{box-sizing:border-box;width:var(--cs,52px);height:30px;padding:2px 5px;font-family:var(--body);font-size:12px;color:var(--ink-3);text-align:right}
   html body .ord .line-b .gl-list .gl .a-qt input{box-sizing:border-box;width:var(--qt,44px);height:30px!important;font-family:var(--body);font-size:14px;font-weight:700;text-align:center!important;padding:0!important}
-  html body .ord .line-b .gl-list .gl .a-ea input{box-sizing:border-box;width:calc(var(--ea,76px) - 12px);flex:none;height:30px!important;padding:4px 6px;font-family:var(--body);font-size:14px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:7px}
+  html body .ord .line-b .gl-list .gl .a-ea input{box-sizing:border-box;width:max(calc(var(--ea,76px) - 12px),var(--eain,0px));flex:none;height:30px!important;padding:4px 6px;font-family:var(--body);font-size:14px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:7px}
   html body .ord .line-b .gl-list .gl input[type=number]{-moz-appearance:textfield;appearance:textfield}
   html body .ord .line-b .gl-list .gl .a-sz .szrow{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 0}
   html body .ord .line-b .gl-list .gl .a-sz .szc{flex:0 0 var(--szw,38px);width:var(--szw,38px);min-width:var(--szw,38px);max-width:var(--szw,38px)}
@@ -11986,7 +11986,7 @@ html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-ea::before{displa
 html body .ord .line-b.fit-s .gl-list .gl > .gl-row.gl-r2 > .a-to{order:7;flex:none;display:block!important;min-width:var(--to,84px);text-align:right;font-size:14px;font-weight:700;line-height:30px!important}
 html body .ord .line-b.fit-s .gl-list .gl .a-cs input{box-sizing:border-box;width:var(--cs,52px);height:30px;padding:2px 5px;font-family:var(--body);font-size:12px;color:var(--ink-3);text-align:right}
 html body .ord .line-b.fit-s .gl-list .gl .a-qt input{box-sizing:border-box;width:var(--qt,44px);height:30px!important;font-family:var(--body);font-size:14px;font-weight:700;text-align:center!important;padding:0!important}
-html body .ord .line-b.fit-s .gl-list .gl .a-ea input{box-sizing:border-box;width:calc(var(--ea,76px) - 12px);flex:none;height:30px!important;padding:4px 6px;font-family:var(--body);font-size:14px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:7px}
+html body .ord .line-b.fit-s .gl-list .gl .a-ea input{box-sizing:border-box;width:max(calc(var(--ea,76px) - 12px),var(--eain,0px));flex:none;height:30px!important;padding:4px 6px;font-family:var(--body);font-size:14px;text-align:right;background:var(--surface);border:1px solid var(--line);border-radius:7px}
 html body .ord .line-b.fit-s .gl-list .gl input[type=number]{-moz-appearance:textfield;appearance:textfield}
 html body .ord .line-b.fit-s .gl-list .gl .a-sz .szrow{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 0}
 html body .ord .line-b.fit-s .gl-list .gl .a-sz .szc{flex:0 0 var(--szw,38px);width:var(--szw,38px);min-width:var(--szw,38px);max-width:var(--szw,38px)}
@@ -19704,3 +19704,7 @@ span.jrl-ring b.jb1,span.jrl-ring b.jb2,span.jrl-ring b.jb3{display:block;inset:
 .jrl-spin{transform-origin:30px 30px;transform-box:view-box;animation:jrl-turn2 14s linear infinite}
 .jrl-sig>b{inset:6px}
 @media (prefers-reduced-motion:reduce){.jrl-spin{animation:none}}
+/* a price box is never narrower than its own number (GroupEditor measures --eain), in every layout (Nov 2, Nick: "$9.09"
+   showed "9....") */
+.gl .a-ea input{min-width:var(--eain,0px)}
+html body .ord .line-b .gl-list .gl .a-ea input,html body .ord .line-b.fit-s .gl-list .gl .a-ea input{min-width:var(--eain,0px)}
