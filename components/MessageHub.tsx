@@ -166,6 +166,18 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
   const other = mode === "portal" ? shopName : customerName || "Customer";
   const totalUnread = convos.reduce((a, c) => a + c.unread, 0);
 
+  const convoBtn = (c: Convo) => (
+    <button key={c.key} type="button" className={"mh-c" + (cur?.key === c.key ? " on" : "") + (c.unread ? " is-unread" : "")} onClick={() => openConvo(c.key)}>
+      <span className={"mh-av" + (c.key === "general" ? " gen" : c.topic === "goods" ? " goods" : c.projectId ? " proj" : "")}>{c.key === "general" ? "💬" : c.topic === "goods" ? "📦" : c.projectId ? "📁" : "#"}</span>
+      <span className="mh-c-main">
+        <span className="mh-c-top"><b>{c.key === "general" && mode === "portal" ? shopName : c.title}</b>{c.last && <span className="mh-c-t">{ago(c.last.created_at)}</span>}</span>
+        <span className="mh-c-sub">{c.last ? `${mine(c.last) ? "You: " : ""}${c.last.body || (c.last.files.length ? `📎 ${c.last.files[0].name}` : "")}` : c.sub}</span>
+        {c.key === "general" ? <span className="mh-c-st">General questions</span> : c.topic !== "goods" && c.order?.status ? <span className="mh-c-st">{c.order.status}</span> : null}
+      </span>
+      {c.unread > 0 && <span className="mh-dot" aria-label={`${c.unread} unread`}>{c.unread}</span>}
+    </button>
+  );
+
   return (
     <div className="mh-box" ref={root}>
     <section className={"mh" + (showThread || only ? " thread-open" : "") + (only ? " single" : "")} style={{ ["--mh-h" as string]: `${height}px` }} aria-label="Messages">
@@ -183,7 +195,11 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
             {orders.slice(0, 80).map((o) => <option key={o.id} value={o.id}>#{o.number}{o.nickname ? ` · ${o.nickname}` : ""}</option>)}
           </select>}
         </div>}
-        {/* the customer's list stays short (Nov 2, Nick: "he's got 30 open orders… that just gets overwhelming"): the chat with
+        <div className="mh-convos">
+          {/* in parts, so it reads at a glance (Nov 2, Nick: "it just looks like a big mess"): the general chat on top, then
+              each order's conversation with its number, name and where the order is, then goods, then projects */}
+          {([["", shown.filter((c) => c.key === "general")]] as const).map(([h, list]) => list.length > 0 && <div key="general" className="mh-sec">{list.map((c) => convoBtn(c))}</div>)}
+          {/* the customer's list stays short (Nov 2, Nick: "he's got 30 open orders… that just gets overwhelming"): the chat with
             us, the orders already talked about, and this one picker to ask about any other order */}
         {mode === "portal" && !only && orders.length > 0 && <label className="mh-ask">
           <span>Ask about an order</span>
@@ -193,23 +209,10 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
               <optgroup key={g} label={g}>{[...list].sort((a, b) => b.number - a.number).slice(0, 200).map((o) => <option key={o.id} value={o.id}>#{o.number}{o.nickname ? ` · ${o.nickname}` : ""}</option>)}</optgroup>))}
           </select>
         </label>}
-        <div className="mh-convos">
-          {/* in parts, so it reads at a glance (Nov 2, Nick: "it just looks like a big mess"): the general chat on top, then
-              each order's conversation with its number, name and where the order is, then goods, then projects */}
-          {([["", shown.filter((c) => c.key === "general")], ["Your orders", shown.filter((c) => c.orderId && c.topic !== "goods")], [mode === "portal" ? "Your goods" : "Goods", shown.filter((c) => c.orderId && c.topic === "goods")], ["Projects", shown.filter((c) => !!c.projectId)]] as const).map(([h, list]) => list.length > 0 && (
+          {([["Your orders", shown.filter((c) => c.orderId && c.topic !== "goods")], [mode === "portal" ? "Your goods" : "Goods", shown.filter((c) => c.orderId && c.topic === "goods")], ["Projects", shown.filter((c) => !!c.projectId)]] as const).map(([h, list]) => list.length > 0 && (
             <div key={h || "general"} className="mh-sec">
               {h && <div className="mh-sec-h">{h}<span>{list.length}</span></div>}
-              {list.map((c) => (
-                <button key={c.key} type="button" className={"mh-c" + (cur?.key === c.key ? " on" : "") + (c.unread ? " is-unread" : "")} onClick={() => openConvo(c.key)}>
-                  <span className={"mh-av" + (c.key === "general" ? " gen" : c.topic === "goods" ? " goods" : c.projectId ? " proj" : "")}>{c.key === "general" ? "💬" : c.topic === "goods" ? "📦" : c.projectId ? "📁" : "#"}</span>
-                  <span className="mh-c-main">
-                    <span className="mh-c-top"><b>{c.key === "general" && mode === "portal" ? shopName : c.title}</b>{c.last && <span className="mh-c-t">{ago(c.last.created_at)}</span>}</span>
-                    <span className="mh-c-sub">{c.last ? `${mine(c.last) ? "You: " : ""}${c.last.body || (c.last.files.length ? `📎 ${c.last.files[0].name}` : "")}` : c.sub}</span>
-                    {c.key === "general" ? <span className="mh-c-st">General questions</span> : c.topic !== "goods" && c.order?.status ? <span className="mh-c-st">{c.order.status}</span> : null}
-                  </span>
-                  {c.unread > 0 && <span className="mh-dot" aria-label={`${c.unread} unread`}>{c.unread}</span>}
-                </button>
-              ))}
+              {list.map((c) => convoBtn(c))}
             </div>
           ))}
           {!shown.length && <div className="mh-none">No messages match “{q}”.</div>}
