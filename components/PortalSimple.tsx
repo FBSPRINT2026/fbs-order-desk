@@ -4,6 +4,8 @@ import { money } from "@/lib/format";
 import type { PortalJob } from "@/lib/portalJobs";
 import type { DashPay, DashProof, DashSent } from "@/components/PortalDash";
 import { DashReorder, JobRow } from "@/components/PortalDashBits";
+import { LogoFace } from "@/components/LogoOnShirts";
+import type { Design } from "@/lib/pricing";
 
 /** a finished order in the simple portal's order history */
 export type SimplePast = { id: string; number: number; nickname: string; when: string; qty: number; pic: string; href: string; archived?: boolean; total: number };
@@ -16,9 +18,9 @@ export type SimplePast = { id: string; number: number; nickname: string; when: s
  * message). The rest (all orders, artwork, settings) are quiet links at the foot, opening the full portal's pages.
  * Customers with many jobs at once get the full portal (customers.portal_view; View: Simple / Full at the foot).
  */
-export default function PortalSimple({ search, jobs, proofs, sent, past, pay, art = [], newMsgs, msgHref, ordersHref, artHref, settingsHref, canAct }: {
+export default function PortalSimple({ search, jobs, proofs, sent, past, pay, art = [], designUrls = {}, newMsgs, msgHref, ordersHref, artHref, settingsHref, canAct }: {
   /** one search for everything (orders, payments, artwork), the portal's AI search bar */ search?: ReactNode;
-  jobs: PortalJob[]; proofs: DashProof[]; sent: DashSent[]; past: SimplePast[]; pay: DashPay; /** their logos, small, under payments */ art?: { id: string; url: string; name: string }[]; newMsgs: number;
+  jobs: PortalJob[]; proofs: DashProof[]; sent: DashSent[]; past: SimplePast[]; pay: DashPay; /** their logos, small, under payments, drawn as the Artwork page draws them (on the shirt color they print on) */ art?: { d: Design; shirt?: string; shown?: { url: string; shirt: string } | null; printed?: Parameters<typeof LogoFace>[0]["printed"] }[]; designUrls?: Record<string, string>; newMsgs: number;
   msgHref: string; ordersHref: string; artHref: string; settingsHref: string; canAct: boolean;
 }) {
   const owed = pay.due > 0.004;
@@ -88,7 +90,7 @@ export default function PortalSimple({ search, jobs, proofs, sent, past, pay, ar
         {art.length > 0 && (
           <section className="panel psm-p psm-artp">
             <div className="panel-h"><div className="psm-ht"><h2>Your artwork</h2><span className="faint">Your logos on file with us</span></div><Link className="pd-link psm-hl" href={artHref}>All artwork</Link></div>
-            <div className="panel-b psm-art">{art.map((d) => <Link key={d.id} href={artHref} className="psm-art-i" title={d.name}><img src={d.url} alt={d.name} loading="lazy" /></Link>)}</div>
+            <div className="panel-b psm-art">{art.map((a) => <Link key={a.d.id} href={artHref} className="psm-art-i" title={a.d.name}><LogoFace d={a.d} urls={designUrls} shirt={a.shirt} shown={a.shown || null} printed={a.printed || null} /></Link>)}</div>
           </section>
         )}
         <Link href={msgHref} className="psm-msg">
