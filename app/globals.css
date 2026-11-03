@@ -2935,7 +2935,7 @@ a.as-ai{text-decoration:none}
   table.m-card td,table.m-card th{display:block;border:0!important;padding:0!important;min-width:0;max-width:100%;text-align:left!important;white-space:normal!important;background:transparent}
   table.m-card td:nth-child(2){flex:1 1 55%}
   table.m-card td[data-wide]{flex:1 1 100%}
-  table.m-card td[data-label]:not(:first-child):not(:nth-child(2))::before{content:attr(data-label) ": ";color:var(--ink-3);font-size:12px;font-weight:600}
+  table.m-card td[data-label]:not([data-label=""]):not(:first-child):not(:nth-child(2))::before{content:attr(data-label) ": ";color:var(--ink-3);font-size:12px;font-weight:600}
   table.m-card td:empty{display:none}
   table.m-card input,table.m-card select{max-width:100%}
 }
@@ -19757,7 +19757,9 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .jcx>.jrl-mc .jrl-mc-ban{padding:10px 12px;row-gap:4px}
   .jrl-mc-w b{font-size:26px}
   /* their order type switch beside the list's dropdown, one line (Nov 2, Nick: Nine18 / Cedar on a phone) */
-  .portal .aa-otabs{flex-wrap:nowrap}
+  /* only the Orders bar with its dropdown: the dashboard's job switches wrap as before (Nov 3: "In progress / Ready /
+     Completed" had been squeezed into a column beside "On hold / All") */
+  .portal .aa-otabs:has(> .aa-osel){flex-wrap:nowrap}
   .portal .aa-otabs .aa-osel{flex:1 1 auto;min-width:0}
   .aa-lane{flex:0 1 auto;min-width:0}
   .aa-lane>span{display:none}
@@ -19818,3 +19820,20 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 .portal .aa-nav.tb-icons > .aa-tab > .aa-n{position:static;margin-left:auto}
 .portal .aa-nav.tb-icons > .aa-tab svg{width:17px;height:17px;flex:0 0 auto}
 .portal .aa-nav.tb-icons > .aa-tab-end{margin-left:0!important;justify-content:flex-start!important}
+
+/* the dashboard's job switches on a phone: where the job is, one line of three across the width, then On hold / All */
+@media (max-width:640px){
+  .pdx .pjt{flex-direction:column;align-items:stretch;gap:8px}
+  .pdx .pjt > .chips{display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);width:100%;margin-left:0!important}
+  .pdx .pjt > .chips > .chip{justify-content:center;padding-left:6px!important;padding-right:6px!important;min-width:0}
+}
+/* the price list on a phone (Nov 3): 8 color columns no longer run their prices together, and the decoration switch is
+   one row of three across the width with Print or save PDF under it, never a chip dropping to its own line */
+@media (max-width:640px){
+  .pl-grid th,.pl-grid td{font-size:11px;padding:7px 1px;letter-spacing:-.01em}
+  .pl-grid th:first-child{width:54px;padding-left:6px;white-space:normal;line-height:1.15}
+  .pl-tabs{flex-direction:column;align-items:stretch!important;gap:8px}
+  .pl-tabs > .chips{display:grid!important;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);width:100%!important;max-width:none!important}
+  .pl-tabs > .chips > .chip{justify-content:center;text-align:center;white-space:normal!important;line-height:1.15;padding:8px 6px!important;min-width:0}
+  .pl-tabs > .pl-tabs-r{align-self:flex-start}
+}

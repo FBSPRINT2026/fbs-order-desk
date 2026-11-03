@@ -156,6 +156,9 @@ function sharedLinks(t: CuTask, comments: CuComment[]): CuFile[] {
     const u = m[0].replace(/[.,;:!?*_]+$/, "");
     const kind = linkKind(u);
     if (!LINK_LABEL[kind] || out.size >= 4) continue;
+    // a picture or file attached to the job shows in its notes as a link to ClickUp's own copy: it's already an
+    // attachment, not a file shared by link (Nov 3: every Cedar job with a picture in its notes had it twice)
+    if (/(^|\.)clickup(-attachments)?\.com$/i.test((() => { try { return new URL(u).hostname; } catch { return ""; } })())) continue;
     const id = `link-${hashOf(u.replace(/[?&](st|dl)=[^&]*/g, ""))}`;
     if ([...out.values()].some((f) => f.id === id)) continue;
     out.set(u, { id, name: LINK_LABEL[kind], url: u, size: 0, ext: "", type: "", link: u });
@@ -264,7 +267,7 @@ async function saveFiles(admin: SupabaseClient, taskId: string, files: CuFile[],
  * Only an order still waiting on us (a request) is touched; once it's priced, new files are for staff to look at.
  */
 export async function filesOntoOrder(admin: SupabaseClient, orderId: string, files: CuFile[]) {
-  const stored = files.filter((f) => f.path);
+  const stored = files.filter((f) => f.path && !(f.link && /clickup(-attachments)?\.com/i.test(f.link)));
   if (!stored.length) return 0;
   const { data: o } = await admin.from("orders").select("id, status, simple_order").eq("id", orderId).maybeSingle();
   const so = (o?.simple_order || null) as { files?: { kind: string; name: string; path: string }[] } | null;
