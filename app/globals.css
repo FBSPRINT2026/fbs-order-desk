@@ -19913,9 +19913,11 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
    strip that scrolls sideways (Nov 3, Nick) */
 @media (max-width:640px){
   main.main nav.aa-shopnav{overflow:visible!important}
-  main.main nav.aa-shopnav .chips{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;padding:4px;width:100%;overflow:visible!important;flex-wrap:nowrap}
-  main.main nav.aa-shopnav .chips .chip{flex:none!important;min-width:0;justify-content:space-between;padding:10px 12px!important;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:8px}
-  main.main nav.aa-shopnav .chips .chip .chip-n{flex:0 0 auto;margin-left:6px}
+  /* always two rows (Nov 3, Nick: "that toolbar always needs to be two lines"): as many columns as it takes, each tab's
+     name with its count under it */
+  main.main nav.aa-shopnav .chips{display:grid!important;grid-template-rows:repeat(2,auto);grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:2px;padding:4px;width:100%;overflow:visible!important;flex-wrap:nowrap}
+  main.main nav.aa-shopnav .chips .chip{flex:none!important;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 4px!important;font-size:12.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:8px;text-align:center}
+  main.main nav.aa-shopnav .chips .chip .chip-n{flex:0 0 auto;margin:0;font-size:10.5px;padding:0 6px}
 }
 /* "Show older quotes and archived": a quiet line under the quotes, both sides (Nov 3) */
 .aa-oldq-more{all:unset;display:block;cursor:pointer;margin:6px 0 4px;padding:10px 18px;font-size:13px;font-weight:600;color:var(--accent);text-align:left}

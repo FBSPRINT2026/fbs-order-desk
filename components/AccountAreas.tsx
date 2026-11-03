@@ -190,6 +190,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   const oFilter: "all" | "requests" | "quotes" | "orders" | "completed" = mode === "shop" && rawArea === "quotes" ? "quotes" : ["all", "requests", "quotes", "orders", "completed"].includes(ordF) ? ordF : "all";
   const [conv, setConv] = useSticky<"portal" | "texts">("customer.conversations", "portal");
   const [bsOpen, setBsOpen] = useSticky<boolean>("customer.brandOpen", false);
+  const [shopArtTab, setShopArtTab] = useSticky<string>("customer.artTab", "art");
   const convNow = rawArea === "texts" ? "texts" : conv;
   // where the More menu opens: fixed under its button (the tab bar clips anything that drops out of it)
   const [moreOpen, setMoreOpen] = useState<{ top: number; right: number } | null>(null);
@@ -277,7 +278,8 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   const AREAS: { id: Area; label: string; icon: string; n?: number; show?: boolean }[] = mode === "shop" ? [
     { id: "home", label: "Orders", icon: I.orders, n: inWork.length },
     { id: "artwork", label: "Artwork", icon: I.artwork },
-    { id: "designs", label: "Design Catalog", icon: I.artwork, show: !!designsPanel },
+    // the design catalog is a tab inside Artwork, not on the main bar (Nov 3, Nick: "that should be on that page anyway")
+    { id: "designs", label: "Design Catalog", icon: I.artwork, show: false },
     { id: "messages", label: "Conversations", icon: I.messages, n: messages.length + (textsCount || 0) },
     { id: "payments", label: "Payments", icon: I.payments },
     // only once it's turned on or added (Oct 21, Nick: "I wouldn't show program pricing on every client unless I added
@@ -1105,6 +1107,12 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     body = <>{mode === "portal" ? null : subBar(subs, cur, setPriceTab)}{cur === "program" ? programPanel : pricingPanel}</>;
   }
   else if (area === "designs" && designsPanel) body = designsPanel;
+  // the shop's Artwork: Logos and mockups · Design catalog, as tabs inside it (Nov 3, Nick)
+  if (mode === "shop" && area === "artwork" && designsPanel) {
+    const subs: [string, string][] = [["art", "Logos and mockups"], ["catalog", "Design catalog"]];
+    const cur = subs.find((x) => x[0] === shopArtTab)?.[0] || "art";
+    body = <>{subBar(subs, cur, setShopArtTab)}{cur === "catalog" ? designsPanel : body}</>;
+  }
   // portal Artwork: Logos and mockups · Design catalog · Brand standards, as tabs under it (Oct 24, Nick)
   if (dcOn && area === "artwork") {
     const subs: [string, string][] = [["catalog", "Design catalog"], ["art", "Artwork"], ...(brandCardEl ? [["brand", "Brand standards"] as [string, string]] : [])];
