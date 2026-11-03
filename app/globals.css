@@ -20173,4 +20173,5 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .pv .pv-info .pv-dates dd{white-space:nowrap}
   .pv .pv-same .pv-ship{display:none}
   .pv .pv-same .pv-same-t{display:inline}
+  .pv .pv-same > div:not(.pv-cust):not(.pv-ship){grid-column:1/-1}
 }
