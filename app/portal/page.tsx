@@ -479,7 +479,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         {/* the full dashboard's foot: help, where Simple / Full used to be (that's in Settings now; Nov 3, Nick) */}
         {/* the tutorial: by itself the first time each person signs in (and after the shop's Reset tutorial), or from
             Settings → View tutorial again (?tour=1); a staff preview shows it only when asked */}
-        {acct && <PortalTour view={simple ? "simple" : "advanced"} auto={tour === "1" || (!ctx.preview && await tourDue(ctx.email, simple ? "simple" : "advanced", (acct as { tour_reset_at?: string | null }).tour_reset_at))} />}
+        {acct && <PortalTour view={simple ? "simple" : "advanced"} clickup={!!(await admin.rpc("customer_used_clickup", { cid: acct.id })).data} auto={tour === "1" || (!ctx.preview && await tourDue(ctx.email, simple ? "simple" : "advanced", (acct as { tour_reset_at?: string | null }).tour_reset_at))} />}
         {acct && !simple && <div className="psup-foot-row"><SupportButton email={ctx.email} portal look="row" /></div>}
       </main>
     </>
