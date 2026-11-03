@@ -2081,7 +2081,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="thread">
                   {messages.map((m) => (
                     <div key={m.id} className={"msg " + (m.author_type === "staff" ? "me" : "them")}>
-                      <div className="who">{m.author_type === "staff" ? "You" : m.author_name || m.author_email} · {fmtStamp(m.created_at)}</div>{m.body}
+                      <div className="who">{m.author_type === "staff" ? "You" : m.author_name || m.author_email} · {fmtStamp(m.created_at)}</div><span className="msg-b">{m.body}</span>
                     </div>
                   ))}
                 </div>

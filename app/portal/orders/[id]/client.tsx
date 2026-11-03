@@ -96,15 +96,15 @@ export function MessageThread({ orderId, messages, disabled, shopName }: { order
   });
   return (
     <div className="stack">
-      {messages.length ? (
-        <div className="thread">
-          {messages.map((m) => (
-            <div key={m.id} className={"msg " + (m.author_type === "customer" ? "me" : "them")}>
-              <div className="who">{m.author_type === "customer" ? "You" : shopName} · {fmtStamp(m.created_at)}</div>{m.body}
-            </div>
-          ))}
-        </div>
-      ) : <div className="muted" style={{ fontSize: 13 }}>Questions about this order? Send us a message and we&apos;ll reply here and by email.</div>}
+      {/* a chat like a phone's (Nov 2, Nick: "it should look like… an iPhone chat"): their words on the right in blue, ours on
+          the left, the name and time over each */}
+      <div className="thread">
+        {messages.length ? messages.map((m) => (
+          <div key={m.id} className={"msg " + (m.author_type === "customer" ? "me" : "them")}>
+            <div className="who">{m.author_type === "customer" ? "You" : shopName} · {fmtStamp(m.created_at)}</div><span className="msg-b">{m.body}</span>
+          </div>
+        )) : <div className="thread-empty">Questions about this order? Send us a message and we&apos;ll reply here and by email.</div>}
+      </div>
       <div className="composer">
         <textarea aria-label="Message" placeholder="Write a message…" value={text} onChange={(e) => setText(e.target.value)} disabled={disabled} />
         <button className="btn primary" type="button" disabled={disabled || pending || !text.trim()} onClick={send} title={disabled ? PREVIEW : ""}>{pending ? "Sending…" : "Send"}</button>

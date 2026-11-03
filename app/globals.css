@@ -19599,3 +19599,33 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jrl-mf button.on em{color:#fff}
 /* "0 new" readable on the colors: solid white in a little dark pill */
 .jrl-mc-w small{opacity:1;color:#fff;font-size:12px;font-weight:700;background:rgba(20,29,43,.35);border-radius:999px;padding:1px 8px;margin-top:3px;width:fit-content}
+/* one chat look, like a phone's, for the customer's order page and ours (Nov 2, Nick: "more like an iPhone chat"): a soft
+   window, round bubbles, the name and time over each, the sender's on the right in blue */
+.thread{background:var(--surface-2);border:1px solid var(--line-2);border-radius:14px;padding:14px;min-height:200px;max-height:460px;gap:12px}
+.thread .msg{max-width:78%;padding:0;background:none;border-radius:0;display:flex;flex-direction:column;gap:3px}
+.thread .msg.me{align-items:flex-end;background:none}
+.thread .msg.them{align-items:flex-start;background:none}
+.thread .msg .who{font-size:11.5px;opacity:1;color:var(--ink-3);margin:0 6px}
+.msg-b{display:inline-block;padding:9px 14px;border-radius:18px;font-size:14.5px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.me .msg-b{background:var(--fbs-blue);color:#fff;border-bottom-right-radius:6px}
+.msg.them .msg-b{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-bottom-left-radius:6px}
+.thread-empty{margin:auto;text-align:center;font-size:13px;color:var(--ink-3);max-width:340px}
+/* the Job Center's conversation, the same phone chat, taller; their bubbles in their job's color */
+.jmb-focus .jmb-msgs{background:var(--surface-2);border:1px solid var(--line-2);border-radius:14px;padding:14px;min-height:260px;max-height:460px;gap:10px}
+.jmb-t .jmb-b.customer{background:none;border:0}
+.jmb-b>span{border-radius:18px;padding:9px 14px;font-size:14.5px;line-height:1.4}
+.jmb-b.customer>span{background:color-mix(in srgb,var(--mc,var(--ink-3)) 13%,var(--surface));border:1px solid color-mix(in srgb,var(--mc,var(--line)) 30%,var(--line));border-bottom-left-radius:6px}
+.jmb-b.staff>span{border-bottom-right-radius:6px}
+.jmb-b small{margin:0 6px}
+/* the Message Center banner: dark navy behind the logo on the left, the colors radiating out to the right; the logo on its
+   own dark circle with a soft dark glow; the title centered (Nov 2, Nick) */
+.jcx>.jrl-mc .jrl-mc-ban::before{background:radial-gradient(circle at 34px 34px,#141D2B 0,#141D2B 22%,rgba(20,29,43,.75) 34%,rgba(20,29,43,0) 62%)}
+.jrl-sig i{background:#141D2B;box-shadow:0 0 0 3px #141D2B,0 0 18px 8px rgba(20,29,43,.55)}
+.jrl-mc-t i{display:none}
+.jrl-mc-t{text-align:center}
+/* All / Waiting / New like our standard toolbar: white, the picked one tinted blue with a blue line under it */
+.jrl-mf{border-color:var(--line);background:var(--surface)}
+.jrl-mf button{background:var(--surface);color:var(--ink-3);box-shadow:inset 0 -3px 0 transparent}
+.jrl-mf button em{background:var(--surface-2);color:var(--ink-3);border-radius:999px;padding:0 7px;line-height:18px}
+.jrl-mf button.on{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 -3px 0 var(--accent)}
+.jrl-mf button.on em{background:var(--accent);color:#fff}
