@@ -3,6 +3,7 @@ import type { PriceList } from "@/lib/pricing";
 import PrintButton from "@/app/portal/pricing/print";
 import PricingTabs from "@/app/portal/pricing/tabs";
 import { EmbCalc, ScreenCalc } from "@/components/PricingCalc";
+import CalcSheet from "@/components/CalcSheet";
 
 /**
  * The wholesale price list, a tab in the portal for wholesale accounts (Oct 24, Nick: "on the wholesale companies, we
@@ -14,6 +15,8 @@ import { EmbCalc, ScreenCalc } from "@/components/PricingCalc";
 function Money({ n }: { n: number }) { const t = m(n); return <><span className="pl-dol">$</span>{t.slice(1)}</>; }
 const m = (n: number) => (n < 1 ? `$${n.toFixed(2).replace(/^0/, "")}` : `$${n.toFixed(2)}`);
 const ranges = (t: number[]) => t.map((q, i) => (i < t.length - 1 ? `${q.toLocaleString()}–${(t[i + 1] - 1).toLocaleString()}` : `${q.toLocaleString()}+`));
+/** a quantity range in a table's first column: "144–287", and on a phone just "144+" (Nov 3, Nick: "abbreviate in the mobile version") */
+function Rng({ r }: { r: string }) { const lo = r.split("–")[0].replace(/\+$/, ""); return <><span className="pl-long">{r}</span><span className="pl-short" aria-hidden>{lo}+</span></>; }
 
 export default function PortalPricing({ pl, company, phone, msgHref }: { pl: PriceList; company: string; phone: string; msgHref: string }) {
   const tiers = pl.tiers || [];
@@ -43,7 +46,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             <div className="pl-wrap"><table className="pl-tbl pl-grid" data-nofit>
               {/* a phone keeps the grid (Nov 1, Nick: "still needs the grid"): the headers shorten to the number of colors */}
               <thead><tr><th>Pieces</th>{Array.from({ length: colors }, (_, i) => <th key={i}><span className="pl-long">{i + 1} color{i ? "s" : ""}</span><span className="pl-short" aria-hidden>{i + 1}</span></th>)}</tr></thead>
-              <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row">{r}</th>{Array.from({ length: colors }, (_, c) => <td key={c}>{pl.screen?.[i]?.[c] != null ? <Money n={+pl.screen[i][c]} /> : "—"}</td>)}</tr>)}</tbody>
+              <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row"><Rng r={r} /></th>{Array.from({ length: colors }, (_, c) => <td key={c}>{pl.screen?.[i]?.[c] != null ? <Money n={+pl.screen[i][c]} /> : "—"}</td>)}</tr>)}</tbody>
             </table></div>
             <ul className="pl-rules">
               {pl.darkAddsColor && <li><b>Dark garments</b> need a white underbase, which counts as one more color{light ? ` (${light} print without one)` : ""}.</li>}
@@ -73,7 +76,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             <div className="panel-b"><dl className="pl-dl">{fin.map((f) => <div key={f.id}><dt>{f.name}</dt><dd>{m(f.price)}</dd></div>)}</dl></div>
           </section>}
         </div>
-        <ScreenCalc pl={pl} />
+        <CalcSheet><ScreenCalc pl={pl} /></CalcSheet>
 
           </> },
           { k: "emb", label: "Embroidery", body: <>
@@ -84,7 +87,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
               {/* prices on the right, specialty items in their own column with what counts as one under its name (Nov 2, Nick) */}
               <colgroup><col />{pl.embSpecialty?.length ? <><col className="pl-c-p" /><col className="pl-c-sp" /></> : <col className="pl-c-p" />}</colgroup>
               <thead><tr><th>Pieces</th><th>Price</th>{pl.embSpecialty?.length ? <th>Specialty items<span className="pl-th-sub">Hats, bags, fleece &amp; jackets</span></th> : null}</tr></thead>
-              <tbody>{ranges(embT).map((r, i) => <tr key={r}><th scope="row">{r}</th><td>{pl.embroidery?.[i] != null ? m(+pl.embroidery[i]) : "—"}</td>{pl.embSpecialty?.length ? <td>{pl.embSpecialty[i] != null ? m((+pl.embroidery[i] || 0) + (+pl.embSpecialty[i] || 0)) : "—"}</td> : null}</tr>)}</tbody>
+              <tbody>{ranges(embT).map((r, i) => <tr key={r}><th scope="row"><Rng r={r} /></th><td>{pl.embroidery?.[i] != null ? m(+pl.embroidery[i]) : "—"}</td>{pl.embSpecialty?.length ? <td>{pl.embSpecialty[i] != null ? m((+pl.embroidery[i] || 0) + (+pl.embSpecialty[i] || 0)) : "—"}</td> : null}</tr>)}</tbody>
             </table></div>
             <ul className="pl-rules">
               {pl.embPer1k ? <li><b>Over {(pl.embStitches || 0).toLocaleString()} stitches:</b> add {m(pl.embPer1k)} per 1,000.</li> : null}
@@ -94,7 +97,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
           </div>
         </section>
 
-        <EmbCalc pl={pl} />
+        <CalcSheet><EmbCalc pl={pl} /></CalcSheet>
           </> },
           ...(dtfOk ? [{ k: "dtf", label: "DTF heat transfers", body: <>
         <section className="panel pl-sec">
@@ -103,7 +106,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
               <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>
                 <colgroup><col /><col className="pl-c-p" /></colgroup>
                 <thead><tr><th>Pieces</th><th>Price</th></tr></thead>
-                <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row">{r}</th><td>{pl.dtf?.[i] != null ? m(+pl.dtf[i]) : "—"}</td></tr>)}</tbody>
+                <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row"><Rng r={r} /></th><td>{pl.dtf?.[i] != null ? m(+pl.dtf[i]) : "—"}</td></tr>)}</tbody>
               </table></div>
             </div>
           </section>
