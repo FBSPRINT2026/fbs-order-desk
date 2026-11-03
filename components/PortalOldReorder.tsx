@@ -43,6 +43,8 @@ function OldReorderForm({ s, onClose }: { s: OldReorderStart; onClose: () => voi
   const [sizes, setSizes] = useState<Record<number, Record<string, string>>>({});
   const [off, setOff] = useState<Record<number, boolean>>({});
   const [art, setArt] = useState<"same" | "new">("same");
+  // their order type, required when they have them (Nov 2, Nick: Cedar Bulk / Cart, Nine18 Sam / Mike)
+  const [otype, setOtype] = useState("");
   const [files, setFiles] = useState<RqFile[]>([]);
   const [changes, setChanges] = useState(""), [notes, setNotes] = useState(""), [due, setDue] = useState("");
   const [paste, setPaste] = useState(""), [reading, setReading] = useState(""), [readMsg, setReadMsg] = useState("");
@@ -107,7 +109,7 @@ function OldReorderForm({ s, onClose }: { s: OldReorderStart; onClose: () => voi
     setBusy(true); setErr("");
     const r = await sendOldReorder(s.id, {
       rows: s.rows.map((row, i) => ({ gi: row.gi, li: row.li, off: !!off[i], sizes: Object.fromEntries(Object.entries(sizes[i] || {}).filter(([, v]) => +v > 0).map(([z, v]) => [z, +v])) })),
-      art, files, changes, notes, due: due || null,
+      art, files, changes, notes, due: due || null, type: otype,
     }).catch(() => null);
     setBusy(false);
     if (!r?.ok) { setErr(r?.error || "Couldn't send it. Try again."); return; }
@@ -193,6 +195,10 @@ function OldReorderForm({ s, onClose }: { s: OldReorderStart; onClose: () => voi
               <div className="field"><label htmlFor="por-ch">Any changes?</label><textarea id="por-ch" rows={2} value={changes} placeholder="New shirt color, change the year on the back, leave off the back…" onChange={(e) => setChanges(e.target.value)} /></div>
               <div className="field"><label htmlFor="por-nt">Notes for us</label><textarea id="por-nt" rows={2} value={notes} placeholder="Ship to the field house, call Jen when ready…" onChange={(e) => setNotes(e.target.value)} /></div>
               <div className="field por-due"><label htmlFor="por-due">Need it by</label><input id="por-due" type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
+              {(s.types || []).length > 0 && <div className="field"><label>{s.typeLabel || "Order type"}</label>
+                <div className="so-seg rq-otype" role="radiogroup" aria-label={s.typeLabel || "Order type"} style={{ gridTemplateColumns: `repeat(${(s.types || []).length},minmax(0,1fr))` }}>
+                  {(s.types || []).map((k) => <button key={k} type="button" role="radio" aria-checked={otype === k} className={otype === k ? "on" : ""} onClick={() => setOtype(k)}>{k}</button>)}
+                </div></div>}
             </section>
 
             <div className="por-price"><span>Price</span><span><b>TBD</b> <span className="faint">· we&apos;ll confirm it and send it back for your OK</span></span></div>
@@ -200,7 +206,7 @@ function OldReorderForm({ s, onClose }: { s: OldReorderStart; onClose: () => voi
             {preview && <div className="faint">Preview of the customer&apos;s reorder form: nothing is saved or sent.</div>}
             <div className="por-foot">
               <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
-              <button type="button" className="btn primary" disabled={busy || !!reading || preview} onClick={() => void send()}>{busy ? "Sending…" : "Send reorder"}</button>
+              <button type="button" className="btn primary" disabled={busy || !!reading || preview || ((s.types || []).length > 0 && !otype)} title={(s.types || []).length > 0 && !otype ? `Pick ${(s.types || []).join(" or ")}` : undefined} onClick={() => void send()}>{busy ? "Sending…" : "Send reorder"}</button>
             </div>
           </>}
         </div>

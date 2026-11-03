@@ -15,14 +15,17 @@ export type ProgramCartLine = { itemId: string; color: string; sizes: Record<str
  * A program order: the customer picks sizes on their program items; it comes to the shop as an order request
  * with the program's flat prices already set (no setup fees). Prices and items are checked here, never taken from the browser.
  */
-export async function placeProgramOrder(input: { lines: ProgramCartLine[]; due_date: string | null; po: string; notes: string; projectId?: string | null }): Promise<{ ok: boolean; error?: string; id?: string; number?: number }> {
+export async function placeProgramOrder(input: { lines: ProgramCartLine[]; due_date: string | null; po: string; notes: string; projectId?: string | null; /** their order type (Cedar: Bulk / Cart; Nine18: Sam / Mike) */ type?: string }): Promise<{ ok: boolean; error?: string; id?: string; number?: number }> {
   try {
     const { supabase, user, email, isStaff } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
     if (isStaff) return { ok: false, error: "This is a preview. Customers order from their own login." };
-    const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, name, company, price_type, tax_exempt").order("id").range(ra, rb));
+    const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, name, company, price_type, tax_exempt, order_types").order("id").range(ra, rb));
     const cust = (cs || [])[0];
     if (!cust) return { ok: false, error: "We couldn't find your account." };
+    // their order type is required when they have them (Nov 2, Nick)
+    const oTypes = ((cust as { order_types?: string[] }).order_types || []);
+    if (oTypes.length && !oTypes.includes(String(input.type || ""))) return { ok: false, error: `Pick ${oTypes.join(" or ")}.` };
     // row security: only their own active program items come back
     const ids = [...new Set(input.lines.map((l) => l.itemId))];
     const { data: its } = ids.length ? await supabase.from("program_items").select("*").in("id", ids).is("archived_at", null) : { data: [] };
@@ -52,7 +55,7 @@ export async function placeProgramOrder(input: { lines: ProgramCartLine[]; due_d
     let projectId: string | null = null;
     if (input.projectId) { const { data: p } = await supabase.from("projects").select("id").eq("id", input.projectId).maybeSingle(); projectId = p?.id || null; }
     const { data, error } = await admin.from("orders").insert({
-      customer_id: cust.id, status: "request", type: "quote", source: "program", submitted_at: new Date().toISOString(),
+      customer_id: cust.id, status: "request", type: "quote", source: "program", submitted_at: new Date().toISOString(), ...(oTypes.length ? { order_lane: String(input.type) } : {}),
       price_type: cust.price_type || "wholesale", tax_exempt: !!cust.tax_exempt, waive_setup: true, groups, total: Math.round(total * 100) / 100, qty: pcs,
       nickname: `Program order${groups.length === 1 ? `: ${groups[0].name}` : ""}`.slice(0, 120), po_number: (input.po || "").slice(0, 60),
       due_date: input.due_date && /^\d{4}-\d{2}-\d{2}$/.test(input.due_date) ? input.due_date : null, notes: (input.notes || "").slice(0, 2000), project_id: projectId,

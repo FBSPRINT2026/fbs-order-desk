@@ -19735,3 +19735,8 @@ html body .ord .line-b .gl-list .gl .a-ea input,html body .ord .line-b.fit-s .gl
 .tbl.cu-tbl.rqd-tbl td.cu-rail{vertical-align:top}
 .rqd-tbl .rqd-sort{white-space:nowrap}
 .pod-om p.pod-om-t{white-space:pre-wrap;font-weight:400;font-size:14px;line-height:1.55;color:var(--ink);margin:0;overflow-wrap:anywhere}
+/* a customer's line before we price it: "Price TBD" on the line, no box, no "×" (Nov 2, Nick: retail pricing "looks weird") */
+.line.np .gl .a-ea.a-quote{align-items:center!important}
+.line.np .gl .a-ea.a-quote::before{display:none!important;content:none!important}
+.line.np .gl .a-quote .aq-ph{height:auto;line-height:1.3;padding:0;border:0;background:none;font-size:13px;font-weight:600;color:var(--ink-3)}
+html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{display:none!important}

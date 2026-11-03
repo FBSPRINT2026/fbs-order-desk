@@ -1001,7 +1001,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   </div>
                   {/* no price when prices are hidden (the retail builder): a "Price" placeholder and who sets it (Oct 24, Nick:
                       "have a thing that says price… FBS will send quote") */}
-                  {hidePrices && <div className="a-ea r a-quote" title="We price your order and send you a quote to approve"><span className="aq-in"><span className="aq-ph">Price</span><small>FBS will send a quote</small></span></div>}
+                  {/* no price for them yet: one short line on the row, the reason on hover (Nov 2, Nick: "the pricing looks weird") */}
+                  {hidePrices && <div className="a-ea r a-quote" title="FBS prices your order and sends you a quote to approve"><span className="aq-in"><span className="aq-ph">Price TBD</span></span></div>}
                   {!hidePrices && <>
                   <div className="a-ea r"><input type="number" step="0.01" min="0" tabIndex={-1} title={l.prog ? `${l.prog.note}. Type a price to override it.` : "Click to override"} aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "") + (l.prog ? " prg" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })}
                     onBlur={(e) => { const v = e.target.value === "" ? null : +e.target.value; if (v != null && !isNaN(v) && g.lines.length > 1 && g.lines.some((y, yi) => yi !== li && y.priceOverride !== v)) setAskAll({ li, v }); }}

@@ -107,7 +107,8 @@ export async function submitRequest(id: string): Promise<Result> {
     const { admin, order: o0, cust, email, supabase } = await myDraft(id);
     const groups = orderGroups(o0);
     const pieces = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
-    const missing = requestProblems(groups);
+    const oTypes = (cust as { order_types?: string[] }).order_types || [];
+    const missing = [...(oTypes.length && !oTypes.includes(String((o0 as { order_lane?: string }).order_lane || "")) ? [`pick ${oTypes.join(" or ")}`] : []), ...requestProblems(groups)];
     if (missing.length) return { ok: false, error: `Almost there: ${missing.join("; ")}.` };
     // sent: the draft becomes an order with its number (Oct 24, Nick)
     const { data: num, error: ce } = await supabase.rpc("order_commit", { p_id: id });
@@ -837,7 +838,7 @@ export async function bringOldJobFile(requestId: string, groupId: string, archiv
 
 export type OldReorderKind = "adult" | "youth" | "toddler" | "baby" | "waist" | "one";
 export type OldReorderRow = { gi: number; li: number; style: string; brand: string; color: string; garment: string; kind: OldReorderKind; run: string[]; last: Record<string, number> };
-export type OldReorderStart = { id: string; number: string; name: string; date: string; rows: OldReorderRow[]; prints: string[]; /** one of their orders in the new system (Nov 2) */ own?: boolean };
+export type OldReorderStart = { id: string; number: string; name: string; date: string; rows: OldReorderRow[]; prints: string[]; /** one of their orders in the new system (Nov 2) */ own?: boolean; /** their order types and what they're called (Cedar: Bulk / Cart; Nine18: Entered by Sam / Mike), required to send */ types?: string[]; typeLabel?: string };
 const KIND_RUN: Record<OldReorderKind, readonly string[]> = { adult: ADULT_SIZES.slice(0, 7), youth: YOUTH_SIZES, toddler: TODDLER_SIZES, baby: BABY_SIZES, waist: ["30", "32", "34", "36", "38", "40"], one: [ONE_SIZE] };
 const kindOfSize = (z: string): OldReorderKind => ((YOUTH_SIZES as readonly string[]).includes(z) ? "youth" : (TODDLER_SIZES as readonly string[]).includes(z) ? "toddler" : (BABY_SIZES as readonly string[]).includes(z) ? "baby" : (WAIST_SIZES as readonly string[]).includes(z) ? "waist" : z === ONE_SIZE ? "one" : "adult");
 
@@ -889,7 +890,7 @@ export async function startOldReorder(archivedId: string, as?: string): Promise<
     const prints = [...new Set(groups.flatMap((g) => g.imprints.map((d) => [d.location, d.method === "embroidery" ? "embroidered" : ""].filter(Boolean).join(", "))).filter(Boolean))];
     if (!r) return { ok: false, error: "We couldn't find that order." };
     const label = `#${r.visual_id}`, nick = String(r.nickname || "");
-    const start0 = { number: String(r.visual_id || ""), name: nick, date: String(r.order_date || "").slice(0, 10), rows, prints, own };
+    const start0 = { number: String(r.visual_id || ""), name: nick, date: String(r.order_date || "").slice(0, 10), rows, prints, own, types: (cust as { order_types?: string[] }).order_types || [], typeLabel: (cust as { order_type_label?: string }).order_type_label || "" };
     if (preview) return { ok: true, start: { id: "", ...start0 } };
     const { data, error } = await admin.from("orders").insert({
       customer_id: cust.id, status: "request", type: "quote", source: "portal", draft: true,
@@ -926,7 +927,7 @@ export async function readOldReorderSizes(orderId: string, input: { files?: RqFi
   } catch (e) { return fail(e); }
 }
 
-export type OldReorderSend = { rows: { gi: number; li: number; sizes: Record<string, number>; off?: boolean }[]; art: "same" | "new"; files: RqFile[]; changes?: string; notes?: string; due?: string | null };
+export type OldReorderSend = { rows: { gi: number; li: number; sizes: Record<string, number>; off?: boolean }[]; art: "same" | "new"; files: RqFile[]; changes?: string; notes?: string; /** their order type */ type?: string; due?: string | null };
 /** send it in: the sizes on the lines, the lines left off removed, their words for us; a request we price and send back */
 export async function sendOldReorder(orderId: string, s: OldReorderSend): Promise<Result & { number?: number }> {
   try {
@@ -947,6 +948,8 @@ export async function sendOldReorder(orderId: string, s: OldReorderSend): Promis
     const qty = kept.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0), 0);
     const files = cleanFiles(s.files || [], cust.id, orderId);
     const changes = String(s.changes || "").trim().slice(0, 3000), notes = String(s.notes || "").trim().slice(0, 3000);
+    const oTypes = (cust as { order_types?: string[] }).order_types || [];
+    if (oTypes.length && !oTypes.includes(String(s.type || ""))) return { ok: false, error: `Pick ${oTypes.join(" or ")}.` };
     if (!qty && !files.length && !changes && !notes) return { ok: false, error: "Add your sizes, or drop a file with them." };
     const art = s.art === "new" ? "new" : "same";
     if (art === "new" && !files.some((f) => f.kind === "art") && !changes) return { ok: false, error: "Add your new art, or tell us what's changing." };
@@ -960,7 +963,7 @@ export async function sendOldReorder(orderId: string, s: OldReorderSend): Promis
       notes ? `Notes: ${notes}` : "",
     ].filter(Boolean).join("\n");
     const { error: ue } = await admin.from("orders").update({
-      groups: kept, qty, ...(due ? { due_date: due } : {}),
+      groups: kept, qty, ...(due ? { due_date: due } : {}), ...(oTypes.length ? { order_lane: String(s.type) } : {}),
       notes: [o0.notes || "", changes ? `Changes: ${changes}` : "", notes ? `Notes: ${notes}` : ""].filter(Boolean).join("\n").slice(0, 4000),
       simple_order: { about, qty, method: "", reorder: { ...re, art, changes, notes, off: offNames }, files: files.map((f) => ({ path: f.path, name: f.name, kind: f.kind })), at: new Date().toISOString(), by: email },
     }).eq("id", orderId);

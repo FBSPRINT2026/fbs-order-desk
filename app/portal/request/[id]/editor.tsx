@@ -181,7 +181,9 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
     setDesc("");
     setDescNote(`We filled in ${r.added} group${r.added === 1 ? "" : "s"} below. Please check the styles, colors and sizes, and upload your logo on each print location.${r.questions?.length ? ` We'll also need: ${r.questions.join("; ")}.` : ""}`);
   }
-  const problems = [...requestProblems(o.groups), ...(o.delivery_method && o.delivery_method !== "pickup" && !(o.ship_to || "").trim() ? [`Add the address to ${o.delivery_method === "ship" ? "ship" : "deliver"} to`] : [])];
+  // their order type is required (Nov 2, Nick: Cedar's Bulk / Cart, Nine18's Sam / Mike: "make sure that those are
+  // required fields when you send to FBS")
+  const problems = [...(orderTypes.length && !orderTypes.includes(o.order_lane || "") ? [`Pick ${orderTypes.join(" or ")}${orderTypeLabel ? ` under ${orderTypeLabel}` : ""}`] : []), ...requestProblems(o.groups), ...(o.delivery_method && o.delivery_method !== "pickup" && !(o.ship_to || "").trim() ? [`Add the address to ${o.delivery_method === "ship" ? "ship" : "deliver"} to`] : [])];
   const hints = problems.length ? [] : requestHints(o.groups);
 
   // the mockup, beside the prints (Oct 24, Nick: "start out by saying create mockup or upload your own existing mockup… in the
@@ -321,7 +323,7 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
     if (!re?.text.trim()) return;
     setRe({ ...re, busy: "Sending…" });
     await flush();
-    const r = await sendSimpleOrder(o.id, { name: o.nickname || "Reorder", about: re.text, files: [], delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "" });
+    const r = await sendSimpleOrder(o.id, { name: o.nickname || "Reorder", about: re.text, files: [], delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "", type: latest.current.order_lane || "" });
     if (!r.ok) { setRe((x) => (x ? { ...x, busy: "" } : x)); return setErr(r.error || "Couldn't send it."); }
     dropUnsaved(o.id);
     router.push(`/portal/orders/${o.id}?sent=1`);
