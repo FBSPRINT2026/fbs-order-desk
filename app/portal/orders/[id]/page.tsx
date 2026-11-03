@@ -47,7 +47,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   if (o.status === "request" && !o.submitted_at) redirect(`/portal/request/${id}${as ? `?as=${as}` : ""}`);
   const isReq = o.status === "request";
   // a simple order: what they sent (Nov 2, Nick: the McKenna job brought in from ClickUp "as if they had filled it out")
-  const so = (o as typeof o & { simple_order?: { about?: string; garments?: string; qty?: number | null; method?: string; reorder?: unknown; fields?: Record<string, string>; files?: { path: string; name: string; kind?: string }[] } | null }).simple_order || null;
+  const so = (o as typeof o & { simple_order?: { about?: string; garments?: string; qty?: number | null; method?: string; reorder?: unknown; fields?: Record<string, string>; prints?: string; sizes?: { group?: string; garment?: string; sizes: Record<string, number> }[]; files?: { path: string; name: string; kind?: string }[] } | null }).simple_order || null;
   // the order as they sent it in, before we've built it (Nov 2, Nick: "rethink this order intake… just like in ClickUp…
   // exactly what they wrote"): only what they gave us, their message, their attachments, and a way to ask us
   const intake = isReq && !!so && !so.reorder;
@@ -207,24 +207,44 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
         )}
         <div className="two pod-two">
           <div className="stack" id="items">
-            {intake && so && (
-              <section className="panel pod-so">
-                <div className="panel-h"><h2>Attachments</h2></div>
-                <div className="panel-b">
-                  {so.about ? <div className="pod-so-msg"><span className="lbl">Original message</span><p>{so.about}</p></div> : null}
-                  {(so.method || so.qty || so.garments) ? <dl className="pod-so-dl">
-                    {so.method ? <div><dt>Decoration</dt><dd>{({ screen: "Screen printing", embroidery: "Embroidery", transfer: "Transfers", mixed: "Mixed" } as Record<string, string>)[so.method] || so.method}</dd></div> : null}
-                    {so.qty ? <div><dt>Pieces</dt><dd>{so.qty.toLocaleString("en-US")}</dd></div> : null}
-                    {so.garments ? <div><dt>Garments</dt><dd>{so.garments}</dd></div> : null}
-                  </dl> : null}
-                  {soFiles.length > 0 ? <div className="pod-att">{soFiles.map((f) => (
-                    <a key={f.path} className="pod-att-t" href={f.url || undefined} target="_blank" rel="noreferrer">
-                      <span className="pod-att-i"><FileThumb name={f.name} url={f.url || undefined} /></span>
-                      <span className="pod-att-c"><b>{f.name}</b><small>{f.kind === "po" ? "PO" : f.kind === "art" ? "Art" : "File"}</small></span>
-                    </a>))}</div> : <div className="faint">No attachments.</div>}
-                </div>
-              </section>
-            )}
+            {/* what they sent, exactly as they sent it (Nov 2, Nick: "I want it like bullet points… exactly as they wrote it…
+                if they give a sizing… in like kind of grid form"): their message in the blue box, line by line; the form's answers
+                one per row; their sizes in a grid by box or group; then their files */}
+            {intake && so && (() => {
+              const lines = String(so.about || "").split(/\n+/).map((x) => x.replace(/^\s*[-•*]\s*/, "").trim()).filter(Boolean);
+              const rows: [string, string][] = ([
+                ["Decoration", so.method ? ({ screen: "Screen printing", embroidery: "Embroidery", transfer: "Transfers", mixed: "Mixed" } as Record<string, string>)[so.method] || so.method : ""],
+                ["Pieces", so.qty && !(so.sizes || []).length ? `About ${so.qty.toLocaleString("en-US")}` : ""],
+                ["Garments", so.garments || ""],
+                ["Prints", so.prints || ""],
+              ] as [string, string][]).filter(([, v]) => v);
+              const sz = (so.sizes || []).filter((r) => Object.values(r.sizes || {}).some((v) => +v > 0));
+              const cols = SIZES.filter((k) => sz.some((r) => +(r.sizes?.[k] || 0) > 0));
+              const tot = (r: { sizes: Record<string, number> }) => cols.reduce((a0, k) => a0 + (+(r.sizes?.[k] || 0)), 0);
+              return (
+                <section className="panel pod-so">
+                  <div className="panel-h"><h2>What you sent us</h2><span className="faint">Exactly as you sent it</span></div>
+                  <div className="panel-b">
+                    {lines.length > 0 && <div className="pod-om"><span>Original message</span>{lines.length > 1 ? <ul>{lines.map((x, i) => <li key={i}>{x}</li>)}</ul> : <p>{lines[0]}</p>}</div>}
+                    {rows.length > 0 && <><div className="pod-so-sec">Order form</div><div className="pod-so-rows">{rows.map(([k, v]) => <Fragment key={k}><span>{k}</span><b>{v}</b></Fragment>)}</div></>}
+                    {sz.length > 0 && <><div className="pod-so-sec">Sizes</div>
+                      <div className="tbl-wrap pod-so-szw"><table className="tbl pod-so-sz" data-nofit>
+                        <thead><tr><th>{sz.some((r) => r.group) ? "Box" : "Garment"}</th>{cols.map((k) => <th key={k} className="r">{sizeLabel(k as never)}</th>)}<th className="r">Total</th></tr></thead>
+                        <tbody>
+                          {sz.map((r, i) => <tr key={i}><td><b>{r.group || r.garment || `Line ${i + 1}`}</b>{r.group && r.garment ? <div className="sub">{r.garment}</div> : null}</td>{cols.map((k) => <td key={k} className="r num">{+(r.sizes?.[k] || 0) || ""}</td>)}<td className="r num b">{tot(r).toLocaleString("en-US")}</td></tr>)}
+                          {sz.length > 1 && <tr className="pod-so-all"><td><b>All</b></td>{cols.map((k) => <td key={k} className="r num">{sz.reduce((a0, r) => a0 + (+(r.sizes?.[k] || 0)), 0) || ""}</td>)}<td className="r num b">{sz.reduce((a0, r) => a0 + tot(r), 0).toLocaleString("en-US")}</td></tr>}
+                        </tbody>
+                      </table></div></>}
+                    <div className="pod-so-sec">Attachments</div>
+                    {soFiles.length > 0 ? <div className="pod-att">{soFiles.map((f) => (
+                      <a key={f.path} className="pod-att-t" href={f.url || undefined} target="_blank" rel="noreferrer">
+                        <span className="pod-att-i"><FileThumb name={f.name} url={f.url || undefined} /></span>
+                        <span className="pod-att-c"><b>{f.name}</b><small>{f.kind === "po" ? "PO" : f.kind === "art" ? "Art" : "File"}</small></span>
+                      </a>))}</div> : <div className="faint">No attachments.</div>}
+                  </div>
+                </section>
+              );
+            })()}
             {/* each job like the proof: its mockups, what's printed where (method, size, inks with their colors), then the
                 garments by size with their prices */}
             {orderGroups(o).map((g, gi) => {

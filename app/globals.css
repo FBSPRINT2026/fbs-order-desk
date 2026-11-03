@@ -19522,3 +19522,22 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jc-sbar .jc-dseg .prf-dept.z{color:color-mix(in srgb,var(--c) 50%,var(--surface))}
 .jc-sbar .jc-dseg .prf-dept.on,.jc-sbar .jc-dseg .prf-dept.all.on{background:var(--c);color:#fff;box-shadow:none}
 .jc-sbar .jc-dseg .prf-dept + .prf-dept{border-left:1px solid color-mix(in srgb,var(--c) 30%,var(--surface))!important}
+/* the customer's order page: the dashboard's panel headers (soft gray, a touch of color at the right, the rainbow seam), not
+   the rainbow under each title (Nov 2, Nick) */
+.pod .panel{--hc:var(--fbs-blue)}
+.pod aside .panel{--hc:var(--fbs-orange)}
+.pod #messages{--hc:var(--fbs-violet)}
+.pod .panel>.panel-h{background:linear-gradient(90deg,var(--surface-2) 70%,color-mix(in srgb,var(--hc) 14%,var(--surface-2)));border-bottom:3px solid transparent;border-image:var(--fbs-fade) 1;border-image-slice:0 0 1 0}
+.pod .panel>.panel-h h2::after{content:none}
+/* What you sent us: their message in blue, the form's answers, their sizes, their files */
+.pod-om{background:color-mix(in srgb,var(--fbs-blue) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--fbs-blue) 35%,var(--line));border-radius:var(--r);padding:10px 14px;margin-bottom:16px}
+.pod-om>span{display:block;font-size:12px;font-weight:700;color:color-mix(in srgb,var(--fbs-blue) 75%,var(--ink));margin-bottom:4px}
+.pod-om ul{margin:0;padding-left:18px;font-size:14px;line-height:1.6;color:var(--ink)}
+.pod-om p{margin:0;font-size:14px;line-height:1.6;color:var(--ink);white-space:pre-wrap}
+.pod-so-sec{font-size:12px;font-weight:600;color:var(--ink-3);margin:0 0 6px}
+.pod-so-rows{display:grid;grid-template-columns:minmax(90px,max-content) minmax(0,1fr);gap:6px 14px;font-size:14px;margin-bottom:16px}
+.pod-so-rows>span{color:var(--ink-3);font-size:13px}
+.pod-so-rows>b{font-weight:500;color:var(--ink)}
+.pod-so-szw{margin-bottom:16px}
+.pod-so-sz td.num,.pod-so-sz th.r{white-space:nowrap}
+.pod-so-all td{background:var(--surface-2)}
