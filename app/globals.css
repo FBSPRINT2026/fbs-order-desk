@@ -19946,3 +19946,29 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .portal .aa-paylay .aa-ph-card{order:4}
   .portal .aa-paylay > .aa-home-main > *:not(.pyl-stats):not(.pyl):not(.aa-ph-card){order:1}
 }
+/* Goods on a phone (Nov 3, Nick: "job number, brief description and then… little icons… check mark… issues… too much"):
+   each order is one short row: a status icon, then #number and its name on one line, in-hands under it; the shipment
+   lines and status words stay on a computer. "Ask about this" / "Add tracking" / the tracking list stay when there's one. */
+.gdk-ico{display:none}
+@media (max-width:640px){
+  .gdk-grp{grid-template-columns:6px minmax(0,1fr)}
+  .gdk-row{display:grid!important;grid-template-columns:30px minmax(0,1fr);column-gap:10px;row-gap:2px;align-items:center;padding:10px 12px!important}
+  .gdk-row > *{grid-column:2}
+  .gdk-row > .gdk-ico{grid-column:1;grid-row:1 / span 2;display:grid;place-items:center;width:28px;height:28px;border-radius:999px;align-self:center}
+  .gdk-ico svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+  .gdk-ico.ok{background:color-mix(in srgb,var(--ok) 15%,var(--surface));color:var(--ok)}
+  .gdk-ico.bad{background:color-mix(in srgb,var(--danger) 14%,var(--surface));color:var(--danger)}
+  .gdk-ico.way{background:color-mix(in srgb,var(--accent) 14%,var(--surface));color:var(--accent)}
+  .gdk-ico.wait{background:var(--surface-2);color:var(--ink-3)}
+  .gdk-ico.way svg{stroke-width:2}
+  .gdk-row .gdk-c1{display:block;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+  .gdk-row .gdk-c1 .gdk-on{font-size:14px;margin-right:6px}
+  .gdk-row .gdk-c1 .gdk-jnm{display:inline;font-size:14px}
+  .gdk-row .gdk-c1 .gdk-sm{display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gdk-row > .gdk-c2{display:none}
+  .gdk-row > .gdk-c3{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;min-width:0}
+  .gdk-row > .gdk-c3 > .gdk-stx{display:none}
+  .gdk-row > .gdk-c3 > .gdk-c3-sub{font-size:12px}
+  .gdk-row > .gdk-c3:not(:has(.gdk-c3-sub, button)){display:none}
+  .gdk-row > :is(.gdk-trks,.gdk-full){grid-column:1 / -1}
+}

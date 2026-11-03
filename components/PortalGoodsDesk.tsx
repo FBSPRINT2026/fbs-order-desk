@@ -122,6 +122,13 @@ export default function PortalGoodsDesk({ items, incoming, told = [], canAct, ca
       <article key={o.id} className={"gdk-row" + (drag ? " drop" : "") + (over === o.id ? " over" : "")}
         onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(o.id); } }} onDragLeave={() => setOver((x) => (x === o.id ? null : x))} onDrop={(e) => { e.preventDefault(); void dropOn(o.id); }}>
         {/* the job first and big (Nov 2, Nick: "really clear on the left… the job number and the description with the due date") */}
+        {/* on a phone the status is this one icon (Nov 3, Nick: "job number, brief description… little icons… check mark,
+            issues"): here, on the way, an issue, or waiting on tracking */}
+        {(() => { const k = r.done ? "ok" : late || r.short || r.st === "issue" ? "bad" : r.boxes ? "way" : "wait"; const t = { ok: "All here", bad: "Needs a look", way: r.boxes ? `${r.here} of ${r.boxes} boxes here` : "On the way", wait: "Waiting on tracking" }[k]; return (
+          <span className={"gdk-ico " + k} title={t} aria-label={t} role="img">{k === "ok" ? <svg viewBox="0 0 24 24" aria-hidden><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+            : k === "bad" ? <svg viewBox="0 0 24 24" aria-hidden><path d="M12 8v5M12 16.5v.5" /></svg>
+            : k === "way" ? <svg viewBox="0 0 24 24" aria-hidden><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7M7 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM17 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" /></svg>
+            : <svg viewBox="0 0 24 24" aria-hidden><path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z" /></svg>}</span>); })()}
         <div className="gdk-c1"><Link className="gdk-on" href={o.href}>#{o.number}</Link><b className="gdk-jnm">{o.nickname || "Order"}</b>
           <div className="gdk-sm">{[o.due_date ? `In hands ${when(o.due_date)}` : "", o.qty ? pcsOf(o.qty) : ""].filter(Boolean).join(" · ")}</div></div>
         <div className="gdk-c2">{groups.length ? groups.map((g, k) => <div key={k}><b>{g.supplier ? `${g.supplier.replace(/ Activewear$/, "")} ${g.order}` : "Your shipment"}</b>{!g.supplier && g.ships[0]?.added_by === "customer" ? <> {youTold}</> : null}{g.ships[0]?.note && g.supplier ? <span className="gdk-sm gdk-c2-sub">{g.ships[0].note.split(" · ").slice(2).join(" · ") || ""}</span> : g.ships[0]?.note ? <span className="gdk-sm gdk-c2-sub">{g.ships[0].note}</span> : null}</div>)
