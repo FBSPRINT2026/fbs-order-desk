@@ -64,9 +64,12 @@ export async function setPayOptions(customerId: string, p: { no_card_fee?: boole
 }
 
 /** run it: `savedId` (on file, OK to charge) or `newPmId` (a card just typed into Stax's fields) */
-export async function takePayment(input: { customerId: string; orderIds: string[]; savedId?: string; newPmId?: string; newMethod?: "card" | "bank"; split: boolean; fee: boolean; save?: boolean }): Promise<{ ok: true; results: TPResult[] } | { ok: false; error: string }> {
+export async function takePayment(input: { customerId: string; orderIds: string[]; savedId?: string; newPmId?: string; newMethod?: "card" | "bank"; split: boolean; fee: boolean; save?: boolean; pin: string }): Promise<{ ok: true; results: TPResult[] } | { ok: false; error: string; pin?: boolean }> {
   try {
     const { v, admin, by } = await allowed();
+    // the person's PIN, every charge (lib/payPin.ts)
+    const pc = await (await import("@/lib/payPin")).checkPin(admin, v.email, input.pin);
+    if (!pc.ok) return { ok: false, error: pc.error, pin: true };
     const key = process.env.STAX_API_KEY?.trim();
     if (!key) return { ok: false, error: "Stax isn't connected." };
     const [{ data: c }, { data: s }] = await Promise.all([
@@ -139,4 +142,39 @@ export async function takePayment(input: { customerId: string; orderIds: string[
     revalidatePath(`/shop/customers/${input.customerId}`);
     return { ok: true, results };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** the PINs: whether you have one; the owner sees everyone who can take payments and can set theirs */
+export async function pinInfo(): Promise<{ ok: true; mine: boolean; owner: boolean; people: { email: string; name: string; has: boolean }[] } | { ok: false; error: string }> {
+  try {
+    const { v, admin } = await allowed();
+    const { hasPin } = await import("@/lib/payPin");
+    const mine = await hasPin(admin, v.email);
+    if (v.role !== "owner") return { ok: true, mine, owner: false, people: [] };
+    const [{ data: st }, { data: s }, { data: pins }] = await Promise.all([
+      admin.from("staff").select("email, name, role"), admin.from("settings").select("data").eq("id", 1).maybeSingle(), admin.from("staff_pay_pins").select("email"),
+    ]);
+    const { permsFor, accessOf } = await import("@/lib/roles");
+    const acc = accessOf(s?.data), have = new Set(((pins || []) as { email: string }[]).map((p) => p.email));
+    const people = ((st || []) as { email: string; name: string; role: string }[]).filter((p) => permsFor(p.role, acc[p.email.toLowerCase()]).takePayments).map((p) => ({ email: p.email.toLowerCase(), name: p.name || p.email, has: have.has(p.email.toLowerCase()) }));
+    return { ok: true, mine, owner: true, people };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+/** set a PIN: your own (with your old one, once you have one), or, for the owner, anyone who can take payments */
+export async function savePin(p: { email?: string; pin: string; old?: string }) {
+  try {
+    const { v, admin, by } = await allowed();
+    const lib = await import("@/lib/payPin");
+    const target = (p.email || v.email).toLowerCase();
+    if (target !== v.email.toLowerCase()) {
+      if (v.role !== "owner") return { ok: false as const, error: "Only the owner sets someone else's PIN." };
+      const { data: st } = await admin.from("staff").select("role").eq("email", target).maybeSingle();
+      if (!st) return { ok: false as const, error: "That person isn't on staff." };
+    } else if (await lib.hasPin(admin, target) && v.role !== "owner") {
+      const c = await lib.checkPin(admin, target, p.old || "");
+      if (!c.ok) return { ok: false as const, error: c.error === "That PIN isn't right." ? "Your current PIN isn't right." : c.error };
+    }
+    return await lib.setPin(admin, target, p.pin, by);
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
 }

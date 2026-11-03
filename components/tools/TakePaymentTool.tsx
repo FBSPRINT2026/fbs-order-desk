@@ -5,7 +5,7 @@ import BillAddressFields from "@/components/BillAddressFields";
 import { billMissing, emptyBill, staxAddress } from "@/lib/billAddress";
 import { staxReason } from "@/lib/staxReason";
 import { fmtDate, money } from "@/lib/format";
-import { paymentContext, setPayOptions, takePayment, type TPInvoice, type TPMethod, type TPResult } from "@/app/shop/take-payment-actions";
+import { paymentContext, pinInfo, savePin, setPayOptions, takePayment, type TPInvoice, type TPMethod, type TPResult } from "@/app/shop/take-payment-actions";
 
 /**
  * Take a Payment (Nov 3, Nick; app/shop/take-payment-actions.ts): pick the customer, tick invoices from their statement,
@@ -27,6 +27,11 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
   const [busy, setBusy] = useState(false), [results, setResults] = useState<TPResult[] | null>(null);
   const [f, setF] = useState({ first: "", last: "", month: "", year: "" }), [bill, setBill] = useState(emptyBill());
   const stax = useRef<StaxJsT | null>(null), [ready, setReady] = useState(false);
+  // the PIN (Nov 3, Nick: "once you hit go, you have to put in the PIN"): asked for at every charge
+  const [pins, setPins] = useState<{ mine: boolean; owner: boolean; people: { email: string; name: string; has: boolean }[] } | null>(null);
+  const [pinAsk, setPinAsk] = useState(false), [pin, setPin] = useState(""), [pinErr, setPinErr] = useState("");
+  const loadPins = () => void pinInfo().then((r) => { if (r.ok) setPins(r); });
+  useEffect(loadPins, []);
 
   const load = (id: string) => {
     setErr(""); setResults(null); setCtx(null);
@@ -72,7 +77,8 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
 
   const run = async () => {
     if (!ctx || !chosen.length) return setErr("Tick at least one invoice.");
-    setErr(""); setBusy(true);
+    if (!/^\d{4,8}$/.test(pin)) return setPinErr("Enter your PIN.");
+    setErr(""); setPinErr(""); setBusy(true);
     let newPmId = "";
     if (pm === "new") {
       if (!stax.current || !ready) { setBusy(false); return setErr("The card form is still loading."); }
@@ -84,9 +90,10 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
         newPmId = t.id;
       } catch (e) { setBusy(false); return setErr(staxReason(e) || "Check the card details and try again."); }
     }
-    const r = await takePayment({ customerId: ctx.customer.id, orderIds: chosen.map((o) => o.id), savedId: pm !== "new" ? pm : undefined, newPmId: newPmId || undefined, newMethod: "card", split, fee: pct > 0, save: pm === "new" && keep });
-    setBusy(false);
-    if (!r.ok) return setErr(r.error);
+    const r = await takePayment({ customerId: ctx.customer.id, orderIds: chosen.map((o) => o.id), savedId: pm !== "new" ? pm : undefined, newPmId: newPmId || undefined, newMethod: "card", split, fee: pct > 0, save: pm === "new" && keep, pin });
+    setBusy(false); setPin("");
+    if (!r.ok) { if (r.pin) return setPinErr(r.error); setPinAsk(false); return setErr(r.error); }
+    setPinAsk(false);
     setResults(r.results);
     // the statement again, without what's paid
     const again = await paymentContext(ctx.customer.id);
@@ -130,6 +137,25 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
         </div>
       </section>
 
+      {pinAsk && ctx && (
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Enter your PIN" onClick={() => !busy && setPinAsk(false)}>
+          <form className="dla tpy-pin" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); void run(); }}>
+            <h3>Enter your PIN to charge {money(total)}</h3>
+            <p className="dla-sub">{ctx.customer.company || ctx.customer.name} · {groups.length > 1 ? `${groups.length} charges, one per invoice` : `${chosen.length} invoice${chosen.length === 1 ? "" : "s"}`}</p>
+            <input type="password" inputMode="numeric" autoComplete="off" maxLength={8} autoFocus value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, "")); setPinErr(""); }} aria-label="PIN" placeholder="PIN" />
+            {pinErr && <div className="err">{pinErr}</div>}
+            <div className="dla-acts"><button type="button" className="btn ghost" disabled={busy} onClick={() => setPinAsk(false)}>Cancel</button><button type="submit" className="btn primary" disabled={busy || pin.length < 4}>{busy ? "Charging…" : `Charge ${money(total)}`}</button></div>
+          </form>
+        </div>
+      )}
+      {pins?.owner && (
+        <section className="panel tpy-pins">
+          <div className="panel-h"><h2>Payment PINs</h2><span className="faint">Who can take payments, and their PIN (only you see this)</span></div>
+          <div className="panel-b stack" style={{ gap: 8 }}>
+            {pins.people.map((p) => <SetPin key={p.email} email={p.email} title={`${p.name}${p.has ? " · PIN set" : " · no PIN yet"}`} button={p.has ? "Change PIN" : "Set PIN"} onDone={loadPins} compact />)}
+          </div>
+        </section>
+      )}
       {ctx && ctx.invoices.length > 0 && (
         <section className="panel tpy-right">
           <div className="panel-h"><h2>Charge</h2></div>
@@ -185,13 +211,40 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
               <div className="tpy-grand"><span>Total</span><b>{money(total)}</b></div>
             </div>
             {err && ctx && <div className="err">{err}</div>}
-            <button type="button" className="btn primary tpy-go" disabled={busy || !chosen.length || (!pm) || (pm === "new" && !ready)} onClick={() => void run()}>
+            {pins && !pins.mine && <SetPin title="Set your payment PIN first" sub="4 to 8 numbers. You'll type it every time you charge a card." onDone={loadPins} />}
+            <button type="button" className="btn primary tpy-go" disabled={busy || !chosen.length || (!pm) || (pm === "new" && !ready) || !pins?.mine} onClick={() => { setPin(""); setPinErr(""); setPinAsk(true); }}>
               {busy ? "Charging…" : `Charge ${groups.length > 1 ? `${groups.length} invoices separately` : `${chosen.length} invoice${chosen.length === 1 ? "" : "s"}`} · ${money(total)}`}
             </button>
             <div className="faint tpy-hint" style={{ textAlign: "center" }}>Receipts go to whoever gets receipts at {ctx.customer.company || ctx.customer.name}.</div>
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/** a PIN set (yours, or the owner setting someone's): typed twice, never shown */
+function SetPin({ email, title, sub, button = "Save PIN", onDone, compact = false }: { email?: string; title: string; sub?: string; button?: string; onDone: () => void; compact?: boolean }) {
+  const [a, setA] = useState(""), [b, setB] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState(false), [open, setOpen] = useState(!compact);
+  const save = async () => {
+    if (!/^\d{4,8}$/.test(a)) return setMsg("4 to 8 numbers.");
+    if (a !== b) return setMsg("The two don't match.");
+    setBusy(true); const r = await savePin({ email, pin: a }); setBusy(false);
+    if (!r.ok) return setMsg(r.error);
+    setA(""); setB(""); setMsg("Saved."); if (compact) setOpen(false); onDone();
+  };
+  const num = (v: string) => v.replace(/\D/g, "").slice(0, 8);
+  return (
+    <div className="tpy-setpin">
+      <div className="tpy-setpin-h"><b>{title}</b>{compact && !open && <button type="button" className="btn sm" onClick={() => { setOpen(true); setMsg(""); }}>{button}</button>}</div>
+      {sub && <div className="faint" style={{ fontSize: 12 }}>{sub}</div>}
+      {open && <div className="tpy-setpin-f">
+        <input type="password" inputMode="numeric" autoComplete="new-password" placeholder="New PIN" aria-label="New PIN" value={a} onChange={(e) => { setA(num(e.target.value)); setMsg(""); }} />
+        <input type="password" inputMode="numeric" autoComplete="new-password" placeholder="Again" aria-label="New PIN again" value={b} onChange={(e) => { setB(num(e.target.value)); setMsg(""); }} />
+        <button type="button" className="btn sm primary" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : button}</button>
+        {compact && <button type="button" className="btn sm ghost" onClick={() => setOpen(false)}>Cancel</button>}
+      </div>}
+      {msg && <div className="faint" style={{ fontSize: 12 }}>{msg}</div>}
     </div>
   );
 }

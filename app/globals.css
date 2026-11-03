@@ -20465,3 +20465,11 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .tpy-res .bad>span:first-child{color:var(--danger);font-weight:700}
 .tpy-res .bad>span:last-child{color:var(--danger)}
 .tpy-res-n{flex:1;min-width:0}
+.tpy-pin{max-width:380px}
+.tpy-pin input[type=password]{width:100%;height:44px;font-size:22px;letter-spacing:.4em;text-align:center;margin:4px 0 8px}
+.tpy-pins{grid-column:1/-1}
+.tpy-setpin{display:flex;flex-direction:column;gap:5px;padding:8px 0;border-top:1px solid var(--line-2,var(--line))}
+.tpy-setpin:first-child{border-top:0}
+.tpy-setpin-h{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;font-size:14px}
+.tpy-setpin-f{display:flex;gap:8px;flex-wrap:wrap}
+.tpy-setpin-f input{flex:1 1 110px;min-width:0;max-width:160px}
