@@ -221,6 +221,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     const { error } = await admin.from("orders").update({ status: "approved", type: "invoice", approved_at: now, approved_name: who }).eq("id", orderId).eq("status", "quote_sent");
     if (error) return { ok: false as const, error: error.message };
     await admin.from("order_events").insert([{ order_id: orderId, kind: "approved", detail: `Signed "${who}" on their order page`, actor }, { order_id: orderId, kind: "status", detail: "approved", actor }]);
+    await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "quote approved");
     await shop(`Quote #${o.number} approved`, `${who} approved quote #${o.number}`, `${o.nickname || "Order"} · ${money(o.total || 0)}`);
     matchGoodsSoon();
     return { ok: true as const };

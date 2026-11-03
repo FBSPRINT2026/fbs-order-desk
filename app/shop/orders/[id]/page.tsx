@@ -40,6 +40,7 @@ import OrderSeparations from "@/components/OrderSeparations";
 import { previewUrls, uploadDesign } from "@/lib/designs";
 import { custLabel, fmtDate, fmtDateLong, fmtStamp, money, todayISO } from "@/lib/format";
 import { markDeclined, undoDeclined } from "@/app/shop/jobs/actions";
+import { autoSepsNow } from "@/app/shop/sep-auto-actions";
 import ProductionPanel from "@/components/ProductionPanel";
 import { isReorder } from "@/components/ReorderPanel";
 import OrderTypeRow, { orderTypeOf, ORDER_TYPE_LABEL } from "@/components/OrderTypeRow";
@@ -1023,6 +1024,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setO((p) => (p ? { ...p, status: k, type: ST[k].type } : p));
     if (latest.current) latest.current = { ...latest.current, status: k, type: ST[k].type };
     loadSide();
+    if (ST[k].type === "invoice") sepsIfReady("status");
   }
 
   const [accepting, setAccepting] = useState<string | null>(null), [acceptBusy, setAcceptBusy] = useState(false);
@@ -1258,6 +1260,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     await sb.from("order_events").insert({ order_id: o.id, kind: "payment", detail: `${money(+payAmt)} ${payMethod}`, actor: "shop" });
     setPayAmt("");
     loadSide();
+    sepsIfReady("paid");
+  }
+  // the order may be ready for separations now: they ask for themselves (lib/autoSeps.ts)
+  const [sepN, setSepN] = useState(0);
+  function sepsIfReady(why: string) {
+    if (!o) return;
+    void autoSepsNow(o.id, why).then((r) => { if (r.made) { say(`Separations requested for ${r.made} location${r.made === 1 ? "" : "s"}: they're in the Separation Center under Working.`); setSepN((x) => x + 1); } }, () => null);
   }
   async function delPayment(pid: string) {
     if (armed !== "pay" + pid) return arm("pay" + pid);
@@ -2119,7 +2128,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <div className="stack">
             {["quote", "request"].includes(o.status) && <DraftArtKeep key={`${o.id}:${drafts.logos}:${drafts.mockups}`} orderId={o.id} customerId={o.customer_id} customer={(() => { const c = customers.find((x) => x.id === o.customer_id); return c ? custLabel(c) : "the customer"; })()} onKept={(m) => { setDrafts({ logos: 0, mockups: 0 }); say(m); }} />}
             <ProofHistory orderId={o.id} bump={proofs.length * 1000 + events.length} />
-            <OrderSeparations o={o} stamp={proofs.map((p) => `${p.id}:${p.status}`).join(",")} />
+            <OrderSeparations o={o} stamp={`${sepN}|${proofs.map((p) => `${p.id}:${p.status}`).join(",")}`} />
           <ProductionPanel note={prodNotes} onNote={onProdNotes} noteState={noteState} uploading={artUploading}
             files={[...art.map((a) => ({ id: a.id, name: a.name, url: a.url, mime: a.file_type, fileName: labelFileName(a.name), category: a.category, guess: a.guess, note: a.note, ...(plain[a.id] ? { plain: plain[a.id] } : {}) })), ...jobPics.map((x) => ({ id: x.id, name: x.name, url: x.url, mime: x.mime, fileName: x.name, category: "photo", note: x.note, readOnly: true }))]}
             onFileNote={(f, t) => { if (f.id.startsWith("jf-")) return; setArt((xs) => xs.map((x) => (x.id === f.id ? { ...x, note: t || null } : x))); void sb.from("art_files").update({ note: t || null }).eq("id", f.id).then(({ error }) => { if (error) say("Couldn't save the note: " + error.message); }); }}

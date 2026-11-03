@@ -35,6 +35,7 @@ export async function POST(req: Request) {
         .select("id");
       if (inserted && inserted.length) {
         await admin.from("order_events").insert({ order_id: orderId, kind: "payment", detail: `${money(amount)} online`, actor: s.customer_details?.email || "customer" });
+        await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "paid");
         const { data: o } = await admin.from("orders").select("number,nickname").eq("id", orderId).maybeSingle();
         if (SHOP_NOTIFY_EMAIL && o)
           await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Payment received: ${money(amount)} on #${o.number}`, html: emailLayout("FBS Order Desk", `${money(amount)} paid on #${o.number}`, o.nickname || "", "Open order", `${siteUrl()}/shop/orders/${orderId}`) });

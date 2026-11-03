@@ -142,6 +142,7 @@ export async function approveAnotherWay(admin: SupabaseClient, orderId: string, 
     await makeVersion(admin, orderId, mocks, { status: "approved", approved_via: "staff", decided_at: at, decided_name: name });
   }
   await admin.from("order_events").insert({ order_id: orderId, kind: "art_approved", detail: `${me.name}: ${how}`, actor: me.email });
+  await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "art approved");
   return { ok: true as const };
 }
 

@@ -80,6 +80,7 @@ export async function chargeSavedMethod(input: { orderId: string; savedId: strin
     await admin.from("saved_payment_methods").update({ last_used_at: new Date().toISOString() }).eq("id", sp.id);
     if (error) return { ok: false, error: `The charge went through, but we couldn't record it (${error.message}). Record ${money(sum)} by hand.` };
     await admin.from("order_events").insert({ order_id: order.id, kind: "payment", detail: `${money(sum)} ${methodName} on file (${sp.brand} ${sp.last4})${fee ? ` + ${money(fee)} card fee` : ""}, at the customer's request`, actor: v.email });
+    await (await import("@/lib/autoSeps")).autoSeparations(admin, order.id, "paid");
     revalidatePath(`/shop/orders/${order.id}`);
     return { ok: true, paid: sum, fee };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }

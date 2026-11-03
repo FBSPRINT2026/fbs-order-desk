@@ -51,6 +51,7 @@ export async function approveQuote(orderId: string, signature: string): Promise<
       { order_id: orderId, kind: "approved", detail: `Signed "${name}"`, actor: email },
       { order_id: orderId, kind: "status", detail: "approved", actor: email },
     ]);
+    await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "quote approved");
     await notifyShop(`Quote #${order.number} approved`, `${name} approved quote #${order.number}`, `${order.nickname || "Order"} · ${money(order.total)}`, orderId, settings.shop.name);
     revalidatePath(`/portal/orders/${orderId}`);
     return { ok: true };
@@ -92,6 +93,7 @@ export async function decideProof(proofId: string, decision: "approved" | "appro
     const status = decision === "changes" ? "changes" : "approved";
     await admin.from("proofs").update({ status, customer_comment: note, decided_at: new Date().toISOString(), decided_name: name }).eq("id", proofId);
     await admin.from("order_events").insert({ order_id: order.id, kind: status === "approved" ? "proof_approved" : "proof_changes", detail: decision === "approved_changes" ? `${proof.title} (with changes)` : proof.title, actor: email });
+    if (status === "approved") await (await import("@/lib/autoSeps")).autoSeparations(admin, order.id, "proof approved");
     const head = decision === "approved" ? "approved" : decision === "approved_changes" ? "approved with changes" : "wants changes to";
     await notifyShop(
       decision === "approved" ? `Proof approved on #${order.number}` : decision === "approved_changes" ? `Proof approved with changes on #${order.number}` : `Proof changes on #${order.number}`,

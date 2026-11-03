@@ -168,6 +168,8 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     }
     if (error) return { ok: false, error: `Your payment went through, but we couldn't record it (${error.message}). Please contact us so we can mark it paid.` };
     const newLines = lines.filter((l) => !l.old);
+    // paid: anything now ready asks for its separations (lib/autoSeps.ts)
+    for (const l of newLines) await (await import("@/lib/autoSeps")).autoSeparations(admin, l.o.id, "paid");
     if (newLines.length) await admin.from("order_events").insert(newLines.map((l) => ({ order_id: l.o.id, kind: "payment", detail: `${money(l.amount)} ${methodName}${fee ? ` + ${money(rows.find((r) => r.order_id === l.o.id)?.fee)} card fee` : ""}`, actor: email })));
     if (SHOP_NOTIFY_EMAIL) await sendEmail({
       to: SHOP_NOTIFY_EMAIL,

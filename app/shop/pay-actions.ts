@@ -38,6 +38,7 @@ export async function recordLumpPayment(customerId: string, p: { amount: number;
     const { error } = await admin.from("payments").insert(parts.map((x) => ({ order_id: x.item.id, amount: x.amount, method, paid_on: day, note })));
     if (error) return { ok: false, error: error.message };
     await admin.from("order_events").insert(parts.map((x) => ({ order_id: x.item.id, kind: "payment", detail: `${money(x.amount)} ${method} (part of ${money(amt)})`, actor: email })));
+    for (const x of parts) await (await import("@/lib/autoSeps")).autoSeparations(admin, x.item.id, "paid");
     return { ok: true, applied, total: amt };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
