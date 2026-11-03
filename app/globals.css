@@ -19255,3 +19255,24 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pls-f > b{text-align:center;color:var(--ink);font-weight:700;font-size:11px}
 .pls-f > span:last-child{text-align:right}
 @media print{.pls-h,.pls-f{display:flex!important}}
+/* the customer's program prices as one clean price page (components/ProgramSheet.tsx, Nov 2) */
+.psh{display:flex;flex-direction:column;gap:16px}
+.psh-b{padding:0}
+.psh-t{width:100%;border-collapse:collapse}
+.psh-t th{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:10px 16px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.psh-t th.r{text-align:right}
+.psh-t td{padding:12px 16px;border-bottom:1px solid var(--line-2);vertical-align:top;font-size:14px;color:var(--ink)}
+.psh-t tbody tr:last-child td{border-bottom:0}
+.psh-pic{width:64px}
+.psh-pic img{width:56px;height:56px;object-fit:contain;border:1px solid var(--line);border-radius:6px;background:#fff;display:block}
+.psh-it b{display:block;font-weight:700}
+.psh-it span,.psh-dec span{display:block;font-size:12.5px;color:var(--ink-3)}
+.psh-st{font-size:13px;color:var(--ink-2,var(--ink))}
+.psh-dec b{display:block;font-weight:600;font-size:13.5px}
+.psh-pr{text-align:right;white-space:nowrap}
+.psh-pr b{font-size:16px;font-weight:700;color:var(--accent)}
+.psh-tiers{display:inline-flex;flex-direction:column;align-items:flex-end;gap:2px;font-weight:700}
+.psh-tiers small{font-weight:500;color:var(--ink-3);font-size:12px;margin-right:6px}
+.psh-x{list-style:none;margin:0;padding:10px 16px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.psh-x li{display:flex;justify-content:space-between;font-size:14px}
+.psh-x b{color:var(--accent)}

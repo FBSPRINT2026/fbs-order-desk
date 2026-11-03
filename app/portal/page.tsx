@@ -4,7 +4,7 @@ import { getPortalCtx, seesPriceList } from "@/lib/portal";
 import type { HubOrder } from "@/lib/messages";
 import { oneOfEach } from "@/lib/mockupList";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { orderGroups, PAY_TERMS, priceList, payDueDate, type Design, type Order } from "@/lib/pricing";
+import { finishingList, orderGroups, PAY_TERMS, priceList, payDueDate, type Design, type Order } from "@/lib/pricing";
 import { fmtDateLong, money } from "@/lib/format";
 import PortalPricing from "@/components/PortalPricing";
 import PortalDash, { type DashNeed, type DashPast, type DashProof, type DashThread } from "@/components/PortalDash";
@@ -28,7 +28,7 @@ import type { ToldShipment } from "@/components/PortalGoodsDesk";
 import { unmatchedGroups } from "@/lib/manifest";
 import PortalAssistant from "@/components/PortalAssistant";
 import PortalProjects from "@/components/PortalProjects";
-import ProgramOrder from "@/components/ProgramOrder";
+import ProgramSheet from "@/components/ProgramSheet";
 import { projectSummaries } from "@/lib/projectsServer";
 import { cardHasPrices, type Program, type ProgramItem } from "@/lib/programs";
 import { aiPaySelect } from "@/app/portal/pay-select";
@@ -192,6 +192,13 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const program = ((progs || [])[0] || null) as Program | null;
   const { data: pits } = program ? await admin.from("program_items").select("*").eq("program_id", program.id).eq("active", true).is("archived_at", null).order("position") : { data: [] };
   const programItems = (pits || []) as ProgramItem[];
+  // the program's own extra prices (Nine18: personalization $5 a name), named from the price list's extras
+  const programExtras = (() => {
+    if (!program) return [] as { name: string; price: number }[];
+    const ex = { ...(program.rate_card?.extraPrices || {}) } as Record<string, number>;
+    const named = finishingList(ctx.settings, priceList(ctx.settings, "wholesale"));
+    return Object.entries(ex).filter(([, v]) => +v > 0).map(([id, v]) => ({ name: (named.find((f) => f.id === id)?.name || id).replace(/\s*\(embroidery\)\s*/i, ""), price: +v }));
+  })();
   const programImages: Record<string, string> = {};
   {
     const withImg = programItems.filter((i) => i.image_path);
@@ -432,7 +439,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
           <AccountAreas mode="portal" dash={dash} brandColors={(acct as { brand_portal?: boolean } | undefined)?.brand_portal === false ? [] : acct?.brand_colors || []}
             designsPanel={acct?.design_catalog && (acct as { design_catalog_portal?: boolean }).design_catalog_portal ? <PortalDesignCatalog customerId={acct.id} qs={qs} /> : undefined}
             projectsPanel={<PortalProjects projects={projects} qs={qs} canAct={!ctx.preview} />} projectsCount={projects.filter((p) => p.status === "planning" || p.status === "active").length}
-            programPanel={<ProgramOrder program={program} items={programItems} images={programImages} projects={projects.filter((p) => p.status !== "closed").map((p) => ({ id: p.id, name: p.name }))} canAct={!ctx.preview} qs={qs} />} hasProgram={!!program && (programItems.length > 0 || cardHasPrices(program.rate_card))}
+            programPanel={program ? <ProgramSheet program={program} items={programItems} images={programImages} extras={programExtras} /> : undefined} hasProgram={!!program && program.active && (programItems.length > 0 || cardHasPrices(program.rate_card))}
             assistant={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} />}
             titleAsk={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare pop ideas={ideas} personHref={msgLink(null)} />}
             goodsPanel={wholesale ? <PortalGoodsDesk items={goodsAll} incoming={incoming} told={told} canAct={!ctx.preview} canLink={!ctx.preview || ctx.isStaff} qs={qs} as={ctx.preview?.id} addTracking={addTracking} linkIncoming={linkIncoming} sendGoods={sendGoods} linkTold={linkToldShipment} /> : undefined}
