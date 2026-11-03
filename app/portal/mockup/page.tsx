@@ -17,7 +17,7 @@ export default async function PortalMockup({ searchParams }: { searchParams: Pro
         <Suspense fallback={<div className="empty">Loading…</div>}><MockupBuilder portal backHref={back} /></Suspense>
       </main>
       {/* its walk-through: by itself the first time each person opens it (and after the shop's Reset tutorial), or ?tour=1 */}
-      <PortalTour view="mockup" auto={tour === "1" || (!ctx.preview && await tourDue(ctx.email, "mockup", (ctx.customers[0] as { tour_reset_at?: string | null } | undefined)?.tour_reset_at))} />
+      <PortalTour view="mockup" wholesale={(ctx.customers[0] as { price_type?: string | null } | undefined)?.price_type === "wholesale"} auto={tour === "1" || (!ctx.preview && await tourDue(ctx.email, "mockup", (ctx.customers[0] as { tour_reset_at?: string | null } | undefined)?.tour_reset_at))} />
     </>
   );
 }

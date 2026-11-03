@@ -11,7 +11,7 @@ import { tourDone } from "@/app/portal/tour-actions";
  * and from Settings → Portal layout → View tutorial again. A step whose part isn't on the page (no artwork yet, a phone
  * layout) is skipped.
  */
-type Step = { sel?: string; t: string; b: string; /** a picture in the card (the new proof email) */ img?: string; /** small print under it */ foot?: string };
+type Step = { sel?: string; t: string; b: string; /** a picture in the card (the new proof email) */ img?: string; /** small print under it */ foot?: string; /** only for wholesale accounts */ forWholesale?: boolean };
 const OLD_SITE: Step = { t: "Welcome to your new portal", b: "Everything you did on our old site is here: see your orders, approve proofs and pay your bill. Here's a quick look around." };
 // proofs never came by email before (Nov 3, Nick: "say hey all new email proofs… a screenshot of how our new email looks")
 const PROOF_EMAIL: Step = { t: "New: proofs come by email", b: "When a proof or quote is ready, we email it to you. One button takes you to it to approve or ask for changes.", img: "/tour/proof-email.png" };
@@ -26,6 +26,9 @@ const CLICKUP: Step[] = [
 ];
 const NEW_THINGS: Step = { t: "A few new things", b: "We're rolling out the rest of the new site soon. For now, here are some new things you can do." };
 const START: Step = { sel: '[data-tour="start"]', t: "Start an order", b: "Send us what you need and we'll confirm it. The Mockup Creator puts your logo on a shirt." };
+// wholesale accounts hear why first (Nov 3, Nick: "the point of the mockup creator is for you to nail down all the
+// details before you sell it to your client… that way you know exactly how to price it")
+const WHOLESALE_WHY: Step = { t: "Why it's here for you", b: "Nail down every detail before you offer it to your client: the garment, the size and placement, and the exact colors. That way you know exactly how to price it, and it prints exactly like you sold it.", forWholesale: true };
 // the Mockup Creator is one of the new things (Nov 3, Nick: "show the Mockup Creator button, and then a clip of what it
 // looks like… the logo on it and the imprint")
 const MOCKUP: Step = { sel: '[data-tour="start"] a.pd-act', t: "Mockup Creator", b: "Put your logo on a shirt before you order: pick the garment and color, add your logo, and see its size and ink colors. It walks you through it the first time you open it.", img: "/tour/mockup-creator.png" };
@@ -39,13 +42,17 @@ const STEPS: Record<TourView, Step[]> = {
   // the Mockup Creator's own walk-through, the first time they open it (Nov 3, Nick: "a tutorial for the mockup creator
   // also… the first time, how to use")
   mockup: [
-    { t: "Welcome to the Mockup Creator", b: "See your logo on a shirt before you order. Here's how it works." },
-    { sel: ".mk-setup", t: "1. Pick the garment", b: "Type a style number or a kind of shirt, then pick its colors. Not sure what to get? Help me pick suggests some. Name it so you can find it later." },
-    { sel: ".mk-side > section.panel:first-child", t: "2. Add your logo", b: "Add a location (front, back or sleeves), then pick one of your logos or upload a new one. Set the size, and we show how it prints and which ink colors it uses." },
-    { sel: ".mk-stage-wrap", t: "3. See it on the shirt", b: "Your logo on the front and back, at its real size. Tick Print areas or Measure to check where it sits." },
-    { sel: ".mk-mini", t: "A close look", b: "Each print up close, with its size and its ink colors." },
+    { t: "Meet the new Mockup Creator", b: "We're excited to roll out our brand new Mockup Creator. Build a realistic mockup that shows exactly how your print will look on the garment." },
+    WHOLESALE_WHY,
+    { sel: ".mk-setup", t: "1. Pick a garment", b: "It's synced with our suppliers' catalogs and pulls in the garment pictures for you to build on. Type a style number or a kind of shirt, pick the colors, or click Help me pick." },
+    { sel: ".mk-side > section.panel:first-child", t: "2. Add a location", b: "Click Add location and choose where it goes: front, back or sleeves, and how it's printed: screen print, embroidery, DTF or heat press." },
+    { sel: ".mk-side > section.panel:first-child", t: "3. Upload your art", b: "Every format works: AI, EPS, SVG, PDF, JPEG, PNG and more. Simple tools like remove background clean it up for you." },
+    { sel: ".mk-stage-wrap", t: "4. Size it and place it", b: "Set the size, then drag it and size it right on the shirt until it looks the way you want. That's the size and placement we print." },
+    { sel: ".mk-side > section.panel:first-child", t: "5. Get the colors right", b: "Not sure what color it'll print in? We suggest the closest standard ink or a PMS color, or set your own PMS. For embroidery, it finds the closest threads we carry." },
+    { sel: ".mk-mini", t: "A close look", b: "Each print up close, with its size and its ink or thread colors." },
     { sel: ".mk-more-box", t: "Need more than a logo?", b: "Add words, start from a ready-made design, have AI create one, or open the Design Lab for names and numbers." },
-    { sel: ".mk-head .row", t: "Save it and share it", b: "Save mockup keeps it in your Artwork. Export PDF makes a sheet you can send around, and Sales tools makes sales sheets with your logo.", foot: "You can watch this again from Settings, under Portal layout." },
+    { sel: ".mk-head .btn.primary", t: "6. Save it to your files", b: "Save mockup keeps it in your Artwork, ready to order from." },
+    { sel: ".mk-head .row", t: "7. Share it with your customers", b: "Sales tools puts your logo on top of a sales sheet and on all sorts of products. Export PDF makes a sheet you can send.", foot: "You can watch this again from Settings, under Portal layout." },
   ],
   simple: [
     OLD_SITE,
@@ -83,8 +90,8 @@ const STEPS: Record<TourView, Step[]> = {
 
 const shown = (el: Element | null): el is HTMLElement => !!el && (el as HTMLElement).getClientRects().length > 0 && (el as HTMLElement).getBoundingClientRect().width > 0;
 
-export default function PortalTour({ view, auto, clickup = false }: { view: TourView; /** start by itself (first time, or ?tour=1) */ auto: boolean; /** they sent us orders through ClickUp before */ clickup?: boolean }) {
-  const [steps] = useState(() => clickup ? STEPS[view].flatMap((x) => (x === START ? [START, ...CLICKUP] : [x])) : STEPS[view]);
+export default function PortalTour({ view, auto, clickup = false, wholesale = false }: { view: TourView; /** start by itself (first time, or ?tour=1) */ auto: boolean; /** they sent us orders through ClickUp before */ clickup?: boolean; /** a wholesale account */ wholesale?: boolean }) {
+  const [steps] = useState(() => STEPS[view].filter((x) => !x.forWholesale || wholesale).flatMap((x) => (clickup && x === START ? [START, ...CLICKUP] : [x])));
   const [i, setI] = useState(-1);
   const [box, setBox] = useState<DOMRect | null>(null);
   useEffect(() => { if (auto) { const t = setTimeout(() => setI(0), 600); return () => clearTimeout(t); } }, [auto]);
