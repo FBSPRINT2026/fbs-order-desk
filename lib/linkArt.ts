@@ -210,10 +210,22 @@ const isZip = (f: { buf: Buffer; type: string; name: string }) => f.buf.length >
  * Word / PDF), or a direct link to a file. Art, PDFs, Office files and CSVs; a folder up to 40 files and 120 MB.
  * A link that needs a sign-in (or a Drive folder, which Google only lists to signed-in apps) gives an error to show.
  */
-export async function filesFromLink(final: string): Promise<{ files: { name: string; buf: Buffer; type: string }[]; error?: string; folder?: boolean }> {
+export async function filesFromLink(final: string, admin?: SupabaseClient): Promise<{ files: { name: string; buf: Buffer; type: string }[]; error?: string; folder?: boolean; skipped?: string[] }> {
   const kind = kindOf(final);
   let got: { buf: Buffer; type: string; name: string } | null = null;
   const BIG = 120 * 1024 * 1024;
+  // a Dropbox folder, file by file through the shop's Dropbox (no size limit on the folder as a whole); the zip below
+  // when Dropbox isn't connected or won't read the link
+  let apiErr = "";
+  if (kind === "dropbox" && admin && /\/(scl\/fo|sh)\//.test(final)) {
+    try {
+      const { sharedLinkFiles } = await import("@/lib/dropbox");
+      const r = await sharedLinkFiles(admin, final, { each: 40 * 1024 * 1024, total: 150 * 1024 * 1024, files: 40, deadline: Date.now() + 120_000 });
+      const files = r.files.filter((f) => !JUNK.test(f.name)).map((f) => ({ ...f, type: /octet-stream|binary/i.test(f.type) ? typeByName(f.name) : f.type }));
+      if (files.length) return { files, folder: true, skipped: r.skipped };
+      apiErr = r.skipped.length ? `Every file there is over 40 MB (${r.skipped.slice(0, 3).join(", ")}).` : "The folder is empty.";
+    } catch (e) { apiErr = e instanceof Error ? e.message : String(e); }
+  }
   try {
     if (kind === "dropbox") {
       const x = new URL(final); x.searchParams.set("dl", "1"); got = await download(x.toString(), BIG, KEEP_TYPE);
@@ -229,7 +241,7 @@ export async function filesFromLink(final: string): Promise<{ files: { name: str
     } else if (kind === "file") got = await download(final, MAX, KEEP_TYPE);
     else return { files: [] };
   } catch (e) { return { files: [], error: e instanceof Error ? e.message : String(e) }; }
-  if (!got) return { files: [], error: "Nothing downloadable at that link (it may need a sign-in, or it's over 120 MB)." };
+  if (!got) return { files: [], error: "Nothing downloadable at that link (it may need a sign-in, or it's over 120 MB)." + (apiErr ? ` Dropbox: ${apiErr}` : "") };
   if (isZip(got)) {
     const files = unzipAll(got.buf, { files: 40, each: 40 * 1024 * 1024 });
     return files.length ? { files, folder: true } : { files: [], error: "The folder came down empty." };

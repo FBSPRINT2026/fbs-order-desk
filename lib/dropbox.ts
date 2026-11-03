@@ -88,3 +88,42 @@ export async function searchFiles(admin: SupabaseClient, query: string, exts: st
   return (r.matches || []).map((m) => m.metadata?.metadata).filter((x): x is DbxEntry => !!x && x[".tag"] === "file")
     .sort((a, b) => (b.server_modified || "").localeCompare(a.server_modified || ""));
 }
+
+/**
+ * The files behind a Dropbox share link (a customer's folder: Tiger Blue links one per job), read one by one through the
+ * shop's Dropbox sign-in instead of as one zip (Nov 2: #2848's folder was too big to come down as a zip, so nothing came
+ * in). Sub-folders two levels down; each file at most `each` bytes, `total` in all. Throws DropboxError when Dropbox
+ * won't (not connected, or the app lacks the sharing.read permission), so the caller can try the zip instead.
+ */
+export async function sharedLinkFiles(admin: SupabaseClient, url: string, o: { each: number; total: number; files: number; deadline: number }) {
+  const link = (() => { try { const u = new URL(url); u.searchParams.delete("dl"); return u.toString(); } catch { return url; } })();
+  const found: DbxEntry[] = [];
+  const walk = async (path: string, depth: number) => {
+    let r = await api<{ entries: DbxEntry[]; cursor: string; has_more: boolean }>(admin, "files/list_folder", { path, shared_link: { url: link } });
+    const all = [...r.entries];
+    for (let i = 0; r.has_more && i < 5; i++) { r = await api(admin, "files/list_folder/continue", { cursor: r.cursor }); all.push(...r.entries); }
+    for (const e of all) {
+      if (e[".tag"] === "file") found.push({ ...e, path_display: `${path}/${e.name}` });
+      else if (e[".tag"] === "folder" && depth < 2) await walk(`${path}/${e.name}`, depth + 1);
+    }
+  };
+  await walk("", 0);
+  const out: { name: string; buf: Buffer; type: string }[] = [], skipped: string[] = [];
+  let used = 0;
+  const t = await token(admin);
+  for (const e of found.sort((a, b) => (a.size || 0) - (b.size || 0))) {
+    if (out.length >= o.files || Date.now() > o.deadline) { skipped.push(e.name); continue; }
+    if ((e.size || 0) > o.each || used + (e.size || 0) > o.total) { skipped.push(e.name); continue; }
+    const arg = JSON.stringify({ url: link, path: e.path_display }).replace(/[\u007f-￿]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+    const r = await fetch("https://content.dropboxapi.com/2/sharing/get_shared_link_file", { method: "POST", headers: { Authorization: `Bearer ${t}`, "Dropbox-API-Arg": arg }, signal: AbortSignal.timeout(60_000) }).catch(() => null);
+    if (!r || !r.ok) {
+      const txt = r ? (await r.text().catch(() => "")).slice(0, 300) : "";
+      if (/missing_scope|sharing\.read/i.test(txt)) throw new DropboxError("Dropbox doesn't allow reading share links yet: tick sharing.read on the Dropbox app (Permissions), then Settings → Dropbox → Connect again.");
+      skipped.push(e.name); continue;
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    used += buf.length;
+    out.push({ name: e.name, buf, type: r.headers.get("content-type")?.split(";")[0] || "application/octet-stream" });
+  }
+  return { files: out, skipped };
+}

@@ -231,7 +231,7 @@ async function saveFiles(admin: SupabaseClient, taskId: string, files: CuFile[],
       // a share link: every file behind it, kept on the task like an attachment (one that failed is tried again in 6 hours)
       if (f.tried && Date.now() - Date.parse(f.tried) < 6 * 3600e3) { out.push(f); continue; }
       if (Date.now() > o.deadline - 55_000) { out.push(f); continue; } // a shared folder can take most of a minute
-      const r = await filesFromLink(f.link).catch((e) => ({ files: [] as { name: string; buf: Buffer; type: string }[], error: String(e) }));
+      const r = await filesFromLink(f.link, admin).catch((e) => ({ files: [] as { name: string; buf: Buffer; type: string }[], error: String(e) }));
       const got: CuFile[] = [];
       for (const [k, g] of r.files.entries()) {
         if (left - g.buf.length < -40 * 1024 * 1024) break;
