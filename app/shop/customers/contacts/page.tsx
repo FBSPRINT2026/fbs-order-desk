@@ -208,7 +208,7 @@ export default function UpdateContacts() {
 
                   <div className="ucx-foot">
                     <button type="button" className="btn" onClick={next}>Skip</button>
-                    <span className="faint">Saves here only. Printavo isn&apos;t touched. Unticking someone already on the account takes them off it.</span>
+                    <span className="faint">Unticking someone already on the account takes them off it.</span>
                     <span className="spacer" />
                     <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save and next"}</button>
                   </div>
