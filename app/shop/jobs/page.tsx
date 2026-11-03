@@ -210,27 +210,36 @@ export default function JobCenter() {
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
       <div className="jcx">
-      {/* the pipeline (Nov 2, Nick picked 3A, with the open stage solid like 3B, and "the rainbow filled the space between…
-          the message center… will blast out a signal. And those rainbows go from not lit up to lit up"): the Message Center
-          is the first arrow, each stage an arrow tinted in its color, our rainbow showing through the seams between them.
-          The signal plays when the page opens and when a new message comes in. */}
-      <div className={"jpa" + (signal ? " go" : "")} role="tablist" aria-label="Steps">
-        <div className={"jpa-mc" + (solo ? " on" : "")}>
-          <div className="jpa-mc-h">
-            <span className="jpa-sig" aria-hidden><span /><span /><span />
-              <i><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M21 14l-3-3h-7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1z" /><path d="M14 15v2a1 1 0 0 1-1 1H6l-3 3V11a1 1 0 0 1 1-1h2" /></svg></i></span>
-            <b>Message Center</b>
-          </div>
-          <div className="jpa-mc-n"><span><b>{myChats.reduce((a0, c) => a0 + c.unread, 0)}</b>new</span><span className="w"><b>{myChats.filter((c) => c.waiting).length}</b>waiting on us</span></div>
+      {/* the FBS Message Center (Nov 2, Nick: "put our logo on there… some sort of flashing icon on the top with the rainbow
+          effect"): our logo on the navy, a chat icon in a ring of our colors that turns, and flashes when a message is
+          waiting on us */}
+      <div className={"jrl-mc" + (solo ? " on" : "") + (signal ? " go" : "")}>
+        <div className="jrl-mc-ban">
+          <img src="/brand/fbs-logo-white.svg" alt="FBS" width={40} height={40} />
+          <span className="jrl-mc-t">Message Center</span>
+          <span className={"jrl-sig" + (waitingNow ? " live" : "")} aria-hidden>
+            <i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M21 14l-3-3h-7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1z" /><path d="M14 15v2a1 1 0 0 1-1 1H6l-3 3V11a1 1 0 0 1 1-1h2" /></svg></i>
+            {waitingNow > 0 && <em>{Math.min(99, waitingNow)}</em>}
+          </span>
         </div>
-        {GROUPS.map((g) => { const on = !solo && curG?.t === g.t; const nm = newIn(g); return (
-          <div key={g.t} role="tab" aria-selected={on} className={"jpa-cv" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--f" as string]: g.steps.length > 1 ? 2 : 1.25 }}>
-            <button type="button" className="jpa-gh" onClick={() => go(g.steps[0][0])} title={g.line}>{g.t}{nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}</button>
-            <div className="jpa-ss">
+        <div className="jrl-mc-n"><span><b className="nw">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</b> new</span><span><b className="wt">{waitingNow}</b> waiting on us</span></div>
+        <i className="jrl-strip" aria-hidden />
+      </div>
+      {/* the one rail (Nov 2, Nick picked "Rail 4 · Stage totals"): one card, each stage with its total big in its color over
+          its steps, light dividers between, the open stage softly tinted, one line of our colors running under every step */}
+      <div className="jrl" role="tablist" aria-label="Steps">
+        <i className="jrl-line" aria-hidden />
+        {GROUPS.map((g) => { const on = !solo && curG?.t === g.t; const nm = newIn(g); const tot = items ? g.steps.reduce((a0, [k]) => a0 + (k === "declined" ? 0 : count(k)), 0) : null; return (
+          <div key={g.t} role="tab" aria-selected={on} className={"jrl-sec" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--f" as string]: g.steps.length > 1 ? 2 : 1 }}>
+            <button type="button" className="jrl-h" onClick={() => go(g.steps[0][0])} title={g.line}>
+              <span className="jrl-n">{tot ?? "…"}</span>
+              <span className="jrl-t">{g.t}{nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}</span>
+            </button>
+            <div className="jrl-ss">
               {g.steps.map(([k, l, icon]) => { const nn = count(k); return (
-                <button key={k} type="button" className={"jpa-st" + (!all && !solo && step === k ? " pick" : "")} onClick={() => go(k)} aria-label={`${l}: ${items ? nn : "loading"}`}>
-                  <span className="jpa-ic">{icon}<em className={items && !nn ? "z" : ""}>{items ? nn : "…"}</em></span>
-                  <span className="jpa-sl">{l}</span>
+                <button key={k} type="button" className={"jrl-st" + (!all && !solo && step === k ? " pick" : "")} onClick={() => go(k)} aria-label={`${l}: ${items ? nn : "loading"}`}>
+                  <span className="jrl-ic">{icon}<em className={items && !nn ? "z" : ""}>{items ? nn : "…"}</em></span>
+                  <span className="jrl-sl">{l}</span>
                 </button>); })}
             </div>
           </div>
