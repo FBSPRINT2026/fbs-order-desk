@@ -48,6 +48,11 @@
   when it's wider than its box or a cell is narrower than a word in it (a side panel squeezing the page, a phone), the
   table becomes stacked rows with each column's name in front, and goes back when there's room. Don't build a
   table-only phone layout or a sideways scroll; put `data-nofit` only on a table that must never stack.
+- **A side panel squeezes the page like a narrower window** (Nick, Nov 3: "when you scale down the job center… it looks
+  good but when you create an order in that panel comes up… it acts completely different"). `components/DockFit.tsx`,
+  mounted for every page, moves every `(max-width/min-width)` rule by the open panel's width (`.dla-bg.dock`), so the
+  page lays out for the room it really has. Keep writing width rules as usual; a layout that lives in a box of its own
+  (a list in a panel) uses a container query (`container: name / inline-size`, as `.pjr-list` does), never the window.
 - **Every feature's class names are its own** (Oct 31: the Assistant's to-do cards were squeezed and stacked because
   the Inbox's after-send pop-up and the Artwork shelf also defined `.as-card` / `.as-t` in the global stylesheet). Give a
   new feature its own prefix, grep `app/globals.css` for a name before using it, and run `node scripts/css-clashes.mjs`
