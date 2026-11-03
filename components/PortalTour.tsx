@@ -45,9 +45,12 @@ const STEPS: Record<TourView, Step[]> = {
     { t: "Meet the new Mockup Creator", b: "We're excited to roll out our brand new Mockup Creator. Build a realistic mockup that shows exactly how your print will look on the garment.", img: "/tour/mockup-creator.png" },
     WHOLESALE_WHY,
     { sel: ".mk-setup", t: "1. Pick a garment", b: "It's synced with our suppliers' catalogs and pulls in the garment pictures for you to build on. Type a style number or a kind of shirt, pick the colors, or click Help me pick.", img: "/tour/mk-garment.png" },
+    // the moves themselves, as little films (Nov 3, Nick: "show how you remove the shirt color… how you drag and drop it
+    // and move it around in size")
+    { sel: ".mk-setup", t: "Change the shirt color", b: "Click the × on a color to take it off, then type a new one. The shirt changes right away, and you can add as many colors as you want to compare.", img: "/tour/mk-color.gif" },
     { sel: ".mk-side > section.panel:first-child", t: "2. Add a location", b: "Click Add location and choose where it goes: front, back or sleeves, and how it's printed: screen print, embroidery, DTF or heat press.", img: "/tour/mk-location.png" },
     { sel: ".mk-side > section.panel:first-child", t: "3. Upload your art", b: "Every format works: AI, EPS, SVG, PDF, JPEG, PNG and more. Simple tools like remove background clean it up for you.", img: "/tour/mk-location.png" },
-    { sel: ".mk-stage-wrap", t: "4. Size it and place it", b: "Set the size, then drag it and size it right on the shirt until it looks the way you want. That's the size and placement we print.", img: "/tour/mk-shirt.png" },
+    { sel: ".mk-stage-wrap", t: "4. Size it and place it", b: "Drag it and size it right on the shirt until it looks the way you want. Grab the logo to move it, and pull the corner to make it bigger or smaller. That's the size and placement we print.", img: "/tour/mk-drag.gif" },
     { sel: ".mk-side > section.panel:first-child", t: "5. Get the colors right", b: "Not sure what color it'll print in? For each color in your logo, we suggest the closest standard ink or a PMS color, or you set your own PMS.", img: "/tour/mk-colors.png" },
     { sel: ".mk-side > section.panel:first-child", t: "Embroidery? Pick your threads", b: "Switch it to embroidery and it finds the closest threads we carry for each color, with a stitch estimate.", img: "/tour/mk-threads.png" },
     { sel: ".mk-more-box", t: "Need more than a logo?", b: "Add words, start from a ready-made design, have AI create one, or open the Design Lab for names and numbers." },
