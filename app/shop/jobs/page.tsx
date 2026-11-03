@@ -22,25 +22,25 @@ import { useUrlSearch } from "@/lib/useUrlSearch";
  * moves a job on its own. My accounts / Everyone like the dashboard and the calendar (lib/accountOwners.ts).
  * The Proof Center and Incoming Orders open here.
  */
-const ic = (d: ReactNode) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{d}</svg>;
+const ic = (d: ReactNode) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{d}</svg>;
 type G = { t: string; line: string; c: string; steps: [Step, string, ReactNode][] };
 const GROUPS: G[] = [
   { t: "Incoming", line: "Leads and requests", c: "var(--fbs-violet)", steps: [
-    ["leads", "Leads", ic(<><path d="M4 4h16v16H4z" /><path d="m4 6 8 7 8-7" /></>)],
-    ["requests", "Requests", ic(<><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></>)]] },
+    ["leads", "Leads", ic(<><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="m3 7 9 6 9-6" /></>)],
+    ["requests", "Requests", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
   { t: "In the works", line: "Mockups and numbers", c: "var(--warn)", steps: [
-    ["mockups", "Mockups", ic(<><path d="M20.4 7.6 16 3l-4 2-4-2-4.4 4.6L6 11v10h12V11z" /></>)],
-    ["numbers", "Numbers", ic(<><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" /></>)]] },
+    ["mockups", "Mockups", ic(<><path d="M15 4l6 2v5h-3v8a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-8H3V6l6-2a3 3 0 0 0 6 0" /></>)],
+    ["numbers", "Numbers", ic(<><path d="M5 9h14M5 15h14M11 4 7 20M17 4l-4 16" /></>)]] },
   { t: "Quotes", line: "Ready or sent", c: "var(--fbs-blue)", steps: [
-    ["ready", "Ready", ic(<><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></>)],
-    ["sent", "Sent", ic(<><path d="M6 2h12M6 22h12M7 2c0 5 10 7 10 10S7 17 7 22M17 2c0 5-10 7-10 10s10 5 10 10" /></>)]] },
+    ["ready", "Ready", ic(<><path d="M10 14 21 3" /><path d="m21 3-6.5 18a.55.55 0 0 1-1 0L10 14l-7-3.5a.55.55 0 0 1 0-1z" /></>)],
+    ["sent", "Sent", ic(<><path d="M6.5 7h11M6.5 17h11" /><path d="M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z" /><path d="M6 4v2a6 6 0 1 0 12 0V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z" /></>)]] },
   { t: "Revisions", line: "On hold", c: "var(--danger)", steps: [
-    ["changes", "Make changes", ic(<><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>)]] },
+    ["changes", "Make changes", ic(<><path d="M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>)]] },
   { t: "Digitizing", line: "Embroidery only", c: "var(--ink-2)", steps: [
-    ["sewouts", "Sew-outs", ic(<><path d="M5 19 19 5" /><circle cx="18" cy="6" r="2" /><path d="M4 20c2-1 3-3 2-5" /></>)]] },
+    ["sewouts", "Sew-outs", ic(<><path d="M5 19 17.5 6.5" /><circle cx="19" cy="5" r="2" /><path d="M3.5 20.5c1.5-.5 2.5-2 1.5-3.5s.5-3 2-3" /></>)]] },
   { t: "Done", line: "Approved or declined", c: "var(--ok)", steps: [
-    ["approved", "Approved", ic(<><path d="M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14l-3-3" /></>)],
-    ["declined", "Declined", ic(<><circle cx="12" cy="12" r="10" /><path d="m15 9-6 6M9 9l6 6" /></>)]] },
+    ["approved", "Approved", ic(<><circle cx="12" cy="12" r="9" /><path d="m9 12 2 2 4-4" /></>)],
+    ["declined", "Declined", ic(<><circle cx="12" cy="12" r="9" /><path d="m10 10 4 4m0-4-4 4" /></>)]] },
 ];
 const ALL_STEPS = GROUPS.flatMap((g) => g.steps.map((s) => s[0]));
 const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g) => g.steps.some((x) => x[0] === s))!.c);
@@ -147,6 +147,17 @@ export default function JobCenter() {
   const curG = all ? null : GROUPS.find((g) => g.steps.some((x) => x[0] === step)) || null;
   const byOrder = useMemo(() => new Map((items || []).filter((it) => it.orderId).map((it) => [it.orderId!, it])), [items]);
   const myChats = chats.filter((c) => !mine || !c.owner || c.owner === me);
+  // the pipeline's signal: once when the page opens, and again whenever more messages are waiting on us
+  const [signal, setSignal] = useState(false);
+  const waitingNow = myChats.filter((c) => c.waiting).length;
+  const lastWaiting = useRef<number | null>(null);
+  useEffect(() => {
+    if (lastWaiting.current !== null && waitingNow <= lastWaiting.current) { lastWaiting.current = waitingNow; return; }
+    lastWaiting.current = waitingNow;
+    setSignal(true);
+    const t = setTimeout(() => setSignal(false), 2800);
+    return () => clearTimeout(t);
+  }, [waitingNow]);
   const inGroup = (c: ChatSummary, g: G) => { const it = c.orderId ? byOrder.get(c.orderId) : null; return !!it && it.steps.some((s0) => g.steps.some((x) => x[0] === s0)); };
   const newIn = (g: G | null) => (g ? myChats.filter((c) => inGroup(c, g)) : myChats).reduce((a, c) => a + c.unread, 0);
   const tagOf = (c: ChatSummary) => {
@@ -199,36 +210,27 @@ export default function JobCenter() {
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
       <div className="jcx">
-      {/* the FBS Message Center (Nov 2, Nick picked "3c"): our logo on the navy, a chat bubble sending out the three brand
-          colors in pulses, one after another like "On the go", with how many are waiting on us on the bubble */}
-      <div className="jcx-mtab jmc">
-        <div className="jmc-ban">
-          <img className="jmc-logo" src="/brand/fbs-logo-white.svg" alt="FBS" width={34} height={34} />
-          <svg className="jmc-art" viewBox="0 0 120 78" aria-hidden>
-            <g fill="none" strokeWidth="4.5" strokeLinecap="round">
-              <path className="jmc-wv" d="M62 27 a24 24 0 0 1 0 30" stroke="#0e9bd8" />
-              <path className="jmc-wv d1" d="M74 19 a36 36 0 0 1 0 46" stroke="#f26660" />
-              <path className="jmc-wv d2" d="M86 11 a48 48 0 0 1 0 62" stroke="#fcb122" />
-            </g>
-            <rect x="22" y="29" width="34" height="24" rx="8" fill="#fff" /><path d="M30 53 l-3 7 l9 -7z" fill="#fff" />
-            <circle cx="31" cy="41" r="2.4" fill="#141D2B" /><circle cx="39" cy="41" r="2.4" fill="#141D2B" /><circle cx="47" cy="41" r="2.4" fill="#141D2B" />
-            {myChats.some((c) => c.waiting) && <g className="jmc-bdg"><circle cx="56" cy="28" r="9.5" fill="#f26660" stroke="#141D2B" strokeWidth="2.5" /><text x="56" y="32" textAnchor="middle" fontSize="11" fontWeight="700" fill="#fff">{Math.min(99, myChats.filter((c) => c.waiting).length)}</text></g>}
-          </svg>
-          <b>Message Center</b>
+      {/* the pipeline (Nov 2, Nick picked 3A, with the open stage solid like 3B, and "the rainbow filled the space between…
+          the message center… will blast out a signal. And those rainbows go from not lit up to lit up"): the Message Center
+          is the first arrow, each stage an arrow tinted in its color, our rainbow showing through the seams between them.
+          The signal plays when the page opens and when a new message comes in. */}
+      <div className={"jpa" + (signal ? " go" : "")} role="tablist" aria-label="Steps">
+        <div className={"jpa-mc" + (solo ? " on" : "")}>
+          <div className="jpa-mc-h">
+            <span className="jpa-sig" aria-hidden><span /><span /><span />
+              <i><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M21 14l-3-3h-7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1z" /><path d="M14 15v2a1 1 0 0 1-1 1H6l-3 3V11a1 1 0 0 1 1-1h2" /></svg></i></span>
+            <b>Message Center</b>
+          </div>
+          <div className="jpa-mc-n"><span><b>{myChats.reduce((a0, c) => a0 + c.unread, 0)}</b>new</span><span className="w"><b>{myChats.filter((c) => c.waiting).length}</b>waiting on us</span></div>
         </div>
-        <div className="jmc-ns"><span><b className="nw">{myChats.reduce((a0, c) => a0 + c.unread, 0)}</b> new</span><span><b className="wt">{myChats.filter((c) => c.waiting).length}</b> waiting on us</span></div>
-        <i className="jmc-strip" aria-hidden />
-      </div>
-      <div className="jct" role="tablist" aria-label="Steps">
         {GROUPS.map((g) => { const on = !solo && curG?.t === g.t; const nm = newIn(g); return (
-          <div key={g.t} role="tab" aria-selected={on} className={"jct-tab jc-g" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--n" as string]: g.steps.length }}>
-            <button type="button" className="jc-gh jct-hbtn" onClick={() => go(g.steps[0][0])}><b>{g.t}{nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}</b><span>{g.line}</span></button>
-            <div className="jc-st">
-              {g.steps.length > 1 && <div className="dgz-rail" aria-hidden />}
-              {g.steps.map(([k, l, icon]) => { const nn = count(k); const c = colorOf(k); return (
-                <button key={k} type="button" className={"dgz-stn" + (!all && !solo && step === k ? " on" : "")} style={{ ["--c" as string]: c }} onClick={() => go(k)}>
-                  <span className="dgz-ring">{icon}<span className={"dgz-cnt" + (items && !nn ? " z" : "")}>{items ? nn : "…"}</span></span>
-                  <span className="dgz-nm">{l}</span>
+          <div key={g.t} role="tab" aria-selected={on} className={"jpa-cv" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--f" as string]: g.steps.length > 1 ? 2 : 1.25 }}>
+            <button type="button" className="jpa-gh" onClick={() => go(g.steps[0][0])} title={g.line}>{g.t}{nm > 0 && <span className="jct-new" title={`${nm} new message${nm === 1 ? "" : "s"}`}>{nm}</span>}</button>
+            <div className="jpa-ss">
+              {g.steps.map(([k, l, icon]) => { const nn = count(k); return (
+                <button key={k} type="button" className={"jpa-st" + (!all && !solo && step === k ? " pick" : "")} onClick={() => go(k)} aria-label={`${l}: ${items ? nn : "loading"}`}>
+                  <span className="jpa-ic">{icon}<em className={items && !nn ? "z" : ""}>{items ? nn : "…"}</em></span>
+                  <span className="jpa-sl">{l}</span>
                 </button>); })}
             </div>
           </div>
