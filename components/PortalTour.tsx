@@ -31,7 +31,7 @@ const START: Step = { sel: '[data-tour="start"]', t: "Start an order", b: "Send 
 const WHOLESALE_WHY: Step = { t: "Why it's here for you", b: "Nail down every detail before you offer it to your client: the garment, the size and placement, and the exact colors. That way you know exactly how to price it, and it prints exactly like you sold it.", forWholesale: true };
 // the Mockup Creator is one of the new things (Nov 3, Nick: "show the Mockup Creator button, and then a clip of what it
 // looks like… the logo on it and the imprint")
-const MOCKUP: Step = { sel: '[data-tour="start"] a.pd-act', t: "Mockup Creator", b: "Put your logo on a shirt before you order: pick the garment and color, add your logo, and see its size and ink colors. It walks you through it the first time you open it.", img: "/tour/mockup-creator.png" };
+const MOCKUP: Step = { sel: '[data-tour="start"] a.pd-act', t: "Mockup Creator", b: "Put your logo on a shirt before you order: pick the garment and color, add your logo, and see its size and ink colors. It walks you through it the first time you open it.", img: "/tour/mockup-creator-front.png" };
 const ASK: Step = { sel: '[data-tour="ask"], [data-tour="ask"] > *', t: "Ask FBS AI", b: "Ask it anything: where's my order, what do I owe, reorder the volunteer shirts." };
 // help is the last thing they hear (Nov 3, Nick: "we built this software for y'all… if you do have an issue… a screenshot
 // and tell us what's going on and we'll fix it immediately")
@@ -42,7 +42,7 @@ const STEPS: Record<TourView, Step[]> = {
   // the Mockup Creator's own walk-through, the first time they open it (Nov 3, Nick: "a tutorial for the mockup creator
   // also… the first time, how to use")
   mockup: [
-    { t: "Meet the new Mockup Creator", b: "We're excited to roll out our brand new Mockup Creator. Build a realistic mockup that shows exactly how your print will look on the garment.", img: "/tour/mockup-creator.png" },
+    { t: "Meet the new Mockup Creator", b: "We're excited to roll out our brand new Mockup Creator. Build a realistic mockup that shows exactly how your print will look on the garment.", img: "/tour/mockup-creator-front.png" },
     WHOLESALE_WHY,
     { sel: ".mk-setup", t: "1. Pick a garment", b: "It's synced with our suppliers' catalogs and pulls in the garment pictures for you to build on. Type a style number or a kind of shirt, pick the colors, or click Help me pick.", img: "/tour/mk-garment.png" },
     // the moves themselves, as little films (Nov 3, Nick: "show how you remove the shirt color… how you drag and drop it
@@ -51,6 +51,7 @@ const STEPS: Record<TourView, Step[]> = {
     { sel: ".mk-side > section.panel:first-child", t: "2. Add a location", b: "Click Add location and choose where it goes: front, back or sleeves, and how it's printed: screen print, embroidery, DTF or heat press.", img: "/tour/mk-location.png" },
     { sel: ".mk-side > section.panel:first-child", t: "3. Upload your art", b: "Every format works: AI, EPS, SVG, PDF, JPEG, PNG and more. Simple tools like remove background clean it up for you.", img: "/tour/mk-location.png" },
     { sel: ".mk-stage-wrap", t: "4. Size it and place it", b: "Drag it and size it right on the shirt until it looks the way you want. Grab the logo to move it, and pull the corner to make it bigger or smaller. That's the size and placement we print.", img: "/tour/mk-drag.gif" },
+    { sel: ".mk-mini", t: "A close look", b: "Each print up close, with its exact size and its ink colors.", img: "/tour/mk-closeup.png" },
     { sel: ".mk-side > section.panel:first-child", t: "5. Get the colors right", b: "Not sure what color it'll print in? For each color in your logo, we suggest the closest standard ink or a PMS color, or you set your own PMS.", img: "/tour/mk-colors.png" },
     { sel: ".mk-side > section.panel:first-child", t: "Embroidery? Pick your threads", b: "Switch it to embroidery and it finds the closest threads we carry for each color, with a stitch estimate.", img: "/tour/mk-threads.png" },
     { sel: ".mk-more-box", t: "Need more than a logo?", b: "Add words, start from a ready-made design, have AI create one, or open the Design Lab for names and numbers." },
