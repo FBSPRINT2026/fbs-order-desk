@@ -3,7 +3,7 @@ import { orderSubject } from "@/lib/orderSubject";
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
-import { emailButton, emailLayout, emailThumb, sendEmail, siteUrl } from "@/lib/email";
+import { emailBrandBar, emailButton, emailLayout, emailThumb, sendEmail, siteUrl } from "@/lib/email";
 import { lineQty, mergeSettings, orderGroups, withoutShopPieces, type Order, type Proof, type Settings } from "@/lib/pricing";
 import { fmtPhone } from "@/lib/phone";
 
@@ -161,15 +161,16 @@ export function proofEmail(x: { settings: Settings; first: string; kind: LinkKin
   const what = x.kind === "art" ? "proof" : "sew-out";
   const job = x.o.nickname || `order #${x.o.number}`;
   const head = x.reminder ? `Your ${what} is waiting for you` : x.kind === "art" ? "Your proof is ready to approve" : "Your sew-out is ready to approve";
+  // plain words, the same as the proof-and-quote email (Nov 2, Nick)
   const intro = x.kind === "art"
-    ? `here's the proof for <b>${esc(job)}</b> (order #${x.o.number}). Please look it over and approve it, or tell us what to change. We start once it's approved.`
-    : `here's a photo of your logo stitched on our machine for <b>${esc(job)}</b> (order #${x.o.number}), the same way the whole run will sew. Please approve it, or tell us what to change.`;
+    ? `please see your proof below for <b>${esc(job)}</b> (order #${x.o.number}). Let us know if this is approved.`
+    : `please see your sew-out below for <b>${esc(job)}</b> (order #${x.o.number}), stitched the same way the whole run will sew. Let us know if this is approved.`;
   const rows = x.rows.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#6B7686;font-size:13px;white-space:nowrap">${esc(k)}</td><td style="padding:2px 0;font-size:13px;font-weight:600;color:#141D2B">${esc(v)}</td></tr>`).join("");
   const pic = x.picture ? `<td style="width:84px;padding-right:14px;vertical-align:top">${emailThumb(x.picture, 84, x.url)}</td>` : "";
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
   const html = `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
-<tr><td style="padding:18px 24px;border-bottom:1px solid #EEF1F5"><img src="${logo}" alt="${esc(sh.name)}" height="34" style="display:block;height:34px" /></td></tr>
+${emailBrandBar(siteUrl(), sh.name, sh.logoUrl ? logo : "")}
 <tr><td style="padding:22px 24px 6px;color:#141D2B">
 <div style="font-size:20px;font-weight:700;margin:0 0 10px">${esc(head)}</div>
 <div style="font-size:15px;line-height:1.5;color:#3C475A">Hi ${esc(x.first || "there")}, ${intro}</div>

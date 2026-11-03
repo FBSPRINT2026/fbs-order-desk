@@ -73,7 +73,7 @@ export function siteUrl() {
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /** Simple branded email body with one button. */
-export { emailButton, emailThumb } from "@/lib/emailParts";
+export { emailBrandBar, emailButton, emailThumb } from "@/lib/emailParts";
 import { emailButton } from "@/lib/emailParts";
 export const EMAIL_DOC_PIC = () => `${siteUrl()}/email/quote-doc.png`;
 

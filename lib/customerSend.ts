@@ -2,7 +2,7 @@ import "server-only";
 import { orderSubject } from "@/lib/orderSubject";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
-import { EMAIL_DOC_PIC, emailButton, emailLayout, emailThumb, sendEmail, siteUrl } from "@/lib/email";
+import { EMAIL_DOC_PIC, emailBrandBar, emailButton, emailLayout, emailThumb, sendEmail, siteUrl } from "@/lib/email";
 import { calcOrder, mergeSettings, orderGroups, withoutShopPieces, type Order, type Payment, type PayTerms, type Proof, type Settings } from "@/lib/pricing";
 import { upFront } from "@/lib/payTerms";
 import { fmtPhone } from "@/lib/phone";
@@ -74,7 +74,7 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
 }
 
 /** the steps an email lists, from what was ticked */
-async function emailFor(admin: SupabaseClient, o: Order, customer: { name: string; payment_terms?: PayTerms | null } | null, settings: Settings, pick: Pick3, url: string) {
+async function emailFor(admin: SupabaseClient, o: Order, customer: { name: string; company?: string | null; payment_terms?: PayTerms | null } | null, settings: Settings, pick: Pick3, url: string) {
   const sh = settings.shop;
   const groups = orderGroups(o);
   const blocks: { k: string; title: string; /** each its own line (Oct 29, Nick: "no cutoffs… everything should be its own kind of line") */ sub: string[]; pic?: string }[] = [];
@@ -110,15 +110,18 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   const logo = sh.logoUrl ? (/^https?:/.test(sh.logoUrl) ? sh.logoUrl : `${siteUrl()}${sh.logoUrl.startsWith("/") ? "" : "/"}${sh.logoUrl}`) : `${siteUrl()}/brand/fbs-logo.png`;
   const rows = blocks.map((b, i) => `<tr><td style="padding:6px 0"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #E6EAF0;border-radius:8px"><tr><td style="width:60px;padding:10px 0 10px 10px;vertical-align:top">${emailThumb(b.pic || EMAIL_DOC_PIC(), 56)}</td><td style="padding:10px 12px;vertical-align:top">${many ? `<div style="font-size:11px;color:#6B7686;text-transform:uppercase;letter-spacing:.05em">Step ${i + 1}</div>` : ""}<div style="font-size:14px;font-weight:700;color:#141D2B">${esc(b.title)}</div>${b.sub.filter(Boolean).map((x) => `<div style="font-size:13px;color:#6B7686">${esc(x)}</div>`).join("")}</td></tr></table></td></tr>`).join("");
   // the greeting, what's ready, the order, what to do: each its own line
-  const lead = many ? "Everything for your order is ready." : has("quote") ? `Your ${price} is ready.` : `Your ${has("sewout") ? "sew-out" : "proof"} is ready.`;
-  const ending = many ? `You can approve it all${has("quote") && payNow && !inv ? ` and ${payNow}` : ""} from one page.` : has("quote") ? `You can approve it${payNow && !inv ? ` and ${payNow}` : ""} online.` : "Look it over and approve it, or tell us what to change.";
+  // plain words (Nov 2, Nick: "hi name… with the company… please see your proof and quote below. Let us know if this is
+  // approved")
+  const seeWhat = has("quote") && (has("proof") || has("sewout")) ? `${has("sewout") && !has("proof") ? "sew-out" : "proof"} and ${price}` : has("quote") ? price : has("sewout") && !has("proof") ? "sew-out" : "proof";
+  const lead = `Please see your ${seeWhat} below.`;
+  const ending = "Let us know if this is approved.";
   const intro = `<div>${esc(lead)}</div><div style="margin-top:12px;padding:10px 12px;background:#F6F7F9;border-radius:8px"><div style="font-weight:700;color:#141D2B">${esc(job)}</div><div style="font-size:13px;color:#6B7686">Order #${o.number}</div></div><div style="margin-top:12px">${esc(ending)}</div>`;
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
   const html = `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
-<tr><td style="padding:18px 24px;border-bottom:1px solid #EEF1F5"><img src="${logo}" alt="${esc(sh.name)}" height="34" style="display:block;height:34px" /></td></tr>
+${emailBrandBar(siteUrl(), sh.name, sh.logoUrl ? logo : "")}
 <tr><td style="padding:22px 24px 4px;color:#141D2B"><div style="font-size:20px;font-weight:700;margin:0 0 10px">${esc(head)}</div>
-<div style="font-size:15px;line-height:1.5;color:#3C475A"><div style="margin-bottom:6px">Hi ${esc(first)},</div>${intro}</div>
+<div style="font-size:15px;line-height:1.5;color:#3C475A"><div style="margin-bottom:6px">Hi ${esc(first)}${customer?.company && customer.company.trim().toLowerCase() !== (customer?.name || "").trim().toLowerCase() ? ` with ${esc(customer.company.trim())}` : ""},</div>${intro}</div>
 ${pick.note?.trim() ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;margin-top:10px;white-space:pre-line">${esc(pick.note.trim())}</div>` : ""}</td></tr>
 <tr><td style="padding:10px 24px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">${rows}</table></td></tr>
 <tr><td style="padding:10px 24px 6px;text-align:center">${emailButton(url, "Review and approve")}</td></tr>

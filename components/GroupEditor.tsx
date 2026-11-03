@@ -553,8 +553,24 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const widest = (sel: string, pad: number, lo: number, hi: number) => {
       let m = 0;
       el.querySelectorAll<HTMLElement>(sel).forEach((node) => {
-        if (node instanceof HTMLInputElement) m = Math.max(m, textW(node, node.value || node.placeholder || ""));
-        else m = Math.max(m, textW(node, (node.textContent || "").trim()));
+        if (node instanceof HTMLInputElement) {
+          // an input needs its text plus everything else its cell draws around it: its own padding and border, and
+          // anything beside it in the cell (the "×" before the price, a "$"). Measured, not guessed, so a style change
+          // can never cut a number off again (Nov 2, Nick: a typed price showed "8....").
+          const w = textW(node, node.value || node.placeholder || "");
+          const cs = getComputedStyle(node), px = (v: string) => parseFloat(v || "0") || 0;
+          let around = px(cs.paddingLeft) + px(cs.paddingRight) + px(cs.borderLeftWidth) + px(cs.borderRightWidth);
+          const cell = node.parentElement;
+          if (cell) {
+            const ccs = getComputedStyle(cell), gap = px(ccs.columnGap), row = ccs.display.includes("flex") && !ccs.flexDirection.startsWith("column");
+            if (row) {
+              const before = getComputedStyle(cell, "::before"), bt = (before.content || "").replace(/^["']|["']$/g, "");
+              if (bt && bt !== "none" && before.display !== "none") around += textW(cell, bt) + gap;
+              for (const sib of Array.from(cell.children)) if (sib !== node && (sib as HTMLElement).offsetWidth) around += (sib as HTMLElement).offsetWidth + gap;
+            }
+          }
+          m = Math.max(m, w + Math.max(0, Math.ceil(around) - pad) + 4);
+        } else m = Math.max(m, textW(node, (node.textContent || "").trim()));
       });
       return Math.max(lo, Math.min(hi, m + pad));
     };
