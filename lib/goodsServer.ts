@@ -22,6 +22,9 @@ function expectedLines(o: O) {
  * `admin` must be the server client; callers check the viewer may see these orders first.
  */
 export async function loadGoodsItems(admin: SupabaseClient, orders: O[], viewer: "customer" | "staff", href: (id: string) => string, portal = viewer === "customer"): Promise<GoodsItem[]> {
+  // an order request (sent to FBS, not priced yet) has no goods to track: it shows on Orders, the dashboard and Messages
+  // only (Nov 2, Nick), wherever goods are listed
+  orders = orders.filter((o) => (o as { status?: string }).status !== "request");
   if (!orders.length) return [];
   const ids = orders.map((o) => o.id);
   const [g, s, m, ml] = await Promise.all([
