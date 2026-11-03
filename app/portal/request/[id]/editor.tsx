@@ -346,6 +346,7 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
     });
     setDescNote(`We filled in the form from your PO. Check the styles, colors and sizes, add a mockup for each group, then send it to us.${r.questions.length ? ` We'll also need: ${r.questions.join("; ")}.` : ""}`);
   }
+  const [simpleDrag, setSimpleDrag] = useState(false);
   async function addSimpleFiles(list: File[], kind: RqFile["kind"]) {
     if (!simple || !list.length) return;
     setSimpleBusy("Uploading…"); setErr("");
@@ -592,12 +593,21 @@ export default function RequestEditor({ neckSets = [], initial, settings, catalo
                 </div>
               )}
               <div className="field"><label>Files</label>
-                <div className="rq-so-up">
-                  {([["po", "Upload PO"], ["art", "Upload art"], ["other", "Files or a .zip"]] as const).map(([k, label]) => (
-                    <label key={k} className={"btn sm" + (simpleBusy ? " disabled" : "")} style={{ cursor: "pointer" }}>{label}
-                      <input type="file" hidden multiple disabled={!!simpleBusy} onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; void addSimpleFiles(l, k); }} />
-                    </label>
-                  ))}
+                {/* one drop zone for everything (Nov 2, Nick: "that whole bottom section should be just like a drag and drop…
+                    click a button to upload PO or… browse"); a dropped file is sorted by its name: a PO, art, or anything else */}
+                <div className={"rq-so-drop" + (simpleDrag ? " over" : "")}
+                  onDragOver={(e) => { e.preventDefault(); if (!simpleDrag) setSimpleDrag(true); }} onDragLeave={() => setSimpleDrag(false)}
+                  onDrop={(e) => { e.preventDefault(); setSimpleDrag(false); const l = Array.from(e.dataTransfer.files || []) as File[]; if (!l.length || simpleBusy) return;
+                    const kindOf = (f: File): RqFile["kind"] => /\b(po|p\.o|purchase|order ?form)\b/i.test(f.name) ? "po" : /\.(ai|eps|svg|png|jpe?g|psd|tiff?|cdr|dst|emb)$/i.test(f.name) ? "art" : "other";
+                    for (const k of ["po", "art", "other"] as const) { const part = l.filter((f) => kindOf(f) === k); if (part.length) void addSimpleFiles(part, k); } }}>
+                  <span className="rq-so-drop-t"><b>Drop your files here</b><small>Your PO, art, photos, anything. No need to zip them.</small></span>
+                  <span className="rq-so-drop-b">
+                    {([["po", "Upload PO"], ["other", "Browse files"]] as const).map(([k, label]) => (
+                      <label key={k} className={"btn sm" + (simpleBusy ? " disabled" : "")} style={{ cursor: "pointer" }}>{label}
+                        <input type="file" hidden multiple disabled={!!simpleBusy} onChange={(e) => { const l = Array.from(e.target.files || []) as File[]; e.target.value = ""; void addSimpleFiles(l, k); }} />
+                      </label>
+                    ))}
+                  </span>
                 </div>
                 {simple.files.length > 0 && <ul className="rq-so-files">{simple.files.map((f, i) => (
                   <li key={f.path}><span className="pill">{f.kind === "po" ? "PO" : f.kind === "art" ? "Art" : "File"}</span><span className="nm">{f.name}</span>
