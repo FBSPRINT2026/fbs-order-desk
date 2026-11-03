@@ -19999,3 +19999,11 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .pjf-sel > span{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
   .pjf-sel > select{width:100%;min-width:0;height:40px;padding:0 28px 0 10px;font:600 14px var(--body);color:var(--ink);border:1px solid var(--line);border-radius:8px;background-color:var(--surface)}
 }
+/* Orders on a phone with an order type switch (Cedar's Bulk / Cart, Nine18's Sam / Mike): the view dropdown gets the
+   whole first line and the switch the line under it, so neither is squeezed ("Qu…") */
+@media (max-width:640px){
+  .aa .aa-otabs:has(> .aa-osel):has(> .aa-lane){flex-wrap:wrap!important;row-gap:8px}
+  .aa .aa-otabs:has(> .aa-osel):has(> .aa-lane) > .aa-osel{flex:1 1 100%!important;max-width:none!important}
+  .aa .aa-otabs:has(> .aa-osel) > .aa-lane{flex:1 1 100%!important}
+  .aa .aa-otabs:has(> .aa-osel) > .aa-lane .aa-lane-seg{width:100%}
+}
