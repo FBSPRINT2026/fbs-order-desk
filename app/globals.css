@@ -19119,6 +19119,8 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   /* Pay orders' three tabs on one line, like the order page's switches */
   .pyl-bar.aa-otabs .chips{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;gap:0}
   .pyl-bar.aa-otabs .chips .chip{justify-content:center;padding:0 6px;font-size:13px;white-space:nowrap;min-width:0}
+  /* the count under the name, so "Over a week 53" never runs into "Not due yet" on a phone (Nov 2) */
+  .portal .pyl-bar.aa-otabs .chips > .chip{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 4px;line-height:1.15;font-size:12.5px}
 }
 @media (max-width:640px){
   /* the order's number and date right under its name, then its buttons */
