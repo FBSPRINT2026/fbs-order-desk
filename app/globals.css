@@ -19989,3 +19989,13 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .pcs-w.open .pcs-x{display:grid;place-items:center;position:sticky;top:0;margin:0 8px 0 auto;width:36px;height:36px;border:0;background:transparent;font-size:26px;color:var(--ink-3);z-index:2;cursor:pointer}
   .pcs-w.open .pcs-in > .pcx{border:0;box-shadow:none;margin:-36px 0 0}
 }
+/* the dashboard's Your jobs on a phone: Show [In progress ▾] and Kind [All kinds ▾] side by side, in place of three rows
+   of switches (Nov 3, Nick) */
+.pjf-ph{display:none}
+@media (max-width:640px){
+  .pjf > .pjt,.pjf > .pdx-ktabs{display:none!important}
+  .pjf-ph{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:8px}
+  .pjf-sel{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .pjf-sel > span{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+  .pjf-sel > select{width:100%;min-width:0;height:40px;padding:0 28px 0 10px;font:600 14px var(--body);color:var(--ink);border:1px solid var(--line);border-radius:8px;background-color:var(--surface)}
+}

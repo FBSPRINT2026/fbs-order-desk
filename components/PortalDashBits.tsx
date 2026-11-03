@@ -145,6 +145,16 @@ export function DashJobs({ jobs, pastJobs, canAct, ordersHref }: { jobs: PortalJ
       <div className="pdx-h"><h2>Your jobs{jobs.length ? <span className="pdx-count">{jobs.length} in progress</span> : null}</h2><Link href={ordersHref} className="pd-link">All orders</Link></div>
       {(jobs.length > 0 || doneK.length > 0) && (
         <div className="pjf">
+          {/* on a phone the three switches are two dropdowns on one line (Nov 3, Nick: "find an easier way to put these three
+              menus together"): where the job is (on hold and all included), and what kind */}
+          <div className="pjf-ph">
+            <label className="pjf-sel"><span>Show</span><select value={curS} onChange={(e) => { setStg(e.target.value); setMore(0); }}>
+              {stages.map((t) => { const n = t.k === "done" ? doneK.length : byKind.filter((j) => t.test(j)).length; return <option key={t.k} value={t.k}>{t.label}{n ? ` (${n})` : ""}</option>; })}
+            </select></label>
+            {showKinds && <label className="pjf-sel"><span>Kind</span><select value={curK} onChange={(e) => { setTab(e.target.value); setMore(0); }}>
+              {kinds.map((t) => { const n = t.k === "all" ? jobs.length : jobs.filter((j) => t.test(j.kind)).length; return <option key={t.k} value={t.k}>{t.label}{n ? ` (${n})` : ""}</option>; })}
+            </select></label>}
+          </div>
           <div className="toolbar aa-otabs pdx-stabs pjt" data-toolbar>
             {(["l", "r"] as const).map((side) => (
               <div key={side} className={"chips pjt-" + side} role="tablist" aria-label={side === "l" ? "Where the job is" : "On hold or all"}>
