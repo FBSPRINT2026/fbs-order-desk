@@ -41,6 +41,8 @@ const STEPS: Record<"simple" | "advanced", Step[]> = {
     OLD_SITE,
     { sel: ".aa-nav", t: "Everything has a tab", b: "Your orders, payments, artwork and messages each have their own tab." },
     { sel: "#your-jobs", t: "Your jobs", b: "Every order we're working on for you and where it is. Click one to see everything: tracking, its art and proofs, and what's due." },
+    // following an order (Nov 3, Nick: "add jobs you're following")
+    { sel: ".pdx-track", t: "Orders you're following", b: "Click the star on any order to follow it. The ones you follow stay up here, with where each one is." },
     { sel: ".pdx-pf", t: "Proofs to approve", b: "When a proof is ready for you to look over, it shows here. Approve it or ask for changes right from it." },
     PROOF_EMAIL,
     { sel: ".pdx-stmt", t: "Pay your bill", b: "Your balance and what's due. Pay online or download a statement." },
