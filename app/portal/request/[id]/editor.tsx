@@ -84,7 +84,7 @@ export default function RequestEditor({ orderTypes = [], neckSets = [], initial,
     const x = latest.current;
     setState("Saving…");
     const startedAt = Date.now();
-    const r = await saveRequest(x.id, { groups: x.groups, nickname: x.nickname, due_date: x.due_date, notes: x.notes, po_number: x.po_number || "", delivery_method: x.delivery_method || "pickup", ship_to: x.ship_to || "", order_type: x.order_type || "" });
+    const r = await saveRequest(x.id, { groups: x.groups, nickname: x.nickname, due_date: x.due_date, notes: x.notes, po_number: x.po_number || "", delivery_method: x.delivery_method || "pickup", ship_to: x.ship_to || "", order_lane: x.order_lane || "" });
     setState(r.ok ? "Saved" : "");
     if (r.ok) { if (r.updated_at) baseAt.current = r.updated_at; savedUnsaved(x.id, startedAt, r.updated_at); }
     if (!r.ok) setErr(r.error || "Couldn't save.");
@@ -457,7 +457,7 @@ export default function RequestEditor({ orderTypes = [], neckSets = [], initial,
           {/* their order type, in the open spot beside How you'll get it (Nov 2, Nick: Cedar's Bulk / Cart) */}
           {orderTypes.length > 0 && <div className="field"><label>Order type</label>
             <div className="so-seg rq-otype" role="radiogroup" aria-label="Order type" style={{ gridTemplateColumns: `repeat(${orderTypes.length},minmax(0,1fr))` }}>
-              {orderTypes.map((k) => <button key={k} type="button" role="radio" aria-checked={o.order_type === k} className={o.order_type === k ? "on" : ""} disabled={preview} onClick={() => patch((d) => { d.order_type = k; })}>{k}</button>)}
+              {orderTypes.map((k) => <button key={k} type="button" role="radio" aria-checked={o.order_lane === k} className={o.order_lane === k ? "on" : ""} disabled={preview} onClick={() => patch((d) => { d.order_lane = k; })}>{k}</button>)}
             </div></div>}
           {(o.delivery_method || "pickup") !== "pickup" && <div className="field" style={{ gridColumn: orderTypes.length ? "1 / -1" : "span 2" }}><label htmlFor="rq-ship">{o.delivery_method === "ship" ? "Ship to" : "Deliver to"}</label><textarea id="rq-ship" rows={2} placeholder="Name, street, city, state, ZIP" value={o.ship_to || ""} disabled={preview} onChange={(e) => patch((d) => { d.ship_to = e.target.value; })} /></div>}
         </div>

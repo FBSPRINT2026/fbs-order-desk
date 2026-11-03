@@ -28,7 +28,7 @@ import { heldFiles } from "@/lib/heldFiles";
 import RowLink from "@/components/RowLink";
 import { useUrlSearch } from "@/lib/useUrlSearch";
 
-export type AOrder = { /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_type?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
+export type AOrder = { /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_lane?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** an old invoice of an account that has moved to the new system: paid here, not on Printavo (Nov 2, Nick) */ payHere?: boolean;
@@ -398,7 +398,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
   const ordersCard = () => {
     // one order type at a time, when the customer has them (Cedar: All · Bulk · Cart)
     const ln = !orderTypes.length || lane === "all" || !orderTypes.includes(lane) ? "all" : lane;
-    const inLane = (l: AOrder[]) => (ln === "all" ? l : l.filter((o) => (o.order_type || "") === ln));
+    const inLane = (l: AOrder[]) => (ln === "all" ? l : l.filter((o) => (o.order_lane || "") === ln));
     const qL = inLane(quotes), iL = inLane(invoices);
     // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
@@ -440,7 +440,7 @@ export default function AccountAreas({ titleAsk, newMockup, programMockups = {},
         </select>
         <span className="spacer" />
         {orderTypes.length > 0 && <div className="aa-lane" role="radiogroup" aria-label="Order type"><span>Show</span><div className="aa-lane-seg" style={{ gridTemplateColumns: `repeat(${orderTypes.length + 1},minmax(0,1fr))` }}>
-          {["all", ...orderTypes].map((k) => { const n = k === "all" ? 0 : [...quotes, ...invoices].filter((o) => o.order_type === k && !o.archived && o.status !== "completed").length; return <button key={k} type="button" role="radio" aria-checked={ln === k} className={ln === k ? "on" : ""} onClick={() => setLane(k)}>{k === "all" ? "All" : k}{n ? <em>{n}</em> : null}</button>; })}
+          {["all", ...orderTypes].map((k) => { const n = k === "all" ? 0 : [...quotes, ...invoices].filter((o) => o.order_lane === k && !o.archived && o.status !== "completed").length; return <button key={k} type="button" role="radio" aria-checked={ln === k} className={ln === k ? "on" : ""} onClick={() => setLane(k)}>{k === "all" ? "All" : k}{n ? <em>{n}</em> : null}</button>; })}
         </div></div>}
         {/* on the tab bar, at the right (Nov 2, Nick: "causing a spacing issue… move that on the main bar") */}
         {tab === "quotes" && <label className="check aa-oldq aa-oldq-bar"><input type="checkbox" checked={oldQuotes} onChange={(e) => setOldQuotes(e.target.checked)} />Show older quotes and archived{olderN > 0 ? ` (${olderN})` : ""}</label>}

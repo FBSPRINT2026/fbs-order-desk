@@ -64,7 +64,7 @@ export async function startRequest(): Promise<Result> {
 }
 
 /** Save the customer's edits (only what they're allowed to change). */
-export async function saveRequest(id: string, patch: { groups?: Group[]; nickname?: string; due_date?: string | null; notes?: string; delivery_method?: string; ship_to?: string; po_number?: string; order_type?: string }): Promise<Result> {
+export async function saveRequest(id: string, patch: { groups?: Group[]; nickname?: string; due_date?: string | null; notes?: string; delivery_method?: string; ship_to?: string; po_number?: string; order_lane?: string }): Promise<Result> {
   try {
     const { admin, cust } = await myDraft(id);
     const row: Record<string, unknown> = {};
@@ -93,7 +93,7 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
     if (patch.delivery_method !== undefined && ["pickup", "ship", "deliver"].includes(patch.delivery_method)) row.delivery_method = patch.delivery_method;
     if (patch.po_number !== undefined) row.po_number = patch.po_number.slice(0, 60);
     // one of their own order types only (customers.order_types)
-    if (patch.order_type !== undefined) { const ts = ((cust as { order_types?: string[] }).order_types || []); row.order_type = ts.includes(patch.order_type) ? patch.order_type : ""; }
+    if (patch.order_lane !== undefined) { const ts = ((cust as { order_types?: string[] }).order_types || []); row.order_lane = ts.includes(patch.order_lane) ? patch.order_lane : ""; }
     if (patch.ship_to !== undefined) row.ship_to = patch.ship_to.slice(0, 1000);
     const { data: saved, error } = await admin.from("orders").update(row).eq("id", id).select("updated_at").maybeSingle();
     if (error) return { ok: false, error: error.message };
@@ -626,7 +626,7 @@ export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<
       ...(String(s.po || "").trim() ? { po_number: String(s.po).trim().slice(0, 60) } : {}),
       // no starting print and no price: the shop builds the job from what they sent (Nov 2, Nick: "I have no idea where you're getting the pricing from")
       groups: [{ ...newGroup(), imprints: [] }], total: 0,
-      ...(((cust as { order_types?: string[] }).order_types || []).includes(String(s.type || "")) ? { order_type: String(s.type) } : {}),
+      ...(((cust as { order_types?: string[] }).order_types || []).includes(String(s.type || "")) ? { order_lane: String(s.type) } : {}),
       simple_order: { about, qty, garments, method, files: files.map((f) => ({ path: f.path, name: f.name, kind: f.kind })), at: new Date().toISOString(), by: email },
     }).eq("id", orderId);
     if (ue) return { ok: false, error: ue.message };
