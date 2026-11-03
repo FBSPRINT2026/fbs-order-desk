@@ -114,7 +114,7 @@ export default function MoveList() {
           <table className="tbl mvl-tbl">
             <thead><tr>
               <th><input type="checkbox" aria-label="Tick every customer shown" checked={allOn} onChange={tickAll} /></th>
-              <th>#</th><th>Customer</th><th className="num">Last 12 months</th><th>Owner</th><th>Terms</th><th>Portal</th><th>Launch email</th>
+              <th>#</th><th>Customer</th><th className="num">Last 12 months</th><th>Owner</th><th>Terms</th><th>Portal</th><th>Launch email</th><th>Personal email</th>
             </tr></thead>
             <tbody>{list.map((r) => (
               <tr key={r.id} className={r.movedAt ? "mvl-done" : ""}>
@@ -130,6 +130,8 @@ export default function MoveList() {
                 <td className="nowrap">{r.launchSent ? `Sent ${day(r.launchSent)}` : !r.email ? <span className="faint">No email</span> : !r.movedAt ? <span className="faint">—</span>
                   : r.quiet ? <button type="button" className="linkbtn mvl-quiet" disabled={busy === r.id} title="Put them back on the launch email" onClick={() => void quiet(r, false)}>Not notifying</button>
                   : <button type="button" className="linkbtn" disabled={busy === r.id} title="Leave them off the launch email" onClick={() => void quiet(r, true)}>Will get it</button>}</td>
+                <td className="mvl-pers">{r.personal.sentAt ? `Sent ${day(r.personal.sentAt)}` : r.personal.skip ? <span className="faint">Not sending</span>
+                  : r.personal.to.length ? <><span data-notranslate>{r.personal.to.join(", ")}</span><div className="sub">from {/^amanda/i.test(r.personal.from) ? "Amanda" : "Nick"}</div></> : <span className="faint">—</span>}</td>
               </tr>
             ))}</tbody>
           </table>

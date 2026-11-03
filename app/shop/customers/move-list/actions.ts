@@ -18,7 +18,8 @@ async function me() {
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 const okEmail = (e: string) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e);
 
-export type MoveRow = { id: string; name: string; contact: string; email: string; sales: number; orders: number; rank: number; terms: PayTerms; priceType: string; owner: string; movedAt: string | null; launchSent: string | null; /** moved without the launch email */ quiet: boolean };
+export type MoveRow = { id: string; name: string; contact: string; email: string; sales: number; orders: number; rank: number; terms: PayTerms; priceType: string; owner: string; movedAt: string | null; launchSent: string | null; /** moved without the launch email */ quiet: boolean;
+  /** the personal note from Nick or Amanda: to whom, from which mailbox, not sent, sent */ personal: { to: string[]; from: string; skip: boolean; sentAt: string | null } };
 
 export async function moveList() {
   try {
@@ -27,7 +28,7 @@ export async function moveList() {
     const to = new Date(Date.now() + 864e5).toISOString().slice(0, 10), from = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
     const [{ data: top, error }, { data: cs, error: ce }, { data: pr }, { data: sent }] = await Promise.all([
       v.supabase.rpc("shop_top_customers", { p_from: from, p_to: to, p_limit: 5000 }),
-      allRows((a, b) => admin.from("customers").select("id, company, name, email, payment_terms, price_type, moved_at, is_test, launch_quiet").order("id").range(a, b)),
+      allRows((a, b) => admin.from("customers").select("id, company, name, email, payment_terms, price_type, moved_at, is_test, launch_quiet, personal_note_to, personal_note_from, personal_note_skip, personal_note_sent_at").order("id").range(a, b)),
       allRows((a, b) => admin.from("customer_private").select("customer_id, account_owner").order("customer_id").range(a, b)),
       allRows((a, b) => admin.from("launch_email_sends").select("customer_id, sent_at").eq("ok", true).order("sent_at", { ascending: false }).order("id").range(a, b)),
     ]);
@@ -37,13 +38,14 @@ export async function moveList() {
     const own = new Map(((pr || []) as { customer_id: string; account_owner: string | null }[]).map((p) => [p.customer_id, p.account_owner || ""]));
     const last = new Map<string, string>();
     for (const r of (sent || []) as { customer_id: string | null; sent_at: string }[]) if (r.customer_id && !last.has(r.customer_id)) last.set(r.customer_id, r.sent_at);
-    const rows = ((cs || []) as { id: string; company: string | null; name: string | null; email: string | null; payment_terms: PayTerms | null; price_type: string | null; moved_at: string | null; is_test: boolean | null; launch_quiet: boolean | null }[])
+    const rows = ((cs || []) as { id: string; company: string | null; name: string | null; email: string | null; payment_terms: PayTerms | null; price_type: string | null; moved_at: string | null; is_test: boolean | null; launch_quiet: boolean | null; personal_note_to: string[] | null; personal_note_from: string | null; personal_note_skip: boolean | null; personal_note_sent_at: string | null }[])
       .filter((c) => !c.is_test)
       .map((c): MoveRow => {
         const s = sales.get(c.id), email = String(c.email || "").trim().toLowerCase();
         return { id: c.id, name: String(c.company || "").trim() || String(c.name || "").trim() || "(no name)", contact: String(c.name || "").trim(), email: okEmail(email) ? email : "",
           sales: s?.sales || 0, orders: s?.orders || 0, rank: s?.rank || 0, terms: (c.payment_terms || "receipt") as PayTerms, priceType: c.price_type || "retail",
-          owner: own.get(c.id) || "", movedAt: c.moved_at, launchSent: last.get(c.id) || null, quiet: !!c.launch_quiet };
+          owner: own.get(c.id) || "", movedAt: c.moved_at, launchSent: last.get(c.id) || null, quiet: !!c.launch_quiet,
+          personal: { to: c.personal_note_to || [], from: c.personal_note_from || "", skip: !!c.personal_note_skip, sentAt: c.personal_note_sent_at } };
       })
       .sort((a, b) => (a.rank && b.rank ? a.rank - b.rank : a.rank ? -1 : b.rank ? 1 : a.name.localeCompare(b.name)));
     // their order: 1, 2, 3… for the ones with sales in the last 12 months

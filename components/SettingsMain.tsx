@@ -46,7 +46,10 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
     const keep = (fresh?.data as { siteEmail?: unknown } | null)?.siteEmail;
     // and the automatic customer emails switch (the customer page's Emails panel): as it is now
     const ce = (fresh?.data as { customerEmails?: unknown } | null)?.customerEmails;
-    const { error } = await sb.from("settings").upsert({ id: 1, data: { ...s, ...(keep ? { siteEmail: keep } : {}), ...(ce ? { customerEmails: ce } : {}) }, updated_at: new Date().toISOString() });
+    // anything else saved elsewhere that this page doesn't edit (the personal launch note, Nov 3) is kept as it is now too:
+    // the page's own settings go over the current row, never in place of it
+    const now = (fresh?.data || {}) as Record<string, unknown>;
+    const { error } = await sb.from("settings").upsert({ id: 1, data: { ...now, ...s, ...(keep ? { siteEmail: keep } : {}), ...(ce ? { customerEmails: ce } : {}) }, updated_at: new Date().toISOString() });
     setState(error ? "Save failed: " + error.message : "Saved");
   }
   async function addStaff() {
