@@ -141,6 +141,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const [askSkip, setAskSkip] = useState(false);
   // "Already digitized?" open for one print (components/DigitizedFinder.tsx)
   const [finder, setFinder] = useState<string | null>(null);
+  // "Already digitized?" asks first whether we have the file (Nov 3, Nick)
+  const [dgzAsk, setDgzAsk] = useState<string | null>(null);
   /** the print has a stitch file: its own, or its logo's from before */
   const hasSewFile = (d: Imprint) => !!d.emb?.file || !!(embSpecsOf((designs || []).find((x) => x.id === d.design_id)).files || []).length;
   const finderFor = finder ? g.imprints.find((x) => x.id === finder) : null;
@@ -886,6 +888,37 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       onDragLeave={onMoveLine ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropOn(""); } : undefined}
       onDrop={onMoveLine ? (e) => { const d = dragging; setDropOn(""); if (!d || d.from === g.id) return; e.preventDefault(); dragging = null; onMoveLine(d.lineId, d.from, g.id); } : undefined}>
       {dropOn && <div className="ge-dropmsg" role="status">Drop to add {dropOn} to {gLabel}</div>}
+      {/* "Already digitized?": do we have its stitch file? Yes brings it in (the finder); no, and the print is a visual
+          mockup that production confirms, finding the file on the run, with no digitizing charge (Nov 3, Nick: "as an account
+          team… we don't know where they are… do you have it? No, I don't have it… visual mock up only, production has to
+          confirm and get the file") */}
+      {dgzAsk && (() => {
+        const di = g.imprints.findIndex((x) => x.id === dgzAsk), im = g.imprints[di];
+        if (!im) return null;
+        const noFile = () => {
+          setDgzAsk(null);
+          update((x) => {
+            const p = x.imprints[di]; if (!p) return;
+            p.digitized = true;
+            p.emb = { ...(p.emb || {}), fileByProduction: true };
+            p.visualOnly = true;
+            if (!p.confirm) p.confirm = { size: true, ink: true, why: "Already digitized: production finds the stitch file and confirms on the run" };
+          });
+        };
+        return (
+          <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Already digitized?" onClick={() => setDgzAsk(null)}>
+            <div className="dla" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
+              <h3>Already digitized: do you have the stitch file?</h3>
+              <p className="dla-sub">{im.location || "This print"}. No digitizing charge either way. If you don&apos;t have the file, it goes as a visual mockup: production finds the file and confirms the size and threads on the run.</p>
+              <div className="dla-acts">
+                <button type="button" className="btn ghost" onClick={() => setDgzAsk(null)}>Cancel</button>
+                <button type="button" className="btn" onClick={noFile}>No, production gets it</button>
+                <button type="button" className="btn primary" autoFocus onClick={() => { setDgzAsk(null); setFinder(im.id); }}>Yes, bring it in</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {finderFor && <DigitizedFinder designId={finderDesign?.id || null}
         where={[finderFor.location, finderDesign ? designLabel(finderDesign) : "", g.name || ""].filter(Boolean).join(" · ")}
         hint={(finderDesign?.name || g.name || "").replace(/\b(mockup|front|back|left|right|chest|logo|final|copy)\b/gi, " ").replace(/\s+/g, " ").trim()}
@@ -896,6 +929,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
           update((x) => {
             const im = x.imprints[di]; if (!im) return;
             im.emb = { ...(im.emb || {}), stitchesFrom: "file", file: set };
+            delete im.emb.fileByProduction;
             im.stitches = set.stitches;
             const w = /(\d+(?:\.\d+)?)/.exec(im.size || "");
             if (set.wIn && (!w || Math.abs(+w[1] - set.wIn) > 0.05)) im.size = `${Math.round(set.wIn * 100) / 100}" wide`;
@@ -1273,7 +1307,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setFinder(d.id) : undefined} />
+              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setDgzAsk(d.id) : undefined} />
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
@@ -1476,7 +1510,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                       {/* the one digitizing fee (lib/pricing.ts digitizingFee): $40, plus $1 a started 1,000 past 6,000 (Oct 28, Nick) */}
                       {!hidePrices && <b className={"num" + (d.digitized ? " sbx-off" : "")} title={d.digitized ? "Digitized before: no charge" : d.digitizeFee != null ? "Set by hand" : `${money(wpl.digitizing)} base${(d.stitches || 0) > (wpl.digStitches ?? 6000) ? ` + ${Math.ceil(((d.stitches || 0) - (wpl.digStitches ?? 6000)) / 1000)} × ${money(wpl.digPer1k ?? 1)} for the stitches past ${(wpl.digStitches ?? 6000).toLocaleString()}` : ""}`}>{money(digitizingFee(d, wpl))}</b>}
                       {/* the logo's DST is on file from before (Oct 27, Nick: "like repeat screens… already digitized… that overrides it") */}
-                      <label className="check sbx-end" title="The logo was digitized before (its DST is on file): no digitizing charge and no Needs digitizing stamp"><input type="checkbox" checked={!!d.digitized} onChange={(e) => { const di = g.imprints.indexOf(d); if (e.target.checked && !hasSewFile(d)) { setFinder(d.id); return; } update((x) => { x.imprints[di].digitized = e.target.checked || undefined; }); }} />Already digitized</label></div>
+                      <label className="check sbx-end" title="The logo was digitized before (its DST is on file): no digitizing charge and no Needs digitizing stamp"><input type="checkbox" checked={!!d.digitized} onChange={(e) => { const di = g.imprints.indexOf(d); if (e.target.checked && !hasSewFile(d)) { setDgzAsk(d.id); return; } update((x) => { x.imprints[di].digitized = e.target.checked || undefined; }); }} />Already digitized</label></div>
                   ))}
                   {(wpl.embSpecialty?.length || 0) > 0 && g.lines.some((l) => (l.style || "").trim()) && (() => {
                     const on = g.lines.some((l) => isSpecialtyItem(l)), rate = wpl.embSpecialty![Math.min(gc.eti, wpl.embSpecialty!.length - 1)] || 0;
@@ -1988,9 +2022,13 @@ function PrintRow({ youth, shown, d, n, hex, mainBg, mainAt = 0, designs, urls, 
         {extra}
         {/* the logo was digitized before: bring its files in instead (Oct 29, Nick: "already digitized question mark…
             all the way at the bottom of that") */}
-        {dgz?.gray && onFind && <button type="button" className="btn sm pr-dgz-find" onClick={onFind} title="Find its DST, EMB and worksheet in the email, Dropbox or this computer">Already digitized?</button>}
         {printNotes(d.notes) && <div className="pr-notes">{printNotes(d.notes)}</div>}
         {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="pr-unconf"><b>{confirmTitle(d.confirm.why)}</b> <span>Our best guess: {d.confirm.why}.</span>{detailsHref ? <a href={detailsHref}>{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}</div>}
+        {/* digitized before, the file with production: it can still be brought in here */}
+        {d.emb?.fileByProduction && !d.emb?.file && <div className="pr-dgz-pf">Stitch file: production finds it on the run.{onFind && <button type="button" className="linkbtn" onClick={onFind}>Have it? Bring it in</button>}</div>}
+        {/* the logo was digitized before: one line at the bottom, under the stamp, never on it (Nov 3, Nick: "it was
+            supposed to just be a line at the bottom that you clicked") */}
+        {dgz?.gray && onFind && <button type="button" className="pr-dgz-find" onClick={onFind} title="Digitized before? Bring its file in, or let production find it">Already digitized? <u>Click here</u></button>}
       </div>
     </div>
   );

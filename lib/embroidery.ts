@@ -247,4 +247,7 @@ export type EmbSpec = {
   /** the digitized file (DST) for this print, with the EMB and the worksheet when they came with it */ file?: import("@/lib/digitizedFiles").DigitizedSet;
   /** asked of the digitizer when the print has no logo on file to keep it on (a request sent outside the portal) */
   request?: { at: string; by: string; size: string; via?: string; changes?: string } | null;
+  /** digitized before, but the account team doesn't have the file: production finds it and confirms the print on the run
+   *  (Nov 3, Nick: "we don't know where they are… do you have it? No… visual mockup only, production has to confirm and
+   *  get the file") */ fileByProduction?: boolean;
 };
