@@ -118,6 +118,15 @@ export function archivePayments(r: ArchiveSummary & { transactions?: PvTransacti
     id: `pv-${t.id}`, order_id: r.id, number: +r.visual_id || 0, amount: +t.amount || 0, method: METHOD_NAMES[t.category] || t.category || "", paid_on: t.date || null, created_at: t.date || "", href, nickname: r.nickname || "", archived: true }));
 }
 
+/** the Printavo (filepicker) file handle in a file's address, to look up its original name (printavo_file_names) */
+export const pvHandle = (u?: string | null) => (String(u || "").match(/filepicker\.io\/([A-Za-z0-9]{15,})(?:[?+]|$)/g) || []).map((m) => m.replace(/^filepicker\.io\/|[?+]$/g, "")).pop() || "";
+/** a file that's a label or barcode sheet, not art, by its original name (Nov 3: "T11A_0521_1up.pdf" was a barcode sheet) */
+export const notArtName = (n: string) => /barcode|label|upc|sku|1[\s_-]?up\b|packing|slip|invoice|hang ?tag|sticker sheet/i.test(n);
+/** every Printavo file handle on an old order's mockups, to look their names up in one go */
+export function archiveMockHandles(r: { data: { groups?: { imprints?: { mockups?: { full?: string | null; thumb?: string | null }[] | null }[] | null; lines?: { mockups?: { full?: string | null; thumb?: string | null }[] | null }[] | null }[] | null } | null }): string[] {
+  return (r.data?.groups || []).flatMap((g) => [...(g.imprints || []).flatMap((im) => im.mockups || []), ...(g.lines || []).flatMap((l) => l.mockups || [])]).map((x) => pvHandle(x.full) || pvHandle(x.thumb)).filter(Boolean);
+}
+
 /**
  * An old (Printavo) order's picture: the stored path of its best mockup (Nov 3, Nick: "a lot of the orders aren't
  * painting"). Picture mockups first; then a PDF or Illustrator mockup's rendered picture (Printavo's "output=format:png"
@@ -125,16 +134,20 @@ export function archivePayments(r: ArchiveSummary & { transactions?: PvTransacti
  * and never Printavo's generic document icon. One rule for every place that shows an old order's picture.
  */
 type MockFile = { thumb?: string | null; full?: string | null; mime?: string | null; name?: string | null };
-export function archivePicPath(r: { files: Record<string, string> | null; data: { groups?: { imprints?: { mockups?: MockFile[] | null }[] | null; lines?: { mockups?: MockFile[] | null }[] | null }[] | null } | null }): string {
+export function archivePicPath(r: { files: Record<string, string> | null; data: { groups?: { imprints?: { mockups?: MockFile[] | null }[] | null; lines?: { mockups?: MockFile[] | null }[] | null }[] | null } | null },
+  /** original file names by handle (printavo_file_names), so a barcode sheet uploaded as a "mockup" is passed over */ names: Record<string, string> = {}): string {
+  const nameOf = (x: MockFile) => x.name || names[pvHandle(x.full)] || names[pvHandle(x.thumb)] || "";
   const all = (r.data?.groups || []).flatMap((g) => [...(g.imprints || []).flatMap((im) => im.mockups || []), ...(g.lines || []).flatMap((l) => l.mockups || [])])
-    .filter((x) => !/barcode|label/i.test(x.name || ""));
+    .filter((x) => !notArtName(nameOf(x)))
+    // a file named as a mockup, proof or setup goes first
+    .sort((a, b) => Number(!/mock|proof|setup|art/i.test(nameOf(a))) - Number(!/mock|proof|setup|art/i.test(nameOf(b))));
   const stored = (u?: string | null) => (u ? storedPath(r.files?.[u]) : "");
   const icon = (u?: string | null) => /ico-document|\/assets\/app\//i.test(u || "");
   for (const x of all) if (/^image\//.test(x.mime || "")) { const p = stored(x.thumb) || stored(x.full); if (p) return p; }
   for (const x of all) if (x.thumb && !icon(x.thumb) && /output=format:(png|jpe?g)/i.test(x.thumb)) { const p = stored(x.thumb); if (p) return p; }
   // nothing on its lines: any picture from the job (Nov 3, Nick: "just grab something from the job if you can't find it
   // on the line… just don't use barcodes"): a stored picture or a rendered PDF, not an icon, barcode, label or packing slip
-  const pics = Object.entries(r.files || {}).filter(([src, path]) => storedPath(path) && !icon(src) && !/barcode|label|packing|slip|invoice|shipping/i.test(`${src} ${path}`)
+  const pics = Object.entries(r.files || {}).filter(([src, path]) => storedPath(path) && !icon(src) && !/barcode|label|packing|slip|invoice|shipping/i.test(`${src} ${path}`) && !notArtName(names[pvHandle(src)] || "")
     && (/\.(png|jpe?g|webp|gif)$/i.test(path) || /output=format:(png|jpe?g)/i.test(src)));
   // full pictures before the small renders
   pics.sort((a, b) => Number(/resize=width:100/.test(a[0])) - Number(/resize=width:100/.test(b[0])));

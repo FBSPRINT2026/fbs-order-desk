@@ -10,7 +10,7 @@ import { aiState } from "@/lib/ai/claude";
 import { orderFromText } from "@/lib/ai/tasks";
 import { proposalToGroups } from "@/lib/ai/normalize";
 import { groupsFromPrintavo, readFiles } from "@/lib/ai/emailOrder";
-import { storedPath, archivePicPath } from "@/lib/archive";
+import { storedPath, archivePicPath, archiveMockHandles } from "@/lib/archive";
 
 type Result = { ok: boolean; error?: string; id?: string; updated_at?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -667,8 +667,12 @@ export async function myReorderables(q = ""): Promise<Reorderable[]> {
     const picOf = new Map<string, string>();
     for (const o of (os || []) as { id: string; groups: Group[] | null }[]) { const g = (o.groups || [])[0]; const p = g?.mockupThumbs?.[0] || g?.customerMockups?.[0]?.path || ""; if (p) picOf.set(`o:${o.id}`, p); }
     type PvFile = { thumb?: string; full?: string; mime?: string; name?: string };
-    for (const r of (as || []) as { id: string; files: Record<string, string> | null; data: { groups?: { imprints?: { mockups?: PvFile[] }[]; lines?: { mockups?: PvFile[] }[] }[] } | null }[]) {
-      const hit = archivePicPath(r);
+    const rows = (as || []) as { id: string; files: Record<string, string> | null; data: { groups?: { imprints?: { mockups?: PvFile[] }[]; lines?: { mockups?: PvFile[] }[] }[] } | null }[];
+    const hs = [...new Set(rows.flatMap((r) => archiveMockHandles(r)))];
+    const pvNames: Record<string, string> = {};
+    for (let i = 0; i < hs.length; i += 300) { const { data: nm } = await admin.from("printavo_file_names").select("handle, filename").in("handle", hs.slice(i, i + 300)); for (const n of (nm || []) as { handle: string; filename: string | null }[]) if (n.filename) pvNames[n.handle] = n.filename; }
+    for (const r of rows) {
+      const hit = archivePicPath(r, pvNames);
       if (hit) picOf.set(`a:${r.id}`, hit);
     }
     const paths = [...new Set(picOf.values())];

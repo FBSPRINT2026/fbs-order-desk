@@ -36,7 +36,7 @@ import { cardHasPrices, type Program, type ProgramItem } from "@/lib/programs";
 import { aiPaySelect } from "@/app/portal/pay-select";
 import { customerSendsGoods, needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
-import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction, storedPath, archivePicPath } from "@/lib/archive";
+import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction, storedPath, archivePicPath, archiveMockHandles } from "@/lib/archive";
 import { fmtPhone } from "@/lib/phone";
 import PortalDesignCatalog from "@/components/PortalDesignCatalog";
 import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/lib/logoShirts";
@@ -364,9 +364,13 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   if (archTop.length || pvOpen.length || archHist.length) {
     const { data: ad } = await admin.from("archived_orders").select("id, files, data").is("removed_at", null).in("id", [...new Set([...archTop.map((a) => a.id), ...archHist.map((a) => a.id), ...pvOpen.map((x) => x.a.id)])]);
     const want: { id: string; path: string }[] = [];
+    // the mockups' original file names, so a barcode sheet isn't taken for the picture (Nov 3)
+    const hs = [...new Set(((ad || []) as { data: PvOrder }[]).flatMap((r) => archiveMockHandles(r as never)))];
+    const pvNames: Record<string, string> = {};
+    for (let i = 0; i < hs.length; i += 300) { const { data: nm } = await admin.from("printavo_file_names").select("handle, filename").in("handle", hs.slice(i, i + 300)); for (const n of (nm || []) as { handle: string; filename: string | null }[]) if (n.filename) pvNames[n.handle] = n.filename; }
     ((ad || []) as { id: string; files: Record<string, string> | null; data: PvOrder }[]).forEach((r) => {
       // the imprint mockups first (the shirt with the art), pictures only (not barcodes or file icons)
-      const hit = archivePicPath(r as never);
+      const hit = archivePicPath(r as never, pvNames);
       pvKind[r.id] = kindFromWords([...(r.data?.groups || []).flatMap((g) => [...g.lines.map((l) => l.category), ...g.imprints.map((im) => im.typeOfWork)])]);
       if (hit) want.push({ id: r.id, path: hit });
     });

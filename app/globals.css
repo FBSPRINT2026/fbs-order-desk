@@ -20122,3 +20122,6 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
 .psm-ht > .faint{font-size:12.5px;line-height:1.35}
 .psm-pb{padding-top:14px}
 @media (max-width:900px){.psm{align-items:stretch}.psm > *,.psm-side > *,.psm-main > *{width:auto;max-width:none}}
+/* a page title stacked on a phone (the portal's page tops are a column there): its title block is its own height, not
+   the 280px a row gives it (Nov 3: a 130px gap under "Review your artwork") */
+@media (max-width:640px){.portal .p-main > .page-head > div:first-child{flex-basis:auto}}
