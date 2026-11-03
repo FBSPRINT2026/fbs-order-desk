@@ -12,7 +12,7 @@ import { APP_VERSION } from "@/lib/version";
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-export const LAUNCH_SUBJECT = "It's here: your new FBS Print customer portal";
+export const LAUNCH_SUBJECT = "IT'S HERE: Your New FBS Print Customer Portal";
 
 export function launchEmailHtml(o: { site: string; portalUrl: string; firstName?: string; replyTo?: string; /** the customer's company, shown in the portal picture */ company?: string }) {
   // the version on each picture's address: phones and mail services keep pictures by address, so a picture that changed
