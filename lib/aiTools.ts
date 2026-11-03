@@ -7,7 +7,7 @@
  * When a tool changes, it changes once (its component), never in one of the places it shows up. When adding a button
  * for a tool somewhere new, open its component (`component`), don't copy it, and add the place to `places`.
  */
-export type AiToolId = "goods-reader" | "create-order" | "mockup-helper" | "reply" | "assistant" | "order-helper" | "order-review" | "reorder-check" | "art-resolution" | "design-ai" | "brand" | "catalog-review" | "sep-coach" | "when-print" | "schedule" | "file-guess" | "goods-match" | "order-goods" | "order-transfers" | "ask-shop" | "digitizer" | "order-training";
+export type AiToolId = "goods-reader" | "create-order" | "mockup-helper" | "reply" | "assistant" | "order-helper" | "order-review" | "reorder-check" | "art-resolution" | "design-ai" | "brand" | "catalog-review" | "sep-coach" | "when-print" | "schedule" | "file-guess" | "goods-match" | "order-goods" | "order-transfers" | "ask-shop" | "digitizer" | "order-training" | "company-lookup";
 
 export type AiTool = {
   id: AiToolId; group: "Orders" | "Art & mockups" | "Email" | "Production" | "Goods" | "Search";
@@ -48,5 +48,7 @@ export const AI_TOOLS: AiTool[] = [
   { id: "order-transfers", group: "Goods", name: "Create DTF gang sheet", what: "Fills a gang sheet from an order's heat press prints: the art as the Mockup Creator showed it (white boxes knocked out), each at its size and as many as the garments; you optimize it and order it from DTF Dallas.",
     places: ["Order page: Ask AI → Create DTF gang sheet", "Production: Gang Sheets → + New gang sheet", "Shop Tools: Gang Sheet Builder"], component: "app/shop/gang-sheet/builder/page.tsx (fromOrder)", open: { href: "/shop/gang-sheet/builder", label: "Open the Gang Sheet Builder" } },
   { id: "goods-match", group: "Goods", name: "Match goods to orders", what: "Links incoming boxes and shipments to the jobs they're for; recommends the close ones for you to OK.", places: ["Receiving: Attempt to relink orders"], component: "app/api/goods/ai-match", open: { href: "/shop/receiving", label: "Open Receiving" } },
+  { id: "company-lookup", group: "Search", name: "Company lookup", what: "Finds a customer's main address and phone online (their website, Google listing, business records), checked against their email's web domain; shows what it found and where, for you to use or not. Saves nothing by itself.",
+    places: ["Customers → Update contacts: Look it up online"], component: "lib/ai/companyLookup.ts (app/shop/customers/contacts/actions.ts lookUpOnline)", open: { href: "/shop/customers/contacts", label: "Open Update contacts" } },
   { id: "ask-shop", group: "Search", name: "Ask the shop", what: "A question in plain words answered from the shop's live data: what's due, who owes, did it arrive.", places: ["The search bar (top left)"], component: "app/api/ai/search", open: { href: "#ask", label: "Ask in the search bar" } },
 ];

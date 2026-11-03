@@ -3,6 +3,8 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { allRows } from "@/lib/readAll";
 import { fmtPhone } from "@/lib/phone";
+import { aiState } from "@/lib/ai/claude";
+import { lookUpCompany } from "@/lib/ai/companyLookup";
 
 /**
  * Update contacts (Nov 3, Nick: "build a update the contact tool… it shows the accounts… just the contacts first… help me
@@ -164,5 +166,28 @@ export async function saveContacts(input: { id: string; company: string; phone: 
       }
     }
     return { ok: true as const, added, removed };
+  } catch (e) { return fail(e); }
+}
+
+/** the company's address and phone from their own listing online (lib/ai/companyLookup.ts); nothing is saved */
+export async function lookUpOnline(customerId: string) {
+  try {
+    const v = await me();
+    const admin = createAdminClient();
+    const st = await aiState(admin);
+    if (!st.ready) throw new Error(st.reason);
+    const [{ data: c }, { data: cc }, { data: pv }] = await Promise.all([
+      admin.from("customers").select("company, name, email, phone, address").eq("id", customerId).maybeSingle(),
+      admin.from("customer_contacts").select("email").eq("customer_id", customerId).is("removed_at", null),
+      admin.from("printavo_customers").select("data").eq("customer_id", customerId),
+    ]);
+    if (!c) throw new Error("That customer isn't here.");
+    const emails = [String(c.email || ""), ...((cc || []) as { email: string | null }[]).map((x) => String(x.email || ""))].map((x) => x.trim().toLowerCase()).filter(okEmail);
+    const domains = [...new Set(emails.map((e) => e.split("@")[1]).filter((d) => d && !FREE.test(d)))];
+    const pvName = ((pv || []) as { data: { companyName?: string } | null }[]).map((x) => String(x.data?.companyName || "").trim()).find(Boolean) || "";
+    const known = [c.address && `address ${String(c.address).replace(/\s+/g, " ")}`, c.phone && `phone ${c.phone}`, pvName && pvName !== c.company && `also called ${pvName}`].filter(Boolean).join("; ");
+    const r = await lookUpCompany({ model: st.settings.assistant.ai.model, admin, by: v.email || "", customerId, name: String(c.company || c.name || "").trim(), domains, known });
+    if (!r.ok) throw new Error(r.error);
+    return { ok: true as const, found: r.found };
   } catch (e) { return fail(e); }
 }

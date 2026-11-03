@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
-import { contactDetail, contactList, saveContacts, type ContactRow, type ContactState, type Detail } from "./actions";
+import { contactDetail, contactList, lookUpOnline, saveContacts, type ContactRow, type ContactState, type Detail } from "./actions";
+import type { CompanyFound } from "@/lib/ai/companyLookup";
 
 /**
  * Update contacts (Nov 3, Nick: "for creative apparel… Scott Gray, Lyn, Lisa… their name, their email… who they are,
@@ -29,6 +30,8 @@ export default function UpdateContacts() {
   const [q, setQ] = useState(""), [cur, setCur] = useState(""), [err, setErr] = useState("");
   const [d, setD] = useState<Detail | null>(null), [co, setCo] = useState({ company: "", phone: "", address: "" });
   const [people, setPeople] = useState<Row[]>([]), [busy, setBusy] = useState(false), [note, setNote] = useState("");
+  // what was found online for this account (Look it up online), and which boxes were filled from it
+  const [web, setWeb] = useState<CompanyFound | null | "busy">(null), [webErr, setWebErr] = useState(""), [fromWeb, setFromWeb] = useState<Set<string>>(new Set());
 
   useEffect(() => { void contactList().then((r) => { if (r.ok) { setRows(r.rows); setOwners(r.owners); } else setErr(r.error); }); }, []);
   const all = rows || [];
@@ -41,7 +44,7 @@ export default function UpdateContacts() {
 
   // open one: who's on the account, then everyone found in the mail; the regulars at the company start ticked
   const open = async (id: string) => {
-    setCur(id); setD(null); setPeople([]); setNote(""); setErr("");
+    setCur(id); setD(null); setPeople([]); setNote(""); setErr(""); setWeb(null); setWebErr(""); setFromWeb(new Set());
     const r = await contactDetail(id);
     if (!r.ok) return setErr(r.error);
     const x = r.detail;
@@ -75,6 +78,18 @@ export default function UpdateContacts() {
   const tickRegulars = () => setPeople((ps) => { const n = ps.map((p) => (p.same && (p.n || 0) >= REGULAR && !p.contact ? { ...p, contact: true, portal: true } : p)); if (!n.some((p) => p.main && p.contact)) { const m = n.find((p) => p.contact); if (m) m.main = true; } return n; });
   const addBlank = () => setPeople((ps) => [...ps, { key: `new-${Date.now()}`, name: "", email: "", phone: "", phoneFound: false, contact: true, portal: true, main: !ps.some((p) => p.main && p.contact), roles: [] }]);
 
+  const lookUp = async () => {
+    if (!d) return;
+    setWeb("busy"); setWebErr("");
+    const r = await lookUpOnline(d.id);
+    if (!r.ok) { setWeb(null); return setWebErr(r.error); }
+    setWeb(r.found);
+  };
+  const useWeb = (what: ("address" | "phone")[]) => {
+    if (!web || web === "busy") return;
+    setCo((c) => ({ ...c, ...(what.includes("address") && web.address ? { address: web.address } : {}), ...(what.includes("phone") && web.phone ? { phone: web.phone } : {}) }));
+    setFromWeb((s) => new Set([...s, ...what]));
+  };
   const next = () => { const i = list.findIndex((r) => r.id === cur); const n = list[i + 1] || list.find((r) => r.id !== cur); if (n) void open(n.id); };
   const save = async () => {
     if (!d) return;
@@ -100,9 +115,9 @@ export default function UpdateContacts() {
         <input className="ucx-in" aria-label="Name" placeholder="Name" value={p.name} onChange={(e) => edit(p.key, { name: e.target.value })} />
         {p.contactId || !p.n ? <input className="ucx-in ucx-em" aria-label="Email" placeholder="Email" value={p.email} onChange={(e) => edit(p.key, { email: e.target.value })} />
           : <div className="sub" data-notranslate>{p.email}</div>}
-        {p.n ? <div className="sub">{p.n.toLocaleString()} email{p.n === 1 ? "" : "s"} with {(p.boxes || []).join(", ")} · last {when(p.last || "")}</div> : null}
+        {p.n ? <div className="sub">{p.suggested && <span className="ucx-found">Suggested · </span>}{p.n.toLocaleString()} email{p.n === 1 ? "" : "s"} with {(p.boxes || []).join(", ")} · last {when(p.last || "")}</div> : null}
       </td>
-      <td><input className={"ucx-in" + (p.phoneFound ? " ucx-sug" : "")} aria-label="Phone" placeholder="Phone" value={p.phone} onChange={(e) => edit(p.key, { phone: e.target.value, phoneFound: false })} />{p.phoneFound && <div className="sub">From their signature</div>}</td>
+      <td><input className="ucx-in" aria-label="Phone" placeholder="Phone" value={p.phone} onChange={(e) => edit(p.key, { phone: e.target.value, phoneFound: false })} />{p.phoneFound && <div className="sub ucx-found">From their signature</div>}</td>
       <td className="ucx-c"><input type="checkbox" aria-label={`${p.name || p.email} is a contact`} checked={p.contact} onChange={(e) => tick(p.key, e.target.checked)} /></td>
       <td className="ucx-c"><input type="checkbox" aria-label={`${p.name || p.email} can sign in to the portal`} checked={p.contact && p.portal} disabled={!p.contact || !p.email} onChange={(e) => edit(p.key, { portal: e.target.checked })} /></td>
       <td className="ucx-c"><input type="radio" name="ucx-main" aria-label={`${p.name || p.email} is the main contact`} checked={p.contact && p.main} onChange={() => setMain(p.key)} /></td>
@@ -152,15 +167,31 @@ export default function UpdateContacts() {
                 <div className="panel-b">
                   <div className="ucx-g">
                     <div className="field"><label htmlFor="ucx-c">Company name on invoices</label><input id="ucx-c" value={co.company} onChange={(e) => setCo({ ...co, company: e.target.value })} /></div>
-                    <div className="field"><label htmlFor="ucx-p">Company phone</label><input id="ucx-p" type="tel" value={co.phone} onChange={(e) => setCo({ ...co, phone: e.target.value })} /></div>
-                    <div className="field ucx-wide"><label htmlFor="ucx-a">Billing address</label><textarea id="ucx-a" rows={2} value={co.address} onChange={(e) => setCo({ ...co, address: e.target.value })} /></div>
+                    <div className="field"><label htmlFor="ucx-p">Company phone</label><input id="ucx-p" type="tel" className={fromWeb.has("phone") ? "ucx-sug" : ""} value={co.phone} onChange={(e) => setCo({ ...co, phone: e.target.value })} /></div>
+                    <div className="field ucx-lookup"><label>&nbsp;</label><button type="button" className="btn" disabled={web === "busy"} onClick={() => void lookUp()}>{web === "busy" ? "Looking it up…" : "Look it up online"}</button></div>
+                    <div className="field ucx-wide"><label htmlFor="ucx-a">Billing address</label><textarea id="ucx-a" rows={2} className={fromWeb.has("address") ? "ucx-sug" : ""} value={co.address} onChange={(e) => setCo({ ...co, address: e.target.value })} /></div>
                   </div>
+                  {webErr && <div className="err" style={{ marginTop: 8 }}>{webErr}</div>}
+                  {web && web !== "busy" && (
+                    <div className={"ucx-web" + (web.sure === "low" ? " low" : "")}>
+                      <div className="ucx-web-t">
+                        <b>{web.address || web.phone ? "Found online" : "Nothing sure found online"}</b>
+                        {(web.address || web.phone) && <span className="faint">{web.sure === "high" ? "Looks right" : web.sure === "medium" ? "Probably right: check it" : "Not sure it's the same company"}</span>}
+                      </div>
+                      {web.address && <div className="ucx-web-r"><span className="ucx-web-k">Address</span><span data-notranslate>{web.address}</span>{web.address !== co.address && <button type="button" className="btn sm" onClick={() => useWeb(["address"])}>Use</button>}</div>}
+                      {web.phone && <div className="ucx-web-r"><span className="ucx-web-k">Phone</span><span data-notranslate>{web.phone}</span>{web.phone !== co.phone && <button type="button" className="btn sm" onClick={() => useWeb(["phone"])}>Use</button>}</div>}
+                      {web.website && <div className="ucx-web-r"><span className="ucx-web-k">Website</span><span data-notranslate>{web.website}</span></div>}
+                      {web.note && <div className="faint ucx-web-n">{web.note}</div>}
+                      {web.sources.length > 0 && <div className="ucx-web-n">{web.sources.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="ucx-web-s">{s.title}</a>)}</div>}
+                      {web.address && web.phone && (web.address !== co.address || web.phone !== co.phone) && <button type="button" className="btn primary sm" onClick={() => useWeb(["address", "phone"])}>Use both</button>}
+                    </div>
+                  )}
 
                   <div className="ucx-sec"><span>People at {co.company || "this company"}</span><span className="faint">{chosen} chosen</span>
                     {regularsOff > 0 && <button type="button" className="btn sm" onClick={tickRegulars}>Tick everyone with {REGULAR}+ emails</button>}
                     <button type="button" className="btn sm" onClick={addBlank}>+ Add person</button></div>
                   {theirs.length ? (
-                    <div className="tbl-wrap"><table className="tbl ucx-t">
+                    <div className="tbl-wrap"><table className="tbl ucx-t"><colgroup><col style={{ width: "34%" }} /><col style={{ width: "20%" }} /><col style={{ width: "8%" }} /><col style={{ width: "8%" }} /><col style={{ width: "7%" }} /><col /></colgroup>
                       <thead><tr><th>Person</th><th>Phone</th><th className="ucx-c">Contact</th><th className="ucx-c">Portal</th><th className="ucx-c">Main</th><th>What they do</th></tr></thead>
                       <tbody>{theirs.map(personRow)}</tbody>
                     </table></div>
@@ -169,7 +200,7 @@ export default function UpdateContacts() {
 
                   {outsiders.length > 0 && <>
                     <button type="button" className="linkbtn ucx-more" onClick={() => setShowOthers(!showOthers)}>{showOthers ? "Hide" : "Show"} {outsiders.length} other {outsiders.length === 1 ? "person" : "people"} on these threads (other companies, shippers)</button>
-                    {showOthers && <div className="tbl-wrap"><table className="tbl ucx-t">
+                    {showOthers && <div className="tbl-wrap"><table className="tbl ucx-t"><colgroup><col style={{ width: "34%" }} /><col style={{ width: "20%" }} /><col style={{ width: "8%" }} /><col style={{ width: "8%" }} /><col style={{ width: "7%" }} /><col /></colgroup>
                       <thead><tr><th>Person</th><th>Phone</th><th className="ucx-c">Contact</th><th className="ucx-c">Portal</th><th className="ucx-c">Main</th><th>What they do</th></tr></thead>
                       <tbody>{outsiders.map(personRow)}</tbody>
                     </table></div>}
