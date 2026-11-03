@@ -42,17 +42,17 @@ const STEPS: Record<TourView, Step[]> = {
   // the Mockup Creator's own walk-through, the first time they open it (Nov 3, Nick: "a tutorial for the mockup creator
   // also… the first time, how to use")
   mockup: [
-    { t: "Meet the new Mockup Creator", b: "We're excited to roll out our brand new Mockup Creator. Build a realistic mockup that shows exactly how your print will look on the garment." },
+    { t: "Meet the new Mockup Creator", b: "We're excited to roll out our brand new Mockup Creator. Build a realistic mockup that shows exactly how your print will look on the garment.", img: "/tour/mockup-creator.png" },
     WHOLESALE_WHY,
-    { sel: ".mk-setup", t: "1. Pick a garment", b: "It's synced with our suppliers' catalogs and pulls in the garment pictures for you to build on. Type a style number or a kind of shirt, pick the colors, or click Help me pick." },
-    { sel: ".mk-side > section.panel:first-child", t: "2. Add a location", b: "Click Add location and choose where it goes: front, back or sleeves, and how it's printed: screen print, embroidery, DTF or heat press." },
-    { sel: ".mk-side > section.panel:first-child", t: "3. Upload your art", b: "Every format works: AI, EPS, SVG, PDF, JPEG, PNG and more. Simple tools like remove background clean it up for you." },
-    { sel: ".mk-stage-wrap", t: "4. Size it and place it", b: "Set the size, then drag it and size it right on the shirt until it looks the way you want. That's the size and placement we print." },
-    { sel: ".mk-side > section.panel:first-child", t: "5. Get the colors right", b: "Not sure what color it'll print in? We suggest the closest standard ink or a PMS color, or set your own PMS. For embroidery, it finds the closest threads we carry." },
-    { sel: ".mk-mini", t: "A close look", b: "Each print up close, with its size and its ink or thread colors." },
+    { sel: ".mk-setup", t: "1. Pick a garment", b: "It's synced with our suppliers' catalogs and pulls in the garment pictures for you to build on. Type a style number or a kind of shirt, pick the colors, or click Help me pick.", img: "/tour/mk-garment.png" },
+    { sel: ".mk-side > section.panel:first-child", t: "2. Add a location", b: "Click Add location and choose where it goes: front, back or sleeves, and how it's printed: screen print, embroidery, DTF or heat press.", img: "/tour/mk-location.png" },
+    { sel: ".mk-side > section.panel:first-child", t: "3. Upload your art", b: "Every format works: AI, EPS, SVG, PDF, JPEG, PNG and more. Simple tools like remove background clean it up for you.", img: "/tour/mk-location.png" },
+    { sel: ".mk-stage-wrap", t: "4. Size it and place it", b: "Set the size, then drag it and size it right on the shirt until it looks the way you want. That's the size and placement we print.", img: "/tour/mk-shirt.png" },
+    { sel: ".mk-side > section.panel:first-child", t: "5. Get the colors right", b: "Not sure what color it'll print in? For each color in your logo, we suggest the closest standard ink or a PMS color, or you set your own PMS.", img: "/tour/mk-colors.png" },
+    { sel: ".mk-side > section.panel:first-child", t: "Embroidery? Pick your threads", b: "Switch it to embroidery and it finds the closest threads we carry for each color, with a stitch estimate.", img: "/tour/mk-threads.png" },
     { sel: ".mk-more-box", t: "Need more than a logo?", b: "Add words, start from a ready-made design, have AI create one, or open the Design Lab for names and numbers." },
     { sel: ".mk-head .btn.primary", t: "6. Save it to your files", b: "Save mockup keeps it in your Artwork, ready to order from." },
-    { sel: ".mk-head .row", t: "7. Share it with your customers", b: "Sales tools puts your logo on top of a sales sheet and on all sorts of products. Export PDF makes a sheet you can send.", foot: "You can watch this again from Settings, under Portal layout." },
+    { sel: ".mk-head .row", t: "7. Share it with your customers", b: "Sales tools makes a sales sheet: every color on one page, your text and logo on top, ready to download as a picture or PDF. Export PDF makes a sheet you can send.", img: "/tour/mk-sales.png", foot: "You can watch this again from Settings, under Portal layout." },
   ],
   simple: [
     OLD_SITE,
@@ -142,12 +142,14 @@ export default function PortalTour({ view, auto, clickup = false, wholesale = fa
   const cardStyle: React.CSSProperties = !box ? {} : below + 240 < vh
     ? { top: below, left: Math.max(16, Math.min(box.left, innerWidth - 376)) }
     : { top: Math.max(16, box.top - pad - 12 - 240), left: Math.max(16, Math.min(box.left, innerWidth - 376)) };
+  // a step with a picture puts its card in the middle, so the picture has room (the part stays lit behind it)
+  const mid = !box || !!s.img;
   return createPortal(
-    <div className={"ptour" + (box ? "" : " mid")} role="dialog" aria-modal="true" aria-label={s.t}>
+    <div className={"ptour" + (mid ? " mid" : "")} role="dialog" aria-modal="true" aria-label={s.t}>
       {box
         ? <div className="ptour-hole" style={{ top: box.top - pad, left: box.left - pad, width: box.width + pad * 2, height: box.height + pad * 2 }} aria-hidden />
         : <div className="ptour-dim" aria-hidden />}
-      <div className="ptour-card" style={cardStyle}>
+      <div className="ptour-card" style={mid ? undefined : cardStyle}>
         <div className="ptour-n">Step {at} of {live.length}</div>
         <h3>{s.t}</h3>
         <p>{s.b}</p>

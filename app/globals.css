@@ -20276,3 +20276,6 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 @media (max-width:900px){.psm-side > .psm-proofs{order:2}}
 .ptour-img{display:block;width:100%;max-height:44vh;object-fit:contain;object-position:top;margin-top:10px;border:1px solid var(--line);border-radius:8px;background:#F3F5F8}
 .ptour-foot{margin-top:8px!important;font-size:12px!important;color:var(--ink-3)!important}
+/* a card with a picture is a little wider */
+.ptour-card:has(.ptour-img){width:min(520px,calc(100vw - 32px))}
+.ptour.mid .ptour-card{max-height:calc(100vh - 32px);overflow:auto}
