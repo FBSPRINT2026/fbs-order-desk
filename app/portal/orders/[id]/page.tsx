@@ -209,7 +209,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                     {pics.length > 0 && <div className="pod-art"><PortalArtView pics={pics.slice(0, 8).map((x) => mkUrls[x])} open={proofHref || undefined} /></div>}
                     <div className="pod-spec">
                       {g.imprints.length > 0 ? (
-                        <table className="tbl pod-prints">
+                        <table className="tbl pod-prints" data-nofit>
                           <thead><tr><th>Print</th><th>Method</th><th>Size</th><th>Inks</th></tr></thead>
                           <tbody>{g.imprints.map((d, k) => {
                             const reorder = needsDetails(d);
@@ -225,11 +225,21 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                           })}</tbody>
                         </table>
                       ) : <div className="faint">No prints on this job.</div>}
+                      {/* phones: each print in two short lines (Nov 2, Nick: "nothing's good there… look at the mobile debug") */}
+                      {g.imprints.length > 0 && <ul className="pod-pl">{g.imprints.map((d, k) => {
+                        const inks = inkNames(d.inks || "");
+                        const cols = (d.method === "screen" || d.method === "embroidery") && d.colors ? (d.method === "screen" && d.colors >= FULL_COLOR ? "full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`) : "";
+                        return (
+                          <li key={d.id || k}>
+                            <div className="pod-pl-a"><b>{d.location || "Print"}</b><span>{[methodLabel(d), cols].filter(Boolean).join(" · ")}</span></div>
+                            <div className="pod-pl-b">{d.size && <span className="pod-nw">{d.size}</span>}{needsDetails(d) ? <span className="faint">Matches your previous order</span> : inks.map((n) => { const hx = colorHex(n); return <span key={n} className="pod-ink"><i style={{ background: hx || "var(--surface-2)" }} aria-hidden />{n}</span>; })}</div>
+                          </li>);
+                      })}</ul>}
                       {(cg?.finishing.length || 0) > 0 && <div className="pod-fin"><span className="lbl">Finishing</span>{cg!.finishing.map((f) => f.name).join(", ")}</div>}
                     </div>
                   </div>
                   <div className="tbl-wrap pod-lines">
-                    <table className="tbl">
+                    <table className="tbl" data-nofit>
                       <thead><tr><th>Garment</th>{grid ? used.map((s) => <th key={s} className="r">{sizeLabel(s)}</th>) : <th>Sizes</th>}<th className="r">Qty</th>{!isReq && <th className="r">Each</th>}{!isReq && <th className="r">Total</th>}</tr></thead>
                       <tbody>{g.lines.map((l, li) => {
                         const lc = cg?.lines[li];
@@ -245,6 +255,17 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                       })}</tbody>
                     </table>
                   </div>
+                  {/* phones: each garment as the name, its sizes in a row of boxes (size over count), then qty × each = total */}
+                  <ul className="pod-gl">{g.lines.map((l, li) => {
+                    const lc = cg?.lines[li];
+                    const sz = SIZES.filter((s) => +(l.sizes?.[s] || 0) > 0);
+                    return (
+                      <li key={l.id}>
+                        <div className="pod-gl-n"><b>{l.style || "Garment"}</b> {garmentName(l.garment, l.style)}{l.color ? <small>{l.color}</small> : null}</div>
+                        {sz.length > 0 && <div className="pod-gl-sz">{sz.map((s) => <span key={s}><small>{sizeLabel(s)}</small><b>{l.sizes[s]}</b></span>)}</div>}
+                        <div className="pod-gl-t"><span>{(lc?.qty || 0).toLocaleString("en-US")} pcs{!isReq ? ` × ${money(lc?.each)}` : ""}</span>{!isReq && <b>{money(lc?.sub)}</b>}</div>
+                      </li>);
+                  })}</ul>
                 </section>
               );
             })}

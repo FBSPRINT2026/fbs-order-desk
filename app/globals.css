@@ -18998,3 +18998,43 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* (Nov 2, Nick's phone: an order's name broke one letter per line beside its buttons) a page's title keeps its room: when
    the buttons don't fit beside it they go on the line under it (the min-width above); a long name wraps between words */
 .page-head > div:first-child > h1{overflow-wrap:normal;word-break:normal;hyphens:manual}
+/* ---- the customer's order page on a phone (Nov 2, Nick: "definitely don't like the order page… on mobile… the header's
+   all wrong… the slider bar… the statistics… can be really compressed… the sizes don't read right") ---- */
+.pod-pl,.pod-gl{display:none}
+@media (max-width:640px){
+  .pod .page-head{gap:10px}
+  .pod .page-head h1{font-size:24px;line-height:1.2}
+  .pod .pod-acts{gap:6px;width:100%}
+  .pod .pod-acts .btn{height:32px;padding:0 10px;font-size:13px;min-width:0}
+  .pod .pod-acts .btn.primary{order:-1;flex:1 0 100%;height:40px;font-size:14px}
+  /* the steps: no box around them, a little tighter */
+  .pod .pod-railw{background:none;border:0;padding:4px 2px 0}
+  /* the four numbers: one small card, two rows, label beside its number */
+  .pod .pod-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .pod .pod-stats .stat{padding:8px 12px!important;display:flex!important;flex-direction:row!important;align-items:baseline;justify-content:space-between;gap:8px;min-height:0!important}
+  .pod .pod-stats .stat .k{font-size:11.5px!important;margin:0!important;white-space:nowrap}
+  .pod .pod-stats .stat .v{font-size:15px!important;line-height:1.3;white-space:nowrap}
+  .pod .pod-stats .stat small{display:none}
+  /* the job: the art across the top, then the prints and the garments as short lines */
+  .pod .pod-art{flex:1 1 100%;min-width:0}
+  .pod .pod-spec{flex:1 1 100%}
+  .pod .pod-prints,.pod .pod-lines{display:none}
+  .pod .pod-pl,.pod .pod-gl{display:block;list-style:none;margin:0;padding:0}
+  .pod-pl li{padding:10px 0;border-top:1px solid var(--line-2)}
+  .pod-pl li:first-child{border-top:0;padding-top:0}
+  .pod-pl-a{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .pod-pl-a b{font-size:14px;color:var(--ink)}
+  .pod-pl-a span{font-size:12.5px;color:var(--ink-3)}
+  .pod-pl-b{display:flex;align-items:center;gap:6px 12px;flex-wrap:wrap;margin-top:4px;font-size:13px;color:var(--ink)}
+  .pod-gl{border-top:1px solid var(--line)}
+  .pod-gl li{padding:12px 16px;border-top:1px solid var(--line-2)}
+  .pod-gl li:first-child{border-top:0}
+  .pod-gl-n{font-size:14px;color:var(--ink);line-height:1.35}
+  .pod-gl-n small{display:block;font-size:12.5px;color:var(--ink-3)}
+  .pod-gl-sz{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;margin-top:8px}
+  .pod-gl-sz span{display:flex;flex-direction:column;align-items:center;border:1px solid var(--line);border-radius:6px;padding:4px 0;background:var(--surface-2)}
+  .pod-gl-sz small{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase}
+  .pod-gl-sz b{font-size:14px;color:var(--ink)}
+  .pod-gl-t{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-top:8px;font-size:13px;color:var(--ink-3);white-space:nowrap}
+  .pod-gl-t b{font-size:15px;color:var(--ink)}
+}
