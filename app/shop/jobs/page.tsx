@@ -227,11 +227,11 @@ export default function JobCenter() {
             <b /><b /><b />
             <i><img src="/brand/fbs-logo-white.svg" alt="" width={30} height={30} /></i>
           </span>
-          <span className="jrl-mc-t">Message Center</span>
+          <span className="jrl-mc-t">Message Center<i aria-hidden /></span>
           {/* who's waiting on us, big, with their initials (Nov 2, Nick picked option C) */}
           <div className="jrl-mc-big">
             <button type="button" className="jrl-mc-w" onClick={() => setMShow(mShow === "waiting" ? "all" : "waiting")} title="Show the conversations waiting on us"><b>{waitingNow}</b><span>waiting on us<small>{myChats.reduce((a0, c) => a0 + c.unread, 0)} new</small></span></button>
-            <span className="jrl-mc-av" aria-hidden>{myChats.filter((c) => c.waiting).slice(0, 3).map((c) => <i key={c.key} title={whoOf(c)}>{(whoOf(c) === "You" ? c.customer : whoOf(c)).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?"}</i>)}{waitingNow > 3 && <i>+{waitingNow - 3}</i>}</span>
+            <span className="jrl-mc-av" aria-hidden>{myChats.filter((c) => c.waiting).slice(0, 3).map((c) => <i key={c.key} title={whoOf(c)} style={{ background: colorOfChat(c) }}>{(whoOf(c) === "You" ? c.customer : whoOf(c)).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?"}</i>)}{waitingNow > 3 && <i>+{waitingNow - 3}</i>}</span>
           </div>
         </div>
       </div>

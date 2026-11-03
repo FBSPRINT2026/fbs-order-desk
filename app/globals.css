@@ -19580,3 +19580,20 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pod-so-sec{font-size:12px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px;padding-top:14px;border-top:1px solid var(--line-2)}
 .pod-om + .pod-so-sec{border-top:0;padding-top:0}
 .pod-so .panel-b>.pod-so-sec:first-child{border-top:0;padding-top:0}
+/* Nov 2, Nick: "messaging center… centered between the end of the logo and the right… a bar underneath… everything got
+   black… color coordinate… JD… the colors associated with where they are… that all waiting new thing… I don't like it black" */
+.jrl-mc-t{flex:1;text-align:center;margin-left:0;display:flex;flex-direction:column;align-items:center;gap:5px}
+.jrl-mc-t i{display:block;width:56px;height:3px;border-radius:3px;background:rgba(255,255,255,.85)}
+.jrl-sig i{background:rgba(255,255,255,.2);box-shadow:0 0 0 2px #fff}
+.jrl-mc-av i{background:var(--ink-3)}
+/* each conversation in its job's stage color: the initials, the name, a line down the left, the picked one tinted */
+.jcx .jmb-c{box-shadow:inset 3px 0 0 var(--mc,var(--ink-3))}
+.jcx .jmb-av{background:var(--mc,var(--ink-3));color:#fff}
+.jcx .jmb-c .jmb-top b{color:color-mix(in srgb,var(--mc,var(--ink)) 70%,var(--ink))}
+.jcx .jmb-c.on{border-color:var(--mc,var(--accent));background:color-mix(in srgb,var(--mc,var(--accent)) 9%,var(--surface));box-shadow:inset 3px 0 0 var(--mc,var(--accent))}
+/* the open conversation: their messages in their job's color */
+.jmb-t .jmb-b.customer{background:color-mix(in srgb,var(--mc,var(--ink-3)) 12%,var(--surface));border-color:color-mix(in srgb,var(--mc,var(--line)) 35%,var(--line))}
+.jmb-t .jmb-b.customer small{color:color-mix(in srgb,var(--mc,var(--ink-3)) 75%,var(--ink))}
+/* All / Waiting / New: the picked one in the Message Center's colors */
+.jrl-mf button.on{background:linear-gradient(115deg,#0E9BD8,#7A5AF8 45%,#F26660);color:#fff}
+.jrl-mf button.on em{color:#fff}
