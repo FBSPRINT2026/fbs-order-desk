@@ -92,7 +92,9 @@ export async function contactDetail(customerId: string) {
       for (const r of (rows || []) as { email: string; name: string | null; acct: string; n: number; last: string }[]) {
         const p = by.get(r.email) || { email: r.email, name: "", n: 0, last: "", boxes: [], sameCompany: false };
         p.n += +r.n || 0;
-        if (r.name && !p.name) p.name = r.name;
+        // "Holly Ries | Brandegroup" → "Holly Ries"
+        const nm = (r.name || "").replace(/\s*\|.*$/, "").replace(/\s+/g, " ").trim();
+        if (nm && !p.name) p.name = nm;
         if (!p.last || r.last > p.last) p.last = r.last;
         const who = r.acct.split("@")[0]; if (!p.boxes.includes(who)) p.boxes.push(who);
         by.set(r.email, p);
