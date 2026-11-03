@@ -9,7 +9,7 @@ major=${cur%.*}; minor=${cur##*.}
 next=$(printf "%s.%03d" "$major" $((10#$minor + 1)))
 sed -i "s/APP_VERSION = \"$cur\"/APP_VERSION = \"$next\"/" lib/version.ts
 git add -A
-git -c user.email=nicholas@fbsprint.com -c user.name="Nick McCoy" commit -q -m "$msg ($next)
+git commit -q -m "$msg ($next)
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01USnzAy28BuCVyhgCQyyvnV"

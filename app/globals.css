@@ -20279,3 +20279,14 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 /* a card with a picture is a little wider */
 .ptour-card:has(.ptour-img){width:min(520px,calc(100vw - 32px))}
 .ptour.mid .ptour-card{max-height:calc(100vh - 32px);overflow:auto}
+
+/* "Have an issue?" tucked into the portal footer's top edge, on the right; a small card pops up from it (Nov 3, Nick) */
+.p-foot{position:relative}
+.psup-dock{position:absolute;left:0;right:0;top:0;max-width:1120px;margin:0 auto;padding:0 20px;height:0;pointer-events:none}
+.psup-tabw{position:absolute;right:20px;bottom:0;display:flex;flex-direction:column;align-items:flex-end;pointer-events:auto}
+.psup-tab{display:inline-flex;align-items:center;gap:6px;padding:6px 12px 5px;border:0;border-radius:8px 8px 0 0;background:var(--side);color:var(--side-ink,#fff);font:600 12.5px/1.2 var(--body);cursor:pointer;white-space:nowrap}
+.psup-tab:hover{color:#fff}
+.psup-pop{display:flex;flex-direction:column;gap:6px;width:min(280px,calc(100vw - 32px));margin-bottom:8px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.14);font-size:12.5px;color:var(--ink-3)}
+.psup-pop b{font-size:14px;color:var(--ink)}
+.psup-pop-a{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+@media print{.psup-dock{display:none}}

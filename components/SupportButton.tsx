@@ -62,12 +62,13 @@ const TICKET = <svg width="18" height="18" viewBox="0 0 24 24" fill="none" strok
  *  does… at the bottom of the page somewhere indiscreet on the mobile view and at the top… to the left of… start a new
  *  quote"); then "row", the line with a button in the simple view's Your account panel and at the foot of the full
  *  dashboard (Nov 3, Nick: "have a support issue… a little button there"). Each is the same Get help box. */
-export default function SupportButton({ email, portal = false, look = "icon" }: { email: string; portal?: boolean; look?: "icon" | "tile" | "link" | "row" }) {
+export default function SupportButton({ email, portal = false, look = "icon" }: { email: string; portal?: boolean; look?: "icon" | "tile" | "link" | "row" | "tab" }) {
   const sb = useMemo(() => createClient(), []);
   const { role, viewAs, realRole } = useRole();
   const [open, setOpen] = useState(false), [shot, setShot] = useState<Blob | null>(null), [url, setUrl] = useState("");
   const [text, setText] = useState(""), [busy, setBusy] = useState(""), [err, setErr] = useState(""), [done, setDone] = useState(false);
   const page = useRef({ href: "", title: "" });
+  const [pop, setPop] = useState(false);
   const ta = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (!shot) { setUrl(""); return; } const u = URL.createObjectURL(shot); setUrl(u); return () => URL.revokeObjectURL(u); }, [shot]);
 
@@ -144,7 +145,20 @@ export default function SupportButton({ email, portal = false, look = "icon" }: 
 
   return (
     <>
-      {portal && look === "row" ? (
+      {portal && look === "tab" ? (
+        <div className={"psup-tabw" + (pop ? " open" : "")}>
+          {pop && <div className="psup-pop" role="dialog" aria-label="Something not right?">
+            <b>Something not right?</b>
+            <span>Send a screenshot and tell us what happened. We&apos;ll fix it right away.</span>
+            <span className="psup-pop-a"><button type="button" className="linkbtn" onClick={() => setPop(false)}>Close</button><button type="button" className="btn sm primary" onClick={() => { setPop(false); void start(); }} disabled={!!busy && !open}>Report an issue</button></span>
+          </div>}
+          <button type="button" className="psup-tab" aria-expanded={pop} onClick={() => setPop((v) => !v)}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01" /></svg>
+            {busy && !open ? busy : "Have an issue?"}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={pop ? "m6 9 6 6 6-6" : "m6 15 6-6 6 6"} /></svg>
+          </button>
+        </div>
+      ) : portal && look === "row" ? (
         <div className="psup-row">
           <span className="psup-row-ic" aria-hidden>{TICKET}</span>
           <span className="psup-row-t"><b>Have a support issue?</b><small>Send a screenshot and tell us what happened.</small></span>

@@ -35,7 +35,7 @@ const MOCKUP: Step = { sel: '[data-tour="start"] a.pd-act', t: "Mockup Creator",
 const ASK: Step = { sel: '[data-tour="ask"], [data-tour="ask"] > *', t: "Ask FBS AI", b: "Ask it anything: where's my order, what do I owe, reorder the volunteer shirts." };
 // help is the last thing they hear (Nov 3, Nick: "we built this software for y'all… if you do have an issue… a screenshot
 // and tell us what's going on and we'll fix it immediately")
-const help = (sel: string): Step => ({ sel, t: "Something not right? Tell us", b: "We built this new site for you. If anything doesn't work the way it should, click Report an issue, take a screenshot and tell us what's going on. We'll fix it right away.", foot: "You can watch this tour again any time in Settings, under Portal layout." });
+const help = (sel: string): Step => ({ sel, t: "Something not right? Tell us", b: "We built this new site for you. If anything doesn't work the way it should, click Have an issue? at the bottom right, take a screenshot and tell us what's going on. We'll fix it right away.", foot: "You can watch this tour again any time in Settings, under Portal layout." });
 
 type TourView = "simple" | "advanced" | "mockup";
 const STEPS: Record<TourView, Step[]> = {
@@ -87,7 +87,7 @@ const STEPS: Record<TourView, Step[]> = {
     START,
     MOCKUP,
     ASK,
-    help(".psup-foot-row"),
+    help(".psup-tab"),
   ],
 };
 

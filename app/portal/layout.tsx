@@ -38,12 +38,13 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       </header>
       {children}
-      {/* phones: Get help as a quiet line at the foot of every page (Nov 3, Nick) */}
-      {email && <div className="psup-foot"><SupportButton email={email} portal look="link" /></div>}
       <MobileTables />
       {/* the footer (Oct 24, Nick): address and phone on one line, social links, and the copyright year (it turns over by
           itself on January 1, Central time) */}
       <footer className="p-foot">
+        {/* help, tucked into the footer's top edge on the right of every portal page (Nov 3, Nick: "hug to the footer… a
+            little up arrow… it pops up… on the right") */}
+        {email && <div className="psup-dock"><SupportButton email={email} portal look="tab" /></div>}
         <div className="p-foot-in">
           {s.brand.sideLogoUrl && <img src={s.brand.sideLogoUrl} alt="" className="p-foot-logo" />}
           <div className="p-foot-addr">
