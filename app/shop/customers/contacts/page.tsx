@@ -31,7 +31,7 @@ export default function UpdateContacts() {
   const [showOthers, setShowOthers] = useSticky<boolean>("customers.contacts.others", false);
   const [rows, setRows] = useState<ContactRow[] | null>(null), [owners, setOwners] = useState<string[]>([]);
   const [q, setQ] = useState(""), [cur, setCur] = useState(""), [err, setErr] = useState("");
-  const [d, setD] = useState<Detail | null>(null), [co, setCo] = useState({ company: "", phone: "", address: "" });
+  const [d, setD] = useState<Detail | null>(null), [co, setCo] = useState({ company: "", phone: "", address: "", taxExempt: false, terms: "receipt", priceType: "retail", notes: "" });
   const [people, setPeople] = useState<Row[]>([]), [busy, setBusy] = useState(false), [note, setNote] = useState("");
   // what was found online for this account (Look it up online), and which boxes were filled from it
   const [web, setWeb] = useState<CompanyFound | null | "busy">(null), [webErr, setWebErr] = useState(""), [fromWeb, setFromWeb] = useState<Set<string>>(new Set());
@@ -66,7 +66,7 @@ export default function UpdateContacts() {
     }
     // one main: the one on file, else the regular we've traded the most mail with
     if (!list.some((p) => p.main && p.contact)) { const m = list.filter((p) => p.contact).sort((a, b) => (b.n || 0) - (a.n || 0))[0]; if (m) m.main = true; }
-    setD(x); setCo({ company: x.company, phone: x.phone, address: x.address }); setPeople(list);
+    setD(x); setCo({ company: x.company, phone: x.phone, address: x.address, taxExempt: x.taxExempt, terms: x.terms, priceType: x.priceType, notes: x.notes }); setPeople(list);
   };
   useEffect(() => { if (!cur && list[0]) void open(list[0].id); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -94,15 +94,15 @@ export default function UpdateContacts() {
     setFromWeb((s) => new Set([...s, ...what]));
   };
   const next = () => { const i = list.findIndex((r) => r.id === cur); const n = list[i + 1] || list.find((r) => r.id !== cur); if (n) void open(n.id); };
-  const save = async () => {
+  const save = async (move = false) => {
     if (!d) return;
     setBusy(true); setErr("");
-    const r = await saveContacts({ id: d.id, ...co, people: people.filter((p) => p.contactId || p.contact).map((p) => ({ contactId: p.contactId, name: p.name, email: p.email, phone: p.phone, contact: p.contact, portal: p.portal, main: p.main, roles: p.roles })) });
+    const r = await saveContacts({ id: d.id, ...co, move, people: people.filter((p) => p.contactId || p.contact).map((p) => ({ contactId: p.contactId, name: p.name, email: p.email, phone: p.phone, contact: p.contact, portal: p.portal, main: p.main, roles: p.roles })) });
     setBusy(false);
     if (!r.ok) return setErr(r.error);
     const m = people.find((p) => p.main && p.contact);
     setRows((rs) => (rs || []).map((x) => (x.id === d.id ? { ...x, name: co.company || x.name, contact: m?.name || x.contact, email: m?.email || x.email, state: "done", checkedAt: new Date().toISOString() } : x)));
-    setNote(`Saved ${co.company || m?.name || "the account"}${r.added ? `: ${r.added} added` : ""}${r.removed ? `, ${r.removed} taken off` : ""}.`);
+    setNote(`${r.moved ? "Moved to our system" : "Saved"}: ${co.company || m?.name || "the account"}${r.added ? `, ${r.added} added` : ""}${r.removed ? `, ${r.removed} taken off` : ""}.`);
     next();
   };
 
@@ -210,10 +210,27 @@ export default function UpdateContacts() {
                     </table></div>}
                   </>}
 
+                  {/* the rest of the move questionnaire (components/CustomerMove.tsx): terms, retail or wholesale, tax, notes */}
+                  <div className="ucx-sec"><span>Terms and notes</span></div>
+                  <div className="ucx-g">
+                    <div className="field"><label>Payment terms</label>
+                      <div className="ucx-seg" role="group" aria-label="Payment terms" style={{ gridTemplateColumns: "repeat(4,minmax(0,1fr))" }}>
+                        {([["prepay", "Pre-pay"], ["receipt", "On receipt"], ["deposit", "50/50"], ["net30", "Net 30"]] as [string, string][]).map(([k, l]) => <button key={k} type="button" className={co.terms === k ? "on" : ""} onClick={() => setCo({ ...co, terms: k })}>{l}</button>)}
+                      </div></div>
+                    <div className="field"><label>Pricing</label>
+                      <div className="ucx-seg" role="group" aria-label="Retail or wholesale" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))" }}>
+                        {([["retail", "Retail"], ["wholesale", "Wholesale"]] as [string, string][]).map(([k, l]) => <button key={k} type="button" className={co.priceType === k ? "on" : ""} onClick={() => setCo({ ...co, priceType: k })}>{l}</button>)}
+                      </div></div>
+                    <div className="field"><label>Sales tax</label><label className="check ucx-tax"><input type="checkbox" checked={co.taxExempt} onChange={(e) => setCo({ ...co, taxExempt: e.target.checked })} /> Tax exempt</label></div>
+                    <div className="field ucx-wide"><label htmlFor="ucx-nt">Notes (only the shop sees these)</label><textarea id="ucx-nt" rows={2} placeholder="Special pricing, how they like to be contacted, anything to remember" value={co.notes} onChange={(e) => setCo({ ...co, notes: e.target.value })} /></div>
+                  </div>
+
                   <div className="ucx-foot">
                     <button type="button" className="btn" onClick={next}>Skip</button>
                     <span className="faint">Unticking someone already on the account takes them off it.</span>
                     <span className="spacer" />
+                    {d.movedAt ? <span className="ucx-moved">In our system since {new Date(d.movedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                      : <button type="button" className="btn" disabled={busy} onClick={() => void save(true)}>{busy ? "Saving…" : "Save and move to our system"}</button>}
                     <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save and next"}</button>
                   </div>
                 </div>

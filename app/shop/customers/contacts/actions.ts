@@ -63,8 +63,10 @@ export async function contactList() {
 
 export type Person = { email: string; name: string; n: number; last: string; boxes: string[]; sameCompany: boolean; /** from their email signature */ phone: string };
 const ROLES = ["Orders", "Art", "Billing"];
+const TERMS = ["prepay", "receipt", "deposit", "net30"];
 export type Contact = { id: string; name: string; email: string; phone: string; isPrimary: boolean; portal: boolean; roles: string[]; /** the phone in their email signature, when none is on file */ foundPhone?: string };
-export type Detail = { id: string; company: string; name: string; email: string; phone: string; address: string; owner: string; printavoAs: string[]; contacts: Contact[]; found: Person[] };
+export type Detail = { id: string; company: string; name: string; email: string; phone: string; address: string; owner: string; printavoAs: string[]; contacts: Contact[]; found: Person[];
+  /** the rest of the move questionnaire (components/CustomerMove.tsx) */ taxExempt: boolean; terms: string; priceType: string; notes: string; movedAt: string | null };
 
 /** one customer: what's on file, their contacts, and who we've been emailing with there */
 export async function contactDetail(customerId: string) {
@@ -72,10 +74,10 @@ export async function contactDetail(customerId: string) {
     await me();
     const admin = createAdminClient();
     const [{ data: c }, { data: cc }, { data: pv }, { data: pr }] = await Promise.all([
-      admin.from("customers").select("id, company, name, email, phone, address").eq("id", customerId).maybeSingle(),
+      admin.from("customers").select("id, company, name, email, phone, address, tax_exempt, payment_terms, price_type, moved_at").eq("id", customerId).maybeSingle(),
       admin.from("customer_contacts").select("id, name, email, phone, is_primary, portal_access, roles").eq("customer_id", customerId).is("removed_at", null).order("created_at"),
       admin.from("printavo_customers").select("data").eq("customer_id", customerId),
-      admin.from("customer_private").select("account_owner").eq("customer_id", customerId).maybeSingle(),
+      admin.from("customer_private").select("account_owner, notes").eq("customer_id", customerId).maybeSingle(),
     ]);
     if (!c) throw new Error("That customer isn't here.");
     const contacts = ((cc || []) as { id: string; name: string | null; email: string | null; phone: string | null; is_primary: boolean | null; portal_access: boolean | null; roles: string[] | null }[])
@@ -126,14 +128,16 @@ export async function contactDetail(customerId: string) {
       }
     }
     return { ok: true as const, detail: { id: c.id as string, company, name: String(c.name || "").trim(), email: String(c.email || "").trim().toLowerCase(), phone: String(c.phone || "").trim(), address: String(c.address || "").trim(),
-      owner: String((pr as { account_owner?: string | null } | null)?.account_owner || ""), printavoAs, contacts, found } as Detail };
+      owner: String((pr as { account_owner?: string | null } | null)?.account_owner || ""), printavoAs, contacts, found,
+      taxExempt: !!c.tax_exempt, terms: String(c.payment_terms || "receipt"), priceType: String(c.price_type || "retail"), notes: String((pr as { notes?: string | null } | null)?.notes || ""), movedAt: (c.moved_at as string | null) || null } as Detail };
   } catch (e) { return fail(e); }
 }
 
 export type PersonSave = { contactId?: string; name: string; email: string; phone: string; contact: boolean; portal: boolean; main: boolean; roles: string[] };
 
 /** save the account: the company's details, and each person (kept, added, or taken off the account), and mark it checked */
-export async function saveContacts(input: { id: string; company: string; phone: string; address: string; people: PersonSave[] }) {
+export async function saveContacts(input: { id: string; company: string; phone: string; address: string; people: PersonSave[];
+  taxExempt: boolean; terms: string; priceType: string; notes: string; /** and move them to our system (the move checklist done) */ move?: boolean }) {
   try {
     const v = await me();
     const admin = createAdminClient();
@@ -149,8 +153,16 @@ export async function saveContacts(input: { id: string; company: string; phone: 
       name: main?.name || String(cur?.name || ""), email: main?.email || String(cur?.email || ""),
       phone: fmtPhone(input.phone.trim()) || main?.phone || String(cur?.phone || ""),
       contacts_checked_at: new Date().toISOString(), contacts_checked_by: v.email || "",
+      tax_exempt: !!input.taxExempt, ...(TERMS.includes(input.terms) ? { payment_terms: input.terms } : {}), ...(["retail", "wholesale"].includes(input.priceType) ? { price_type: input.priceType } : {}),
     }).eq("id", input.id);
     if (error) throw new Error(error.message);
+    // the shop-only notes (seen on every order)
+    const { data: priv } = await admin.from("customer_private").select("customer_id, notes").eq("customer_id", input.id).maybeSingle();
+    if ((priv?.notes || "") !== input.notes.trim()) {
+      const { error: ne } = priv ? await admin.from("customer_private").update({ notes: input.notes.trim(), updated_at: new Date().toISOString() }).eq("customer_id", input.id)
+        : await admin.from("customer_private").insert({ customer_id: input.id, notes: input.notes.trim() });
+      if (ne) throw new Error(ne.message);
+    }
     const { data: have } = await admin.from("customer_contacts").select("id, email").eq("customer_id", input.id).is("removed_at", null);
     const byEmail = new Map(((have || []) as { id: string; email: string | null }[]).filter((x) => x.email).map((x) => [String(x.email).trim().toLowerCase(), x.id]));
     let added = 0, removed = 0;
@@ -167,7 +179,15 @@ export async function saveContacts(input: { id: string; company: string; phone: 
         removed++;
       }
     }
-    return { ok: true as const, added, removed };
+    // moved to our system: the same as finishing the move checklist (components/CustomerMove.tsx)
+    let moved = false;
+    if (input.move) {
+      const at = new Date().toISOString();
+      const { data: mv } = await admin.from("customers").update({ moved_at: at, moved_by: v.email || "", move_checklist: { name: true, contacts: true, type: true, pricing: true, address: true } }).eq("id", input.id).is("moved_at", null).select("id");
+      moved = !!mv?.length;
+      if (moved) await admin.from("activities").insert({ customer_id: input.id, kind: "note", direction: "none", subject: "Moved to the new system", body: "Moved from Update contacts. New orders are 40,000-series; their portal is open.", occurred_at: at });
+    }
+    return { ok: true as const, added, removed, moved };
   } catch (e) { return fail(e); }
 }
 
