@@ -108,7 +108,10 @@ function readLogo(img: HTMLImageElement, removeBg: boolean): Look {
   const near = (a: number[], b: number[]) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 30;
   const corners = [0, (W - 1) * 4, (H - 1) * W * 4, ((H - 1) * W + W - 1) * 4].map(px).filter((p) => p[3] > 200);
   // the background: the corner color most corners share (none when the corners are see-through)
-  const bg = corners.map((p) => ({ p, n: corners.filter((q) => near(p, q)).length })).sort((a, b) => b.n - a.n)[0]?.p;
+  // a see-through picture has no background color of its own: its white is what isn't sewn (the shirt shows through),
+  // so Remove takes the white off (Nov 4, Nick: "you're not sewing the white if you remove it, so that should decrease
+  // your stitches")
+  const bg = corners.map((p) => ({ p, n: corners.filter((q) => near(p, q)).length })).sort((a, b) => b.n - a.n)[0]?.p || [255, 255, 255, 255];
   let on = 0, x0 = W, y0 = H, x1 = -1, y1 = -1;
   const bins = new Map<number, number>();
   for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
