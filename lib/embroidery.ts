@@ -109,7 +109,13 @@ export function findThreads(q: string, line?: Thread["line"], n = 30): Thread[] 
  */
 // Calibrated Oct 23 on Volikes' Gateway "Icon Only" (1.65" × 2.01", about 45% stitched: 4,333 on their worksheet; the
 // first figure, 1,800, came out ~25% low). Small logos are satin borders around fills: dense
-export const densityFor = (stitchedSqIn: number) => (stitchedSqIn <= 2 ? 2400 : stitchedSqIn >= 20 ? 1000 : 2400 - ((stitchedSqIn - 2) / 18) * 1400);
+// Refit Nov 4 on the 13 real logos with digitizer counts (Nick: "you know how to accurately estimate stitch count?"),
+// at the usual 45% stitched: small logos (≤1.5 in² of thread) ran ~2,700 a square inch (MEI Primary 3,554, MEI Icon
+// 3,889, Embark E 3,116), falling to ~1,350 by 4 in² (Keslow pocket 5,632, Keslow RC 5,611) and ~1,150 on big backs
+// (Keslow back 9" × 3.9" = 23,847). The old line kept small-logo density too long and ran mid-size logos 20–80% high.
+// Refit again with scripts/stitch-fit.mjs as more files come back.
+export const densityFor = (stitchedSqIn: number) =>
+  stitchedSqIn <= 1.5 ? 2700 : stitchedSqIn <= 4 ? 2700 - ((stitchedSqIn - 1.5) / 2.5) * 1350 : stitchedSqIn >= 20 ? 1150 : 1350 - ((stitchedSqIn - 4) / 16) * 200;
 export const UNDERLAY = 0.2;
 /** tie-ins, tie-offs and trims, a color */
 export const STITCHES_PER_COLOR = 20;
