@@ -14,7 +14,8 @@ export const NOTE_DEFAULT = {
     "Hi {first},",
     "You should have just received an email from portal@fbsprint.com introducing our new customer portal. I wanted to follow up personally, because we're really excited about it.",
     "We've been working on this for a long time, and it's finally ready. Your orders, proofs, payments and past jobs are now all in one place, so checking on a job or placing a reorder is quick and easy. Your login is already set up.",
-    "Take a look when you get a chance, and let me know what you think. If you don't see that email, please check your spam folder.",
+    "There's a brief tutorial when you log in for the first time that walks you through the new features. Take a look when you get a chance, and please let me know if you have any questions.",
+    "If you don't see the portal email, please check your spam folder.",
     "Thank you for your business. We truly appreciate it.",
   ],
 };
@@ -26,7 +27,7 @@ export const NOTE_CLICKUP = {
     "Hi {first},",
     "You should have just received an email from portal@fbsprint.com introducing our new customer portal. I wanted to follow up personally, because we're really excited about it.",
     "We know you and your team work with us every day through ClickUp and Printavo. Both will stay available through the middle of this month, but you don't have to wait: we've backed up all of your orders and moved your account over, so you can submit orders directly through the portal starting today. Your orders, proofs, payments and past jobs are all in one place, and your login is already set up.",
-    "We'd love to sit down with you and your team for a quick training and walk through it together. Just reply with a few times that work for you.",
+    "We'd love to sit down with you and your team for a quick training and walk through it together. There's also a brief tutorial when you log in for the first time that explains the new features. Please let me know if you have any questions.",
     "If you don't see the portal email, please check your spam folder.",
     "Thank you for your business. We truly appreciate it.",
   ],
