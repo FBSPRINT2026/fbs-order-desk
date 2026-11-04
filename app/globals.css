@@ -12191,6 +12191,9 @@ main.main .sep-sr-m>.rv-seg>button{flex:1 1 0!important;min-width:0;padding:6px 
 .cu-cust select{margin-left:6px;max-width:100%}
 .cu-ask{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .cu-acts{display:flex;gap:8px;flex-wrap:wrap}
+.cu-acts .cu-not{margin-left:auto}
+.jc-leadacts{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.ctw-armed{border-color:var(--danger)!important;color:var(--danger)!important;background:var(--surface)!important}
 .cu-done{margin-top:16px;padding:10px 12px;border-radius:var(--r);background:var(--accent-soft);display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}
 .cu-bad{color:var(--danger)}
 .cu-nw{white-space:nowrap}
@@ -16383,6 +16386,7 @@ table.tbl.jc tbody tr:focus-visible{outline:2px solid var(--accent);outline-offs
 .jcp-note{font-size:12.5px;color:var(--ink-3);margin-top:6px}
 .jcp-acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}
 .jcp-acts .btn{display:inline-flex;align-items:center;gap:5px}
+.jcp-acts .jcp-not{margin-left:auto}
 .jcp-hero{position:relative;height:250px;background:var(--surface-2);display:grid;place-items:center;border-bottom:1px solid var(--line);overflow:hidden}
 .jcp-hero img{max-width:100%;max-height:100%;object-fit:contain;padding:28px 14px 30px;box-sizing:border-box}
 .jcp-ver{position:absolute;top:8px;left:10px;display:flex;gap:4px;z-index:1}

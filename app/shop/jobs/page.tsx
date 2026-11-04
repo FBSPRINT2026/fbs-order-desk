@@ -1,4 +1,5 @@
 "use client";
+import ClickTwice from "@/components/ClickTwice";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import RequestsDesk from "@/components/RequestsDesk";
 import { useSticky } from "@/lib/useSticky";
@@ -397,8 +398,9 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, 
       <td><b>{it.title}</b><div className="sub">{it.customer ? `${it.customer} · ` : ""}{it.sub}{it.tracks.length ? " · has questions to answer" : ""}</div></td>
       <td className="nowrap">{ago(it.at)}</td>
       <td className="nowrap" onClick={(e) => e.stopPropagation()}>
-        {it.activityId && <button type="button" className="btn sm primary" onClick={onLead}>Make a job</button>}{" "}
-        <button type="button" className="btn sm" disabled={busy} onClick={() => { setBusy(true); void notAJob(it.suggestionId!).then((r) => { setBusy(false); after(r.ok ? "Taken off the leads." : r.error); }); }}>Not a job</button>
+        <div className="jc-leadacts">{it.activityId && <button type="button" className="btn sm primary" onClick={onLead}>Make a job</button>}
+        {/* two clicks, apart from Make a job (Nov 3, Nick) */}
+        <ClickTwice className="btn sm ghost" label="Not a job" again="Click again: not a job" disabled={busy} onConfirm={() => { setBusy(true); void notAJob(it.suggestionId!).then((r) => { setBusy(false); after(r.ok ? "Taken off the leads." : r.error); }); }} /></div>
       </td>
     </tr>);
   if (step === "declined") return wide

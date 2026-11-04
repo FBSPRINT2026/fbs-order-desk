@@ -1,4 +1,5 @@
 "use client";
+import ClickTwice from "@/components/ClickTwice";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import { useColumnWidths } from "@/components/ColumnWidths";
@@ -107,10 +108,11 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
               {job.simple
                 ? <button type="button" className="btn primary" disabled={!!busy} title="The AI reads what they sent, their PO and art, and fills in this order (it keeps its number)" onClick={() => void createOrder(job)}>Process</button>
                 : <Link className="btn primary" href={`/shop/orders/${job.id}?stay=1`}>Open the order</Link>}
-              <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void notOrder(job)}>Not an order</button>
               {/* a question about it in the Message Center, beside the list (Nov 2, Nick: "ask him a question in the messaging
                   center… about this") */}
               {only ? null : onMessage ? <button type="button" className="btn ghost" onClick={() => onMessage(job.id)}>Message them</button> : <Link className="btn ghost" href={`/shop/orders/${job.id}#messages`}>Message them</Link>}
+              {/* on the far right, two clicks (Nov 3, Nick) */}
+              <ClickTwice className="btn ghost cu-not" label="Not an order" again="Click again: not an order" disabled={!!busy} onConfirm={() => notOrder(job)} />
             </div>
             {busy && <div className="faint">{busy}</div>}
           </div>

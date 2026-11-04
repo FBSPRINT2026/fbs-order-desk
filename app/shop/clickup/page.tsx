@@ -9,6 +9,7 @@ import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import EmailOrderPanel from "@/components/EmailOrderPanel";
 import { FileTray, type MailFile } from "@/components/MailFolders";
 import type { ClickUpTeamRow, CuFile } from "@/lib/clickup";
+import ClickTwice from "@/components/ClickTwice";
 import { clickUpFiles, clickUpWorkspace, markClickUpDone, tickClickUpBox, dismissClickUpTask, hideClickUpField, hideClickUpTeam, listClickUp, processClickUpTask, setClickUpCustomer, type ClickUpKnown, type ClickUpState, type ClickUpTask } from "./actions";
 import CustomerPick from "@/components/CustomerPick";
 import { useUrlSearch } from "@/lib/useUrlSearch";
@@ -402,10 +403,11 @@ export default function ClickUpJobs() {
             <b>Would you like to process this job?</b>
             <div className="cu-acts">
               <button type="button" className="btn primary" disabled={!!busy || !jobTeam?.customer_id || !data?.connected} title="New order or reorder: the AI reads the job's notes, its purchase order and art, then makes the order (the same as from an email)" onClick={() => void createOrder()}>Create order</button>
-              {job.dismissed_at
-                ? <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, false); if (!r.ok) setErr(r.error); else { flash("Back on the list."); await load(); } }}>Put it back on the list</button>
-                : <button type="button" className="btn ghost" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, true); if (!r.ok) setErr(r.error); else { flash(`"${job.name}" marked not an order.`); setOpenId(null); await load(); } }}>Not an order</button>}
               <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void toggleDone(job)}>{isDoneT(job) ? "Reopen in ClickUp" : "Mark complete in ClickUp"}</button>
+              {/* off on the far right, and two clicks (Nov 3, Nick: a job went to Not orders by a stray click beside Process) */}
+              {job.dismissed_at
+                ? <button type="button" className="btn ghost cu-not" disabled={!!busy} onClick={async () => { const r = await dismissClickUpTask(job.id, false); if (!r.ok) setErr(r.error); else { flash("Back on the list."); await load(); } }}>Put it back on the list</button>
+                : <ClickTwice className="btn ghost cu-not" label="Not an order" again="Click again: not an order" disabled={!!busy} onConfirm={async () => { const r = await dismissClickUpTask(job.id, true); if (!r.ok) setErr(r.error); else { flash(`"${job.name}" marked not an order.`); setOpenId(null); await load(); } }} />}
             </div>
             {busy && busy !== "Checking ClickUp…" && <div className="faint">{busy}</div>}
           </div>}

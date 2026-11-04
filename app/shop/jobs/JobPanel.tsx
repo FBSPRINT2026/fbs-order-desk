@@ -1,4 +1,5 @@
 "use client";
+import ClickTwice from "@/components/ClickTwice";
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import SendProofTool from "@/components/tools/SendProofTool";
@@ -50,7 +51,7 @@ export default function JobPanel({ it, step, after, onClose, onLead, onUndo }: {
           <p className="jcp-txt">{it.leadText?.replace(it.title, "").trim() || "An order the AI found."}</p>
           {it.tracks.length > 0 && <p className="jcp-note">The AI has questions to answer before it can make the order.</p>}
           <div className="jcp-acts"><button type="button" className="btn primary" onClick={onLead}>Make a job</button>
-            <button type="button" className="btn" onClick={() => void notAJob(it.suggestionId!).then((r) => { after(r.ok ? "Taken off the leads." : r.error); onClose(); })}>Not a job</button></div>
+            <ClickTwice className="btn ghost jcp-not" label="Not a job" again="Click again: not a job" onConfirm={() => void notAJob(it.suggestionId!).then((r) => { after(r.ok ? "Taken off the leads." : r.error); onClose(); })} /></div>
         </> : <>
           <p className="jcp-txt">{it.mockupIds?.length || 0} mockup{it.mockupIds?.length === 1 ? "" : "s"} made for {it.customer}. Make the order from the customer&apos;s page when the details come in.</p>
           <div className="jcp-acts">{it.customerId && <Link className="btn primary" href={`/shop/customers/${it.customerId}`}>Open the customer</Link>}</div>
