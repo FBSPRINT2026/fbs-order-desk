@@ -90,21 +90,40 @@ const GARMENTS: { k: string; specialty: boolean }[] = [
   { k: "Bag or backpack", specialty: true }, { k: "Other flat garment", specialty: false },
 ];
 
-/** how much of a picture is stitched: pixels that aren't see-through and aren't its background color (read off a corner) */
-function coverage(img: HTMLImageElement): number {
-  const W = 300, H = Math.max(1, Math.round((img.naturalHeight / img.naturalWidth) * W));
+type Look = { /** height ÷ width of what's stitched */ aspect: number; /** share of that box that's stitched */ cov: number; /** thread colors */ colors: number };
+
+/**
+ * What of a logo gets stitched, read off the picture: pixels that aren't see-through and (with the background removed)
+ * aren't the background color read off its corners. Its shape is the box around those pixels (a logo with empty space
+ * around it is measured by the logo, not the picture), and its thread colors are the distinct colors that cover at least
+ * 2% of it (shades and soft edges fold into their color).
+ */
+function readLogo(img: HTMLImageElement, removeBg: boolean): Look {
+  const W = 300, H = Math.max(1, Math.round((img.naturalHeight / Math.max(1, img.naturalWidth)) * W));
   const c = document.createElement("canvas"); c.width = W; c.height = H;
-  const x = c.getContext("2d"); if (!x) return 0.5;
+  const x = c.getContext("2d", { willReadFrequently: true }); if (!x) return { aspect: H / W, cov: 0.5, colors: 1 };
   x.drawImage(img, 0, 0, W, H);
   const d = x.getImageData(0, 0, W, H).data;
-  const bg = [d[0], d[1], d[2], d[3]];
-  let on = 0;
-  for (let i = 0; i < d.length; i += 4) {
+  const px = (k: number) => [d[k], d[k + 1], d[k + 2], d[k + 3]];
+  const near = (a: number[], b: number[]) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 30;
+  const corners = [0, (W - 1) * 4, (H - 1) * W * 4, ((H - 1) * W + W - 1) * 4].map(px).filter((p) => p[3] > 200);
+  // the background: the corner color most corners share (none when the corners are see-through)
+  const bg = corners.map((p) => ({ p, n: corners.filter((q) => near(p, q)).length })).sort((a, b) => b.n - a.n)[0]?.p;
+  let on = 0, x0 = W, y0 = H, x1 = -1, y1 = -1;
+  const bins = new Map<number, number>();
+  for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
+    const i = (y * W + xx) * 4;
     if (d[i + 3] < 96) continue;
-    if (bg[3] > 200 && Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 60) continue;
+    if (removeBg && bg && Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 60) continue;
     on++;
+    if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    const key = ((d[i] >> 5) << 6) | ((d[i + 1] >> 5) << 3) | (d[i + 2] >> 5);
+    bins.set(key, (bins.get(key) || 0) + 1);
   }
-  return on / (W * H);
+  if (!on) return { aspect: H / W, cov: 0.5, colors: 1 };
+  const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+  const colors = Math.max(1, Math.min(12, [...bins.values()].filter((n) => n >= on * 0.02).length));
+  return { aspect: bh / bw, cov: on / (bw * bh), colors };
 }
 
 export function EmbCalc({ pl }: { pl: PriceList }) {
@@ -113,19 +132,26 @@ export function EmbCalc({ pl }: { pl: PriceList }) {
   const [garment, setGarment] = useState(GARMENTS[0].k);
   const [place, setPlace] = useState(PLACES[0].k);
   const [stitches, setStitches] = useState(String(pl.embStitches || 6000));
-  const [pic, setPic] = useState<{ url: string; name: string; aspect: number; cov: number } | null>(null);
+  // the uploaded logo, read once: with its background taken off and with it kept (Nov 4, Nick: the upload "isn't
+  // working… just make all that work on the form that's there already": how big, and removing the background)
+  const [pic, setPic] = useState<{ url: string; name: string; off: Look; keep: Look } | null>(null);
+  const [picErr, setPicErr] = useState("");
+  const [bgOff, setBgOff] = useState(true);
   const [est, setEst] = useState(false);
   const pp = PLACES.find((p) => p.k === place) || PLACES[0];
   // how wide they'd like it (Nov 2, Nick: "how big do you think you want it… 10 inches, then this would be your cost");
   // empty = the usual size for that spot
   const [wide, setWide] = useState("");
-  // a logo picked: its stitches estimated from its shape at this spot's size (the digitized file's count is the real one)
-  const estimate = useMemo(() => {
-    if (!pic) return 0;
-    let w = +wide > 0 ? +wide : pp.w, h = w * pic.aspect;
-    if (!(+wide > 0) && h > pp.maxH) { h = pp.maxH; w = h / pic.aspect; }
-    return estimateStitches(w, h, pic.cov, 3);
-  }, [pic, pp, wide]);
+  const look = pic ? (bgOff ? pic.off : pic.keep) : null;
+  // the size it sews at: the width typed, else the spot's usual width (no taller than the spot allows)
+  const size = useMemo(() => {
+    if (!look) return null;
+    let w = +wide > 0 ? +wide : pp.w, h = w * look.aspect;
+    if (!(+wide > 0) && h > pp.maxH) { h = pp.maxH; w = h / look.aspect; }
+    return { w: Math.round(w * 100) / 100, h: Math.round(h * 100) / 100 };
+  }, [look, pp, wide]);
+  // a logo picked: its stitches estimated from its shape at that size (the digitized file's count is the real one)
+  const estimate = look && size ? estimateStitches(size.w, size.h, look.cov, look.colors) : 0;
   const st = est && estimate ? estimate : Math.max(0, Math.floor(+stitches || 0));
   const q = Math.max(0, Math.floor(+qty || 0));
   const eti = tierOf(q, embT);
@@ -136,10 +162,18 @@ export function EmbCalc({ pl }: { pl: PriceList }) {
   const each = base + extra + spec;
   const dig = digitizingFee({ stitches: st }, pl);
   const onFile = (f: File | undefined) => {
-    if (!f || !f.type.startsWith("image/")) return;
+    if (!f) return;
+    setPicErr("");
     const url = URL.createObjectURL(f);
     const img = new Image();
-    img.onload = () => { setPic({ url, name: f.name, aspect: img.naturalHeight / Math.max(1, img.naturalWidth), cov: coverage(img) }); setEst(true); };
+    img.onload = () => {
+      try {
+        setPic({ url, name: f.name, off: readLogo(img, true), keep: readLogo(img, false) });
+        setEst(true); setBgOff(true); setWide("");
+      } catch { setPicErr("We couldn't read that picture. Try a PNG or JPG of the logo."); }
+    };
+    // a PDF, AI or iPhone photo (HEIC) the browser can't show
+    img.onerror = () => { URL.revokeObjectURL(url); setPicErr("We can't read that kind of file here. Upload a PNG, JPG or SVG of the logo."); };
     img.src = url;
   };
   return (
@@ -153,17 +187,22 @@ export function EmbCalc({ pl }: { pl: PriceList }) {
           </div>
           <div className="pcx-row">
             <label className="pcx-f"><span>Where it goes</span><select value={place} onChange={(e) => { setPlace(e.target.value); setWide(""); }}>{PLACES.map((p) => <option key={p.k} value={p.k}>{p.k}</option>)}</select></label>
-            <label className="pcx-f"><span>Stitches</span><input inputMode="numeric" value={est && estimate ? String(estimate) : stitches} onChange={(e) => { setEst(false); setStitches(e.target.value.replace(/[^\d]/g, "")); }} /></label>
+            <label className="pcx-f"><span>Stitches</span><span className={"pcx-st" + (est && estimate ? " est" : "")}><input inputMode="numeric" value={est && estimate ? estimate.toLocaleString() : stitches} onChange={(e) => { setEst(false); setStitches(e.target.value.replace(/[^\d]/g, "")); }} />{est && estimate ? <small>from your logo</small> : null}</span></label>
           </div>
           {pic && <div className="pcx-row">
-            <label className="pcx-f"><span>How wide, in inches</span><input inputMode="decimal" placeholder={`About ${pp.w}`} value={wide} onChange={(e) => setWide(e.target.value.replace(/[^\d.]/g, ""))} /></label>
-            <div className="pcx-f pcx-hint"><span>&nbsp;</span><small>Usually about {pp.w}&quot; on a {pp.k.toLowerCase()}.</small></div>
+            <label className="pcx-f"><span>How wide, in inches</span><input inputMode="decimal" placeholder={String(size?.w ?? pp.w)} value={wide} onChange={(e) => { setWide(e.target.value.replace(/[^\d.]/g, "")); setEst(true); }} /></label>
+            <div className="pcx-f"><span>Background</span><div className="pcx-seg" role="radiogroup" aria-label="The logo's background">
+              <button type="button" role="radio" aria-checked={bgOff} className={bgOff ? "on" : ""} onClick={() => { setBgOff(true); setEst(true); }}>Remove</button>
+              <button type="button" role="radio" aria-checked={!bgOff} className={!bgOff ? "on" : ""} onClick={() => { setBgOff(false); setEst(true); }}>Keep</button>
+            </div></div>
           </div>}
           <label className={"pcx-up" + (pic ? " has" : "")}>
-            <input type="file" accept="image/*" onChange={(e) => onFile(e.target.files?.[0])} />
-            {pic ? <><img src={pic.url} alt="" /><span><b>{pic.name}</b><small>About {estimate.toLocaleString()} stitches at {+wide > 0 ? `${wide}" wide` : `${pp.k.toLowerCase()} size`}. Choose another logo to change it.</small></span></>
+            {/* cleared after each pick, so picking the same file again still works */}
+            <input type="file" accept="image/*,.svg" onChange={(e) => { onFile(e.target.files?.[0]); e.target.value = ""; }} />
+            {pic && look && size ? <><img src={pic.url} alt="" className={bgOff ? "" : "keep"} /><span><b>{pic.name}</b><small>{size.w}&quot; × {size.h}&quot; on a {pp.k.toLowerCase()} · {look.colors} thread color{look.colors === 1 ? "" : "s"}. Choose another logo to change it.</small></span></>
               : <span><b>Upload your logo</b><small>We&apos;ll estimate the stitch count for where it goes.</small></span>}
           </label>
+          {picErr && <p className="pcx-err" role="alert">{picErr}</p>}
         </div>
         <div className="pcx-out" aria-live="polite">
           {!q ? <p className="faint">Type how many pieces.</p> : <>

@@ -20800,3 +20800,10 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .aa-ptop>.psmn .psmn-btn{width:40px;height:40px;padding:0;justify-content:center}
 }
 .aa-ptop>.psmn-tl+.aa-ptop-r{margin-left:auto}
+/* the embroidery calculator's logo (components/PricingCalc.tsx): stitches marked when they come from the logo */
+.pcx-st{position:relative;display:block}
+.pcx-st input{width:100%}
+.pcx-st.est input{border-color:var(--accent);background:var(--accent-soft)}
+.pcx-st small{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--accent);pointer-events:none;text-transform:none;letter-spacing:0;font-weight:400}
+.pcx-up img.keep{background:var(--surface-2)}
+.pcx-err{margin:0;font-size:12.5px;color:var(--danger)}
