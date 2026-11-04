@@ -27,6 +27,8 @@ import { OldReorderButton } from "@/components/PortalOldReorder";
 import { fmtPhone } from "@/lib/phone";
 import { orderSteps } from "@/lib/customerSend";
 import { approveHref, REVIEW_KINDS, reviewWords } from "@/lib/portalApprove";
+import PortalItems from "@/components/PortalItems";
+import { isSimpleKind, kindLabel } from "@/lib/simpleOrders";
 
 // our garments in words, for the order's details (the customer's own goods use GOODS[…].portal)
 const BLANKS: Record<GoodsStatus, string> = { waiting: "Ordered, not here yet", on_way: "On the way", arrived: "Arrived, checking them in", partial: "Partly here", received: "All here", issue: "Issue with the garments" };
@@ -83,6 +85,11 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const mkPaths = [...new Set(mkGroups.flatMap((g) => (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => !/\.pdf$/i.test(x))))];
   const mkUrls: Record<string, string> = {};
   if (mkPaths.length) { const { data: sg } = await createAdminClient().storage.from("proofs").createSignedUrls(mkPaths, 3600); mkPaths.forEach((pth, i) => { if (sg?.[i]?.signedUrl) mkUrls[pth] = sg[i].signedUrl!; }); }
+  // a signage / promo / paper order: each item's picture, to look at and approve (components/PortalItems.tsx)
+  const simple = isSimpleKind((o as { product_kind?: string | null }).product_kind);
+  const itemPaths = simple ? [...new Set(orderGroups(o).flatMap((g) => g.lines.map((l) => l.spec?.image).filter((x): x is string => !!x)))] : [];
+  const itemUrls: Record<string, string> = {};
+  if (itemPaths.length) { const { data: sg } = await createAdminClient().storage.from("proofs").createSignedUrls(itemPaths, 3600); itemPaths.forEach((pth, i) => { if (sg?.[i]?.signedUrl) itemUrls[pth] = sg[i].signedUrl!; }); }
   const messages = (m.data || []) as Message[];
   // sew-outs: the photo of their logo stitched on our machine, to approve (lib/sewouts.ts)
   const { data: swData } = await ctx.db.from("sewouts").select("id, version, photo_path, status, sent_at, decided_name, decided_at").eq("order_id", id).is("archived_at", null).order("created_at", { ascending: false });
@@ -246,7 +253,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             })()}
             {/* each job like the proof: its mockups, what's printed where (method, size, inks with their colors), then the
                 garments by size with their prices */}
-            {orderGroups(o).map((g, gi) => {
+            {simple && <PortalItems orderId={o.id} groups={orderGroups(o)} urls={itemUrls} title={o.nickname || kindLabel((o as { product_kind?: string | null }).product_kind)} preview={!!preview} />}
+            {!simple && orderGroups(o).map((g, gi) => {
               // a simple order's blank starting job isn't shown: "What you sent us" says it all until we build it
               if (intake && !g.lines.some((l) => l.style || Object.values(l.sizes || {}).some((v) => +v > 0))) return null;
               const cg = c.groups[gi];

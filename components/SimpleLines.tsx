@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ONE_SIZE, type GLine, type Group } from "@/lib/pricing";
+import { sendItemProofs } from "@/lib/itemProofs";
 import { IMPRINT_TYPES, SIGN_FINISHING, SIGN_MATERIALS, kindLabel, newSimpleGroup, qtyOf, signEach, specText, sqft, type ProductKind, type SimpleSpec } from "@/lib/simpleOrders";
 
 /**
@@ -14,9 +15,21 @@ type Kind = Exclude<ProductKind, "apparel">;
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PROOF: Record<string, [string, string]> = { sent: ["Proof sent", "wait"], approved: ["Approved", "ok"], changes: ["Needs changes", "no"] };
 
-export default function SimpleLines({ orderId, kind, groups, update, hidePrices }: {
+export default function SimpleLines({ orderId, kind, groups, update, hidePrices, save }: {
   orderId: string; kind: Kind; groups: Group[]; update: (fn: (groups: Group[]) => void) => void; hidePrices?: boolean;
+  /** saves the order now (before the proofs go out, so the server sends what's on screen) */ save: () => Promise<void>;
 }) {
+  const [msg, setMsg] = useState("");
+  /** every item with a picture (not approved yet) goes to the customer to approve, in one email */
+  const sendProofs = async () => {
+    setBusy("send"); setErr(""); setMsg("");
+    await save();
+    const r = await sendItemProofs(orderId);
+    setBusy("");
+    if (!r.ok) return setErr(r.error);
+    update((gs) => { gs.splice(0, gs.length, ...(r.groups as Group[])); });
+    setMsg(`${r.n} proof${r.n === 1 ? "" : "s"} sent${r.emailed ? " and emailed to the customer" : " (no email went: check their email settings)"}. They answer each item in their portal.`);
+  };
   const sb = createClient();
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
@@ -56,9 +69,11 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices 
   const isPdf = (p?: string) => !!p && /\.pdf$/i.test(p);
   return (
     <section className="panel sol">
-      <div className="panel-h"><h2>{kindLabel(kind)}</h2><span className="faint">Outsourced: a simple invoice, never on the production boards.</span></div>
+      <div className="panel-h"><h2>{kindLabel(kind)}</h2><span className="faint">Outsourced: a simple invoice, never on the production boards.</span>
+        <button type="button" className="btn sol-send" disabled={!!busy || !lines.some((x) => x.l.spec?.image)} title="Every item's picture goes to the customer to approve" onClick={() => void sendProofs()}>{busy === "send" ? "Sending…" : "Send proofs for approval"}</button></div>
       <div className="panel-b">
         {err && <div className="err">{err}</div>}
+        {msg && <div className="ok-note">{msg}</div>}
         {!lines.length && <p className="faint">No items yet.</p>}
         {lines.map(({ gi, l, li }) => {
           const s: SimpleSpec = { kind, ...(l.spec || {}) } as SimpleSpec;
@@ -78,6 +93,7 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices 
                   {pf && <span className={"sol-pf " + pf[1]} title={s.proof?.note || ""}>{pf[0]}</span>}
                   <button type="button" className="btn icon ghost" aria-label="Remove this item" title="Remove" onClick={() => update((gs) => { gs[gi].lines.splice(li, 1); if (!gs[gi].lines.length) gs.splice(gi, 1); })}>×</button>
                 </div>
+                {s.proof?.status === "changes" && s.proof.note && <div className="sol-note"><b>Customer asked:</b> {s.proof.note}</div>}
                 <div className="sol-f">
                   {kind === "signage" && <>
                     <label><span>Material</span><select value={s.material || ""} onChange={(e) => { const m = SIGN_MATERIALS.find((x) => x.name === e.target.value); spec(gi, li, { material: e.target.value, ...(m ? { rate: m.rate } : {}) }, true); }}>

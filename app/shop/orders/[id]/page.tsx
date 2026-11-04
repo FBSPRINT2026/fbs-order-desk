@@ -1935,7 +1935,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 else if (p.helperFile) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&helper=1&helperFile=${encodeURIComponent(p.helperFile)}`);
               }} />
           )}
-          {isSimpleKind(o.product_kind) ? <SimpleLines orderId={o.id} kind={o.product_kind} groups={o.groups} hidePrices={!seesMoney || undefined} update={(fn) => patch((d) => fn(d.groups))} /> : <>
+          {isSimpleKind(o.product_kind) ? <SimpleLines orderId={o.id} kind={o.product_kind} groups={o.groups} hidePrices={!seesMoney || undefined} update={(fn) => patch((d) => fn(d.groups))} save={save} /> : <>
           <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => (
             <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
