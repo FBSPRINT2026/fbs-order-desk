@@ -62,9 +62,9 @@ export default function UpdateContacts() {
     if (!m) return s === "notmoved";
     if (s === "notmoved") return !m.movedAt;
     if (!m.movedAt) return false;
-    // the master list: moved, nothing sent yet; customers with no order this year that are already set to no email
-    // (the bulk move of Nov 4) stay out of it
-    return s === "unsent" ? !wasSent(m) && !(r.rank === 0 && mailOf(m) === "none") : s === "launch" ? !!m.launchSent : s === "personal" ? !!m.personal.sentAt : m.visits.n > 0;
+    // the master list: moved and waiting on an email (launch or personal ticked, not sent yet); set to No email is decided
+    // and leaves it (Nov 4, Nick: "that'll clear that list"). Moving someone here puts them on it with the launch email ticked.
+    return s === "unsent" ? !wasSent(m) && (pickOf(m).launch || pickOf(m).personal) : s === "launch" ? !!m.launchSent : s === "personal" ? !!m.personal.sentAt : m.visits.n > 0;
   };
   useEffect(() => { void contactList().then((r) => { if (r.ok) { setRows(r.rows); setOwners(r.owners); setMeOwner(r.meOwner); } else setErr(r.error); }); }, []);
   const all = rows || [];
@@ -173,10 +173,10 @@ export default function UpdateContacts() {
   const moveNow = async () => {
     if (!d) return;
     setBusy(true); setErr("");
-    const r = await moveCustomers([d.id], true);
+    const r = await moveCustomers([d.id], false);
     setBusy(false);
     if (!r.ok) return setErr(r.error);
-    setNote(`${co.company || "The account"} is moved to the new system. No email was sent.`);
+    setNote(`${co.company || "The account"} is moved to the new system. It's on Moved, not sent with the launch email ticked; nothing was sent.`);
     await loadMv(); next();
   };
   /** which intro email they get: none, the launch email, or a personal note from Nick or Amanda (nothing sends from here) */
@@ -237,7 +237,7 @@ export default function UpdateContacts() {
         /* Moved, not sent: one master list, each customer's intro email picked, then Submit (Nov 4, Nick: "company name…
            launch email, personal email, and then no notification… a button at the bottom that says submit") */
         <section className="panel">
-          <div className="panel-h"><h2>Intro email for each customer</h2><span className="faint">{list.length} moved, nothing sent yet. Submit saves the picks; nothing sends until you say so.</span></div>
+          <div className="panel-h"><h2>Intro email for each customer</h2><span className="faint">{list.length} moved and waiting on an email. Submit saves the picks (No email takes them off this list); nothing sends until you say so.</span></div>
           <div className="tbl-wrap"><table className="tbl ucx-pk">
             <thead><tr><th>Company</th><th className="ucx-c">Launch email</th><th className="ucx-c">Personal email</th><th className="ucx-c">No email</th></tr></thead>
             <tbody>{list.map((r) => {
@@ -358,7 +358,7 @@ export default function UpdateContacts() {
                         </select></label>))}
                     {m && !wasSent(m) && mailOf(m) !== "none" && <button type="button" className="btn ghost sm" disabled={!!pv} onClick={() => void preview()}>{pv === "busy" ? "Sending…" : "Preview to us"}</button>}
                     {(m?.movedAt || d.movedAt) ? <span className="ucx-moved">In the new system since {shortDay((m?.movedAt || d.movedAt)!)}</span>
-                      : <><button type="button" className="btn" disabled={busy} onClick={() => void moveNow()} title="Move them now; contacts stay as they are, no email">Move to new system</button>
+                      : <><button type="button" className="btn" disabled={busy} onClick={() => void moveNow()} title="Move them now; contacts stay as they are. Pick their email on Moved, not sent">Move to new system</button>
                         <button type="button" className="btn" disabled={busy} onClick={() => void save(true)}>{busy ? "Saving…" : "Save and move"}</button></>}
                     <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save and next"}</button>
                   </div>
