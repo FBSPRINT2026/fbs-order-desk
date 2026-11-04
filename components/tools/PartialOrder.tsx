@@ -21,7 +21,7 @@ export const PARTIAL: Record<PartKind, { label: string; sub: string; told: strin
   sizes: { label: "Bring in the sizes only", sub: "Garments, colors, sizes and quantities. No art, prints or mockup.", told: "Staff want ONLY the garments: style, color and every size quantity. Leave out prints and art (they're added later); don't ask about art. What they say about the decoration goes in notes for staff (not customer_notes or a group's description). Personalization still comes in (Oct 30, Nick: \"just add $5 to the invoice and type in the name… our team will know what to do\"): the pieces that get a name are their own line in their own group, each name exactly as written with its size in that line's note, and the personalization extra ticked in that group's finishing; no print or proof for it." },
   art: { label: "Add the art to a blank order", sub: "The art and its prints (locations, inks). No garments or sizes yet.", told: "Staff want ONLY the prints and their art (location, size, inks, the art file for each). Garments are added later; don't ask about sizes." },
   mockup: { label: "Just make the mockup", sub: "The art on their garment colors, straight into the Mockup Creator. Sizes later.", told: "Staff want the garments' styles and colors and the prints with their art, to make the mockup. Don't ask questions; take your best guess." },
-  empty: { label: "Empty order with the files", sub: "The customer and their files on a blank order. You fill it in.", told: "Staff only want a blank order for this customer with the job name and dates; they fill in the garments and prints themselves." },
+  empty: { label: "Complicated order", sub: "Their files on a blank order (a request keeps its number). Then tell the AI helper what to enter, piece by piece.", told: "Staff only want a blank order for this customer with the job name and dates; they fill in the garments and prints themselves." },
 };
 const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, v) => a + (+v || 0), 0), 0), 0);
 
@@ -116,6 +116,9 @@ export default function PartialOrder({ activityId, start, onClose, onCreated }: 
       try {
         const ctx = ctxOf(activityId, start);
         const made = await partialStep(ctx, first, null, step);
+        // made from Other options: the AI helper on this order just does what it's told (Nov 3, Nick: "that's your
+        // indicator to just be a helper… don't have any rules")
+        await createClient().from("orders").update({ helper_plain: true }).eq("id", made.id).then(() => null, () => null);
         onCreated?.(made.id, made.number, made.label);
         openOrderCheck(made.id, [...stepsRef.current, ...(made.note ? [made.note] : [])], { activity: activityId }, { ctx, done: first === "mockup" ? ["sizes", "art"] : [first] });
         onClose();

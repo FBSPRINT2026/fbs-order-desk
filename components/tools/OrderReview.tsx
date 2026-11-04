@@ -35,7 +35,7 @@ import { canDrop, filesFromLinks, msgFiles } from "@/lib/dropFiles";
  *   - a lesson for this customer, ticked to remember (their next Create order reads it first)
  *   - Yes, it's right: closes. Every correction is kept for the overnight review (lib/ai/orderFix.ts).
  */
-type O = { id: string; number: number; nickname: string; customer_id: string | null; groups: Group[]; due_date: string | null; firm?: boolean; customers?: { name?: string; company?: string } | null };
+type O = { id: string; number: number; nickname: string; customer_id: string | null; groups: Group[]; due_date: string | null; firm?: boolean; /** "Just do what I say" (migration 280) */ helper_plain?: boolean; customers?: { name?: string; company?: string } | null };
 type Art = OrderChange & { state: "doing" | "done" | "error"; err?: string };
 type Round = { you: string; reply: string; applied: string[]; art: Art[]; suggest: OrderChange[]; rule?: string };
 /** their PO first, then their mockup and art, then the last job's */
@@ -227,7 +227,7 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
   const [gone, setGone] = useState(false);
   const [loadErr, setLoadErr] = useState("");
   const load = useCallback(async () => {
-    const { data, error } = await sb.from("orders").select("id, number, nickname, customer_id, groups, due_date, firm, customers(name, company)").eq("id", orderId).maybeSingle();
+    const { data, error } = await sb.from("orders").select("id, number, nickname, customer_id, groups, due_date, firm, helper_plain, customers(name, company)").eq("id", orderId).maybeSingle();
     setLoadErr(error ? error.message : "");
     if (data) { setO(data as unknown as O); setGone(false); }
     // not there (Nov 1, Nick: a draft saved or thrown away while its helper was open sat on "Opening the order…")
@@ -399,7 +399,11 @@ export default function OrderReview({ orderId, onClose, did, next, from, steps: 
       onDrop={(e) => { e.preventDefault(); setOver(false); if (e.dataTransfer.files.length) void addDrop([...e.dataTransfer.files]); else void dropLinks(e.dataTransfer); }}
       onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length) { e.preventDefault(); void addDrop(fs); } }}>
       <div className="orv-top">
-        <div className="orv-top-h"><b>#{o.number}</b><span className="faint">{o.nickname}</span><span className="orv-name">✦ AI order helper</span><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back from ✦ AI on the order, with everything said">Close for now</button></div>
+        <div className="orv-top-h"><b>#{o.number}</b><span className="faint">{o.nickname}</span><span className="orv-name">✦ AI order helper</span>
+          {/* "Just do what I say" (Nov 3, Nick: "switch everything off and you're just helping me at this point"): no shop
+              rules, customer memory or paperwork checks; on by itself for an order made from Create order → Other options */}
+          <label className={"orv-plain" + (o.helper_plain ? " on" : "")} title="On: the helper does exactly what you say, with no shop rules, customer habits or checks against the paperwork. On by itself for orders made from Other options.">
+            <input type="checkbox" checked={!!o.helper_plain} onChange={async (e) => { const on = e.target.checked; setO((p) => (p ? { ...p, helper_plain: on } : p)); await sb.from("orders").update({ helper_plain: on }).eq("id", o.id); }} /> Just do what I say</label><button type="button" className="ap-link" onClick={onClose} title="Hide it; it comes back from ✦ AI on the order, with everything said">Close for now</button></div>
         {o.groups.map((g) => (
           <section key={g.id} className="orv-g">
             <div className="orv-pics">

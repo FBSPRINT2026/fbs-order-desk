@@ -101,6 +101,15 @@ function patchDoc(doc0: Record<string, unknown>, ops: PatchOp[]): { ok: true; do
 const sizeRun = (l: Group["lines"][number]) => SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => `${z} ${l.sizes?.[z]}`).join(", ");
 const linesText = (groups: Group[]) => groups.map((g, gi) => `Group ${gi + 1}${g.name ? ` "${g.name}"` : ""}: prints ${g.imprints.length ? g.imprints.map((d) => `${d.location} (${d.method})`).join(", ") : "none"}\n` + g.lines.map((l) => `  Line id ${l.id} (group ${gi + 1}): ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color || ""}, ${Object.values(l.sizes || {}).reduce((a, v) => a + (+(v || 0)), 0)} pcs (${sizeRun(l) || "no sizes"})${l.priceOverride != null && (l.priceOverride as unknown) !== "" ? `, priced $${l.priceOverride} each` : ""}${l.extras ? `, their extras (${l.extrasPrint === false ? "not printed" : "printed"}, ${l.extrasFree === false ? "charged" : "no charge"})` : ""}`).join("\n")).join("\n");
 
+/** what the helper is told first in "Just do what I say" (it outranks everything after it) */
+const PLAIN_MODE = `JUST DO WHAT I SAY MODE (this outranks every rule below). Staff are entering this order by hand with you as a fast data-entry helper. Do exactly what they say, right away, and nothing else:
+- No checking against the paperwork, no shop rules or habits, no "what the shop taught you", no second-guessing, no extra changes they didn't ask for.
+- A file or page dropped in WITH an instruction ("enter page 2 in 3 groups"): do it now, all of it, every line and every group. Dropped with no instruction: say in one line what it is and ask what to do with it.
+- Copy what they point at as it's written (styles, colors, sizes, names, thread colors); don't correct or improve it.
+- Ask only when you truly can't do it, in one short line.
+
+`;
+
 export async function orderFix(admin: SupabaseClient, s: Settings, orderId: string, by: string, message: string, mode: "review" | "change", earlier = "",
   /** what staff dropped or pasted in just now (a PDF's pages, a snip, an Outlook email's attachments) */ dropped?: { images: { media_type: "image/jpeg" | "image/png"; data: string; label?: string }[] }): Promise<{ ok: true; r: FixResult } | { ok: false; error: string }> {
   const msg = message.trim().slice(0, dropped?.images.length || /^Dropped an email/.test(message) ? 7000 : 2000);
@@ -134,10 +143,14 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
   }
   const { data: cuBp } = o.customer_id ? await admin.from("customers").select("brand_print").eq("id", o.customer_id as string).maybeSingle() : { data: null };
   const hasMask = !!((cuBp?.brand_print || {}) as { distress?: { path?: string } }).distress?.path;
-  const mem = await loadMemories(admin, (o.customer_id as string) || null).catch(() => []);
+  // "Just do what I say" (orders.helper_plain, migration 280): no customer memory, shop rules or paperwork check, nothing
+  // learned from it; the helper does exactly what staff say (Nov 3, Nick: "switch everything off and you're just helping me")
+  const { data: hp } = await admin.from("orders").select("helper_plain").eq("id", orderId).maybeSingle();
+  const plain = !!hp?.helper_plain;
+  const mem = plain ? [] : await loadMemories(admin, (o.customer_id as string) || null).catch(() => []);
   // what the order was made from, and the code's own item-by-item check against it (lib/sourceCheck.ts): a spot, a
   // color, a size run, a style or a logo that isn't what the paperwork says (Oct 31, the MEI carts)
-  const sc = mode === "review" ? await checkOrderSource(admin, o as Order).catch(() => ({ findings: [] as SrcFinding[], source: "" })) : { findings: [] as SrcFinding[], source: "" };
+  const sc = mode === "review" && !plain ? await checkOrderSource(admin, o as Order).catch(() => ({ findings: [] as SrcFinding[], source: "" })) : { findings: [] as SrcFinding[], source: "" };
   const prompt = [
     b.text,
     "Garment lines:", linesText(groups),
@@ -146,7 +159,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     sc.source ? `\nWHAT THIS ORDER WAS MADE FROM (the email or ClickUp task, and its files' words):\n${sc.source.slice(0, 8000)}` : "",
     sc.findings.length ? `\nCHECKED BY CODE, ITEM BY ITEM AGAINST THAT PAPERWORK. These don't match: name each one in your reply and give the change that fixes it (a garment the paperwork puts on another spot of an embroidered print is a location change on that print: its spotBy, keyed by the garment's style in lower case with no spaces; any other print: move the line to a group printing at that spot):\n${sc.findings.map((f) => `- ${f.say} (line ids ${f.lineIds.join(", ")})`).join("\n")}` : "",
     mem.length ? `\nWhat the shop has taught you about this customer:\n${mem.slice(0, 15).map((m) => `- ${m.text}`).join("\n")}` : "",
-    shopRulesText(await loadShopRules(admin).catch(() => [])),
+    plain ? "" : shopRulesText(await loadShopRules(admin).catch(() => [])),
     earlier.trim() ? `\nEarlier in this check (already done; the order above already has these changes):\n${earlier.trim().slice(0, 3000)}` : "",
     mode === "review" ? "\nStaff ask: did I get everything right? Compare the order with what the customer sent (their mockup, their PO, their art) and say plainly what doesn't match." : `\nStaff say: ${msg}`,
   ].filter(Boolean).join("\n");
@@ -169,7 +182,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
       lesson: { type: "string", description: "Only when staff corrected something that will come up again with THIS customer (how their art usually comes in, where they like a print): what to remember for their next orders, one or two short sentences (under 400 characters). Empty otherwise." },
       rule: { type: "string", description: "Only when the mistake was the shop's own way of doing things, not this customer's (a print placed far too low, a wrong default): one sentence of the rule that would have prevented it. Empty otherwise." },
     }, required: ["reply", "changes"] } },
-    system: `${SHOP_CONTEXT(s)}
+    system: `${plain ? PLAIN_MODE : ""}${SHOP_CONTEXT(s)}
 
 You're the AI order helper on this order, working with the shop's account manager like a careful order-entry person: checking it right after it's made, building it up, and changing whatever they ask. Keep every reply short and simple: a few short lines, plain words, no explaining unless asked. Write it to read at a glance: one thing per line, never a paragraph; a garment's name on one line and its sizes on the next ("S 10 · M 30 · L 40"); a question last, on its own line.
 
@@ -227,7 +240,7 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
     const a = await applyChanges(admin, orderId, by, changes.filter((c) => c.what !== "art"));
     if (!a.ok) return a;
     res.applied = a.applied;
-    await keepCorrection(admin, o as Order, by, msg, changes, res);
+    if (!plain) await keepCorrection(admin, o as Order, by, msg, changes, res);
   }
   return { ok: true, r: res };
 }

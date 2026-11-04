@@ -158,6 +158,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   const [otherFor, setOtherFor] = useState<string | null>(null), [aiNote, setAiNote] = useState("");
   const otherMenu = (go: (k: PartKind) => void) => (
     <div className="osp-other">
+      <p className="faint osp-other-note">Here the AI helper just does what you tell it: no rules or checks.</p>
       {(Object.keys(PARTIAL) as PartKind[]).map((k) => (
         <button key={k} type="button" className="osp-other-it" onClick={() => go(k)}><b>{PARTIAL[k].label}</b><span className="faint">{PARTIAL[k].sub}</span></button>
       ))}

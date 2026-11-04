@@ -20735,3 +20735,8 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 /* zoomed pages wider than the box scroll all the way to their left edge (centered, the left side was out of reach) */
 .mf-pdf-main{align-items:flex-start}
 .mf-pdf-main canvas{margin-inline:auto}
+/* the AI order helper's "Just do what I say" switch (Nov 3) */
+.orv-plain{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--ink-3);white-space:nowrap;cursor:pointer;border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+.orv-plain.on{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.osp-other-note{margin:0 0 4px;font-size:12px}
+.orv-top-h{flex-wrap:wrap;row-gap:4px}
