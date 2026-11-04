@@ -210,9 +210,17 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
     const s = o.simple_order as { about?: string; qty?: number | null; garments?: string; method?: string; by?: string };
     const { data: cust } = await admin.from("customers").select("company, name, email").eq("id", o.customer_id).maybeSingle();
     // the files they sent with it (simple_order.files: uploaded in the portal, or brought in from their ClickUp job)
-    const sent = new Set(((s as { files?: { path: string }[] }).files || []).map((f) => f.path));
+    // The request's own list is the record: a ClickUp job brought in as a request has its files only there, not on
+    // art_files (Nov 3, Nick: Reimagine #40461's PDF wasn't in Resources), so each listed file counts, with its art_files
+    // row when there is one, plus anything uploaded to the request in the portal
+    const listed = ((s as { files?: { path: string; name?: string; kind?: string }[] }).files || []).filter((f) => f?.path);
     const { data: all } = await admin.from("art_files").select("name, file_path, file_type, category").eq("order_id", orderId);
-    const files = (all || []).filter((f) => sent.has(String(f.file_path)) || String(f.file_path).startsWith("requests/"));
+    const rows = (all || []) as { name: string; file_path: string; file_type: string | null; category: string | null }[];
+    const typeOf = (p: string) => /\.pdf$/i.test(p) ? "application/pdf" : /\.png$/i.test(p) ? "image/png" : /\.jpe?g$/i.test(p) ? "image/jpeg" : /\.(ai|eps)$/i.test(p) ? "application/postscript" : /\.svg$/i.test(p) ? "image/svg+xml" : "";
+    const files = [
+      ...listed.map((f) => rows.find((r) => r.file_path === f.path) || { name: f.name || f.path.split("/").pop() || "File", file_path: f.path, file_type: typeOf(f.path), category: f.kind || null }),
+      ...rows.filter((r) => r.file_path.startsWith("requests/") && !listed.some((f) => f.path === r.file_path)),
+    ];
     const sizes = await Promise.all((files || []).map(async (f) => {
       const dir = String(f.file_path).replace(/\/[^/]+$/, ""), base = String(f.file_path).split("/").pop() || "";
       const { data: l } = await admin.storage.from("proofs").list(dir, { search: base, limit: 5 });

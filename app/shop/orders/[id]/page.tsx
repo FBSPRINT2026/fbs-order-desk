@@ -79,7 +79,7 @@ import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
 import { archiveOrderArt, draftArtCount, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
 import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
-import { printavoDeleteCheck } from "@/app/shop/orders/delete-actions";
+import { backToRequests, printavoDeleteCheck } from "@/app/shop/orders/delete-actions";
 import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 import { mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
@@ -1153,7 +1153,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // in QuickBooks: asked before deleting (Oct 24, Nick: "this order has already been synced… would you like me to void the
   // order in QuickBooks?"); qbVoid = the yes
   type QbState = { synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string; issue?: string; pending?: boolean };
-  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean; /** still in Printavo: not deleted here */ pv?: { visualId: string; url: string } | null; pvErr?: string }>(null);
+  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; /** sent in by the customer: back to Portal requests instead of deleted */ req?: boolean; reqBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean; /** still in Printavo: not deleted here */ pv?: { visualId: string; url: string } | null; pvErr?: string }>(null);
   // the small QB ✓ beside the status: is this order's invoice in QuickBooks
   const [qbSt, setQbSt] = useState<QbState | null>(null);
   // an invoice also asks QuickBooks itself, so one sent before orders kept their link (TEST-40135) is found and linked
@@ -1204,10 +1204,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const pvAsk = pvc.ok ? { pv: pvc.still } : { pvErr: pvc.error };
     const qb: QbState | null = qs && qs.ok ? qs : null;
     const qbVoid = !!qb?.synced && !qb.voided && (qb.source === "created" || qb.source === "test");
-    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: true, qb, qbVoid, ...pvAsk });
+    // the customer sent it in (a simple order, or a ClickUp job brought in as one): it goes back to Portal requests, and
+    // ClickUp is left alone (Nov 3, Nick: "after it comes into our system… ClickUp is dead to this order")
+    const req = !!(o as Order & { simple_order?: unknown }).simple_order;
+    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: !req, req, reqBack: req, qb, qbVoid, ...pvAsk });
     // a copy of another order's mockup goes with it (nothing is lost); art made only on this order starts as Keep (Nov 2, Nick)
     const pick = new Set<string>(r.mockups.filter((m) => m.copyOf).map((m) => m.id));
-    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: true, qb, qbVoid, ...pvAsk });
+    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: !req, req, reqBack: req, qb, qbVoid, ...pvAsk });
   }
   async function confirmDel() {
     if (!o || !delAsk) return;
@@ -1219,6 +1222,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     }
     const lg = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).map((l) => l.id), mk = delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).map((m) => m.id);
     if (lg.length || mk.length) { const r = await archiveOrderArt(o.id, lg, mk); if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: r.error }); return; } }
+    // back to Portal requests: same number, what they sent stays, nothing in ClickUp is touched
+    if (delAsk.req && delAsk.reqBack) {
+      const b = await backToRequests(o.id);
+      if (!b.ok) { setDelAsk({ ...delAsk, busy: false, error: b.error }); return; }
+      location.assign(`/shop/jobs?req=${o.id}`); return;
+    }
     // the order goes first; the ClickUp job goes back on New only once it's really gone (else it could be made twice)
     const gone = await reallyDel(false);
     if (!gone) { setDelAsk({ ...delAsk, busy: false, qbVoid: false, error: `Couldn't delete the order${delErr.current ? `: ${delErr.current}` : "."}${delAsk.qbVoid ? " (It was already voided in QuickBooks.)" : ""} Nothing else was changed in ClickUp.` }); return; }
@@ -1610,7 +1619,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       {delAsk && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Delete order" onClick={() => !delAsk.busy && setDelAsk(null)} onKeyDown={(e) => { if (e.key === "Escape" && !delAsk.busy) setDelAsk(null); }}>
           <div className="dla" onClick={(e) => e.stopPropagation()}>
-            <h3>Delete order #{o.number}?</h3>
+            <h3>{delAsk.req && delAsk.reqBack ? `Send #${o.number} back to Portal requests?` : `Delete order #${o.number}?`}</h3>
             {!delAsk.loading && delAsk.pv ? (
               <div className="dla-pv">
                 <b>This order is in Printavo as #{delAsk.pv.visualId}.</b>
@@ -1669,7 +1678,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     <small className="faint">Voided invoices stay in QuickBooks at $0. Number #{o.number} is never used again.</small>
                   </div>
                 )}
-                {delAsk.cu && (
+                {delAsk.req && (
+                  <label className="dla-cu">
+                    <input type="checkbox" checked={!!delAsk.reqBack} disabled={delAsk.busy} onChange={(e) => setDelAsk((d) => (d ? { ...d, reqBack: e.target.checked } : d))} />
+                    <span>Send it back to <b>Portal requests</b> instead <small className="faint">(the customer sent it in: same number, their words and files stay, what was built from it is cleared)</small></span>
+                  </label>
+                )}
+                {delAsk.cu && !delAsk.req && (
                   <label className="dla-cu">
                     <input type="checkbox" checked={!!delAsk.cuBack} disabled={delAsk.busy} onChange={(e) => setDelAsk((d) => (d ? { ...d, cuBack: e.target.checked } : d))} />
                     <span>Put the ClickUp job <b data-notranslate>{delAsk.cu.name}</b> back on the New list <small className="faint">({delAsk.cu.team}; In Printavo is unticked in ClickUp)</small></span>
@@ -1681,7 +1696,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="dla-acts">
               {delAsk.gone ? <button type="button" className="btn primary" onClick={() => { setDelAsk(null); leave(); }}>OK</button> : <>
               <button type="button" className="btn ghost" disabled={delAsk.busy} onClick={() => setDelAsk(null)}>Cancel</button>
-              {!delAsk.pv && !delAsk.pvErr && <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.busy ? "Deleting…" : "Delete order"}</button>}</>}
+              {!delAsk.pv && !delAsk.pvErr && <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.req && delAsk.reqBack ? (delAsk.busy ? "Sending back…" : "Send back to Portal requests") : delAsk.busy ? "Deleting…" : "Delete order"}</button>}</>}
             </div>
           </div>
         </div>

@@ -30,3 +30,28 @@ export async function printavoDeleteCheck(orderId: string): Promise<{ ok: true; 
     return { ok: false, error: `Couldn't check Printavo, so it wasn't deleted: ${e instanceof Error ? e.message : String(e)}` };
   }
 }
+
+/**
+ * An order the customer sent in (a simple order from their portal, or a ClickUp job brought in as one) goes back to Portal
+ * requests instead of being deleted (Nov 3, Nick: "after it comes into our system… ClickUp is dead to this order… send it
+ * back to the job center under customer requests… the status still as order request"). Same number; what they sent (their
+ * words and files) stays; what was built from it (garments, prints, prices) is cleared so Process starts fresh. Its art is
+ * left as the delete box chose.
+ */
+export async function backToRequests(orderId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff) return { ok: false, error: "Not allowed." };
+    const admin = createAdminClient();
+    const { data: o } = await admin.from("orders").select("id, simple_order, printavo_id, status").eq("id", orderId).maybeSingle();
+    if (!o) return { ok: false, error: "Order not found." };
+    if (!o.simple_order) return { ok: false, error: "This order wasn't sent in by the customer." };
+    if (o.printavo_id) return { ok: false, error: "It's in Printavo: it can't go back to the requests." };
+    const blank = [{ id: crypto.randomUUID(), lines: [{ id: crypto.randomUUID(), cost: "", brand: "", color: "", sizes: {}, style: "", garment: "", priceOverride: null }], imprints: [], customerMockups: [] }];
+    const { error } = await admin.from("orders").update({ status: "request", type: "quote", groups: blank, lines: [], fees: [], total: 0, qty: 0, sent_at: null, approved_at: null, approved_name: null, declined_at: null, declined_reason: "" }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "request", actor: v.user.email || "shop" });
+    await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: "Sent back to Portal requests (instead of deleted): what was built from it was cleared; what the customer sent stays.", actor: v.user.email || "shop" });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}

@@ -20696,3 +20696,20 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .jcx>.jrl-mc .jrl-mc-ban{padding:10px 12px 0}
   .jrl-mc-big{margin:10px -12px 0;padding:8px 12px 10px}
 }
+/* v2 (Nov 3, 22:28, Nick: "all navy and white… the rainbow banner separating the navy from the white… when you click on it…
+   a background tint of whatever the color is… the numbers… shouldn't have a color when they're not selected… just a number
+   in the corners"): white cards, the three-color line under each navy header, the picked card tinted in its color with its
+   picked step filled in that color and its counts in that color */
+.jrl-sec{background:var(--surface)}
+.jrl-sec:hover{background:color-mix(in srgb,var(--c) 4%,var(--surface))}
+.jrl-sec.on{background:color-mix(in srgb,var(--c) 10%,var(--surface));border-color:color-mix(in srgb,var(--c) 40%,var(--line));box-shadow:inset 0 -3px 0 var(--c)}
+.jrl-sec .jrl-h{background:linear-gradient(90deg,#0E9BD8 33.3%,#F26660 33.3% 66.6%,#FCB122 66.6%) bottom/100% 3px no-repeat,#141D2B;padding-bottom:10px}
+.jrl-st.pick .jrl-ic{background:var(--c);border-color:var(--c);color:#fff}
+.jrl-cn,.jrl-cn.z{background:none;padding:0;color:#141D2B;font-size:14px;font-weight:700;line-height:1;bottom:9px}
+.jrl-cn.l{left:11px}.jrl-cn.r{right:11px}
+.jrl-cn.z{color:color-mix(in srgb,var(--ink) 30%,var(--line))}
+.jrl-sec.on .jrl-cn:not(.z){color:var(--c)}
+.jrl-sec.on .jrl-cn{bottom:11px}
+.jrl-mc-big{background:linear-gradient(90deg,#0E9BD8 33.3%,#F26660 33.3% 66.6%,#FCB122 66.6%) top/100% 3px no-repeat,var(--surface);padding-top:13px}
+.jcx>.jrl-mc{background:var(--surface)}
+.jrl-mc-av i{box-shadow:0 0 0 2px var(--surface)}
