@@ -1226,6 +1226,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (delAsk.req) {
       const b = await resetToRequest(o.id);
       if (!b.ok) { setDelAsk({ ...delAsk, busy: false, error: b.error }); return; }
+      // and the helper's conversation kept in this tab
+      try { for (const k of [`fbs:orderCheck:${o.id}`, `fbs:orderDock:${o.id}`]) sessionStorage.removeItem(k); } catch { /* */ }
       location.assign(`/shop/jobs?req=${o.id}`); return;
     }
     // the order goes first; the ClickUp job goes back on New only once it's really gone (else it could be made twice)

@@ -55,6 +55,11 @@ export async function resetToRequest(orderId: string): Promise<{ ok: true } | { 
       : o.simple_order ? { groups: blank, lines: [], fees: [], qty: 0 } : {};
     const { error } = await admin.from("orders").update({ ...back, status: "request", type: "quote", total: 0, sent_at: null, approved_at: null, approved_name: null, declined_at: null, declined_reason: "" }).eq("id", orderId);
     if (error) return { ok: false, error: error.message };
+    // a fresh start: the AI order helper's conversation about it goes, and it's back to its normal mode (Nov 3, Nick: "when
+    // you… put it back in the queue, you should purge the message history… It's like I deleted you so that we could start
+    // again")
+    await admin.from("order_internal").update({ check_thread: null }).eq("order_id", orderId);
+    await admin.from("orders").update({ helper_plain: false }).eq("id", orderId);
     // the files it picked up while it was being made (pictures the reader cut from their PDF, files staff dropped in) are
     // set aside, not deleted (art_files_set_aside, migration 279): only what the customer sent stays on their request
     const theirs = new Set(((o.simple_order as { files?: { path?: string }[] } | null)?.files || []).map((f) => String(f.path || "")));

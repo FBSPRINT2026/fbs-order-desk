@@ -539,6 +539,8 @@ type DockState = { orderId: string; did?: string[]; /** made from one of several
 const dockKey = (id: string) => `${DOCK_KEY}:${id}`;
 const readDock = (id: string): DockState | null => { try { const x = sessionStorage.getItem(dockKey(id)); const d = x ? (JSON.parse(x) as DockState) : null; return d && d.orderId === id ? d : null; } catch { return null; } };
 export function openOrderCheck(orderId: string, did?: string[], from?: { activity: string }, steps?: NextSteps) {
+  // just made (or made again after a reset): a new conversation, not the last one kept in this tab
+  if (did?.length) try { sessionStorage.removeItem(keyOf(orderId)); } catch { /* */ }
   const st: DockState = { orderId, did, ...(from ? { from } : {}), ...(steps ? { steps } : {}) };
   try { sessionStorage.setItem(dockKey(orderId), JSON.stringify(st)); } catch { /* */ }
   window.dispatchEvent(new CustomEvent("fbs:order-check", { detail: st }));
