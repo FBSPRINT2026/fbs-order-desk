@@ -17,10 +17,13 @@ export async function GET(req: Request) {
   const { data: s } = await admin.from("qbo_settings").select("token").eq("id", 1).maybeSingle();
   if (!s || !tokenMatches(req.headers.get("x-sync-token"), String(s.token))) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   const preview = new URL(req.url).searchParams.get("preview") === "1";
+  // one queue row sent for real, as a test, while the sync is otherwise off or previewing (Nov 4, Nick: "send it to
+  // QuickBooks like you would normally… and I can see")
+  const one = Number(new URL(req.url).searchParams.get("one") || 0);
   const lockId = await claimLock(admin);
   if (!lockId) return NextResponse.json({ busy: true });
   try {
-    const stats = await runQueue(admin, { mode: preview ? "preview" : "auto", deadline: Date.now() + 280000, lockId });
+    const stats = await runQueue(admin, one > 0 ? { mode: "auto", deadline: Date.now() + 120000, lockId, ids: [one], forceLive: true } : { mode: preview ? "preview" : "auto", deadline: Date.now() + 280000, lockId });
     return NextResponse.json(stats);
   } catch (e) {
     const msg = (e instanceof Error ? e.message : String(e)).slice(0, 500);

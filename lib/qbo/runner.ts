@@ -31,7 +31,7 @@ export async function claimLock(admin: SupabaseClient): Promise<string | null> {
 }
 export async function releaseLock(admin: SupabaseClient, id: string) { await admin.rpc("qbo_lock_release", { p_id: id }); }
 
-export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "preview"; deadline: number; lockId: string; max?: number; ids?: number[] }): Promise<RunStats> {
+export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "preview"; deadline: number; lockId: string; max?: number; ids?: number[]; /** send just these rows for real, even while the sync is off or in preview (the owner's "send this one" test) */ forceLive?: boolean }): Promise<RunStats> {
   const qs = await loadQboSettings(admin);
   const stats: RunStats = { mode: "off", processed: 0, byStatus: {}, changes: 0 };
   const env = qboEnv();
@@ -45,7 +45,8 @@ export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "pr
     try { const n = await followTests(admin, qs); if (n) stats.note = `Updated ${n} test invoice${n === 1 ? "" : "s"}.`; }
     catch (e) { stats.note = `Test invoices: ${e instanceof Error ? e.message : String(e)}`; }
   }
-  if (opts.mode === "auto" && !qs.enabled) {
+  const one = !!(opts.forceLive && opts.ids?.length);
+  if (opts.mode === "auto" && !qs.enabled && !one) {
     // off: only keep the sign-in alive (about once a day)
     if (connected && (!qs.keepalive_at || Date.now() - new Date(qs.keepalive_at).getTime() > 20 * 3600000)) {
       try { await keepAlive(admin); stats.note = "Sign-in refreshed (the sync is off)."; }
@@ -54,7 +55,7 @@ export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "pr
     }
     return stats;
   }
-  const live = opts.mode === "auto" && qs.enabled && qs.mode === "live" && connected;
+  const live = (opts.mode === "auto" && qs.enabled && qs.mode === "live" && connected) || (one && connected);
   stats.mode = live ? "live" : "preview";
   const qbo = connected ? new Qbo(admin) : null;
   let realm = qs.realm_id;
@@ -93,7 +94,7 @@ export async function runQueue(admin: SupabaseClient, opts: { mode: "auto" | "pr
         const { data: held } = await admin.rpc("qbo_lock_extend", { p_id: opts.lockId, p_seconds: LOCK_SECONDS });
         if (!held) { stats.note = "Lost the runner lock: stopped."; stop = true; break; }
         // a live run stops as soon as the owner turns the sync off or back to preview
-        if (live) {
+        if (live && !one) {
           const { data: now } = await admin.from("qbo_settings").select("enabled, mode").eq("id", 1).maybeSingle();
           if (!now?.enabled || now.mode !== "live") { stats.note = "The sync was turned off or set to preview: stopped."; stop = true; break; }
         }
