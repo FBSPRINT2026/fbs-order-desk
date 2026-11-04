@@ -314,6 +314,18 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
         <label className="check"><input type="checkbox" checked={c.waiveSetup} onChange={(e) => set({ waiveSetup: e.target.checked })} /> No setup on grid prices</label>
         <label className="check" title="Our courier, local only. Shipping is still charged."><input type="checkbox" checked={!!c.freeDelivery} onChange={(e) => set({ freeDelivery: e.target.checked })} /> Free local delivery</label>
       </div>
+      {c.garmentIncluded && <div className="pga-row rc-sa">
+        {/* a shirt at a set amount over the base shirt, whatever its blank costs (Nov 4, Nick: 3001CVC = 6210 + $0.50) */}
+        <span>Set amount over {c.base.style || "the base shirt"}</span>
+        {(c.styleAdds || []).map((x, i) => (
+          <span key={i} className="rc-sa-i">
+            <input type="text" aria-label="Style" placeholder="3001CVC" defaultValue={x.style} onBlur={(e) => set({ styleAdds: (c.styleAdds || []).map((y, j) => (j === i ? { ...y, style: e.target.value.trim() } : y)).filter((y) => y.style) })} style={{ width: 110 }} />
+            <span className="qp-amt-in"><span>+$</span><input type="text" inputMode="decimal" aria-label="Amount over the base shirt" defaultValue={String(x.add)} onBlur={(e) => set({ styleAdds: (c.styleAdds || []).map((y, j) => (j === i ? { ...y, add: +e.target.value.replace(/[^\d.-]/g, "") || 0 } : y)) })} style={{ width: 70 }} /></span>
+            <button type="button" className="btn icon ghost sm" aria-label={`Remove ${x.style}`} onClick={() => set({ styleAdds: (c.styleAdds || []).filter((_, j) => j !== i) })}>×</button>
+          </span>
+        ))}
+        <button type="button" className="btn sm" onClick={() => set({ styleAdds: [...(c.styleAdds || []), { style: "", add: 0.5 }] })}>+ Add a style</button>
+      </div>}
       <div className="pga-row rc-up">
         <span>Big sizes, per piece</span>
         {BIG_SIZES.map((z) => <label key={z}>{z}<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.sizeUp?.[z] != null ? String(c.sizeUp[z]) : ""} onBlur={(e) => set({ sizeUp: { ...c.sizeUp, [z]: money2(e.target.value) } })} placeholder="0.00" /></div></label>)}

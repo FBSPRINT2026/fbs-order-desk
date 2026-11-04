@@ -70,6 +70,9 @@ export type RateCard = {
   base: { brand: string; style: string; cost?: number };
   /** the difference in blank cost is multiplied by this (1.2 = 20% on the difference) */
   markup: number;
+  /** other shirts at a set amount over the base shirt's price, instead of the blank-cost difference (Nov 4, Nick:
+   *  "Bella Canvas 3001 CVC is always 50 cents more than the Next Level 6210") */
+  styleAdds?: { style: string; brand?: string; add: number }[];
   /** pieces per print job (group) for program prices; below it, normal pricing */
   minQty: number;
   waiveSetup: boolean;
@@ -104,6 +107,13 @@ export type RateCard = {
   about?: { text: string; by: string; at: string }[];
 };
 /** does the card set anything? (prices, or a rule) */
+/** a style's set amount over the base shirt on this card ("3001CVC" = "3001 CVC" = "BC3001CVC") */
+const styleKey = (x: string) => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+export function styleAdd(card: Pick<RateCard, "styleAdds">, style: string | undefined) {
+  const k = styleKey(style || "");
+  if (!k) return null;
+  return (card.styleAdds || []).find((x) => { const s = styleKey(x.style); return !!s && (k === s || k.endsWith(s) || s.endsWith(k)); }) || null;
+}
 export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.noSetupEver || !!c.extras?.length || !!Object.keys(c.extraPrices || {}).length || !!c.included?.length || !!c.freeDelivery || !!c.designsAllIn);
 export const cardHasPrices = (c: RateCard | null | undefined) => !!c && c.gridOn !== false && Object.values(c.prices || {}).some((x) => +x > 0);
 export const BIG_SIZES = ["2XL", "3XL", "4XL", "5XL"] as const;
@@ -252,6 +262,8 @@ export function programForGroup(g: Group, card: RateCard | null, baseCost: numbe
     if (!card.garmentIncluded) { lines[l.id] = { each: price, note: `Program ${k.key}: ${price.toFixed(2)} print` }; continue; }
     const same = (l.style || "").trim().toLowerCase() === card.base.style.trim().toLowerCase();
     if (same) { lines[l.id] = { each: r2(price), note: `Program ${k.key} on ${card.base.style}: ${price.toFixed(2)}` }; continue; }
+    const fixed = styleAdd(card, l.style);
+    if (fixed) { lines[l.id] = { each: r2(price + fixed.add), note: `Program ${k.key}: ${price.toFixed(2)} on ${card.base.style} ${fixed.add < 0 ? "−" : "+"} ${Math.abs(fixed.add).toFixed(2)} for ${fixed.style} = ${r2(price + fixed.add).toFixed(2)}` }; continue; }
     const cost = n0(l.cost);
     if (!cost || baseCost == null) { lines[l.id] = null; all = false; continue; }
     const diff = r2((cost - baseCost) * (card.markup || 1));

@@ -20902,3 +20902,7 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .pit-ask{display:flex;flex-direction:column;gap:8px;margin-top:4px}
 .pit-ask .row{gap:8px;justify-content:flex-end}
 @media (max-width:520px){.pit-ln{grid-template-columns:80px minmax(0,1fr)}.pit-img{width:80px;height:70px}}
+
+/* a program card's styles at a set amount over the base shirt (components/ProgramAdmin.tsx) */
+.rc-sa{align-items:center;flex-wrap:wrap;gap:8px}
+.rc-sa-i{display:inline-flex;align-items:center;gap:6px}
