@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
-import { moveList, sendCustomerPreview, sendPersonalNoteTest, setPersonal, setQuiet, type MoveRow } from "./actions";
+import { moveCustomers, moveList, sendCustomerPreview, sendPersonalNoteTest, setPersonal, setQuiet, type MoveRow } from "./actions";
 
 /**
  * Portal intro emails (Nov 3, Nick: "we'll just call that the Portal email tool… introductory email tool… we're going to
@@ -14,16 +14,18 @@ import { moveList, sendCustomerPreview, sendPersonalNoteTest, setPersonal, setQu
  */
 /** when they were last in: "Today 11:42 AM", "Nov 3" */
 const when = (iso: string) => { const d = new Date(iso), t = new Date(); const same = d.toDateString() === t.toDateString(); return same ? `Today ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
-type Show = "waiting" | "sent" | "all" | "launch" | "personal" | "none" | "visited";
-const SHOWS: Show[] = ["waiting", "sent", "all", "launch", "personal", "none", "visited"];
-const LABEL: Record<Show, string> = { waiting: "Not sent yet", sent: "Already sent", all: "Everyone in the portal", launch: "Launch email", personal: "Personal email", none: "No email", visited: "Been in the portal" };
+type Show = "waiting" | "sent" | "notmoved" | "all" | "launch" | "personal" | "none" | "visited";
+const SHOWS: Show[] = ["waiting", "sent", "notmoved", "all", "launch", "personal", "none", "visited"];
+const LABEL: Record<Show, string> = { waiting: "Not sent yet", sent: "Already sent", notmoved: "Not moved yet", all: "Everyone in the portal", launch: "Launch email", personal: "Personal email", none: "No email", visited: "Been in the portal" };
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "");
 const first = (n: string) => n.split(/\s+/)[0];
 const launchOn = (r: MoveRow) => !r.quiet && !!r.email;
 const personalOn = (r: MoveRow) => !r.personal.skip && r.personal.to.length > 0;
 /** an intro email (launch or personal) already went to them (Nov 4, Nick: "all that's left on there are customers that haven't been sent the intro email") */
 const wasSent = (r: MoveRow) => !!r.launchSent || !!r.personal.sentAt;
-const shows = (r: MoveRow, s: Show) => s === "all" || (s === "waiting" ? !wasSent(r) : s === "sent" ? wasSent(r) : s === "visited" ? r.visits.n > 0 : s === "launch" ? launchOn(r) : s === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r));
+/** "Not moved yet" is everyone still on the old system; every other view is customers in the portal (Nov 4, Nick: "a column
+ *  that says move to new system or not") */
+const shows = (r: MoveRow, s: Show) => s === "notmoved" ? !r.movedAt : !r.movedAt ? false : s === "all" || (s === "waiting" ? !wasSent(r) : s === "sent" ? wasSent(r) : s === "visited" ? r.visits.n > 0 : s === "launch" ? launchOn(r) : s === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r));
 
 export default function IntroEmails() {
   const [show, setShow] = useSticky<Show>("customers.introEmails.view", "waiting");
@@ -34,7 +36,7 @@ export default function IntroEmails() {
   const test = async () => { setBusy("test"); setErr(""); setNote(""); const r = await sendPersonalNoteTest(); setBusy(""); if (r.ok) setNote(`Both versions (standard and ClickUp customers) sent from ${r.from} to ${r.to}.`); else setErr(r.error); };
   /** both emails as this customer gets them, to Nick and Amanda (Nov 4) */
   const preview = async (r: MoveRow) => { setBusy("pv" + r.id); setErr(""); setNote(""); const x = await sendCustomerPreview(r.id); setBusy(""); if (x.ok) setNote(`${r.name}: both emails sent to ${x.to} as ${r.name} gets them (launch email to ${x.launchFirst || "them"}, personal note${x.kind === "clickup" ? ", ClickUp version," : ""} to ${x.noteFirst || "them"} at ${x.noteTo}, from ${x.from}).`); else setErr(x.error); };
-  const load = async () => { const r = await moveList(); if (r.ok) { setRows(r.rows.filter((x) => x.movedAt)); setErr(""); } else setErr(r.error); };
+  const load = async () => { const r = await moveList(); if (r.ok) { setRows(r.rows); setErr(""); } else setErr(r.error); };
   useEffect(() => { void load(); }, []);
 
   const all = rows || [];
@@ -58,6 +60,14 @@ export default function IntroEmails() {
     setBusy(""); if (!r.ok) return setErr(r.error);
     await load();
   };
+  /** move one customer to the new system, without the launch email (tick Launch email after if they should get it) */
+  const move = async (r: MoveRow) => {
+    setBusy(r.id); setErr(""); setNote("");
+    const x = await moveCustomers([r.id], true);
+    setBusy(""); if (!x.ok) return setErr(x.error);
+    setNote(`${r.name} is moved to the new system. No email was sent.`);
+    await load();
+  };
   const unsentL = list.filter((r) => r.email && !r.launchSent), unsentP = list.filter((r) => r.email && !r.personal.sentAt);
   const allL = unsentL.length > 0 && unsentL.every(launchOn), allP = unsentP.length > 0 && unsentP.every(personalOn);
 
@@ -69,7 +79,7 @@ export default function IntroEmails() {
         <div className="row"><button type="button" className="btn" disabled={busy === "test"} onClick={() => void test()} title="The personal email in both versions (standard and ClickUp customers), from your own mailbox to Nick and Amanda">{busy === "test" ? "Sending…" : "Test the personal email"}</button><Link className="btn" href="/shop/customers/contacts">Update contacts</Link><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
       </div>
       {rows && <div className="stats">
-        {(["waiting", "sent", "all", "visited"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
+        {(["waiting", "sent", "notmoved", "all", "visited"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
       </div>}
       <div className="toolbar">
         <div className="chips">{SHOWS.map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
@@ -85,20 +95,22 @@ export default function IntroEmails() {
         <div className="tbl-wrap">
           <table className="tbl mvl-tbl">
             <thead><tr>
-              <th>Customer</th><th>Owner</th>
+              <th>Customer</th><th>Owner</th><th className="mvl-c">New system</th>
               <th className="mvl-c"><label className="mvl-hc"><input type="checkbox" aria-label="Launch email for everyone shown" checked={allL} disabled={busy === "bulk"} onChange={() => void launch(unsentL, !allL)} /> Launch email</label></th>
               <th className="mvl-c"><label className="mvl-hc"><input type="checkbox" aria-label="Personal email for everyone shown" checked={allP} disabled={busy === "bulk"} onChange={() => void personal(unsentP, !allP)} /> Personal email</label></th>
               <th>From</th><th>In the portal</th><th />
             </tr></thead>
             <tbody>{list.map((r) => {
-              const pOn = personalOn(r), fromAmanda = /^amanda/i.test(r.personal.from);
+              const pOn = !!r.movedAt && personalOn(r), fromAmanda = /^amanda/i.test(r.personal.from);
               return (
                 <tr key={r.id} className={!launchOn(r) && !pOn ? "mvl-none" : ""}>
                   <td><Link href={`/shop/customers/${r.id}`} data-notranslate>{r.name}</Link><div className="sub" data-notranslate>{r.email ? [r.contact, r.email].filter(Boolean).join(" · ") : <span className="mvl-noemail">No email on file: add one in Update contacts</span>}</div></td>
                   <td className="nowrap">{r.owner ? first(r.owner) : <span className="faint">—</span>}</td>
-                  <td className="mvl-c">{r.launchSent ? <span className="mvl-in">Sent {day(r.launchSent)}</span>
+                  <td className="mvl-c">{r.movedAt ? <span className="mvl-in" title={`Moved ${day(r.movedAt)}`}>✓ {day(r.movedAt)}</span>
+                    : <input type="checkbox" aria-label={`Move ${r.name} to the new system`} title="Move to the new system (no email is sent)" checked={false} disabled={busy === r.id} onChange={() => void move(r)} />}</td>
+                  <td className="mvl-c">{!r.movedAt ? <span className="faint">—</span> : r.launchSent ? <span className="mvl-in">Sent {day(r.launchSent)}</span>
                     : <input type="checkbox" aria-label={`Launch email to ${r.name}`} checked={launchOn(r)} disabled={!r.email || busy === r.id} onChange={(e) => void launch([r], e.target.checked)} />}</td>
-                  <td className="mvl-c">{r.personal.sentAt ? <span className="mvl-in">Sent {day(r.personal.sentAt)}</span>
+                  <td className="mvl-c">{!r.movedAt ? <span className="faint">—</span> : r.personal.sentAt ? <span className="mvl-in">Sent {day(r.personal.sentAt)}</span>
                     : <input type="checkbox" aria-label={`Personal email to ${r.name}`} checked={pOn} disabled={!r.email || busy === r.id} onChange={(e) => void personal([r], e.target.checked)} />}
                     {pOn && <div className="sub" data-notranslate>to {r.personal.to.join(", ")}</div>}
                     {pOn && r.clickup && <div className="sub mvl-cu" title="They work with us through ClickUp: their note says ClickUp and Printavo stay open to mid-month and offers their team a training">ClickUp version</div>}</td>
