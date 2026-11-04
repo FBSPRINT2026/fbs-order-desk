@@ -70,6 +70,7 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
             {sh.address && <span>{sh.address}</span>}
           </div>
         </div>
+        <div className="pls-line" />
         <div className="pls-b">
           <h2>Contract screen printing</h2>
           <table className="pls-t pls-grid">

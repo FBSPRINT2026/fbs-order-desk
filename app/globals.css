@@ -19333,7 +19333,10 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pls{background:var(--surface-2);min-height:100vh;padding:20px 12px 40px;font-family:var(--body);color:var(--ink)}
 .pls-bar{max-width:816px;margin:0 auto 12px;display:flex;justify-content:flex-end}
 .pls-page{max-width:816px;margin:0 auto;background:#fff;box-shadow:0 2px 16px rgba(20,29,43,.12);border-radius:8px;overflow:hidden;font-size:11.5px;line-height:1.35}
-.pls-h{display:flex;align-items:center;gap:18px;background:#141D2B;color:#fff;padding:16px 28px;border-bottom:4px solid transparent;border-image:var(--fbs-fade) 1;border-image-slice:0 0 1 0}
+.pls-h{display:flex;align-items:center;gap:18px;background:#141D2B;color:#fff;padding:16px 28px}
+/* the color line under the header is its own bar, not a border-image: the saved PDF's drawing painted a border-image
+   over the whole header (Nov 4, Nick: "one has a rainbow banner on the top") */
+.pls-line{height:4px;background:var(--fbs-fade)}
 .pls-logo{height:42px;width:auto;display:block}
 .pls-ttl{flex:1;display:flex;flex-direction:column;gap:2px;border-left:1px solid rgba(255,255,255,.25);padding-left:18px}
 .pls-ttl b{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-.01em}
