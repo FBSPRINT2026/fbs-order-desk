@@ -109,7 +109,9 @@ async function request<T>(query: string, variables: Record<string, unknown>, ret
     const msg = j?.errors?.map((e) => e.message).join("; ") || "";
     if (r.status === 429 || /rate limit|throttl|too many requests/i.test(msg)) {
       // back off: as long as Printavo says (at least 10 seconds); after 3 tries give up for now
-      if (retry && attempt < 3) { const ra = +(r.headers.get("retry-after") || 0); await sleep(Math.max(10000, Math.min(ra * 1000, 60000)) * (attempt + 1)); continue; }
+      // a slow-down answer means Printavo didn't do it, so even a write waits and asks again (Nov 4, #40284: a Reset in
+      // Printavo stopped after clearing a group, with ours not yet added back)
+      if (attempt < 3) { const ra = +(r.headers.get("retry-after") || 0); await sleep(Math.max(10000, Math.min(ra * 1000, 60000)) * (attempt + 1)); continue; }
       throw new PrintavoThrottled("Printavo asked us to slow down. The sync pauses for a few minutes and then carries on.");
     }
     if (retry && r.status >= 500 && attempt < 3) { await sleep(2000 * (attempt + 1)); continue; }
