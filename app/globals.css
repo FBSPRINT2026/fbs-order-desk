@@ -20720,3 +20720,8 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .jrl-mc-w span{font-size:12px;font-weight:600}
 .jcx>.jrl-mc{background:var(--surface)}
 .jrl-mc-av i{box-shadow:0 0 0 2px var(--surface)}
+/* a PDF zoomed past 100% in the quick look: the viewer takes the whole window (Nov 3, Nick) */
+.mf-look-bg.big{padding:8px}
+.mf-look.big{width:100%;height:100%;max-height:none}
+.mf-look.big > .mf-look-b{flex:1 1 auto}
+.mf-look.big .mf-pdf{height:100%;max-height:none}

@@ -674,11 +674,22 @@ export function FileTray({ files, inBar, note }: { files: MailFile[]; /** phones
 /**
  * A PDF's pages, drawn here (Oct 23, Nick on the quick look: "make the pages view not so wide… typically that goes on the
  * right side"): the pages down the middle, a narrow strip of page pictures on the right to jump to one, zoom in and out.
+ * Nov 3 (Nick, a 9-page pre-production PDF): clicking a page picture made the pages vanish and the view stuck, and zooming
+ * crashed the tab. So:
+ *   - a page picture scrolls only the pages' own box (scrollIntoView also scrolled the viewer's hidden-overflow boxes, which
+ *     can't be scrolled back by hand);
+ *   - a page is drawn only when it's near view, one at a time, at a size held under a pixel ceiling (every page redrawn at
+ *     once at 2× and 3× ran the tab out of memory);
+ *   - zooming in first gives the viewer the whole window (onZoom), so there's room to see it.
  */
-function PdfPages({ url }: { url: string }) {
-  type Doc = { numPages: number; getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> } }> };
+const PDF_MAX_PX = 6_000_000; // a page's canvas, at most this many pixels
+function PdfPages({ url, onZoom }: { url: string; /** zoomed past 100% (the viewer grows to the window) */ onZoom?: (big: boolean) => void }) {
+  type Pg = { getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> } };
+  type Doc = { numPages: number; getPage: (n: number) => Promise<Pg> };
   const [doc, setDoc] = useState<Doc | null>(null), [err, setErr] = useState(""), [zoom, setZoom] = useState(1), [at, setAt] = useState(1);
+  const [ratio, setRatio] = useState<number[]>([]); // each page's height ÷ width, so a page not drawn yet still takes its room
   const main = useRef<HTMLDivElement | null>(null);
+  const queue = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
     let live = true;
     (async () => {
@@ -686,25 +697,34 @@ function PdfPages({ url }: { url: string }) {
         const buf = await (await fetch(url)).arrayBuffer();
         const { openPdf } = await import("@/lib/printavoArt");
         const d = await openPdf(buf) as unknown as Doc;
-        if (live) setDoc(d);
+        const rs: number[] = [];
+        for (let n = 1; n <= d.numPages; n++) { const v = (await d.getPage(n)).getViewport({ scale: 1 }); rs.push(v.height / Math.max(1, v.width)); }
+        if (live) { setRatio(rs); setDoc(d); }
       } catch { if (live) setErr("This file couldn't be shown here. Open it in a tab."); }
     })();
     return () => { live = false; };
   }, [url]);
-  const draw = async (c: HTMLCanvasElement | null, n: number, w: number) => {
+  useEffect(() => { onZoom?.(zoom > 1); }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+  // one page at a time, in the order asked
+  const draw = (c: HTMLCanvasElement | null, n: number, w: number) => {
     if (!c || !doc || c.dataset.w === String(w)) return;
     c.dataset.w = String(w);
-    const pg = await doc.getPage(n), v1 = pg.getViewport({ scale: 1 }), dpr = Math.min(2, window.devicePixelRatio || 1);
-    const vp = pg.getViewport({ scale: (w / v1.width) * dpr });
-    // drawn on a canvas of its own, then shown: a page redrawn while it was still drawing came out upside down for a while
-    // (Oct 23, Nick: "the first page was upside down for like a minute, then it rotated")
-    const off = document.createElement("canvas");
-    off.width = Math.round(vp.width); off.height = Math.round(vp.height);
-    await pg.render({ canvasContext: off.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
-    if (c.dataset.w !== String(w)) return; // a newer size was asked for meanwhile
-    c.width = off.width; c.height = off.height;
-    c.style.width = `${w}px`; c.style.height = `${Math.round(vp.height / dpr)}px`;
-    c.getContext("2d")!.drawImage(off, 0, 0);
+    queue.current = queue.current.then(async () => {
+      if (!c.isConnected || c.dataset.w !== String(w)) return; // gone, or a newer size asked for meanwhile
+      const pg = await doc.getPage(n), v1 = pg.getViewport({ scale: 1 });
+      const h = w * (v1.height / v1.width);
+      const dpr = Math.max(0.5, Math.min(2, window.devicePixelRatio || 1, Math.sqrt(PDF_MAX_PX / Math.max(1, w * h))));
+      const vp = pg.getViewport({ scale: (w / v1.width) * dpr });
+      // drawn on a canvas of its own, then shown: a page redrawn while it was still drawing came out upside down for a while
+      // (Oct 23, Nick: "the first page was upside down for like a minute, then it rotated")
+      const off = document.createElement("canvas");
+      off.width = Math.round(vp.width); off.height = Math.round(vp.height);
+      await pg.render({ canvasContext: off.getContext("2d")!, viewport: vp, background: "rgba(255,255,255,1)" }).promise;
+      if (!c.isConnected || c.dataset.w !== String(w)) { off.width = off.height = 0; return; }
+      c.width = off.width; c.height = off.height;
+      c.getContext("2d")!.drawImage(off, 0, 0);
+      off.width = off.height = 0; // let go of the copy's memory now
+    }).catch(() => { delete c.dataset.w; });
   };
   const [w, setW] = useState(0);
   useEffect(() => {
@@ -715,22 +735,31 @@ function PdfPages({ url }: { url: string }) {
     const ro = new ResizeObserver(() => setW((x) => { const n = Math.max(200, Math.floor(el.clientWidth - 34)); return Math.abs(n - x) > 6 ? n : x; }));
     ro.observe(el); return () => ro.disconnect();
   }, [doc]);
+  // pages near view get drawn; the rest keep their room until they're scrolled to
+  const pw = Math.round(w * zoom);
+  useEffect(() => {
+    const el = main.current; if (!el || !doc || !w) return;
+    const io = new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) { const c = e.target as HTMLCanvasElement; draw(c, +(c.dataset.pg || 1), pw); } }, { root: el, rootMargin: "900px 0px" });
+    el.querySelectorAll("canvas[data-pg]").forEach((c) => io.observe(c));
+    return () => io.disconnect();
+  }, [doc, pw]); // eslint-disable-line react-hooks/exhaustive-deps
   if (err) return <p className="mf-pdf-err">{err}</p>;
   if (!doc) return <p className="mf-pdf-err faint">Opening…</p>;
-  const pw = Math.round(w * zoom), pages = Array.from({ length: doc.numPages }, (_, i) => i + 1);
-  const go = (n: number) => { setAt(n); main.current?.querySelector(`[data-pg="${n}"]`)?.scrollIntoView({ block: "start", behavior: "smooth" }); };
+  const pages = Array.from({ length: doc.numPages }, (_, i) => i + 1);
+  // only the pages' own box scrolls (see above)
+  const go = (n: number) => { setAt(n); const el = main.current, t = el?.querySelector<HTMLElement>(`[data-pg="${n}"]`); if (el && t) el.scrollTo({ top: Math.max(0, t.offsetTop - 12), behavior: "smooth" }); };
   return (
     <div className="mf-pdf">
       <div className="mf-pdf-main" ref={main} onScroll={(e) => { const el = e.currentTarget as HTMLDivElement, top = el.scrollTop + 40; let n = 1; (Array.from(el.querySelectorAll("[data-pg]")) as HTMLElement[]).forEach((x) => { if (x.offsetTop <= top) n = +(x.dataset.pg || 1); }); setAt(n); }}>
-        {w > 0 && pages.map((n) => <canvas key={n} data-pg={n} ref={(c) => { void draw(c, n, pw).catch(() => { if (c) delete c.dataset.w; }); }} />)}
+        {w > 0 && pages.map((n) => <canvas key={n} data-pg={n} style={{ width: pw, height: Math.round(pw * (ratio[n - 1] || 1.294)) }} />)}
       </div>
       <div className="mf-pdf-side">
         <div className="mf-pdf-zoom">
           <button type="button" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} aria-label="Zoom out">−</button>
           <span>{Math.round(zoom * 100)}%</span>
-          <button type="button" onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))} aria-label="Zoom in">+</button>
+          <button type="button" onClick={() => setZoom((z) => Math.min(2.5, +(z + 0.25).toFixed(2)))} aria-label="Zoom in">+</button>
         </div>
-        {pages.map((n) => <button key={n} type="button" className={"mf-pdf-th" + (n === at ? " on" : "")} onClick={() => go(n)} aria-label={`Page ${n}`}><canvas ref={(c) => { void draw(c, n, 64).catch(() => { if (c) delete c.dataset.w; }); }} /><span>{n}</span></button>)}
+        {pages.map((n) => <button key={n} type="button" className={"mf-pdf-th" + (n === at ? " on" : "")} onClick={() => go(n)} aria-label={`Page ${n}`}><canvas style={{ width: 64, height: Math.round(64 * (ratio[n - 1] || 1.294)) }} ref={(c) => draw(c, n, 64)} /><span>{n}</span></button>)}
       </div>
     </div>
   );
@@ -742,6 +771,10 @@ const onCustomerPage = () => typeof location !== "undefined" && /^\/(portal|proo
 export function QuickLook({ files, at, onClose, title, strip }: { files: MailFile[]; at: number; onClose: () => void; /** a heading before the file's name (Order resources) */ title?: string; /** every file as a tab across the top (Order resources, Oct 23: "you should have the files listed across the top") */ strip?: boolean }) {
   const [i, setI] = useState(Math.max(0, at));
   const f = files[i];
+  // a PDF zoomed past 100% gets the whole window (Nov 3, Nick: "when you hit the zoom button, all that's got to do is just
+  // make the panel larger")
+  const [big, setBig] = useState(false);
+  useEffect(() => { setBig(false); }, [i]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); else if (e.key === "ArrowRight" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setI((x) => Math.min(files.length - 1, x + 1)); else if (e.key === "ArrowLeft" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) setI((x) => Math.max(0, x - 1)); };
     window.addEventListener("keydown", k);
@@ -759,8 +792,8 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
   // Download and arrows didn't work: inside a docked panel the viewer was laid out and clicked as part of the panel)
   if (!f || typeof document === "undefined") return null;
   return createPortal(
-    <div className="mf-look-bg" onClick={onClose} style={dockGap ? { right: dockGap } : undefined}>
-      <div className="mf-look" role="dialog" aria-label={`Quick look: ${f.name}`} onClick={(e) => e.stopPropagation()}>
+    <div className={"mf-look-bg" + (big ? " big" : "")} onClick={onClose} style={dockGap ? { right: dockGap } : undefined}>
+      <div className={"mf-look" + (big ? " big" : "")} role="dialog" aria-label={`Quick look: ${f.name}`} onClick={(e) => e.stopPropagation()}>
         {strip && files.length > 0 && <div className="mf-look-strip">{title && <b>{title}</b>}{files.map((x, k) => <button key={x.key} type="button" className={"chip" + (k === i ? " on" : "")} onClick={() => setI(k)} title={x.name}>{x.label || x.name}</button>)}</div>}
         <div className="mf-look-h">
           {files.length > 1 && <button type="button" className="mf-look-nav" disabled={i === 0} onClick={() => setI(i - 1)} aria-label="Previous file">‹</button>}
@@ -779,7 +812,7 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
           <button type="button" className="mf-look-x" onClick={onClose} aria-label="Close">×</button>
         </div>
         <div className="mf-look-b">
-          {kindOf(f) === "img" ? <img src={f.href} alt={f.name} /> : officeKind(f.name, f.type) ? <OfficeView key={f.key} url={f.href!} name={f.name} type={f.type} /> : <PdfPages key={f.key} url={f.href!} />}
+          {kindOf(f) === "img" ? <img src={f.href} alt={f.name} /> : officeKind(f.name, f.type) ? <OfficeView key={f.key} url={f.href!} name={f.name} type={f.type} /> : <PdfPages key={f.key} url={f.href!} onZoom={setBig} />}
         </div>
       </div>
     </div>,
