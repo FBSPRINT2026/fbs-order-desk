@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
-import { moveList, setPersonal, setQuiet, type MoveRow } from "./actions";
+import { moveList, sendPersonalNoteTest, setPersonal, setQuiet, type MoveRow } from "./actions";
 
 /**
  * Portal intro emails (Nov 3, Nick: "we'll just call that the Portal email tool… introductory email tool… we're going to
@@ -23,7 +23,9 @@ export default function IntroEmails() {
   const [show, setShow] = useSticky<Show>("customers.introEmails.show", "all");
   const [who, setWho] = useSticky<string>("customers.introEmails.owner", "");
   const [rows, setRows] = useState<MoveRow[] | null>(null);
-  const [q, setQ] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState("");
+  const [q, setQ] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState(""), [note, setNote] = useState("");
+  /** the personal note as it really looks: from your mailbox to Nick and Amanda (Nov 3, Nick) */
+  const test = async () => { setBusy("test"); setErr(""); setNote(""); const r = await sendPersonalNoteTest(); setBusy(""); if (r.ok) setNote(`Test sent from ${r.from} to ${r.to}.`); else setErr(r.error); };
   const load = async () => { const r = await moveList(); if (r.ok) { setRows(r.rows.filter((x) => x.movedAt)); setErr(""); } else setErr(r.error); };
   useEffect(() => { void load(); }, []);
 
@@ -56,7 +58,7 @@ export default function IntroEmails() {
       <BackLink href="/shop/customers" label="Customers" />
       <div className="page-head">
         <div><h1>Portal intro emails</h1><div className="eyebrow">Who gets the launch email, who gets a personal note from Nick or Amanda, and who gets nothing. Nothing sends from here.</div></div>
-        <div className="row"><Link className="btn" href="/shop/customers/contacts">Update contacts</Link><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
+        <div className="row"><button type="button" className="btn" disabled={busy === "test"} onClick={() => void test()} title="The personal email, from your own mailbox to Nick and Amanda, to see how it looks">{busy === "test" ? "Sending…" : "Test the personal email"}</button><Link className="btn" href="/shop/customers/contacts">Update contacts</Link><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
       </div>
       {rows && <div className="stats">
         {(["all", "launch", "personal", "none"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
@@ -70,6 +72,7 @@ export default function IntroEmails() {
         <input type="search" className="mvl-q" placeholder="Find a customer" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {err && <div className="err">{err}</div>}
+      {note && <div className="ok-note">{note}</div>}
       {rows === null ? <p className="faint">Loading…</p> : !list.length ? <p className="faint">No customers here.</p> : (
         <div className="tbl-wrap">
           <table className="tbl mvl-tbl">

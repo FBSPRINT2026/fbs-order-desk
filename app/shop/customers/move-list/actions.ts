@@ -121,3 +121,31 @@ export async function setPersonal(ids: string[], on: boolean, from?: string) {
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * A test of the personal note from your own mailbox to Nick and Amanda (Nov 3, Nick: "send a copy of it from my email to
+ * myself and to Amanda just to see what it looks like actually in our email"): exactly as a customer gets it, greeted
+ * "Michael" as an example, with your Outlook signature. Nothing goes to a customer.
+ */
+export async function sendPersonalNoteTest() {
+  try {
+    const v = await me();
+    const admin = createAdminClient();
+    const { accountForUser, cfgOf } = await import("@/lib/mail/config");
+    const box = await accountForUser(admin, v.user!.id);
+    if (!box) throw new Error("Your mailbox isn't connected here (Email → Settings).");
+    const { noteText, noteHtml, noteTextPlain } = await import("@/lib/personalNote");
+    const { inlineImages } = await import("@/lib/mail/compose");
+    const { siteUrl } = await import("@/lib/email");
+    const t = await noteText(admin);
+    const b = box as typeof box & { signature_html?: string | null; signature_on?: boolean | null };
+    const sig = b.signature_on !== false ? b.signature_html || "" : "";
+    const { html, attachments } = inlineImages(noteHtml(t, "Michael", siteUrl(), sig));
+    const { sendFromMailbox } = await import("@/lib/mail/send");
+    const { ewsReady, ewsSaveSent } = await import("@/lib/mail/ewsBox");
+    const ews = await ewsReady(admin, box).catch(() => false);
+    const to = "nicholas@fbsprint.com, amanda@fbsprint.com";
+    await sendFromMailbox(cfgOf(box), { to, subject: `[Test] ${t.subject}`, text: noteTextPlain(t, "Michael"), html, attachments }, ews ? (raw) => ewsSaveSent(box, raw) : undefined);
+    return { ok: true as const, to, from: box.email };
+  } catch (e) { return fail(e); }
+}
