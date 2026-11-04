@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { emailButton } from "@/lib/emailParts";
 import { bundleCopy, bundlePreview, bundleSend, orderLinkAction, sendFromChoices, sendOptionsAction } from "@/app/shop/proof-send-actions";
@@ -129,65 +129,64 @@ export default function SendProofTool({ target, label = "Send to customer", mode
   </>;
   if (mode === "copy") return <span className="spt-copy">{copyBtns(false)}{err && <span className="pv-err" style={{ margin: 0 }}>{err}</span>}</span>;
 
-  const tick = (on: boolean, set: (v: boolean) => void, title: string, sub: string, key2: string) => (
-    <label key={key2} className={"spt-chk" + (on ? " on" : "")}><input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} /><span><b>{title}</b><small>{sub}</small></span></label>
-  );
+
   return (
     <>
       <button type="button" className={"btn" + (primary ? " primary" : "")} disabled={disabled} onClick={() => void start()}>{label}</button>
       {open && createPortal(
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="spt-t" onKeyDown={(e) => { if (e.key === "Escape" && !busy) setOpen(false); }}>
           <div className="mk-modal spt">
-            <div className="spt-h"><h2 id="spt-t">Send to {opts?.name || "the customer"}</h2><span className="faint">One email with what you tick</span></div>
+            {/* Option A (Nov 3, Nick): like writing an email. What to send as ticks on the title line; From, To and Reply to
+                as the email's header lines; then the email itself, big, its boxes growing as you type (no scroll bars in
+                them); the preview on the right */}
+            <div className="spt-h"><h2 id="spt-t">Send to {opts?.name || "the customer"}</h2>
+              {opts && <div className="spt-ticks">
+                {opts.proof && <label className={"spt-tk" + (pick.proof ? " on" : "")} title={`${opts.proof.mockups} mockup${opts.proof.mockups === 1 ? "" : "s"}${opts.proof.unsent ? "" : opts.proof.waiting ? " · already sent, waiting on them" : " · already sent"}`}><input type="checkbox" checked={!!pick.proof} onChange={(e) => setPick((p) => ({ ...p, proof: e.target.checked }))} /> Proof v{opts.proof.version}{!opts.proof.unsent && <small> · sent</small>}</label>}
+                {opts.quote && <label className={"spt-tk" + (pick.quote ? " on" : "")} title={`${opts.quote.due || `Deposit to start: ${money(opts.quote.deposit)}`}${opts.quote.sent || opts.quote.status === "quote_sent" ? " · already sent" : ""}`}><input type="checkbox" checked={!!pick.quote} onChange={(e) => setPick((p) => ({ ...p, quote: e.target.checked }))} /> {opts.quote.kind === "invoice" ? "Final invoice" : "Quote"} · {money(opts.quote.total)}{(opts.quote.sent || opts.quote.status === "quote_sent") && <small> · sent</small>}</label>}
+                {opts.sewouts.map((x) => { const on = (pick.sewouts || []).includes(x.id); return <label key={x.id} className={"spt-tk" + (on ? " on" : "")} title={x.sent ? "already sent" : "photo saved, not sent yet"}><input type="checkbox" checked={on} onChange={(e) => setPick((p) => ({ ...p, sewouts: e.target.checked ? [...(p.sewouts || []), x.id] : (p.sewouts || []).filter((y) => y !== x.id) }))} /> {x.label}</label>; })}
+                {!opts.proof && !opts.quote && !opts.sewouts.length && <span className="faint">Nothing to send yet: make a mockup, or the quote, first.</span>}
+              </div>}
+            </div>
             {!opts && <div className="faint">{busy === "load" ? "Loading…" : ""}</div>}
-            <div className="spt-cols">
+            {opts && <div className="spt-cols">
             <div className="spt-left">
-            {opts && <div className="spt-picks">
-              {opts.proof && tick(!!pick.proof, (v) => setPick((p) => ({ ...p, proof: v })), `Proof, version ${opts.proof.version}`, `${opts.proof.mockups} mockup${opts.proof.mockups === 1 ? "" : "s"}${opts.proof.unsent ? "" : opts.proof.waiting ? " · already sent, waiting on them" : " · already sent"}`, "proof")}
-              {opts.quote && tick(!!pick.quote, (v) => setPick((p) => ({ ...p, quote: v })), `${opts.quote.kind === "invoice" ? "Final invoice" : "Quote"} · ${money(opts.quote.total)}`, `${opts.quote.due || `Deposit to start: ${money(opts.quote.deposit)}`}${opts.quote.sent || opts.quote.status === "quote_sent" ? " · already sent" : ""}`, "quote")}
-              {opts.sewouts.map((s) => tick((pick.sewouts || []).includes(s.id), (v) => setPick((p) => ({ ...p, sewouts: v ? [...(p.sewouts || []), s.id] : (p.sewouts || []).filter((x) => x !== s.id) })), s.label, s.sent ? "already sent" : "photo saved, not sent yet", s.id))}
-              {!opts.proof && !opts.quote && !opts.sewouts.length && <div className="faint">Nothing to send yet: make a mockup, or the quote, first.</div>}
-            </div>}
-            {/* who gets it this time; their email settings stay as they are (Nov 3, Nick: "override settings and just send to this person") */}
-            {opts && (opts.people || []).length > 0 && <div className="spt-to">
-              <span className="imp-l">To: just this time, their email settings don&apos;t change</span>
-              <div className="spt-ppl">{(opts.people || []).map((x) => {
-                const on = (pick.to || []).includes(x.email);
-                return <label key={x.email} className={"spt-person" + (on ? " on" : "")}><input type="checkbox" checked={on} onChange={(e) => setPick((p) => ({ ...p, to: e.target.checked ? [...(p.to || []), x.email] : (p.to || []).filter((y) => y !== x.email) }))} />
-                  <span><b data-notranslate>{x.name || x.email}</b>{x.name && <small data-notranslate>{x.email}</small>}</span></label>;
-              })}</div>
-            </div>}
-            {/* from the portal's address, or their own mailbox as a reply in the customer's thread */}
-            {opts && box && <div className="spt-from">
-              <span className="imp-l">Send from</span>
-              <div className="spt-seg" role="radiogroup" aria-label="Send from">
-                <button type="button" role="radio" aria-checked={!pick.fromMe} className={!pick.fromMe ? "on" : ""} onClick={() => setPick((p) => ({ ...p, fromMe: false }))}>FBS Print (portal@)</button>
-                <button type="button" role="radio" aria-checked={!!pick.fromMe} className={pick.fromMe ? "on" : ""} onClick={() => { const g = pick.reply === undefined ? choices.find((x) => x.likely) : undefined; if (g) answer(g); else setPick((p) => ({ ...p, fromMe: true })); }} data-notranslate>My email ({box.split("@")[0]}@)</button>
+              <div className="spt-mailbox">
+                {box && <div className="spt-row"><span className="spt-rl">From</span>
+                  <div className="spt-seg" role="radiogroup" aria-label="Send from">
+                    <button type="button" role="radio" aria-checked={!pick.fromMe} className={!pick.fromMe ? "on" : ""} onClick={() => setPick((p) => ({ ...p, fromMe: false }))}>FBS Print (portal@)</button>
+                    <button type="button" role="radio" aria-checked={!!pick.fromMe} className={pick.fromMe ? "on" : ""} onClick={() => { const g = pick.reply === undefined ? choices.find((x) => x.likely) : undefined; if (g) answer(g); else setPick((p) => ({ ...p, fromMe: true })); }} data-notranslate>My email ({box.split("@")[0]}@)</button>
+                  </div></div>}
+                {/* who gets it this time; their email settings stay as they are (Nov 3, Nick: "override settings and just send to this person") */}
+                {(opts.people || []).length > 0 && <div className="spt-row"><span className="spt-rl">To</span>
+                  <div className="spt-ppl" title="Just this time: their email settings don't change">{(opts.people || []).map((x) => {
+                    const on = (pick.to || []).includes(x.email);
+                    return <button key={x.email} type="button" className={"spt-who" + (on ? " on" : "")} aria-pressed={on} title={x.email} data-notranslate
+                      onClick={() => setPick((p) => ({ ...p, to: on ? (p.to || []).filter((y) => y !== x.email) : [...(p.to || []), x.email] }))}>{on ? "" : "+ "}{x.name || x.email}{on && <span aria-hidden> ×</span>}</button>;
+                  })}</div></div>}
+                {pick.fromMe && <div className="spt-row"><span className="spt-rl">Reply to</span>
+                  <div className="spt-rv"><select value={pick.reply?.messageId || ""} aria-label="As a reply to" onChange={(e) => { const g = choices.find((x) => x.messageId === e.target.value); if (g) answer(g); else setPick((p) => ({ ...p, reply: null })); }}>
+                    <option value="">A new email (not a reply)</option>
+                    {choices.map((c) => <option key={c.messageId} value={c.messageId}>{c.subject} · {c.from} · {new Date(c.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</option>)}
+                  </select>
+                  {(() => { const g = choices.find((x) => x.messageId === pick.reply?.messageId && x.likely); return g ? <small className="spt-guess" data-notranslate>Looks like you&apos;re answering {g.from.split(/\s+/)[0]}&apos;s email from {new Date(g.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small> : null; })()}</div></div>}
+                {/* the email itself: your words, the FBS card as a little bar, your closing, your signature */}
+                <div className="spt-body">
+                  <AutoText value={pick.note || ""} placeholder={pick.fromMe ? "Hi …" : `A note (optional): e.g. Here's the ${what} we talked about`} label={pick.fromMe ? "Your message, above the card" : "A note (optional, goes in the email)"}
+                    onChange={(v) => { setTyped((t) => ({ ...t, note: true })); setPick((p) => ({ ...p, note: v })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} />
+                  <div className="spt-dcard" aria-hidden="true"><div className="spt-dbar"><img src="/email/launch/logo-white.png" alt="" /><span>Your {whatLine}{pick.reply ? "" : " · ready to review"}</span></div><div className="spt-drb"><i /><i /><i /></div><small>The {whatLine} and the Review and approve button go here</small></div>
+                  {pick.fromMe && <>
+                    <AutoText value={pick.after || ""} placeholder="Please let me know if this is approved." label="After the card"
+                      onChange={(v) => { setTyped((t) => ({ ...t, after: true })); setPick((p) => ({ ...p, after: v })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} />
+                    <small className="faint spt-sig">Your signature goes here{pick.reply ? ", then their email under it" : ""}.</small>
+                  </>}
+                </div>
               </div>
-              {pick.fromMe && <label className="spt-reply"><span className="imp-l">As a reply to</span>
-                <select value={pick.reply?.messageId || ""} onChange={(e) => { const g = choices.find((x) => x.messageId === e.target.value); if (g) answer(g); else setPick((p) => ({ ...p, reply: null })); }}>
-                  <option value="">A new email (not a reply)</option>
-                  {choices.map((c) => <option key={c.messageId} value={c.messageId}>{c.subject} · {c.from} · {new Date(c.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</option>)}
-                </select>
-                {(() => { const g = choices.find((x) => x.messageId === pick.reply?.messageId && x.likely); return g ? <small className="spt-guess" data-notranslate>Looks like you&apos;re answering {g.from.split(/\s+/)[0]}&apos;s email from {new Date(g.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small> : null; })()}</label>}
-            </div>}
-            {/* the email, short: your words, the FBS card as a little bar, your closing (Nov 3, Nick: "make an email that shows
-                the default first sentence, then that little FBS bar… cut it off, and then the below") */}
-            {opts && (pick.fromMe ? <div className="spt-draft"><span className="imp-l">The email</span>
-              <div className="spt-dbox">
-                <textarea rows={3} value={pick.note || ""} placeholder={`e.g. Here's the ${what} we talked about`} onChange={(e) => { setTyped((t) => ({ ...t, note: true })); setPick((p) => ({ ...p, note: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} />
-                <div className="spt-dcard" aria-hidden="true"><div className="spt-dbar"><img src="/email/launch/logo-white.png" alt="" /><span>Your {whatLine}{pick.reply ? "" : " · ready to review"}</span></div><div className="spt-drb"><i /><i /><i /></div><small>The {whatLine} and the Review and approve button go here</small></div>
-                <textarea rows={2} value={pick.after || ""} onChange={(e) => { setTyped((t) => ({ ...t, after: true })); setPick((p) => ({ ...p, after: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} />
-                <small className="faint">Your signature goes under it{pick.reply ? ", then their email" : ""}.</small>
-              </div></div>
-              : <label className="spt-note"><span className="imp-l">A note (optional, goes in the email)</span>
-              <textarea rows={2} value={pick.note || ""} placeholder={`e.g. Here's the ${what} we talked about`} onChange={(e) => { setTyped((t) => ({ ...t, note: true })); setPick((p) => ({ ...p, note: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} /></label>)}
             </div>
             <div className="spt-right">
-            {pv && <div className="spt-meta">{pv.from && <div><span>From</span><b data-notranslate>{pv.from}</b></div>}<div><span>To</span><b>{pv.to || (pick.to && opts?.people?.length ? "Tick who gets it" : "No email on the customer")}</b></div><div><span>Subject</span><b>{pv.subject}</b></div></div>}
-            {opts && <div className="spt-mail">{pv ? <iframe title="The email" srcDoc={pv.html} sandbox="" /> : <div className="faint" style={{ padding: 20 }}>{any ? "Making the preview…" : "Tick what to send."}</div>}</div>}
+            {pv && <div className="spt-meta"><div><span>To</span><b>{pv.to || (pick.to && opts?.people?.length ? "Pick who gets it" : "No email on the customer")}</b></div><div><span>Subject</span><b>{pv.subject}</b></div></div>}
+            <div className="spt-mail">{pv ? <iframe title="The email" srcDoc={pv.html} sandbox="" /> : <div className="faint" style={{ padding: 20 }}>{any ? "Making the preview…" : "Tick what to send."}</div>}</div>
             </div>
-            </div>
+            </div>}
             {err && <div className="pv-err">{err}</div>}
             <div className="spt-foot">
               {copyBtns(!any)}
@@ -199,4 +198,12 @@ export default function SendProofTool({ target, label = "Send to customer", mode
         </div>, document.body)}
     </>
   );
+}
+
+/** a box that grows with what's typed, so it never has a scroll bar of its own (Nov 3, Nick: "I don't want those two scroll
+ *  bars. I just want to be able to type like normal") */
+function AutoText({ value, onChange, onBlur, placeholder, label }: { value: string; onChange: (v: string) => void; onBlur?: () => void; placeholder?: string; label: string }) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => { const t = ref.current; if (!t) return; t.style.height = "auto"; t.style.height = `${t.scrollHeight + 2}px`; }, [value]);
+  return <textarea ref={ref} className="spt-auto" rows={2} aria-label={label} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} onBlur={onBlur} />;
 }

@@ -20740,3 +20740,26 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .orv-plain.on{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
 .osp-other-note{margin:0 0 4px;font-size:12px}
 .orv-top-h{flex-wrap:wrap;row-gap:4px}
+/* Send to customer, option A (Nov 3, Nick): ticks on the title line, the email's header lines, the email big, its boxes
+   growing as you type; the left side doesn't scroll on its own */
+.mk-modal.spt{display:flex;flex-direction:column;gap:12px;max-height:94vh;overflow:auto}
+.spt-h{justify-content:space-between;row-gap:8px}
+.spt-ticks{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.spt-tk{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap;background:var(--surface)}
+.spt-tk.on{border-color:var(--accent);background:var(--accent-soft)}
+.spt-tk small{font-weight:400;color:var(--ink-3)}
+.spt-left{max-height:none!important;overflow:visible!important;padding-right:0}
+.spt-mailbox{border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden}
+.spt-row{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--line);min-height:44px;box-sizing:border-box}
+.spt-rl{flex:none;width:62px;font-size:12px;color:var(--ink-3);font-weight:600}
+.spt-row .spt-seg{flex:1;max-width:360px;height:32px}
+.spt-row .spt-ppl{flex:1;display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.spt-who{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 10px;font:inherit;font-size:13px;color:var(--accent);cursor:pointer;white-space:nowrap}
+.spt-who.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);font-weight:600}
+.spt-rv{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.spt-rv select{height:32px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:13px;width:100%}
+.spt-body{display:flex;flex-direction:column;gap:10px;padding:12px}
+.spt-auto{width:100%;box-sizing:border-box;border:1px dashed color-mix(in srgb,var(--ink) 18%,var(--line));border-radius:6px;padding:8px 10px;font:inherit;font-size:14px;line-height:1.5;color:var(--ink);resize:none;overflow:hidden;min-height:44px;background:var(--surface)}
+.spt-auto:focus{outline:none;border-style:solid;border-color:var(--accent)}
+.spt-sig{padding-left:2px}
+.spt-right .spt-mail iframe{height:min(640px,66vh)}
