@@ -20,7 +20,7 @@ type Target = { kind: "art" | "sewout" | "order"; orderId: string; sewoutId?: st
 type Opts = { to: string; name: string; proof: { version: number; mockups: number; unsent: boolean; waiting: boolean } | null; quote: { kind?: "quote" | "invoice"; total: number; status: string; sent?: boolean; deposit: number; /** what's due when they approve, by their terms */ due?: string } | null; sewouts: { id: string; label: string; sent: boolean }[];
   /** the account's people, ticked when their email settings send them approvals */ people?: { email: string; name: string; on: boolean }[] };
 /** what's ticked, who it goes to this time, and whether it goes from the person's own mailbox as a reply (lib/customerSend.ts) */
-type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note?: string; to?: string[]; fromMe?: boolean; reply?: { messageId: string } | null };
+type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note?: string; to?: string[]; fromMe?: boolean; reply?: { messageId: string } | null; after?: string };
 type Choice = { messageId: string; subject: string; from: string; at: string };
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -40,7 +40,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
 
   async function start() {
     if (before && !(await before())) return;
-    setErr(""); setPv(null); setOpts(null); setOpen(true); setBusy("load");
+    setErr(""); setPv(null); setOpts(null); setOpen(true); setBusy("load"); setTyped({ note: false, after: false });
     const r = await sendOptionsAction(target.orderId);
     setBusy("");
     if (!r.ok) { setErr(r.error); return; }
@@ -74,8 +74,23 @@ export default function SendProofTool({ target, label = "Send to customer", mode
     return () => { live = false; };
   }, [toKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const any = !!(pick.proof || pick.quote || (pick.sewouts || []).length);
+  // from your own mailbox: your words before and after the card, written for you until you change them (Nov 3, Nick: "hello
+  // such and such, thank you for the quote request. Please see and review your quote below… please let me know if this
+  // is approved. Thank you")
+  const [typed, setTyped] = useState({ note: false, after: false });
+  const firsts = (opts?.people || []).filter((x) => (pick.to || []).includes(x.email)).map((x) => (x.name || "").trim().split(/\s+/)[0]).filter(Boolean);
+  const hiTo = firsts.length ? (firsts.length === 1 ? firsts[0] : `${firsts.slice(0, -1).join(", ")} and ${firsts[firsts.length - 1]}`) : "there";
+  const invoice = opts?.quote?.kind === "invoice";
+  const sendWhat = [pick.quote ? (invoice ? "final invoice" : "quote") : "", pick.proof ? "proof" : "", (pick.sewouts || []).length ? "sew-out" : ""].filter(Boolean);
+  const whatLine = sendWhat.length > 1 ? `${sendWhat.slice(0, -1).join(", ")} and ${sendWhat[sendWhat.length - 1]}` : sendWhat[0] || "order";
+  const defBefore = `Hi ${hiTo},\n\n${pick.quote && !invoice ? "Thank you for the quote request. " : invoice ? "Thank you for your order. " : ""}Please review your ${whatLine} below.`;
+  const defAfter = `Please let me know if ${sendWhat.length > 1 ? "everything" : "this"} is approved.`;
+  useEffect(() => {
+    if (!opts) return;
+    setPick((p) => p.fromMe ? { ...p, note: typed.note ? p.note : defBefore, after: typed.after ? p.after : defAfter } : { ...p, note: typed.note ? p.note : target.note || "", after: undefined });
+  }, [opts, pick.fromMe, defBefore, defAfter]); // eslint-disable-line react-hooks/exhaustive-deps
   // the preview follows what's ticked
-  const key = JSON.stringify({ p: pick.proof, q: pick.quote, s: pick.sewouts, t: pick.to, f: pick.fromMe, r: pick.reply?.messageId });
+  const key = JSON.stringify({ p: pick.proof, q: pick.quote, s: pick.sewouts, t: pick.to, f: pick.fromMe, r: pick.reply?.messageId, n: typed.note ? "" : pick.note, a: typed.after ? "" : pick.after });
   useEffect(() => {
     if (!open || !opts) return;
     if (!any) { setPv(null); return; }
@@ -156,8 +171,10 @@ export default function SendProofTool({ target, label = "Send to customer", mode
                   {choices.map((c) => <option key={c.messageId} value={c.messageId}>{c.subject} · {c.from} · {new Date(c.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</option>)}
                 </select></label>}
             </div>}
-            {opts && <label className="spt-note"><span className="imp-l">{pick.fromMe ? "What you'd write (above the quote card)" : "A note (optional, goes in the email)"}</span>
-              <textarea rows={2} value={pick.note || ""} placeholder={`e.g. Here's the ${what} we talked about`} onChange={(e) => setPick((p) => ({ ...p, note: e.target.value }))} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} /></label>}
+            {opts && <label className="spt-note"><span className="imp-l">{pick.fromMe ? "Your message (above the card)" : "A note (optional, goes in the email)"}</span>
+              <textarea rows={pick.fromMe ? 3 : 2} value={pick.note || ""} placeholder={`e.g. Here's the ${what} we talked about`} onChange={(e) => { setTyped((t) => ({ ...t, note: true })); setPick((p) => ({ ...p, note: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} /></label>}
+            {opts && pick.fromMe && <label className="spt-note"><span className="imp-l">After the card (your signature follows)</span>
+              <textarea rows={2} value={pick.after || ""} onChange={(e) => { setTyped((t) => ({ ...t, after: true })); setPick((p) => ({ ...p, after: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} /></label>}
             {pv && <div className="spt-meta">{pv.from && <div><span>From</span><b data-notranslate>{pv.from}</b></div>}<div><span>To</span><b>{pv.to || (pick.to && opts?.people?.length ? "Tick who gets it" : "No email on the customer")}</b></div><div><span>Subject</span><b>{pv.subject}</b></div></div>}
             {opts && <div className="spt-mail">{pv ? <iframe title="The email" srcDoc={pv.html} sandbox="" /> : <div className="faint" style={{ padding: 20 }}>{any ? "Making the preview…" : "Tick what to send."}</div>}</div>}
             {err && <div className="pv-err">{err}</div>}

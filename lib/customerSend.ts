@@ -24,7 +24,8 @@ export type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note
   /** who gets it this time (Nov 3, Nick: "four different people… I don't need to send Stephanie… override settings and just
    *  send to this person"): the account's people ticked; unset, their email settings decide. Never saved as the settings. */ to?: string[];
   /** from the staff member's own mailbox instead of the portal's (Nov 3, Nick: "send it through my own email… the look and
-   *  feel of the email"), and the email of theirs it answers (the same thread) */ fromMe?: boolean; reply?: { messageId: string } | null };
+   *  feel of the email"), and the email of theirs it answers (the same thread) */ fromMe?: boolean; reply?: { messageId: string } | null;
+  /** from their own mailbox: what they wrote to go under the card ("Please let me know if this is approved.") */ after?: string };
 /** a staff member's own mailbox (lib/mail/config.ts) */
 type Box = import("@/lib/mail/config").MailAccount & { signature_html?: string | null; signature_css?: string | null; signature_on?: boolean | null };
 type SewRow = { id: string; order_id: string; imprint_id: string; version: number; status: string; sent_at: string | null; sent_to: string | null; archived_at: string | null; photo_path: string; created_at: string };
@@ -114,11 +115,12 @@ async function mineEmail(admin: SupabaseClient, box: Box, card: { subject: strin
       if (c?.body_text || c?.body_html) quote = { from: `${x.from_name || ""} <${x.from_email}>`.trim(), sent, to: x.to_text || "", cc: c?.cc_text || "", subject: x.subject || "", html: c?.body_html && c.body_html.length < 1_500_000 ? c.body_html : "", text: c?.body_text || "" };
     }
   }
-  const typed = pick.note?.trim() || `Hi ${firstName},\n\nPlease see below. You can review and approve it with the button.`;
+  const typed = pick.note?.trim() || `Hi ${firstName},\n\nThank you for the quote request. Please review your quote below.`;
+  const after = pick.after ?? "Please let me know if this is approved.";
   const signature = box.signature_on !== false ? box.signature_html || "" : "";
-  const page = replyHtml({ body: typed, signature, css: signature ? box.signature_css : "", quote, card: card.html });
+  const page = replyHtml({ body: typed, signature, css: signature ? box.signature_css : "", quote, card: card.html, after });
   const { html, attachments } = inlineImages(page);
-  return { subject, html, attachments, text: replyText({ body: typed, signature, quote }), inReplyTo, refs };
+  return { subject, html, attachments, text: replyText({ body: typed, after, signature, quote }), inReplyTo, refs };
 }
 
 /** what could go to the customer now, and what's ticked to start with (what's ready) */

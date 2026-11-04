@@ -20,6 +20,7 @@ export function bodyOf(html: string) {
 export function replyHtml(o: {
   body: string; signature?: string | null; css?: string | null;
   /** something designed to go under what was typed (the portal email's card, sent from someone's own mailbox) */ card?: string;
+  /** what was typed to go under the card, before the signature ("Please let me know if this is approved.") */ after?: string;
   quote?: { from: string; sent: string; to: string; cc?: string; subject: string; html?: string; text: string };
 }) {
   const typed = o.body.trim().split(/\r?\n/).map((l) => `<p class="MsoNormal">${l.trim() ? linkify(esc(l)) : "&nbsp;"}</p>`).join("\n");
@@ -31,12 +32,12 @@ export function replyHtml(o: {
     const original = q.html ? bodyOf(q.html) : `<div style="white-space:pre-wrap;font-family:Calibri,sans-serif;font-size:11pt">${linkify(esc(q.text))}</div>`;
     quoted = `<p class="MsoNormal">&nbsp;</p>\n<div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p class="MsoNormal">${head}</p></div>\n<p class="MsoNormal">&nbsp;</p>\n${original}`;
   }
-  return `<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><style>${FALLBACK_CSS}\n${o.css || ""}</style></head><body lang="EN-US" link="#0563C1" vlink="#954F72" style="word-wrap:break-word"><div class="WordSection1">\n${typed}\n${o.card ? `<p class="MsoNormal">&nbsp;</p>\n${bodyOf(o.card)}` : ""}\n${sig}\n${quoted}\n</div></body></html>`;
+  return `<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><style>${FALLBACK_CSS}\n${o.css || ""}</style></head><body lang="EN-US" link="#0563C1" vlink="#954F72" style="word-wrap:break-word"><div class="WordSection1">\n${typed}\n${o.card ? `<p class="MsoNormal">&nbsp;</p>\n${bodyOf(o.card)}` : ""}\n${o.after?.trim() ? `<p class="MsoNormal">&nbsp;</p>\n${o.after.trim().split(/\r?\n/).map((l) => `<p class="MsoNormal">${l.trim() ? linkify(esc(l)) : "&nbsp;"}</p>`).join("\n")}` : ""}\n${sig}\n${quoted}\n</div></body></html>`;
 }
 
 /** the plain-text copy of a reply (for mail programs that don't show HTML) */
-export function replyText(o: { body: string; signature?: string | null; quote?: { from: string; sent: string; to: string; subject: string; text: string } }) {
-  const sig = o.signature ? `\n\n${textOf(o.signature)}` : "";
+export function replyText(o: { body: string; after?: string; signature?: string | null; quote?: { from: string; sent: string; to: string; subject: string; text: string } }) {
+  const sig = `${o.after?.trim() ? `\n\n${o.after.trim()}` : ""}${o.signature ? `\n\n${textOf(o.signature)}` : ""}`;
   const q = o.quote ? `\n\nFrom: ${o.quote.from}\nSent: ${o.quote.sent}\nTo: ${o.quote.to}\nSubject: ${o.quote.subject}\n\n${o.quote.text.split("\n").slice(0, 80).join("\n")}` : "";
   return `${o.body.trim()}${sig}${q}`;
 }
