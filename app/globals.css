@@ -20763,3 +20763,8 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .spt-auto:focus{outline:none;border-style:solid;border-color:var(--accent)}
 .spt-sig{padding-left:2px}
 .spt-right .spt-mail iframe{height:min(640px,66vh)}
+/* a location section inside a color section (Nov 3, #40461): set in under its numbered color heading */
+.gl-ver.gl-sub{margin-left:22px;padding-left:10px;border-left:2px solid var(--line);font-size:13px}
+.gl-ver.gl-sub .gl-vt{width:20px;height:20px;font-size:11px}
+.gl-thr{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);margin:2px 0 0}
+.gl-thr .gl-vt{width:18px;height:18px;font-size:10.5px}

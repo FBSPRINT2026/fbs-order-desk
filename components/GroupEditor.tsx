@@ -335,7 +335,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const spKey = (l: GLine) => scImps.map((x) => spotsOf(x, g.lines).indexOf(spotOf(x, l))).join(".");
   const spLetter = (l: GLine) => scImps.map((x) => String.fromCharCode(65 + Math.max(0, spotsOf(x, g.lines).indexOf(spotOf(x, l))))).join("");
   const spLabel = (l: GLine) => scImps.map((x) => spotOf(x, l)).join("  /  ");
-  const verLetter = (color: string) => ccImps.map((x) => (isCw(x) ? cwLetter(designOf(x)!, cwOn(x, color)) : "") || String.fromCharCode(65 + versionOfColor(x, color))).join("");
+  const verLetter0 = (color: string) => ccImps.map((x) => (isCw(x) ? cwLetter(designOf(x)!, cwOn(x, color)) : "") || String.fromCharCode(65 + versionOfColor(x, color))).join("");
+  // a color change and a location change together (Nov 3, Nick on #40461: "section one, which is blueberry smash, then A is
+  // left chest, B is left sleeve… section two, which is super white… A, B, C"): the color sections are numbered 1, 2, 3
+  // and the spots inside each keep their letters
+  const secKeys = () => [...new Set(g.lines.map((l) => verKey(l.color)))].sort();
+  const verLetter = (color: string) => (ccShow && spShow ? String(secKeys().indexOf(verKey(color)) + 1) : verLetter0(color));
   const lightHex = (h: string) => { const v = parseInt((h || "").replace("#", "").padEnd(6, "0").slice(0, 6), 16); return 0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 160; };
   const verHex = (color: string) => { const x = ccImps[0]; if (!x) return "transparent"; const n = isCw(x) ? cwOn(x, color)?.inks[0] || "" : inkOfVer(x, color); return threadByName(n)?.hex || colorHex(n) || (/white/i.test(n) ? "#F4F4F1" : "#9aa1ab"); };
   /** a print's close-ups by section when the lines are grouped: Group B, C… each on its first garment color */
@@ -985,7 +990,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
               </>); })()}
               {sHead && (() => { const n = g.lines.filter((x) => spKey(x) === spKey(l) && (!ccShow || verKey(x.color) === vk)); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
                 {pos > 0 && !vHead && <div className="gl-ccdiv"><span><CcIcon />Location change</span></div>}
-                <div className="gl-ver"><span className={"gl-vt" + (spLetter(l).startsWith("A") ? "" : " lt")} style={{ background: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" }}>{spLetter(l)}</span><b>{spLabel(l)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
+                <div className={"gl-ver" + (ccShow ? " gl-sub" : "")}><span className={"gl-vt" + (spLetter(l).startsWith("A") ? "" : " lt")} style={{ background: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" }}>{spLetter(l)}</span><b>{spLabel(l)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
               </>); })()}
               <div className={"gl" + (same && !vHead && !sHead ? " same" : "") + (ccShow || spShow ? " ver" : "") + (slot?.id === l.id ? (slot.after ? " gl-slot-a" : " gl-slot-b") : "")}
                 onDragOver={onMoveLine && !fixed ? (e) => { if (!dragging || dragging.from !== g.id || dragging.lineId === l.id) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; const r = e.currentTarget.getBoundingClientRect(); const after = e.clientY > r.top + r.height / 2; if (slot?.id !== l.id || slot.after !== after) setSlot({ id: l.id, after }); } : undefined}
@@ -1005,6 +1010,9 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 </div>}
                 {/* the next color of the same style: its style number grayed, like a ditto mark (Oct 21, Nick: like Printavo) */}
                 {same && !vHead && <div className="gl-ditto" aria-hidden>{l.style}</div>}
+                {/* a color change whose sections don't show (one line per color): each line still says what it sews in (Nov 3,
+                    Nick on #40461's caps: "it doesn't indicate color change, although it says it") */}
+                {!ccShow && ccImps.length > 0 && <div className="gl-thr"><span className={"gl-vt" + (lightHex(verHex(l.color)) ? " lt" : "")} style={{ background: verHex(l.color) }}>{verLetter0(l.color)}</span>{ccImps.some((x) => versionOfColor(x, l.color) > 0 || isCw(x)) ? "Color change: " : ""}{verLabel(l.color)}</div>}
                 <div className="gl-row gl-r2">
                   <div className="a-co" inert={fixed || undefined}>
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {
