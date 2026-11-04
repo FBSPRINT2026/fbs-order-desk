@@ -404,8 +404,13 @@ export function paymentPayload(inp: { payment: OurPayment; orderNumber: number; 
   if (amount <= 0) problems.push(amount < 0 ? "This is a refund (a negative payment). Refunds aren't sent automatically yet: record it in QuickBooks (refund receipt or credit memo) as your accountant prefers, then mark this Skipped." : "A zero payment isn't sent.");
   const method = s(p.method), methodId = (method && qs.payment_method_map[method]) || qs.payment_method_map.default || "";
   const fee = r2(+(p.fee || 0));
-  const ref = s(p.processor_id).replace(/^[a-z]+:/i, "").slice(0, 21);
-  const note = [`Portal payment on order #${inp.orderNumber}`, method ? `(${method})` : "", fee ? `· card processing fee ${fee.toFixed(2)} (our cost, not on this payment)` : "", s(p.note) ? `· ${s(p.note)}` : "", `· ${p.id}`].filter(Boolean).join(" ");
+  // read like Printavo's did (Nov 4, Nick: "the descriptions… are kind of funky"): the reference is the order and how it was
+  // paid ("40133 - ACH"), the memo says it in words with Stax's reference at the end
+  const how = method.replace(/^./, (c) => c.toUpperCase());
+  const ref = `${inp.orderNumber}${how ? ` - ${how}` : ""}`.slice(0, 21);
+  const stax = s(p.processor_id).replace(/^[a-z]+:/i, "").slice(0, 8);
+  const note = [`Payment for order #${inp.orderNumber}${how ? `, ${how}` : ""}, paid in the FBS portal`, s(p.note) ? s(p.note) : "", stax && !/^printavo/i.test(s(p.processor_id)) ? `Stax ref ${stax}` : ""].filter(Boolean).join(" · ");
+  void fee;
   const body: Record<string, unknown> = {
     CustomerRef: { value: inp.customerRef },
     TotalAmt: amount,
