@@ -56,7 +56,7 @@ export function noteHtml(t: NoteText, first: string, site: string, signature: st
 <td width="56" style="vertical-align:middle;padding:0 20px 0 0"><!-- the three-color bar: Outlook draws an empty cell a line of text tall unless its line height is set exactly (Nov 4: it came out a thick band) --><img src="${site.replace(/\/$/, "")}/email/launch/logo-white.png?v=${APP_VERSION}" width="56" height="56" alt="FBS Print" style="display:block;border:0"></td>
 <td style="vertical-align:middle;border-left:1px solid #2C3A52;padding:0 0 0 20px;${F}">
 <div style="${F};font-size:20px;font-weight:700;letter-spacing:2px;line-height:1.2;color:#FFFFFF;white-space:nowrap">EXCITING ANNOUNCEMENT</div>
-<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:10px 0 8px"><tr><td width="33%" height="3" bgcolor="#0e9bd8" style="height:3px;font-size:1px;line-height:3px;mso-line-height-rule:exactly">&nbsp;</td><td width="34%" height="3" bgcolor="#f26660" style="height:3px;font-size:1px;line-height:3px;mso-line-height-rule:exactly">&nbsp;</td><td width="33%" height="3" bgcolor="#fcb122" style="height:3px;font-size:1px;line-height:3px;mso-line-height-rule:exactly">&nbsp;</td></tr></table>
+<img src="${site.replace(/\/$/, "")}/email/launch/three-bar.png?v=${APP_VERSION}" width="416" height="3" alt="" style="display:block;width:100%;max-width:416px;height:3px;border:0;margin:10px 0 8px">
 <div style="${F};font-size:15px;line-height:1.4;color:#AEB8C8">Our new customer portal is here</div></td>
 </tr></table></td></tr>
 <tr><td style="padding:22px 4px 4px">${body}</td></tr>
