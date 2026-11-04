@@ -866,6 +866,13 @@ export function InvoiceDoc(p: DocData) {
               const logo = g.imprints.map((d) => (d.design_id ? p.designUrls[d.design_id] : "")).find(Boolean) || "";
               const sz = invoiceSizes(l.sizes as Record<string, number>);
               const name = [l.brand, l.style].filter(Boolean).join(" ") || l.garment || "Garment";
+              // a signage / promo / paper item (lib/simpleOrders.ts): a small picture of it at the left of its line, then its
+              // name and description (Nov 4, Nick: "the little picture of it to the left of on the invoice")
+              if (l.spec) return (
+                <div className="iv2-ln iv2-it" key={l.id}>
+                  <div className="iv2-row"><span className="iv2-nm iv2-itn">{pic ? <img className="iv2-itp" src={pic} alt="" /> : null}<span><b>{l.garment || "Item"}</b>{l.note?.trim() && <span className="iv2-itd">{l.note.trim()}</span>}</span></span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
+                </div>
+              );
               return (
                 <div className="iv2-ln" key={l.id}>
                   <div className="iv2-row"><span className="iv2-nm"><b>{name}</b>{l.color ? <> · {l.color}</> : null}{l.garment && name !== l.garment && <small className="iv2-nsub"> {l.garment}</small>}</span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
@@ -879,7 +886,7 @@ export function InvoiceDoc(p: DocData) {
                     return <>{ownRows}{its.map((x, k) => <div key={k} className="iv2-note"><b>Personalization:</b> {x.text}{x.size ? ` · Size ${x.size}` : ""} · Qty {x.qty} · {money(x.unit)} each = {money(x.amount)}</div>)}</>; })()}
                   <div className="iv2-det">
                     {gc.wholesale && <div className="iv2-cs">Customer<br />supplied</div>}
-                    {pic ? <img className={"iv2-th" + (l.spec ? " item" : "")} src={pic} alt="" /> : <div className={"iv2-th none" + (logo ? " lg" : "")} style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }}>{logo && <img src={logo} alt="" />}</div>}
+                    {pic ? <img className="iv2-th" src={pic} alt="" /> : <div className={"iv2-th none" + (logo ? " lg" : "")} style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }}>{logo && <img src={logo} alt="" />}</div>}
                     <div className="iv2-blk">
                       {!l.spec && <div className={"iv2-sz" + (sz.length > 7 ? " many" : "")}>{sz.map(({ z, n, extra }) => <span key={z} className={n ? (extra ? "x" : "") : "z"}>{sizeLabel(z)}<b>{n}</b></span>)}</div>}
                       {prints.length > 0 && (
