@@ -89,7 +89,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     // drafts aren't orders yet (Oct 24, Nick): only in "Your drafts", never in the lists
     // an order they sent in that we're still building shows as they sent it (lib/portalView.ts)
     const specs = await designSpecsFor(ctx.db, (data || []) as Order[]);
-    const all = ((data || []) as (Order & { draft?: boolean })[]).map((o) => asCustomerSees({ ...o, designSpecs: specs } as typeof o, ctx.settings));
+    const all = ((data || []) as (Order & { draft?: boolean })[]).map((o) => asCustomerSees(o, ctx.settings, specs));
     drafts = all.filter((o) => o.draft).map((o) => ({ id: o.id, name: o.nickname || "", updated: String((o as { updated_at?: string }).updated_at || o.created_at || ""), pcs: o.qty || 0 }));
     orders = all.filter((o) => !o.draft);
     const ids = orders.map((o) => o.id);
@@ -138,7 +138,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     });
   }
   const bal = (o: Order) => Math.round(((+o.total || 0) - (paid[o.id] || 0)) * 100) / 100;
-  const aOrders: AOrder[] = orders.map((o) => ({ order_lane: (o as { order_lane?: string }).order_lane || "", id: o.id, starred: !!(o as { customer_starred_at?: string | null }).customer_starred_at, sent: o.status === "request" && !!o.submitted_at, archivedQ: !!(o as { customer_archived_at?: string | null }).customer_archived_at, cancelAsked: !!(o as { cancel_requested_at?: string | null }).cancel_requested_at && (o.status as string) !== "void", number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, hold: (() => { const h = !["completed", "void"].includes(String(o.status)) ? customerHold((o as Order & { flags?: unknown }).flags as never) : null; return h ? `On hold · ${holdShort(h.key)}` : ""; })(), total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
+  const aOrders: AOrder[] = orders.map((o) => ({ order_lane: (o as { order_lane?: string }).order_lane || "", id: o.id, starred: !!(o as { customer_starred_at?: string | null }).customer_starred_at, sent: o.status === "request" && !!o.submitted_at, digitizing: (o as { digitizing?: string }).digitizing || "", archivedQ: !!(o as { customer_archived_at?: string | null }).customer_archived_at, cancelAsked: !!(o as { cancel_requested_at?: string | null }).cancel_requested_at && (o.status as string) !== "void", number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, hold: (() => { const h = !["completed", "void"].includes(String(o.status)) ? customerHold((o as Order & { flags?: unknown }).flags as never) : null; return h ? `On hold · ${holdShort(h.key)}` : ""; })(), total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
     cardFeeIn: cardFeeInOrder(o as never, bal(o)),
     pay_due: o.type === "invoice" ? payDueDate(o, ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms) : null,
     // what can be paid now (lib/payReady.ts)

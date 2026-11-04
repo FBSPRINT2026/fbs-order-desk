@@ -88,13 +88,15 @@ export type CustomerStatus = { key: string; label: string; text: string };
  * What the customer sees, from the order's status, its flags and how it leaves. Everything in the shop between proof
  * approval and out the door is "In production"; a hold the customer must act on, or a delay staff mark, shows instead.
  */
-export function customerStatus(o: { status: string; flags?: Flag[] | null; delivery_method?: string | null; type?: string | null; /** a reorder sent from the portal's old-system form (Nov 1) */ simple_order?: { reorder?: unknown } | null; /** sent in and being built (lib/portalView.ts) */ working?: boolean; digitizing?: boolean }, extra: { proofSent?: boolean; shipped?: boolean; delivered?: boolean; changesRequested?: boolean } = {}): CustomerStatus {
+export function customerStatus(o: { status: string; flags?: Flag[] | null; delivery_method?: string | null; type?: string | null; /** a reorder sent from the portal's old-system form (Nov 1) */ simple_order?: { reorder?: unknown } | null; /** sent in and being built (lib/portalView.ts) */ working?: boolean; digitizing?: string }, extra: { proofSent?: boolean; shipped?: boolean; delivered?: boolean; changesRequested?: boolean } = {}): CustomerStatus {
   const flags = (o.flags || []) as Flag[];
   const flag = (k: FlagKey) => flags.find((f) => f.key === k);
   const say = (key: string, label: string, text: string) => ({ key, label, text });
   if (o.status === "void") return say("canceled", "Canceled", "This order was canceled.");
   if (o.status === "request" && o.simple_order?.reorder) return say("request", "Reorder pending approval", "We got your reorder. We'll check it, set the price and send it back for your OK.");
-  if (o.status === "request" && o.digitizing) return say("request", "Sent to FBS · digitizing", "We're digitizing your logo for embroidery. You'll see a sew-out to approve, then your order to review.");
+  // a logo in digitizing (lib/portalView.ts digitizeNote): its own status, sent in or confirmed
+  if (o.digitizing === "Approve your sew-out") return say("sewout", "Approve your sew-out", "Your logo's sew-out is ready. Approve it or ask for changes, and we'll carry on.");
+  if (o.digitizing) return say("digitizing", "Digitizing", o.status === "request" ? "We've sent your logo off to be digitized for embroidery. You'll see a sew-out to approve, then your order to review." : "We've sent your logo off to be digitized for embroidery. You'll see a sew-out to approve before we sew.");
   if (o.status === "request" && o.working) return say("request", "Sent to FBS · in progress", "We're putting your order together. You'll get a message when it's ready to review.");
   if (o.status === "request") return say("request", "Sent to FBS", "We got your order and we're checking it. You'll get a message when we confirm.");
   if (o.status === "quote") return say("quote", "Quote in progress", "We're putting your quote together.");

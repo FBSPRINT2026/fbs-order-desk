@@ -29,7 +29,7 @@ import RowLink from "@/components/RowLink";
 import { useUrlSearch } from "@/lib/useUrlSearch";
 import PortalSimpleMenu, { SimpleBack, SimpleMenuContext } from "@/components/PortalSimpleMenu";
 
-export type AOrder = { /** the credit card fee already in its balance (lib/cardFeeIn.ts) */ cardFeeIn?: number; /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_lane?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
+export type AOrder = { /** a logo on it is in digitizing (lib/portalView.ts digitizeNote): the status the customer sees */ digitizing?: string; /** the credit card fee already in its balance (lib/cardFeeIn.ts) */ cardFeeIn?: number; /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_lane?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** an old invoice of an account that has moved to the new system: paid here, not on Printavo (Nov 2, Nick) */ payHere?: boolean;
@@ -175,6 +175,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     : o.cancelAsked ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--danger)" }}>Cancellation requested</span>
     : o.archivedQ ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--ink-3)" }}>Archived</span>
     : o.hold ? <span className="aa-pill" style={{ ["--sc" as string]: "var(--warn)" }} title={ST[statusKey(o)]?.portal || ST[statusKey(o)]?.label}>{o.hold}</span>
+    : o.digitizing ? <span className="aa-pill" style={{ ["--sc" as string]: ST.art?.c || "var(--accent)" }}>{o.digitizing}</span>
     : o.status === "request"
       // the customer's own order requests: not sent yet, or sent to us and waiting on our OK (Oct 24, Nick)
       ? <span className="aa-pill" style={{ ["--sc" as string]: o.sent ? "var(--fbs-orange, #F7941D)" : "var(--ink-3)" }}>{o.sent ? "Waiting on FBS" : "Not sent yet"}</span>
