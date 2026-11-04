@@ -63,10 +63,10 @@ export async function contactList() {
   } catch (e) { return fail(e); }
 }
 
-export type Person = { email: string; name: string; n: number; last: string; boxes: string[]; sameCompany: boolean; /** from their email signature */ phone: string };
+export type Person = { email: string; name: string; n: number; last: string; boxes: string[]; sameCompany: boolean; /** from their email signature */ phone: string; /** from someone's phone contacts, and whose */ cell?: string; cellFrom?: string };
 const ROLES = ["Orders", "Art", "Billing"];
 const TERMS = ["prepay", "receipt", "deposit", "net30"];
-export type Contact = { id: string; name: string; email: string; phone: string; isPrimary: boolean; portal: boolean; roles: string[]; /** the phone in their email signature, when none is on file */ foundPhone?: string };
+export type Contact = { id: string; name: string; email: string; phone: string; isPrimary: boolean; portal: boolean; roles: string[]; /** the phone in their email signature, when none is on file */ foundPhone?: string; /** from someone's phone contacts, and whose */ cell?: string; cellFrom?: string };
 export type Detail = { id: string; company: string; name: string; email: string; phone: string; address: string; owner: string; printavoAs: string[]; contacts: Contact[]; found: Person[];
   /** the rest of the move questionnaire (components/CustomerMove.tsx) */ taxExempt: boolean; terms: string; priceType: string; notes: string; movedAt: string | null };
 
@@ -154,18 +154,19 @@ export async function contactDetail(customerId: string) {
         const emails = (r.emails || []).map((e) => e.toLowerCase());
         const phone = fmtPhone((r.phones || [])[0] || "");
         const atCo = orgHit(r.org || "");
-        const people: { name: string; email: string; phone: string; foundPhone?: string; isFound?: boolean }[] = [...contacts, ...found.map((p) => ({ ...p, isFound: true }))];
+        const whose = `${r.owner_email.split("@")[0].replace(/^\w/, (m) => m.toUpperCase())}'s phone`;
+        const people: { name: string; email: string; phone: string; isFound?: boolean }[] = [...contacts, ...found.map((p) => ({ ...p, isFound: true }))];
         let hit = people.find((p) => p.email && emails.includes(p.email)) || (r.name.includes(" ") ? people.find((p) => nm(p.name) === nm(r.name)) : undefined);
         // "Scott" at Creative Apparel is Scott Gray there
         if (!hit && atCo && !r.name.includes(" ")) { const same = people.filter((p) => nm(p.name).split(" ")[0] === nm(r.name)); if (same.length === 1) hit = same[0]; }
         if (hit) {
           const target = hit.isFound ? found.find((p) => p.email === hit!.email && p.name === hit!.name) : contacts.find((c) => c.email === hit!.email && c.name === hit!.name);
-          if (target && "isPrimary" in target) { if (!target.phone && !target.foundPhone && phone) target.foundPhone = phone; }
-          else if (target && !target.phone && phone) target.phone = phone;
+          // offered next to the signature's number, never put in for them (Nov 3, Nick: "signature and then from my phone… I can select which one is right")
+          if (target && phone && !target.cell) { target.cell = phone; target.cellFrom = whose; }
           continue;
         }
         if (!atCo) continue;
-        found.push({ email: emails[0] || "", name: r.name, n: 0, last: "", boxes: [`${r.owner_email.split("@")[0]}'s phone`], sameCompany: true, phone });
+        found.push({ email: emails[0] || "", name: r.name, n: 0, last: "", boxes: [whose], sameCompany: true, phone: "", cell: phone, cellFrom: whose });
       }
     }
     return { ok: true as const, detail: { id: c.id as string, company, name: String(c.name || "").trim(), email: String(c.email || "").trim().toLowerCase(), phone: String(c.phone || "").trim(), address: String(c.address || "").trim(),

@@ -16,10 +16,11 @@ import type { CompanyFound } from "@/lib/ai/companyLookup";
 type Show = ContactState | "all";
 const LABEL: Record<Show, string> = { missing: "Needs a contact", check: "Check", done: "Done", all: "All" };
 const ROLES = ["Orders", "Art", "Billing"];
-const REGULAR = 20;
 const when = (d: string) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
 const first = (n: string) => n.split(/\s+/)[0];
-type Row = { key: string; contactId?: string; name: string; email: string; phone: string; phoneFound: boolean; contact: boolean; portal: boolean; main: boolean; roles: string[];
+/** a number we found for someone: from their email signature, or from someone's phone contacts */
+type PhoneOpt = { label: string; value: string };
+type Row = { key: string; contactId?: string; name: string; email: string; phone: string; phoneFound: boolean; opts: PhoneOpt[]; contact: boolean; portal: boolean; main: boolean; roles: string[];
   n?: number; last?: string; boxes?: string[]; same?: boolean; suggested?: boolean; outsider?: boolean };
 
 export default function UpdateContacts() {
@@ -51,18 +52,26 @@ export default function UpdateContacts() {
     const r = await contactDetail(id);
     if (!r.ok) return setErr(r.error);
     const x = r.detail;
-    const list: Row[] = x.contacts.filter((c) => c.email || c.name).map((c) => ({ key: c.id, contactId: c.id, name: c.name, email: c.email, phone: c.phone || c.foundPhone || "", phoneFound: !c.phone && !!c.foundPhone,
+    // the numbers found for someone, to pick from (Nov 3, Nick: "signature and then from my phone… I can select which one is right")
+    const optsOf = (sig?: string, cell?: string, cellFrom?: string): PhoneOpt[] => {
+      const o: PhoneOpt[] = [];
+      if (sig) o.push({ label: "Signature", value: sig });
+      if (cell) { const same = o.find((y) => y.value.replace(/\D/g, "") === cell.replace(/\D/g, "")); if (same) same.label += ` and ${cellFrom || "phone"}`; else o.push({ label: cellFrom || "Phone contacts", value: cell }); }
+      return o;
+    };
+    const addOpts = (row: Row, more: PhoneOpt[]) => { for (const m of more) if (!row.opts.some((y) => y.value.replace(/\D/g, "") === m.value.replace(/\D/g, ""))) row.opts.push(m); };
+    const list: Row[] = x.contacts.filter((c) => c.email || c.name).map((c) => ({ key: c.id, contactId: c.id, name: c.name, email: c.email, phone: c.phone, phoneFound: false, opts: optsOf(c.foundPhone, c.cell, c.cellFrom),
       contact: true, portal: c.portal, main: c.isPrimary || (!!x.email && c.email === x.email), roles: c.roles }));
-    if (x.email && !list.some((p) => p.email === x.email)) list.unshift({ key: "main", name: x.name, email: x.email, phone: "", phoneFound: false, contact: true, portal: true, main: true, roles: [] });
+    if (x.email && !list.some((p) => p.email === x.email)) list.unshift({ key: "main", name: x.name, email: x.email, phone: "", phoneFound: false, opts: [], contact: true, portal: true, main: true, roles: [] });
     for (const p of x.found) {
       // a contact on file by name only (Printavo often had no email for them) is the same person found by name in the mail
-      const nameOnly = list.find((y) => !y.email && y.name && y.name.toLowerCase() === p.name.toLowerCase());
-      if (nameOnly) { nameOnly.email = p.email; nameOnly.phoneFound = nameOnly.phoneFound || (!nameOnly.phone && !!p.phone); if (!nameOnly.phone) nameOnly.phone = p.phone; }
+      const nameOnly = p.email ? list.find((y) => !y.email && y.name && y.name.toLowerCase() === p.name.toLowerCase()) : undefined;
+      if (nameOnly) nameOnly.email = p.email;
       const have = p.email ? list.find((y) => y.email === p.email) : undefined;
-      if (have) { Object.assign(have, { n: p.n, last: p.last, boxes: p.boxes, same: p.sameCompany }); if (!have.phone && p.phone) { have.phone = p.phone; have.phoneFound = true; } continue; }
-      const regular = p.sameCompany && p.n >= REGULAR;
-      list.push({ key: p.email || `ph-${p.name}`, name: p.name, email: p.email, phone: p.phone, phoneFound: !!p.phone, contact: regular, portal: regular, main: false, roles: [],
-        n: p.n, last: p.last, boxes: p.boxes, same: p.sameCompany, suggested: regular, outsider: !p.sameCompany });
+      if (have) { Object.assign(have, { n: p.n, last: p.last, boxes: p.boxes, same: p.sameCompany }); addOpts(have, optsOf(p.phone, p.cell, p.cellFrom)); continue; }
+      // nobody found starts ticked (Nov 3, Nick: "by default, can you have no one checked… and I'll check them")
+      list.push({ key: p.email || `ph-${p.name}`, name: p.name, email: p.email, phone: "", phoneFound: false, opts: optsOf(p.phone, p.cell, p.cellFrom), contact: false, portal: false, main: false, roles: [],
+        n: p.n, last: p.last, boxes: p.boxes, same: p.sameCompany, outsider: !p.sameCompany });
     }
     // one main: the one on file, else the regular we've traded the most mail with
     if (!list.some((p) => p.main && p.contact)) { const m = list.filter((p) => p.contact).sort((a, b) => (b.n || 0) - (a.n || 0))[0]; if (m) m.main = true; }
@@ -78,8 +87,7 @@ export default function UpdateContacts() {
   });
   const setMain = (key: string) => setPeople((ps) => ps.map((p) => ({ ...p, main: p.key === key, contact: p.key === key ? true : p.contact })));
   const role = (key: string, r: string) => setPeople((ps) => ps.map((p) => (p.key === key ? { ...p, roles: p.roles.includes(r) ? p.roles.filter((x) => x !== r) : [...p.roles, r], contact: true } : p)));
-  const tickRegulars = () => setPeople((ps) => { const n = ps.map((p) => (p.same && (p.n || 0) >= REGULAR && !p.contact ? { ...p, contact: true, portal: true } : p)); if (!n.some((p) => p.main && p.contact)) { const m = n.find((p) => p.contact); if (m) m.main = true; } return n; });
-  const addBlank = () => setPeople((ps) => [...ps, { key: `new-${Date.now()}`, name: "", email: "", phone: "", phoneFound: false, contact: true, portal: true, main: !ps.some((p) => p.main && p.contact), roles: [] }]);
+  const addBlank = () => setPeople((ps) => [...ps, { key: `new-${Date.now()}`, name: "", email: "", phone: "", phoneFound: false, opts: [], contact: true, portal: true, main: !ps.some((p) => p.main && p.contact), roles: [] }]);
 
   const lookUp = async () => {
     if (!d) return;
@@ -109,7 +117,6 @@ export default function UpdateContacts() {
   const row = all.find((r) => r.id === cur);
   const theirs = people.filter((p) => !p.outsider);
   const outsiders = people.filter((p) => p.outsider);
-  const regularsOff = people.filter((p) => p.same && (p.n || 0) >= REGULAR && !p.contact).length;
   const chosen = people.filter((p) => p.contact).length;
 
   const personRow = (p: Row) => (
@@ -121,7 +128,11 @@ export default function UpdateContacts() {
         {p.n ? <div className="sub">{p.suggested && <span className="ucx-found">Suggested · </span>}{p.n.toLocaleString()} email{p.n === 1 ? "" : "s"} with {(p.boxes || []).join(", ")} · last {when(p.last || "")}</div>
           : !p.contactId && p.boxes?.length ? <div className="sub">In {p.boxes.join(", ")}{p.email ? "" : " (no email there: add one for the portal)"}</div> : null}
       </td>
-      <td><input className="ucx-in" aria-label="Phone" placeholder="Phone" value={p.phone} onChange={(e) => edit(p.key, { phone: e.target.value, phoneFound: false })} />{p.phoneFound && <div className="sub ucx-found">Found for you</div>}</td>
+      <td><input className="ucx-in" aria-label="Phone" placeholder="Phone" value={p.phone} onChange={(e) => edit(p.key, { phone: e.target.value })} />
+        {p.opts.length > 0 && <div className="ucx-opts">{p.opts.map((o) => {
+          const on = o.value.replace(/\D/g, "") === p.phone.replace(/\D/g, "");
+          return <button key={o.value} type="button" className={"ucx-opt" + (on ? " on" : "")} onClick={() => edit(p.key, { phone: on ? "" : o.value })} title={on ? "Clear it" : "Use this number"}><span>{o.label}</span><b>{o.value}</b></button>;
+        })}</div>}</td>
       <td className="ucx-c"><input type="checkbox" aria-label={`${p.name || p.email} is a contact`} checked={p.contact} onChange={(e) => tick(p.key, e.target.checked)} /></td>
       <td className="ucx-c"><input type="checkbox" aria-label={`${p.name || p.email} can sign in to the portal`} checked={p.contact && p.portal} disabled={!p.contact || !p.email} onChange={(e) => edit(p.key, { portal: e.target.checked })} /></td>
       <td className="ucx-c"><input type="radio" name="ucx-main" aria-label={`${p.name || p.email} is the main contact`} checked={p.contact && p.main} onChange={() => setMain(p.key)} /></td>
@@ -193,7 +204,6 @@ export default function UpdateContacts() {
                   )}
 
                   <div className="ucx-sec"><span>People at {co.company || "this company"}</span><span className="faint">{chosen} chosen</span>
-                    {regularsOff > 0 && <button type="button" className="btn sm" onClick={tickRegulars}>Tick everyone with {REGULAR}+ emails</button>}
                     <button type="button" className="btn sm" onClick={addBlank}>+ Add person</button></div>
                   {theirs.length ? (
                     <div className="tbl-wrap"><table className="tbl ucx-t"><colgroup><col style={{ width: "34%" }} /><col style={{ width: "20%" }} /><col style={{ width: "8%" }} /><col style={{ width: "8%" }} /><col style={{ width: "7%" }} /><col /></colgroup>
@@ -201,7 +211,6 @@ export default function UpdateContacts() {
                       <tbody>{theirs.map(personRow)}</tbody>
                     </table></div>
                   ) : <p className="faint ucx-none">Nobody at this company found in the shop&apos;s email. Add someone, or skip it.</p>}
-                  {people.some((p) => p.suggested) && <div className="ucx-hint">Blue rows were ticked for you: regulars at their company&apos;s own email address. Untick anyone who shouldn&apos;t be on the account.</div>}
 
                   {outsiders.length > 0 && <>
                     <button type="button" className="linkbtn ucx-more" onClick={() => setShowOthers(!showOthers)}>{showOthers ? "Hide" : "Show"} {outsiders.length} other {outsiders.length === 1 ? "person" : "people"} on these threads (other companies, shippers)</button>
@@ -213,18 +222,20 @@ export default function UpdateContacts() {
 
                   {/* the rest of the move questionnaire (components/CustomerMove.tsx): terms, retail or wholesale, tax, notes */}
                   <div className="ucx-sec"><span>Terms and notes</span></div>
-                  <div className="ucx-g">
-                    <div className="field"><label>Payment terms</label>
+                  <div className="ucx-tn">
+                    <div className="ucx-tn-f"><span className="ucx-lbl">Payment terms</span>
                       <div className="ucx-seg" role="group" aria-label="Payment terms" style={{ gridTemplateColumns: "repeat(4,minmax(0,1fr))" }}>
                         {([["prepay", "Pre-pay"], ["receipt", "On receipt"], ["deposit", "50/50"], ["net30", "Net 30"]] as [string, string][]).map(([k, l]) => <button key={k} type="button" className={co.terms === k ? "on" : ""} onClick={() => setCo({ ...co, terms: k })}>{l}</button>)}
                       </div></div>
-                    <div className="field"><label>Pricing</label>
+                    <div className="ucx-tn-f ucx-tn-s"><span className="ucx-lbl">Pricing</span>
                       <div className="ucx-seg" role="group" aria-label="Retail or wholesale" style={{ gridTemplateColumns: "repeat(2,minmax(0,1fr))" }}>
                         {([["retail", "Retail"], ["wholesale", "Wholesale"]] as [string, string][]).map(([k, l]) => <button key={k} type="button" className={co.priceType === k ? "on" : ""} onClick={() => setCo({ ...co, priceType: k })}>{l}</button>)}
                       </div></div>
-                    <div className="field"><label>Sales tax</label><label className="check ucx-tax"><input type="checkbox" checked={co.taxExempt} onChange={(e) => setCo({ ...co, taxExempt: e.target.checked })} /> Tax exempt</label></div>
-                    <div className="field ucx-wide"><label htmlFor="ucx-nt">Notes (only the shop sees these)</label><textarea id="ucx-nt" rows={2} placeholder="Special pricing, how they like to be contacted, anything to remember" value={co.notes} onChange={(e) => setCo({ ...co, notes: e.target.value })} /></div>
+                    <div className="ucx-tn-f ucx-tn-x"><span className="ucx-lbl">Sales tax</span>
+                      <button type="button" role="switch" aria-checked={co.taxExempt} className={"ucx-taxbtn" + (co.taxExempt ? " on" : "")} onClick={() => setCo({ ...co, taxExempt: !co.taxExempt })}>
+                        <span className="ucx-box" aria-hidden>{co.taxExempt ? "✓" : ""}</span>Tax exempt</button></div>
                   </div>
+                  <div className="field ucx-notes"><label htmlFor="ucx-nt">Notes (only the shop sees these)</label><textarea id="ucx-nt" rows={2} placeholder="Special pricing, how they like to be contacted, anything to remember" value={co.notes} onChange={(e) => setCo({ ...co, notes: e.target.value })} /></div>
 
                   <div className="ucx-foot">
                     <button type="button" className="btn" onClick={next}>Skip</button>

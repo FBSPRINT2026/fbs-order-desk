@@ -14922,7 +14922,23 @@ input.ucx-sug,textarea.ucx-sug{border-color:var(--accent);background:var(--accen
 .ucx-seg button{border:0;border-right:1px solid var(--line);background:var(--surface);font:inherit;font-size:13px;color:var(--ink-2);cursor:pointer;white-space:nowrap;padding:0 4px}
 .ucx-seg button:last-child{border-right:0}
 .ucx-seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:700}
-.ucx-tax{height:36px;display:flex;align-items:center;gap:8px;font-size:14px}
+.ucx-tn{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end}
+.ucx-tn-f{display:flex;flex-direction:column;gap:4px;flex:1 1 360px;min-width:300px;max-width:440px}
+.ucx-tn-s{flex:0 1 240px;min-width:200px}
+.ucx-tn-x{flex:0 0 auto;min-width:0}
+.ucx-lbl{font-size:11.5px;font-weight:600;color:var(--ink-2);letter-spacing:.02em}
+.ucx-taxbtn{height:36px;display:inline-flex;align-items:center;gap:8px;padding:0 14px 0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:14px;color:var(--ink);cursor:pointer;white-space:nowrap}
+.ucx-taxbtn.on{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
+.ucx-box{width:18px;height:18px;border:1.5px solid var(--ink-3);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;line-height:1;color:var(--accent-ink)}
+.ucx-taxbtn.on .ucx-box{background:var(--accent);border-color:var(--accent)}
+.ucx-notes{margin-top:14px}
+.ucx-notes textarea{width:100%}
+.ucx-opts{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.ucx-opt{display:flex;align-items:center;gap:8px;justify-content:space-between;border:1px dashed var(--line);border-radius:6px;background:var(--surface);padding:5px 9px;font:inherit;font-size:12.5px;color:var(--ink-2);cursor:pointer;text-align:left}
+.ucx-opt b{font-size:13px;color:var(--ink);white-space:nowrap}
+.ucx-opt:hover{border-color:var(--accent)}
+.ucx-opt.on{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
+.ucx-opt.on span::before{content:"✓ ";color:var(--accent);font-weight:700}
 .ucx-moved{font-size:13px;color:var(--ok);font-weight:700;white-space:nowrap}
 .ucx-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px;padding-top:12px;border-top:1px solid var(--line)}
 /* Move to the portal (app/shop/customers/move-list) */
