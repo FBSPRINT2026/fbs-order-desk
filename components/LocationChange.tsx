@@ -10,20 +10,25 @@ import { spotKey, spotOf, spotsOf } from "@/lib/spotChange";
  * logo, same file, one digitizing charge.
  */
 export default function LocationChange({ im, lines, onClose, onSave }: { im: Imprint; lines: GLine[]; onClose: () => void; onSave: (spotBy: Record<string, string> | undefined) => void }) {
-  // one row per garment kind (its style): the spot is per garment, whatever its color
-  const kinds = lines.filter((l, i) => lineQty(l) > 0 && lines.findIndex((x) => spotKey(x) === spotKey(l)) === i);
+  // one row per garment kind (its style): the spot is per garment, whatever its color; a style on more than one line gets a
+  // row per line, so one line can sew on the chest and the other on the sleeve (Nov 3, #40461: the Meade shirt, M1 chest /
+  // M2 sleeve)
+  const live = lines.filter((l) => lineQty(l) > 0);
+  const kk = (l: GLine) => (live.filter((x) => spotKey(x) === spotKey(l)).length > 1 ? l.id : spotKey(l));
+  const kinds = live.filter((l, i) => live.findIndex((x) => kk(x) === kk(l)) === i);
+  const linesOf = (k: string) => lines.filter((x) => kk(x) === k);
   const [spots, setSpots] = useState<string[]>(() => { const s = spotsOf(im, lines).slice(1); return s.length ? s : [""]; });
-  const [pick, setPick] = useState<Record<string, number>>(() => Object.fromEntries(kinds.map((l) => { const s = spotOf(im, l); const i = spotsOf(im, lines).indexOf(s); return [spotKey(l), i > 0 ? i : 0]; })));
+  const [pick, setPick] = useState<Record<string, number>>(() => Object.fromEntries(kinds.map((l) => { const s = spotOf(im, l); const i = spotsOf(im, lines).indexOf(s); return [kk(l), i > 0 ? i : 0]; })));
   // a hat or beanie picked for a change gets its own spot first (beanie → Cuff, cap → Full Front)
   const suggest = [...new Set([...BEANIE_LOCATIONS, ...HAT_LOCATIONS, ...LOCATIONS, "Left Upper Arm", "Right Upper Arm", "Left Leg", "Right Leg"])];
   const ok = spots.every((s) => s.trim()) && Object.values(pick).some((v) => v > 0);
   const save = () => {
     const out: Record<string, string> = {};
-    for (const l of kinds) { const v = pick[spotKey(l)] || 0; if (v > 0 && spots[v - 1]?.trim() && spots[v - 1].trim() !== im.location) out[spotKey(l)] = spots[v - 1].trim(); }
+    for (const l of kinds) { const v = pick[kk(l)] || 0; if (v > 0 && spots[v - 1]?.trim() && spots[v - 1].trim() !== im.location) out[kk(l)] = spots[v - 1].trim(); }
     onSave(Object.keys(out).length ? out : undefined);
   };
   const setPickFor = (l: GLine, vi: number) => {
-    setPick({ ...pick, [spotKey(l)]: vi });
+    setPick({ ...pick, [kk(l)]: vi });
     // the spot box still empty: the garment's own spot (a beanie's cuff) goes in it
     if (vi > 0 && !spots[vi - 1]?.trim()) { const own = locationsFor([l])[0]; if (own && own !== im.location) setSpots(spots.map((s, j) => (j === vi - 1 ? own : s))); }
   };
@@ -49,9 +54,9 @@ export default function LocationChange({ im, lines, onClose, onSave }: { im: Imp
         </div>
         <div className="tbl-wrap"><table className="tbl cc-tbl">
           <thead><tr><th>Garment</th><th>A · {im.location}</th>{spots.map((s, i) => <th key={i}>{String.fromCharCode(66 + i)} · {s || "…"}</th>)}</tr></thead>
-          <tbody>{kinds.map((l) => { const k = spotKey(l), on = pick[k] || 0; const n = lines.filter((x) => spotKey(x) === k).reduce((a, x) => a + lineQty(x), 0); return (
+          <tbody>{kinds.map((l) => { const k = kk(l), on = pick[k] || 0; const n = linesOf(k).reduce((a, x) => a + lineQty(x), 0); const sz = k === l.id ? Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z, q]) => `${z} ${q}`).join(" · ") : ""; return (
             <tr key={k}>
-              <td><span className="cc-g"><b>{l.style || l.garment || "Garment"}</b><span className="faint">{[...new Set(lines.filter((x) => spotKey(x) === k).map((x) => x.color))].join(", ")} · {n} pcs</span></span></td>
+              <td><span className="cc-g"><b>{l.style || l.garment || "Garment"}</b><span className="faint">{[...new Set(linesOf(k).map((x) => x.color))].join(", ")} · {sz ? `${sz} · ` : ""}{n} pcs</span></span></td>
               {[0, ...spots.map((_, i) => i + 1)].map((vi) => (
                 <td key={vi}><label className="cc-tick"><input type="radio" name={`lc-${k}`} checked={on === vi} onChange={() => setPickFor(l, vi)} aria-label={`${l.style}: ${vi ? spots[vi - 1] || `spot ${String.fromCharCode(65 + vi)}` : im.location}`} /></label></td>
               ))}

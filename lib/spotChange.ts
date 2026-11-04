@@ -7,9 +7,10 @@ import { lineQty, type GLine, type Imprint } from "@/lib/pricing";
  * spots, each on the garments set to it (Imprint.spotBy: garment → spot). One print, one sew file, one digitizing charge.
  */
 export const spotKey = (l: Pick<GLine, "style" | "brand" | "id">) => (l.style || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "") || l.id;
-/** the spot a garment line sews this print on */
+/** the spot a garment line sews this print on: its own line's spot first (a line id key: the same style sewn on the
+ *  chest on one line and the sleeve on another, Nov 3, #40461), else its garment's, else the print's own */
 export const spotOf = (im: Pick<Imprint, "location" | "spotBy" | "method">, l: Pick<GLine, "style" | "brand" | "id">) =>
-  (im.method === "embroidery" && im.spotBy?.[spotKey(l)]) || im.location || "";
+  (im.method === "embroidery" && (im.spotBy?.[l.id] || im.spotBy?.[spotKey(l)])) || im.location || "";
 /** the print's spots in order: A (its own location) first, then each other spot */
 export function spotsOf(im: Pick<Imprint, "location" | "spotBy" | "method">, lines: GLine[]): string[] {
   const out = [im.location || ""];
