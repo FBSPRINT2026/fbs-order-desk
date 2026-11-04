@@ -19509,6 +19509,8 @@ button.jc-msgn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .jrl-st:hover .jrl-ic{transform:translateY(-1px)}
 .jrl-ic em{position:absolute;top:-7px;right:-13px;font-style:normal;font-size:11px;font-weight:700;border-radius:999px;padding:0 6px;line-height:17px;background:var(--c);color:#fff;box-shadow:0 0 0 2px var(--surface)}
 .jrl-ic em.z{opacity:.4}
+.jrl-nb{display:none!important}
+.jrl-ic em.jrl-bub,.jrl-st.pick .jrl-ic em.jrl-bub{background:#F26660;color:#fff}
 .jrl-sl{font-size:12px;font-weight:600;color:var(--ink-2,var(--ink));white-space:nowrap}
 .jrl-st.pick .jrl-ic{background:var(--c);color:#fff}
 .jrl-st.pick .jrl-ic em{background:var(--ink)}
@@ -19897,6 +19899,7 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .jcx>.jrl{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px}
   .jrl-sec{padding:0!important}
   .jrl-sec:not(.on) .jrl-ss,.jrl-sec:not(.on) .jrl-cn,.jrl-sec:not(.on) .jrl-nm{display:none}
+  .jrl-sec:not(.on) .jrl-nb{display:inline!important} /* the bubble's card folded on a phone: its count back in the header */
   .jrl-sec .jrl-h{border-radius:7px;padding:7px 26px 7px 8px!important}
   .jrl-sec .jrl-h .jrl-t{font-size:12.5px}
   .jrl-sec.on{grid-column:1/-1;order:9;padding-bottom:26px!important}
