@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
 import { contactDetail, contactList, lookUpOnline, saveContacts, type Addr, type ContactRow, type ContactState, type Detail } from "./actions";
@@ -76,9 +76,14 @@ export default function UpdateContacts() {
   const count = (s: Show) => all.filter((r) => inView(r, s) && mine(r)).length;
 
   // open one: who's on the account, then everyone found in the mail; the regulars at the company start ticked
+  // the account last clicked: a slower answer for an account clicked before it is thrown away (Nov 4, Nick: "it shows the
+  // wrong account on the right a lot of times")
+  const want = useRef("");
   const open = async (id: string) => {
+    want.current = id;
     setCur(id); setD(null); setPeople([]); setNote(""); setErr(""); setWeb(null); setWebErr(""); setFromWeb(new Set());
     const r = await contactDetail(id);
+    if (want.current !== id) return;
     if (!r.ok) return setErr(r.error);
     const x = r.detail;
     // the numbers found for someone, to pick from (Nov 3, Nick: "signature and then from my phone… I can select which one is right")
@@ -122,6 +127,7 @@ export default function UpdateContacts() {
     if (!d) return;
     setWeb("busy"); setWebErr("");
     const r = await lookUpOnline(d.id);
+    if (want.current !== d.id) return;
     if (!r.ok) { setWeb(null); return setWebErr(r.error); }
     setWeb(r.found);
   };
