@@ -329,7 +329,9 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const ccShow = ccImps.length > 0 && (ccImps.some(isCw) || (() => { const n: Record<string, number> = {}; for (const l of g.lines) { const k = verKey(l.color); n[k] = (n[k] || 0) + 1; } return Object.values(n).some((v) => v > 1); })());
   // location change (Oct 30): one embroidery print sewn at another spot on some garments, shown like a color change
   const scImps = g.imprints.filter((x) => x.method === "embroidery" && hasSpotChange(x, g.lines));
-  const spShow = !ccShow && scImps.length > 0;
+  // both can be true (Nov 3, Nick on #40461: "if you have both a color change and a location change, they can't work
+  // together… both can be true"): the lines go by color change first, then by location change inside each
+  const spShow = scImps.length > 0;
   const spKey = (l: GLine) => scImps.map((x) => spotsOf(x, g.lines).indexOf(spotOf(x, l))).join(".");
   const spLetter = (l: GLine) => scImps.map((x) => String.fromCharCode(65 + Math.max(0, spotsOf(x, g.lines).indexOf(spotOf(x, l))))).join("");
   const spLabel = (l: GLine) => scImps.map((x) => spotOf(x, l)).join("  /  ");
@@ -963,11 +965,11 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
           {/* with a color change, the lines show grouped by version (A's together, then B's), each keeping its own index */}
-          {(ccShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => verKey(a.l.color).localeCompare(verKey(b.l.color)) || a.li - b.li) : spShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => spKey(a.l).localeCompare(spKey(b.l)) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
+          {(ccShow || spShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => (ccShow ? verKey(a.l.color).localeCompare(verKey(b.l.color)) : 0) || (spShow ? spKey(a.l).localeCompare(spKey(b.l)) : 0) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
             const lc = gc.lines[li];
             // grouped by color change (Oct 27): a heading where the version changes (A · 1743 Oxford Blue, B · 1801 White)
             const vk = verKey(l.color), vHead = ccShow && (pos === 0 || verKey(order[pos - 1].l.color) !== vk);
-            const sHead = spShow && (pos === 0 || spKey(order[pos - 1].l) !== spKey(l));
+            const sHead = spShow && (pos === 0 || vHead || spKey(order[pos - 1].l) !== spKey(l));
             const hit = findStyle(l.style, l.brand);
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
             const setQty = (s: keyof GLine["sizes"], raw: string) => update((x) => { const v = Math.max(0, Math.floor(+raw || 0)); if (v) x.lines[li].sizes[s] = v; else delete x.lines[li].sizes[s]; });
@@ -981,8 +983,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />{ccImps.some(isCw) ? "Colorway split" : "Color change"}</span></div>}
                 <div className="gl-ver"><span className={"gl-vt" + (lightHex(verHex(l.color)) ? " lt" : "")} style={{ background: verHex(l.color) }}>{verLetter(l.color)}</span><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
               </>); })()}
-              {sHead && (() => { const n = g.lines.filter((x) => spKey(x) === spKey(l)); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
-                {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />Location change</span></div>}
+              {sHead && (() => { const n = g.lines.filter((x) => spKey(x) === spKey(l) && (!ccShow || verKey(x.color) === vk)); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
+                {pos > 0 && !vHead && <div className="gl-ccdiv"><span><CcIcon />Location change</span></div>}
                 <div className="gl-ver"><span className={"gl-vt" + (spLetter(l).startsWith("A") ? "" : " lt")} style={{ background: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" }}>{spLetter(l)}</span><b>{spLabel(l)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
               </>); })()}
               <div className={"gl" + (same && !vHead && !sHead ? " same" : "") + (ccShow || spShow ? " ver" : "") + (slot?.id === l.id ? (slot.after ? " gl-slot-a" : " gl-slot-b") : "")}
