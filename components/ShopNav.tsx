@@ -38,6 +38,8 @@ const ICONS: Record<string, React.ReactNode> = {
   // a bank check: the Payroll Center (Oct 30, Nick: "a little dollar sign or a check symbol")
   // payday: a calendar page with a dollar sign (Oct 30, Nick picked it; the bill icon looked like the Artwork Builder's)
   takepay: <svg viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="2" /><path d="M2.5 9.5h19M6 14.5h4" /></svg>,
+  contacts: <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2" /><circle cx="12" cy="10" r="3" /><path d="M7.5 17.5c.8-2 2.5-3 4.5-3s3.7 1 4.5 3M2 7h2M2 12h2M2 17h2" /></svg>,
+  moveport: <svg viewBox="0 0 24 24"><path d="M4 12h11M11 7l5 5-5 5" /><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4" /></svg>,
   payroll: <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 9.5h17M8 3v4M16 3v4" /><path d="M13.7 12.3c-.3-.4-.9-.6-1.5-.6-.9 0-1.5.4-1.5 1.1 0 1.5 3.1.8 3.1 2.3 0 .7-.7 1.1-1.6 1.1-.7 0-1.2-.3-1.6-.7M12.2 11v.7M12.2 16.2v.7" /></svg>,
   pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
@@ -334,6 +336,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     {/* QuickBooks: straight to its settings, with the sync button and the list of anything that didn't sync (Oct 24, Nick) */}
     {link(["/shop/settings/quickbooks", "qb", "QuickBooks"])}
     {link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
+    {/* moving customers over (Nov 3, Nick: "put the tool in my admin tools"): their contacts and details, then the move */}
+    {link(["/shop/customers/contacts", "contacts", "Update contacts"])}
+    {link(["/shop/customers/move-list", "moveport", "Move to the portal"])}
     {/* payday: W-2 hours for QuickBooks Payroll, contractor checks, paycheck advances (Oct 30, Nick) */}
     {link(["/shop/payroll", "payroll", "Payroll Center"])}
     {/* where every drop is measured from, checked once per garment photo (Oct 20, Nick) */}
