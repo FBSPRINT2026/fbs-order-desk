@@ -17,6 +17,9 @@ const SETUP_FEE = /^(new screen fee|repeat screen fee|digitize file|pms match|co
 export const ADJUST = "Setup adjustment (from Printavo)";
 // the card surcharge is added in Printavo only when the customer pays by card (Oct 16, Nick: a check customer doesn't
 // get it): taken as it is when it's there, removed here when it isn't, without asking. Printavo's preset is "CC Fees".
+/** the fees Send to Printavo makes from personalizations and names & numbers (lib/printavoSend.ts): ours, from the lines'
+ *  names, never a "new fee" to bring back (that would charge them twice) */
+const PERS_FEE = /^(personalization|names|number digits)$/i;
 export const CARD = /credit card processing surcharge|^\s*cc\s*fees?\b|\bcard (processing )?(fee|surcharge)/i;
 const norm = (x: string) => (x || "").replace(/\s+/g, " ").trim().toLowerCase();
 export type Change = { key: string; what: "Quantities" | "Price" | "Setup fees" | "New fee" | "Fee amount" | "Fee removed" | "Production note"
@@ -68,7 +71,7 @@ export function printavoChanges(o: Order, calc: OrderCalc, snap: PvSnap | null, 
     if (Math.abs(wantAdj - (+(adj?.amount || 0))) > 0.005) changes.push({ what: "Setup fees", key: "setup", text: `Setup fees in Printavo $${pvSetup.toFixed(2)}, ours $${ourSetup.toFixed(2)}${adj ? ` (+ $${(+(adj.amount || 0)).toFixed(2)} adjustment)` : ""}`,
       apply: (d) => { d.fees = (d.fees || []).filter((f) => f.label !== ADJUST); if (Math.abs(wantAdj) > 0.005) d.fees.push({ label: ADJUST, amount: wantAdj }); } });
     // their own fees one by one, the card surcharge included (Printavo's amount, so both invoices show the same total)
-    const theirFees = snap.fees.filter((f) => !SETUP_FEE.test(norm(f.description)) && !CARD.test(f.description));
+    const theirFees = snap.fees.filter((f) => !SETUP_FEE.test(norm(f.description)) && !PERS_FEE.test(norm(f.description)) && !CARD.test(f.description));
     for (const f of theirFees) {
       const mine = (o.fees || []).find((x) => norm(x.label) === norm(f.description));
       if (!mine) changes.push({ what: "New fee", key: `f+${f.description}`, text: `New fee in Printavo: ${f.description.trim()} $${f.amount.toFixed(2)}`, apply: (d) => { d.fees = [...(d.fees || []), { label: f.description.trim(), amount: f.amount }]; } });

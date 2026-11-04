@@ -202,6 +202,16 @@ async function payloadFor(o: Order, settings: ReturnType<typeof mergeSettings>) 
     }
     if (c.materials > 0) { const f = sum.get("materials"); if (f) { f.amount = Math.round(((f.amount || 0) + c.materials) * 100) / 100; f.unitPrice = f.amount; } else sum.set("materials", { description: "Sizes Above XL", quantity: 1, unitPrice: c.materials, amount: c.materials, taxable: taxed }); }
   }
+  // personalizations (a name sewn on a piece) and names & numbers: charged on top of their lines, not in a line's price
+  // each, so they go as their own fee, one per kind and price (Nov 4, Nick on #40415: 44 names × $5 = $220 never reached
+  // Printavo, which had $225 to our $445)
+  for (const c of calc.groups) for (const it of (c as { persItems?: { qty: number; unit: number; amount: number; label?: string }[] }).persItems || []) {
+    if (!(it.amount > 0)) continue;
+    const name = it.label || "Personalization", even = Math.abs(it.unit * it.qty - it.amount) < 0.005;
+    const key = even ? `pers|${name}|${it.unit}` : `pers|${name}|total|${sum.size}`, f = sum.get(key);
+    if (f) f.quantity = (f.quantity || 0) + it.qty;
+    else sum.set(key, even ? { description: name, quantity: it.qty, unitPrice: it.unit, amount: it.unit, taxable: taxed } : { description: name, quantity: 1, unitPrice: it.amount, amount: it.amount, taxable: taxed });
+  }
   const fees: PvFee[] = [...sum.values()];
   // (a card surcharge already on our order is Printavo's, brought back: the percentage one below replaces it)
   for (const f of (o.fees || []) as { label: string; amount: number | ""; free?: boolean; tbd?: boolean }[]) if (+f.amount && !f.free && !f.tbd && !/credit card processing surcharge/i.test(f.label)) fees.push({ description: f.label || "Fee", amount: +f.amount, quantity: 1, unitPrice: +f.amount, taxable: taxed });
