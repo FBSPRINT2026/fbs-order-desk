@@ -20833,3 +20833,10 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .rop-go{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
 .rop-why{font-size:12.5px;color:var(--warn)}
 .rop-modes2{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+/* the time clock's status in the Payroll Center header (components/ClockStatus.tsx) */
+.clk-st{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-weight:700;white-space:nowrap;background:var(--surface)}
+.clk-st i{width:9px;height:9px;border-radius:50%;flex:none}
+.clk-st small{font-weight:400;color:var(--ink-3);font-size:12px}
+.clk-st.on{color:var(--ok)}.clk-st.on i{background:var(--ok)}
+.clk-st.off{color:var(--danger);border-color:var(--danger)}.clk-st.off i{background:var(--danger)}

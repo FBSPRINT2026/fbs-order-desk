@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import ClockStatus from "@/components/ClockStatus";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { addDays, dayLabel, fullName, localDay, mergeTime, periodOf, r2 } from "@/lib/timeclock";
@@ -190,6 +191,7 @@ export default function PayrollCenter() {
           <div className="eyebrow">{p ? <>Pay period {dayLabel(p.start)} – {dayLabel(p.end)} · pay date {dayLabel(d!.payDate)} · overtime past {d!.settings.otWeekly} hrs a week{closed && <> · <span className="pc-ok">Payroll finished ✓</span></>}</> : "Loading…"}</div>
         </div>
         <div className="row" style={{ gap: 8 }}>
+          <ClockStatus />
           <button type="button" className="btn" disabled={!p} onClick={() => p && setStart(periodOf(d!.settings, addDays(p.start, -1)).start)} aria-label="Previous pay period" title="Previous pay period">←</button>
           <button type="button" className="btn" disabled={!p || addDays(p.end, 1) > today} onClick={() => p && setStart(addDays(p.end, 1))} aria-label="Next pay period" title="Next pay period">→</button>
           <button type="button" className="btn primary" onClick={() => { setTab("advances"); setNewAdv(true); }}>Issue paycheck advance</button>
