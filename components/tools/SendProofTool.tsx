@@ -21,7 +21,7 @@ type Opts = { to: string; name: string; proof: { version: number; mockups: numbe
   /** the account's people, ticked when their email settings send them approvals */ people?: { email: string; name: string; on: boolean }[] };
 /** what's ticked, who it goes to this time, and whether it goes from the person's own mailbox as a reply (lib/customerSend.ts) */
 type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note?: string; to?: string[]; fromMe?: boolean; reply?: { messageId: string } | null; after?: string };
-type Choice = { messageId: string; subject: string; from: string; at: string };
+type Choice = { messageId: string; subject: string; from: string; fromEmail: string; at: string; likely?: boolean };
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
@@ -55,24 +55,21 @@ export default function SendProofTool({ target, label = "Send to customer", mode
       note: target.note || "",
       to: (r.people || []).filter((x) => x.on).map((x) => x.email),
     });
-    // from their own mailbox, as a reply, when the person picked has written to them lately (Nov 3, Nick: Michael asked
-    // for the quote by email: "reply to him with… here's your quote… that's how I've always done it")
-    const tos = (r.people || []).filter((x) => x.on).map((x) => x.email);
-    const c = await sendFromChoices(tos);
+    // from their own mailbox, as a reply to the email this send most likely answers, to whoever wrote it (Nov 3, Nick:
+    // "Fossil hasn't emailed me in like 4 weeks… can't you just read and go like, hey, we think you're responding to
+    // Michael here"): read from everyone at the account and its company domain, not just who's ticked
+    const c = await sendFromChoices(target.orderId, (r.people || []).map((x) => x.email));
     if (c.ok && c.box) {
       setBox(c.box); setChoices(c.choices);
-      const recent = c.choices[0] && Date.now() - new Date(c.choices[0].at).getTime() < 14 * 864e5;
-      if (recent) setPick((p) => ({ ...p, fromMe: true, reply: { messageId: c.choices[0].messageId } }));
+      const g = c.choices.find((x) => x.likely);
+      if (g) answer(g, r);
     }
   }
-  // a different person picked: the emails they've sent that a reply could answer
-  const toKey = JSON.stringify(pick.to || []);
-  useEffect(() => {
-    if (!open || !box) return;
-    let live = true;
-    void sendFromChoices(pick.to || []).then((c) => { if (!live || !c.ok) return; setChoices(c.choices); setPick((p) => (p.reply && !c.choices.some((x) => x.messageId === p.reply!.messageId) ? { ...p, reply: c.choices[0] ? { messageId: c.choices[0].messageId } : null } : p)); });
-    return () => { live = false; };
-  }, [toKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** reply to this email: from your mailbox, to the person who wrote it (added to the list if they're new) */
+  function answer(g: Choice, base = opts) {
+    if (base && !(base.people || []).some((x) => x.email === g.fromEmail)) setOpts({ ...base, people: [...(base.people || []), { email: g.fromEmail, name: g.from !== g.fromEmail ? g.from : "", on: false }] });
+    setPick((p) => ({ ...p, fromMe: true, reply: { messageId: g.messageId }, to: [g.fromEmail] }));
+  }
   const any = !!(pick.proof || pick.quote || (pick.sewouts || []).length);
   // from your own mailbox: your words before and after the card, written for you until you change them (Nov 3, Nick: "hello
   // such and such, thank you for the quote request. Please see and review your quote below… please let me know if this
@@ -143,6 +140,8 @@ export default function SendProofTool({ target, label = "Send to customer", mode
           <div className="mk-modal spt">
             <div className="spt-h"><h2 id="spt-t">Send to {opts?.name || "the customer"}</h2><span className="faint">One email with what you tick</span></div>
             {!opts && <div className="faint">{busy === "load" ? "Loading…" : ""}</div>}
+            <div className="spt-cols">
+            <div className="spt-left">
             {opts && <div className="spt-picks">
               {opts.proof && tick(!!pick.proof, (v) => setPick((p) => ({ ...p, proof: v })), `Proof, version ${opts.proof.version}`, `${opts.proof.mockups} mockup${opts.proof.mockups === 1 ? "" : "s"}${opts.proof.unsent ? "" : opts.proof.waiting ? " · already sent, waiting on them" : " · already sent"}`, "proof")}
               {opts.quote && tick(!!pick.quote, (v) => setPick((p) => ({ ...p, quote: v })), `${opts.quote.kind === "invoice" ? "Final invoice" : "Quote"} · ${money(opts.quote.total)}`, `${opts.quote.due || `Deposit to start: ${money(opts.quote.deposit)}`}${opts.quote.sent || opts.quote.status === "quote_sent" ? " · already sent" : ""}`, "quote")}
@@ -163,20 +162,32 @@ export default function SendProofTool({ target, label = "Send to customer", mode
               <span className="imp-l">Send from</span>
               <div className="spt-seg" role="radiogroup" aria-label="Send from">
                 <button type="button" role="radio" aria-checked={!pick.fromMe} className={!pick.fromMe ? "on" : ""} onClick={() => setPick((p) => ({ ...p, fromMe: false }))}>FBS Print (portal@)</button>
-                <button type="button" role="radio" aria-checked={!!pick.fromMe} className={pick.fromMe ? "on" : ""} onClick={() => setPick((p) => ({ ...p, fromMe: true, reply: p.reply === undefined && choices[0] ? { messageId: choices[0].messageId } : p.reply }))} data-notranslate>My email ({box.split("@")[0]}@)</button>
+                <button type="button" role="radio" aria-checked={!!pick.fromMe} className={pick.fromMe ? "on" : ""} onClick={() => { const g = pick.reply === undefined ? choices.find((x) => x.likely) : undefined; if (g) answer(g); else setPick((p) => ({ ...p, fromMe: true })); }} data-notranslate>My email ({box.split("@")[0]}@)</button>
               </div>
               {pick.fromMe && <label className="spt-reply"><span className="imp-l">As a reply to</span>
-                <select value={pick.reply?.messageId || ""} onChange={(e) => setPick((p) => ({ ...p, reply: e.target.value ? { messageId: e.target.value } : null }))}>
+                <select value={pick.reply?.messageId || ""} onChange={(e) => { const g = choices.find((x) => x.messageId === e.target.value); if (g) answer(g); else setPick((p) => ({ ...p, reply: null })); }}>
                   <option value="">A new email (not a reply)</option>
                   {choices.map((c) => <option key={c.messageId} value={c.messageId}>{c.subject} · {c.from} · {new Date(c.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</option>)}
-                </select></label>}
+                </select>
+                {(() => { const g = choices.find((x) => x.messageId === pick.reply?.messageId && x.likely); return g ? <small className="spt-guess" data-notranslate>Looks like you&apos;re answering {g.from.split(/\s+/)[0]}&apos;s email from {new Date(g.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small> : null; })()}</label>}
             </div>}
-            {opts && <label className="spt-note"><span className="imp-l">{pick.fromMe ? "Your message (above the card)" : "A note (optional, goes in the email)"}</span>
-              <textarea rows={pick.fromMe ? 3 : 2} value={pick.note || ""} placeholder={`e.g. Here's the ${what} we talked about`} onChange={(e) => { setTyped((t) => ({ ...t, note: true })); setPick((p) => ({ ...p, note: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} /></label>}
-            {opts && pick.fromMe && <label className="spt-note"><span className="imp-l">After the card (your signature follows)</span>
-              <textarea rows={2} value={pick.after || ""} onChange={(e) => { setTyped((t) => ({ ...t, after: true })); setPick((p) => ({ ...p, after: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} /></label>}
+            {/* the email, short: your words, the FBS card as a little bar, your closing (Nov 3, Nick: "make an email that shows
+                the default first sentence, then that little FBS bar… cut it off, and then the below") */}
+            {opts && (pick.fromMe ? <div className="spt-draft"><span className="imp-l">The email</span>
+              <div className="spt-dbox">
+                <textarea rows={3} value={pick.note || ""} placeholder={`e.g. Here's the ${what} we talked about`} onChange={(e) => { setTyped((t) => ({ ...t, note: true })); setPick((p) => ({ ...p, note: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} />
+                <div className="spt-dcard" aria-hidden="true"><div className="spt-dbar"><img src="/email/launch/logo-white.png" alt="" /><span>Your {whatLine}{pick.reply ? "" : " · ready to review"}</span></div><div className="spt-drb"><i /><i /><i /></div><small>The {whatLine} and the Review and approve button go here</small></div>
+                <textarea rows={2} value={pick.after || ""} onChange={(e) => { setTyped((t) => ({ ...t, after: true })); setPick((p) => ({ ...p, after: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} />
+                <small className="faint">Your signature goes under it{pick.reply ? ", then their email" : ""}.</small>
+              </div></div>
+              : <label className="spt-note"><span className="imp-l">A note (optional, goes in the email)</span>
+              <textarea rows={2} value={pick.note || ""} placeholder={`e.g. Here's the ${what} we talked about`} onChange={(e) => { setTyped((t) => ({ ...t, note: true })); setPick((p) => ({ ...p, note: e.target.value })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} /></label>)}
+            </div>
+            <div className="spt-right">
             {pv && <div className="spt-meta">{pv.from && <div><span>From</span><b data-notranslate>{pv.from}</b></div>}<div><span>To</span><b>{pv.to || (pick.to && opts?.people?.length ? "Tick who gets it" : "No email on the customer")}</b></div><div><span>Subject</span><b>{pv.subject}</b></div></div>}
             {opts && <div className="spt-mail">{pv ? <iframe title="The email" srcDoc={pv.html} sandbox="" /> : <div className="faint" style={{ padding: 20 }}>{any ? "Making the preview…" : "Tick what to send."}</div>}</div>}
+            </div>
+            </div>
             {err && <div className="pv-err">{err}</div>}
             <div className="spt-foot">
               {copyBtns(!any)}

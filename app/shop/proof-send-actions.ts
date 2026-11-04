@@ -73,12 +73,15 @@ export async function bundlePreview(orderId: string, pick: Pick3) {
   try { const who = await me(); const { previewSend } = await import("@/lib/customerSend"); return await previewSend(createAdminClient(), orderId, pick, pick.fromMe ? await myBox(who) : null); } catch (e) { return fail(e); }
 }
 /** can this person send from their own mailbox, and the emails from these people it could answer (newest first) */
-export async function sendFromChoices(emails: string[]) {
+/** the emails from this order's account that a send from your own mailbox could answer, the likely one first */
+export async function sendFromChoices(orderId: string, emails: string[]) {
   try {
     const who = await me(); const box = await myBox(who);
     if (!box) return { ok: true as const, box: "", choices: [] };
+    const admin = createAdminClient();
+    const { data: o } = await admin.from("orders").select("number, nickname").eq("id", orderId).maybeSingle();
     const { replyChoices } = await import("@/lib/customerSend");
-    return { ok: true as const, box: box.email, choices: await replyChoices(createAdminClient(), box, emails) };
+    return { ok: true as const, box: box.email, choices: await replyChoices(admin, box, emails, { name: o?.nickname || "", number: o?.number || null }) };
   } catch (e) { return fail(e); }
 }
 export async function bundleSend(orderId: string, pick: Pick3) {

@@ -70,29 +70,57 @@ async function recipientsFor(admin: SupabaseClient, o: Order, customer: { email?
   }
   if (!list.length && customer?.email) list = [customer.email.toLowerCase()];
   if (customer?.email && !people.some((x) => x.email === customer.email!.toLowerCase())) people.unshift({ email: customer.email.toLowerCase(), name: "" });
-  if (pick?.to) list = [...new Set(pick.to.map((e) => e.trim().toLowerCase()))].filter((e) => people.some((x) => x.email === e));
+  if (pick?.to) {
+    // a person on file, or someone else at the company's own domain (a new person who wrote in)
+    const doms = companyDomains(people.map((x) => x.email));
+    list = [...new Set(pick.to.map((e) => e.trim().toLowerCase()))].filter((e) => people.some((x) => x.email === e) || (/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e) && doms.includes(domainOf(e))));
+    for (const e of list) if (!people.some((x) => x.email === e)) people.push({ email: e, name: "" });
+  }
   return { people, list };
 }
 
-/** the emails this person has had from these people lately: the ones a send from their own mailbox can answer */
-export async function replyChoices(admin: SupabaseClient, box: Box, emails: string[]) {
+/** free mail providers: a shared domain there says nothing about which company someone's with */
+const PUBLIC_MAIL = /^(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|icloud|me|mac|aol|comcast|att|sbcglobal|verizon|protonmail|proton|gmx|mail)\./i;
+const domainOf = (e: string) => (e.split("@")[1] || "").toLowerCase();
+/** the company email domains of these addresses (not gmail and the like) */
+export const companyDomains = (emails: string[]) => [...new Set(emails.map(domainOf).filter((d) => d.includes(".") && !PUBLIC_MAIL.test(d)))];
+
+export type ReplyChoice = { messageId: string; subject: string; from: string; fromEmail: string; at: string; /** the one we think this send answers */ likely?: boolean };
+
+/**
+ * The emails this person has had lately from the account: from any of its people or anyone else at the company's own
+ * domain (a new person at Fossil counts), newest first, with the one this send most likely answers marked and first
+ * (Nov 3, Nick: "Fossil hasn't emailed me in like 4 weeks. All of a sudden I'm emailing them a quote… can't you just read
+ * and go like, hey, we think you're responding to Michael here"). Likely = the newest that names this job (its words or
+ * its number), else the newest from the last 30 days; nothing when no one's written in that time.
+ */
+export async function replyChoices(admin: SupabaseClient, box: Box, emails: string[], job?: { name?: string; number?: number | null }) {
   const em = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter((e) => e.includes("@")))];
-  if (!em.length) return [];
+  const doms = companyDomains(em).filter((d) => d !== domainOf(box.email || ""));
+  if (!em.length && !doms.length) return [];
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
   // the mailbox's saved emails (mail_cache: what came in today is there first) and its search index (older ones), newest first
   // (Nov 3, Nick: Michael's email from that morning wasn't offered: it wasn't in the index yet)
-  const who = em.map((e) => `from_email.ilike.${e.replace(/[,()]/g, "")}`).join(",");
+  const clean = (x: string) => x.replace(/[,()%*]/g, "");
+  const who = [...em.map((e) => `from_email.ilike.${clean(e)}`), ...doms.map((d) => `from_email.ilike.%@${clean(d)}`)].join(",");
   const [{ data: a }, { data: b }] = await Promise.all([
-    admin.from("mail_cache").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).is("gone_at", null).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(30),
-    admin.from("mail_index").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(30),
+    admin.from("mail_cache").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).is("gone_at", null).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(40),
+    admin.from("mail_index").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(40),
   ]);
   const data = [...(a || []), ...(b || [])].sort((x, y) => String(y.sent_at).localeCompare(String(x.sent_at)));
-  const seen = new Set<string>(), out: { messageId: string; subject: string; from: string; at: string }[] = [];
+  const seen = new Set<string>(), out: ReplyChoice[] = [];
   for (const r of data as { message_id: string; subject: string | null; from_name: string | null; from_email: string; sent_at: string }[]) {
     if (!r.message_id || seen.has(r.message_id)) continue; seen.add(r.message_id);
-    out.push({ messageId: r.message_id, subject: r.subject || "(no subject)", from: r.from_name || r.from_email, at: r.sent_at });
-    if (out.length >= 8) break;
+    out.push({ messageId: r.message_id, subject: r.subject || "(no subject)", from: r.from_name || r.from_email, fromEmail: String(r.from_email || "").toLowerCase(), at: r.sent_at });
+    if (out.length >= 10) break;
   }
+  // which one this send answers: one that names the job, else the newest lately
+  const STOP = new Set(["the", "and", "for", "with", "shirts", "shirt", "tees", "order", "quote", "new"]);
+  const words = String(job?.name || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w));
+  const names = (subj: string) => { const t = subj.toLowerCase(); return (!!job?.number && t.includes(String(job.number))) || (words.length > 0 && words.filter((w) => t.includes(w)).length >= Math.min(2, words.length)); };
+  const fresh = (c: ReplyChoice) => Date.now() - new Date(c.at).getTime() < 30 * 864e5;
+  const best = out.find((c) => names(c.subject)) || out.find(fresh);
+  if (best) { best.likely = true; out.splice(out.indexOf(best), 1); out.unshift(best); }
   return out;
 }
 

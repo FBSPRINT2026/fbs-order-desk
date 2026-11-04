@@ -16249,7 +16249,22 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 @media (max-width:820px){.pfl-body{grid-template-columns:1fr}.pfl-side{border-right:0;border-bottom:1px solid var(--line)}.pfl-pdf iframe{min-height:80vh}}
 
 /* Send a proof (components/tools/SendProofTool.tsx): the email as the customer gets it, then Send or Copy */
-.mk-modal.spt{max-width:640px}
+.mk-modal.spt{max-width:1120px;width:min(1120px,96vw)}
+/* side by side: what to send and the short email on the left, the preview on the right (Nov 3, Nick: "it's gotten too tall") */
+.spt-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:20px;align-items:start}
+.spt-left{display:flex;flex-direction:column;gap:10px;min-width:0;max-height:min(680px,72vh);overflow:auto;padding-right:4px}
+.spt-left .spt-to,.spt-left .spt-from{margin-top:0}
+.spt-right{display:flex;flex-direction:column;gap:8px;min-width:0}
+.spt-right .spt-mail iframe{height:min(620px,64vh)}
+.spt-draft{display:flex;flex-direction:column;gap:4px}
+.spt-dbox{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--surface)}
+.spt-dbox textarea{border:1px dashed var(--line-2,var(--line));border-radius:6px;padding:7px 9px;font:inherit;font-size:14px;resize:vertical}
+.spt-dcard{border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.spt-dbar{display:flex;align-items:center;gap:10px;background:#141D2B;color:#fff;padding:6px 10px;font-size:13px;font-weight:700}
+.spt-dbar img{width:22px;height:22px;display:block}
+.spt-drb{display:flex;height:3px}.spt-drb i{flex:1}.spt-drb i:nth-child(1){background:#0e9bd8}.spt-drb i:nth-child(2){background:#f26660}.spt-drb i:nth-child(3){background:#fcb122}
+.spt-dcard small{display:block;text-align:center;font-size:12px;color:var(--ink-3);padding:5px 8px}
+@media (max-width:900px){.spt-cols{grid-template-columns:minmax(0,1fr)}.spt-left{max-height:none;overflow:visible}}
 .spt-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .spt-h h2{margin:0}
 .spt-meta{display:flex;flex-direction:column;gap:3px;font-size:13px}
@@ -16268,6 +16283,7 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .spt-seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:700}
 .spt-reply{display:flex;flex-direction:column;gap:4px;margin-top:4px}
 .spt-reply select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;max-width:100%}
+.spt-guess{font-size:12px;color:var(--accent)}
 .spt-note{display:flex;flex-direction:column;gap:4px}
 .spt-note textarea{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;font-size:14px}
 .spt-mail{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
