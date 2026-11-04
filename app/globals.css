@@ -20710,6 +20710,13 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .jrl-cn.z{color:color-mix(in srgb,var(--ink) 30%,var(--line))}
 .jrl-sec.on .jrl-cn:not(.z){color:var(--c)}
 .jrl-sec.on .jrl-cn{bottom:11px}
-.jrl-mc-big{background:linear-gradient(90deg,#0E9BD8 33.3%,#F26660 33.3% 66.6%,#FCB122 66.6%) top/100% 3px no-repeat,var(--surface);padding-top:13px}
+/* the Message Center, quieter (Nov 3, 22:36, Nick: "remove the rainbow… make that look professional"): a slim navy top
+   with the turning ring and the title, a white bottom with who's waiting */
+.jcx>.jrl-mc .jrl-mc-ban{padding:9px 12px 0}
+.jrl-mc-ban>.jrl-sig{width:40px;height:40px}
+.jrl-mc-t{font-size:15px;font-weight:700;letter-spacing:.01em;text-align:left;align-items:flex-start}
+.jrl-mc-big{background:var(--surface);border-top:1px solid var(--line);margin:9px -12px 0;padding:9px 12px 10px}
+.jrl-mc-w b{font-size:26px}
+.jrl-mc-w span{font-size:12px;font-weight:600}
 .jcx>.jrl-mc{background:var(--surface)}
 .jrl-mc-av i{box-shadow:0 0 0 2px var(--surface)}

@@ -79,7 +79,7 @@ import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
 import { archiveOrderArt, draftArtCount, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
 import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
-import { backToRequests, printavoDeleteCheck } from "@/app/shop/orders/delete-actions";
+import { resetToRequest, printavoDeleteCheck } from "@/app/shop/orders/delete-actions";
 import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 import { mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
@@ -1204,9 +1204,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const pvAsk = pvc.ok ? { pv: pvc.still } : { pvErr: pvc.error };
     const qb: QbState | null = qs && qs.ok ? qs : null;
     const qbVoid = !!qb?.synced && !qb.voided && (qb.source === "created" || qb.source === "test");
-    // the customer sent it in (a simple order, or a ClickUp job brought in as one): it goes back to Portal requests, and
-    // ClickUp is left alone (Nov 3, Nick: "after it comes into our system… ClickUp is dead to this order")
-    const req = !!(o as Order & { simple_order?: unknown }).simple_order;
+    // the customer sent it in (their portal, or a ClickUp job brought in as a request): never deleted, only reset to what
+    // they sent, back in Portal requests; ClickUp is left alone (Nov 3, Nick: "you just can't delete anymore. You can reset it")
+    const req = !!o.submitted_at;
     if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: !req, req, reqBack: req, qb, qbVoid, ...pvAsk });
     // a copy of another order's mockup goes with it (nothing is lost); art made only on this order starts as Keep (Nov 2, Nick)
     const pick = new Set<string>(r.mockups.filter((m) => m.copyOf).map((m) => m.id));
@@ -1222,9 +1222,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     }
     const lg = delAsk.logos.filter((l) => delAsk.pick.has(l.id) && !l.elsewhere).map((l) => l.id), mk = delAsk.mockups.filter((m) => delAsk.pick.has(m.id)).map((m) => m.id);
     if (lg.length || mk.length) { const r = await archiveOrderArt(o.id, lg, mk); if (!r.ok) { setDelAsk({ ...delAsk, busy: false, error: r.error }); return; } }
-    // back to Portal requests: same number, what they sent stays, nothing in ClickUp is touched
-    if (delAsk.req && delAsk.reqBack) {
-      const b = await backToRequests(o.id);
+    // a customer's order: reset to what they sent, back in Portal requests (same number, nothing in ClickUp touched)
+    if (delAsk.req) {
+      const b = await resetToRequest(o.id);
       if (!b.ok) { setDelAsk({ ...delAsk, busy: false, error: b.error }); return; }
       location.assign(`/shop/jobs?req=${o.id}`); return;
     }
@@ -1601,7 +1601,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <summary className="btn">More ▾</summary>
             <div className="ot-menu">
               <button type="button" onClick={async () => { await save(); setOwnReorder(true); }}><MenuItem icon="copy" tone="gray" title="Reorder" sub="Same sizes, new sizes from a file, or type them" /></button>
-              <button type="button" className="danger" onClick={del}><MenuItem icon="trash" tone="danger" title="Delete order" sub="Asks first, with what goes with it" /></button>
+              {o.submitted_at
+                ? <button type="button" onClick={del}><MenuItem icon="refresh" title="Reset to the customer's request" sub="Back to Portal requests as they sent it (a customer's order is never deleted)" /></button>
+                : <button type="button" className="danger" onClick={del}><MenuItem icon="trash" tone="danger" title="Delete order" sub="Asks first, with what goes with it" /></button>}
             </div>
           </details>
           </span>
@@ -1617,9 +1619,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       </div>}
       {/* the draft art note lives in Art & production now (Nov 1, Nick: "annoying that it's just always there"): DraftArtKeep */}
       {delAsk && (
-        <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Delete order" onClick={() => !delAsk.busy && setDelAsk(null)} onKeyDown={(e) => { if (e.key === "Escape" && !delAsk.busy) setDelAsk(null); }}>
+        <div className="dla-bg" role="dialog" aria-modal="true" aria-label={delAsk.req ? "Reset order" : "Delete order"} onClick={() => !delAsk.busy && setDelAsk(null)} onKeyDown={(e) => { if (e.key === "Escape" && !delAsk.busy) setDelAsk(null); }}>
           <div className="dla" onClick={(e) => e.stopPropagation()}>
-            <h3>{delAsk.req && delAsk.reqBack ? `Send #${o.number} back to Portal requests?` : `Delete order #${o.number}?`}</h3>
+            <h3>{delAsk.req ? `Reset #${o.number} to the customer\u2019s request?` : `Delete order #${o.number}?`}</h3>
             {!delAsk.loading && delAsk.pv ? (
               <div className="dla-pv">
                 <b>This order is in Printavo as #{delAsk.pv.visualId}.</b>
@@ -1678,12 +1680,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     <small className="faint">Voided invoices stay in QuickBooks at $0. Number #{o.number} is never used again.</small>
                   </div>
                 )}
-                {delAsk.req && (
-                  <label className="dla-cu">
-                    <input type="checkbox" checked={!!delAsk.reqBack} disabled={delAsk.busy} onChange={(e) => setDelAsk((d) => (d ? { ...d, reqBack: e.target.checked } : d))} />
-                    <span>Send it back to <b>Portal requests</b> instead <small className="faint">(the customer sent it in: same number, their words and files stay, what was built from it is cleared)</small></span>
-                  </label>
-                )}
+                {delAsk.req && <p className="dla-sub">The customer sent this order in, so it can&apos;t be deleted. Reset puts it back in <b>Portal requests</b> as they sent it, with the same number. What was made from it is cleared; the art below is kept unless you choose Delete.</p>}
                 {delAsk.cu && !delAsk.req && (
                   <label className="dla-cu">
                     <input type="checkbox" checked={!!delAsk.cuBack} disabled={delAsk.busy} onChange={(e) => setDelAsk((d) => (d ? { ...d, cuBack: e.target.checked } : d))} />
@@ -1696,7 +1693,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="dla-acts">
               {delAsk.gone ? <button type="button" className="btn primary" onClick={() => { setDelAsk(null); leave(); }}>OK</button> : <>
               <button type="button" className="btn ghost" disabled={delAsk.busy} onClick={() => setDelAsk(null)}>Cancel</button>
-              {!delAsk.pv && !delAsk.pvErr && <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.req && delAsk.reqBack ? (delAsk.busy ? "Sending back…" : "Send back to Portal requests") : delAsk.busy ? "Deleting…" : "Delete order"}</button>}</>}
+              {!delAsk.pv && !delAsk.pvErr && <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.req ? (delAsk.busy ? "Resetting…" : "Reset to their request") : delAsk.busy ? "Deleting…" : "Delete order"}</button>}</>}
             </div>
           </div>
         </div>

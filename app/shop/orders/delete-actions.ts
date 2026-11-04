@@ -32,26 +32,33 @@ export async function printavoDeleteCheck(orderId: string): Promise<{ ok: true; 
 }
 
 /**
- * An order the customer sent in (a simple order from their portal, or a ClickUp job brought in as one) goes back to Portal
- * requests instead of being deleted (Nov 3, Nick: "after it comes into our system… ClickUp is dead to this order… send it
- * back to the job center under customer requests… the status still as order request"). Same number; what they sent (their
- * words and files) stays; what was built from it (garments, prints, prices) is cleared so Process starts fresh. Its art is
- * left as the delete box chose.
+ * Reset an order the customer sent in back to what they sent (Nov 3, Nick: "you just can't delete anymore. You can reset it.
+ * It can go back on the list as a customer request… we can't delete a customer's request"). Same number. Their order comes
+ * back exactly as they sent it (orders.request_original, kept when it was sent in: migration 278); one sent in before that
+ * was kept goes back to their words and files only (a simple order) or as it is now (a form they filled in). Its status is
+ * Order request again, so it's back in the Job Center's Portal requests. ClickUp is never touched. The database won't let a
+ * customer's order be deleted at all.
  */
-export async function backToRequests(orderId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function resetToRequest(orderId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const v = await getViewer();
     if (!v.user || !v.isStaff) return { ok: false, error: "Not allowed." };
     const admin = createAdminClient();
-    const { data: o } = await admin.from("orders").select("id, simple_order, printavo_id, status").eq("id", orderId).maybeSingle();
+    const { data: o } = await admin.from("orders").select("id, submitted_at, simple_order, printavo_id, request_original").eq("id", orderId).maybeSingle();
     if (!o) return { ok: false, error: "Order not found." };
-    if (!o.simple_order) return { ok: false, error: "This order wasn't sent in by the customer." };
+    if (!o.submitted_at) return { ok: false, error: "This order wasn't sent in by the customer." };
     if (o.printavo_id) return { ok: false, error: "It's in Printavo: it can't go back to the requests." };
+    const og = (o.request_original || null) as Record<string, unknown> | null;
     const blank = [{ id: crypto.randomUUID(), lines: [{ id: crypto.randomUUID(), cost: "", brand: "", color: "", sizes: {}, style: "", garment: "", priceOverride: null }], imprints: [], customerMockups: [] }];
-    const { error } = await admin.from("orders").update({ status: "request", type: "quote", groups: blank, lines: [], fees: [], total: 0, qty: 0, sent_at: null, approved_at: null, approved_name: null, declined_at: null, declined_reason: "" }).eq("id", orderId);
+    const back: Record<string, unknown> = og
+      ? { groups: og.groups ?? blank, lines: og.lines ?? [], fees: og.fees ?? [], nickname: og.nickname ?? "", due_date: og.due_date ?? null, po_number: og.po_number ?? "", delivery_method: og.delivery_method ?? "pickup", ship_to: og.ship_to ?? "", notes: og.notes ?? "", qty: og.qty ?? 0, ...(og.price_type ? { price_type: og.price_type } : {}) }
+      : o.simple_order ? { groups: blank, lines: [], fees: [], qty: 0 } : {};
+    const { error } = await admin.from("orders").update({ ...back, status: "request", type: "quote", total: 0, sent_at: null, approved_at: null, approved_name: null, declined_at: null, declined_reason: "" }).eq("id", orderId);
     if (error) return { ok: false, error: error.message };
-    await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "request", actor: v.user.email || "shop" });
-    await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: "Sent back to Portal requests (instead of deleted): what was built from it was cleared; what the customer sent stays.", actor: v.user.email || "shop" });
+    await admin.from("order_events").insert([
+      { order_id: orderId, kind: "status", detail: "request", actor: v.user.email || "shop" },
+      { order_id: orderId, kind: "note", detail: og ? "Reset to the customer's request, as they sent it." : o.simple_order ? "Reset to the customer's request: their words and files; what was built from it was cleared." : "Reset to an order request (as it is now: it was sent in before the original was kept).", actor: v.user.email || "shop" },
+    ]);
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

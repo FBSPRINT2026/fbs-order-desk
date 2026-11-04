@@ -19,13 +19,15 @@ export async function bulkDeleteOrders(ids: string[]): Promise<{ ok: true; delet
     if (!want.length) return { ok: false, error: "No orders picked." };
     const admin = createAdminClient();
     const [{ data: os }, { data: pays }] = await Promise.all([
-      admin.from("orders").select("id, number, printavo_id").in("id", want),
+      admin.from("orders").select("id, number, printavo_id, submitted_at").in("id", want),
       admin.from("payments").select("order_id").in("order_id", want),
     ]);
     const paid = new Set(((pays || []) as { order_id: string }[]).map((p) => p.order_id));
     const skipped: string[] = [], go: { id: string; number: number }[] = [];
-    for (const o of (os || []) as { id: string; number: number; printavo_id: string | null }[]) {
-      if (o.printavo_id) skipped.push(`#${o.number} (sent to Printavo)`);
+    for (const o of (os || []) as { id: string; number: number; printavo_id: string | null; submitted_at: string | null }[]) {
+      // a customer's order is never deleted, only reset to their request on its page (Nov 3, Nick; migration 278 holds it too)
+      if (o.submitted_at) skipped.push(`#${o.number} (the customer sent it in: reset it on its page instead)`);
+      else if (o.printavo_id) skipped.push(`#${o.number} (sent to Printavo)`);
       else if (paid.has(o.id)) skipped.push(`#${o.number} (has a payment)`);
       else go.push(o);
     }
