@@ -151,7 +151,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     mode === "review" ? "\nStaff ask: did I get everything right? Compare the order with what the customer sent (their mockup, their PO, their art) and say plainly what doesn't match." : `\nStaff say: ${msg}`,
   ].filter(Boolean).join("\n");
   const r = await askClaude<{ reply: string; changes?: OrderChange[]; lesson?: string; rule?: string }>({
-    task: "order_fix", model: s.assistant.ai.model, maxTokens: 20000, timeoutMs: 150_000, admin, images, documents,
+    task: "order_fix", model: s.assistant.ai.model, maxTokens: 16000, timeoutMs: 150_000, admin, images, documents,
     ctx: { order_id: orderId, customer_id: o.customer_id, by },
     tool: { name: "order_fix", description: "What you'll change on the order and its art.", input_schema: { type: "object", properties: {
       reply: { type: "string", description: "Plain words, short: what you found or what you changed. No headings. Name prints by their spot (the Full Front print), never by an id." },
