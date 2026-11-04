@@ -19,7 +19,8 @@ export default function SheetPrint({ auto, name }: { auto: boolean; /** the file
       await document.fonts?.ready;
       const [{ toPng }, { PDFDocument }] = await Promise.all([import("html-to-image"), import("pdf-lib")]);
       const w = page.offsetWidth, h = page.offsetHeight;
-      const png = await toPng(page, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true });
+      // the copy is drawn without the page's centering margin and shadow, or it lands shifted half off the picture
+      const png = await toPng(page, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true, width: w, height: h, style: { margin: "0", boxShadow: "none", borderRadius: "0", transform: "none" } });
       const pdf = await PDFDocument.create();
       const img = await pdf.embedPng(png);
       // 96 css px = 72 pt: one page exactly the sheet's size
