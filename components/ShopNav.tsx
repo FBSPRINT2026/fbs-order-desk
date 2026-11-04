@@ -338,7 +338,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     {link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
     {/* moving customers over (Nov 3, Nick: "put the tool in my admin tools"): their contacts and details, then the move */}
     {link(["/shop/customers/contacts", "contacts", "Update contacts"])}
-    {link(["/shop/customers/move-list", "moveport", "Move to the portal"])}
+    {link(["/shop/customers/move-list", "moveport", "Portal intro emails"])}
     {/* payday: W-2 hours for QuickBooks Payroll, contractor checks, paycheck advances (Oct 30, Nick) */}
     {link(["/shop/payroll", "payroll", "Payroll Center"])}
     {/* where every drop is measured from, checked once per garment photo (Oct 20, Nick) */}

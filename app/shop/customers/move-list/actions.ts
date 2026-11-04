@@ -95,3 +95,29 @@ export async function setQuiet(ids: string[], quiet: boolean) {
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
+
+/** the owner's mailbox, from their name ("Amanda McCoy" → amanda@fbsprint.com) */
+const boxOf = (owner: string) => (owner.trim().split(/\s+/)[0] || "nicholas").toLowerCase().replace(/[^a-z]/g, "") + "@fbsprint.com";
+
+/** the personal intro email on or off for these customers: on goes to the main contact, from the account owner unless `from` says */
+export async function setPersonal(ids: string[], on: boolean, from?: string) {
+  try {
+    await me();
+    const admin = createAdminClient();
+    const ok = ids.filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 1000);
+    if (!on) { const { error } = await admin.from("customers").update({ personal_note_skip: true }).in("id", ok); if (error) throw new Error(error.message); return { ok: true as const }; }
+    const [{ data: cs }, { data: pr }] = await Promise.all([
+      admin.from("customers").select("id, email, personal_note_to, personal_note_from").in("id", ok),
+      admin.from("customer_private").select("customer_id, account_owner").in("customer_id", ok),
+    ]);
+    const own = new Map(((pr || []) as { customer_id: string; account_owner: string | null }[]).map((p) => [p.customer_id, p.account_owner || ""]));
+    for (const c of (cs || []) as { id: string; email: string | null; personal_note_to: string[] | null; personal_note_from: string | null }[]) {
+      const main = String(c.email || "").trim().toLowerCase();
+      const to = (c.personal_note_to || []).length ? c.personal_note_to! : okEmail(main) ? [main] : [];
+      const sender = from && /^(nicholas|amanda)@fbsprint\.com$/.test(from) ? from : c.personal_note_from || boxOf(own.get(c.id) || "");
+      const { error } = await admin.from("customers").update({ personal_note_skip: false, personal_note_to: to, personal_note_from: sender }).eq("id", c.id);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}

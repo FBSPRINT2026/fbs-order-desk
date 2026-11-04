@@ -145,7 +145,7 @@ export default function UpdateContacts() {
       <BackLink href="/shop/customers" label="Customers" />
       <div className="page-head">
         <div><h1>Update contacts</h1><div className="eyebrow">Every account, biggest first, with everyone at that company from your email. Blue was filled in for you: check it and save.</div></div>
-        <div className="row"><Link className="btn" href="/shop/customers/move-list">Move to the portal</Link></div>
+        <div className="row"><Link className="btn" href="/shop/customers/move-list">Portal intro emails</Link></div>
       </div>
       {rows && <div className="stats">
         {(["missing", "check", "done"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className={"v" + (s === "missing" && count(s) ? " alert" : "")}>{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}

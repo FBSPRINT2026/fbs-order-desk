@@ -3,137 +3,100 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
-import { PAY_TERMS, type PayTerms } from "@/lib/pricing";
-import { moveCustomers, moveList, setQuiet, setTerms, type MoveRow } from "./actions";
+import { moveList, setPersonal, setQuiet, type MoveRow } from "./actions";
 
 /**
- * Move to the portal (Nov 3, Nick): every customer, biggest first. Set terms with one click (or for every ticked one at
- * once), see who has an email, and move the ticked ones together. Customers already moved are grayed. The top 30 not
- * moved yet start ticked. The launch email itself goes from Settings → Launch email.
+ * Portal intro emails (Nov 3, Nick: "we'll just call that the Portal email tool… introductory email tool… we're going to
+ * check whether they get the email, they get the personal email, or they get no email tonight. Nothing else"). Every
+ * customer in the portal, with two ticks: the launch email (from portal@) and the personal note from Nick or Amanda (to
+ * their main contact). Neither ticked is no email. Nothing is sent from here; the sends go when Nick says.
+ * Moving customers and their contacts is Update contacts (app/shop/customers/contacts).
  */
-type Show = "30" | "100" | "all" | "todo";
-const money0 = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
+type Show = "all" | "launch" | "personal" | "none";
+const LABEL: Record<Show, string> = { all: "Everyone in the portal", launch: "Launch email", personal: "Personal email", none: "No email" };
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "");
-const SHORT: Record<PayTerms, string> = { prepay: "Pre-pay", receipt: "On receipt", deposit: "50/50", net30: "Net 30" };
-const TERMS = Object.keys(PAY_TERMS) as PayTerms[];
+const first = (n: string) => n.split(/\s+/)[0];
+const launchOn = (r: MoveRow) => !r.quiet && !!r.email;
+const personalOn = (r: MoveRow) => !r.personal.skip && r.personal.to.length > 0;
 
-export default function MoveList() {
-  const [show, setShow] = useSticky<Show>("customers.moveList.show", "30");
+export default function IntroEmails() {
+  const [show, setShow] = useSticky<Show>("customers.introEmails.show", "all");
+  const [who, setWho] = useSticky<string>("customers.introEmails.owner", "");
   const [rows, setRows] = useState<MoveRow[] | null>(null);
-  const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [q, setQ] = useState("");
-  const [err, setErr] = useState(""), [note, setNote] = useState(""), [busy, setBusy] = useState("");
-  const load = async (first = false) => {
-    const r = await moveList();
-    if (!r.ok) return setErr(r.error);
-    setRows(r.rows); setErr("");
-    if (first) setPicked(new Set(r.rows.filter((x) => x.rank && x.rank <= 30 && !x.movedAt).map((x) => x.id)));
-  };
-  useEffect(() => { void load(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [q, setQ] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState("");
+  const load = async () => { const r = await moveList(); if (r.ok) { setRows(r.rows.filter((x) => x.movedAt)); setErr(""); } else setErr(r.error); };
+  useEffect(() => { void load(); }, []);
 
   const all = rows || [];
+  const owners = [...new Set(all.map((r) => first(r.owner)).filter(Boolean))].sort();
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return all.filter((r) => (show === "30" ? r.rank > 0 && r.rank <= 30 : show === "100" ? r.rank > 0 && r.rank <= 100 : show === "todo" ? !r.movedAt : true)
-      && (!t || `${r.name} ${r.contact} ${r.email} ${r.owner}`.toLowerCase().includes(t)));
-  }, [all, show, q]);
-  const ticked = all.filter((r) => picked.has(r.id));
-  const toMove = ticked.filter((r) => !r.movedAt);
-  const tick = (id: string) => setPicked((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const allOn = list.length > 0 && list.every((r) => picked.has(r.id));
-  const tickAll = () => setPicked((s) => { const n = new Set(s); for (const r of list) { if (allOn) n.delete(r.id); else n.add(r.id); } return n; });
+    return all.filter((r) => (show === "all" || (show === "launch" ? launchOn(r) : show === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r)))
+      && (!who || first(r.owner) === who) && (!t || `${r.name} ${r.contact} ${r.email}`.toLowerCase().includes(t)));
+  }, [all, show, who, q]);
+  const count = (s: Show) => all.filter((r) => s === "all" || (s === "launch" ? launchOn(r) : s === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r))).length;
 
-  const terms = async (ids: string[], t: PayTerms) => {
-    const before = rows;
-    setBusy(ids.length > 1 ? "bulk" : ids[0]); setNote("");
-    setRows((rs) => (rs || []).map((x) => (ids.includes(x.id) ? { ...x, terms: t } : x)));
-    const r = await setTerms(ids, t);
-    setBusy("");
-    if (!r.ok) { setRows(before); return setErr(r.error); }
-    if (ids.length > 1) setNote(`${PAY_TERMS[t]} set for ${ids.length} customers.`);
-  };
-  const move = async (quiet = false) => {
-    if (!toMove.length) return;
-    setBusy(quiet ? "quiet" : "move"); setNote("");
-    const r = await moveCustomers(toMove.map((x) => x.id), quiet);
-    setBusy("");
-    if (!r.ok) return setErr(r.error);
-    setNote(`${r.moved} customer${r.moved === 1 ? "" : "s"} moved to the portal${quiet ? ", left off the launch email" : ""}.`);
+  const launch = async (rs: MoveRow[], on: boolean) => {
+    setBusy(rs.length > 1 ? "bulk" : rs[0].id);
+    const r = await setQuiet(rs.map((x) => x.id), !on);
+    setBusy(""); if (!r.ok) return setErr(r.error);
     await load();
   };
-  /** on or off the launch email, one customer */
-  const quiet = async (r: MoveRow, q: boolean) => {
-    setBusy(r.id);
-    setRows((rs) => (rs || []).map((x) => (x.id === r.id ? { ...x, quiet: q } : x)));
-    const res = await setQuiet([r.id], q);
-    setBusy("");
-    if (!res.ok) { setErr(res.error); setRows((rs) => (rs || []).map((x) => (x.id === r.id ? { ...x, quiet: r.quiet } : x))); }
+  const personal = async (rs: MoveRow[], on: boolean, from?: string) => {
+    setBusy(rs.length > 1 ? "bulk" : rs[0].id);
+    const r = await setPersonal(rs.map((x) => x.id), on, from);
+    setBusy(""); if (!r.ok) return setErr(r.error);
+    await load();
   };
-
-  const moved = all.filter((r) => r.movedAt).length;
-  const topLeft = all.filter((r) => r.rank && r.rank <= 30 && !r.movedAt).length;
-  const noEmail = all.filter((r) => r.movedAt && !r.email).length;
-  const sent = all.filter((r) => r.launchSent).length;
+  const unsentL = list.filter((r) => r.email && !r.launchSent), unsentP = list.filter((r) => r.email && !r.personal.sentAt);
+  const allL = unsentL.length > 0 && unsentL.every(launchOn), allP = unsentP.length > 0 && unsentP.every(personalOn);
 
   return (
     <>
       <BackLink href="/shop/customers" label="Customers" />
       <div className="page-head">
-        <div><h1>Move to the portal</h1><div className="eyebrow">Every customer, biggest first: set terms, tick who to move, and move them together</div></div>
-        <div className="row"><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
+        <div><h1>Portal intro emails</h1><div className="eyebrow">Who gets the launch email, who gets a personal note from Nick or Amanda, and who gets nothing. Nothing sends from here.</div></div>
+        <div className="row"><Link className="btn" href="/shop/customers/contacts">Update contacts</Link><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
       </div>
       {rows && <div className="stats">
-        <button type="button" className="stat" onClick={() => setShow("all")}><span className="v">{moved}</span><span className="k">In the portal</span></button>
-        <button type="button" className="stat" onClick={() => setShow("30")}><span className={"v" + (topLeft ? " alert" : "")}>{topLeft}</span><span className="k">Top 30 not moved</span></button>
-        <button type="button" className="stat" onClick={() => setShow("todo")}><span className="v">{all.length - moved}</span><span className="k">Not moved yet</span></button>
-        <button type="button" className="stat"><span className={"v" + (noEmail ? " alert" : "")}>{noEmail}</span><span className="k">Moved, no email</span></button>
-        <button type="button" className="stat"><span className="v">{sent}</span><span className="k">Launch email sent</span></button>
+        {(["all", "launch", "personal", "none"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
       </div>}
       <div className="toolbar">
+        <div className="chips">{(["all", "launch", "personal", "none"] as Show[]).map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
         <div className="chips">
-          {([["30", "Top 30"], ["100", "Top 100"], ["todo", "Not moved yet"], ["all", "Everyone"]] as [Show, string][]).map(([k, l]) => <button key={k} type="button" className={"chip" + (show === k ? " on" : "")} onClick={() => setShow(k)}>{l}</button>)}
+          <button type="button" className={"chip" + (!who ? " on" : "")} onClick={() => setWho("")}>Everyone&apos;s</button>
+          {owners.map((o) => <button key={o} type="button" className={"chip" + (who === o ? " on" : "")} onClick={() => setWho(o)}>{o}&apos;s</button>)}
         </div>
         <input type="search" className="mvl-q" placeholder="Find a customer" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
-      {ticked.length > 0 && (
-        <div className="mvl-bulk">
-          <b>{ticked.length} ticked</b>
-          <span className="mvl-bulk-t"><span className="faint">Set terms:</span>
-            <span className="chips">{TERMS.map((t) => <button key={t} type="button" className="chip" disabled={busy === "bulk"} onClick={() => void terms(ticked.map((x) => x.id), t)}>{SHORT[t]}</button>)}</span>
-          </span>
-          <span className="spacer" />
-          <button type="button" className="btn ghost sm" onClick={() => setPicked(new Set())}>Clear</button>
-          {toMove.length > 0 && <button type="button" className="btn" disabled={!!busy} title="Moved to the portal, but left off the launch email" onClick={() => void move(true)}>{busy === "quiet" ? "Moving…" : `Move ${toMove.length}, don't notify`}</button>}
-          <button type="button" className="btn primary" disabled={!toMove.length || !!busy} onClick={() => void move()}>{busy === "move" ? "Moving…" : toMove.length ? `Move ${toMove.length} to the portal` : "All ticked are moved"}</button>
-        </div>
-      )}
-      {note && <div className="ok-note">{note}</div>}
       {err && <div className="err">{err}</div>}
       {rows === null ? <p className="faint">Loading…</p> : !list.length ? <p className="faint">No customers here.</p> : (
         <div className="tbl-wrap">
           <table className="tbl mvl-tbl">
             <thead><tr>
-              <th><input type="checkbox" aria-label="Tick every customer shown" checked={allOn} onChange={tickAll} /></th>
-              <th>#</th><th>Customer</th><th className="num">Last 12 months</th><th>Owner</th><th>Terms</th><th>Portal</th><th>Launch email</th><th>Personal email</th>
+              <th>Customer</th><th>Owner</th>
+              <th className="mvl-c"><label className="mvl-hc"><input type="checkbox" aria-label="Launch email for everyone shown" checked={allL} disabled={busy === "bulk"} onChange={() => void launch(unsentL, !allL)} /> Launch email</label></th>
+              <th className="mvl-c"><label className="mvl-hc"><input type="checkbox" aria-label="Personal email for everyone shown" checked={allP} disabled={busy === "bulk"} onChange={() => void personal(unsentP, !allP)} /> Personal email</label></th>
+              <th>From</th>
             </tr></thead>
-            <tbody>{list.map((r) => (
-              <tr key={r.id} className={r.movedAt ? "mvl-done" : ""}>
-                <td><input type="checkbox" aria-label={`Tick ${r.name}`} checked={picked.has(r.id)} onChange={() => tick(r.id)} /></td>
-                <td className="faint">{r.rank || ""}</td>
-                <td><Link href={`/shop/customers/${r.id}`} data-notranslate>{r.name}</Link><div className="sub" data-notranslate>{r.email || <span className="mvl-noemail">No email on file</span>}</div></td>
-                <td className="num nowrap">{r.sales ? money0(r.sales) : "—"}</td>
-                <td className="nowrap">{r.owner ? r.owner.split(/\s+/)[0] : <span className="faint">—</span>}</td>
-                <td><div className="chips mvl-terms" role="group" aria-label={`Terms for ${r.name}`}>
-                  {TERMS.map((t) => <button key={t} type="button" className={"chip" + (r.terms === t ? " on" : "")} disabled={busy === r.id} onClick={() => r.terms !== t && void terms([r.id], t)}>{SHORT[t]}</button>)}
-                </div></td>
-                <td className="nowrap">{r.movedAt ? <span className="mvl-in">In since {day(r.movedAt)}</span> : <span className="faint">Not yet</span>}</td>
-                <td className="nowrap">{r.launchSent ? `Sent ${day(r.launchSent)}` : !r.email ? <span className="faint">No email</span> : !r.movedAt ? <span className="faint">—</span>
-                  : r.quiet ? <button type="button" className="linkbtn mvl-quiet" disabled={busy === r.id} title="Put them back on the launch email" onClick={() => void quiet(r, false)}>Not notifying</button>
-                  : <button type="button" className="linkbtn" disabled={busy === r.id} title="Leave them off the launch email" onClick={() => void quiet(r, true)}>Will get it</button>}</td>
-                <td className="mvl-pers">{r.personal.sentAt ? `Sent ${day(r.personal.sentAt)}` : r.personal.skip ? <span className="faint">Not sending</span>
-                  : r.personal.to.length ? <><span data-notranslate>{r.personal.to.join(", ")}</span><div className="sub">from {/^amanda/i.test(r.personal.from) ? "Amanda" : "Nick"}</div></> : <span className="faint">—</span>}</td>
-              </tr>
-            ))}</tbody>
+            <tbody>{list.map((r) => {
+              const pOn = personalOn(r), fromAmanda = /^amanda/i.test(r.personal.from);
+              return (
+                <tr key={r.id} className={!launchOn(r) && !pOn ? "mvl-none" : ""}>
+                  <td><Link href={`/shop/customers/${r.id}`} data-notranslate>{r.name}</Link><div className="sub" data-notranslate>{r.email ? [r.contact, r.email].filter(Boolean).join(" · ") : <span className="mvl-noemail">No email on file: add one in Update contacts</span>}</div></td>
+                  <td className="nowrap">{r.owner ? first(r.owner) : <span className="faint">—</span>}</td>
+                  <td className="mvl-c">{r.launchSent ? <span className="mvl-in">Sent {day(r.launchSent)}</span>
+                    : <input type="checkbox" aria-label={`Launch email to ${r.name}`} checked={launchOn(r)} disabled={!r.email || busy === r.id} onChange={(e) => void launch([r], e.target.checked)} />}</td>
+                  <td className="mvl-c">{r.personal.sentAt ? <span className="mvl-in">Sent {day(r.personal.sentAt)}</span>
+                    : <input type="checkbox" aria-label={`Personal email to ${r.name}`} checked={pOn} disabled={!r.email || busy === r.id} onChange={(e) => void personal([r], e.target.checked)} />}
+                    {pOn && <div className="sub" data-notranslate>to {r.personal.to.join(", ")}</div>}</td>
+                  <td>{pOn ? <div className="mvl-from" role="group" aria-label="Who it's from">
+                    <button type="button" className={!fromAmanda ? "on" : ""} disabled={busy === r.id} onClick={() => fromAmanda && void personal([r], true, "nicholas@fbsprint.com")}>Nick</button>
+                    <button type="button" className={fromAmanda ? "on" : ""} disabled={busy === r.id} onClick={() => !fromAmanda && void personal([r], true, "amanda@fbsprint.com")}>Amanda</button>
+                  </div> : <span className="faint">—</span>}</td>
+                </tr>
+              );
+            })}</tbody>
           </table>
         </div>
       )}

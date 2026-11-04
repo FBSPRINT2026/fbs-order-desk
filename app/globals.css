@@ -14952,6 +14952,14 @@ input.ucx-sug,textarea.ucx-sug{border-color:var(--accent);background:var(--accen
 .mvl-in{color:var(--ok);font-weight:700}
 .mvl-tbl .linkbtn{font-size:13px}
 .mvl-pers{font-size:13px;min-width:160px}
+.mvl-c{text-align:center}
+.mvl-tbl td.mvl-c input{width:18px;height:18px}
+.mvl-hc{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer}
+.mvl-tbl tr.mvl-none td{color:var(--ink-3)}
+.mvl-from{display:inline-grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden;min-width:140px}
+.mvl-from button{height:32px;border:0;border-right:1px solid var(--line);background:var(--surface);font:inherit;font-size:13px;color:var(--ink-2);cursor:pointer}
+.mvl-from button:last-child{border-right:0}
+.mvl-from button.on{background:var(--accent);color:var(--accent-ink);font-weight:700}
 .mvl-tbl .linkbtn.mvl-quiet{color:var(--ink-3)}
 .mvl-q{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;min-width:200px;flex:0 1 260px;margin-left:auto}
 .mvl-bulk{position:sticky;top:8px;z-index:20;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--accent);border-radius:var(--r);background:var(--surface);box-shadow:0 6px 18px rgba(0,0,0,.08)}
