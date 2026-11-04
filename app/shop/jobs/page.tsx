@@ -27,9 +27,11 @@ import { useUrlSearch } from "@/lib/useUrlSearch";
 const ic = (d: ReactNode) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{d}</svg>;
 type G = { t: string; line: string; c: string; steps: [Step, string, ReactNode][] };
 const GROUPS: G[] = [
-  { t: "Incoming", line: "Leads and requests", c: "var(--fbs-violet)", steps: [
-    ["leads", "Leads", ic(<><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="m3 7 9 6 9-6" /></>)],
-    ["requests", "Requests", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
+  // one card for now: what customers sent in (Nov 3, Nick: "hide leads… one card thing that says incoming… customer
+  // request, customer sent… leads I will deal with later as more of a sales pipeline thing… people are getting confused").
+  // Leads (orders the AI found in emails) are still worked out in lib/jobCenter.ts, just not shown.
+  { t: "Incoming", line: "Customer requests", c: "var(--fbs-violet)", steps: [
+    ["requests", "Customer sent", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
   { t: "In the works", line: "Mockups and numbers", c: "var(--warn)", steps: [
     ["mockups", "Mockups", ic(<><path d="M15 4l6 2v5h-3v8a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-8H3V6l6-2a3 3 0 0 0 6 0" /></>)],
     ["numbers", "Numbers", ic(<><path d="M5 9h14M5 15h14M11 4 7 20M17 4l-4 16" /></>)]] },
@@ -76,6 +78,8 @@ export default function JobCenter() {
   useEffect(() => { const c = jcRead(); if (c.items) setItems0((cur) => cur || c.items!); if (c.me) setMe(c.me); if (c.hasAcc != null) setHasAcc(c.hasAcc); if (c.chats) setChats((cur) => (cur.length ? cur : c.chats!)); }, []);
   const [err, setErr] = useState(""), [msg, setMsg] = useState("");
   const [step, setStep] = useSticky<Step>("jobs.step", "mockups");
+  // Leads are hidden for now: a page left on them opens on what customers sent
+  useEffect(() => { if (step === "leads") setStep("requests"); }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
   const [dept, setDept] = useSticky<Dept | "all">("jobs.dept", "all");
   const [mineOn, setMine] = useSticky<boolean>("jobs.mine", true);
   const cameBack = false; // the "Came back with changes" filter is gone (Nov 2, Nick)
@@ -113,7 +117,7 @@ export default function JobCenter() {
   }, [cn]);
   useEffect(() => {
     let live = true;
-    void loadJobs().then((r) => { if (!live) return; if (!r.ok) { setErr(r.error); return; } setItems(r.items); setMe(r.me); setHasAcc(r.hasAccounts); jcKeep({ me: r.me, hasAcc: r.hasAccounts }); });
+    void loadJobs().then((r) => { if (!live) return; if (!r.ok) { setErr(r.error); return; } setItems(r.items.filter((x) => x.type !== "lead")); setMe(r.me); setHasAcc(r.hasAccounts); jcKeep({ me: r.me, hasAcc: r.hasAccounts }); });
     return () => { live = false; };
   }, [n]);
 
@@ -331,7 +335,7 @@ export default function JobCenter() {
               <div className="jmb-focus" style={{ ["--mc" as string]: focusJob ? colorOfChat(curChat) : "var(--ink-3)" }}>
                 <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} />
               </div>
-              {isRq && focusJob?.orderId ? <RequestsDesk q="" only={focusJob.orderId} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} />
+              {isRq && focusJob?.orderId ? <RequestsDesk q="" only={focusJob.orderId} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} />
                 : focusJob ? <div className="tbl-wrap"><table className="tbl jc" data-nofit>
                   <thead><tr><th>Job</th><th>Dept</th><th>{fst === "approved" ? "Where it is" : "Needs"}</th><th>Also</th><th>Due</th></tr></thead>
                   <tbody><Row it={focusJob} step={fst || step} msgs={unreadOf(focusJob.orderId)} on={pick === focusJob.key} onPick={() => setPick(pick === focusJob.key ? null : focusJob.key)} after={after} onLead={() => setLead(focusJob)} /></tbody>
@@ -353,7 +357,7 @@ export default function JobCenter() {
             </div>
             <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{curG?.t}</b><span>›</span><b>{(curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && step !== "requests" ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}</div>
             {/* Requests: laid out like ClickUp Jobs' New list, the picked one opened on top (components/RequestsDesk.tsx) */}
-            {step === "requests" && !all ? <RequestsDesk q={q} onlyIds={items ? new Set(pool("requests").filter((it) => it.steps.includes("requests") && inDept(it) && it.orderId).map((it) => it.orderId!)) : undefined} pick={reqPick || undefined} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
+            {step === "requests" && !all ? <RequestsDesk q={q} onlyIds={items ? new Set(pool("requests").filter((it) => it.steps.includes("requests") && inDept(it) && it.orderId).map((it) => it.orderId!)) : undefined} pick={reqPick || undefined} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
                 <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
                 <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [
