@@ -41,7 +41,16 @@ export async function sendFromMailbox(c: MailCfg, o: {
     if (saveSent) { try { await saveSent(raw); return { messageId }; } catch (e) { console.warn(`sent copy over EWS failed: ${e instanceof Error ? e.message : e}`); } }
     const client = imapClient(c);
     await client.connect();
-    try { await client.append(await sentFolder(client), raw, ["\\Seen"]); } finally { await client.logout().catch(() => null); }
+    try {
+      await client.append(await sentFolder(client), raw, ["\\Seen"]);
+      // a reply: the email it answers is flagged answered, so Outlook shows it replied (Nov 4, Nick)
+      if (o.inReplyTo) {
+        try {
+          const lock = await client.getMailboxLock("INBOX");
+          try { const uids = await client.search({ header: { "message-id": o.inReplyTo } }, { uid: true }); if (uids && uids.length) await client.messageFlagsAdd(uids, ["\\Answered"], { uid: true }); } finally { lock.release(); }
+        } catch { /* the reply went either way */ }
+      }
+    } finally { await client.logout().catch(() => null); }
   } catch { /* sent anyway; only the Outlook copy is missing */ }
   return { messageId };
 }

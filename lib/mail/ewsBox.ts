@@ -296,6 +296,24 @@ export async function ewsMove(admin: SupabaseClient, acct: MailAccount, path: st
 export async function ewsSaveSent(acct: MailAccount, raw: Buffer) {
   const t = await ewsTree(acct);
   await call(acct, `<m:CreateItem MessageDisposition="SaveOnly"><m:SavedItemFolderId><t:FolderId Id="${esc(t.sent)}"/></m:SavedItemFolderId><m:Items><t:Message><t:MimeContent CharacterSet="UTF-8">${raw.toString("base64")}</t:MimeContent><t:ExtendedProperty><t:ExtendedFieldURI PropertyTag="3591" PropertyType="Integer"/><t:Value>1</t:Value></t:ExtendedProperty></t:Message></m:Items></m:CreateItem>`, 40000);
+  // a reply: the email it answers shows as replied in Outlook (Nov 4, Nick: "my Outlook right now shows his message is
+  // unreplied to… but then I see the item in the sent")
+  await ewsMarkReplied(acct, raw).catch((e) => console.warn("ewsMarkReplied", e));
+}
+
+/** the email a sent reply answers (its In-Reply-To), marked replied the way Outlook does it: the last action (reply or
+ *  reply all), when, and the replied arrow */
+export async function ewsMarkReplied(acct: MailAccount, raw: Buffer) {
+  const head = raw.subarray(0, Math.min(raw.length, 64000)).toString("utf8").split(/\r?\n\r?\n/)[0].replace(/\r?\n[ \t]+/g, " ");
+  const h = (name: string) => (head.match(new RegExp(`^${name}:\\s*(.*)$`, "im"))?.[1] || "").trim();
+  const irt = h("In-Reply-To").match(/<[^>]+>/)?.[0] || "";
+  if (!irt) return false;
+  const many = h("Cc") !== "" || (h("To").match(/@/g) || []).length > 1;
+  const id = await ewsFindByMessageId(acct, "INBOX", irt).catch(() => "");
+  if (!id) return false;
+  const prop = (tag: string, type: string, v: string) => `<t:SetItemField><t:ExtendedFieldURI PropertyTag="${tag}" PropertyType="${type}"/><t:Message><t:ExtendedProperty><t:ExtendedFieldURI PropertyTag="${tag}" PropertyType="${type}"/><t:Value>${v}</t:Value></t:ExtendedProperty></t:Message></t:SetItemField>`;
+  await call(acct, `<m:UpdateItem MessageDisposition="SaveOnly" ConflictResolution="AutoResolve" SuppressReadReceipts="true"><m:ItemChanges><t:ItemChange><t:ItemId Id="${esc(id)}"/><t:Updates>${prop("0x1081", "Integer", many ? "103" : "102")}${prop("0x1082", "SystemTime", new Date().toISOString().replace(/\.\d+Z$/, "Z"))}${prop("0x1080", "Integer", "261")}</t:Updates></t:ItemChange></m:ItemChanges></m:UpdateItem>`);
+  return true;
 }
 
 /**
