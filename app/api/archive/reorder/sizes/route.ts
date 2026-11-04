@@ -18,7 +18,7 @@ export const maxDuration = 60;
  */
 type Line = { style: string; color: string; sizes: Record<string, number>; brand?: string; garment?: string; /** the paper's own words for it (brand, name), to tell two brands' same style apart */ said?: string };
 type Img = { media_type: "image/jpeg" | "image/png" | "image/webp"; data: string };
-type InFile = { name: string; pdf?: string; images?: Img[] };
+type InFile = { name: string; pdf?: string; images?: Img[]; /** words: an email's message, pasted text */ text?: string };
 
 /**
  * A style as our catalog knows it (Nov 2, Nick on #40363: the reader wrote "5000 Unisex Heavy Cotton T-Shirt" and
@@ -59,7 +59,8 @@ const pcsOf = (ls: Line[]) => ls.reduce((s, l) => s + Object.values(l.sizes).red
 export async function POST(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const b = await req.json().catch(() => ({})) as { name?: string; pdf?: string; pdfs?: string[]; count?: number; images?: Img[]; files?: InFile[] };
+  const b = await req.json().catch(() => ({})) as { name?: string; pdf?: string; pdfs?: string[]; count?: number; images?: Img[]; files?: InFile[];
+    /** last time's garments: an email that just says "the same shirts, these sizes" is about them */ last?: { style?: string; brand?: string; color?: string; garment?: string }[] };
   const name = String(b.name || "the file").slice(0, 160);
   // each file read on its own terms (Nov 2, Nick: two S&S confirmations and a One Stop order): a supplier confirmation by
   // code, exactly; anything else by the AI from its pictures; then everything added together
@@ -86,14 +87,16 @@ export async function POST(req: Request) {
   }
   if (rest.length) {
     const images = rest.flatMap((f) => f.images || []).slice(0, 10);
-    if (!images.length) return NextResponse.json({ error: "Couldn't read any sizes from that file." }, { status: 400 });
+    const texts = rest.filter((f) => f.text?.trim()).map((f) => `--- ${f.name} ---\n${String(f.text).slice(0, 12000)}`);
+    if (!images.length && !texts.length) return NextResponse.json({ error: "Couldn't read any sizes from that file." }, { status: 400 });
+    const last = (b.last || []).filter((l) => l?.style).slice(0, 20).map((l) => `${[l.brand, l.style].filter(Boolean).join(" ")}${l.color ? ` ${l.color}` : ""}${l.garment ? ` (${l.garment})` : ""}`);
     const st = await aiState(admin);
     if (!st.ready) return NextResponse.json({ error: st.reason }, { status: 400 });
     const names = rest.map((f) => f.name).join(", ");
     const r = await askClaude<{ source?: string; lines?: Line[] }>({
       task: "reorder_sizes", model: st.settings.assistant.ai.model, maxTokens: 2500, timeoutMs: 50_000, admin, images, ctx: { by: v.email || "staff" },
-      system: `You read garment quantities off a file a print shop got for a reorder: a supplier's order confirmation (S&S, SanMar, alphabroder, One Stop…), the customer's PO, a size sheet or a snip of one. List every style and color with its quantity in each size, exactly as the file shows them. Skip totals and subtotals. Sizes: ${SIZES.join(", ")} (XXL / 2X → 2XL, SM → S, MD → M, LG → L, Youth M → YM). style: the garment maker's style number as written (e.g. 5000, 562MR, PC54), and when the seller uses its own item number too, write both ("JZ360 562MR"); never the description. color: the color as written. Never make numbers up.`,
-      prompt: rest.length > 1 ? `${rest.length} files (${names}): one order split over several. Read every row on every file and add the same style, color and size together.` : `The file: ${names}. Read every row on it.`,
+      system: `You read garment quantities off a file a print shop got for a reorder: a supplier's order confirmation (S&S, SanMar, alphabroder, One Stop…), the customer's PO, a size sheet or a snip of one. List every style and color with its quantity in each size, exactly as the file shows them. Skip totals and subtotals. Sizes: ${SIZES.join(", ")} (XXL / 2X → 2XL, SM → S, MD → M, LG → L, Youth M → YM). style: the garment maker's style number as written (e.g. 5000, 562MR, PC54), and when the seller uses its own item number too, write both ("JZ360 562MR"); never the description. color: the color as written. Never make numbers up. The file may be an email or text in words ("50 Small, 165 Medium, 170 Large…"): read those counts the same way. When it gives sizes without naming the garment ("a quote for these reprint quantities"), it means last time's garment: give one line for it with its style and color${last.length ? "" : " left empty"}.${last.length ? ` Last time's garments: ${last.join("; ")}. Use these styles and colors when the file doesn't name others; when last time had several and the file doesn't say which, leave style and color empty.` : ""}`,
+      prompt: `${rest.length > 1 ? `${rest.length} files (${names}): one order split over several. Read every row on every file and add the same style, color and size together.` : `The file: ${names}. Read every row on it.`}${texts.length ? `\n\n${texts.join("\n\n")}` : ""}`,
       tool: { name: "sizes", description: "What the file lists.", input_schema: { type: "object", properties: {
         source: { type: "string", description: 'What the file is, short: "S&S order confirmation #77356830", "One Stop order 1-1-6878980", "Their PO 4471"' },
         lines: { type: "array", items: { type: "object", properties: { style: { type: "string" }, color: { type: "string" }, sizes: { type: "object", additionalProperties: { type: "number" } } }, required: ["style", "color", "sizes"] } },
@@ -103,10 +106,10 @@ export async function POST(req: Request) {
     exact = false;
     if (r.data.source) sources.push(String(r.data.source).slice(0, 80));
     for (const l of r.data.lines || []) {
-      if (!l?.style) continue;
+      if (!l) continue;
       const sizes: Record<string, number> = {};
       for (const [k, q] of Object.entries(l.sizes || {})) { const z = normSize(k); const n = Math.floor(+q || 0); if (z && n > 0) sizes[z] = (sizes[z] || 0) + n; }
-      if (Object.keys(sizes).length) got.push({ style: String(l.style).trim(), color: String(l.color || "").trim(), sizes });
+      if (Object.keys(sizes).length) got.push({ style: String(l.style || "").trim(), color: String(l.color || "").trim(), sizes });
     }
   }
   const lines = merge(await toCatalog(admin, got));

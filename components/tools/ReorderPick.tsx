@@ -84,17 +84,18 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
     for (const f0 of fs) {
       let f = f0 as File; const nm = f.name || `Snip ${queued.length + out.length + 1}.png`;
       if (/\.msg$/i.test(nm) || /ms-outlook/i.test(f.type)) {
-        // an email dragged out of Outlook: its PDFs and pictures
+        // an email dragged out of Outlook: its words (the counts are often written right in it) and its PDFs and pictures
         try {
-          const { readMsg } = await import("@/lib/outlookMsg");
-          const as = readMsg(await f.arrayBuffer()).attachments.filter((x) => /pdf|^image\//i.test(x.type) || /\.(pdf|png|jpe?g)$/i.test(x.name));
-          if (!as.length) { setErr("That email has no PDF or picture attached to read sizes from."); continue; }
-          for (const a of as) out.push(new File([a.data as BlobPart], a.name, { type: a.type || (/\.pdf$/i.test(a.name) ? "application/pdf" : "image/png") }));
+          const { msgAsFiles, isTextFile } = await import("@/lib/dropFiles");
+          const as = (await msgAsFiles(f)).filter((x) => isTextFile(x) || /pdf|^image\//i.test(x.type) || /\.(pdf|png|jpe?g)$/i.test(x.name))
+            .map((x) => (x.type ? x : new File([x], x.name, { type: /\.pdf$/i.test(x.name) ? "application/pdf" : "image/png" })));
+          if (!as.length) { setErr("That email is empty: nothing in it or attached to read sizes from."); continue; }
+          out.push(...as);
         } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't read that email."); }
         continue;
       }
       if (!f.name) f = new File([f0], nm, { type: f0.type || "image/png" });
-      if (!/pdf/i.test(f.type) && !/\.pdf$/i.test(f.name) && !/^image\//.test(f.type)) { setErr(`${f.name}: drop a PDF or a picture (a snip works too).`); continue; }
+      if (!/pdf/i.test(f.type) && !/\.pdf$/i.test(f.name) && !/^image\//.test(f.type) && !/^text\/plain/i.test(f.type) && !/\.txt$/i.test(f.name)) { setErr(`${f.name}: drop a PDF, a picture (a snip works too), an email or some text.`); continue; }
       out.push(f);
     }
     if (out.length) { setSizeMode("file"); setRead(null); setReadOk(false); setErr(""); setQueued((q) => [...q, ...out].slice(0, 8)); }
@@ -104,11 +105,13 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
     setSizeMode("file"); setRead(null); setReadOk(false); setErr(""); setReadBusy(fs.length > 1 ? `Reading ${fs.length} files…` : `Reading ${fs[0].name}…`);
     try {
       // each file on its own (its PDF and its pictures), so a supplier confirmation is read exactly and only the rest by AI
-      const files: { name: string; pdf?: string; images: { media_type: "image/jpeg"; data: string }[] }[] = [];
+      const files: { name: string; pdf?: string; text?: string; images: { media_type: "image/jpeg"; data: string }[] }[] = [];
       const per = Math.max(1, Math.min(2, Math.floor(8 / fs.length)));
       for (const f of fs) {
         const one: (typeof files)[number] = { name: f.name, images: [] };
         const pic = (c: HTMLCanvasElement) => one.images.push({ media_type: "image/jpeg", data: c.toDataURL("image/jpeg", 0.82).split(",")[1] });
+        // words: an email's message or pasted text, read as they are
+        if (/^text\/plain/i.test(f.type) || /\.txt$/i.test(f.name)) { one.text = (await f.text()).slice(0, 12000); files.push(one); continue; }
         if (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name)) {
           const buf = await f.arrayBuffer();
           let bin = ""; const u8 = new Uint8Array(buf); for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode(...u8.subarray(i, i + 0x8000));
@@ -124,7 +127,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
         }
         files.push(one);
       }
-      const r = await fetch("/api/archive/reorder/sizes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fs.map((f) => f.name).join(", "), files }) });
+      const r = await fetch("/api/archive/reorder/sizes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fs.map((f) => f.name).join(", "), files, last: (d?.lines || []).map((l) => ({ style: l.style, brand: l.brand, color: l.color, garment: l.garment })) }) });
       const j = await r.json().catch(() => ({})) as Read & { error?: string };
       if (!r.ok || j.error) throw new Error(j.error || "Couldn't read the sizes.");
       setRead(j); setOffOld({}); setAddNew({}); // the files stay listed: drop one more and Read reads them all again
@@ -138,6 +141,8 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
     const old = d.lines.map((l) => {
       let k = read.lines.findIndex((r, i) => !used.has(i) && sameStyle(r.style, l.style) && sameColor(r.color, l.color));
       if (k < 0) k = read.lines.findIndex((r, i) => !used.has(i) && sameStyle(r.style, l.style) && read.lines.filter((z) => sameStyle(z.style, l.style)).length === 1 && d.lines.filter((z) => sameStyle(z.style, l.style)).length === 1);
+      // sizes with no garment named ("the same shirts: 50 S, 165 M…"): last time's line, when it's the only one (or the color says which)
+      if (k < 0) k = read.lines.findIndex((r, i) => !used.has(i) && !r.style.trim() && (r.color.trim() ? sameColor(r.color, l.color) : d.lines.length === 1));
       if (k >= 0) used.add(k);
       return { k, was: sizesOf(l.sizes) };
     });
@@ -286,7 +291,13 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
 
   return (
     <div className="dla-bg dock" role="dialog" aria-label="Create reorder">
-      <div className="dla osp rop" onClick={(e) => e.stopPropagation()} onPaste={(e) => { const fs = [...e.clipboardData.files]; if (fs.length && sizeMode === "file") { e.preventDefault(); void addSizeFiles(fs); } }}>
+      <div className="dla osp rop" onClick={(e) => e.stopPropagation()} onPaste={(e) => {
+        const fs = [...e.clipboardData.files];
+        if (fs.length && sizeMode === "file") { e.preventDefault(); void addSizeFiles(fs); return; }
+        // pasted words with counts in them (an email copied out of Outlook), unless they're going into a box
+        const t = e.clipboardData.getData("text/plain"), into = (e.target as HTMLElement).closest("input, textarea, select, [contenteditable]");
+        if (!into && sizeMode === "file" && /\d/.test(t) && t.trim().length > 6) { e.preventDefault(); void addSizeFiles([new File([t], "Pasted text.txt", { type: "text/plain" })]); }
+      }}>
         <h3>Create reorder</h3>
         {!d ? <p className="faint">{err || "Reading the old job…"}</p> : <>
           <div className="osp-card open">

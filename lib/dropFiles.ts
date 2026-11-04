@@ -18,6 +18,20 @@ export async function msgFiles(f: File): Promise<File[]> {
   return readMsg(await f.arrayBuffer()).attachments.filter((a) => !sigPic(a.name, a.data.length)).map((a) => new File([a.data as BlobPart], a.name, { type: a.type || "" }));
 }
 
+/** an Outlook email as everything in it that can be read (Nov 3, Nick: Fossil's reorder email had the counts in its
+ *  words, not an attachment, and the reorder's drop box said "no PDF or picture"): its words as a text file (who it's
+ *  from, the subject and the message), then its attachments (signature pictures left out) */
+export async function msgAsFiles(f: File): Promise<File[]> {
+  const { readMsg } = await import("@/lib/outlookMsg");
+  const m = readMsg(await f.arrayBuffer());
+  const out: File[] = [];
+  const words = [`From: ${m.from}${m.fromEmail ? ` <${m.fromEmail}>` : ""}`, `Subject: ${m.subject}`, "", m.body].join("\n").trim();
+  if (m.body.trim()) out.push(new File([words], `${(m.subject || "Email").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80)} (email).txt`, { type: "text/plain" }));
+  for (const a of m.attachments) if (!sigPic(a.name, a.data.length)) out.push(new File([a.data as BlobPart], a.name, { type: a.type || "" }));
+  return out;
+}
+export const isTextFile = (f: File) => /^text\/plain/i.test(f.type) || /\.txt$/i.test(f.name);
+
 /** a file dragged off a web page: its link, fetched (the first link that gives a file; ClickUp's files first) */
 export async function filesFromLinks(dt: DataTransfer): Promise<{ files: File[]; error?: string }> {
   const html = dt.getData("text/html"), list = dt.getData("text/uri-list") || dt.getData("text/plain");
