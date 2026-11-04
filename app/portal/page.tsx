@@ -1,3 +1,4 @@
+import { asCustomerSees, designSpecsFor, SENT_OR_SHOWN } from "@/lib/portalView";
 import { cardFeeInOld, cardFeeInOrder } from "@/lib/cardFeeIn";
 import { allRows } from "@/lib/readAll";
 import CreditBox from "@/components/CreditBox";
@@ -82,11 +83,13 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const [{ data: ar }, { data }] = await Promise.all([
       // every one, in pages (Nov 2 portal check: Cedar Promos has 2,337 old orders and the list stopped at 1,000)
       allRows((ra, rb) => admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).is("removed_at", null).in("customer_id", ctx.customerIds).order("order_date", { ascending: false }).order("id").range(ra, rb)),
-      allRows((ra, rb) => ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).neq("status", "quote").is("discarded_at", null).order("number", { ascending: false }).order("id").range(ra, rb)),
+      allRows((ra, rb) => ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).or(SENT_OR_SHOWN).is("discarded_at", null).order("number", { ascending: false }).order("id").range(ra, rb)),
     ]);
     archived = (ar || []) as never;
     // drafts aren't orders yet (Oct 24, Nick): only in "Your drafts", never in the lists
-    const all = (data || []) as (Order & { draft?: boolean })[];
+    // an order they sent in that we're still building shows as they sent it (lib/portalView.ts)
+    const specs = await designSpecsFor(ctx.db, (data || []) as Order[]);
+    const all = ((data || []) as (Order & { draft?: boolean })[]).map((o) => asCustomerSees({ ...o, designSpecs: specs } as typeof o, ctx.settings));
     drafts = all.filter((o) => o.draft).map((o) => ({ id: o.id, name: o.nickname || "", updated: String((o as { updated_at?: string }).updated_at || o.created_at || ""), pcs: o.qty || 0 }));
     orders = all.filter((o) => !o.draft);
     const ids = orders.map((o) => o.id);

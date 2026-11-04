@@ -1,3 +1,4 @@
+import { asCustomerSees, designSpecsFor, SENT_OR_SHOWN } from "@/lib/portalView";
 import { cardFeeInOrder } from "@/lib/cardFeeIn";
 import PortalGoods from "@/components/PortalGoods";
 import PortalAttachments from "@/components/PortalAttachments";
@@ -41,9 +42,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   const { id } = await params;
   const { as, paid: justPaid, sent: justSent, reviewed, sewout: sewDone, view, pay: payOpen } = await searchParams;
   const ctx = await getPortalCtx(as, `/portal/orders/${id}`);
-  const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).neq("status", "quote").maybeSingle();
+  const { data: od } = await ctx.db.from("orders").select("*").eq("id", id).in("customer_id", ctx.customerIds.length ? ctx.customerIds : ["00000000-0000-0000-0000-000000000000"]).or(SENT_OR_SHOWN).maybeSingle();
   if (!od) notFound();
-  const o = withoutShopPieces(od as Order); // the customer's view: never the shop's own pieces (lib/pricing.ts withoutShopPieces)
+  const o = withoutShopPieces(asCustomerSees({ ...(od as Order), designSpecs: await designSpecsFor(ctx.db, [od as Order]) } as Order, ctx.settings)); // the customer's view: never the shop's own pieces (lib/pricing.ts withoutShopPieces)
   // a request the customer hasn't sent in yet opens in the order builder
   if (o.status === "request" && !o.submitted_at) redirect(`/portal/request/${id}${as ? `?as=${as}` : ""}`);
   const isReq = o.status === "request";

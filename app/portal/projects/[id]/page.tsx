@@ -1,3 +1,4 @@
+import { SENT_OR_SHOWN } from "@/lib/portalView";
 import BackLink from "@/components/BackLink";
 import { notFound } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
@@ -19,7 +20,7 @@ export default async function PortalProjectPage({ params, searchParams }: { para
   const qs = ctx.preview ? `?as=${ctx.preview.id}` : "";
   const [{ data: ts }, { data: os }, { data: ar }, { data: ms }] = await Promise.all([
     admin.from("project_tasks").select("*").eq("project_id", id).eq("shop_only", false).order("position"),
-    admin.from("orders").select("id, number, nickname, status, type, total, due_date, project_id, submitted_at").in("customer_id", ctx.customerIds).neq("status", "quote").is("discarded_at", null).order("number", { ascending: false }).limit(500),
+    admin.from("orders").select("id, number, nickname, status, type, total, due_date, project_id, submitted_at").in("customer_id", ctx.customerIds).or(SENT_OR_SHOWN).is("discarded_at", null).order("number", { ascending: false }).limit(500),
     admin.from("archived_orders").select("id, visual_id, nickname, status_name, status_color, kind, total, balance, due_date, project_id").is("removed_at", null).in("customer_id", ctx.customerIds).order("order_date", { ascending: false }).limit(500),
     admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments").is("hidden_at", null).eq("project_id", id).is("order_id", null).order("created_at"),
   ]);

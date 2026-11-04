@@ -16,7 +16,7 @@ export async function projectSummaries(admin: SupabaseClient, customerIds: strin
     admin.from("project_tasks").select("project_id, title, due_date, done_at, shop_only, position").in("project_id", ids).order("due_date", { ascending: true, nullsFirst: false }),
   ]);
   return projects.map((p) => {
-    const o = (os || []).filter((x) => x.project_id === p.id && !(customerView && x.status === "quote"));
+    const o = (os || []).filter((x) => x.project_id === p.id && !(customerView && x.status === "quote" && !(x as { submitted_at?: string | null }).submitted_at));
     const a = (ar || []).filter((x) => x.project_id === p.id);
     const all = (ts || []).filter((x) => x.project_id === p.id && !(customerView && x.shop_only));
     const t = all.filter((x) => !x.done_at);
