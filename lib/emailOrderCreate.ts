@@ -88,6 +88,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
       imprints: (g.imprints || []).slice(0, 10).map((im) => ({ ...im, colors: Math.max(1, Math.min(15, Math.round(+im.colors || 1))) })),
     };
   }).filter((g) => g.lines.some((l) => Object.keys(l.sizes || {}).length) || g.imprints.length);
+  // "Empty order with the files" (Nov 3, Nick: "open a blank order with the same number… this is for super complicated
+  // orders"): one blank group to fill in by hand
+  if (!groups.length && d.empty) groups.push({ id: crypto.randomUUID(), name: "", lines: [{ id: crypto.randomUUID(), style: "", brand: "", color: "", garment: "", cost: "", sizes: {}, priceOverride: null }], imprints: [], customerMockups: [] } as unknown as Group);
   if (!groups.length) return { ok: false, error: "Add at least one garment with sizes." };
 
   // the art files → designs in the customer's library (one design per file), attached to their prints

@@ -51,6 +51,26 @@ export async function partialStep(ctx: PartialCtx, mode: PartKind, into: { id: s
     if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");
     return j.draft as EODraft;
   };
+  // an empty order for a customer's request: nothing to read (Nov 3, Nick: "you're not putting any numbers in… just opening
+  // the panel to the right with the number that's in there now and the resources"): the request itself, as it is, with
+  // its number, name, dates and files, and one blank group
+  if (mode === "empty" && !into) {
+    const sb = createClient();
+    const { data: act } = await sb.from("activities").select("subject, meta").eq("id", activityId).maybeSingle();
+    const req = String(((act?.meta || {}) as { into_order?: string }).into_order || "");
+    if (req) {
+      step("Opening the request as a blank order…");
+      const { data: o } = await sb.from("orders").select("nickname, due_date, po_number, delivery_method, ship_to").eq("id", req).maybeSingle();
+      const blank = { v: 2, kind: "new", summary: "", confidence: "high", empty: true, nickname: String(o?.nickname || act?.subject || ""), due_date: (o?.due_date as string | null) || null,
+        delivery: (["pickup", "ship", "deliver"].includes(String(o?.delivery_method)) ? o?.delivery_method : "pickup") as EODraft["delivery"], ship_to: String(o?.ship_to || ""), po_number: String(o?.po_number || ""),
+        goods: { supplied: false, supplier: "", expected: "", note: "" }, groups: [], art: {}, mockups: {}, reorderOf: null, questions: [], check: [], notes: ctx.note ? `Staff: ${ctx.note}` : "", files: [] } as unknown as EODraft;
+      const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: blank, status: "quote" }) }).catch(() => null);
+      const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+      if (!r?.ok || !j.id) throw new Error(j.error || "Couldn't open the blank order.");
+      step(`#${j.number} is open to fill in`);
+      return { id: j.id as string, number: j.number as number, url: `/shop/orders/${j.id}?email=${activityId}`, note: "", label: blank.nickname || m.label };
+    }
+  }
   step(into ? `${m.label} for #${into.number}: reading the job…` : part ? `Reading the email for ${part.label}…` : "Reading the email…");
   let d = await read();
   let note = "";
@@ -63,7 +83,7 @@ export async function partialStep(ctx: PartialCtx, mode: PartKind, into: { id: s
   }
   if (mode === "sizes") d = { ...d, groups: d.groups.map((g) => ({ ...g, imprints: [] })), art: {} };
   if (mode === "art") d = { ...d, groups: d.groups.map((g) => ({ ...g, lines: [] })) };
-  if (mode === "empty") d = { ...d, groups: d.groups.slice(0, 1).map((g) => ({ ...g, lines: [], imprints: [], name: "" })), art: {}, mockups: {}, questions: [], check: [] };
+  if (mode === "empty") d = { ...d, empty: true, groups: [], art: {}, mockups: {}, questions: [], check: [] };
   d = { ...d, check: [], notes: [d.notes, ctx.note ? `Staff: ${ctx.note}` : ""].filter(Boolean).join("\n").slice(0, 2000) };
   step(mode === "sizes" ? `Found ${pcsOf(d.groups).toLocaleString("en-US")} pcs on ${d.groups.reduce((n, g) => n + g.lines.length, 0)} garment lines` : mode === "empty" ? "Setting up the blank order…" : `Found ${d.groups.reduce((n, g) => n + g.imprints.length, 0)} print${d.groups.reduce((n, g) => n + g.imprints.length, 0) === 1 ? "" : "s"}`);
   step(into ? `Adding it to #${into.number}…` : "Creating the order…");
