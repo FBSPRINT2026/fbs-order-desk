@@ -51,8 +51,14 @@ export function supplierConfirmRows(text: string): { product: string; style: str
     if (!size || !qty || Math.abs(qty * price - total) > 0.05 * Math.max(1, total)) continue;
     // "Comfort Colors - Unisex Garment-Dyed Heavyweight T-Shirt" + " - 1717"
     // the first row can carry the page's header before it: the description starts after the last item number
-    const desc = m[2].split(/\b\d[0-9A-Z]{5,8}\s+/).pop()!.trim();
-    out.push({ product: `${desc} - ${m[3]}`, style: m[3], color: m[4].trim(), size, qty });
+    let desc = m[2].split(/\b\d[0-9A-Z]{5,8}\s+/).pop()!.trim(), style = m[3], color = m[4].trim();
+    // the style is the LAST " - STYLE" before the color: a description can hold a dash and a capital word of its own
+    // ("BELLA + CANVAS - CVC Jersey Tee - 3001CVC Athletic Heather" is the 3001CVC in Athletic Heather, not a "CVC" in
+    // "Jersey Tee - 3001CVC Athletic Heather"; Nov 4, Peticolas reorder)
+    for (let k = 0, mm: RegExpMatchArray | null; k < 3 && (mm = color.match(/^(.+?)\s+-\s+([A-Z0-9][A-Z0-9-]{1,11})\s+(.+)$/)) && /\d/.test(mm[2]); k++) {
+      desc = `${desc} - ${style} ${mm[1]}`; style = mm[2]; color = mm[3].trim();
+    }
+    out.push({ product: `${desc} - ${style}`, style, color, size, qty });
   }
   return out.length ? out : sanmarRows(t);
 }
