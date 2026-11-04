@@ -21,6 +21,8 @@ async function me() {
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 const okEmail = (e: string) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e);
+/** words in a name that don't tell one customer from another */
+const GENERIC = /^(church|school|schools|high|elementary|middle|academy|isd|pta|pto|club|team|teams|foundation|group|company|brands?|brewing|brewery|designs?|print|printing|prints|apparel|promo|promos|promotions|solutions|marketing|services|products|creative|studio|studios|shop|store|sports|athletics|booster|boosters|association|church|ministries|united|first|north|south|east|west|dallas|texas|plano|frisco|richardson)$/;
 const FREE = /^(gmail|yahoo|hotmail|outlook|aol|icloud|me|msn|live|att|sbcglobal|comcast|verizon|protonmail|ymail|mac)\./i;
 
 /** missing: no email on file; check: an email we've never written to or heard from; done: checked here, or the email is in our mail */
@@ -90,6 +92,19 @@ export async function contactDetail(customerId: string) {
     const compact = names.map((x) => norm(x).replace(/\s+/g, "")).filter((x) => x.length >= 5);
     const known = [String(c.email || ""), ...contacts.map((x) => x.email)].map((x) => x.trim().toLowerCase()).filter(okEmail);
     const domains = [...new Set(known.map((x) => x.split("@")[1]).filter((d) => d && !FREE.test(d)))];
+    // their web domain from a word of their name (Nov 3, Nick: "Gateway is gatewaystaff.com… you should have gotten that
+    // somehow"): domains in our mail holding the name's own words (not "church", "school"…), the ones holding the most
+    // words first, then the busiest; the top two count as the company's own
+    const words = [...new Set(names.flatMap((x) => norm(x).split(" ")).filter((w) => w.length >= 4 && !GENERIC.test(w)))].slice(0, 4);
+    if (words.length) {
+      const { data: ds } = await admin.rpc("contact_domains", { p_words: words });
+      const scored = ((ds || []) as { domain: string; n: number }[]).filter((x) => x.domain && !FREE.test(x.domain) && !domains.includes(x.domain)
+          // a company's own domain, not a service's sub-domain for them (gatewaystaff.coupahost.com)
+          && x.domain.split(".").length <= (/\.(com|net|org|co|edu|gov)\.[a-z]{2}$/.test(x.domain) ? 3 : 2))
+        .map((x) => ({ ...x, hits: words.filter((w) => x.domain.includes(w)).length }));
+      const best = Math.max(0, ...scored.map((x) => x.hits));
+      for (const x of scored.filter((y) => y.hits === best).sort((a, b) => b.n - a.n).slice(0, 2)) domains.push(x.domain);
+    }
     const terms = [...new Set([...names.map(norm).filter((x) => x.length >= 5 && x.includes(" ")), ...compact, ...domains.map((d) => "@" + d), ...known.filter((e) => FREE.test(e.split("@")[1] || "")).map((e) => e)])].slice(0, 8);
     let found: Person[] = [];
     if (terms.length) {
@@ -114,7 +129,7 @@ export async function contactDetail(customerId: string) {
       }
       // the company's own people first, then whoever we've traded the most mail with; one-off strangers on a thread are left out
       // everyone at the company (their web domain), then whoever else we've traded real mail with on those threads
-      found = [...by.values()].filter((p) => p.sameCompany || p.n >= 3 || known.includes(p.email))
+      found = [...by.values()].filter((p) => !/do.?not.?reply|^(info|news|newsletter|marketing|support|hello)@.*\.(shop|xyz)$/i.test(p.email) && (p.sameCompany || p.n >= 3 || known.includes(p.email)))
         .sort((a, b) => Number(b.sameCompany) - Number(a.sameCompany) || b.n - a.n).slice(0, 40);
       // their phone from their own email signature (recent mail only), never our own number
       const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
