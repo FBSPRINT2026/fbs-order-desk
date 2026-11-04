@@ -70,6 +70,8 @@ export function ScreenCalc({ pl }: { pl: PriceList }) {
               <div><dt>Per piece</dt><dd><b>{custom ? "Quoted" : m(each)}</b></dd></div>
               <div><dt>Screens ({screens} × {m(pl.screenFee || 0)}) <small>one time</small></dt><dd>{m(setup)}</dd></div>
               <div className="tot"><dt>Total for {q.toLocaleString()}{charged > q ? ` (charged as ${charged})` : ""}</dt><dd><b>{custom ? "Quoted" : m(each * charged + setup)}</b></dd></div>
+              {/* what one shirt really costs, the screens spread over the order (Nov 4, Nick: "this needs to be a per shirt cost") */}
+              {!custom && <div className="pcx-per"><dt>Per shirt, screens included</dt><dd><b>{m((each * charged + setup) / Math.max(1, q))}</b></dd></div>}
             </dl>
             <p className="pcx-fine">Before garments, finishing and tax.{dark && pl.darkAddsColor ? " Dark garments get a white underbase, counted as one more color." : ""}{custom ? ` ${cols + 1}+ colors are quoted for the job.` : ""}</p>
             <Ballpark />
@@ -216,6 +218,7 @@ export function EmbCalc({ pl }: { pl: PriceList }) {
               <div><dt>Per piece</dt><dd><b>{m(each)}</b></dd></div>
               <div><dt>Digitizing your logo <small>one time</small></dt><dd>{m(dig)}</dd></div>
               <div className="tot"><dt>Total for {q.toLocaleString()}</dt><dd><b>{m(each * q + dig)}</b></dd></div>
+              <div className="pcx-per"><dt>Per piece, digitizing included</dt><dd><b>{m((each * q + dig) / Math.max(1, q))}</b></dd></div>
             </dl>
             <p className="pcx-fine">Before garments and tax.{q < (embT[0] || 0) ? ` Embroidery starts at ${embT[0]} pieces.` : ""} The stitch count is set once your logo is digitized; a logo we&apos;ve digitized before has no digitizing charge.</p>
             <Ballpark />
