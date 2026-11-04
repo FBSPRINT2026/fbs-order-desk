@@ -1,0 +1,6 @@
+-- A payment made in Printavo after the move (Nov 4, Nick: "I've disabled payments in Printavo… If you see a payment
+-- added in Printavo, you should alert me"). Every 5 minutes: any payment Printavo shows from Nov 4 on, on an old
+-- Printavo invoice (online through its processor, or typed in there) or brought back onto one of our orders by the
+-- Printavo sync (processor_id printavo:…), is one alert to the owner, once.
+-- Applied as migration 285_printavo_payment_watch (function public.printavo_payment_watch(), cron job
+-- 'printavo-payment-watch' every 5 minutes); see the database for the function body.
