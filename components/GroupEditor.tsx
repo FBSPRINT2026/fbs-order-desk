@@ -1526,7 +1526,14 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                     const on = g.lines.some((l) => isSpecialtyItem(l)), rate = wpl.embSpecialty![Math.min(gc.eti, wpl.embSpecialty!.length - 1)] || 0;
                     return (
                       <div className="sbx-r"><span className="sbx-loc">Specialty item</span><span className="faint">hats, bags, fleece, jackets</span>{!hidePrices && <b className={"num" + (on ? "" : " sbx-off")}>{money(on ? rate * embImps.length : 0)}/pc</b>}
-                        <label className="check sbx-end"><input type="checkbox" checked={on} onChange={(e) => update((x) => { for (const l of x.lines) l.specialty = e.target.checked; })} />Specialty</label></div>
+                        {/* only the lines that are specialty items are charged (Nov 4, Nick on #40461: the caps in a group of shirts
+                            weren't charged): ticking it goes back to each line's own kind (hats, bags, fleece by name), or every line
+                            when none is one by its name; unticking takes it off them all */}
+                        <label className="check sbx-end" title={on ? `Charged on ${g.lines.filter((l) => isSpecialtyItem(l)).map((l) => l.garment || l.style).filter((v, i, a) => a.indexOf(v) === i).join(", ")}` : undefined}><input type="checkbox" checked={on} onChange={(e) => update((x) => {
+                          if (!e.target.checked) { for (const l of x.lines) l.specialty = false; return; }
+                          const auto = x.lines.some((l) => isSpecialtyItem({ ...l, specialty: null }));
+                          for (const l of x.lines) { if (auto) delete l.specialty; else l.specialty = true; }
+                        })} />Specialty{on && g.lines.some((l) => !isSpecialtyItem(l)) ? <span className="faint"> ({g.lines.filter((l) => isSpecialtyItem(l)).length} of {g.lines.length} lines)</span> : null}</label></div>
                     );
                   })()}
                   {embList.length > 0 && <div className="sbx-r">{embList.map((f) => <label key={f.id} className="check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> {money(f.price)}/pc</span>}</label>)}</div>}
