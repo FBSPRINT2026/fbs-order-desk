@@ -1,4 +1,5 @@
 "use client";
+import ClockStatus from "@/components/ClockStatus";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -52,6 +53,7 @@ export default function TimePage() {
       <div className="page-head">
         <div><div className="eyebrow">Time &amp; attendance</div><h1>Time Clock</h1></div>
         <div className="row" style={{ gap: 8 }}>
+          <ClockStatus />
           <a className="btn" href="/clock" target="_blank" rel="noreferrer">Open Wall Clock</a>
         </div>
       </div>

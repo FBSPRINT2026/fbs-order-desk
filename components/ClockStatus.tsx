@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * Is the time clock online? (Nov 4, Nick: "a clock monitor tool into the payroll center that says like the clock is
+ * Is the time clock online? (Nov 4, Nick: "a clock monitor tool… that says like the clock is
  * online… more than 5 minutes, it sends up a notification"). An online clock checks in about every half minute; past
  * 5 minutes it's offline, and the database's own clock (clock_watch_tick, migration 283) sends the owner an alert, and
  * another when it's back. Punches made while it's offline stay on the clock and upload when it reconnects.
