@@ -76,6 +76,25 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
   return { admin, email, settings, lines: use, customer: (cs || [])[0] as { id: string; name: string; company: string; email: string } | undefined };
 }
 
+/**
+ * The card fee already inside an invoice, taken off when it's paid without a card (ACH, Zelle, Venmo; Nov 4, Nick: "just
+ * treat like an ACH… you need to remove it if it's there"): an old Printavo invoice gets it as its own line in its
+ * payments (its balance is Printavo's less what's paid here; QuickBooks is asked to match it, lib/qbo/push.ts); one of
+ * ours gets a fee that takes it back off, so the invoice itself says so.
+ */
+async function takeFeeOff(admin: ReturnType<typeof createAdminClient>, lines: { o: Order; old: boolean; off: number }[], ref: string, email: string, how: string) {
+  const offs = lines.filter((l) => l.off > 0.004);
+  if (!offs.length) return;
+  const note = `Paid by ${how}: credit card surcharge taken off`, today = new Date().toISOString().slice(0, 10);
+  const oldOffs = offs.filter((l) => l.old);
+  if (oldOffs.length) await admin.from("payments").insert(oldOffs.map((l) => ({ order_id: null, archived_order_id: l.o.id, amount: l.off, method: `Surcharge taken off (${how})`, paid_on: today, fee: 0, processor_id: `achoff:${ref}`, note })));
+  for (const l of offs.filter((x) => !x.old)) {
+    const fees = [...((l.o.fees || []) as { label: string; amount: number | "" }[]), { label: `Paid by ${how}: surcharge taken off`, amount: -l.off }];
+    await admin.from("orders").update({ fees }).eq("id", l.o.id);
+    await admin.from("order_events").insert({ order_id: l.o.id, kind: "payment", detail: `${note} (${money(l.off)})`, actor: email });
+  }
+}
+
 /** Card fee on a credit card payment (a setting; never on ACH, Zelle or Venmo). */
 const cardFee = (sum: number, pct: number) => r2((sum * Math.max(0, pct)) / 100);
 
@@ -168,19 +187,8 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
       return { ...(l.old ? { order_id: null, archived_order_id: l.o.id } : { order_id: l.o.id }), amount: l.amount, method: methodName, paid_on: today, fee: f, processor_id: String(txn.id || ""), note: lines.length > 1 ? `Paid together: ${ref}` : null };
     });
     const { error } = await admin.from("payments").insert(rows);
-    // the card fee taken off for ACH: an old invoice gets it as its own line in its payments (its balance is Printavo's
-    // less what's paid here); one of ours gets a fee that takes it back off, so the invoice itself says so
-    const offs = lines.filter((l) => l.off > 0.004);
-    if (!error && offs.length) {
-      const offNote = "Paid by ACH: credit card surcharge taken off";
-      const oldOffs = offs.filter((l) => l.old);
-      if (oldOffs.length) await admin.from("payments").insert(oldOffs.map((l) => ({ order_id: null, archived_order_id: l.o.id, amount: l.off, method: "Surcharge taken off (ACH)", paid_on: today, fee: 0, processor_id: `achoff:${String(txn.id || "")}`, note: offNote })));
-      for (const l of offs.filter((x) => !x.old)) {
-        const fees = [...((l.o.fees || []) as { label: string; amount: number | "" }[]), { label: "Paid by ACH: surcharge taken off", amount: -l.off }];
-        await admin.from("orders").update({ fees }).eq("id", l.o.id);
-        await admin.from("order_events").insert({ order_id: l.o.id, kind: "payment", detail: `${offNote} (${money(l.off)})`, actor: email });
-      }
-    }
+    // the card fee already on these invoices, taken off for a payment with no card fee (lib/cardFeeIn.ts)
+    if (!error) await takeFeeOff(admin, lines, String(txn.id || ""), email, "ACH");
     // paying a quote approves it (the customer saw "Paying approves the quote and our terms")
     const quotes = lines.filter((l) => !l.old && l.o.type === "quote");
     if (!error && quotes.length) {
@@ -290,9 +298,12 @@ export async function removeSavedMethod(id: string): Promise<Result> {
 /** Customer says they sent a Zelle or Venmo payment. Staff confirm it and record the payment. */
 export async function sentPaymentNotice(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "Zelle" | "Venmo"; note: string; applyAmount?: number }): Promise<Result> {
   try {
-    const { admin, email, settings, lines, customer } = await owed(input.items, input.applyAmount);
+    const { admin, email, settings, lines: lines0, customer } = await owed(input.items, input.applyAmount);
+    // no card fee by Zelle or Venmo: one already on an invoice comes off, as for ACH
+    const lines = lines0.map((l) => { const off = l.full && l.feeIn > 0.004 ? l.feeIn : 0; return { ...l, off, amount: r2(l.amount - off) }; });
     const sum = r2(lines.reduce((a, l) => a + l.amount, 0));
     const ref = lines.map((l) => `#${l.o.number}`).join(", ");
+    await takeFeeOff(admin, lines, `notice:${Date.now()}`, email, input.method);
     const { error } = await admin.from("payment_notices").insert({ customer_id: customer?.id || null, order_ids: lines.map((l) => l.o.id), method: input.method, amount: sum, note: input.note.slice(0, 500), created_by: email });
     if (error) return { ok: false, error: error.message };
     const nl = lines.filter((l) => !l.old);

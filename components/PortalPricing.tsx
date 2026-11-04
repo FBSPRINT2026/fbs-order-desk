@@ -5,7 +5,7 @@ import PricingTabs from "@/app/portal/pricing/tabs";
 import { EmbCalc, ScreenCalc } from "@/components/PricingCalc";
 import CalcSheet from "@/components/CalcSheet";
 import DtfGridTable from "@/components/DtfGridTable";
-import { dtfGridOn } from "@/lib/dtfGrid";
+import { dtfGridOn, dtfMinimum } from "@/lib/dtfGrid";
 
 /**
  * The wholesale price list, a tab in the portal for wholesale accounts (Oct 24, Nick: "on the wholesale companies, we
@@ -114,7 +114,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             <div className="panel-h"><h2>DTF heat transfers</h2><span className="faint">Full color, per location, per piece</span></div>
             <div className="panel-b">
               {dtfGridOn(pl) ? <>
-                <p className="pl-lead">We order the transfers and press them. The price is by the print&apos;s size and how many pieces carry it.</p>
+                <p className="pl-lead">We order the transfers and press them. The price is by the print&apos;s size and how many pieces carry it. DTF orders have a {m(dtfMinimum(pl.dtfGrid))} minimum.</p>
                 <div className="pl-wrap"><DtfGridTable grid={pl.dtfGrid} /></div>
                 <p className="faint" style={{ fontSize: 12.5 }}>Sending your own transfers? We press them at the pressing price in the last row, per location, per piece.</p>
               </> : <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>

@@ -1,4 +1,4 @@
-import { dtfEach, dtfGridOn, dtfPress } from "@/lib/dtfGrid";
+import { dtfEach, dtfGridOn, dtfMinimum, dtfPress } from "@/lib/dtfGrid";
 import { colorHex } from "./inkColors";
 
 // Shared pricing engine and order vocabulary.
@@ -1257,7 +1257,12 @@ export function calcOrder(
   const groups = gs0.map((g, gi) => { seen.cur = g.name || `Group ${gi + 1}`; return calcGroup(g, o, s, seen); });
   const lines = groups.flatMap((g) => g.lines);
   const items = r2(groups.reduce((a, g) => a + g.sub, 0));
-  const setup = r2(groups.reduce((a, g) => a + g.setup, 0));
+  // DTF transfers we order have an order minimum (lib/dtfGrid.ts DTF_MIN; Nov 4, Nick: "DTF orders have a $10 minimum"):
+  // what the order's DTF prints come to, topped up to it, in the setup
+  const pl0 = priceList(s, o.price_type || "retail");
+  const dtfSum = dtfGridOn(pl0) ? r2(gs0.reduce((a, g, gi) => a + (g.imprints || []).filter((d) => d.method === "dtf" && !d.supplied && !d.patch).reduce((b, d) => b + (+((groups[gi].imprints || []).find((x) => x.id === d.id)?.each || 0)) * groups[gi].qty, 0), 0)) : 0;
+  const dtfMin = dtfSum > 0 && dtfSum < dtfMinimum(pl0.dtfGrid) ? r2(dtfMinimum(pl0.dtfGrid) - dtfSum) : 0;
+  const setup = r2(groups.reduce((a, g) => a + g.setup, 0) + dtfMin);
   const materials = r2(groups.reduce((a, g) => a + g.materials, 0)); // 2XL+ Materials Charge
   const fees = r2((o.fees || []).reduce((a, f) => a + feeAmount(f), 0));
   // shipping is its own line (Totals, invoice), inside the fees total so every sum stays the same
@@ -1270,7 +1275,7 @@ export function calcOrder(
   const total = r2(pre - discount + tax);
   const paid = r2(payments.reduce((a, p) => a + num(p.amount), 0));
   const qty = groups.reduce((a, g) => a + g.qty, 0);
-  return { groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), qty, /** every piece printed, the shop's own included */ allQty: groups.reduce((a, g) => a + g.allQty, 0) };
+  return { groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), /** the DTF order minimum's top-up, inside setup */ dtfMin, qty, /** every piece printed, the shop's own included */ allQty: groups.reduce((a, g) => a + g.allQty, 0) };
 }
 
 export const uid = () =>

@@ -74,7 +74,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
   // whole invoice is paid (the server works it out the same way)
   const has = (it: PayItem) => (it.cardFeeIn || 0) > 0.004;
   const whole = (it: PayItem) => amount === undefined && !it.part && !(single && kind === "deposit" && it.deposit) && !(it.full && it.full - it.balance > 0.004);
-  const offOf = (it: PayItem) => (method === "bank" && has(it) && whole(it) ? r2(Math.min(it.cardFeeIn || 0, it.balance)) : 0);
+  const offOf = (it: PayItem) => (method !== "card" && has(it) && whole(it) ? r2(Math.min(it.cardFeeIn || 0, it.balance)) : 0);
   const withFee = items.filter(has), offs = items.filter((it) => offOf(it) > 0);
   const off = r2(offs.reduce((a, it) => a + offOf(it), 0));
   const feeBase = r2(items.filter((it) => !has(it)).reduce((a, it) => a + (single && kind === "deposit" && it.deposit ? it.deposit : it.balance), 0));
@@ -92,7 +92,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     {method === "card" && <div className="pp-fee"><span>Credit card fee ({pay.cardFeePct}%){withFee.length ? ` on ${items.length - withFee.length} ${items.length - withFee.length === 1 ? "invoice" : "invoices"}` : ""}</span><b className="num">{money(fee)}</b></div>}
     {method === "card" && withFee.length > 0 && <div className="faint pp-feenote">{withFee.length === items.length ? (items.length > 1 ? "These already include it" : "This one already includes it") : `${withFee.length} already ${withFee.length === 1 ? "includes" : "include"} it`}, so no fee on {withFee.length === 1 ? "that one" : "those"}.</div>}
     {off > 0 && <div className="pp-fee pp-off"><span>Card fee taken off {offs.length} {offs.length === 1 ? "invoice" : "invoices"}</span><b className="num">−{money(off)}</b></div>}
-    {off > 0 && <div className="faint pp-feenote">ACH has no card fee, so the one already on {offs.length === 1 ? "that invoice" : "those"} comes off.</div>}
+    {off > 0 && <div className="faint pp-feenote">{method === "bank" ? "ACH" : method} has no card fee, so the one already on {offs.length === 1 ? "that invoice" : "those"} comes off.</div>}
   </>;
   const online = !!staxToken;
 

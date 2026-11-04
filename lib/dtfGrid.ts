@@ -17,6 +17,7 @@ export type DtfGrid = {
   /** the piece breaks, lowest first */ qty: number[];
   /** the transfer each: [size][break] */ price: number[][];
   /** pressing each, per location: [break] (also their own transfers) */ press?: number[];
+  /** the least a DTF order comes to (transfers and pressing), in dollars */ min?: number;
   /** off: the list's old flat row (PriceList.dtf) */ off?: boolean;
 };
 
@@ -30,7 +31,11 @@ export const DTF_GRID: DtfGrid = {
     [11.15, 7, 6.15, 5.6],
   ],
   press: [2.5, 2, 1.75, 1.5],
+  min: 10,
 };
+
+/** the DTF order minimum (Nov 4, Nick: "$10") */
+export const dtfMinimum = (g?: DtfGrid) => +(g?.min ?? DTF_GRID.min ?? 0) || 0;
 
 const breakOf = (g: DtfGrid, pieces: number) => { let b = 0; g.qty.forEach((q, k) => { if (pieces >= q) b = k; }); return b; };
 

@@ -4,7 +4,7 @@ import { getPortalCtx, seesPriceList } from "@/lib/portal";
 import { priceList } from "@/lib/pricing";
 import { fmtPhone } from "@/lib/phone";
 import SheetPrint from "./SheetPrint";
-import { DTF_GRID, dtfGridOn } from "@/lib/dtfGrid";
+import { DTF_GRID, dtfGridOn, dtfMinimum } from "@/lib/dtfGrid";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Contract pricing · FBS Print", robots: { index: false } };
@@ -113,7 +113,7 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
                 <tr><th scope="row">Your own transfers <span className="pls-sub">pressing only</span></th>{dg.qty.map((_, k) => <td key={k}>{d(dgPress[k] ?? 0)}</td>)}</tr>
               </tbody>
             </table>
-            <p className="pls-fine pls-c2"><i>Full color, per location, per piece. Small is up to 4×4, medium 8×10, large 12×12, XL 12×18.</i></p>
+            <p className="pls-fine pls-c2"><i>Full color, per location, per piece. Small is up to 4×4, medium 8×10, large 12×12, XL 12×18. DTF orders have a {m(dtfMinimum(dg))} minimum.</i></p>
           </>}
           </div>
         </div>
