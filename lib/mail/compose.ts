@@ -19,6 +19,7 @@ export function bodyOf(html: string) {
 
 export function replyHtml(o: {
   body: string; signature?: string | null; css?: string | null;
+  /** something designed to go under what was typed (the portal email's card, sent from someone's own mailbox) */ card?: string;
   quote?: { from: string; sent: string; to: string; cc?: string; subject: string; html?: string; text: string };
 }) {
   const typed = o.body.trim().split(/\r?\n/).map((l) => `<p class="MsoNormal">${l.trim() ? linkify(esc(l)) : "&nbsp;"}</p>`).join("\n");
@@ -30,7 +31,7 @@ export function replyHtml(o: {
     const original = q.html ? bodyOf(q.html) : `<div style="white-space:pre-wrap;font-family:Calibri,sans-serif;font-size:11pt">${linkify(esc(q.text))}</div>`;
     quoted = `<p class="MsoNormal">&nbsp;</p>\n<div style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0in 0in 0in"><p class="MsoNormal">${head}</p></div>\n<p class="MsoNormal">&nbsp;</p>\n${original}`;
   }
-  return `<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><style>${FALLBACK_CSS}\n${o.css || ""}</style></head><body lang="EN-US" link="#0563C1" vlink="#954F72" style="word-wrap:break-word"><div class="WordSection1">\n${typed}\n${sig}\n${quoted}\n</div></body></html>`;
+  return `<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><style>${FALLBACK_CSS}\n${o.css || ""}</style></head><body lang="EN-US" link="#0563C1" vlink="#954F72" style="word-wrap:break-word"><div class="WordSection1">\n${typed}\n${o.card ? `<p class="MsoNormal">&nbsp;</p>\n${bodyOf(o.card)}` : ""}\n${sig}\n${quoted}\n</div></body></html>`;
 }
 
 /** the plain-text copy of a reply (for mail programs that don't show HTML) */

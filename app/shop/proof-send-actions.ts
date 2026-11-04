@@ -17,7 +17,15 @@ async function me() {
   const v = await getViewer();
   if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
   const { data } = await v.supabase.from("staff").select("name").eq("email", v.email).maybeSingle();
-  return { email: v.email, name: (data?.name as string) || v.email.split("@")[0] };
+  return { email: v.email, name: (data?.name as string) || v.email.split("@")[0], userId: v.user.id, role: v.role };
+}
+/** the person's own connected mailbox, to send from (never while viewing as someone else) */
+async function myBox(who: { userId: string; role?: string; email: string }) {
+  const { viewedEmail } = await import("@/lib/mail/viewing");
+  if (await viewedEmail({ role: who.role, email: who.email })) return null;
+  const { accountForUser } = await import("@/lib/mail/config");
+  const a = await accountForUser(createAdminClient(), who.userId);
+  return a && a.enabled !== false ? a : null;
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 
@@ -62,12 +70,21 @@ export async function sendOptionsAction(orderId: string) {
   try { await me(); const { sendOptions } = await import("@/lib/customerSend"); return { ok: true as const, ...(await sendOptions(createAdminClient(), orderId)) }; } catch (e) { return fail(e); }
 }
 export async function bundlePreview(orderId: string, pick: Pick3) {
-  try { await me(); const { previewSend } = await import("@/lib/customerSend"); return await previewSend(createAdminClient(), orderId, pick); } catch (e) { return fail(e); }
+  try { const who = await me(); const { previewSend } = await import("@/lib/customerSend"); return await previewSend(createAdminClient(), orderId, pick, pick.fromMe ? await myBox(who) : null); } catch (e) { return fail(e); }
+}
+/** can this person send from their own mailbox, and the emails from these people it could answer (newest first) */
+export async function sendFromChoices(emails: string[]) {
+  try {
+    const who = await me(); const box = await myBox(who);
+    if (!box) return { ok: true as const, box: "", choices: [] };
+    const { replyChoices } = await import("@/lib/customerSend");
+    return { ok: true as const, box: box.email, choices: await replyChoices(createAdminClient(), box, emails) };
+  } catch (e) { return fail(e); }
 }
 export async function bundleSend(orderId: string, pick: Pick3) {
   try {
     const who = await me(); const { sendTogether } = await import("@/lib/customerSend");
-    const r = await sendTogether(createAdminClient(), orderId, pick, who, true);
+    const r = await sendTogether(createAdminClient(), orderId, pick, who, true, pick.fromMe ? await myBox(who) : null);
     // sent to the customer: the order is what we'd make, so it teaches Create order (lib/ai/orderExamples.ts)
     if (r.ok) { const { saveExample } = await import("@/lib/ai/orderExamples"); await saveExample(createAdminClient(), orderId, who.email).catch((e) => console.warn("saveExample", e)); }
     return r.ok ? { ok: true as const, msg: r.emailed ? `Sent: ${r.done.join(", ")}.` : `Made ${r.done.join(", ")}, but the email didn't go out. Copy the link and send it yourself.`, url: r.url } : r;
