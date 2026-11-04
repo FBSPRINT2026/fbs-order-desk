@@ -26,6 +26,9 @@ const LABEL: Record<Show, string> = { notmoved: "Not moved yet", unsent: "Moved,
 type Mail = "none" | "launch" | "nick" | "amanda";
 const wasSent = (m?: MoveRow) => !!m && (!!m.launchSent || !!m.personal.sentAt);
 const mailOf = (m?: MoveRow): Mail => (!m ? "none" : !m.personal.skip && m.personal.to.length ? (/^amanda/i.test(m.personal.from) ? "amanda" : "nick") : !m.quiet && m.email ? "launch" : "none");
+type Pick = "launch" | "personal" | "none";
+const LABEL3: Record<Pick, string> = { launch: "Launch email", personal: "Personal email", none: "No email" };
+const pickOf = (m?: MoveRow): Pick => { const x = mailOf(m); return x === "nick" || x === "amanda" ? "personal" : x; };
 const shortDay = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const ROLES = ["Orders", "Art", "Billing"];
 const when = (d: string) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
@@ -59,7 +62,9 @@ export default function UpdateContacts() {
     if (!m) return s === "notmoved";
     if (s === "notmoved") return !m.movedAt;
     if (!m.movedAt) return false;
-    return s === "unsent" ? !wasSent(m) : s === "launch" ? !!m.launchSent : s === "personal" ? !!m.personal.sentAt : m.visits.n > 0;
+    // the master list: moved, nothing sent yet; customers with no order this year that are already set to no email
+    // (the bulk move of Nov 4) stay out of it
+    return s === "unsent" ? !wasSent(m) && !(r.rank === 0 && mailOf(m) === "none") : s === "launch" ? !!m.launchSent : s === "personal" ? !!m.personal.sentAt : m.visits.n > 0;
   };
   useEffect(() => { void contactList().then((r) => { if (r.ok) { setRows(r.rows); setOwners(r.owners); setMeOwner(r.meOwner); } else setErr(r.error); }); }, []);
   const all = rows || [];
@@ -140,6 +145,22 @@ export default function UpdateContacts() {
   };
 
   const row = all.find((r) => r.id === cur);
+  const [picks, setPicks] = useState<Record<string, Pick>>({});
+  /** save every pick on the master list (only what changed) */
+  const submitPicks = async () => {
+    setBusy(true); setErr(""); setNote("");
+    const by: Record<Pick, string[]> = { launch: [], personal: [], none: [] };
+    for (const r of list) { const x = mv?.get(r.id); const v = picks[r.id] ?? pickOf(x); if (v !== pickOf(x)) by[v].push(r.id); }
+    const steps = [
+      by.launch.length && setQuiet(by.launch, false), by.launch.length && setPersonal(by.launch, false),
+      by.personal.length && setQuiet(by.personal, true), by.personal.length && setPersonal(by.personal, true),
+      by.none.length && setQuiet(by.none, true), by.none.length && setPersonal(by.none, false),
+    ];
+    for (const st of steps) { if (!st) continue; const x = await st; if (!x.ok) { setBusy(false); return setErr(x.error); } }
+    await loadMv(); setPicks({}); setBusy(false);
+    const n = list.reduce((a, r) => { const v = picks[r.id] ?? pickOf(mv?.get(r.id)); a[v]++; return a; }, { launch: 0, personal: 0, none: 0 } as Record<Pick, number>);
+    setNote(`Saved: ${n.launch} launch email, ${n.personal} personal email, ${n.none} no email. Nothing was sent.`);
+  };
   const m = cur ? mv?.get(cur) : undefined;
   /** move without touching contacts, and no email (Nov 4, Nick) */
   const moveNow = async () => {
@@ -205,7 +226,23 @@ export default function UpdateContacts() {
       </div>
       {err && <div className="err">{err}</div>}
       {note && <div className="ok-note">{note}</div>}
-      {rows === null ? <p className="faint">Loading accounts…</p> : (
+      {rows === null ? <p className="faint">Loading accounts…</p> : show === "unsent" ? (
+        /* Moved, not sent: one master list, each customer's intro email picked, then Submit (Nov 4, Nick: "company name…
+           launch email, personal email, and then no notification… a button at the bottom that says submit") */
+        <section className="panel">
+          <div className="panel-h"><h2>Intro email for each customer</h2><span className="faint">{list.length} moved, nothing sent yet. Submit saves the picks; nothing sends until you say so.</span></div>
+          <div className="tbl-wrap"><table className="tbl ucx-pk">
+            <thead><tr><th>Company</th><th className="ucx-c">Launch email</th><th className="ucx-c">Personal email</th><th className="ucx-c">No email</th></tr></thead>
+            <tbody>{list.map((r) => {
+              const x = mv?.get(r.id); const has = !!x?.email; const v = picks[r.id] ?? pickOf(x);
+              const radio = (k: Pick) => <td className="ucx-c"><input type="radio" name={`pk-${r.id}`} aria-label={`${LABEL3[k]} for ${r.name}`} checked={v === k} disabled={!has && k !== "none"} onChange={() => setPicks((p) => ({ ...p, [r.id]: k }))} /></td>;
+              return <tr key={r.id}><td><b data-notranslate>{r.name}</b><div className="sub" data-notranslate>{has ? [r.contact, x!.email].filter(Boolean).join(" · ") : "No email on file"}{v === "personal" && r.owner ? ` · from ${first(r.owner)}` : ""}</div></td>{radio("launch")}{radio("personal")}{radio("none")}</tr>;
+            })}</tbody>
+          </table></div>
+          <div className="ucx-foot"><span className="faint">Personal emails go from the account owner&apos;s mailbox.</span><span className="spacer" />
+            <button type="button" className="btn primary" disabled={busy || !list.length} onClick={() => void submitPicks()}>{busy ? "Saving…" : "Submit"}</button></div>
+        </section>
+      ) : (
         <div className="ucx">
           <section className="panel ucx-list">
             <div className="panel-h"><h2>Accounts</h2><span className="faint">{list.length}</span></div>

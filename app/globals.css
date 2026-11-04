@@ -14886,6 +14886,7 @@ td.num .pv-mark,.tbl td .tag + .pv-mark{margin-left:6px;vertical-align:middle}
 .ucx-mv.yes{background:var(--accent-soft);color:var(--accent)}
 .ucx-mv.sent{color:var(--ok)}
 .ucx-mail{display:flex;align-items:center;gap:8px}
+.ucx-pk td.ucx-c,.ucx-pk th.ucx-c{text-align:center;width:120px}
 .ucx-mail select{height:36px;min-width:190px}
 .ucx-form .panel-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .ucx-open{margin-left:auto;white-space:nowrap}
