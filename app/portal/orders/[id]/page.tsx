@@ -28,7 +28,7 @@ import { fmtPhone } from "@/lib/phone";
 import { orderSteps } from "@/lib/customerSend";
 import { approveHref, REVIEW_KINDS, reviewWords } from "@/lib/portalApprove";
 import PortalItems from "@/components/PortalItems";
-import { isSimpleKind, kindLabel } from "@/lib/simpleOrders";
+import { isSimpleKind, kindLabel, linePic } from "@/lib/simpleOrders";
 
 // our garments in words, for the order's details (the customer's own goods use GOODS[…].portal)
 const BLANKS: Record<GoodsStatus, string> = { waiting: "Ordered, not here yet", on_way: "On the way", arrived: "Arrived, checking them in", partial: "Partly here", received: "All here", issue: "Issue with the garments" };
@@ -87,7 +87,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   if (mkPaths.length) { const { data: sg } = await createAdminClient().storage.from("proofs").createSignedUrls(mkPaths, 3600); mkPaths.forEach((pth, i) => { if (sg?.[i]?.signedUrl) mkUrls[pth] = sg[i].signedUrl!; }); }
   // a signage / promo / paper order: each item's picture, to look at and approve (components/PortalItems.tsx)
   const simple = isSimpleKind((o as { product_kind?: string | null }).product_kind);
-  const itemPaths = simple ? [...new Set(orderGroups(o).flatMap((g) => g.lines.map((l) => l.spec?.image).filter((x): x is string => !!x)))] : [];
+  const itemPaths = simple ? [...new Set(orderGroups(o).flatMap((g) => g.lines.map((l) => linePic(l.spec)).filter((x): x is string => !!x)))] : [];
   const itemUrls: Record<string, string> = {};
   if (itemPaths.length) { const { data: sg } = await createAdminClient().storage.from("proofs").createSignedUrls(itemPaths, 3600); itemPaths.forEach((pth, i) => { if (sg?.[i]?.signedUrl) itemUrls[pth] = sg[i].signedUrl!; }); }
   const messages = (m.data || []) as Message[];

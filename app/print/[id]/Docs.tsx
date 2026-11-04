@@ -879,9 +879,9 @@ export function InvoiceDoc(p: DocData) {
                     return <>{ownRows}{its.map((x, k) => <div key={k} className="iv2-note"><b>Personalization:</b> {x.text}{x.size ? ` · Size ${x.size}` : ""} · Qty {x.qty} · {money(x.unit)} each = {money(x.amount)}</div>)}</>; })()}
                   <div className="iv2-det">
                     {gc.wholesale && <div className="iv2-cs">Customer<br />supplied</div>}
-                    {pic ? <img className="iv2-th" src={pic} alt="" /> : <div className={"iv2-th none" + (logo ? " lg" : "")} style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }}>{logo && <img src={logo} alt="" />}</div>}
+                    {pic ? <img className={"iv2-th" + (l.spec ? " item" : "")} src={pic} alt="" /> : <div className={"iv2-th none" + (logo ? " lg" : "")} style={{ ["--sc" as string]: guessHex(lineColor(l)) || "#e8ebf0" }}>{logo && <img src={logo} alt="" />}</div>}
                     <div className="iv2-blk">
-                      <div className={"iv2-sz" + (sz.length > 7 ? " many" : "")}>{sz.map(({ z, n, extra }) => <span key={z} className={n ? (extra ? "x" : "") : "z"}>{sizeLabel(z)}<b>{n}</b></span>)}</div>
+                      {!l.spec && <div className={"iv2-sz" + (sz.length > 7 ? " many" : "")}>{sz.map(({ z, n, extra }) => <span key={z} className={n ? (extra ? "x" : "") : "z"}>{sizeLabel(z)}<b>{n}</b></span>)}</div>}
                       {prints.length > 0 && (
                         <div className="iv2-prs">
                           {/* how it's decorated, then each spot (Oct 30, Nick: "right underneath sizes… screen printing, embroidery,

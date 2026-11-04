@@ -1,4 +1,5 @@
 "use server";
+import { approveItems } from "@/lib/simpleOrdersServer";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { allRows } from "@/lib/readAll";
 import Stripe from "stripe";
@@ -47,6 +48,7 @@ export async function approveQuote(orderId: string, signature: string): Promise<
     const now = new Date().toISOString();
     const { error } = await admin.from("orders").update({ status: "approved", type: "invoice", approved_at: now, approved_name: name }).eq("id", orderId).eq("status", "quote_sent");
     if (error) return { ok: false, error: error.message };
+    await approveItems(admin, orderId, name, now);
     await admin.from("order_events").insert([
       { order_id: orderId, kind: "approved", detail: `Signed "${name}"`, actor: email },
       { order_id: orderId, kind: "status", detail: "approved", actor: email },

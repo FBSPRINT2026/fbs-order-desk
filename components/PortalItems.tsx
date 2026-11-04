@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { answerItemProof } from "@/lib/itemProofs";
 import type { Group } from "@/lib/pricing";
-import { qtyOf, type SimpleSpec } from "@/lib/simpleOrders";
+import { linePic, qtyOf, type SimpleSpec } from "@/lib/simpleOrders";
 
 /**
  * A signage / promotional products / paper printing order in the customer's portal (Nov 4, Nick: "the customers will see
@@ -32,10 +32,10 @@ export default function PortalItems({ orderId, groups, urls, title, hidePrices, 
         {err && <div className="err">{err}</div>}
         {lines.map((l) => {
           const s = l.spec as SimpleSpec | undefined, q = qtyOf(l), each = +(l.priceOverride || 0) || 0;
-          const url = s?.image ? urls[s.image] : "", st = s?.proof?.status;
+          const pic = linePic(s), url = pic ? urls[pic] : "", st = s?.proof?.status;
           return (
             <div key={l.id} className="pit-ln">
-              {s?.image ? <a className="pit-img" href={url || undefined} target="_blank" rel="noreferrer">{url && !/\.pdf$/i.test(s.image) ? <img src={url} alt={l.garment || "Proof"} /> : <span>View proof (PDF)</span>}</a> : <span className="pit-img none" aria-hidden />}
+              {s?.image ? <a className="pit-img" href={url || undefined} target="_blank" rel="noreferrer">{url ? <img src={url} alt={l.garment || "Proof"} /> : <span>View proof (PDF)</span>}</a> : <span className="pit-img none" aria-hidden />}
               <div className="pit-b">
                 <div className="pit-t"><b>{l.garment || "Item"}</b>
                   {st === "approved" && <span className="pit-pf ok">Approved</span>}

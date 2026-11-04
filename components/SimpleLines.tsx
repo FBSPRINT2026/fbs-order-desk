@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ONE_SIZE, type GLine, type Group } from "@/lib/pricing";
 import { sendItemProofs } from "@/lib/itemProofs";
-import { IMPRINT_TYPES, SIGN_FINISHING, SIGN_MATERIALS, kindLabel, newSimpleGroup, qtyOf, signEach, specText, sqft, type ProductKind, type SimpleSpec } from "@/lib/simpleOrders";
+import { IMPRINT_TYPES, SIGN_FINISHING, SIGN_MATERIALS, kindLabel, linePic, newSimpleGroup, pdfFirstPage, qtyOf, signEach, specText, sqft, type ProductKind, type SimpleSpec } from "@/lib/simpleOrders";
 
 /**
  * The middle of a signage / promotional products / paper printing order (lib/simpleOrders.ts; Nov 4, Nick): one card per
@@ -35,7 +35,7 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const lines = groups.flatMap((g, gi) => g.lines.map((l, li) => ({ g, gi, l, li })));
-  const paths = lines.map((x) => x.l.spec?.image).filter((p): p is string => !!p);
+  const paths = lines.map((x) => linePic(x.l.spec)).filter((p): p is string => !!p);
   const key = paths.join("|");
   useEffect(() => {
     if (!paths.length) return;
@@ -61,12 +61,34 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
     const l = groups[gi]?.lines[li];
     const path = `orders/${orderId}/items/${l?.id || "x"}-${Date.now()}-${f.name.replace(/[^\w.-]+/g, "_")}`;
     const { error } = await sb.storage.from("proofs").upload(path, f, { contentType: f.type || "application/octet-stream" });
+    if (error) { setBusy(""); return setErr(`The picture didn't upload: ${error.message}`); }
+    // a PDF: its first page as a picture, for the order, the quote and the customer's proof
+    const preview = /pdf/i.test(f.type) || /\.pdf$/i.test(f.name) ? await makePreview(f, path) : undefined;
     setBusy("");
-    if (error) return setErr(`The picture didn't upload: ${error.message}`);
-    spec(gi, li, { image: path, imageName: f.name, proof: undefined });
+    spec(gi, li, { image: path, imageName: f.name, preview, proof: undefined });
   };
 
   const isPdf = (p?: string) => !!p && /\.pdf$/i.test(p);
+  const makePreview = async (src: Blob, path: string) => {
+    const png = await pdfFirstPage(src, path.split("/").pop() || "proof.pdf");
+    if (!png) return undefined;
+    const pp = path.replace(/\.pdf$/i, "") + "-preview.png";
+    const { error } = await sb.storage.from("proofs").upload(pp, png, { contentType: "image/png", upsert: true });
+    return error ? undefined : pp;
+  };
+  // a PDF added before previews were made: make it now (once)
+  useEffect(() => {
+    lines.forEach(({ gi, li, l }) => {
+      const s = l.spec;
+      if (!s?.image || s.preview || !isPdf(s.image) || busy) return;
+      void (async () => {
+        const { data } = await sb.storage.from("proofs").download(s.image!);
+        if (!data) return;
+        const pp = await makePreview(data, s.image!);
+        if (pp) spec(gi, li, { preview: pp });
+      })();
+    });
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <section className="panel sol">
       <div className="panel-h"><h2>{kindLabel(kind)}</h2><span className="faint">Outsourced: a simple invoice, never on the production boards.</span>
@@ -77,13 +99,13 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
         {!lines.length && <p className="faint">No items yet.</p>}
         {lines.map(({ gi, l, li }) => {
           const s: SimpleSpec = { kind, ...(l.spec || {}) } as SimpleSpec;
-          const q = qtyOf(l), each = +(l.priceOverride || 0) || 0, url = s.image ? urls[s.image] : "";
+          const q = qtyOf(l), each = +(l.priceOverride || 0) || 0, url = linePic(s) ? urls[linePic(s)] : "";
           const pf = s.proof ? PROOF[s.proof.status] : null;
           const id = `${gi}-${li}`;
           return (
             <div key={l.id} className="sol-ln">
               <label className={"sol-img" + (s.image ? " has" : "")} title={s.image ? "Change the picture" : "Add a picture: what the customer approves"}>
-                {s.image ? (isPdf(s.image) ? <span className="sol-pdf">PDF<small>{s.imageName}</small></span> : url ? <img src={url} alt={l.garment || "Item"} /> : <span className="faint">…</span>)
+                {s.image ? (url ? <img src={url} alt={l.garment || "Item"} /> : isPdf(s.image) ? <span className="sol-pdf">PDF<small>{s.imageName}</small></span> : <span className="faint">…</span>)
                   : <span className="sol-add">{busy === id ? "Uploading…" : "+ Picture"}</span>}
                 <input type="file" accept="image/*,application/pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(gi, li, f); }} />
               </label>

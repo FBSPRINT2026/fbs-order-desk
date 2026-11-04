@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { linePic } from "@/lib/simpleOrders";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calcOrder, withoutShopPieces, mergeSettings, orderGroups, type Customer, type Order, type Payment } from "@/lib/pricing";
@@ -55,6 +56,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   // the art proof (?proof=1): every mockup big and each print's art up close, for the customer to approve (Oct 20)
   const proof0 = !!proof && !work0;
   const mkPaths = groups.map((g) => {
+    // a signage / promo / paper item: its own picture (a PDF's first-page preview), one per line
+    if (g.lines.some((l) => l.spec)) return g.lines.map((l) => linePic(l.spec) || "");
     // ours first; the customer's own mockup only when we haven't made one
     // customer supplied transfers: their placement reference is the mockup (Oct 27, Nick: "that's what they should see on
     // top of the work order")
@@ -75,7 +78,7 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     const cw = (((designs[d.design_id!].specs || {}) as { colorways?: { name: string; preview?: string }[] }).colorways || []).find((c) => cwKey(c.name) === cwKey(name));
     return cw?.preview ? [`${d.design_id}:cw:${cwKey(cw.name)}`, cw.preview] as [string, string] : null;
   })).filter((x): x is [string, string] => !!x)).entries()];
-  const toSign = [...mkPaths.flat(), ...dPaths.map((d) => d.preview_path), ...cwPics.map(([, path]) => path)];
+  const toSign = [...mkPaths.flat().filter(Boolean), ...dPaths.map((d) => d.preview_path), ...cwPics.map(([, path]) => path)];
   const signed = toSign.length ? (await admin.storage.from("proofs").createSignedUrls(toSign, 3600)).data || [] : [];
   const urlOf = new Map<string, string>();
   toSign.forEach((x, i) => { if (signed[i]?.signedUrl) urlOf.set(x, signed[i].signedUrl!); });

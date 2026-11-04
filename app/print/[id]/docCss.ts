@@ -473,6 +473,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-note{font-size:9pt;color:var(--ink2);font-style:italic;white-space:pre-wrap;margin-top:2px}
 .pdoc .iv2-det{display:flex;gap:10px;align-items:flex-start;margin-top:8px;min-width:0}
 .pdoc .iv2-th{width:.95in;height:.95in;flex:none;object-fit:contain;border-radius:7px;background:#f4f5f7;display:block}
+.pdoc .iv2-th.item{width:2.4in;height:1.6in}
 .pdoc .iv2-th.none{background:linear-gradient(var(--sc),var(--sc)) center/45% 55% no-repeat,#f4f5f7}
 .pdoc .iv2-cs{width:.27in;height:.95in;flex:none;border:.75px solid var(--ink);border-radius:4px;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;transform:rotate(180deg);font-size:6pt;font-weight:300;letter-spacing:.12em;line-height:1.15;text-align:center;text-transform:uppercase}
 .pdoc .iv2-blk{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}

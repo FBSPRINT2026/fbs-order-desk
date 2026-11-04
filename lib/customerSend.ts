@@ -1,4 +1,5 @@
 import "server-only";
+import { approveItems } from "@/lib/simpleOrdersServer";
 import { orderSubject } from "@/lib/orderSubject";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
@@ -385,6 +386,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     if (who.length < 2) return { ok: false as const, error: "Type your full name to approve." };
     const { error } = await admin.from("orders").update({ status: "approved", type: "invoice", approved_at: now, approved_name: who }).eq("id", orderId).eq("status", "quote_sent");
     if (error) return { ok: false as const, error: error.message };
+    await approveItems(admin, orderId, who || actor || "customer", now);
     await admin.from("order_events").insert([{ order_id: orderId, kind: "approved", detail: `Signed "${who}" on their order page`, actor }, { order_id: orderId, kind: "status", detail: "approved", actor }]);
     await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "quote approved");
     await shop(`Quote #${o.number} approved`, `${who} approved quote #${o.number}`, `${o.nickname || "Order"} · ${money(o.total || 0)}`);
