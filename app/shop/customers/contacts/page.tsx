@@ -5,6 +5,7 @@ import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
 import { contactDetail, contactList, lookUpOnline, saveContacts, type Addr, type ContactRow, type ContactState, type Detail } from "./actions";
 import type { CompanyFound } from "@/lib/ai/companyLookup";
+import { moveCustomers, moveList, sendCustomerPreview, sendPersonalNoteTest, setPersonal, setQuiet, type MoveRow } from "../move-list/actions";
 
 /**
  * Update contacts (Nov 3, Nick: "for creative apparel… Scott Gray, Lyn, Lisa… their name, their email… who they are,
@@ -13,8 +14,19 @@ import type { CompanyFound } from "@/lib/ai/companyLookup";
  * signature, Contact / Portal / Main and what they do (orders, art, billing). People who look like regulars (20+ emails at
  * the company's own address) start ticked, in blue, until saved. Saves here only; Printavo isn't touched.
  */
-type Show = ContactState | "all";
-const LABEL: Record<Show, string> = { missing: "Needs a contact", check: "Check", done: "Done", all: "All" };
+/**
+ * Portal customers: one tool for moving customers to the new system, their contacts, and their intro email (Nov 4, Nick:
+ * "put those together into one tool… hide everyone who's already been sent… launch email sent, personal email sent,
+ * haven't been sent, people who have logged in… click on them… update contact info, move to new… on the right… hasn't
+ * been moved"). Portal intro emails (/shop/customers/move-list) opens here.
+ */
+type Show = "notmoved" | "unsent" | "launch" | "personal" | "visited" | "all";
+const SHOWS: Show[] = ["notmoved", "unsent", "launch", "personal", "visited", "all"];
+const LABEL: Record<Show, string> = { notmoved: "Not moved yet", unsent: "Moved, not sent", launch: "Launch email sent", personal: "Personal email sent", visited: "Logged in", all: "All" };
+type Mail = "none" | "launch" | "nick" | "amanda";
+const wasSent = (m?: MoveRow) => !!m && (!!m.launchSent || !!m.personal.sentAt);
+const mailOf = (m?: MoveRow): Mail => (!m ? "none" : !m.personal.skip && m.personal.to.length ? (/^amanda/i.test(m.personal.from) ? "amanda" : "nick") : !m.quiet && m.email ? "launch" : "none");
+const shortDay = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const ROLES = ["Orders", "Art", "Billing"];
 const when = (d: string) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
 const first = (n: string) => n.split(/\s+/)[0];
@@ -24,7 +36,7 @@ type Row = { key: string; contactId?: string; name: string; email: string; phone
   n?: number; last?: string; boxes?: string[]; same?: boolean; suggested?: boolean; outsider?: boolean };
 
 export default function UpdateContacts() {
-  const [show, setShow] = useSticky<Show>("customers.contacts.show", "missing");
+  const [show, setShow] = useSticky<Show>("customers.portal.view", "notmoved");
   // whose accounts: "auto" until picked, then the person looking (their own) on first load
   const [who0, setWho] = useSticky<string>("customers.contacts.owner2", "auto");
   const [meOwner, setMeOwner] = useState("");
@@ -37,14 +49,26 @@ export default function UpdateContacts() {
   // what was found online for this account (Look it up online), and which boxes were filled from it
   const [web, setWeb] = useState<CompanyFound | null | "busy">(null), [webErr, setWebErr] = useState(""), [fromWeb, setFromWeb] = useState<Set<string>>(new Set());
 
+  // where each customer is in the move: moved, which intro email, sent, logged in (owner only; others see contacts only)
+  const [mv, setMv] = useState<Map<string, MoveRow> | null>(null);
+  const loadMv = async () => { const r = await moveList(); setMv(r.ok ? new Map(r.rows.map((x) => [x.id, x])) : new Map()); };
+  useEffect(() => { void loadMv(); }, []);
+  const inView = (r: ContactRow, s: Show) => {
+    if (s === "all") return true;
+    const m = mv?.get(r.id);
+    if (!m) return s === "notmoved";
+    if (s === "notmoved") return !m.movedAt;
+    if (!m.movedAt) return false;
+    return s === "unsent" ? !wasSent(m) : s === "launch" ? !!m.launchSent : s === "personal" ? !!m.personal.sentAt : m.visits.n > 0;
+  };
   useEffect(() => { void contactList().then((r) => { if (r.ok) { setRows(r.rows); setOwners(r.owners); setMeOwner(r.meOwner); } else setErr(r.error); }); }, []);
   const all = rows || [];
   const mine = (r: ContactRow) => !who || first(r.owner).toLowerCase() === first(who).toLowerCase();
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return all.filter((r) => (show === "all" || r.state === show) && mine(r) && (!t || `${r.name} ${r.contact} ${r.email}`.toLowerCase().includes(t)));
-  }, [all, show, who, q]); // eslint-disable-line react-hooks/exhaustive-deps
-  const count = (s: Show) => all.filter((r) => (s === "all" || r.state === s) && mine(r)).length;
+    return all.filter((r) => inView(r, show) && mine(r) && (!t || `${r.name} ${r.contact} ${r.email}`.toLowerCase().includes(t)));
+  }, [all, show, who, q, mv]); // eslint-disable-line react-hooks/exhaustive-deps
+  const count = (s: Show) => all.filter((r) => inView(r, s) && mine(r)).length;
 
   // open one: who's on the account, then everyone found in the mail; the regulars at the company start ticked
   const open = async (id: string) => {
@@ -110,11 +134,36 @@ export default function UpdateContacts() {
     if (!r.ok) return setErr(r.error);
     const m = people.find((p) => p.main && p.contact);
     setRows((rs) => (rs || []).map((x) => (x.id === d.id ? { ...x, name: co.company || x.name, contact: m?.name || x.contact, email: m?.email || x.email, state: "done", checkedAt: new Date().toISOString() } : x)));
+    if (r.moved) void loadMv();
     setNote(`${r.moved ? "Moved to our system" : "Saved"}: ${co.company || m?.name || "the account"}${r.added ? `, ${r.added} added` : ""}${r.removed ? `, ${r.removed} taken off` : ""}.`);
     next();
   };
 
   const row = all.find((r) => r.id === cur);
+  const m = cur ? mv?.get(cur) : undefined;
+  /** move without touching contacts, and no email (Nov 4, Nick) */
+  const moveNow = async () => {
+    if (!d) return;
+    setBusy(true); setErr("");
+    const r = await moveCustomers([d.id], true);
+    setBusy(false);
+    if (!r.ok) return setErr(r.error);
+    setNote(`${co.company || "The account"} is moved to the new system. No email was sent.`);
+    await loadMv(); next();
+  };
+  /** which intro email they get: none, the launch email, or a personal note from Nick or Amanda (nothing sends from here) */
+  const setMail = async (v: Mail) => {
+    if (!d) return;
+    setErr("");
+    const a = await setQuiet([d.id], v !== "launch");
+    const b = await setPersonal([d.id], v === "nick" || v === "amanda", v === "amanda" ? "amanda@fbsprint.com" : v === "nick" ? "nicholas@fbsprint.com" : undefined);
+    if (!a.ok) return setErr(a.error);
+    if (!b.ok) return setErr(b.error);
+    await loadMv();
+  };
+  const [pv, setPv] = useState("");
+  const preview = async () => { if (!d) return; setPv("busy"); setErr(""); const x = await sendCustomerPreview(d.id); setPv(""); if (x.ok) setNote(`Both emails sent to ${x.to} as ${co.company || "they"} get them.`); else setErr(x.error); };
+  const testNote = async () => { setPv("test"); setErr(""); const r = await sendPersonalNoteTest(); setPv(""); if (r.ok) setNote(`Both versions of the personal email sent from ${r.from} to ${r.to}.`); else setErr(r.error); };
   const theirs = people.filter((p) => !p.outsider);
   const outsiders = people.filter((p) => p.outsider);
   const chosen = people.filter((p) => p.contact).length;
@@ -144,14 +193,14 @@ export default function UpdateContacts() {
     <>
       <BackLink href="/shop/customers" label="Customers" />
       <div className="page-head">
-        <div><h1>Update contacts</h1><div className="eyebrow">Every account, biggest first, with everyone at that company from your email. Blue was filled in for you: check it and save.</div></div>
-        <div className="row"><Link className="btn" href="/shop/customers/move-list">Portal intro emails</Link></div>
+        <div><h1>Portal customers</h1><div className="eyebrow">Move customers to the new system, update their contacts and pick their intro email. Customers already sent an email are hidden unless you pick them. Nothing sends from here.</div></div>
+        <div className="row"><button type="button" className="btn" disabled={pv === "test"} onClick={() => void testNote()} title="The personal email in both versions, from your own mailbox to Nick and Amanda">{pv === "test" ? "Sending…" : "Test the personal email"}</button><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
       </div>
       {rows && <div className="stats">
-        {(["missing", "check", "done"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className={"v" + (s === "missing" && count(s) ? " alert" : "")}>{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
+        {(["notmoved", "unsent", "launch", "personal", "visited"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{mv ? count(s) : "…"}</span><span className="k">{LABEL[s]}</span></button>)}
       </div>}
       <div className="toolbar">
-        <div className="chips">{(["missing", "check", "done", "all"] as Show[]).map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
+        <div className="chips">{SHOWS.map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
         <input type="search" className="ucx-q" placeholder="Find an account" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {err && <div className="err">{err}</div>}
@@ -170,7 +219,7 @@ export default function UpdateContacts() {
                 <button key={r.id} type="button" className={"ucx-i" + (r.id === cur ? " on" : "")} onClick={() => void open(r.id)}>
                   <span className={"ucx-dot " + r.state} aria-hidden />
                   <span className="ucx-it"><b data-notranslate>{r.name}</b><small>{r.state === "missing" ? "No contact" : r.state === "check" ? `${r.email} · never in our mail` : r.contact || r.email}{r.owner ? ` · ${first(r.owner)}` : ""}</small></span>
-                  {r.rank > 0 && <span className="ucx-rank">#{r.rank}</span>}
+                  {(() => { const x = mv?.get(r.id); return !mv ? null : !x?.movedAt ? <span className="ucx-mv no">Not moved</span> : wasSent(x) ? <span className="ucx-mv sent">Sent {shortDay((x.launchSent || x.personal.sentAt)!)}</span> : <span className="ucx-mv yes">Moved</span>; })()}
                 </button>
               ))}
               {!list.length && <p className="faint" style={{ padding: 12 }}>Nothing here.</p>}
@@ -255,8 +304,15 @@ export default function UpdateContacts() {
                     <button type="button" className="btn" onClick={next}>Skip</button>
                     <span className="faint">Unticking someone already on the account takes them off it.</span>
                     <span className="spacer" />
-                    {d.movedAt ? <span className="ucx-moved">In our system since {new Date(d.movedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                      : <button type="button" className="btn" disabled={busy} onClick={() => void save(true)}>{busy ? "Saving…" : "Save and move to our system"}</button>}
+                    {m && (wasSent(m) ? <span className="ucx-moved">Intro email sent {shortDay((m.launchSent || m.personal.sentAt)!)}</span> : (
+                      <label className="ucx-mail"><span className="ucx-lbl">Intro email</span>
+                        <select value={mailOf(m)} onChange={(e) => void setMail(e.target.value as Mail)} disabled={!m.email}>
+                          <option value="none">No email</option><option value="launch">Launch email</option><option value="nick">Personal note from Nick</option><option value="amanda">Personal note from Amanda</option>
+                        </select></label>))}
+                    {m && !wasSent(m) && mailOf(m) !== "none" && <button type="button" className="btn ghost sm" disabled={!!pv} onClick={() => void preview()}>{pv === "busy" ? "Sending…" : "Preview to us"}</button>}
+                    {(m?.movedAt || d.movedAt) ? <span className="ucx-moved">In the new system since {shortDay((m?.movedAt || d.movedAt)!)}</span>
+                      : <><button type="button" className="btn" disabled={busy} onClick={() => void moveNow()} title="Move them now; contacts stay as they are, no email">Move to new system</button>
+                        <button type="button" className="btn" disabled={busy} onClick={() => void save(true)}>{busy ? "Saving…" : "Save and move"}</button></>}
                     <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save and next"}</button>
                   </div>
                 </div>

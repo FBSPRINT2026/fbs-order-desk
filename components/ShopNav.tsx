@@ -292,7 +292,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/jobs", "proof", "Job Center"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
     { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Wall"], ["/shop/digitizing", "needle", "Digitizing"], ["/shop/gang-sheet", "gang", "Gang Sheets"]] },
-    { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"], ["/shop/art-builder", "artbuild", "Customer Artwork Builder"], ["/shop/take-payment", "takepay", "Take a Payment"], ["/shop/customers/contacts", "contacts", "Update contacts"]] },
+    { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"], ["/shop/art-builder", "artbuild", "Customer Artwork Builder"], ["/shop/take-payment", "takepay", "Take a Payment"], ["/shop/customers/contacts", "contacts", "Portal customers"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
@@ -339,8 +339,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     {/* the customers' ClickUp boards: Nick only now (Nov 3, Nick: "remove the ClickUp tool from everybody's view except mine") */}
     {link(["/shop/clickup", "clickup", "ClickUp Jobs"])}
     {/* moving customers over (Nov 3, Nick: "put the tool in my admin tools"): their contacts and details, then the move */}
-    {link(["/shop/customers/contacts", "contacts", "Update contacts"])}
-    {link(["/shop/customers/move-list", "moveport", "Portal intro emails"])}
+    {link(["/shop/customers/contacts", "contacts", "Portal customers"])}
+    
     {/* payday: W-2 hours for QuickBooks Payroll, contractor checks, paycheck advances (Oct 30, Nick) */}
     {link(["/shop/payroll", "payroll", "Payroll Center"])}
     {/* where every drop is measured from, checked once per garment photo (Oct 20, Nick) */}
