@@ -58,6 +58,8 @@ import SendProofTool from "@/components/tools/SendProofTool";
 import { acceptRequest, requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
 import MenuItem from "@/components/MenuItem";
+import SimpleLines from "@/components/SimpleLines";
+import { KINDS, isSimpleKind, kindLabel, newSimpleGroup, type ProductKind } from "@/lib/simpleOrders";
 import PayReadiness from "@/components/PayReadiness";
 import { checkOrder } from "@/lib/orderChecks";
 import { ADJUST } from "@/lib/printavoChanges";
@@ -413,7 +415,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const startedAt = Date.now();
     const { data: savedRow, error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      price_type: d.price_type || "retail", order_type: d.order_type || null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", order_type: d.order_type || null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
@@ -721,6 +723,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     timer.current = setTimeout(save, 700);
   }
   const setGroup = (i: number, fn: (g: Group) => void) => patch((d) => fn(d.groups[i]));
+  /** the order type (More → Order type): a simple kind starts with one empty item when the order has no garments yet */
+  const [kindOpen, setKindOpen] = useState(false);
+  const setKind = (k: ProductKind) => {
+    setKindOpen(false);
+    patch((d) => {
+      d.product_kind = k === "apparel" ? null : k;
+      if (isSimpleKind(k) && !d.groups.some((g) => g.lines.some((l) => (l.style || l.garment || "").trim() || l.spec))) d.groups = [newSimpleGroup(k)];
+    });
+  };
   // finishing: picked once for the whole order (the usual case) or per group. Embroidery extras stay on their group.
   const [finSplit, setFinSplit] = useState<boolean | null>(null);
   // finishing picked for the whole order: not embroidery extras, not the tag print (it's on each group's imprints)
@@ -1604,6 +1615,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <details className="ot-more" onBlur={closeSoon}>
             <summary className="btn">More ▾</summary>
             <div className="ot-menu">
+              {/* what the order sells (Nov 4, Nick): apparel, or an outsourced kind with simple item lines (lib/simpleOrders.ts) */}
+              <div className="ot-kind">
+                <button type="button" aria-haspopup="menu" aria-expanded={kindOpen} onClick={() => setKindOpen(!kindOpen)}><MenuItem icon="grid" tone="violet" title="Order type" sub={kindLabel(o.product_kind)} /></button>
+                {kindOpen && <div className="ot-kind-sub" role="menu" aria-label="Order type">
+                  {KINDS.map((k) => <button key={k.k} type="button" role="menuitemradio" aria-checked={(o.product_kind || "apparel") === k.k} className={(o.product_kind || "apparel") === k.k ? "on" : ""} onClick={() => setKind(k.k)}><MenuItem icon={k.k === "apparel" ? "shirt" : k.k === "paper" ? "invoice" : k.k === "promo" ? "label" : "proof"} tone={(o.product_kind || "apparel") === k.k ? "blue" : "gray"} title={k.label} sub={k.sub} /></button>)}
+                </div>}
+              </div>
               <button type="button" onClick={async () => { await save(); setOwnReorder(true); }}><MenuItem icon="copy" tone="gray" title="Reorder" sub="Same sizes, new sizes from a file, or type them" /></button>
               {o.submitted_at
                 ? <button type="button" onClick={del}><MenuItem icon="refresh" title="Reset to the customer's request" sub="Back to Portal requests as they sent it (a customer's order is never deleted)" /></button>
@@ -1917,6 +1935,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 else if (p.helperFile) router.push(`/shop/artwork/mockup?order=${o.id}&group=${gid}&helper=1&helperFile=${encodeURIComponent(p.helperFile)}`);
               }} />
           )}
+          {isSimpleKind(o.product_kind) ? <SimpleLines orderId={o.id} kind={o.product_kind} groups={o.groups} hidePrices={!seesMoney || undefined} update={(fn) => patch((d) => fn(d.groups))} /> : <>
           <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => (
             <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
@@ -1953,6 +1972,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </div>
             </section>
           )}
+          </>}
             <div className="grid g2 fees-notes">
             <section className="panel money-only">
               <div className="panel-h"><h2>Fees & adjustments</h2></div>

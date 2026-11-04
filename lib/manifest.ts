@@ -111,7 +111,7 @@ async function matchBlanks(admin: SupabaseClient, g: Group): Promise<{ orderId: 
   }
   const since = new Date(Date.now() - 75 * 86400000).toISOString().slice(0, 10);
   const [{ data }, { data: ar }] = await Promise.all([
-    admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, due_date, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).limit(400),
+    admin.from("orders").select("id, number, nickname, po_number, customer_id, price_type, status, due_date, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).or("product_kind.is.null,product_kind.eq.apparel").limit(400),
     admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").is("removed_at", null).or(`due_date.gte.${since},due_date.is.null`).limit(600),
   ]);
   type C = Open & { who: string };
@@ -315,7 +315,7 @@ async function guessCustomerByGoods(admin: SupabaseClient, g: Group) {
   const lo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10), hi = new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10);
   const [{ data: ar }, { data: os }] = await Promise.all([
     allRows((r0, r1) => admin.from("archived_orders").select("id, visual_id, nickname, po_number, customer_id, status_name, due_date, data, customers(company, name)").is("removed_at", null).gte("due_date", lo).lte("due_date", hi).not("status_name", "ilike", "%job completed%").order("id").range(r0, r1), 1500),
-    admin.from("orders").select("id, number, nickname, po_number, customer_id, due_date, status, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).gte("due_date", lo).lte("due_date", hi).limit(500),
+    admin.from("orders").select("id, number, nickname, po_number, customer_id, due_date, status, groups, lines, customers(company, name)").in("status", ["approved", "art", "blanks", "production"]).or("product_kind.is.null,product_kind.eq.apparel").gte("due_date", lo).lte("due_date", hi).limit(500),
   ]);
   type J = { id: string; number: number; nickname: string; po: string; customerId: string | null; customer: string; due: string | null; items: { style: string; color: string; qty: number }[] };
   const jobs: J[] = [

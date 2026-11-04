@@ -20847,3 +20847,39 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .clk-st small{font-weight:400;color:var(--ink-3);font-size:12px}
 .clk-st.on{color:var(--ok)}.clk-st.on i{background:var(--ok)}
 .clk-st.off{color:var(--danger);border-color:var(--danger)}.clk-st.off i{background:var(--danger)}
+
+/* ===== Simple item orders: signage, promotional products, paper printing (components/SimpleLines.tsx, Nov 4) ===== */
+.ot-kind{position:relative}
+.ot-kind-sub{position:absolute;right:calc(100% + 6px);top:0;z-index:41;min-width:250px;display:flex;flex-direction:column;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px rgba(20,29,43,.16)}
+.ot-kind-sub button.on{background:var(--accent-soft)}
+@media (max-width:700px){.ot-kind-sub{position:static;box-shadow:none;border:0;padding:0 0 0 12px;min-width:0}}
+.sol .panel-b{display:flex;flex-direction:column;gap:0}
+.sol-ln{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.sol-ln:first-of-type{padding-top:0}
+.sol-img{width:96px;height:96px;border:1px dashed var(--line);border-radius:var(--r);background:var(--surface-2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;text-align:center}
+.sol-img.has{border-style:solid}
+.sol-img img{width:100%;height:100%;object-fit:contain}
+.sol-add{font-size:12.5px;color:var(--accent);font-weight:700}
+.sol-pdf{font-size:13px;font-weight:700;color:var(--ink-2);display:flex;flex-direction:column;gap:2px;padding:4px}
+.sol-pdf small{font-size:11px;font-weight:400;color:var(--ink-3);word-break:break-all}
+.sol-body{display:flex;flex-direction:column;gap:10px;min-width:0}
+.sol-top{display:flex;align-items:center;gap:8px}
+.sol-name{flex:1;min-width:0;height:36px;font-weight:700}
+.sol-pf{font-size:12px;font-weight:700;padding:3px 9px;border-radius:var(--r);white-space:nowrap}
+.sol-pf.ok{background:var(--ok-soft);color:var(--ok)}
+.sol-pf.wait{background:var(--warn-soft);color:var(--warn)}
+.sol-pf.no{background:var(--danger-soft);color:var(--danger)}
+.sol-f{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+.sol-f label,.sol-money label{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sol-f label>span:first-child,.sol-money label>span{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:700}
+.sol-f input,.sol-f select,.sol-money input{height:36px;min-width:0;width:100%}
+.sol-sz{grid-column:span 2}
+.sol-wide{grid-column:1/-1}
+.sol-wh{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) 64px;gap:6px;align-items:center;color:var(--ink-3)}
+.sol-bot{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.sol-calc{font-size:12.5px;color:var(--accent)}
+.sol-money{display:flex;align-items:flex-end;gap:10px}
+.sol-money label{width:96px}
+.sol-money b{font-size:15px;white-space:nowrap;min-width:90px;text-align:right;padding-bottom:8px}
+.sol>.panel-b>.btn{align-self:flex-start;margin-top:12px}
+@media (max-width:560px){.sol-ln{grid-template-columns:72px minmax(0,1fr)}.sol-img{width:72px;height:72px}.sol-sz{grid-column:1/-1}}

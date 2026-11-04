@@ -274,6 +274,9 @@ export type GLine = {
    *  saved with each mockup so the order's pictures match it (lib/mockup.ts lineHex) */
   shade?: string;
   sizes: Partial<Record<Size, number>>; priceOverride: number | null;
+  /** an item on a signage / promotional products / paper printing order (lib/simpleOrders.ts): what it is, its picture
+   *  and the customer's approval of it; `note` carries its plain description */
+  spec?: import("@/lib/simpleOrders").SimpleSpec;
   /** an embroidery specialty item (hat, bag, fleece…) set by hand; unset = from its name, style and brand (isSpecialtyItem) */
   specialty?: boolean | null;
   /** a garment we have no photo of, drawn in the Mockup Creator: its look read off the customer's sheet (Oct 27) */
@@ -422,6 +425,7 @@ export type Order = {
   waive_setup: boolean; notes: string; /** print the customer notes on the quote / invoice (Oct 30, Nick: a checkbox) */ notes_on_invoice?: boolean; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
   /** the customer walked away (Job Center → Mark declined; migration 232): under Declined for two weeks */ declined_at?: string | null; declined_reason?: string;
+  /** what it sells: apparel (null) or an outsourced kind with simple item lines (lib/simpleOrders.ts; orders.product_kind) */ product_kind?: import("@/lib/simpleOrders").ProductKind | null;
   /** New order / Reorder / Reorder with changes (Oct 24, Nick; orders.order_type). Null = worked out from the order */ order_type?: "new" | "reorder" | "reorder_changes" | null;
   price_type: PriceType; /** priced by the customer's program rate card (the chip next to Retail / Wholesale) */ use_program?: boolean; /** which of the customer's rate cards (programs.rate_cards id, "main" = the first) */ program_card?: string | null; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; /** firm in-hands (can't slip), and the time it's needed that day (minutes; null = end of day) */ firm?: boolean; due_time?: number | null; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string; /** bill third party: the carrier account this shipment is billed to (lib/thirdParty.ts) */ third_party?: import("@/lib/thirdParty").ThirdParty | null;
 };
