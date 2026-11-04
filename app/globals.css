@@ -14932,6 +14932,12 @@ input.ucx-sug,textarea.ucx-sug{border-color:var(--accent);background:var(--accen
 .ucx-box{width:18px;height:18px;border:1.5px solid var(--ink-3);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;line-height:1;color:var(--accent-ink)}
 .ucx-taxbtn.on .ucx-box{background:var(--accent);border-color:var(--accent)}
 .ucx-notes{margin-top:14px}
+.ucx-addrs{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.ucx-addr{display:grid;grid-template-columns:minmax(150px,220px) minmax(0,1fr) auto;gap:10px;align-items:start}
+@media (max-width:640px){.ucx-addr{grid-template-columns:minmax(0,1fr) auto}.ucx-addr .ucx-at{grid-column:1/-1;grid-row:2}}
+.ucx-addr .ucx-al{font-weight:700}
+.ucx-at{width:100%;min-height:56px;border:1px solid var(--line);border-radius:6px;padding:8px 9px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);resize:vertical}
+.ucx-addbtn{align-self:flex-start}
 .ucx-notes textarea{width:100%}
 .ucx-opts{display:flex;flex-direction:column;gap:4px;margin-top:6px}
 .ucx-opt{display:flex;align-items:center;gap:8px;justify-content:space-between;border:1px dashed var(--line);border-radius:6px;background:var(--surface);padding:5px 9px;font:inherit;font-size:12.5px;color:var(--ink-2);cursor:pointer;text-align:left}

@@ -68,7 +68,9 @@ const ROLES = ["Orders", "Art", "Billing"];
 const TERMS = ["prepay", "receipt", "deposit", "net30"];
 export type Contact = { id: string; name: string; email: string; phone: string; isPrimary: boolean; portal: boolean; roles: string[]; /** the phone in their email signature, when none is on file */ foundPhone?: string; /** from someone's phone contacts, and whose */ cell?: string; cellFrom?: string };
 export type Detail = { id: string; company: string; name: string; email: string; phone: string; address: string; owner: string; printavoAs: string[]; contacts: Contact[]; found: Person[];
-  /** the rest of the move questionnaire (components/CustomerMove.tsx) */ taxExempt: boolean; terms: string; priceType: string; notes: string; movedAt: string | null };
+  /** the rest of the move questionnaire (components/CustomerMove.tsx) */ taxExempt: boolean; terms: string; priceType: string; notes: string; movedAt: string | null;
+  /** ship-to, and any other address with its own name (Nov 3, Nick: "billing, delivery, and admin office") */ shipAddress: string; others: Addr[] };
+export type Addr = { id: string; label: string; address: string };
 
 /** one customer: what's on file, their contacts, and who we've been emailing with there */
 export async function contactDetail(customerId: string) {
@@ -76,7 +78,7 @@ export async function contactDetail(customerId: string) {
     await me();
     const admin = createAdminClient();
     const [{ data: c }, { data: cc }, { data: pv }, { data: pr }] = await Promise.all([
-      admin.from("customers").select("id, company, name, email, phone, address, tax_exempt, payment_terms, price_type, moved_at").eq("id", customerId).maybeSingle(),
+      admin.from("customers").select("id, company, name, email, phone, address, ship_address, other_addresses, tax_exempt, payment_terms, price_type, moved_at").eq("id", customerId).maybeSingle(),
       admin.from("customer_contacts").select("id, name, email, phone, is_primary, portal_access, roles").eq("customer_id", customerId).is("removed_at", null).order("created_at"),
       admin.from("printavo_customers").select("data").eq("customer_id", customerId),
       admin.from("customer_private").select("account_owner, notes").eq("customer_id", customerId).maybeSingle(),
@@ -171,7 +173,8 @@ export async function contactDetail(customerId: string) {
     }
     return { ok: true as const, detail: { id: c.id as string, company, name: String(c.name || "").trim(), email: String(c.email || "").trim().toLowerCase(), phone: String(c.phone || "").trim(), address: String(c.address || "").trim(),
       owner: String((pr as { account_owner?: string | null } | null)?.account_owner || ""), printavoAs, contacts, found,
-      taxExempt: !!c.tax_exempt, terms: String(c.payment_terms || "receipt"), priceType: String(c.price_type || "retail"), notes: String((pr as { notes?: string | null } | null)?.notes || ""), movedAt: (c.moved_at as string | null) || null } as Detail };
+      taxExempt: !!c.tax_exempt, terms: String(c.payment_terms || "receipt"), priceType: String(c.price_type || "retail"), notes: String((pr as { notes?: string | null } | null)?.notes || ""), movedAt: (c.moved_at as string | null) || null,
+      shipAddress: String(c.ship_address || "").trim(), others: ((c.other_addresses || []) as Addr[]).filter((a) => a && (a.label || a.address)) } as Detail };
   } catch (e) { return fail(e); }
 }
 
@@ -179,7 +182,7 @@ export type PersonSave = { contactId?: string; name: string; email: string; phon
 
 /** save the account: the company's details, and each person (kept, added, or taken off the account), and mark it checked */
 export async function saveContacts(input: { id: string; company: string; phone: string; address: string; people: PersonSave[];
-  taxExempt: boolean; terms: string; priceType: string; notes: string; /** and move them to our system (the move checklist done) */ move?: boolean }) {
+  taxExempt: boolean; terms: string; priceType: string; notes: string; shipAddress: string; others: Addr[]; /** and move them to our system (the move checklist done) */ move?: boolean }) {
   try {
     const v = await me();
     const admin = createAdminClient();
@@ -195,6 +198,8 @@ export async function saveContacts(input: { id: string; company: string; phone: 
       name: main?.name || String(cur?.name || ""), email: main?.email || String(cur?.email || ""),
       phone: fmtPhone(input.phone.trim()) || main?.phone || String(cur?.phone || ""),
       contacts_checked_at: new Date().toISOString(), contacts_checked_by: v.email || "",
+      ship_address: input.shipAddress.trim(),
+      other_addresses: input.others.map((a) => ({ id: String(a.id || Math.random().toString(36).slice(2, 9)).slice(0, 20), label: a.label.trim().slice(0, 60), address: a.address.trim().slice(0, 600) })).filter((a) => a.address || a.label),
       tax_exempt: !!input.taxExempt, ...(TERMS.includes(input.terms) ? { payment_terms: input.terms } : {}), ...(["retail", "wholesale"].includes(input.priceType) ? { price_type: input.priceType } : {}),
     }).eq("id", input.id);
     if (error) throw new Error(error.message);

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
-import { contactDetail, contactList, lookUpOnline, saveContacts, type ContactRow, type ContactState, type Detail } from "./actions";
+import { contactDetail, contactList, lookUpOnline, saveContacts, type Addr, type ContactRow, type ContactState, type Detail } from "./actions";
 import type { CompanyFound } from "@/lib/ai/companyLookup";
 
 /**
@@ -32,7 +32,7 @@ export default function UpdateContacts() {
   const [showOthers, setShowOthers] = useSticky<boolean>("customers.contacts.others", false);
   const [rows, setRows] = useState<ContactRow[] | null>(null), [owners, setOwners] = useState<string[]>([]);
   const [q, setQ] = useState(""), [cur, setCur] = useState(""), [err, setErr] = useState("");
-  const [d, setD] = useState<Detail | null>(null), [co, setCo] = useState({ company: "", phone: "", address: "", taxExempt: false, terms: "receipt", priceType: "retail", notes: "" });
+  const [d, setD] = useState<Detail | null>(null), [co, setCo] = useState<{ company: string; phone: string; address: string; taxExempt: boolean; terms: string; priceType: string; notes: string; shipAddress: string; others: Addr[] }>({ company: "", phone: "", address: "", taxExempt: false, terms: "receipt", priceType: "retail", notes: "", shipAddress: "", others: [] });
   const [people, setPeople] = useState<Row[]>([]), [busy, setBusy] = useState(false), [note, setNote] = useState("");
   // what was found online for this account (Look it up online), and which boxes were filled from it
   const [web, setWeb] = useState<CompanyFound | null | "busy">(null), [webErr, setWebErr] = useState(""), [fromWeb, setFromWeb] = useState<Set<string>>(new Set());
@@ -75,7 +75,7 @@ export default function UpdateContacts() {
     }
     // one main: the one on file, else the regular we've traded the most mail with
     if (!list.some((p) => p.main && p.contact)) { const m = list.filter((p) => p.contact).sort((a, b) => (b.n || 0) - (a.n || 0))[0]; if (m) m.main = true; }
-    setD(x); setCo({ company: x.company, phone: x.phone, address: x.address, taxExempt: x.taxExempt, terms: x.terms, priceType: x.priceType, notes: x.notes }); setPeople(list);
+    setD(x); setCo({ company: x.company, phone: x.phone, address: x.address, taxExempt: x.taxExempt, terms: x.terms, priceType: x.priceType, notes: x.notes, shipAddress: x.shipAddress, others: x.others }); setPeople(list);
   };
   useEffect(() => { if (!cur && list[0]) void open(list[0].id); }, [list]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -186,6 +186,20 @@ export default function UpdateContacts() {
                     <div className="field"><label htmlFor="ucx-p">Company phone</label><input id="ucx-p" type="tel" className={fromWeb.has("phone") ? "ucx-sug" : ""} value={co.phone} onChange={(e) => setCo({ ...co, phone: e.target.value })} /></div>
                     <div className="field ucx-lookup"><label>&nbsp;</label><button type="button" className="btn" disabled={web === "busy"} onClick={() => void lookUp()}>{web === "busy" ? "Looking it up…" : "Look it up online"}</button></div>
                     <div className="field ucx-wide"><label htmlFor="ucx-a">Billing address</label><textarea id="ucx-a" rows={2} className={fromWeb.has("address") ? "ucx-sug" : ""} value={co.address} onChange={(e) => setCo({ ...co, address: e.target.value })} /></div>
+                  </div>
+                  {/* more addresses, each with its own name (Nov 3, Nick: "Gateway, I need three addresses: billing, delivery, and admin office") */}
+                  <div className="ucx-addrs">
+                    {(co.shipAddress || co.others.length > 0) && <div className="ucx-lbl">Other addresses</div>}
+                    {co.shipAddress && <div className="ucx-addr"><input className="ucx-in ucx-al" value="Ship to" readOnly aria-label="Name of this address" /><textarea rows={2} className="ucx-at" aria-label="Ship to address" value={co.shipAddress} onChange={(e) => setCo({ ...co, shipAddress: e.target.value })} />
+                      <button type="button" className="btn icon ghost" aria-label="Remove the ship-to address" title="Remove" onClick={() => setCo({ ...co, shipAddress: "" })}>×</button></div>}
+                    {co.others.map((a) => (
+                      <div key={a.id} className="ucx-addr">
+                        <input className="ucx-in ucx-al" placeholder="Name it: Delivery, Admin office…" aria-label="Name of this address" value={a.label} onChange={(e) => setCo({ ...co, others: co.others.map((x) => (x.id === a.id ? { ...x, label: e.target.value } : x)) })} />
+                        <textarea rows={2} className="ucx-at" placeholder="Street, city, state ZIP" aria-label={`${a.label || "Other"} address`} value={a.address} onChange={(e) => setCo({ ...co, others: co.others.map((x) => (x.id === a.id ? { ...x, address: e.target.value } : x)) })} />
+                        <button type="button" className="btn icon ghost" aria-label={`Remove ${a.label || "this address"}`} title="Remove" onClick={() => setCo({ ...co, others: co.others.filter((x) => x.id !== a.id) })}>×</button>
+                      </div>
+                    ))}
+                    <button type="button" className="btn sm ucx-addbtn" onClick={() => setCo({ ...co, others: [...co.others, { id: Math.random().toString(36).slice(2, 9), label: "", address: "" }] })}>+ Add an address</button>
                   </div>
                   {webErr && <div className="err" style={{ marginTop: 8 }}>{webErr}</div>}
                   {web && web !== "busy" && (
