@@ -151,7 +151,7 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     mode === "review" ? "\nStaff ask: did I get everything right? Compare the order with what the customer sent (their mockup, their PO, their art) and say plainly what doesn't match." : `\nStaff say: ${msg}`,
   ].filter(Boolean).join("\n");
   const r = await askClaude<{ reply: string; changes?: OrderChange[]; lesson?: string; rule?: string }>({
-    task: "order_fix", model: s.assistant.ai.model, maxTokens: 8000, timeoutMs: 150_000, admin, images, documents,
+    task: "order_fix", model: s.assistant.ai.model, maxTokens: 20000, timeoutMs: 150_000, admin, images, documents,
     ctx: { order_id: orderId, customer_id: o.customer_id, by },
     tool: { name: "order_fix", description: "What you'll change on the order and its art.", input_schema: { type: "object", properties: {
       reply: { type: "string", description: "Plain words, short: what you found or what you changed. No headings. Name prints by their spot (the Full Front print), never by an id." },
@@ -183,6 +183,7 @@ No customer, ship-to, PO or file details, no explaining the order, no second que
 Order changes you can make: a garment line's sizes (move quantities to other sizes: give the whole run after the change), its color, its price per piece; which group a line is in (field group: the id of a line in the group it joins, or "new"): this is how groups are combined or split ("put all the left chest ones together, the sleeve ones together" → move every left-chest line into one left-chest line's group and every sleeve line into one sleeve line's group). A line that joins a group takes that group's prints; a group left with no lines goes away. Name each group you combine (group_name on one of its lines) by what it gets: "Left chest", "Left chest + sleeve"; a print's size, location, inks, number of colors, drop and white underbase; a print's details sent to production to confirm on the run (Reorder Details: "production needs to confirm the details" on a reorder → confirm "both", or just "size" / "ink"; "they confirmed it" / "take it off Reorder Details" → "none"; when staff ask for it without naming one print ("have production confirm these", "the mockups", "this order", "it's a reorder, please confirm"), send a confirm change for EVERY print on the order, not just one. It keeps the details already entered as our best guess and never changes the mockup); a heat transfer print's customer supplied transfers (field supplied: "mark the transfers customer supplied" → "yes" on each heat transfer print, with who made them and their order # when said; never a note for it); extras; the order's job name, PO, due date and firm date, production date, rush, pickup / delivery / ship and the address, retail or wholesale, tax exempt, a discount, no setup charge. When staff ask for one of these, make it; don't say you can't.
 ANYTHING ELSE on the order (add or remove lines, prints, groups or fees; every price at once; a print's method; a group's name or its notes; whatever staff ask that's part of the order): make it with "edits", JSON Patch operations on the ORDER JSON (paths into it, array indexes from 0, "-" to add at the end; a new line or print copies the shape of the ones there, with a new short id). Use a field change when one fits, an edit for the rest. Never answer that you can't change something on the order: there's nothing on it you can't change. Only things outside the order (sending the customer an email, ordering goods, Printavo) are for staff to do.
 
+BUILDING FROM A SHEET (several groups and many lines): make each new group ONE edit (add /groups/- with its name, every one of its lines and its prints in the value), not one edit per line, and build EVERY group the sheet has, never just the first. A line with its own spot (one shirt on the left chest, another on the left sleeve) gets its own print in that group.
 COLOR CHANGES (Oct 27, Nick on #40195: "separate the group into two color changes, one with white left chest and one with the blue left chest"): a color change is ONE print that sews (or prints) in a different thread or ink on some of the group's garment colors. It is NOT a new group and NOT a second print: never split the group or copy the print for it. It lives on the print as "inkBy": an object keyed by garment color in lower case ("navy", "black"), each { "<the print's thread or ink as written in its inks>": "<what it changes to>" }. The colors not in inkBy keep the print's own inks. Example for a left chest in "Madeira 1743 Oxford Blue" that goes white on the navy and black polos: {"op":"add","path":"/groups/0/imprints/0/inkBy","value":{"navy":{"Madeira 1743 Oxford Blue":"Madeira 1801 Super White"},"black":{"Madeira 1743 Oxford Blue":"Madeira 1801 Super White"}}}. Use full thread names ("Madeira 1801 Super White"; white is 1801, black 1800 in Polyneon) or ink names as the order writes them. For a screen print also set "inkChanges" on the print to how many garment colors change. To undo a color change, remove "inkBy". The order page then shows the group's lines in sections: A (as printed) and B (the change).
 
 Art fixes you can make (what "art", the print id, value "yes"), drawn on the art itself, no Illustrator:
@@ -200,17 +201,25 @@ Print drop: "" puts it at our standard spot for the location (a full front sits 
     (c.what === "print" && printIds.has(c.id) && PRINT_FIELDS.includes(c.field)) ||
     (c.what === "art" && printIds.has(c.id) && ART_ACTIONS.includes(c.field)) ||
     (c.what === "line" && lineIds.has(c.id) && ((c.field === "group" && (c.value === "new" || (lineIds.has(c.value) && c.value !== c.id))) || (c.field === "group_name" && !!String(c.value || "").trim()) || (c.field === "extras" && EXTRAS.includes(c.value)) || (c.field === "sizes" && !!parseRun(c.value)) || (c.field === "color" && !!String(c.value || "").trim()) || c.field === "price")) ||
-    (c.what === "order" && c.field in ORDER_FIELDS)).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 40);
+    (c.what === "order" && c.field in ORDER_FIELDS)).filter((c) => !sameAsNow(c, groups, o as Order, mode)).slice(0, 150);
   // the edits: each one checked on a copy of the order now (one that wouldn't apply is left out and said so)
-  const docNow = docOf(o as Record<string, unknown>);
+  // Each edit is checked on the order as the edits before it left it, the same way they're saved (an edit adding lines to
+  // a group an earlier edit made used to be checked against the order without that group). Up to 150 of them: a whole
+  // order built from a sheet is one edit per line and print (Nov 3, #40461: 21 lines in 3 logo groups, and only the first
+  // 20 edits were kept, without a word, so it stopped partway into the second group every time). Any left out is said.
+  let docNow = docOf(o as Record<string, unknown>);
   let skipped = "";
-  for (const e of (Array.isArray((r.data as { edits?: unknown }).edits) ? (r.data as { edits: { say?: string; ops?: PatchOp[] }[] }).edits : []).slice(0, 20)) {
+  const allEdits = Array.isArray((r.data as { edits?: unknown }).edits) ? (r.data as { edits: { say?: string; ops?: PatchOp[] }[] }).edits : [];
+  const MAX_EDITS = 150;
+  for (const e of allEdits.slice(0, MAX_EDITS)) {
     const ops = Array.isArray(e.ops) ? e.ops.slice(0, 200) : [];
     if (!ops.length) continue;
     const t = patchDoc(docNow, ops);
     if (!t.ok) { skipped += ` (Couldn't: ${String(e.say || "a change")}: ${t.error}.)`; continue; }
+    docNow = t.doc;
     changes.push({ what: "order", id: "order", field: "edit", value: JSON.stringify(ops), say: String(e.say || "Changed the order").slice(0, 300) });
   }
+  if (allEdits.length > MAX_EDITS) skipped += ` (${allEdits.length - MAX_EDITS} more changes weren't made: ask me to finish.)`;
   // what the code found is said whatever the AI wrote
   const found = sc.findings.length ? `Against the paperwork: ${sc.findings.map((f) => f.say).join(" ")}\n\n` : "";
   const res: FixResult = { reply: (found + String(r.data.reply || "") + skipped).slice(0, 2600), changes, applied: [], art: changes.filter((c) => c.what === "art"), lesson: clean(r.data.lesson), rule: clean(r.data.rule) };

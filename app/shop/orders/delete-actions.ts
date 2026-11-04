@@ -55,6 +55,15 @@ export async function resetToRequest(orderId: string): Promise<{ ok: true } | { 
       : o.simple_order ? { groups: blank, lines: [], fees: [], qty: 0 } : {};
     const { error } = await admin.from("orders").update({ ...back, status: "request", type: "quote", total: 0, sent_at: null, approved_at: null, approved_name: null, declined_at: null, declined_reason: "" }).eq("id", orderId);
     if (error) return { ok: false, error: error.message };
+    // the files it picked up while it was being made (pictures the reader cut from their PDF, files staff dropped in) are
+    // set aside, not deleted (art_files_set_aside, migration 279): only what the customer sent stays on their request
+    const theirs = new Set(((o.simple_order as { files?: { path?: string }[] } | null)?.files || []).map((f) => String(f.path || "")));
+    const { data: af } = await admin.from("art_files").select("*").eq("order_id", orderId);
+    const extra = ((af || []) as { id: string; file_path: string; created_at: string }[]).filter((f) => !theirs.has(f.file_path) && !f.file_path.startsWith("requests/") && f.created_at > String(o.submitted_at));
+    if (extra.length) {
+      const { error: se } = await admin.from("art_files_set_aside").insert(extra.map((f) => ({ ...f, set_aside_by: v.user!.email || "shop", reason: "Reset to the customer's request" })));
+      if (!se) await admin.from("art_files").delete().in("id", extra.map((f) => f.id));
+    }
     await admin.from("order_events").insert([
       { order_id: orderId, kind: "status", detail: "request", actor: v.user.email || "shop" },
       { order_id: orderId, kind: "note", detail: og ? "Reset to the customer's request, as they sent it." : o.simple_order ? "Reset to the customer's request: their words and files; what was built from it was cleared." : "Reset to an order request (as it is now: it was sent in before the original was kept).", actor: v.user.email || "shop" },
