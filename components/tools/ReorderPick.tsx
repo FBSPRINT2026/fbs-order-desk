@@ -313,7 +313,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
   const goodsSummary = sizeMode === "same" ? `Same sizes as last time${d?.job.qty ? ` · ${d.job.qty.toLocaleString("en-US")} pcs` : ""}` : sizeMode === "clear" ? "Sizes to type in on the order"
     : read ? `${read.source} · ${read.pieces.toLocaleString("en-US")} pcs${newOnes ? `, ${newOnes} new line${newOnes === 1 ? "" : "s"}` : ""}${offOnes ? `, last time's ${offOnes} left off` : ""}` : "New sizes from a file";
   const keptFiles = d ? d.files.filter((f) => what[f.key] !== "skip").length : 0, keptNotes = (["production", "customer"] as const).filter((k) => d?.notes?.[k] && keepNote[k]).length;
-  const filesSummary = `${d?.files.length ? `${keptFiles} of ${d.files.length} file${d.files.length === 1 ? "" : "s"} come along` : "No files"}${keptNotes ? ` · ${keptNotes} note${keptNotes === 1 ? "" : "s"}` : ""}`;
+  const filesSummary = `${d?.files.length ? `${keptFiles} of ${d.files.length} file${d.files.length === 1 ? "" : "s"} ${keptFiles === 1 ? "comes" : "come"} along` : "No files"}${keptNotes ? ` · ${keptNotes} note${keptNotes === 1 ? "" : "s"}` : ""}`;
   /** one step: open (its body and Next), done (one line and Change), or waiting below */
   const stepBox = (n: number, title: string, summary: string, body: ReactNode, ready: boolean, why: string, last = false) => {
     const state = at === n ? "cur" : at > n ? "done" : "wait";
