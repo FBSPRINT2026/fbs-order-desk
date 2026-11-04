@@ -15,10 +15,10 @@ export const COACH_SETTINGS: Record<CoachSetting, { about: string; check: (v: un
   method: { about: "\"spot\" (flat colors, solid screens; fades as two inks' halftones crossing) or \"sim\" (simulated process: a few bright inks in halftones mixed on the shirt; photos, painted art)", check: (v) => (v === "spot" || v === "sim" ? v : null) },
   colors: { about: "how many inks (1–12). The Studio re-separates with that many: fewer = the colors left out print as halftones of the others; more = a fade gets another step or the next color in the art gets its own ink", check: (v) => num(v, 1, 12, 1) },
   addMiddle: { about: "add a third screen in the middle of a fade, value \"Ink A|Ink B\" (the two ink names of the fade, as listed). For fades whose middle prints muddy as two halftones crossing (yellow→blue needs a green)", check: (v) => (typeof v === "string" && v.includes("|") ? v.slice(0, 120) : null) },
-  underbase: { about: "white underbase: \"auto\" (on dark shirts), \"on\", \"off\"", check: (v) => (v === "auto" || v === "on" || v === "off" ? v : null) },
-  highlight: { about: "true/false: print the art's white again on top (dark shirts)", check: bool },
+  underbase: { about: "white underbase: \"auto\" (the shop's rule: every shirt but a white one gets it), \"on\", \"off\". This job only; a lesson never starts new separations at it", check: (v) => (v === "auto" || v === "on" || v === "off" ? v : null) },
+  highlight: { about: "true/false: print the art's white again on top as a highlight white. Simulated process on a shirt with an underbase only: spot color never prints a highlight white (its white is an ink like the others), so on spot this setting does nothing", check: bool },
   chokePt: { about: "underbase choke in points (0–3, default 0.5): how far the base is pulled in from the colors' edges so it never peeks out", check: (v) => num(v, 0, 3, 0.05) },
-  trapPt: { about: "spot color trap in points (0–2, default 0.25): each color spreads under the darker color printed after it so neighbors overlap a hair (no gaps when a screen is a little off)", check: (v) => num(v, 0, 2, 0.05) },
+  trapPt: { about: "(spot only) spot color trap in points (0–2, default 0.25): each color spreads under the darker color printed after it so neighbors overlap a hair (no gaps when a screen is a little off)", check: (v) => num(v, 0, 2, 0.05) },
   finePt: { about: "fine detail threshold in points (0–4, 0 = off): parts thinner than this (small type, thin lines) get a smaller base choke and the color on top gets a stroke instead", check: (v) => num(v, 0, 4, 0.05) },
   fineChokePt: { about: "base choke on fine detail, points (0–3)", check: (v) => num(v, 0, 3, 0.05) },
   bumpPt: { about: "color stroke: the stroke added to the top color on fine detail, points (0–1)", check: (v) => num(v, 0, 1, 0.05) },
@@ -41,9 +41,78 @@ export function cleanChange(c: { setting?: string; value?: unknown; why?: string
   return { setting: c.setting as CoachSetting, value: typeof value === "number" ? +value.toFixed(3) : value, why: String(c.why || "").slice(0, 300) };
 }
 
-/** a lesson's starting setting applies to this separation? */
-export const lessonFits = (d: LessonDefault, method: string, dark: boolean) =>
-  d.when === "all" || d.when === method || (d.when === "dark" && dark) || (d.when === "light" && !dark);
+/**
+ * The job a setting is read on. `dark` means what the engine means by it: the shirt gets an underbase by the shop's rule
+ * (`baseShirt`: every shirt but a white one), not that it looks dark. Yellow Haze, Irish Green and heather gray look
+ * light and still print on a base. Left out (undefined) = not known, and the setting counts as in use.
+ */
+export type SepJob = { method?: string; dark?: boolean; underbase?: string; halftones?: boolean };
+
+/**
+ * Does this setting do anything on this job? Some only act on part of the jobs: the highlight white is simulated process
+ * with an underbase only (spot color never prints one); the choke and fine-detail settings work on the underbase, so only
+ * when one prints; "auto" underbase on a white shirt is no underbase at all; trap and black on top are spot color's; LPI,
+ * angle, dot and dot gain only touch halftone plates.
+ * (Oct 29, S-57: a spot job showed "highlight: true" and the Separo comparison read it as an extra white pass. Nov 3,
+ * S-72: a white-shirt job showed "underbase: auto" and a choke, and it read those as an underbase that never printed.)
+ */
+export function settingApplies(setting: CoachSetting, job: SepJob): boolean {
+  const sim = job.method === undefined ? undefined : job.method === "sim";
+  const base = job.underbase === "on" ? true : job.underbase === "off" ? false : job.dark;
+  switch (setting) {
+    case "underbase": return job.underbase !== "auto" || job.dark !== false;
+    case "highlight": return sim !== false && base !== false;
+    case "chokePt": case "finePt": case "fineChokePt": case "bumpPt": return base !== false;
+    case "trapPt": case "blackOver": return sim !== true;
+    case "lpi": case "angle": case "dot": case "pressGain": return sim === true || job.halftones !== false;
+    default: return true;
+  }
+}
+
+/** a settings object cut down to what's in use on this job (what the coach and the Separo comparison are shown) */
+export function settingsInUse<T extends Record<string, unknown>>(settings: T, job: SepJob): Partial<T> {
+  const out: Partial<T> = {};
+  for (const [k, v] of Object.entries(settings)) if (!(k in COACH_SETTINGS) || settingApplies(k as CoachSetting, job)) (out as Record<string, unknown>)[k] = v;
+  return out;
+}
+
+/** the job a saved feedback row was about (a Separo comparison keeps ours + art, a coach chat keeps the Studio's context) */
+export function feedbackJob(ctx: unknown): SepJob {
+  const c = (ctx || {}) as { method?: string; ours?: { method?: string; settings?: { underbase?: string } }; art?: { dark?: boolean; gets_underbase?: boolean }; shirt?: { dark?: boolean; gets_underbase?: boolean } | string; settings?: { underbase?: string } };
+  const shirt = typeof c.shirt === "object" ? c.shirt : undefined;
+  // no shirt picked is worked out as a shirt with an underbase (the Studio's shirtOf); rows saved before Nov 4 only have `dark`
+  const dark = c.art?.gets_underbase ?? c.art?.dark ?? shirt?.gets_underbase ?? shirt?.dark ?? (typeof c.shirt === "string" ? true : undefined);
+  return { method: c.ours?.method || c.method, dark, underbase: c.ours?.settings?.underbase || c.settings?.underbase };
+}
+
+/**
+ * Settings no lesson can start a new separation at. The method, the color count and a fade's middle screen depend on the
+ * art. The underbase is the shop's rule (every shirt but a white one, Nicholas Oct 5): `auto` already does it, and one
+ * job can't overrule it for every job after it (Nov 3: a lesson from a white shirt, S-72, started every shirt that merely
+ * looks light, Irish Green and Yellow Haze too, with no underbase). A single job can still change any of these.
+ */
+const NEVER_STARTS: readonly CoachSetting[] = ["method", "colors", "addMiddle", "underbase"];
+export const canStartAt = (setting: CoachSetting) => !NEVER_STARTS.includes(setting);
+/** the settings a lesson can start new separations at (what the coach and the Separo comparison are offered) */
+export const STARTING_SETTINGS = (Object.keys(COACH_SETTINGS) as CoachSetting[]).filter(canStartAt);
+
+/**
+ * A lesson's starting setting, checked against the job it was learned on: a setting that did nothing there can't be
+ * what fixed it, so the lesson keeps its words but starts nothing (null).
+ */
+export function lessonDefaultFrom(d: LessonDefault | null, from: SepJob): LessonDefault | null {
+  return d && canStartAt(d.setting) && settingApplies(d.setting, from) ? d : null;
+}
+
+/** a lesson's starting setting applies to this separation? (and, when known, made sense on the job it was learned on).
+ *  `dark`: the shirt gets an underbase (`baseShirt`), see SepJob; "light" lessons are for a white shirt. */
+export const lessonFits = (d: LessonDefault, method: string, dark: boolean, from?: SepJob) =>
+  canStartAt(d.setting)
+  && (d.when === "all" || d.when === method || (d.when === "dark" && dark) || (d.when === "light" && !dark))
+  && settingApplies(d.setting, { method, dark }) && (!from || settingApplies(d.setting, from));
+
+/** what a "when" means, for whoever writes a lesson */
+export const WHEN_DOC = "when: \"dark\" = any shirt that gets an underbase (every shirt but a white one, however light it looks), \"light\" = a white shirt.";
 
 export const COACH_LABEL: Record<CoachSetting, string> = {
   method: "Method", colors: "Colors", addMiddle: "Middle screen", underbase: "Underbase", highlight: "Highlight white", chokePt: "Choke",

@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { viewerPerms } from "@/lib/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
-import { cleanChange, COACH_SETTINGS, type CoachSetting, type LessonDefault } from "@/lib/sepCoach";
+import { cleanChange, canStartAt, COACH_SETTINGS, feedbackJob, lessonDefaultFrom, STARTING_SETTINGS, WHEN_DOC, type CoachSetting, type LessonDefault } from "@/lib/sepCoach";
 
 /**
  * "Make Separations Better": the production manager tells the Separation Studio how a separation came out ("good, but
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     ctx,
     "",
     (lessons || []).length ? "WHAT THE SHOP HAS TAUGHT YOU (last 30 days, newest first; follow these unless this separation clearly differs):" : "Nothing learned yet: this is one of the first notes.",
-    ...((lessons || []) as { lesson: string; tags: string[]; default_setting: LessonDefault | null; created_at: string }[]).map((l) => `- ${l.lesson}${l.tags?.length ? ` [${l.tags.join(", ")}]` : ""}${l.default_setting ? ` (starts new ${l.default_setting.when === "all" ? "" : l.default_setting.when + " "}separations at ${l.default_setting.setting} = ${l.default_setting.value})` : ""} · ${l.created_at.slice(0, 10)}`),
+    ...((lessons || []) as { lesson: string; tags: string[]; default_setting: LessonDefault | null; created_at: string }[]).map((l) => `- ${l.lesson}${l.tags?.length ? ` [${l.tags.join(", ")}]` : ""}${l.default_setting && canStartAt(l.default_setting.setting) ? ` (starts new ${l.default_setting.when === "all" ? "" : l.default_setting.when + " "}separations at ${l.default_setting.setting} = ${l.default_setting.value})` : ""} · ${l.created_at.slice(0, 10)}`),
     "",
     ...((thread || []).length ? ["EARLIER ON THIS SEPARATION (oldest first):", ...((thread || []) as { message: string; reply: string; changes: unknown[]; applied: boolean }[]).reverse().map((t) => `Him: ${t.message}\nYou: ${t.reply}${t.changes?.length ? ` (changes ${t.applied ? "applied" : "not applied"})` : ""}`), ""] : []),
     `HE SAYS NOW: ${message}`,
@@ -74,6 +74,7 @@ export async function POST(req: Request) {
       "Suggest 0–4 changes, only ones that address what he said. If the fix is on press or in the RIP (mesh, squeegee, flash, off-contact, the RIP's curve, the art itself), say so in the reply instead of inventing a setting.",
       "lesson: when his note teaches something that should carry over to other separations (a preference, how our presses / inks / films behave, what works for gradients, small type, dark shirts…), write it as one short rule in his terms, e.g. 'Gradients on dark shirts: 45 lpi and 20% dot gain hold better on our 156 mesh.' Give it a starting setting (default) only when it should apply to every new separation of that kind. Leave lesson out for one-off notes about this art. Don't repeat a lesson already listed; refine it instead (say so in the reply).",
       "Presets: when he says to change a preset or a default for good ('always…', 'never put crop marks on films', 'change the preset to 45 lpi'), make it a lesson with a default and preset: true (it stays until someone turns it off, not 30 days). 'Don't do crop marks on this' is just this separation: a change, no lesson.",
+      `A lesson's default ${WHEN_DOC} The underbase is the shop's rule (every shirt but a white one) and no default can change it; change it on this separation only.`,
       "engine_note: one or two sentences for the developer who maintains the separation software, when his note points at something the software itself should do better (e.g. 'fade detection split the orange into two inks'). Leave it out otherwise.",
       "Never mention prices or money.",
     ].join("\n"),
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
           changes: { type: "array", items: { type: "object", properties: { setting: { type: "string", enum: Object.keys(COACH_SETTINGS) }, value: { description: "The new value (number, boolean or string as the setting says)." }, why: { type: "string" } }, required: ["setting", "value"] } },
           lesson: { type: "object", properties: {
             text: { type: "string" }, tags: { type: "array", items: { type: "string" }, description: "1–3 short topics: gradients, dark shirts, small type, sim process, halftones, underbase, black, trap…" },
-            default: { type: "object", properties: { setting: { type: "string", enum: Object.keys(COACH_SETTINGS).filter((k) => k !== "addMiddle" && k !== "colors") }, value: {}, when: { type: "string", enum: ["all", "spot", "sim", "dark", "light"] } }, required: ["setting", "value", "when"] },
+            default: { type: "object", properties: { setting: { type: "string", enum: STARTING_SETTINGS }, value: {}, when: { type: "string", enum: ["all", "spot", "sim", "dark", "light"] } }, required: ["setting", "value", "when"] },
             preset: { type: "boolean", description: "true when he asked to change a preset / default for good: kept until turned off instead of 30 days" },
           }, required: ["text"] },
           engine_note: { type: "string" },
@@ -107,7 +108,8 @@ export async function POST(req: Request) {
   if (L?.text?.trim()) {
     const d = L.default ? cleanChange({ setting: L.default.setting, value: L.default.value }) : null;
     const when = ["all", "spot", "sim", "dark", "light"].includes(L.default?.when || "") ? L.default!.when : "all";
-    const def = d && d.setting !== "addMiddle" && d.setting !== "colors" ? { setting: d.setting, value: d.value, when } : null;
+    // a starting setting that does nothing on this job (the highlight white on spot) can't be what fixed it
+    const def = lessonDefaultFrom(d ? { setting: d.setting, value: d.value, when: when as LessonDefault["when"] } : null, feedbackJob(b.context));
     const tags = (L.tags || []).map((t) => String(t).toLowerCase().slice(0, 30)).slice(0, 3);
     // a preset stays until someone turns it off (ten years); everything else is learned for 30 days
     const ins = await admin.from("sep_lessons").insert({ lesson: L.text.trim().slice(0, 400), tags: L.preset ? ["preset", ...tags.slice(0, 2)] : tags, default_setting: def, by: v.email, feedback_id: fb.data?.id || null, ...(L.preset ? { expires_at: new Date(Date.now() + 3650 * 86400000).toISOString() } : {}) })

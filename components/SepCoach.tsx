@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { changeText, type CoachChange, type Lesson } from "@/lib/sepCoach";
+import { canStartAt, changeText, type CoachChange, type Lesson } from "@/lib/sepCoach";
 import { MicButton } from "@/components/SearchInput";
 
 type Turn = { id: string | null; message: string; reply: string; changes: CoachChange[]; applied: boolean; lesson?: { id: string; lesson: string } | null; at: string };
@@ -108,7 +108,7 @@ export default function SepCoach({ sepId, designId, context, images, onApply }: 
       <button type="button" className="linkbtn sc-lessons-t" onClick={() => setShowLessons((x) => !x)}>{lessons.length ? `What it's learned (${lessons.length})` : "Nothing learned yet"}{lessons.length ? (showLessons ? " ▴" : " ▾") : ""}</button>
       {showLessons && lessons.length > 0 && (
         <ul className="sc-lessons">{lessons.map((l) => (
-          <li key={l.id}><span>{l.lesson}{l.default_setting ? <small> · new {l.default_setting.when === "all" ? "" : `${l.default_setting.when} `}seps start at {changeText({ setting: l.default_setting.setting, value: l.default_setting.value })}</small> : null}</span>
+          <li key={l.id}><span>{l.lesson}{l.default_setting && canStartAt(l.default_setting.setting) ? <small> · new {l.default_setting.when === "all" ? "" : `${l.default_setting.when} `}seps start at {changeText({ setting: l.default_setting.setting, value: l.default_setting.value })}</small> : null}</span>
             <small className="faint">{l.tags?.includes("preset") ? "preset" : l.tags?.includes("separo") ? `from Separo · ${days(l.expires_at)}d` : `${days(l.expires_at)}d left`}</small><button type="button" className="linkbtn" onClick={() => forget(l.id)}>Forget</button></li>
         ))}</ul>
       )}
