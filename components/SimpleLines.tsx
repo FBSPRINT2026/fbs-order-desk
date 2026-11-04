@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ONE_SIZE, type GLine, type Group } from "@/lib/pricing";
-import { sendItemProofs } from "@/lib/itemProofs";
+import { itemMockup } from "@/lib/itemProofs";
 import { IMPRINT_TYPES, SIGN_FINISHING, SIGN_MATERIALS, kindLabel, linePic, newSimpleGroup, pdfFirstPage, qtyOf, signEach, specText, sqft, type ProductKind, type SimpleSpec } from "@/lib/simpleOrders";
 
 /**
@@ -19,17 +19,6 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
   orderId: string; kind: Kind; groups: Group[]; update: (fn: (groups: Group[]) => void) => void; hidePrices?: boolean;
   /** saves the order now (before the proofs go out, so the server sends what's on screen) */ save: () => Promise<void>;
 }) {
-  const [msg, setMsg] = useState("");
-  /** every item with a picture (not approved yet) goes to the customer to approve, in one email */
-  const sendProofs = async () => {
-    setBusy("send"); setErr(""); setMsg("");
-    await save();
-    const r = await sendItemProofs(orderId);
-    setBusy("");
-    if (!r.ok) return setErr(r.error);
-    update((gs) => { gs.splice(0, gs.length, ...(r.groups as Group[])); });
-    setMsg(`${r.n} proof${r.n === 1 ? "" : "s"} sent${r.emailed ? " and emailed to the customer" : " (no email went: check their email settings)"}. They answer each item in their portal.`);
-  };
   const sb = createClient();
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
@@ -64,8 +53,12 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
     if (error) { setBusy(""); return setErr(`The picture didn't upload: ${error.message}`); }
     // a PDF: its first page as a picture, for the order, the quote and the customer's proof
     const preview = /pdf/i.test(f.type) || /\.pdf$/i.test(f.name) ? await makePreview(f, path) : undefined;
+    // the picture is the order's mockup for this item: the usual Send to customer sends it as the proof
+    const shown = preview || (/\.(png|jpe?g|webp|gif)$/i.test(path) ? path : "");
+    if (shown && /\.png$/i.test(shown)) await sb.storage.from("proofs").upload(shown.replace(/\.png$/i, "-thumb.png"), preview ? (await (await sb.storage.from("proofs").download(shown)).data) || f : f, { contentType: "image/png", upsert: true });
+    const mk = shown ? await itemMockup(orderId, l?.id || "", l?.garment || "", shown, l?.spec?.mockupId) : null;
     setBusy("");
-    spec(gi, li, { image: path, imageName: f.name, preview, proof: undefined });
+    spec(gi, li, { image: path, imageName: f.name, preview, proof: undefined, mockupId: mk && mk.ok ? mk.id || undefined : l?.spec?.mockupId });
   };
 
   const isPdf = (p?: string) => !!p && /\.pdf$/i.test(p);
@@ -85,17 +78,19 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
         const { data } = await sb.storage.from("proofs").download(s.image!);
         if (!data) return;
         const pp = await makePreview(data, s.image!);
-        if (pp) spec(gi, li, { preview: pp });
+        if (!pp) return;
+        const png = (await sb.storage.from("proofs").download(pp)).data;
+        if (png) await sb.storage.from("proofs").upload(pp.replace(/\.png$/i, "-thumb.png"), png, { contentType: "image/png", upsert: true });
+        const mk = await itemMockup(orderId, l.id, l.garment || "", pp, s.mockupId);
+        spec(gi, li, { preview: pp, mockupId: mk.ok ? mk.id || undefined : s.mockupId });
       })();
     });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <section className="panel sol">
-      <div className="panel-h"><h2>{kindLabel(kind)}</h2><span className="faint">Outsourced: a simple invoice, never on the production boards.</span>
-        <button type="button" className="btn sol-send" disabled={!!busy || !lines.some((x) => x.l.spec?.image)} title="Every item's picture goes to the customer to approve" onClick={() => void sendProofs()}>{busy === "send" ? "Sending…" : "Send proofs for approval"}</button></div>
+      <div className="panel-h"><h2>{kindLabel(kind)}</h2><span className="faint">Outsourced: a simple invoice, never on the production boards.</span></div>
       <div className="panel-b">
         {err && <div className="err">{err}</div>}
-        {msg && <div className="ok-note">{msg}</div>}
         {!lines.length && <p className="faint">No items yet.</p>}
         {lines.map(({ gi, l, li }) => {
           const s: SimpleSpec = { kind, ...(l.spec || {}) } as SimpleSpec;
@@ -113,7 +108,7 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
                 <div className="sol-top">
                   <input className="sol-name" aria-label="Item name" placeholder={kind === "signage" ? "Mambo 5K start banner" : kind === "promo" ? "20 oz vacuum tumbler" : "Business cards: Sarah Lee"} value={l.garment} onChange={(e) => edit(gi, li, (x) => { x.garment = e.target.value; })} />
                   {pf && <span className={"sol-pf " + pf[1]} title={s.proof?.note || ""}>{pf[0]}</span>}
-                  <button type="button" className="btn icon ghost" aria-label="Remove this item" title="Remove" onClick={() => update((gs) => { gs[gi].lines.splice(li, 1); if (!gs[gi].lines.length) gs.splice(gi, 1); })}>×</button>
+                  <button type="button" className="btn icon ghost" aria-label="Remove this item" title="Remove" onClick={() => { if (l.spec?.mockupId) void itemMockup(orderId, l.id, "", "", l.spec.mockupId); update((gs) => { gs[gi].lines.splice(li, 1); if (!gs[gi].lines.length) gs.splice(gi, 1); }); }}>×</button>
                 </div>
                 {s.proof?.status === "changes" && s.proof.note && <div className="sol-note"><b>Customer asked:</b> {s.proof.note}</div>}
                 <div className="sol-f">

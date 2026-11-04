@@ -96,6 +96,8 @@ export async function decideProof(proofId: string, decision: "approved" | "appro
     await admin.from("proofs").update({ status, customer_comment: note, decided_at: new Date().toISOString(), decided_name: name }).eq("id", proofId);
     await admin.from("order_events").insert({ order_id: order.id, kind: status === "approved" ? "proof_approved" : "proof_changes", detail: decision === "approved_changes" ? `${proof.title} (with changes)` : proof.title, actor: email });
     if (status === "approved") await (await import("@/lib/autoSeps")).autoSeparations(admin, order.id, "proof approved");
+    // a signage / promo / paper order: its items are approved with the proof (lib/simpleOrders.ts)
+    if (status === "approved") await (await import("@/lib/simpleOrdersServer")).approveItems(admin, order.id, name, new Date().toISOString());
     const head = decision === "approved" ? "approved" : decision === "approved_changes" ? "approved with changes" : "wants changes to";
     await notifyShop(
       decision === "approved" ? `Proof approved on #${order.number}` : decision === "approved_changes" ? `Proof approved with changes on #${order.number}` : `Proof changes on #${order.number}`,

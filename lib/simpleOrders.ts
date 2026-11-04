@@ -28,6 +28,7 @@ export type SimpleSpec = {
   kind: Exclude<ProductKind, "apparel">;
   /** the line's picture (proofs bucket): what the customer approves */ image?: string; imageName?: string;
   /** a PDF's first page as a PNG (made when it's added), what every page shows for a PDF */ preview?: string;
+  /** the order's mockup row made from this picture (lib/itemProofs.ts itemMockup): what the proof sends */ mockupId?: string;
   proof?: LineProof;
   // signage
   material?: string; w?: number; h?: number; /** feet or inches */ unit?: "ft" | "in"; sides?: "single" | "double"; finishing?: string; /** price per square foot */ rate?: number;

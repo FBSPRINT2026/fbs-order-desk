@@ -88,3 +88,24 @@ export async function answerItemProof(orderId: string, lineId: string, ok: boole
   } catch (e) { return fail(e); }
 }
 
+
+/**
+ * Staff: an item's picture becomes the order's mockup for it (Nov 4, Nick: the Send dialog's "Proof v1 · Quote" with the
+ * picture in the email, like an apparel order). So the usual Send, proof versions, the review page and approvals all work
+ * as they do for a shirt; the line keeps the mockup's id. A changed picture retires the old one.
+ */
+export async function itemMockup(orderId: string, lineId: string, title: string, path: string, oldId?: string) {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
+    const admin = createAdminClient();
+    const { data: o } = await admin.from("orders").select("customer_id, groups").eq("id", orderId).maybeSingle();
+    if (!o) throw new Error("Order not found.");
+    const g = ((o.groups || []) as Group[]).find((x) => x.lines.some((l) => l.id === lineId));
+    if (oldId) await admin.from("mockups").update({ archived_at: new Date().toISOString() }).eq("id", oldId).eq("order_id", orderId);
+    if (!path) return { ok: true as const, id: "" };
+    const { data, error } = await admin.from("mockups").insert({ order_id: orderId, customer_id: o.customer_id, title: (title || "Item").slice(0, 200), file_path: path, group_id: g?.id || null, created_by: v.email || "" }).select("id").single();
+    if (error) throw new Error(error.message);
+    return { ok: true as const, id: String(data.id) };
+  } catch (e) { return fail(e); }
+}

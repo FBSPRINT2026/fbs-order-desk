@@ -120,6 +120,8 @@ export async function decideByLink(admin: SupabaseClient, id: string, decision: 
     await admin.from("proofs").update({ status, customer_comment: text, decided_at: at, decided_name: who || actor }).in("id", live.map((x) => x.id));
     await admin.from("order_events").insert({ order_id: p.o.id, kind: status === "approved" ? "proof_approved" : "proof_changes", detail: `${label}${decision === "approved_changes" ? " (with a small change, no new proof)" : decision === "changes" ? " (send a new proof)" : ""} on the proof link${text ? `: ${text.slice(0, 300)}` : ""}`, actor });
     if (status === "approved") await (await import("@/lib/autoSeps")).autoSeparations(admin, p.o.id, "proof approved");
+    // a signage / promo / paper order: its items are approved with the proof (lib/simpleOrders.ts)
+    if (status === "approved") await (await import("@/lib/simpleOrdersServer")).approveItems(admin, p.o.id, who || actor, new Date().toISOString());
   } else {
     const { decideSewout } = await import("@/lib/sewouts");
     const r = await decideSewout(admin, p.sewout as never, p.o, decision === "changes" ? "changes" : "approved", who, text, actor, quiet);
