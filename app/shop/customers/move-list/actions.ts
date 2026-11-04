@@ -19,7 +19,7 @@ async function me() {
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 const okEmail = (e: string) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e);
 
-export type MoveRow = { id: string; name: string; contact: string; email: string; sales: number; orders: number; rank: number; terms: PayTerms; priceType: string; owner: string; movedAt: string | null; launchSent: string | null; /** moved without the launch email */ quiet: boolean;
+export type MoveRow = { /** in the portal (portal_visits): the last time, how many visits, and who */ visits: { last: string | null; n: number; who: string[] }; id: string; name: string; contact: string; email: string; sales: number; orders: number; rank: number; terms: PayTerms; priceType: string; owner: string; movedAt: string | null; launchSent: string | null; /** moved without the launch email */ quiet: boolean;
   /** the personal note from Nick or Amanda: to whom, from which mailbox, not sent, sent */ personal: { to: string[]; from: string; skip: boolean; sentAt: string | null };
   /** works with us through ClickUp (has ClickUp tasks, or marked): gets the ClickUp version of the personal note */ clickup: boolean };
 
@@ -35,6 +35,14 @@ export async function moveList() {
       allRows((a, b) => admin.from("launch_email_sends").select("customer_id, sent_at").eq("ok", true).order("sent_at", { ascending: false }).order("id").range(a, b)),
       clickupCustomers(admin),
     ]);
+    const { data: vis } = await allRows((a, b) => admin.from("portal_visits").select("id, customer_id, email, at").order("id").range(a, b));
+    const visits = new Map<string, { last: string | null; n: number; who: string[] }>();
+    for (const x of (vis || []) as { customer_id: string | null; email: string; at: string }[]) {
+      if (!x.customer_id) continue;
+      const v0 = visits.get(x.customer_id) || { last: null, n: 0, who: [] };
+      v0.n++; if (!v0.last || x.at > v0.last) v0.last = x.at; if (!v0.who.includes(x.email)) v0.who.push(x.email);
+      visits.set(x.customer_id, v0);
+    }
     const onCu = new Set(((cu || []) as string[]));
     if (error) throw new Error(error.message);
     if (ce) throw new Error(ce.message);
@@ -48,7 +56,7 @@ export async function moveList() {
         const s = sales.get(c.id), email = String(c.email || "").trim().toLowerCase();
         return { id: c.id, name: String(c.company || "").trim() || String(c.name || "").trim() || "(no name)", contact: String(c.name || "").trim(), email: okEmail(email) ? email : "",
           sales: s?.sales || 0, orders: s?.orders || 0, rank: s?.rank || 0, terms: (c.payment_terms || "receipt") as PayTerms, priceType: c.price_type || "retail",
-          owner: own.get(c.id) || "", movedAt: c.moved_at, launchSent: last.get(c.id) || null, quiet: !!c.launch_quiet,
+          owner: own.get(c.id) || "", movedAt: c.moved_at, launchSent: last.get(c.id) || null, visits: visits.get(c.id) || { last: null, n: 0, who: [] }, quiet: !!c.launch_quiet,
           personal: { to: c.personal_note_to || [], from: c.personal_note_from || "", skip: !!c.personal_note_skip, sentAt: c.personal_note_sent_at },
           clickup: !!c.clickup_client || onCu.has(c.id) };
       })

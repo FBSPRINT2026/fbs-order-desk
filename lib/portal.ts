@@ -23,6 +23,16 @@ export type PortalCtx = {
  */
 /** a customer we've agreed not to charge the card fee (customers.no_card_fee, set in Take a Payment): no fee shown or charged */
 const feeFor = (s: ReturnType<typeof mergeSettings>, cs: Customer[]) => (cs.length && cs.every((c) => (c as { no_card_fee?: boolean }).no_card_fee) ? { ...s, pay: { ...s.pay, cardFeePct: 0 } } : s);
+/** a customer was in the portal (portal_visits, migration 282): at most one row per login per half hour */
+async function noteVisit(admin: ReturnType<typeof createAdminClient>, email: string, ids: string[], path: string) {
+  const who = String(email || "").toLowerCase();
+  if (!who || !ids.length) return;
+  const since = new Date(Date.now() - 30 * 60000).toISOString();
+  const { count } = await admin.from("portal_visits").select("id", { count: "exact", head: true }).eq("email", who).gte("at", since);
+  if (count) return;
+  await admin.from("portal_visits").insert(ids.slice(0, 5).map((customer_id) => ({ customer_id, email: who, path: path.slice(0, 200) })));
+}
+
 export async function getPortalCtx(as?: string, next = "/portal"): Promise<PortalCtx> {
   const { supabase, user, email, isStaff } = await getViewer();
   if (!user) redirect(`/login?next=${encodeURIComponent(next)}`);
@@ -43,6 +53,7 @@ export async function getPortalCtx(as?: string, next = "/portal"): Promise<Porta
   const customers = (cs || []) as Customer[];
   // on more than one account and none picked yet: pick one first (Nov 3, Nick); my_customer_ids() answers with the pick
   if (customers.length > 1) redirect("/portal/choose");
+  await noteVisit(admin, email, customers.map((c) => c.id), next).catch(() => null);
   return { db: supabase as unknown as SupabaseClient, email, isStaff, preview: null, customerIds: customers.map((c) => c.id), customers, settings: feeFor(settings, customers) };
 }
 

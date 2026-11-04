@@ -12,8 +12,10 @@ import { moveList, sendCustomerPreview, sendPersonalNoteTest, setPersonal, setQu
  * their main contact). Neither ticked is no email. Nothing is sent from here; the sends go when Nick says.
  * Moving customers and their contacts is Update contacts (app/shop/customers/contacts).
  */
-type Show = "all" | "launch" | "personal" | "none";
-const LABEL: Record<Show, string> = { all: "Everyone in the portal", launch: "Launch email", personal: "Personal email", none: "No email" };
+/** when they were last in: "Today 11:42 AM", "Nov 3" */
+const when = (iso: string) => { const d = new Date(iso), t = new Date(); const same = d.toDateString() === t.toDateString(); return same ? `Today ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+type Show = "all" | "launch" | "personal" | "none" | "visited";
+const LABEL: Record<Show, string> = { all: "Everyone in the portal", launch: "Launch email", personal: "Personal email", none: "No email", visited: "Been in the portal" };
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "");
 const first = (n: string) => n.split(/\s+/)[0];
 const launchOn = (r: MoveRow) => !r.quiet && !!r.email;
@@ -35,10 +37,10 @@ export default function IntroEmails() {
   const owners = [...new Set(all.map((r) => first(r.owner)).filter(Boolean))].sort();
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return all.filter((r) => (show === "all" || (show === "launch" ? launchOn(r) : show === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r)))
+    return all.filter((r) => (show === "all" || (show === "visited" ? r.visits.n > 0 : show === "launch" ? launchOn(r) : show === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r)))
       && (!who || first(r.owner) === who) && (!t || `${r.name} ${r.contact} ${r.email}`.toLowerCase().includes(t)));
   }, [all, show, who, q]);
-  const count = (s: Show) => all.filter((r) => s === "all" || (s === "launch" ? launchOn(r) : s === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r))).length;
+  const count = (s: Show) => all.filter((r) => s === "all" || (s === "visited" ? r.visits.n > 0 : s === "launch" ? launchOn(r) : s === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r))).length;
 
   const launch = async (rs: MoveRow[], on: boolean) => {
     setBusy(rs.length > 1 ? "bulk" : rs[0].id);
@@ -63,10 +65,10 @@ export default function IntroEmails() {
         <div className="row"><button type="button" className="btn" disabled={busy === "test"} onClick={() => void test()} title="The personal email in both versions (standard and ClickUp customers), from your own mailbox to Nick and Amanda">{busy === "test" ? "Sending…" : "Test the personal email"}</button><Link className="btn" href="/shop/customers/contacts">Update contacts</Link><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
       </div>
       {rows && <div className="stats">
-        {(["all", "launch", "personal", "none"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
+        {(["all", "launch", "personal", "none", "visited"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
       </div>}
       <div className="toolbar">
-        <div className="chips">{(["all", "launch", "personal", "none"] as Show[]).map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
+        <div className="chips">{(["all", "launch", "personal", "none", "visited"] as Show[]).map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
         <div className="chips">
           <button type="button" className={"chip" + (!who ? " on" : "")} onClick={() => setWho("")}>Everyone&apos;s</button>
           {owners.map((o) => <button key={o} type="button" className={"chip" + (who === o ? " on" : "")} onClick={() => setWho(o)}>{o}&apos;s</button>)}
@@ -82,7 +84,7 @@ export default function IntroEmails() {
               <th>Customer</th><th>Owner</th>
               <th className="mvl-c"><label className="mvl-hc"><input type="checkbox" aria-label="Launch email for everyone shown" checked={allL} disabled={busy === "bulk"} onChange={() => void launch(unsentL, !allL)} /> Launch email</label></th>
               <th className="mvl-c"><label className="mvl-hc"><input type="checkbox" aria-label="Personal email for everyone shown" checked={allP} disabled={busy === "bulk"} onChange={() => void personal(unsentP, !allP)} /> Personal email</label></th>
-              <th>From</th><th />
+              <th>From</th><th>In the portal</th><th />
             </tr></thead>
             <tbody>{list.map((r) => {
               const pOn = personalOn(r), fromAmanda = /^amanda/i.test(r.personal.from);
@@ -100,6 +102,7 @@ export default function IntroEmails() {
                     <button type="button" className={!fromAmanda ? "on" : ""} disabled={busy === r.id} onClick={() => fromAmanda && void personal([r], true, "nicholas@fbsprint.com")}>Nick</button>
                     <button type="button" className={fromAmanda ? "on" : ""} disabled={busy === r.id} onClick={() => !fromAmanda && void personal([r], true, "amanda@fbsprint.com")}>Amanda</button>
                   </div> : <span className="faint">—</span>}</td>
+                  <td className="nowrap">{r.visits.n ? <span title={r.visits.who.join(", ")}>{when(r.visits.last!)}<div className="sub">{r.visits.n} {r.visits.n === 1 ? "visit" : "visits"} · {r.visits.who.length} {r.visits.who.length === 1 ? "person" : "people"}</div></span> : <span className="faint">Not yet</span>}</td>
                   <td className="nowrap">{(launchOn(r) || pOn) && <button type="button" className="btn sm ghost" disabled={!!busy} title="Both emails exactly as this customer gets them, sent to Nick and Amanda" onClick={() => void preview(r)}>{busy === "pv" + r.id ? "Sending…" : "Preview to us"}</button>}</td>
                 </tr>
               );
