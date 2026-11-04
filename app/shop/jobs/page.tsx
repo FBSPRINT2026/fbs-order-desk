@@ -25,12 +25,12 @@ import { useUrlSearch } from "@/lib/useUrlSearch";
  * The Proof Center and Incoming Orders open here.
  */
 const ic = (d: ReactNode) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>{d}</svg>;
-type G = { t: string; line: string; c: string; /** the count as a bubble on the icon, not in the header or corner (Nov 3, Nick: "the one time I want you to do the bubble") */ bubble?: boolean; steps: [Step, string, ReactNode][] };
+type G = { t: string; line: string; c: string; steps: [Step, string, ReactNode][] };
 const GROUPS: G[] = [
   // one card for now: what customers sent in (Nov 3, Nick: "hide leads… one card thing that says incoming… customer
   // request, customer sent… leads I will deal with later as more of a sales pipeline thing… people are getting confused").
   // Leads (orders the AI found in emails) are still worked out in lib/jobCenter.ts, just not shown.
-  { t: "Portal requests", line: "Customer orders", bubble: true, c: "var(--fbs-violet)", steps: [
+  { t: "Portal requests", line: "Customer orders", c: "var(--fbs-violet)", steps: [
     ["requests", "Customer orders", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
   { t: "In the works", line: "Mockups and numbers", c: "var(--warn)", steps: [
     ["mockups", "Mockups", ic(<><path d="M15 4l6 2v5h-3v8a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-8H3V6l6-2a3 3 0 0 0 6 0" /></>)],
@@ -278,7 +278,7 @@ export default function JobCenter() {
           <div key={g.t} role="tab" aria-selected={on} className={"jrl-sec" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--f" as string]: g.steps.length > 1 ? 2 : 1 }}>
             <button type="button" className="jrl-h" onClick={() => go(g.steps[0][0])} title={g.line}>
               <span className="jrl-t">{g.t}</span>
-              <span className={"jrl-n" + (g.bubble ? " jrl-nb" : "")}>{tot ?? "…"}</span>
+              <span className="jrl-n">{tot ?? "…"}</span>
             </button>
             {nm > 0 && <span className="jrl-nm">{nm} new message{nm === 1 ? "" : "s"}</span>}
             {/* the steps joined by a line, each step's count in the card's corner on its side (Nov 2, Nick: "leads would have a
@@ -286,11 +286,11 @@ export default function JobCenter() {
             <div className={"jrl-ss" + (g.steps.length > 1 ? " two" : "")}>
               {g.steps.map(([k, l, icon]) => { const nn = count(k); return (
                 <button key={k} type="button" className={"jrl-st" + (!all && !solo && step === k ? " pick" : "")} onClick={() => go(k)} aria-label={`${l}: ${items ? nn : "loading"}`}>
-                  <span className="jrl-ic">{icon}{g.bubble && items && nn > 0 && <em className="jrl-bub">{nn}</em>}</span>
+                  <span className="jrl-ic">{icon}</span>
                   <span className="jrl-sl">{l}</span>
                 </button>); })}
             </div>
-            {!g.bubble && g.steps.map(([k, l], i) => { const nn = count(k); return <span key={k} className={"jrl-cn " + (g.steps.length > 1 && i === 0 ? "l" : "r") + (items && !nn ? " z" : "")} title={l}>{items ? nn : "…"}</span>; })}
+            {g.steps.map(([k, l], i) => { const nn = count(k); return <span key={k} className={"jrl-cn " + (g.steps.length > 1 && i === 0 ? "l" : "r") + (items && !nn ? " z" : "")} title={l}>{items ? nn : "…"}</span>; })}
           </div>
         ); })}
       </div>
