@@ -202,9 +202,21 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
       // file, "It made them all adult": the check ran on last time's sizes, then the file's were laid over it)
       if (sizeMode === "clear") for (const g of x.groups) for (const l of g.lines) l.sizes = {};
       if (sizeMode === "file" && read && match && readOk) {
-        const lineOf = (st: string, co: string) => { for (const g of x.groups) for (const l of g.lines) if (styleKey(l.style) === styleKey(st) && sameColor(l.color, co)) return l; return null; };
+        // last time's line on the copied job: the same style and color, else the line with exactly its sizes. An old
+        // Printavo line can have no item # or color of its own (it's in the description, "Next level 6210-Navy Blue"),
+        // and the copy reads one from there; matching on style alone left it on the reorder when it was ticked "leave it
+        // off", and then asked about its color (Nov 4, Nick: Peticolas #33402)
+        const claimed = new Set<GLine>();
+        const sizeSig = (sz: Record<string, unknown> | undefined) => Object.entries(sz || {}).filter(([, n]) => +(n as number) > 0).map(([k, n]) => `${k.toUpperCase().replace(/^XXL$/, "2XL").replace(/^XXXL$/, "3XL")}:${+(n as number)}`).sort().join(",");
+        const lineOf = (st: string, co: string, was: Record<string, number> | undefined) => {
+          for (const g of x.groups) for (const l of g.lines) if (!claimed.has(l) && st && styleKey(l.style) === styleKey(st) && sameColor(l.color, co)) return l;
+          const sig = sizeSig(was);
+          if (sig) { const hits = x.groups.flatMap((g) => g.lines).filter((l) => !claimed.has(l) && sizeSig(l.sizes as Record<string, number>) === sig); if (hits.length === 1) return hits[0]; }
+          return null;
+        };
         d.lines.forEach((ol, i) => {
-          const m = match.old[i], l = lineOf(ol.style, ol.color);
+          const m = match.old[i], l = lineOf(ol.style, ol.color, m.was);
+          if (l) claimed.add(l);
           if (!l) return;
           if (m.k >= 0) l.sizes = { ...read.lines[m.k].sizes } as GLine["sizes"];
           else if (offOld[i] !== false) for (const g of x.groups) g.lines = g.lines.filter((z) => z !== l);

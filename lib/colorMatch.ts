@@ -75,8 +75,11 @@ function matchOne(asked: string, options: string[]): { color: string; sure: bool
   const pre = options.filter((o) => { const ow = words(o); return aw.length > 0 && aw.every((w) => ow.some((x) => x.startsWith(w))); }).sort((p, q) => words(p).length - words(q).length);
   if (pre.length && (pre.length === 1 || words(pre[0]).length < words(pre[1]).length)) return { color: pre[0], sure: false };
   // closest by shared words and letters (a guess: staff confirm it)
+  // a shared shade name ("navy", "forest") says more than a shared color family ("blue", "green"): "Navy Blue" is the
+  // 6210's Midnight Navy, not its Ice Blue (Nov 4, Peticolas reorder)
+  const FAM = /^(blue|red|green|gray|grey|black|white|brown|tan|pink|purple|orange|yellow|gold)$/;
   const score = (o: string) => {
-    const ow = words(o), shared = aw.filter((w) => ow.includes(w)).length;
+    const ow = words(o), shared = aw.filter((w) => ow.includes(w)).reduce((n, w) => n + (FAM.test(w) ? 0.5 : 1), 0);
     const bi = (s: string) => new Set(Array.from({ length: Math.max(0, s.length - 1) }, (_, i) => s.slice(i, i + 2)));
     const A = bi(a.replace(/ /g, "")), B = bi(key(o).replace(/ /g, "")); let n = 0; A.forEach((x) => { if (B.has(x)) n++; });
     return shared * 2 + (2 * n) / Math.max(1, A.size + B.size);
