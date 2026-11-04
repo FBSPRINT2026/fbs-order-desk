@@ -169,3 +169,53 @@ export async function sendPersonalNoteTest() {
     return { ok: true as const, to, from: box.email };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * Both emails exactly as one customer will get them, sent to Nick and Amanda (Nov 4, Nick: "use Cedar Promos as an example…
+ * resend me both the intro email… and the It's Here email… as you're going to send it to Cedar Promos"): the launch email
+ * with their first name and company, and the personal note in their version (ClickUp or not), greeted by the person it
+ * goes to. Nothing goes to the customer.
+ */
+export async function sendCustomerPreview(customerId: string) {
+  try {
+    const v = await me();
+    const admin = createAdminClient();
+    if (!/^[0-9a-f-]{36}$/i.test(customerId)) throw new Error("Pick a customer.");
+    const { data: c } = await admin.from("customers").select("id, company, name, email, personal_note_to, personal_note_from, clickup_client").eq("id", customerId).maybeSingle();
+    if (!c) throw new Error("Customer not found.");
+    const company = String(c.company || "").trim(), to = "nicholas@fbsprint.com, amanda@fbsprint.com";
+    const { siteUrl, sendEmailWhy } = await import("@/lib/email");
+    const { LAUNCH_SUBJECT, launchEmailHtml } = await import("@/lib/launchEmail");
+    const site = siteUrl();
+    // 1. the launch email from portal@, as sendLaunchBatch makes it for them
+    const launchFirst = String(c.name || "").trim().split(/\s+/)[0] || "";
+    const lHtml = launchEmailHtml({ site, portalUrl: `${site}/portal`, firstName: launchFirst, company: company || undefined });
+    for (const t of to.split(/\s*,\s*/)) {
+      const r = await sendEmailWhy({ to: t, subject: `[Preview for ${company || "this customer"}] ${LAUNCH_SUBJECT}`, html: lHtml });
+      if (!r.ok) throw new Error(`The launch email didn't go from ${r.from}. ${r.why || ""}`.trim());
+    }
+    // 2. the personal note: their version, greeted by the person it goes to (their name on file, else the account's)
+    const { data: cu } = await clickupCustomers(admin);
+    const kind = c.clickup_client || ((cu || []) as string[]).includes(c.id) ? "clickup" as const : "standard" as const;
+    const { peopleOf } = await import("@/lib/customerEmailServer");
+    const pp = await peopleOf(admin, c.id).catch(() => null);
+    const toEmail = ((c.personal_note_to as string[] | null) || [])[0] || String(c.email || "");
+    const person = pp?.people.find((p) => p.email.toLowerCase() === toEmail.toLowerCase());
+    const noteFirst = String(person?.name || c.name || "").trim().split(/\s+/)[0] || "";
+    const { accountForUser, cfgOf } = await import("@/lib/mail/config");
+    const box = await accountForUser(admin, v.user!.id);
+    if (!box) throw new Error("Your mailbox isn't connected here (Email → Settings).");
+    const { noteText, noteHtml, noteTextPlain } = await import("@/lib/personalNote");
+    const { inlineImages } = await import("@/lib/mail/compose");
+    const t = await noteText(admin, kind);
+    const b = box as typeof box & { signature_html?: string | null; signature_on?: boolean | null };
+    const sig = b.signature_on !== false ? b.signature_html || "" : "";
+    const { html, attachments } = inlineImages(noteHtml(t, noteFirst, site, sig));
+    const { sendFromMailbox } = await import("@/lib/mail/send");
+    const { ewsReady, ewsSaveSent } = await import("@/lib/mail/ewsBox");
+    const ews = await ewsReady(admin, box).catch(() => false);
+    const from = String(c.personal_note_from || "");
+    await sendFromMailbox(cfgOf(box), { to, subject: `[Preview for ${company}${kind === "clickup" ? ", ClickUp version" : ""}${from && from !== box.email ? `, will come from ${from}` : ""}] ${t.subject}`, text: noteTextPlain(t, noteFirst), html, attachments }, ews ? (raw) => ewsSaveSent(box, raw) : undefined);
+    return { ok: true as const, to, launchFirst, noteFirst, kind, noteTo: toEmail, from: from || box.email };
+  } catch (e) { return fail(e); }
+}

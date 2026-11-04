@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import BackLink from "@/components/BackLink";
-import { moveList, sendPersonalNoteTest, setPersonal, setQuiet, type MoveRow } from "./actions";
+import { moveList, sendCustomerPreview, sendPersonalNoteTest, setPersonal, setQuiet, type MoveRow } from "./actions";
 
 /**
  * Portal intro emails (Nov 3, Nick: "we'll just call that the Portal email tool… introductory email tool… we're going to
@@ -26,6 +26,8 @@ export default function IntroEmails() {
   const [q, setQ] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState(""), [note, setNote] = useState("");
   /** the personal note as it really looks: from your mailbox to Nick and Amanda (Nov 3, Nick) */
   const test = async () => { setBusy("test"); setErr(""); setNote(""); const r = await sendPersonalNoteTest(); setBusy(""); if (r.ok) setNote(`Both versions (standard and ClickUp customers) sent from ${r.from} to ${r.to}.`); else setErr(r.error); };
+  /** both emails as this customer gets them, to Nick and Amanda (Nov 4) */
+  const preview = async (r: MoveRow) => { setBusy("pv" + r.id); setErr(""); setNote(""); const x = await sendCustomerPreview(r.id); setBusy(""); if (x.ok) setNote(`${r.name}: both emails sent to ${x.to} as ${r.name} gets them (launch email to ${x.launchFirst || "them"}, personal note${x.kind === "clickup" ? ", ClickUp version," : ""} to ${x.noteFirst || "them"} at ${x.noteTo}, from ${x.from}).`); else setErr(x.error); };
   const load = async () => { const r = await moveList(); if (r.ok) { setRows(r.rows.filter((x) => x.movedAt)); setErr(""); } else setErr(r.error); };
   useEffect(() => { void load(); }, []);
 
@@ -80,7 +82,7 @@ export default function IntroEmails() {
               <th>Customer</th><th>Owner</th>
               <th className="mvl-c"><label className="mvl-hc"><input type="checkbox" aria-label="Launch email for everyone shown" checked={allL} disabled={busy === "bulk"} onChange={() => void launch(unsentL, !allL)} /> Launch email</label></th>
               <th className="mvl-c"><label className="mvl-hc"><input type="checkbox" aria-label="Personal email for everyone shown" checked={allP} disabled={busy === "bulk"} onChange={() => void personal(unsentP, !allP)} /> Personal email</label></th>
-              <th>From</th>
+              <th>From</th><th />
             </tr></thead>
             <tbody>{list.map((r) => {
               const pOn = personalOn(r), fromAmanda = /^amanda/i.test(r.personal.from);
@@ -98,6 +100,7 @@ export default function IntroEmails() {
                     <button type="button" className={!fromAmanda ? "on" : ""} disabled={busy === r.id} onClick={() => fromAmanda && void personal([r], true, "nicholas@fbsprint.com")}>Nick</button>
                     <button type="button" className={fromAmanda ? "on" : ""} disabled={busy === r.id} onClick={() => !fromAmanda && void personal([r], true, "amanda@fbsprint.com")}>Amanda</button>
                   </div> : <span className="faint">—</span>}</td>
+                  <td className="nowrap">{(launchOn(r) || pOn) && <button type="button" className="btn sm ghost" disabled={!!busy} title="Both emails exactly as this customer gets them, sent to Nick and Amanda" onClick={() => void preview(r)}>{busy === "pv" + r.id ? "Sending…" : "Preview to us"}</button>}</td>
                 </tr>
               );
             })}</tbody>
