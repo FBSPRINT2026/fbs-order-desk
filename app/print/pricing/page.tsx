@@ -4,6 +4,7 @@ import { getPortalCtx, seesPriceList } from "@/lib/portal";
 import { priceList } from "@/lib/pricing";
 import { fmtPhone } from "@/lib/phone";
 import SheetPrint from "./SheetPrint";
+import { DTF_GRID, dtfGridOn } from "@/lib/dtfGrid";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Contract pricing · FBS Print", robots: { index: false } };
@@ -18,8 +19,8 @@ const pick = (notes: string, re: RegExp) => notes.match(re)?.[1]?.trim() || "";
  * like our website… same fonts and the same header… this is just to make a PDF to download"). The same sections as the
  * FBS Contract Pricing List, read live from their price list, so it always matches what their orders are priced at.
  */
-export default async function PricingSheet({ searchParams }: { searchParams: Promise<{ as?: string; print?: string }> }) {
-  const { as, print } = await searchParams;
+export default async function PricingSheet({ searchParams }: { searchParams: Promise<{ as?: string; print?: string; save?: string }> }) {
+  const { as, print, save } = await searchParams;
   const ctx = await getPortalCtx(as, "/print/pricing");
   if (!seesPriceList(ctx.customers)) notFound();
   const pl = priceList(ctx.settings, "wholesale");
@@ -53,9 +54,11 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
     ...(pl.embExtras || []).map((x) => [x.name.replace(/\s*\(embroidery\)\s*/i, "").replace(/^Embroidery personalization.*$/i, "Personalization"), m(x.price)] as [string, string]),
   ];
   const service = pick(notes, /(Standard service[^;.]*)/i);
+  const dg = pl.dtfGrid || DTF_GRID, dgPress = dg.press || DTF_GRID.press!;
+  const qr = (q: number[], i: number) => (i < q.length - 1 ? `${q[i]}-${q[i + 1] - 1}` : `${q[i]}+`);
   return (
     <div className="pls">
-      <SheetPrint auto={print === "1"} />
+      <SheetPrint auto={save === "1" || print === "1"} name={`FBS contract pricing${ctx.customers[0]?.company ? ` - ${ctx.customers[0].company}` : ""}`} />
       <article className="pls-page">
         {/* divs, not header/footer: the print styles hide page headers and footers */}
         <div className="pls-h">
@@ -81,6 +84,8 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
             <tbody>{setups.map(([a, b, c]) => <tr key={a}><th scope="row">{a}{b ? <span> – {b}</span> : null}</th><td>{c}</td></tr>)}</tbody>
           </table>
 
+          {/* on paper the back side starts here: embroidery, DTF (Nov 4, Nick: "screen printing on the front and embroidery on the back") */}
+          <div className="pls-back">
           <h2>Contract embroidery</h2>
           <div className="pls-two">
             <div>
@@ -97,6 +102,18 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
               </table>
               <div className="pls-rush"><b>Rush services available</b><span>{service || "Standard service on all decoration methods"}{service ? "" : ""}</span></div>
             </div>
+          </div>
+          {dtfGridOn(pl) && <>
+            <h2>DTF heat transfers</h2>
+            <table className="pls-t pls-grid">
+              <thead><tr><th>We order and press</th>{dg.qty.map((_, k) => <th key={k}>{qr(dg.qty, k)}</th>)}</tr></thead>
+              <tbody>
+                {dg.sizes.map((z, i) => <tr key={z.name}><th scope="row">{z.name} <span className="pls-sub">up to {z.max} sq in</span></th>{dg.qty.map((_, k) => <td key={k}>{d((dg.price[i]?.[k] ?? 0) + (dgPress[k] ?? 0))}</td>)}</tr>)}
+                <tr><th scope="row">Your own transfers <span className="pls-sub">pressing only</span></th>{dg.qty.map((_, k) => <td key={k}>{d(dgPress[k] ?? 0)}</td>)}</tr>
+              </tbody>
+            </table>
+            <p className="pls-fine pls-c2"><i>Full color, per location, per piece. Small is up to 4×4, medium 8×10, large 12×12, XL 12×18.</i></p>
+          </>}
           </div>
         </div>
         <div className="pls-f"><span>{sh.name}</span><b>{version}</b><span>Your quotes and orders are priced from this list.</span></div>
