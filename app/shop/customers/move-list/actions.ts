@@ -1,4 +1,5 @@
 "use server";
+import { clickupCustomers } from "@/lib/launchSend";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { allRows } from "@/lib/readAll";
@@ -60,16 +61,6 @@ export async function moveList() {
 
 /** the customers who send us work through ClickUp: any order of theirs came from a ClickUp task (so a new ClickUp
  *  customer is picked up by itself), plus anyone marked clickup_client */
-async function clickupCustomers(admin: ReturnType<typeof createAdminClient>) {
-  const { data: t } = await allRows((a, b) => admin.from("clickup_tasks").select("id, order_id").not("order_id", "is", null).order("id").range(a, b));
-  const oids = [...new Set(((t || []) as { order_id: string }[]).map((x) => x.order_id))];
-  const ids = new Set<string>();
-  for (let i = 0; i < oids.length; i += 200) {
-    const { data: os } = await admin.from("orders").select("customer_id").in("id", oids.slice(i, i + 200));
-    for (const o of (os || []) as { customer_id: string | null }[]) if (o.customer_id) ids.add(o.customer_id);
-  }
-  return { data: [...ids] };
-}
 
 /** set the payment terms of one or more customers */
 export async function setTerms(ids: string[], terms: PayTerms) {
@@ -194,28 +185,10 @@ export async function sendCustomerPreview(customerId: string) {
       const r = await sendEmailWhy({ to: t, subject: `[Preview for ${company || "this customer"}] ${LAUNCH_SUBJECT}`, html: lHtml });
       if (!r.ok) throw new Error(`The launch email didn't go from ${r.from}. ${r.why || ""}`.trim());
     }
-    // 2. the personal note: their version, greeted by the person it goes to (their name on file, else the account's)
-    const { data: cu } = await clickupCustomers(admin);
-    const kind = c.clickup_client || ((cu || []) as string[]).includes(c.id) ? "clickup" as const : "standard" as const;
-    const { peopleOf } = await import("@/lib/customerEmailServer");
-    const pp = await peopleOf(admin, c.id).catch(() => null);
-    const toEmail = ((c.personal_note_to as string[] | null) || [])[0] || String(c.email || "");
-    const person = pp?.people.find((p) => p.email.toLowerCase() === toEmail.toLowerCase());
-    const noteFirst = String(person?.name || c.name || "").trim().split(/\s+/)[0] || "";
-    const { accountForUser, cfgOf } = await import("@/lib/mail/config");
-    const box = await accountForUser(admin, v.user!.id);
-    if (!box) throw new Error("Your mailbox isn't connected here (Email → Settings).");
-    const { noteText, noteHtml, noteTextPlain } = await import("@/lib/personalNote");
-    const { inlineImages } = await import("@/lib/mail/compose");
-    const t = await noteText(admin, kind);
-    const b = box as typeof box & { signature_html?: string | null; signature_on?: boolean | null };
-    const sig = b.signature_on !== false ? b.signature_html || "" : "";
-    const { html, attachments } = inlineImages(noteHtml(t, noteFirst, site, sig));
-    const { sendFromMailbox } = await import("@/lib/mail/send");
-    const { ewsReady, ewsSaveSent } = await import("@/lib/mail/ewsBox");
-    const ews = await ewsReady(admin, box).catch(() => false);
-    const from = String(c.personal_note_from || "");
-    await sendFromMailbox(cfgOf(box), { to, subject: `[Preview for ${company}${kind === "clickup" ? ", ClickUp version" : ""}${from && from !== box.email ? `, will come from ${from}` : ""}] ${t.subject}`, text: noteTextPlain(t, noteFirst), html, attachments }, ews ? (raw) => ewsSaveSent(box, raw) : undefined);
-    return { ok: true as const, to, launchFirst, noteFirst, kind, noteTo: toEmail, from: from || box.email };
+    // 2. the personal note, from the mailbox it will really come from, as the scheduled send makes it (lib/launchSend.ts)
+    const { sendPersonalNote } = await import("@/lib/launchSend");
+    const n = await sendPersonalNote(admin, c.id, { by: v.user?.email || "", testTo: to });
+    const kind = n.kind, noteFirst = n.first, toEmail = n.to?.[0] || "", from = n.from;
+    return { ok: true as const, to, launchFirst, noteFirst, kind, noteTo: toEmail, from };
   } catch (e) { return fail(e); }
 }

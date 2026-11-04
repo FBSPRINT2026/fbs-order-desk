@@ -58,20 +58,8 @@ export async function listLaunchRecipients(): Promise<{ ok: boolean; rows?: Laun
 export async function sendLaunchBatch(ids: string[]): Promise<{ ok: boolean; sent: number; failed: { email: string; why: string }[]; error?: string }> {
   const v = await getViewer();
   if (!v.user || v.role !== "owner") return { ok: false, sent: 0, failed: [], error: "Only the owner can send this." };
-  const admin = createAdminClient();
-  const { data } = await admin.from("customers").select("id, company, name, email, is_test").in("id", ids.slice(0, 25));
-  const site = siteUrl();
-  let sent = 0; const failed: { email: string; why: string }[] = [];
-  for (const c of (data || []) as { id: string; company: string | null; name: string | null; email: string | null; is_test: boolean | null }[]) {
-    const to = String(c.email || "").trim().toLowerCase();
-    if (!to || c.is_test) continue;
-    const first = String(c.name || "").trim().split(/\s+/)[0] || "";
-    const company = String(c.company || "").trim();
-    const html = launchEmailHtml({ site, portalUrl: `${site}/portal`, firstName: first, company: company || undefined });
-    let ok = false, why = "";
-    try { ok = await sendEmail({ to, subject: LAUNCH_SUBJECT, html }); if (!ok) why = "The email service didn't take it."; } catch (e) { why = e instanceof Error ? e.message : String(e); }
-    await admin.from("launch_email_sends").insert({ customer_id: c.id, email: to, company: company || null, ok, error: ok ? null : why.slice(0, 300), sent_by: v.email });
-    if (ok) sent++; else failed.push({ email: to, why });
-  }
-  return { ok: true, sent, failed };
+  // one sender for this and the scheduled send (lib/launchSend.ts)
+  const { sendLaunchTo } = await import("@/lib/launchSend");
+  const r = await sendLaunchTo(createAdminClient(), ids.slice(0, 25), v.email || "");
+  return { ok: true, ...r };
 }
