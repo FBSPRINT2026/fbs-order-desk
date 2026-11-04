@@ -5,7 +5,7 @@ returns table(domain text, n bigint)
 language sql stable security definer set search_path = public as $$
   select split_part(lower(from_email), '@', 2) d, count(*)
   from mail_index
-  where from_email ~ '@' and from_email !~* '(fbsprint\.com$|no-?reply|donotreply|mailer-daemon|bounce)'
+  where from_email ~ '@' and from_email !~* '(fbsprint\.com$|no-?reply|do.?not.?reply|mailer-daemon|bounce)'
     and exists (select 1 from unnest(p_words) w where length(w) >= 4 and split_part(lower(from_email), '@', 2) like '%' || w || '%')
   group by 1 having count(*) >= 5 order by 2 desc limit 40;
 $$;
