@@ -11,7 +11,7 @@ import { colorHex } from "@/lib/inkColors";
 import { pdfTextServer } from "@/lib/pdfTextServer";
 import { checkOrderSource } from "@/lib/ai/sourceCheckRun";
 import type { SrcFinding } from "@/lib/sourceCheck";
-import { calcOrder, LOCATIONS, mergeSettings, orderGroups, SIZES, uid, type Group, type Order, type Settings } from "@/lib/pricing";
+import { calcOrder, LOCATIONS, mergeSettings, orderGroups, shapeGroups, SIZES, uid, type Group, type Order, type Settings } from "@/lib/pricing";
 
 /**
  * "Did I get everything right?" (Oct 23, Nick: "the right panel… never closes until I say, yes, we've got everything
@@ -310,7 +310,7 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
       const t = patchDoc(doc, ops); if (!t.ok) continue;
       doc = t.doc; applied.push(c.say);
     }
-    groups = doc.groups as Group[];
+    groups = shapeGroups(doc.groups as Group[]);
     for (const k of DOC_KEYS) if (k !== "groups" && JSON.stringify(doc[k] ?? null) !== JSON.stringify((o as Record<string, unknown>)[k] ?? null)) patch[k] = doc[k];
     changes = changes.filter((c) => !(c.what === "order" && c.field === "edit"));
   }

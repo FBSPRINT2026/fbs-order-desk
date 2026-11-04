@@ -878,8 +878,37 @@ export function frontFirst<T extends { location: string }>(list: T[]): T[] {
 }
 
 /** The order's garment groups, each one's prints front first; converts older one-garment lines on the fly. */
+/**
+ * Every group, garment line and print with the fields the pages count on (Nov 3, #40461: prints the AI order helper added
+ * by JSON edits had no size or notes, and the order page crashed on "reading 'trim'"). Filled in place, nothing else
+ * changed; used wherever groups are written (lib/ai/orderFix.ts) and read (orderGroups).
+ */
+export function shapeGroups(gs: Group[]): Group[] {
+  for (const g of gs || []) {
+    if (!g || typeof g !== "object") continue;
+    if (!g.id) g.id = (globalThis.crypto?.randomUUID?.() || `g${Math.random().toString(36).slice(2)}`);
+    if (!Array.isArray(g.lines)) g.lines = [];
+    if (!Array.isArray(g.imprints)) g.imprints = [];
+    for (const l of g.lines) {
+      const x = l as unknown as Record<string, unknown>;
+      for (const k of ["style", "brand", "garment", "color"]) if (typeof x[k] !== "string") x[k] = x[k] == null ? "" : String(x[k]);
+      if (x.cost == null) x.cost = "";
+      if (!x.sizes || typeof x.sizes !== "object") x.sizes = {};
+      if (x.priceOverride === undefined) x.priceOverride = null;
+      if (!x.id) x.id = globalThis.crypto?.randomUUID?.() || `l${Math.random().toString(36).slice(2)}`;
+    }
+    for (const im of g.imprints) {
+      const x = im as unknown as Record<string, unknown>;
+      for (const k of ["location", "inks", "size", "notes"]) if (typeof x[k] !== "string") x[k] = x[k] == null ? "" : String(x[k]);
+      if (!["screen", "embroidery", "dtf"].includes(String(x.method))) x.method = "screen";
+      if (!(+(x.colors as number) > 0)) x.colors = 1;
+      if (!x.id) x.id = globalThis.crypto?.randomUUID?.() || `i${Math.random().toString(36).slice(2)}`;
+    }
+  }
+  return gs;
+}
 export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
-  if (o.groups && o.groups.length) { for (const g of o.groups) if (Array.isArray(g.imprints)) frontFirst(g.imprints); return o.groups; }
+  if (o.groups && o.groups.length) { shapeGroups(o.groups); for (const g of o.groups) if (Array.isArray(g.imprints)) frontFirst(g.imprints); return o.groups; }
   return (o.lines || []).map((l) => ({
     id: l.id,
     lines: [{ id: l.id + "-g", style: l.style || "", brand: "", garment: l.garment || "", color: l.color || "", cost: l.cost, sizes: l.sizes || {}, priceOverride: l.priceOverride ?? null }],

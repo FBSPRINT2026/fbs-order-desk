@@ -69,7 +69,7 @@ import { FillFromText, type StatusLine } from "@/components/OrderAssist";
 import Timeline from "@/components/Timeline";
 import { useCan, useRole, useSeesMoney } from "@/components/RoleContext";
 import { firstName, renderTemplate, TEMPLATES, type TemplateKey } from "@/lib/crm/templates";
-import { PAY_TERMS, SIZES, SUPPLIED_PRESS_ID, PATCH_APPLY_ID, patchEach, specialLocEach, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
+import { shapeGroups, PAY_TERMS, SIZES, SUPPLIED_PRESS_ID, PATCH_APPLY_ID, patchEach, specialLocEach, isShipFee, lineQty, colorCosts, supplierSizeUp, sizeUpEach, newGLine, newImprint, type Size, type Imprint } from "@/lib/pricing";
 import OrderHelper from "@/components/OrderHelper";
 import type { HelperAction, HelperOrder } from "@/lib/orderHelperShared";
 import { BIG_SIZES, cardForOrder, finishingIncluded, programForOrder, type DesignCtx, type DesignPrice, type RateCard } from "@/lib/programs";
@@ -288,6 +288,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.discount_amt = +(d.discount_amt || 0);
       d.discount_type = d.discount_type === "amt" ? "amt" : "pct";
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
+      if (Array.isArray(d.groups)) shapeGroups(d.groups); // every print and line whole, whoever wrote it
       setO(d);
       latest.current = d;
       // test companies are offered too: the picker only shows what's typed, so they come up when typed for (lib/format testFound)
@@ -467,6 +468,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
       d.delivery_method = d.delivery_method || "pickup";
       d.price_type = d.price_type || "retail";
+      if (Array.isArray(d.groups)) shapeGroups(d.groups);
       setO(d); latest.current = d;
       // the server's copy is on screen now: a person's change that didn't reach it is offered back right here
       baseAt.current = String((d as Order & { updated_at?: string }).updated_at || "");
