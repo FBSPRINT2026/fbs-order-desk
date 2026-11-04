@@ -51,9 +51,10 @@ export function SimpleBack() {
   const c = useContext(SimpleMenuContext);
   if (!c || c.current === "home") return null;
   return (
-    <button type="button" className="btn psmn-back" onClick={() => { c.go("home"); window.scrollTo({ top: 0 }); }}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-      <span>Dashboard</span>
+    // the small arrow in front of the title, as on every other page (components/BackLink.tsx's look; Nov 4, Nick: the big
+    // "Dashboard" button pushed the title over: "the arrow, like we've been doing… next to messages")
+    <button type="button" className="back-ic psmn-back" title="Back to Dashboard" aria-label="Back to Dashboard" onClick={() => { c.go("home"); window.scrollTo({ top: 0 }); }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h14" /><path d="M5 12l6 6" /><path d="M5 12l6-6" /></svg>
     </button>
   );
 }
