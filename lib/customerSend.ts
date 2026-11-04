@@ -78,9 +78,16 @@ export async function replyChoices(admin: SupabaseClient, box: Box, emails: stri
   const em = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter((e) => e.includes("@")))];
   if (!em.length) return [];
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
-  const { data } = await admin.from("mail_index").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(em.map((e) => `from_email.ilike.${e.replace(/[,()]/g, "")}`).join(",")).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(30);
+  // the mailbox's saved emails (mail_cache: what came in today is there first) and its search index (older ones), newest first
+  // (Nov 3, Nick: Michael's email from that morning wasn't offered: it wasn't in the index yet)
+  const who = em.map((e) => `from_email.ilike.${e.replace(/[,()]/g, "")}`).join(",");
+  const [{ data: a }, { data: b }] = await Promise.all([
+    admin.from("mail_cache").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).is("gone_at", null).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(30),
+    admin.from("mail_index").select("message_id, subject, from_name, from_email, sent_at").eq("account_id", box.id).or(who).gte("sent_at", since).not("message_id", "is", null).order("sent_at", { ascending: false }).limit(30),
+  ]);
+  const data = [...(a || []), ...(b || [])].sort((x, y) => String(y.sent_at).localeCompare(String(x.sent_at)));
   const seen = new Set<string>(), out: { messageId: string; subject: string; from: string; at: string }[] = [];
-  for (const r of (data || []) as { message_id: string; subject: string | null; from_name: string | null; from_email: string; sent_at: string }[]) {
+  for (const r of data as { message_id: string; subject: string | null; from_name: string | null; from_email: string; sent_at: string }[]) {
     if (!r.message_id || seen.has(r.message_id)) continue; seen.add(r.message_id);
     out.push({ messageId: r.message_id, subject: r.subject || "(no subject)", from: r.from_name || r.from_email, at: r.sent_at });
     if (out.length >= 8) break;
@@ -94,8 +101,10 @@ async function mineEmail(admin: SupabaseClient, box: Box, card: { subject: strin
   const { replyHtml, replyText, inlineImages } = await import("@/lib/mail/compose");
   let quote: { from: string; sent: string; to: string; cc?: string; subject: string; html?: string; text: string } | undefined, subject = card.subject, refs: string[] = [], inReplyTo = "";
   if (pick.reply?.messageId) {
-    const { data: ix } = await admin.from("mail_index").select("message_id, in_reply_to, subject, from_name, from_email, to_text, sent_at").eq("account_id", box.id).eq("message_id", pick.reply.messageId).limit(1).maybeSingle();
-    const { data: mc } = await admin.from("mail_cache").select("body_text, body_html, refs, cc_text").eq("account_id", box.id).eq("message_id", pick.reply.messageId).limit(1).maybeSingle();
+    // the saved copy first (newest emails are there before the index), else the index
+    const { data: mc } = await admin.from("mail_cache").select("message_id, in_reply_to, subject, from_name, from_email, to_text, sent_at, body_text, body_html, refs, cc_text").eq("account_id", box.id).eq("message_id", pick.reply.messageId).limit(1).maybeSingle();
+    const { data: ix0 } = mc ? { data: null } : await admin.from("mail_index").select("message_id, in_reply_to, subject, from_name, from_email, to_text, sent_at").eq("account_id", box.id).eq("message_id", pick.reply.messageId).limit(1).maybeSingle();
+    const ix = mc || ix0;
     if (ix) {
       const x = ix as { message_id: string; in_reply_to: string | null; subject: string | null; from_name: string | null; from_email: string; to_text: string | null; sent_at: string };
       const c = mc as { body_text: string | null; body_html: string | null; refs: string[] | null; cc_text: string | null } | null;
@@ -134,7 +143,7 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
   const sews = ((sw || []) as SewRow[]).filter((x) => x.status === "pending").map((x) => ({ id: x.id, label: `Sew-out v${x.version} · ${where(x.imprint_id)}`, sent: !!x.sent_at }));
   const rc = await recipientsFor(admin, o, customer);
   return {
-    to: await approvalsTo(admin, o, customer), name: customer?.name || customer?.company || "",
+    to: await approvalsTo(admin, o, customer), name: customer?.company || customer?.name || "",
     people: rc.people.map((x) => ({ ...x, on: rc.list.includes(x.email) })),
     proof: mocks.length ? { version: unsent ? nextV : live[0]?.version || nextV, mockups: mocks.length, unsent, waiting: !unsent && live.some((p) => p.status === "pending") } : null,
     // what's due when they approve, by their terms (lib/payTerms.ts)
@@ -207,21 +216,27 @@ ${pick.note?.trim() ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;
 export async function previewSend(admin: SupabaseClient, orderId: string, pick: Pick3, box?: Box | null) {
   const { o, customer, settings } = await load(admin, orderId);
   if (!pick.proof && !pick.quote && !(pick.sewouts || []).length) return { ok: false as const, error: "Tick what to send." };
-  const { list } = await recipientsFor(admin, o, customer, pick);
+  const { list, people } = await recipientsFor(admin, o, customer, pick);
+  const hi = firstOf(customer, list, people);
   if (pick.fromMe && box) {
-    const card = await emailFor(admin, withoutShopPieces(o), customer, settings, { ...pick, note: "" }, `${siteUrl()}/proof/preview`);
-    const mine = await mineEmail(admin, box, card, pick, firstOf(customer, list));
+    const card = await emailFor(admin, withoutShopPieces(o), greeted(customer, hi), settings, { ...pick, note: "" }, `${siteUrl()}/proof/preview`);
+    const mine = await mineEmail(admin, box, card, pick, hi);
     // the preview shows the pictures as they are (the attached copies are for the real email)
     return { ok: true as const, to: list.join(", "), subject: mine.subject, html: previewOf(mine.html, mine.attachments), from: `${box.name || box.email} <${box.email}>` };
   }
-  const em = await emailFor(admin, withoutShopPieces(o), customer, settings, pick, `${siteUrl()}/proof/preview`);
+  // the portal sends one to each person, each greeted by name: the preview greets the first
+  const em = await emailFor(admin, withoutShopPieces(o), greeted(customer, firstOf(customer, list.slice(0, 1), people)), settings, pick, `${siteUrl()}/proof/preview`);
   return { ok: true as const, to: list.join(", "), ...em, from: "" };
 }
-/** the first name to greet: the one person it goes to, else the customer's main contact */
-function firstOf(customer: { name?: string | null } | null, list: string[]) {
-  void list;
+/** the first names to greet: the people it goes to ("Michael", "Michael and Anna"), else the customer's main contact
+ *  (Nov 3, Nick: sent to Michael, it said "Hi Stephanie", the main contact) */
+function firstOf(customer: { name?: string | null } | null, list: string[], people: { email: string; name: string }[] = []) {
+  const firsts = list.map((e) => (people.find((p) => p.email === e)?.name || "").trim().split(/\s+/)[0]).filter(Boolean);
+  if (firsts.length && firsts.length === list.length && firsts.length <= 3) return firsts.length === 1 ? firsts[0] : `${firsts.slice(0, -1).join(", ")} and ${firsts[firsts.length - 1]}`;
   return ((customer?.name || "").trim().split(/\s+/)[0]) || "there";
 }
+/** the customer as the email greets them: by the people it goes to */
+const greeted = <T extends { name: string } | null>(customer: T, first: string): T => (customer ? { ...customer, name: first } : customer);
 /** an email with attached pictures (cid:) shown as it will look, the pictures put back in */
 function previewOf(html: string, atts: { cid?: string; content: Buffer; contentType: string }[]) {
   let out = html;
@@ -238,7 +253,7 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   if (!pick.proof && !pick.quote && !(pick.sewouts || []).length) return { ok: false as const, error: "Tick what to send." };
   // who gets it: the people picked for this send, else who at the customer gets proofs and approvals (their email
   // settings, lib/customerEmails.ts; the main email if unset)
-  const { list } = await recipientsFor(admin, o, customer, pick);
+  const { list, people } = await recipientsFor(admin, o, customer, pick);
   const to = list.join(", ");
   if (email && !to) return { ok: false as const, error: pick.to ? "Tick who gets it." : "This customer has no email address. Add one, or copy the link and send it yourself." };
   if (email && pick.fromMe && !box) return { ok: false as const, error: "Your mailbox isn't connected here. Send it from FBS Print, or connect your email in Settings first." };
@@ -283,8 +298,9 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   let emailed = false;
   if (pick.fromMe && box) {
     // one email from their own mailbox to everyone picked, in the thread it answers, kept in their Sent Items
-    const card = await emailFor(admin, withoutShopPieces(fresh as Order), customer, settings, { ...pick, note: "" }, url);
-    const mine = await mineEmail(admin, box, card, pick, firstOf(customer, list));
+    const hi = firstOf(customer, list, people);
+    const card = await emailFor(admin, withoutShopPieces(fresh as Order), greeted(customer, hi), settings, { ...pick, note: "" }, url);
+    const mine = await mineEmail(admin, box, card, pick, hi);
     const { cfgOf } = await import("@/lib/mail/config"); const { sendFromMailbox } = await import("@/lib/mail/send");
     const { ewsReady, ewsSaveSent } = await import("@/lib/mail/ewsBox");
     const ews = await ewsReady(admin, box).catch(() => false);
@@ -294,8 +310,10 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
     await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: `Sent from ${box.email}${mine.inReplyTo ? ` as a reply to "${mine.subject.replace(/^re:\s*/i, "")}"` : ""} to ${to}`, actor: me.email });
     return { ok: true as const, url, emailed, done };
   }
-  const em = await emailFor(admin, withoutShopPieces(fresh as Order), customer, settings, pick, url);
-  for (const t of list) if (await sendEmail({ to: t, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html })) emailed = true;
+  for (const t of list) {
+    const em = await emailFor(admin, withoutShopPieces(fresh as Order), greeted(customer, firstOf(customer, [t], people)), settings, pick, url);
+    if (await sendEmail({ to: t, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html })) emailed = true;
+  }
   return { ok: true as const, url, emailed, done };
 }
 
