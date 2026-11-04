@@ -421,6 +421,7 @@ export class Pusher {
     const oldInv = (p as OurPayment & { archived_order_id?: string | null }).archived_order_id;
     if (oldInv) {
       const { data: a } = await this.admin.from("archived_orders").select("visual_id").eq("id", oldInv).maybeSingle();
+      if (String((p as { processor_id?: string | null }).processor_id || "").startsWith("achoff:")) return { status: "needs_review", reason: `Paid by ACH in the portal: the credit card surcharge (${r2(+p.amount).toFixed(2)}) on old Printavo invoice #${a?.visual_id || "?"} was taken off. In QuickBooks, take that surcharge off the invoice (or credit it), then Skip.` };
       return { status: "needs_review", reason: `Paid in the portal on old Printavo invoice #${a?.visual_id || "?"}: record ${r2(+p.amount).toFixed(2)} on that invoice in QuickBooks, then Skip.` };
     }
     const o = await this.order(p.order_id);

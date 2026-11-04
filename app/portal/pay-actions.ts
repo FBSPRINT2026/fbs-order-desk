@@ -10,6 +10,7 @@ import { calcOrder, mergeSettings, r2, type Order, type Payment, type PayTerms }
 import { money } from "@/lib/format";
 import { allocateOldest } from "@/lib/paySelect";
 import { payState } from "@/lib/payReady";
+import { cardFeeInOld, cardFeeInOrder } from "@/lib/cardFeeIn";
 
 type Result = { receiptTo?: string; ok: boolean; error?: string; paid?: number; fee?: number };
 const STAX_API = "https://apiprod.fattlabs.com";
@@ -39,13 +40,13 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
   const settings = mergeSettings(s?.data);
   // old invoices: only their own (row security above lists only their customers), only once the account has moved
   const mine = ((cs || []) as { id: string; moved_at?: string | null }[]);
-  const { data: olds } = oldIds.length ? await admin.from("archived_orders").select("id, visual_id, nickname, order_date, balance, customer_id, kind").is("removed_at", null).in("id", oldIds) : { data: [] };
-  const oldLines = ((olds || []) as { id: string; visual_id: string; nickname: string | null; order_date: string | null; balance: number; customer_id: string; kind: string }[]).map((a) => {
+  const { data: olds } = oldIds.length ? await admin.from("archived_orders").select("id, visual_id, nickname, order_date, balance, customer_id, kind, fees:data->fees, groups:data->groups").is("removed_at", null).in("id", oldIds) : { data: [] };
+  const oldLines = ((olds || []) as { id: string; visual_id: string; nickname: string | null; order_date: string | null; balance: number; customer_id: string; kind: string; fees: null; groups: null }[]).map((a) => {
     const c = mine.find((x) => x.id === a.customer_id);
     if (!c) throw new Error("We couldn't find one of those orders.");
     if (!c.moved_at) throw new Error(`#${a.visual_id} is from our old system: pay it on its own invoice for now.`);
     if (a.kind !== "invoice" || !(+a.balance > 0.004)) throw new Error(`#${a.visual_id} is already paid.`);
-    return { o: { id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", created_at: a.order_date || "", type: "invoice", total: +a.balance, customer_id: a.customer_id } as unknown as Order, amount: r2(+a.balance), old: true };
+    return { o: { id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", created_at: a.order_date || "", type: "invoice", total: +a.balance, customer_id: a.customer_id } as unknown as Order, amount: r2(+a.balance), old: true, feeIn: cardFeeInOld(a as never, r2(+a.balance)), full: true };
   });
   if (oldLines.length !== oldIds.length) throw new Error("We couldn't find one of those orders.");
   const lines0 = items.filter((it) => !it.orderId.startsWith("pv:")).map((it) => {
@@ -60,7 +61,7 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
     const deposit = Math.min(c.balance, r2((c.total * (tPct > 0 && tPct < 100 ? tPct : settings.depositPct)) / 100));
     const amount = r2(ps.can === "deposit" || (it.kind === "deposit" && c.paid < 0.005) ? deposit : c.balance);
     if (amount <= 0.004) throw new Error(`#${o.number} is already paid.`);
-    return { o, amount, old: false };
+    return { o, amount, old: false, feeIn: cardFeeInOrder(o as never, c.balance), full: Math.abs(amount - c.balance) < 0.005 };
   });
   const lines = [...lines0, ...oldLines];
   // "pay an amount": oldest orders first, the last one partly
@@ -70,7 +71,7 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
     const amt = r2(+applyAmount);
     if (!(amt >= 1)) throw new Error("Enter an amount of at least $1.");
     if (amt > total + 0.004) throw new Error(`That's more than these orders owe (${money(total)}).`);
-    use = allocateOldest(lines.map((l) => ({ ...l, balance: l.amount, created_at: l.o.created_at, number: l.o.number })), amt).map((x) => ({ o: x.item.o, amount: x.amount, old: x.item.old }));
+    use = allocateOldest(lines.map((l) => ({ ...l, balance: l.amount, created_at: l.o.created_at, number: l.o.number })), amt).map((x) => ({ o: x.item.o, amount: x.amount, old: x.item.old, feeIn: x.item.feeIn, full: Math.abs(x.amount - x.item.amount) < 0.005 && x.item.full }));
   }
   return { admin, email, settings, lines: use, customer: (cs || [])[0] as { id: string; name: string; company: string; email: string } | undefined };
 }
@@ -89,7 +90,7 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
   try {
     const viaQbo = input.method === "bank" && !!input.bank && !input.savedId;
     if (!viaQbo && !process.env.STAX_API_KEY) return { ok: false, error: "Online payments aren't set up yet. Please contact the shop." };
-    const { admin, email, settings, lines, customer } = await owed(input.items, input.applyAmount);
+    const { admin, email, settings, lines: lines0, customer } = await owed(input.items, input.applyAmount);
     // a run of failed tries locks the pay form for a while (a bot testing stolen cards)
     const since = new Date(Date.now() - 30 * 60000).toISOString();
     const { count: fails } = await admin.from("pay_attempts").select("id", { count: "exact", head: true }).eq("email", email).eq("ok", false).gte("created_at", since);
@@ -105,10 +106,15 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     }
     if (!viaQbo && !/^[\w-]{6,}$/.test(pmId)) return { ok: false, error: "Enter your payment details again." };
     if (viaQbo && (!/^\d{9}$/.test(input.bank!.routing) || !/^\d{4,17}$/.test(input.bank!.account) || !input.bank!.name.trim())) return { ok: false, error: "Check the name, routing number and account number." };
+    // an invoice that already has the card fee in it (lib/cardFeeIn.ts; Nov 4, Nick): by card it gets no second fee; by ACH
+    // (no card fee at all) that fee comes off what's paid, when the whole invoice is being paid
+    const offOf = (l: (typeof lines0)[number]) => (input.method === "bank" && l.full && l.feeIn > 0.004 ? l.feeIn : 0);
+    const lines = lines0.map((l) => ({ ...l, off: offOf(l), amount: r2(l.amount - offOf(l)) }));
     const sum = r2(lines.reduce((a, l) => a + l.amount, 0));
     // a customer we don't charge the card fee (customers.no_card_fee; Nov 3, Nick)
     const noFee = customer?.id ? !!(await admin.from("customers").select("no_card_fee").eq("id", customer.id).maybeSingle()).data?.no_card_fee : false;
-    const fee = input.method === "card" && !noFee ? cardFee(sum, settings.pay.cardFeePct) : 0;
+    const feeBase = r2(lines.filter((l) => !(l.feeIn > 0.004)).reduce((a, l) => a + l.amount, 0));
+    const fee = input.method === "card" && !noFee ? cardFee(feeBase, settings.pay.cardFeePct) : 0;
     const total = r2(sum + fee);
     const ref = lines.map((l) => `#${l.o.number}`).join(", ");
     let txn: Record<string, unknown> = {};
@@ -155,12 +161,26 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
     const methodName = input.method === "card" ? "Credit card" : viaQbo ? "ACH (QuickBooks)" : "ACH";
     let feeLeft = fee;
     const today = new Date().toISOString().slice(0, 10);
-    const rows = lines.map((l, i) => {
-      const f = i === lines.length - 1 ? r2(feeLeft) : r2((fee * l.amount) / (sum || 1));
+    const feeLines = lines.filter((l) => !(l.feeIn > 0.004)), lastFee = feeLines[feeLines.length - 1];
+    const rows = lines.map((l) => {
+      const f = !fee || l.feeIn > 0.004 ? 0 : l === lastFee ? r2(feeLeft) : r2((fee * l.amount) / (feeBase || 1));
       feeLeft = r2(feeLeft - f);
       return { ...(l.old ? { order_id: null, archived_order_id: l.o.id } : { order_id: l.o.id }), amount: l.amount, method: methodName, paid_on: today, fee: f, processor_id: String(txn.id || ""), note: lines.length > 1 ? `Paid together: ${ref}` : null };
     });
     const { error } = await admin.from("payments").insert(rows);
+    // the card fee taken off for ACH: an old invoice gets it as its own line in its payments (its balance is Printavo's
+    // less what's paid here); one of ours gets a fee that takes it back off, so the invoice itself says so
+    const offs = lines.filter((l) => l.off > 0.004);
+    if (!error && offs.length) {
+      const offNote = "Paid by ACH: credit card surcharge taken off";
+      const oldOffs = offs.filter((l) => l.old);
+      if (oldOffs.length) await admin.from("payments").insert(oldOffs.map((l) => ({ order_id: null, archived_order_id: l.o.id, amount: l.off, method: "Surcharge taken off (ACH)", paid_on: today, fee: 0, processor_id: `achoff:${String(txn.id || "")}`, note: offNote })));
+      for (const l of offs.filter((x) => !x.old)) {
+        const fees = [...((l.o.fees || []) as { label: string; amount: number | "" }[]), { label: "Paid by ACH: surcharge taken off", amount: -l.off }];
+        await admin.from("orders").update({ fees }).eq("id", l.o.id);
+        await admin.from("order_events").insert({ order_id: l.o.id, kind: "payment", detail: `${offNote} (${money(l.off)})`, actor: email });
+      }
+    }
     // paying a quote approves it (the customer saw "Paying approves the quote and our terms")
     const quotes = lines.filter((l) => !l.old && l.o.type === "quote");
     if (!error && quotes.length) {
@@ -194,7 +214,7 @@ export async function payOrders(input: { items: { orderId: string; kind: "deposi
       const paidNow: Record<string, number> = {};
       ((pays2 || []) as { order_id: string; amount: number }[]).forEach((p) => { paidNow[p.order_id] = (paidNow[p.order_id] || 0) + (+p.amount || 0); });
       const oldLeft = Object.fromEntries(((olds2 || []) as { id: string; balance: number }[]).map((a) => [a.id, +a.balance || 0]));
-      shopLines = lines.map((l) => ({ number: l.o.number, nickname: l.o.nickname || "", amount: l.amount, balanceAfter: l.old ? r2(oldLeft[l.o.id] || 0) : r2((+l.o.total || 0) - (paidNow[l.o.id] || 0)) }));
+      shopLines = lines.map((l) => ({ number: l.o.number, nickname: l.o.nickname || "", amount: l.amount, balanceAfter: l.old ? r2(oldLeft[l.o.id] || 0) : r2((+l.o.total || 0) - l.off - (paidNow[l.o.id] || 0)) }));
       const html = receiptEmailHtml({
         shop: settings.shop, customer: customer?.company || customer?.name || email, date: day,
         method: methodName, txn: String(txn.id || ""), subtotal: sum, fee, total, url: `${siteUrl()}/portal?area=payments`, lines: shopLines,

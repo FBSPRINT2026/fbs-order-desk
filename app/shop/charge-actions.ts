@@ -52,7 +52,9 @@ export async function chargeSavedMethod(input: { orderId: string; savedId: strin
     if (!(sum >= 1)) return { ok: false, error: "Enter an amount of at least $1." };
     if (sum > c.balance + 0.004) return { ok: false, error: `That's more than the order owes (${money(c.balance)}).` };
     const isCard = sp.method !== "bank";
-    const fee = isCard ? r2((sum * Math.max(0, settings.pay.cardFeePct)) / 100) : 0;
+    // the card fee already on the invoice (lib/cardFeeIn.ts; Nov 4, Nick): never charged twice
+    const { cardFeeInOrder } = await import("@/lib/cardFeeIn");
+    const fee = isCard && !cardFeeInOrder(order as never, c.balance) ? r2((sum * Math.max(0, settings.pay.cardFeePct)) / 100) : 0;
     const total = r2(sum + fee);
     const res = await fetch(`${STAX_API}/charge`, {
       method: "POST",

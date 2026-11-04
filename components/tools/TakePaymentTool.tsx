@@ -77,7 +77,10 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
   const sum = Math.round(chosen.reduce((a, o) => a + o.balance, 0) * 100) / 100;
   const groups = split ? chosen.map((o) => [o]) : chosen.length ? [chosen] : [];
   const feeOf = (n: number) => Math.round(n * pct) / 100;
-  const total = Math.round(groups.reduce((a, g) => { const s = g.reduce((x, o) => x + o.balance, 0); return a + s + feeOf(s); }, 0) * 100) / 100;
+  // no second card fee on an invoice that already has one (lib/cardFeeIn.ts; Nov 4, Nick)
+  const feeBase = (g: TPInvoice[]) => g.filter((o) => !((o.cardFeeIn || 0) > 0.004)).reduce((x, o) => x + o.balance, 0);
+  const already = chosen.filter((o) => (o.cardFeeIn || 0) > 0.004).length;
+  const total = Math.round(groups.reduce((a, g) => { const s = g.reduce((x, o) => x + o.balance, 0); return a + s + feeOf(feeBase(g)); }, 0) * 100) / 100;
   const owed = Math.round((ctx?.invoices || []).reduce((a, o) => a + o.balance, 0) * 100) / 100;
 
   const run = async () => {
@@ -242,9 +245,9 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
             )}
 
             <div className="tpy-tot">
-              {groups.length > 1 ? groups.map((g) => <div key={g[0].id}><span>#{g[0].number}</span><b>{money(g[0].balance + feeOf(g[0].balance))}</b></div>)
+              {groups.length > 1 ? groups.map((g) => <div key={g[0].id}><span>#{g[0].number}</span><b>{money(g[0].balance + feeOf(feeBase(g)))}</b></div>)
                 : <div><span>{chosen.length} invoice{chosen.length === 1 ? "" : "s"}</span><b>{money(sum)}</b></div>}
-              {pct > 0 && groups.length <= 1 && <div><span>Card fee</span><b>{money(feeOf(sum))}</b></div>}
+              {pct > 0 && groups.length <= 1 && <div><span>Card fee{already ? ` (${already} already ${already === 1 ? "has" : "have"} it)` : ""}</span><b>{money(feeOf(feeBase(chosen)))}</b></div>}
               <div className="tpy-grand"><span>Total</span><b>{money(total)}</b></div>
             </div>
             {err && ctx && <div className="err">{err}</div>}

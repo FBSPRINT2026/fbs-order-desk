@@ -8,7 +8,8 @@ import { staxReason } from "@/lib/staxReason";
 import { money } from "@/lib/format";
 import { mySavedMethods, payOrders, sentPaymentNotice, type SavedPM } from "@/app/portal/pay-actions";
 
-export type PayItem = { /** the invoice isn't final: charges may still change (lib/payReady.ts) */ notFinal?: boolean; notFinalNote?: string; id: string; number: number; nickname: string; balance: number; deposit?: number; quote?: boolean; /** "pay an amount": what the order owes in full, when only part of it is being paid */ full?: number };
+export type PayItem = { /** the invoice isn't final: charges may still change (lib/payReady.ts) */ notFinal?: boolean; notFinalNote?: string; id: string; number: number; nickname: string; balance: number; deposit?: number; quote?: boolean; /** "pay an amount": what the order owes in full, when only part of it is being paid */ full?: number;
+  /** the credit card fee already inside this balance (lib/cardFeeIn.ts): no second fee by card, taken off by ACH */ cardFeeIn?: number; /** only part of what it owes (a deposit): ACH takes no fee off */ part?: boolean };
 type Method = "card" | "bank" | "Zelle" | "Venmo";
 type StaxJsT = { showCardForm: () => Promise<unknown>; tokenize: (d: Record<string, unknown>) => Promise<{ id: string }> };
 declare global { interface Window { StaxJs?: new (token: string, opts: Record<string, unknown>) => StaxJsT } }
@@ -69,8 +70,30 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
   const pickSaved = savedHere.find((x) => x.id === useSaved) || null;
 
   const sum = r2(items.reduce((a, it) => a + (single && kind === "deposit" && it.deposit ? it.deposit : it.balance), 0));
-  const fee = method === "card" ? r2((sum * pay.cardFeePct) / 100) : 0;
-  const total = r2(sum + fee);
+  // an invoice that already has the card fee in it (Nov 4, Nick): by card no second fee; by ACH it comes off, when the
+  // whole invoice is paid (the server works it out the same way)
+  const has = (it: PayItem) => (it.cardFeeIn || 0) > 0.004;
+  const whole = (it: PayItem) => amount === undefined && !it.part && !(single && kind === "deposit" && it.deposit) && !(it.full && it.full - it.balance > 0.004);
+  const offOf = (it: PayItem) => (method === "bank" && has(it) && whole(it) ? r2(Math.min(it.cardFeeIn || 0, it.balance)) : 0);
+  const withFee = items.filter(has), offs = items.filter((it) => offOf(it) > 0);
+  const off = r2(offs.reduce((a, it) => a + offOf(it), 0));
+  const feeBase = r2(items.filter((it) => !has(it)).reduce((a, it) => a + (single && kind === "deposit" && it.deposit ? it.deposit : it.balance), 0));
+  const fee = method === "card" ? r2((feeBase * pay.cardFeePct) / 100) : 0;
+  const total = r2(sum + fee - off);
+  const [allRows, setAllRows] = useState(false);
+  const shown = items.length > 8 && !allRows ? items.slice(0, 6) : items;
+  const rowOf = (it: PayItem, amt = it.balance) => (
+    <div key={it.id}><span>{has(it) && <i className="pp-in" title="Already has the credit card fee on it" aria-label="Already has the credit card fee on it" />}#{it.number} {it.nickname}{it.full && it.full - it.balance > 0.004 ? <small className="faint"> (part of {money(it.full)})</small> : null}</span>
+      <b className="num">{offOf(it) ? <><s className="pp-was">{money(amt)}</s>{money(r2(amt - offOf(it)))}</> : money(amt)}</b></div>
+  );
+  const moreRows = items.length > 8 && <button type="button" className="btn ghost pp-more" onClick={() => setAllRows((x) => !x)}>{allRows ? "Show fewer" : `Show all ${items.length}`}</button>;
+  const inKey = withFee.length > 0 && <div className="pp-key"><i className="pp-in" aria-hidden="true" />Already has the credit card fee on it</div>;
+  const feeRows = <>
+    {method === "card" && <div className="pp-fee"><span>Credit card fee ({pay.cardFeePct}%){withFee.length ? ` on ${items.length - withFee.length} ${items.length - withFee.length === 1 ? "invoice" : "invoices"}` : ""}</span><b className="num">{money(fee)}</b></div>}
+    {method === "card" && withFee.length > 0 && <div className="faint pp-feenote">{withFee.length === items.length ? (items.length > 1 ? "These already include it" : "This one already includes it") : `${withFee.length} already ${withFee.length === 1 ? "includes" : "include"} it`}, so no fee on {withFee.length === 1 ? "that one" : "those"}.</div>}
+    {off > 0 && <div className="pp-fee pp-off"><span>Card fee taken off {offs.length} {offs.length === 1 ? "invoice" : "invoices"}</span><b className="num">−{money(off)}</b></div>}
+    {off > 0 && <div className="faint pp-feenote">ACH has no card fee, so the one already on {offs.length === 1 ? "that invoice" : "those"} comes off.</div>}
+  </>;
   const online = !!staxToken;
 
   // load Stax.js and its secure card fields once
@@ -229,7 +252,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
             <div className="pp-check" aria-hidden="true">✓</div>
             <h3>{msg?.text}</h3>
             <p>{sentTo ? <>A detailed receipt is on its way to <b>{sentTo}</b>.</> : "It shows in your payment history now."}</p>
-            <div className="pp-list">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}</span><b className="num">{money(single && kind === "deposit" && it.deposit ? it.deposit : it.balance)}</b></div>)}</div>
+            <div className="pp-list">{items.map((it) => rowOf(it, single && kind === "deposit" && it.deposit ? it.deposit : it.balance))}</div>
             <button type="button" className="btn primary" onClick={onClose}>Done</button>
           </div>
         ) : (
@@ -242,14 +265,14 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
                   <label className={kind === "balance" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "balance"} onChange={() => setKind("balance")} /> Full balance <b>{money(single.balance)}</b></label>
                 </div>
               ) : (
-                <div className="pp-list tall">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}{it.full && it.full - it.balance > 0.004 ? <small className="faint"> (part of {money(it.full)})</small> : null}</span><b className="num">{money(it.balance)}</b></div>)}</div>
+                <><div className="pp-list tall">{shown.map((it) => rowOf(it))}</div>{moreRows}{inKey}</>
               )}
               {items.some((it) => it.quote) && (method === "card" || method === "bank") && <div className="pp-note">Paying {items.filter((it) => it.quote).map((it) => `quote #${it.number}`).join(", ")} approves {items.filter((it) => it.quote).length > 1 ? "them" : "it"} and our terms, so we can get started.</div>}
       {/* the invoice isn't final yet (Oct 24, Nick: "this invoice hasn't been finalized yet, so there may be additional charges") */}
       {items.some((it) => it.notFinal) && <div className="pp-note pp-nf"><b>This invoice isn&apos;t final yet.</b> {items.filter((it) => it.notFinal).map((it) => it.notFinalNote).filter(Boolean).join(" ") || "There may be more charges (like shipping)."} We&apos;ll send you the final amount.</div>}
               <div className="pp-sum">
                 <div><span>{items.length > 1 ? `${items.length} orders` : single && kind === "deposit" ? "Deposit" : "Balance"}</span><b className="num">{money(sum)}</b></div>
-                {method === "card" && <div className="pp-fee"><span>Credit card fee ({pay.cardFeePct}%)</span><b className="num">{money(fee)}</b></div>}
+                {feeRows}
                 <div className="pp-total"><span>Total</span><b className="num">{money(total)}</b></div>
                 {method === "card" && <div className="faint" style={{ fontSize: 12 }}>Pay by ACH bank transfer, Zelle or Venmo to skip the {pay.cardFeePct}% card fee.</div>}
               </div>
@@ -305,7 +328,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
           <label className={kind === "balance" ? "on" : ""}><input type="radio" name="pp-kind" checked={kind === "balance"} onChange={() => setKind("balance")} /> Full balance <b>{money(single.balance)}</b></label>
         </div>
       ) : items.length > 1 ? (
-        <div className="pp-list">{items.map((it) => <div key={it.id}><span>#{it.number} {it.nickname}{it.full && it.full - it.balance > 0.004 ? <small className="faint"> (part of {money(it.full)})</small> : null}</span><b className="num">{money(it.balance)}</b></div>)}</div>
+        <><div className="pp-list">{shown.map((it) => rowOf(it))}</div>{moreRows}{inKey}</>
       ) : null}
 
       {items.some((it) => it.quote) && (method === "card" || method === "bank") && <div className="pp-note">Paying {items.filter((it) => it.quote).map((it) => `quote #${it.number}`).join(", ")} approves {items.filter((it) => it.quote).length > 1 ? "them" : "it"} and our terms, so we can get started.</div>}
@@ -320,7 +343,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
       {FORMS}
       <div className="pp-sum">
         <div><span>{items.length > 1 ? `${items.length} orders` : single && kind === "deposit" ? "Deposit" : "Balance"}</span><b className="num">{money(sum)}</b></div>
-        {method === "card" && <div className="pp-fee"><span>Credit card fee ({pay.cardFeePct}%)</span><b className="num">{money(fee)}</b></div>}
+        {feeRows}
         <div className="pp-total"><span>Total</span><b className="num">{money(total)}</b></div>
         {method === "card" && <div className="faint" style={{ fontSize: 12 }}>A {pay.cardFeePct}% fee applies to credit card payments. Pay by ACH, Zelle or Venmo to avoid it.</div>}
       </div>

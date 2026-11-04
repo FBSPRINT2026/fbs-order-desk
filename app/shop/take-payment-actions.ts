@@ -18,7 +18,7 @@ import { money } from "@/lib/format";
  * Access: Nick, and Amanda).
  */
 const STAX = "https://apiprod.fattlabs.com";
-export type TPInvoice = { id: string; number: number; nickname: string; po_number: string; created_at: string; total: number; paid: number; balance: number; pay_due: string | null };
+export type TPInvoice = { id: string; number: number; nickname: string; po_number: string; created_at: string; total: number; paid: number; balance: number; pay_due: string | null; /** the card fee already in it (lib/cardFeeIn.ts) */ cardFeeIn?: number };
 export type TPMethod = { id: string; method: string; brand: string; last4: string; exp: string; holder: string; ok: boolean };
 export type TPResult = { orderIds: string[]; numbers: number[]; amount: number; fee: number; ok: boolean; ref?: string; error?: string };
 
@@ -44,7 +44,7 @@ export async function paymentContext(customerId: string): Promise<{ ok: true; cu
     const inv = await openInvoices(admin, [customerId]);
     return {
       ok: true, customer: c as { id: string; name: string; company: string; no_card_fee: boolean; charge_split: boolean },
-      invoices: inv.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, po_number: o.po_number, created_at: o.created_at, total: o.total, paid: o.paid, balance: o.balance, pay_due: o.pay_due })),
+      invoices: inv.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, po_number: o.po_number, created_at: o.created_at, total: o.total, paid: o.paid, balance: o.balance, pay_due: o.pay_due, cardFeeIn: o.cardFeeIn })),
       methods: ((pms || []) as { id: string; method: string; brand: string; last4: string; exp: string; holder: string; staff_charge_ok: boolean }[]).map((m) => ({ id: m.id, method: m.method, brand: m.brand, last4: m.last4, exp: m.exp || "", holder: m.holder || "", ok: !!m.staff_charge_ok })),
       feePct: mergeSettings(s?.data).pay.cardFeePct,
     };
@@ -97,7 +97,9 @@ export async function takePayment(input: { customerId: string; orderIds: string[
     const methodName = method === "bank" ? "ACH" : "Credit card";
     for (const g of groups) {
       const sum = r2(g.reduce((a, o) => a + o.balance, 0));
-      const fee = r2((sum * pct) / 100), total = r2(sum + fee);
+      // no second card fee on an invoice that already has one (lib/cardFeeIn.ts; Nov 4, Nick)
+      const feeBase = r2(g.filter((o) => !(o.cardFeeIn > 0.004)).reduce((a, o) => a + o.balance, 0));
+      const fee = r2((feeBase * pct) / 100), total = r2(sum + fee);
       const ref = g.map((o) => `#${o.number}`).join(", ");
       const res = await fetch(`${STAX}/charge`, {
         method: "POST", headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json", Accept: "application/json" },
@@ -117,7 +119,8 @@ export async function takePayment(input: { customerId: string; orderIds: string[
       const day = new Date().toISOString().slice(0, 10);
       // the fee split over the invoices in the charge, the last one taking what's left
       let feeLeft = fee;
-      const rows = g.map((o, i) => { const f = i === g.length - 1 ? r2(feeLeft) : r2((fee * o.balance) / (sum || 1)); feeLeft = r2(feeLeft - f); return { order_id: o.id, amount: o.balance, method: methodName, paid_on: day, fee: f, processor_id: String(txn.id || ""), note: `${label}, run by ${by}${g.length > 1 ? ` · paid together: ${ref}` : ""}` }; });
+      const feeG = g.filter((o) => !(o.cardFeeIn > 0.004)), lastF = feeG[feeG.length - 1];
+      const rows = g.map((o) => { const f = !fee || o.cardFeeIn > 0.004 ? 0 : o === lastF ? r2(feeLeft) : r2((fee * o.balance) / (feeBase || 1)); feeLeft = r2(feeLeft - f); return { order_id: o.id, amount: o.balance, method: methodName, paid_on: day, fee: f, processor_id: String(txn.id || ""), note: `${label}, run by ${by}${g.length > 1 ? ` · paid together: ${ref}` : ""}` }; });
       const { error } = await admin.from("payments").insert(rows);
       if (error) { results.push({ orderIds: g.map((o) => o.id), numbers: g.map((o) => o.number), amount: sum, fee, ok: false, error: `Charged, but not recorded (${error.message}). Record ${money(total)} by hand.` }); continue; }
       await admin.from("order_events").insert(g.map((o) => ({ order_id: o.id, kind: "payment", detail: `${money(o.balance)} ${methodName} (${label})${fee ? ` + card fee` : ""}, Take a Payment`, actor: v.email })));

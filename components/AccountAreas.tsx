@@ -29,7 +29,7 @@ import RowLink from "@/components/RowLink";
 import { useUrlSearch } from "@/lib/useUrlSearch";
 import PortalSimpleMenu, { SimpleBack, SimpleMenuContext } from "@/components/PortalSimpleMenu";
 
-export type AOrder = { /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_lane?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
+export type AOrder = { /** the credit card fee already in its balance (lib/cardFeeIn.ts) */ cardFeeIn?: number; /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_lane?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** an old invoice of an account that has moved to the new system: paid here, not on Printavo (Nov 2, Nick) */ payHere?: boolean;
@@ -688,13 +688,13 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     const open = liveInvoices.filter((o) => o.status !== "request" && o.balance > 0.004 && has(q, o.number, o.nickname));
     const waitingQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent" && has(q, o.number, o.nickname));
     const canPay = mode === "portal" && !!payCfg;
-    const item = (o: AOrder): PayItem => ({ id: o.id, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
+    const item = (o: AOrder): PayItem => ({ id: o.id, cardFeeIn: o.cardFeeIn, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
     // only what's open for paying (Oct 24, Nick): a deposit-only order pays its deposit; one that isn't ready can't be picked
     // an old invoice is paid here once the account has moved (Nov 2, Nick); "pv:" tells the server it's an old one
     const payable = (o: AOrder) => (o.archived ? mode === "portal" && !!o.payHere : mode !== "portal" || o.payCan !== "none");
     const itemOf = (o: AOrder): PayItem => {
-      if (o.archived) return { id: `pv:${o.id}`, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100 };
-      const it = item(o); return o.payCan === "deposit" && it.deposit ? { ...it, balance: it.deposit, notFinal: o.notFinal, notFinalNote: o.payNote } : { ...it, notFinal: o.notFinal, notFinalNote: o.payNote };
+      if (o.archived) return { id: `pv:${o.id}`, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, cardFeeIn: o.cardFeeIn };
+      const it = item(o); return o.payCan === "deposit" && it.deposit ? { ...it, balance: it.deposit, part: true, notFinal: o.notFinal, notFinalNote: o.payNote } : { ...it, notFinal: o.notFinal, notFinalNote: o.payNote };
     };
     const amtOf = (o: AOrder) => (o.archived ? o.balance : o.payCan === "deposit" ? itemOf(o).balance : o.balance);
     const oldOpen = oldOwed.filter((o) => has(q, o.number, o.nickname));

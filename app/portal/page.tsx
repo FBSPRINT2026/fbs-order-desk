@@ -1,3 +1,4 @@
+import { cardFeeInOld, cardFeeInOrder } from "@/lib/cardFeeIn";
 import { allRows } from "@/lib/readAll";
 import CreditBox from "@/components/CreditBox";
 import { discardRequest } from "@/app/portal/request-actions";
@@ -135,20 +136,21 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   }
   const bal = (o: Order) => Math.round(((+o.total || 0) - (paid[o.id] || 0)) * 100) / 100;
   const aOrders: AOrder[] = orders.map((o) => ({ order_lane: (o as { order_lane?: string }).order_lane || "", id: o.id, starred: !!(o as { customer_starred_at?: string | null }).customer_starred_at, sent: o.status === "request" && !!o.submitted_at, archivedQ: !!(o as { customer_archived_at?: string | null }).customer_archived_at, cancelAsked: !!(o as { cancel_requested_at?: string | null }).cancel_requested_at && (o.status as string) !== "void", number: o.number, nickname: o.nickname || "", status: o.status, type: o.type, hold: (() => { const h = !["completed", "void"].includes(String(o.status)) ? customerHold((o as Order & { flags?: unknown }).flags as never) : null; return h ? `On hold · ${holdShort(h.key)}` : ""; })(), total: +o.total || 0, paid: paid[o.id] || 0, balance: bal(o), due_date: o.due_date, created_at: o.created_at, qty: o.qty, price_type: o.price_type, search: orderSearchText(o),
+    cardFeeIn: cardFeeInOrder(o as never, bal(o)),
     pay_due: o.type === "invoice" ? payDueDate(o, ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms) : null,
     // what can be paid now (lib/payReady.ts)
     ...(() => { const ps = payState(o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: paid[o.id] || 0, depositPct: ctx.settings.depositPct, terms: ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms || "receipt" }); return { payCan: ps.can, payWhy: ps.why, notFinal: ps.notFinal, payNote: ps.note }; })() }));
   const archHref = (id: string) => `/portal/archive/${id}${qs}`;
   const owedArch = archived.filter((a) => a.kind === "invoice" && +a.balance > 0.004).map((a) => a.id);
-  const payUrls: Record<string, string> = {};
+  const payUrls: Record<string, string> = {}, feeIns: Record<string, number> = {};
   for (let i = 0; i < owedArch.length; i += 200) {
-    const { data: pu } = await admin.from("archived_orders").select("id, pay:data->urls->>publicUrl").is("removed_at", null).in("id", owedArch.slice(i, i + 200));
-    ((pu || []) as { id: string; pay: string | null }[]).forEach((r) => { if (r.pay && /^https:\/\//.test(r.pay)) payUrls[r.id] = r.pay; });
+    const { data: pu } = await admin.from("archived_orders").select("id, balance, pay:data->urls->>publicUrl, fees:data->fees, groups:data->groups").is("removed_at", null).in("id", owedArch.slice(i, i + 200));
+    ((pu || []) as { id: string; balance: number; pay: string | null; fees: null; groups: null }[]).forEach((r) => { if (r.pay && /^https:\/\//.test(r.pay)) payUrls[r.id] = r.pay; const n = cardFeeInOld(r, +r.balance || 0); if (n) feeIns[r.id] = n; });
   }
   // an account that has moved to the new system pays its old invoices here too (Nov 2, Nick: "they should be able to pay
   // in our new system only"); the others keep their old invoice's own pay link until they move
   const movedIds = new Set(ctx.customers.filter((c) => !!(c as { moved_at?: string | null }).moved_at).map((c) => c.id));
-  aOrders.push(...archived.map((a) => ({ ...archiveAsOrder(a, archHref(a.id)), payUrl: payUrls[a.id], payHere: movedIds.has((a as { customer_id?: string }).customer_id || "") })));
+  aOrders.push(...archived.map((a) => ({ ...archiveAsOrder(a, archHref(a.id)), payUrl: payUrls[a.id], cardFeeIn: feeIns[a.id] || 0, payHere: movedIds.has((a as { customer_id?: string }).customer_id || "") })));
   // what's been paid here on old invoices (migration 260), beside Printavo's own payments
   const archIds = archived.map((a) => a.id), ours: APayment[] = [];
   for (let i = 0; i < archIds.length; i += 300) {
