@@ -1,6 +1,6 @@
 "use client";
 import { openOrderCheck } from "@/components/tools/OrderReview";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { uploadDesign } from "@/lib/designs";
 import { newGLine, newImprint, SIZES, type GLine } from "@/lib/pricing";
@@ -161,6 +161,11 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
   }, [archivedId, orderId]);
   // last time's notes: brought in unless unticked
   const [keepNote, setKeepNote] = useState<{ production: boolean; customer: boolean }>({ production: true, customer: true });
+  // one step at a time, top to bottom (Nov 4, Nick: "I read the file and then click the button below and it won't go
+  // forward… a clearer way to move from step to step… it cascades into step two and then to step three"): the step
+  // you're on is open with its own Next; finished ones fold to a line of what you chose (Change opens one again); the
+  // ones still to come wait below
+  const [at, setAt] = useState(1);
   const looks: MailFile[] = useMemo(() => (d?.files || []).map((f) => ({ key: f.key, name: f.name, type: f.mime, href: href(f) })), [d]);
   const label = d ? `#${d.job.visual}${d.job.nickname ? ` ${d.job.nickname}` : ""}` : "";
   const lastTotal = d ? d.lines.reduce((s, l) => s + l.qty * l.price, 0) : 0;
@@ -301,6 +306,32 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
     } catch (e) { setStep(""); setErr(e instanceof Error ? e.message : String(e)); }
   }
 
+  // what each finished step says, folded
+  const goodsReady = sizeMode !== "file" || (!!read && readOk);
+  const goodsWhy = sizeMode === "file" ? (readBusy ? "Reading…" : !read ? (queued.length ? "Press Read to read the file" : "Drop the file with the new sizes") : "Press Update to these, or Keep last time's") : "";
+  const newOnes = match ? match.extra.filter(({ i }) => addNew[i] !== false).length : 0, offOnes = match ? match.old.filter((m, i) => m.k < 0 && offOld[i] !== false).length : 0;
+  const goodsSummary = sizeMode === "same" ? `Same sizes as last time${d?.job.qty ? ` · ${d.job.qty.toLocaleString("en-US")} pcs` : ""}` : sizeMode === "clear" ? "Sizes to type in on the order"
+    : read ? `${read.source} · ${read.pieces.toLocaleString("en-US")} pcs${newOnes ? `, ${newOnes} new line${newOnes === 1 ? "" : "s"}` : ""}${offOnes ? `, last time's ${offOnes} left off` : ""}` : "New sizes from a file";
+  const keptFiles = d ? d.files.filter((f) => what[f.key] !== "skip").length : 0, keptNotes = (["production", "customer"] as const).filter((k) => d?.notes?.[k] && keepNote[k]).length;
+  const filesSummary = `${d?.files.length ? `${keptFiles} of ${d.files.length} file${d.files.length === 1 ? "" : "s"} come along` : "No files"}${keptNotes ? ` · ${keptNotes} note${keptNotes === 1 ? "" : "s"}` : ""}`;
+  /** one step: open (its body and Next), done (one line and Change), or waiting below */
+  const stepBox = (n: number, title: string, summary: string, body: ReactNode, ready: boolean, why: string, last = false) => {
+    const state = at === n ? "cur" : at > n ? "done" : "wait";
+    return (
+      <section className={`rop-st ${state}`} aria-label={title}>
+        <div className="rop-st-h">
+          <span className="rop-st-n" aria-hidden>{state === "done" ? "✓" : n}</span>
+          <div className="rop-st-t"><b>{title}</b>{state !== "cur" && <small data-notranslate>{state === "wait" ? "Opens when you're done above" : summary}</small>}</div>
+          {state === "done" && !step && <button type="button" className="linkbtn" onClick={() => setAt(n)}>Change</button>}
+        </div>
+        {state === "cur" && <div className="rop-st-b">
+          {body}
+          {!last && <div className="rop-go">{!ready && why ? <span className="rop-why">{why}</span> : null}<span className="spacer" /><button type="button" className="btn primary" disabled={!ready} onClick={() => setAt(n + 1)}>Next →</button></div>}
+        </div>}
+      </section>
+    );
+  };
+
   return (
     <div className="dla-bg dock" role="dialog" aria-label="Create reorder">
       <div className="dla osp rop" onClick={(e) => e.stopPropagation()} onPaste={(e) => {
@@ -312,21 +343,11 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
       }}>
         <h3>Create reorder</h3>
         {!d ? <p className="faint">{err || "Reading the old job…"}</p> : <>
-          <div className="osp-card open">
-            <div className="osp-card-t"><b>{label}</b><span className="faint">{d.own ? "Our order" : "Printavo"}{d.job.date ? ` · ${new Date(`${d.job.date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}</span></div>
-            <div className="osp-cb-f">
-              <div className="field"><label>Order type</label><input value="Reorder" readOnly aria-readonly /></div>
-              <div className="field"><label htmlFor="rop-price">Price</label>
-                <select id="rop-price" value={price} onChange={(e) => setPrice(e.target.value as "last" | "today")}>
-                  <option value="last">Last time&apos;s{lastTotal ? ` (${money(lastTotal)})` : ""}</option>
-                  <option value="today">Today&apos;s price list</option>
-                </select>
-              </div>
-            </div>
-          </div>
+          {/* the job being reordered */}
+          <div className="rop-job"><b>{label}</b><span className="faint">{d.own ? "Our order" : "Printavo"}{d.job.date ? ` · ${new Date(`${d.job.date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}</span></div>
 
+          {stepBox(1, "Goods", goodsSummary, <>
           <section className="rop-sec" aria-label="Goods">
-            <div className="rop-h"><b>Goods</b><span className="faint">{d.job.qty ? `${d.job.qty.toLocaleString("en-US")} pcs last time` : ""}</span></div>
             <div className="rop-modes" role="group" aria-label="Sizes">
               {/* three equal parts on one line, short words (Nov 1, Nick: the toolbar "showing two lines and collapsing weird") */}
               {([["same", "Same sizes", "The same sizes as last time"], ["file", "From a file", "New sizes from a confirmation, PO or size sheet"], ["clear", "I'll type", "Clear the sizes and type them"]] as const).map(([k, t, tip]) => <button key={k} type="button" title={tip} className={sizeMode === k ? "on" : ""} aria-pressed={sizeMode === k} onClick={() => { setSizeMode(k); if (k !== "file") setReadOk(false); setPrice(k === "same" ? "last" : "today"); }}>{t}</button>)}
@@ -380,7 +401,7 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
                       "I already said update the lines. I'm confused"); Undo goes back a step */}
                   {readOk ? <><span className="rop-done">✓ Updated: these sizes go on the reorder.</span><span className="spacer" /><button type="button" className="linkbtn" onClick={() => setReadOk(false)}>Undo</button></>
                     : <><button type="button" className="linkbtn" onClick={() => sizeFile.current?.click()}>+ Add another file</button><span className="spacer" /><button type="button" className="btn sm" onClick={() => { setRead(null); setReadOk(false); setQueued([]); setSizeMode("same"); }}>Keep last time&apos;s</button>
-                      <button type="button" className="btn sm primary" onClick={() => setReadOk(true)}>Update to these</button></>}
+                      <button type="button" className="btn sm primary" onClick={() => { setReadOk(true); setAt(2); }}>Update to these</button></>}
                 </div>
               </div>
             )}
@@ -392,6 +413,16 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
             ))}
           </section>
 
+          </>, goodsReady, goodsWhy)}
+
+          {stepBox(2, "Price", price === "today" ? "Today's price list" : `Last time's${lastTotal ? ` (${money(lastTotal)})` : ""}`, <>
+            <div className="rop-modes rop-modes2" role="group" aria-label="Price">
+              <button type="button" className={price === "last" ? "on" : ""} aria-pressed={price === "last"} onClick={() => setPrice("last")}>Last time&apos;s{lastTotal ? ` (${money(lastTotal)})` : ""}</button>
+              <button type="button" className={price === "today" ? "on" : ""} aria-pressed={price === "today"} onClick={() => setPrice("today")}>Today&apos;s price list</button>
+            </div>
+          </>, true, "")}
+
+          {stepBox(3, d.own ? "Files and notes" : "Files and notes from last time", filesSummary, <>
           {d.own && <section className="rop-sec"><div className="rop-h"><b>Art and mockups</b><span className="faint">come with it, as they are on #{d.job.visual}</span></div></section>}
           <section className="rop-sec" aria-label="Files on the old job">
             {/* our own order's Production files are asked about too, each starting as what it is there (Nov 2, Nick, #40359) */}
@@ -423,11 +454,17 @@ export default function ReorderPick({ archivedId = "", orderId = "", onClose, on
               ))}
             </section>
           )}
+          </>, true, "")}
+
+          {stepBox(4, "Check and make the reorder", step || "Sizes each style comes in and the shirt colors are checked, then the reorder is made", <>
+            {fitAsk && <SizeFitAsk inline rows={fitAsk.rows} onDone={(r) => fitAsk.done(r)} onCancel={() => fitAsk.done(null)} />}
+            {ask && <ColorCheck inline rows={ask.rows} onDone={(r) => ask.done(r)} onCancel={() => ask.done(null)} />}
+            {!fitAsk && !ask && <div className="rop-go">{step ? <span className="rop-step">{step}</span> : <span className="faint">Lines you left off aren&apos;t checked or asked about.</span>}<span className="spacer" />
+              <button type="button" className="btn primary" disabled={!!step} onClick={() => void make()}>Make the reorder</button></div>}
+          </>, false, "", true)}
           {err && <div className="err">{err === "move" ? <>This customer isn&apos;t in the new system yet. <a href={`/shop/customers/${d.customer?.id}`}>Move them first</a>, then Reorder.</> : err}</div>}
         </>}
-        {fitAsk && <SizeFitAsk inline rows={fitAsk.rows} onDone={(r) => fitAsk.done(r)} onCancel={() => fitAsk.done(null)} />}
-        {ask && <ColorCheck inline rows={ask.rows} onDone={(r) => ask.done(r)} onCancel={() => ask.done(null)} />}
-        <div className="dla-acts">{step && <span className="faint rop-step">{step}</span>}<span className="spacer" />{/* a question open above has its own buttons: one set at a time */}{!fitAsk && !ask && <><button type="button" className="btn ghost" onClick={onClose} disabled={!!step}>Cancel</button><button type="button" className="btn primary" disabled={!d || !!step || (sizeMode === "file" && !readOk)} title={sizeMode === "file" && !readOk ? "Drop the file with the new sizes and press Update to these first" : undefined} onClick={() => void make()}>Make the reorder</button></>}</div>
+        <div className="dla-acts"><span className="spacer" /><button type="button" className="btn ghost" onClick={onClose} disabled={!!step}>Cancel</button></div>
       </div>
       {look != null && looks[look] && <QuickLook files={looks} at={look} strip title={label} onClose={() => setLook(null)} />}
     </div>
