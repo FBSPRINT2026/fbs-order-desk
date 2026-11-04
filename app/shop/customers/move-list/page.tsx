@@ -25,7 +25,7 @@ export default function IntroEmails() {
   const [rows, setRows] = useState<MoveRow[] | null>(null);
   const [q, setQ] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState(""), [note, setNote] = useState("");
   /** the personal note as it really looks: from your mailbox to Nick and Amanda (Nov 3, Nick) */
-  const test = async () => { setBusy("test"); setErr(""); setNote(""); const r = await sendPersonalNoteTest(); setBusy(""); if (r.ok) setNote(`Test sent from ${r.from} to ${r.to}.`); else setErr(r.error); };
+  const test = async () => { setBusy("test"); setErr(""); setNote(""); const r = await sendPersonalNoteTest(); setBusy(""); if (r.ok) setNote(`Both versions (standard and ClickUp customers) sent from ${r.from} to ${r.to}.`); else setErr(r.error); };
   const load = async () => { const r = await moveList(); if (r.ok) { setRows(r.rows.filter((x) => x.movedAt)); setErr(""); } else setErr(r.error); };
   useEffect(() => { void load(); }, []);
 
@@ -58,7 +58,7 @@ export default function IntroEmails() {
       <BackLink href="/shop/customers" label="Customers" />
       <div className="page-head">
         <div><h1>Portal intro emails</h1><div className="eyebrow">Who gets the launch email, who gets a personal note from Nick or Amanda, and who gets nothing. Nothing sends from here.</div></div>
-        <div className="row"><button type="button" className="btn" disabled={busy === "test"} onClick={() => void test()} title="The personal email, from your own mailbox to Nick and Amanda, to see how it looks">{busy === "test" ? "Sending…" : "Test the personal email"}</button><Link className="btn" href="/shop/customers/contacts">Update contacts</Link><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
+        <div className="row"><button type="button" className="btn" disabled={busy === "test"} onClick={() => void test()} title="The personal email in both versions (standard and ClickUp customers), from your own mailbox to Nick and Amanda">{busy === "test" ? "Sending…" : "Test the personal email"}</button><Link className="btn" href="/shop/customers/contacts">Update contacts</Link><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
       </div>
       {rows && <div className="stats">
         {(["all", "launch", "personal", "none"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
@@ -92,7 +92,8 @@ export default function IntroEmails() {
                     : <input type="checkbox" aria-label={`Launch email to ${r.name}`} checked={launchOn(r)} disabled={!r.email || busy === r.id} onChange={(e) => void launch([r], e.target.checked)} />}</td>
                   <td className="mvl-c">{r.personal.sentAt ? <span className="mvl-in">Sent {day(r.personal.sentAt)}</span>
                     : <input type="checkbox" aria-label={`Personal email to ${r.name}`} checked={pOn} disabled={!r.email || busy === r.id} onChange={(e) => void personal([r], e.target.checked)} />}
-                    {pOn && <div className="sub" data-notranslate>to {r.personal.to.join(", ")}</div>}</td>
+                    {pOn && <div className="sub" data-notranslate>to {r.personal.to.join(", ")}</div>}
+                    {pOn && r.clickup && <div className="sub mvl-cu" title="They work with us through ClickUp: their note says ClickUp and Printavo stay open to mid-month and offers their team a training">ClickUp version</div>}</td>
                   <td>{pOn ? <div className="mvl-from" role="group" aria-label="Who it's from">
                     <button type="button" className={!fromAmanda ? "on" : ""} disabled={busy === r.id} onClick={() => fromAmanda && void personal([r], true, "nicholas@fbsprint.com")}>Nick</button>
                     <button type="button" className={fromAmanda ? "on" : ""} disabled={busy === r.id} onClick={() => !fromAmanda && void personal([r], true, "amanda@fbsprint.com")}>Amanda</button>

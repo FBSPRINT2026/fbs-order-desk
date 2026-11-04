@@ -14956,6 +14956,7 @@ input.ucx-sug,textarea.ucx-sug{border-color:var(--accent);background:var(--accen
 .mvl-terms .chip{white-space:nowrap}
 .mvl-noemail{color:var(--warn)}
 .mvl-in{color:var(--ok);font-weight:700}
+.mvl-cu{color:var(--accent);font-weight:700}
 .mvl-tbl .linkbtn{font-size:13px}
 .mvl-pers{font-size:13px;min-width:160px}
 .mvl-c{text-align:center}

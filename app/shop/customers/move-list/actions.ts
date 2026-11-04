@@ -19,39 +19,56 @@ const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? 
 const okEmail = (e: string) => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e);
 
 export type MoveRow = { id: string; name: string; contact: string; email: string; sales: number; orders: number; rank: number; terms: PayTerms; priceType: string; owner: string; movedAt: string | null; launchSent: string | null; /** moved without the launch email */ quiet: boolean;
-  /** the personal note from Nick or Amanda: to whom, from which mailbox, not sent, sent */ personal: { to: string[]; from: string; skip: boolean; sentAt: string | null } };
+  /** the personal note from Nick or Amanda: to whom, from which mailbox, not sent, sent */ personal: { to: string[]; from: string; skip: boolean; sentAt: string | null };
+  /** works with us through ClickUp (has ClickUp tasks, or marked): gets the ClickUp version of the personal note */ clickup: boolean };
 
 export async function moveList() {
   try {
     const v = await me();
     const admin = createAdminClient();
     const to = new Date(Date.now() + 864e5).toISOString().slice(0, 10), from = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
-    const [{ data: top, error }, { data: cs, error: ce }, { data: pr }, { data: sent }] = await Promise.all([
+    const [{ data: top, error }, { data: cs, error: ce }, { data: pr }, { data: sent }, { data: cu }] = await Promise.all([
       v.supabase.rpc("shop_top_customers", { p_from: from, p_to: to, p_limit: 5000 }),
-      allRows((a, b) => admin.from("customers").select("id, company, name, email, payment_terms, price_type, moved_at, is_test, launch_quiet, personal_note_to, personal_note_from, personal_note_skip, personal_note_sent_at").order("id").range(a, b)),
+      allRows((a, b) => admin.from("customers").select("id, company, name, email, payment_terms, price_type, moved_at, is_test, launch_quiet, personal_note_to, personal_note_from, personal_note_skip, personal_note_sent_at, clickup_client").order("id").range(a, b)),
       allRows((a, b) => admin.from("customer_private").select("customer_id, account_owner").order("customer_id").range(a, b)),
       allRows((a, b) => admin.from("launch_email_sends").select("customer_id, sent_at").eq("ok", true).order("sent_at", { ascending: false }).order("id").range(a, b)),
+      clickupCustomers(admin),
     ]);
+    const onCu = new Set(((cu || []) as string[]));
     if (error) throw new Error(error.message);
     if (ce) throw new Error(ce.message);
     const sales = new Map(((top || []) as { customer_id: string; sales: number; orders: number }[]).filter((r) => r.customer_id).map((r, i) => [r.customer_id, { sales: +r.sales || 0, orders: +r.orders || 0, rank: i + 1 }]));
     const own = new Map(((pr || []) as { customer_id: string; account_owner: string | null }[]).map((p) => [p.customer_id, p.account_owner || ""]));
     const last = new Map<string, string>();
     for (const r of (sent || []) as { customer_id: string | null; sent_at: string }[]) if (r.customer_id && !last.has(r.customer_id)) last.set(r.customer_id, r.sent_at);
-    const rows = ((cs || []) as { id: string; company: string | null; name: string | null; email: string | null; payment_terms: PayTerms | null; price_type: string | null; moved_at: string | null; is_test: boolean | null; launch_quiet: boolean | null; personal_note_to: string[] | null; personal_note_from: string | null; personal_note_skip: boolean | null; personal_note_sent_at: string | null }[])
+    const rows = ((cs || []) as { id: string; company: string | null; name: string | null; email: string | null; payment_terms: PayTerms | null; price_type: string | null; moved_at: string | null; is_test: boolean | null; launch_quiet: boolean | null; personal_note_to: string[] | null; personal_note_from: string | null; personal_note_skip: boolean | null; personal_note_sent_at: string | null; clickup_client: boolean | null }[])
       .filter((c) => !c.is_test)
       .map((c): MoveRow => {
         const s = sales.get(c.id), email = String(c.email || "").trim().toLowerCase();
         return { id: c.id, name: String(c.company || "").trim() || String(c.name || "").trim() || "(no name)", contact: String(c.name || "").trim(), email: okEmail(email) ? email : "",
           sales: s?.sales || 0, orders: s?.orders || 0, rank: s?.rank || 0, terms: (c.payment_terms || "receipt") as PayTerms, priceType: c.price_type || "retail",
           owner: own.get(c.id) || "", movedAt: c.moved_at, launchSent: last.get(c.id) || null, quiet: !!c.launch_quiet,
-          personal: { to: c.personal_note_to || [], from: c.personal_note_from || "", skip: !!c.personal_note_skip, sentAt: c.personal_note_sent_at } };
+          personal: { to: c.personal_note_to || [], from: c.personal_note_from || "", skip: !!c.personal_note_skip, sentAt: c.personal_note_sent_at },
+          clickup: !!c.clickup_client || onCu.has(c.id) };
       })
       .sort((a, b) => (a.rank && b.rank ? a.rank - b.rank : a.rank ? -1 : b.rank ? 1 : a.name.localeCompare(b.name)));
     // their order: 1, 2, 3… for the ones with sales in the last 12 months
     let n = 0; for (const r of rows) r.rank = r.sales > 0 ? ++n : 0;
     return { ok: true as const, rows };
   } catch (e) { return fail(e); }
+}
+
+/** the customers who send us work through ClickUp: any order of theirs came from a ClickUp task (so a new ClickUp
+ *  customer is picked up by itself), plus anyone marked clickup_client */
+async function clickupCustomers(admin: ReturnType<typeof createAdminClient>) {
+  const { data: t } = await allRows((a, b) => admin.from("clickup_tasks").select("id, order_id").not("order_id", "is", null).order("id").range(a, b));
+  const oids = [...new Set(((t || []) as { order_id: string }[]).map((x) => x.order_id))];
+  const ids = new Set<string>();
+  for (let i = 0; i < oids.length; i += 200) {
+    const { data: os } = await admin.from("orders").select("customer_id").in("id", oids.slice(i, i + 200));
+    for (const o of (os || []) as { customer_id: string | null }[]) if (o.customer_id) ids.add(o.customer_id);
+  }
+  return { data: [...ids] };
 }
 
 /** set the payment terms of one or more customers */
@@ -137,15 +154,18 @@ export async function sendPersonalNoteTest() {
     const { noteText, noteHtml, noteTextPlain } = await import("@/lib/personalNote");
     const { inlineImages } = await import("@/lib/mail/compose");
     const { siteUrl } = await import("@/lib/email");
-    const t = await noteText(admin);
     const b = box as typeof box & { signature_html?: string | null; signature_on?: boolean | null };
     const sig = b.signature_on !== false ? b.signature_html || "" : "";
-    const { html, attachments } = inlineImages(noteHtml(t, "Michael", siteUrl(), sig));
     const { sendFromMailbox } = await import("@/lib/mail/send");
     const { ewsReady, ewsSaveSent } = await import("@/lib/mail/ewsBox");
     const ews = await ewsReady(admin, box).catch(() => false);
     const to = "nicholas@fbsprint.com, amanda@fbsprint.com";
-    await sendFromMailbox(cfgOf(box), { to, subject: `[Test] ${t.subject}`, text: noteTextPlain(t, "Michael"), html, attachments }, ews ? (raw) => ewsSaveSent(box, raw) : undefined);
+    // both versions: the standard note and the one for ClickUp customers
+    for (const [kind, tag] of [["standard", "[Test]"], ["clickup", "[Test – ClickUp customers]"]] as const) {
+      const t = await noteText(admin, kind);
+      const { html, attachments } = inlineImages(noteHtml(t, "Michael", siteUrl(), sig));
+      await sendFromMailbox(cfgOf(box), { to, subject: `${tag} ${t.subject}`, text: noteTextPlain(t, "Michael"), html, attachments }, ews ? (raw) => ewsSaveSent(box, raw) : undefined);
+    }
     return { ok: true as const, to, from: box.email };
   } catch (e) { return fail(e); }
 }
