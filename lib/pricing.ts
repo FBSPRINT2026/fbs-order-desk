@@ -619,6 +619,10 @@ export type Settings = PriceList & {
   markup: number; taxRate: number; depositPct: number;
   /** 2XL+ (2XL–5XL) supplier upcharge markup: the supplier's extra cost for a big size × this (1.2 = +20%) (Oct 16, Nick) */
   sizeUpMarkup?: number;
+  /** Retail shirts against the Gildan 5000 (Nov 3, Nick: "the normal shirts pricing… then taking the difference in cost
+   *  between the 64000 and the 5000 times 1.2"): the price tables are ooShirts' for a 5000 (its shirt at `shirt` in them),
+   *  so any garment is the 5000's price plus (its cost − the 5000's cost today, `cost`) × `diffMarkup`. */
+  retailBase?: { cost: number; shirt: number; diffMarkup: number };
   /** online payments: card fee % (credit card only), and where to send Zelle / Venmo */
   pay: { cardFeePct: number; zelle: string; venmo: string };
   wholesale: PriceList;
@@ -673,6 +677,7 @@ export const DEFAULT_SETTINGS: Settings = {
   brand: { sideLogoUrl: "/brand/fbs-logo-white.svg", sideLogoWidth: 64, sideTagline: "Shop management" },
   markup: 50,
   sizeUpMarkup: 1.2,
+  retailBase: { cost: 2.49, shirt: 2.0, diffMarkup: 1.2 },
   taxRate: 8.25,
   depositPct: 50,
   pay: { cardFeePct: 3.25, zelle: "", venmo: "" },
@@ -805,7 +810,22 @@ export function supplierSizeUp(gm: { size_costs?: Record<string, number> | null;
 }
 export function priceList(s: Settings, type: PriceType = "retail") {
   const pl: PriceList = type === "wholesale" ? s.wholesale : s;
-  return { ...pl, markup: s.markup, useGarment: type !== "wholesale" };
+  return { ...pl, markup: s.markup, useGarment: type !== "wholesale", retailBase: type === "wholesale" ? undefined : { ...DEFAULT_SETTINGS.retailBase!, ...(s.retailBase || {}) } };
+}
+/**
+ * A retail garment's price per piece (before prints): on the ooShirts tables (a Blank + per quantity), the Gildan 5000's
+ * shirt plus the difference in cost × the markup (Nov 3, Nick: Fossil's 64000 came to $4.67 a shirt: its cost had never
+ * come over, so the shirt was $0; and the 64000 should be the 5000's $6.67 plus ($3.05 − $2.49) × 1.2 = $7.34). A garment
+ * with no cost on file is priced as the 5000, never as a free shirt. Other price lists: cost × (1 + markup).
+ */
+export function garmentPrice(cost: number | string | null | undefined, pl: { markup: number; useGarment: boolean; blankAdd?: number[]; retailBase?: { cost: number; shirt: number; diffMarkup: number } }, ti: number, adj = 0) {
+  if (!pl.useGarment) return 0;
+  const c = num(cost);
+  if (pl.blankAdd?.length && pl.retailBase) {
+    const b = pl.retailBase;
+    return b.shirt + (c > 0 ? (c - b.cost) * b.diffMarkup : 0) + num(pl.blankAdd[ti]) + num(adj);
+  }
+  return c * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti]) + num(adj);
 }
 
 /** every finishing and embroidery extra a group of this price list can have ticked (fold, tags… and specialty thread,
@@ -1103,7 +1123,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const lines: LineCalc[] = (g.lines || []).map((l, li) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
-    const garmentRaw = pl.useGarment ? num(l.cost) * (1 + num(pl.markup) / 100) + num(pl.blankAdd?.[ti]) + num(adj) : 0;
+    const garmentRaw = garmentPrice(l.cost, pl, ti, adj);
     const garmentEach = r2(garmentRaw);
     const { light, print: basePrint } = printLine(l.color, anySplit ? (kidAt[li] ? "y" : "a") : undefined);
     const linePrint = r2(basePrint + locExtra + inkExtra + puffExtra + embSpecial(l));

@@ -80,8 +80,8 @@ export function customerEmailHtml(e: {
   const contact = [fmtPhone(sh.phone || ""), sh.email].filter(Boolean).map((x) => esc(String(x))).join(" · ");
   const job = e.job ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;background:#F6F7F9;border-radius:8px;margin:4px 0 12px"><tr>${e.job.pic ? `<td style="width:60px;padding:10px 0 10px 10px;vertical-align:middle">${emailThumb(e.job.pic, 52)}</td>` : ""}<td style="padding:10px 12px;vertical-align:middle"><div style="font-size:14px;font-weight:700;color:#141D2B">${esc(e.job.title)}</div><div style="font-size:12px;color:#6B7686">${esc(e.job.sub)}</div></td></tr></table>` : "";
   const rows = (e.rows || []).length ? `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:2px 0 8px">${(e.rows || []).map(([k, v], i, a) => `<tr><td style="padding:7px 0;font-size:13px;color:#6B7686;${i < a.length - 1 ? "border-bottom:1px solid #EEF1F5;" : ""}">${esc(k)}</td><td style="padding:7px 0;font-size:13px;color:#141D2B;font-weight:700;text-align:right;${i < a.length - 1 ? "border-bottom:1px solid #EEF1F5;" : ""}">${v}</td></tr>`).join("")}</table>` : "";
-  return `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
-<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
+  return `<div style="padding:16px 12px;font-family:Helvetica,Arial,sans-serif">
+<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate;box-shadow:0 2px 12px rgba(20,29,43,0.14)">
 ${emailBrandBar(site, sh.name, logo)}
 <tr><td style="padding:22px 24px 6px;color:#141D2B">
 <div><span style="display:inline-block;background:${cb};color:${cf};font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border-radius:99px">${esc(e.chip.text)}</span></div>

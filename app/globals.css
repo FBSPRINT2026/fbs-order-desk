@@ -16269,7 +16269,7 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .spt-reply select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;max-width:100%}
 .spt-note{display:flex;flex-direction:column;gap:4px}
 .spt-note textarea{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;font-size:14px}
-.spt-mail{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#F3F5F8}
+.spt-mail{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
 .spt-mail iframe{display:block;width:100%;height:min(560px,55vh);border:0}
 .spt-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .spt-copy{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}

@@ -154,7 +154,10 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
 }
 
 /** the steps an email lists, from what was ticked */
-async function emailFor(admin: SupabaseClient, o: Order, customer: { name: string; company?: string | null; payment_terms?: PayTerms | null } | null, settings: Settings, pick: Pick3, url: string) {
+async function emailFor(admin: SupabaseClient, o: Order, customer: { name: string; company?: string | null; payment_terms?: PayTerms | null } | null, settings: Settings, pick: Pick3, url: string,
+  /** under someone's own reply (Nov 3, Nick: "I'm going to type… hi Michael, please see below… it's a little redundant for it to
+   *  say the same thing in the thing below… just say your proof is ready… make that box a little smaller"): no greeting or
+   *  lines of its own, smaller */ compact = false) {
   const sh = settings.shop;
   const groups = orderGroups(o);
   const blocks: { k: string; title: string; /** each its own line (Oct 29, Nick: "no cutoffs… everything should be its own kind of line") */ sub: string[]; pic?: string }[] = [];
@@ -197,8 +200,15 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   const ending = "Let us know if this is approved.";
   const intro = `<div>${esc(lead)}</div><div style="margin-top:12px;padding:10px 12px;background:#F6F7F9;border-radius:8px"><div style="font-weight:700;color:#141D2B">${esc(job)}</div><div style="font-size:13px;color:#6B7686">Order #${o.number}</div></div><div style="margin-top:12px">${esc(ending)}</div>`;
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
-  const html = `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
-<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
+  const html = compact ? `<div style="padding:8px 0;font-family:Helvetica,Arial,sans-serif">
+<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:420px;width:100%;margin:0;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate;box-shadow:0 2px 12px rgba(20,29,43,0.14)">
+${emailBrandBar(siteUrl(), sh.name, sh.logoUrl ? logo : "")}
+<tr><td style="padding:16px 18px 2px;color:#141D2B"><div style="font-size:17px;font-weight:700;margin:0 0 8px">${esc(head)}</div>
+<div style="padding:8px 10px;background:#F6F7F9;border-radius:8px"><div style="font-size:14px;font-weight:700;color:#141D2B">${esc(job)}</div><div style="font-size:12px;color:#6B7686">Order #${o.number}</div></div></td></tr>
+<tr><td style="padding:6px 18px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">${rows}</table></td></tr>
+<tr><td style="padding:8px 18px 16px;text-align:center">${emailButton(url, "Review and approve")}</td></tr>
+</table></div>` : `<div style="padding:16px 12px;font-family:Helvetica,Arial,sans-serif">
+<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate;box-shadow:0 2px 12px rgba(20,29,43,0.14)">
 ${emailBrandBar(siteUrl(), sh.name, sh.logoUrl ? logo : "")}
 <tr><td style="padding:22px 24px 4px;color:#141D2B"><div style="font-size:20px;font-weight:700;margin:0 0 10px">${esc(head)}</div>
 <div style="font-size:15px;line-height:1.5;color:#3C475A"><div style="margin-bottom:6px">Hi ${esc(first)}${customer?.company && customer.company.trim().toLowerCase() !== (customer?.name || "").trim().toLowerCase() ? ` with ${esc(customer.company.trim())}` : ""},</div>${intro}</div>
@@ -219,7 +229,7 @@ export async function previewSend(admin: SupabaseClient, orderId: string, pick: 
   const { list, people } = await recipientsFor(admin, o, customer, pick);
   const hi = firstOf(customer, list, people);
   if (pick.fromMe && box) {
-    const card = await emailFor(admin, withoutShopPieces(o), greeted(customer, hi), settings, { ...pick, note: "" }, `${siteUrl()}/proof/preview`);
+    const card = await emailFor(admin, withoutShopPieces(o), greeted(customer, hi), settings, { ...pick, note: "" }, `${siteUrl()}/proof/preview`, true);
     const mine = await mineEmail(admin, box, card, pick, hi);
     // the preview shows the pictures as they are (the attached copies are for the real email)
     return { ok: true as const, to: list.join(", "), subject: mine.subject, html: previewOf(mine.html, mine.attachments), from: `${box.name || box.email} <${box.email}>` };
@@ -299,7 +309,7 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   if (pick.fromMe && box) {
     // one email from their own mailbox to everyone picked, in the thread it answers, kept in their Sent Items
     const hi = firstOf(customer, list, people);
-    const card = await emailFor(admin, withoutShopPieces(fresh as Order), greeted(customer, hi), settings, { ...pick, note: "" }, url);
+    const card = await emailFor(admin, withoutShopPieces(fresh as Order), greeted(customer, hi), settings, { ...pick, note: "" }, url, true);
     const mine = await mineEmail(admin, box, card, pick, hi);
     const { cfgOf } = await import("@/lib/mail/config"); const { sendFromMailbox } = await import("@/lib/mail/send");
     const { ewsReady, ewsSaveSent } = await import("@/lib/mail/ewsBox");

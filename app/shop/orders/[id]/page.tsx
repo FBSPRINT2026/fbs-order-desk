@@ -489,10 +489,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     return () => window.removeEventListener("beforeunload", h);
   }, [save]);
 
-  // customer order requests come in without costs: suggest them from the garment catalog once
+  // a garment without its cost (a portal request, a Printavo reorder, a line the AI added): filled from the garment catalog
+  // once, on any retail order still being quoted (Nov 3, Nick: Fossil's reorder had no cost on its 64000, so the shirt was
+  // priced at nothing). Orders already sent or approved keep their price.
   const costsFilled = useRef(false);
   useEffect(() => {
-    if (!o || o.status !== "request" || costsFilled.current || !catalog.length) return;
+    if (!o || !["request", "quote"].includes(o.status) || o.price_type === "wholesale" || costsFilled.current || !catalog.length) return;
     costsFilled.current = true;
     const find = (l: GLine) => garmentFor(catalog, l.style, l.brand);
     const missing = (o.groups || []).some((g) => g.lines.some((l) => (l.cost === "" || l.cost === null || l.cost === undefined) && find(l)));

@@ -169,8 +169,8 @@ export function proofEmail(x: { settings: Settings; first: string; kind: LinkKin
   const rows = x.rows.map(([k, v]) => `<tr><td style="padding:2px 12px 2px 0;color:#6B7686;font-size:13px;white-space:nowrap">${esc(k)}</td><td style="padding:2px 0;font-size:13px;font-weight:600;color:#141D2B">${esc(v)}</td></tr>`).join("");
   const pic = x.picture ? `<td style="width:84px;padding-right:14px;vertical-align:top">${emailThumb(x.picture, 84, x.url)}</td>` : "";
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
-  const html = `<div style="background:#F3F5F8;padding:24px 12px;font-family:Helvetica,Arial,sans-serif">
-<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate">
+  const html = `<div style="padding:16px 12px;font-family:Helvetica,Arial,sans-serif">
+<table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate;box-shadow:0 2px 12px rgba(20,29,43,0.14)">
 ${emailBrandBar(siteUrl(), sh.name, sh.logoUrl ? logo : "")}
 <tr><td style="padding:22px 24px 6px;color:#141D2B">
 <div style="font-size:20px;font-weight:700;margin:0 0 10px">${esc(head)}</div>
