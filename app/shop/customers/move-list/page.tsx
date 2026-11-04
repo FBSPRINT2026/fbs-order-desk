@@ -14,15 +14,19 @@ import { moveList, sendCustomerPreview, sendPersonalNoteTest, setPersonal, setQu
  */
 /** when they were last in: "Today 11:42 AM", "Nov 3" */
 const when = (iso: string) => { const d = new Date(iso), t = new Date(); const same = d.toDateString() === t.toDateString(); return same ? `Today ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
-type Show = "all" | "launch" | "personal" | "none" | "visited";
-const LABEL: Record<Show, string> = { all: "Everyone in the portal", launch: "Launch email", personal: "Personal email", none: "No email", visited: "Been in the portal" };
+type Show = "waiting" | "sent" | "all" | "launch" | "personal" | "none" | "visited";
+const SHOWS: Show[] = ["waiting", "sent", "all", "launch", "personal", "none", "visited"];
+const LABEL: Record<Show, string> = { waiting: "Not sent yet", sent: "Already sent", all: "Everyone in the portal", launch: "Launch email", personal: "Personal email", none: "No email", visited: "Been in the portal" };
 const day = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "");
 const first = (n: string) => n.split(/\s+/)[0];
 const launchOn = (r: MoveRow) => !r.quiet && !!r.email;
 const personalOn = (r: MoveRow) => !r.personal.skip && r.personal.to.length > 0;
+/** an intro email (launch or personal) already went to them (Nov 4, Nick: "all that's left on there are customers that haven't been sent the intro email") */
+const wasSent = (r: MoveRow) => !!r.launchSent || !!r.personal.sentAt;
+const shows = (r: MoveRow, s: Show) => s === "all" || (s === "waiting" ? !wasSent(r) : s === "sent" ? wasSent(r) : s === "visited" ? r.visits.n > 0 : s === "launch" ? launchOn(r) : s === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r));
 
 export default function IntroEmails() {
-  const [show, setShow] = useSticky<Show>("customers.introEmails.show", "all");
+  const [show, setShow] = useSticky<Show>("customers.introEmails.view", "waiting");
   const [who, setWho] = useSticky<string>("customers.introEmails.owner", "");
   const [rows, setRows] = useState<MoveRow[] | null>(null);
   const [q, setQ] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState(""), [note, setNote] = useState("");
@@ -37,10 +41,10 @@ export default function IntroEmails() {
   const owners = [...new Set(all.map((r) => first(r.owner)).filter(Boolean))].sort();
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
-    return all.filter((r) => (show === "all" || (show === "visited" ? r.visits.n > 0 : show === "launch" ? launchOn(r) : show === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r)))
+    return all.filter((r) => shows(r, show)
       && (!who || first(r.owner) === who) && (!t || `${r.name} ${r.contact} ${r.email}`.toLowerCase().includes(t)));
   }, [all, show, who, q]);
-  const count = (s: Show) => all.filter((r) => s === "all" || (s === "visited" ? r.visits.n > 0 : s === "launch" ? launchOn(r) : s === "personal" ? personalOn(r) : !launchOn(r) && !personalOn(r))).length;
+  const count = (s: Show) => all.filter((r) => shows(r, s)).length;
 
   const launch = async (rs: MoveRow[], on: boolean) => {
     setBusy(rs.length > 1 ? "bulk" : rs[0].id);
@@ -65,10 +69,10 @@ export default function IntroEmails() {
         <div className="row"><button type="button" className="btn" disabled={busy === "test"} onClick={() => void test()} title="The personal email in both versions (standard and ClickUp customers), from your own mailbox to Nick and Amanda">{busy === "test" ? "Sending…" : "Test the personal email"}</button><Link className="btn" href="/shop/customers/contacts">Update contacts</Link><Link className="btn" href="/shop/settings/launch-email">Launch email</Link></div>
       </div>
       {rows && <div className="stats">
-        {(["all", "launch", "personal", "none", "visited"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
+        {(["waiting", "sent", "all", "visited"] as Show[]).map((s) => <button key={s} type="button" className="stat" onClick={() => setShow(s)}><span className="v">{count(s)}</span><span className="k">{LABEL[s]}</span></button>)}
       </div>}
       <div className="toolbar">
-        <div className="chips">{(["all", "launch", "personal", "none", "visited"] as Show[]).map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
+        <div className="chips">{SHOWS.map((s) => <button key={s} type="button" className={"chip" + (show === s ? " on" : "")} onClick={() => setShow(s)}>{LABEL[s]}</button>)}</div>
         <div className="chips">
           <button type="button" className={"chip" + (!who ? " on" : "")} onClick={() => setWho("")}>Everyone&apos;s</button>
           {owners.map((o) => <button key={o} type="button" className={"chip" + (who === o ? " on" : "")} onClick={() => setWho(o)}>{o}&apos;s</button>)}
@@ -77,7 +81,7 @@ export default function IntroEmails() {
       </div>
       {err && <div className="err">{err}</div>}
       {note && <div className="ok-note">{note}</div>}
-      {rows === null ? <p className="faint">Loading…</p> : !list.length ? <p className="faint">No customers here.</p> : (
+      {rows === null ? <p className="faint">Loading…</p> : !list.length ? <p className="faint">{show === "waiting" ? "Everyone in the portal has had an intro email." : "No customers here."}</p> : (
         <div className="tbl-wrap">
           <table className="tbl mvl-tbl">
             <thead><tr>
