@@ -4,6 +4,9 @@ import PrintButton from "@/app/portal/pricing/print";
 import PricingTabs from "@/app/portal/pricing/tabs";
 import { EmbCalc, ScreenCalc } from "@/components/PricingCalc";
 import CalcSheet from "@/components/CalcSheet";
+import DtfGridTable from "@/components/DtfGridTable";
+import { dtfGridOn } from "@/lib/dtfGrid";
+import { suppliedPress } from "@/lib/pricing";
 
 /**
  * The wholesale price list, a tab in the portal for wholesale accounts (Oct 24, Nick: "on the wholesale companies, we
@@ -22,7 +25,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
   const tiers = pl.tiers || [];
   const colors = Math.max(...(pl.screen || []).map((r) => r.length), 0);
   const embT = pl.embTiers?.length ? pl.embTiers : tiers;
-  const dtfOk = (pl.dtf || []).some((v) => +v > 0);
+  const dtfOk = dtfGridOn(pl) || (pl.dtf || []).some((v) => +v > 0);
   const fin = (pl.finishing || []).filter((f) => !f.more && !/^emb_/.test(f.id));
   const embX = [...(pl.embExtras || []), ...(pl.finishing || []).filter((f) => !f.more && /^emb_/.test(f.id) && !(pl.embExtras || []).some((e) => e.id === f.id))];
   const notes = String(pl.contractNotes || "").split(/(?<=\.)\s+(?=[A-Z0-9])/).map((x) => x.trim()).filter((x) => x && !/^FBS Contract Pricing List/i.test(x));
@@ -103,11 +106,15 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
         <section className="panel pl-sec">
             <div className="panel-h"><h2>DTF heat transfers</h2><span className="faint">Full color, per location, per piece</span></div>
             <div className="panel-b">
-              <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>
+              {dtfGridOn(pl) ? <>
+                <p className="pl-lead">We order the transfers and press them. The price is by the print&apos;s size and how many pieces carry it.</p>
+                <div className="pl-wrap"><DtfGridTable grid={pl.dtfGrid} press={suppliedPress(pl)} /></div>
+                <p className="faint" style={{ fontSize: 12.5 }}>Sending your own transfers? We press them for {m(suppliedPress(pl))} per location, per piece.</p>
+              </> : <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>
                 <colgroup><col /><col className="pl-c-p" /></colgroup>
                 <thead><tr><th>Pieces</th><th>Price</th></tr></thead>
                 <tbody>{ranges(tiers).map((r, i) => <tr key={r}><th scope="row"><Rng r={r} /></th><td>{pl.dtf?.[i] != null ? m(+pl.dtf[i]) : "—"}</td></tr>)}</tbody>
-              </table></div>
+              </table></div>}
             </div>
           </section>
           </> }] : []),

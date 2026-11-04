@@ -1,4 +1,5 @@
 "use client";
+import DtfGridTable from "@/components/DtfGridTable";
 import { PUFF_PRICE, SUPPLIED_PRESS, PATCH_APPLY, uid, type Finishing, type PriceList } from "@/lib/pricing";
 import { FBS_CONTRACT_2024 } from "@/lib/contractPricing";
 
@@ -103,14 +104,9 @@ export default function WholesalePricing({ pl, upd }: { pl: PriceList; upd: (fn:
       </section>
 
       <section className="ws-sec">
-        <h3>DTF</h3>
-        <div className="faint" style={{ fontSize: 12.5 }}>Not on the contract sheet: per piece, per location.</div>
-        <div className="matrix-wrap"><table className="matrix">
-          <thead><tr><th>Qty from</th><th>DTF</th></tr></thead>
-          <tbody>{pl.tiers.map((t, i) => (
-            <tr key={"d" + i}><td className="tier">{t}+</td><td><input type="number" step="0.05" aria-label={`${t}+ DTF`} value={pl.dtf[i] ?? 0} onChange={(e) => upd((d) => { d.dtf[i] = n(e.target.value); })} /></td></tr>
-          ))}</tbody>
-        </table></div>
+        <h3>DTF transfers we order</h3>
+        <div className="faint" style={{ fontSize: 12.5 }}>The transfer each, by print size and pieces (about a 40% margin on DTF Dallas&apos;s wholesale price). Pressing is added on top, the same as for their own transfers.</div>
+        <div className="matrix-wrap"><DtfGridTable grid={pl.dtfGrid} onChange={(g) => upd((d) => { d.dtfGrid = g; })} /></div>
       </section>
 
       {pl.contractNotes && <div className="muted ws-notes">{pl.contractNotes}</div>}

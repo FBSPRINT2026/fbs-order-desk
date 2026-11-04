@@ -1,4 +1,5 @@
 "use client";
+import DtfGridTable from "@/components/DtfGridTable";
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -161,7 +162,7 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
               return (
                 <div className="matrix-wrap">
                   <table className="matrix">
-                    <thead><tr><th>Min qty</th>{pl.blankAdd && <th>Blank +</th>}{Array.from({ length: cols }, (_, c) => <th key={c}>{c + 1}c</th>)}{dtg && <th>Full color</th>}{pl.specialtyInk && <th title="Polyester, nylon or dyed garments: per location">Specialty ink</th>}{!pl.embTiers && <th>Embroidery</th>}<th>DTF</th></tr></thead>
+                    <thead><tr><th>Min qty</th>{pl.blankAdd && <th>Blank +</th>}{Array.from({ length: cols }, (_, c) => <th key={c}>{c + 1}c</th>)}{dtg && <th>Full color</th>}{pl.specialtyInk && <th title="Polyester, nylon or dyed garments: per location">Specialty ink</th>}{!pl.embTiers && <th>Embroidery</th>}</tr></thead>
                     <tbody>
                       {pl.tiers.map((t, i) => (
                         <tr key={tab + shade + i}>
@@ -171,7 +172,6 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
                           {dtg && <td><input type="number" step="0.01" aria-label={`${t}+ full color`} value={dtg[i] ?? 0} onChange={(e) => setDtg(i, n(e.target.value))} /></td>}
                           {pl.specialtyInk && <td><input type="number" step="0.05" aria-label={`${t}+ specialty ink per location`} value={pl.specialtyInk[i] ?? 0} onChange={(e) => updPl((d) => { if (d.specialtyInk) d.specialtyInk[i] = n(e.target.value); })} /></td>}
                           {!pl.embTiers && <td><input type="number" step="0.05" aria-label={`${t}+ embroidery`} value={pl.embroidery[i] ?? 0} onChange={(e) => updPl((d) => { d.embroidery[i] = n(e.target.value); })} /></td>}
-                          <td><input type="number" step="0.05" aria-label={`${t}+ DTF`} value={pl.dtf[i] ?? 0} onChange={(e) => updPl((d) => { d.dtf[i] = n(e.target.value); })} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -179,6 +179,8 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
                 </div>
               );
             })()}
+            <div className="field"><label>DTF transfers we order (the transfer each; pressing is added on top)</label>
+              <div className="matrix-wrap"><DtfGridTable grid={pl.dtfGrid} onChange={(g) => updPl((d) => { d.dtfGrid = g; })} /></div></div>
             {pl.lightColors && <div className="field"><label htmlFor="s-light">Light garment colors (comma separated)</label><input id="s-light" type="text" value={pl.lightColors.join(", ")} onChange={(e) => updPl((d) => { d.lightColors = e.target.value.split(",").map((x) => x.trim()).filter(Boolean); })} /></div>}
             </>)}
             <div className="preview">Check: <b>100 black tees</b>{tab === "retail" ? <> on a <b>$2.00</b> blank</> : <> supplied by the customer</>}, 1-color front + 1-color back → <b>{money(chk.lines[0]?.calcEach)} each</b>, {money(chk.sub + chk.setup)} total{chk.setup ? ` (incl. ${money(chk.setup)} setup)` : ""}.</div>

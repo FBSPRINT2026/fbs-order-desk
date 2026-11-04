@@ -1,3 +1,4 @@
+import { dtfEach, dtfGridOn } from "@/lib/dtfGrid";
 import { colorHex } from "./inkColors";
 
 // Shared pricing engine and order vocabulary.
@@ -561,6 +562,7 @@ export type PriceList = {
   puffPrice?: number;
   /** pressing customer supplied transfers, each piece per location; $2 when not set */
   dtfSupplied?: number;
+  /** DTF transfers we order, priced by the print's size and pieces (lib/dtfGrid.ts); off: the flat `dtf` row */ dtfGrid?: import("@/lib/dtfGrid").DtfGrid;
   /** the Patch Application fee, per piece (a patch heat pressed on); $2.50 when not set */
   patchApply?: number;
   /** names & numbers: each name, and each digit of a number (Imprint.roster); $2 and $3 when not set */
@@ -977,7 +979,7 @@ export function screensFor(d: Imprint, s: Pick<PriceList, "darkAddsColor">, ligh
   return { n: d.screens != null && d.screens > 0 ? d.screens : auto, under, auto, hit2 };
 }
 
-function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean; screenFee?: number } = {}) {
+function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean; screenFee?: number; /** pieces this print is priced at */ q?: number } = {}) {
   const inkFee = num(d.inkChanges) * num(s.inkChangeFee) + (d.method === "screen" ? pmsCount(d) : num(d.pms)) * num(s.pmsFee);
   if (d.method === "screen") {
     const k0 = Math.max(1, num(d.colors) || 1);
@@ -1004,7 +1006,7 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
   }
   // their own transfers: we press them, per location (Oct 31, Nick: "$2 for everybody… $1.50 for him")
   if (d.method === "dtf" && d.patch) return { each: patchEach(d, s), setup: 0, inkFee: 0 };
-  if (d.method === "dtf") return d.supplied ? { each: d.supplied.price != null && !isNaN(+d.supplied.price) ? +d.supplied.price : suppliedPress(s), setup: 0, inkFee: 0 } : { each: num(s.dtf[ti]), setup: 0, inkFee };
+  if (d.method === "dtf") return d.supplied ? { each: d.supplied.price != null && !isNaN(+d.supplied.price) ? +d.supplied.price : suppliedPress(s), setup: 0, inkFee: 0 } : dtfGridOn(s) && x.q ? { each: dtfEach(d, x.q, suppliedPress(s), s.dtfGrid), setup: 0, inkFee } : { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
 }
 
@@ -1056,7 +1058,9 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   type Side = "a" | "y" | undefined;
   const sideQty = (side: Side) => (side === "y" ? yQty : aQty);
   const tiOf = (d: Imprint, side?: Side) => (side && split(d) ? tierIndex(sideQty(side), pl) : dq(d) === qty ? ti : tierIndex(dq(d), pl));
-  const ixOf = (d: Imprint, side?: Side) => (side && split(d) ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQty(side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
+  const ixOf0 = (d: Imprint, side?: Side) => (side && split(d) ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQty(side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
+  // the pieces a print is priced at (DTF transfers are priced by size and these pieces, lib/dtfGrid.ts)
+  const ixOf = (d: Imprint, side?: Side) => ({ ...ixOf0(d, side), q: side && split(d) ? sideQty(side) : dq(d) });
   const anySplit = (g.imprints || []).some(split);
   // the youth screens' own underbase: none when every youth shirt is light (a Natural), the same rule as the adult's
   const kidLight = !!pl.darkAddsColor && !(g.lines || []).some((l, i) => kidAt[i] && billQty(l) > 0 && !isLightColor(l.color, pl));

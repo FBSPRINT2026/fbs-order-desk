@@ -20776,3 +20776,8 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .pp-more{font-size:12.5px;margin:4px 0 0;padding:2px 8px;height:auto}
 .pp-sum .pp-off{color:var(--ok)}
 .pp-feenote{font-size:12px;margin-top:-2px}
+
+/* the DTF transfer grid (components/DtfGridTable.tsx) */
+.dfg .dfg-n{text-align:right;white-space:nowrap}
+.dfg input{width:72px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);text-align:right}
+.dfg th .sub{font-weight:400}
