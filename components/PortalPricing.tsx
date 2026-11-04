@@ -28,6 +28,13 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
   const fin = (pl.finishing || []).filter((f) => !f.more && !/^emb_/.test(f.id));
   const embX = [...(pl.embExtras || []), ...(pl.finishing || []).filter((f) => !f.more && /^emb_/.test(f.id) && !(pl.embExtras || []).some((e) => e.id === f.id))];
   const notes = String(pl.contractNotes || "").split(/(?<=\.)\s+(?=[A-Z0-9])/).map((x) => x.trim()).filter((x) => x && !/^FBS Contract Pricing List/i.test(x));
+  // "Good to know" on each tab is only that tab's notes, plus the ones for every job (Nov 4, Nick: "we only need screen
+  // printing stuff on the screen printing page and embroidery stuff on the embroidery page"); it isn't on the printed sheet
+  const kindOf = (n: string) => (/embroider|digitiz|sew-?outs?\b|stitch|puff|thread/i.test(n) ? "emb" : /\bDTF\b|transfer/i.test(n) ? "dtf" : /screen|colou?r|\bink|underbase|PMS|tag removal|private label/i.test(n) ? "screen" : "all");
+  const goodToKnow = (k: "screen" | "emb" | "dtf") => {
+    const mine = notes.filter((n) => kindOf(n) === k || kindOf(n) === "all");
+    return mine.length ? <section className="panel pl-sec"><div className="panel-h"><h2>Good to know</h2></div><div className="panel-b"><ul className="pl-notes">{mine.map((n) => <li key={n}>{n}</li>)}</ul></div></section> : null;
+  };
   const title = String(pl.contractNotes || "").match(/^FBS Contract Pricing List[^.]*/)?.[0] || "FBS wholesale price list";
   const light = (pl.lightColors || []).join(" and ");
   return (
@@ -80,6 +87,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             <div className="panel-b"><dl className="pl-dl">{fin.map((f) => <div key={f.id}><dt>{f.name}</dt><dd>{m(f.price)}</dd></div>)}</dl></div>
           </section>}
         </div>
+        {goodToKnow("screen")}
           </> },
           { k: "emb", label: "Embroidery", body: <>
         <CalcSheet><EmbCalc pl={pl} /></CalcSheet>
@@ -99,7 +107,7 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             </ul>
           </div>
         </section>
-
+        {goodToKnow("emb")}
           </> },
           ...(dtfOk ? [{ k: "dtf", label: "DTF heat transfers", body: <>
         <section className="panel pl-sec">
@@ -116,16 +124,11 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
               </table></div>}
             </div>
           </section>
+          {goodToKnow("dtf")}
           </> }] : []),
         ]} />
 
 
-        {notes.length > 0 && (
-          <section className="panel pl-sec">
-            <div className="panel-h"><h2>Good to know</h2></div>
-            <div className="panel-b"><ul className="pl-notes">{notes.map((n) => <li key={n}>{n}</li>)}</ul></div>
-          </section>
-        )}
         <p className="pl-foot faint">Questions about pricing? <Link href={msgHref}>Send us a message</Link>{phone ? ` or call ${phone}` : ""}.</p>
       </div>
   );

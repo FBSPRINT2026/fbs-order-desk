@@ -217,11 +217,11 @@ export const FBS_CONTRACT_2024: PriceList = {
     },
     {
       "id": "relabel",
-      "name": "Tag removal & custom imprint (+ 1-color screen)",
+      "name": "Tag removal & custom imprint",
       "price": 1
     }
   ],
-  "contractNotes": "FBS Contract Pricing List 2026 V1. 9+ color and full color jobs are custom quoted. Spoilage / reject on customer supplied goods: 5% on small orders, up to 2% on large orders. Embroidery digitizing: basic $40-$60, complex / puff $80+ (set on the job). Sew-outs $15. Drop ship fee $5 per order + cost (add as an order fee). Tag removal & custom imprint also needs a 1-color screen. Standard service on all decoration methods: 7-14 business days after approvals and receipt of goods; rush available.",
+  "contractNotes": "FBS Contract Pricing List 2026 V1. 9+ color and full color jobs are custom quoted. Spoilage / reject on customer supplied goods: 5% on small orders, up to 2% on large orders. Embroidery digitizing: basic $40-$60, complex / puff $80+ (set on the job). Sew-outs $15. Drop ship services available: contact us for a custom quote (we can split shipments by location or ship to individuals). Standard service on all decoration methods: 7-14 business days after approvals and receipt of goods; rush available.",
   "embExtras": [
     {
       "id": "emb_thread",

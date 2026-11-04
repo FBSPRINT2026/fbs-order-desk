@@ -42,7 +42,7 @@ export default async function PricingSheet({ searchParams }: { searchParams: Pro
     ...(pl.pmsFee ? [["PMS matching fee", "non-standard ink", `${m(pl.pmsFee)} per color`] as [string, string, string]] : []),
     ...(pl.finishing || []).filter((f) => !f.more && !/^emb_/.test(f.id)).map((f) => [f.name, "", `${m(f.price)} per garment`] as [string, string, string]),
     ["Vinyl names / numbers", "", `${m(pl.rosterName ?? 2)} per name / ${m(pl.rosterDigit ?? 3)} per digit`],
-    ...(pick(notes, /Drop ship fee\s+([^.(]+)/i) ? [["Drop ship fee", "", pick(notes, /Drop ship fee\s+([^.(]+)/i)] as [string, string, string]] : []),
+    ...(/drop ship/i.test(notes) ? [["Drop ship", "split by location or to individuals", "Contact us for a quote"] as [string, string, string]] : []),
   ];
   const digBasic = pick(notes, /digitizing:\s*basic\s+([^,]+)/i) || `${m(pl.digitizing || 0)}+`;
   const digComplex = pick(notes, /complex\s*\/\s*puff\s+([^\s(.,]+)/i);
