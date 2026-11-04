@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ONE_SIZE, type GLine, type Group } from "@/lib/pricing";
 import { itemMockup } from "@/lib/itemProofs";
@@ -69,20 +69,20 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
     const { error } = await sb.storage.from("proofs").upload(pp, png, { contentType: "image/png", upsert: true });
     return error ? undefined : pp;
   };
-  // a PDF added before previews were made: make it now (once)
+  // a picture added before previews and mockups were made: its PDF preview and its mockup now (once)
+  const healed = useRef(new Set<string>());
   useEffect(() => {
     lines.forEach(({ gi, li, l }) => {
       const s = l.spec;
-      if (!s?.image || s.preview || !isPdf(s.image) || busy) return;
+      if (!s?.image || (s.mockupId && (s.preview || !isPdf(s.image))) || busy || healed.current.has(l.id)) return;
+      healed.current.add(l.id);
       void (async () => {
-        const { data } = await sb.storage.from("proofs").download(s.image!);
-        if (!data) return;
-        const pp = await makePreview(data, s.image!);
+        let pp = s.preview || (isPdf(s.image!) ? "" : /\.(png|jpe?g|webp|gif)$/i.test(s.image!) ? s.image! : "");
+        if (!pp && isPdf(s.image!)) { const { data } = await sb.storage.from("proofs").download(s.image!); if (data) pp = (await makePreview(data, s.image!)) || ""; }
         if (!pp) return;
-        const png = (await sb.storage.from("proofs").download(pp)).data;
-        if (png) await sb.storage.from("proofs").upload(pp.replace(/\.png$/i, "-thumb.png"), png, { contentType: "image/png", upsert: true });
-        const mk = await itemMockup(orderId, l.id, l.garment || "", pp, s.mockupId);
-        spec(gi, li, { preview: pp, mockupId: mk.ok ? mk.id || undefined : s.mockupId });
+        if (/\.png$/i.test(pp)) { const png = (await sb.storage.from("proofs").download(pp)).data; if (png) await sb.storage.from("proofs").upload(pp.replace(/\.png$/i, "-thumb.png"), png, { contentType: "image/png", upsert: true }); }
+        const mk = s.mockupId ? null : await itemMockup(orderId, l.id, l.garment || "", pp);
+        spec(gi, li, { ...(isPdf(s.image!) ? { preview: pp } : {}), mockupId: mk?.ok ? mk.id || undefined : s.mockupId });
       })();
     });
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
