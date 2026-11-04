@@ -732,7 +732,9 @@ function PdfPages({ url, onZoom }: { url: string; /** zoomed past 100% (the view
     // the room for a page, steadied: a page that brings in the scroll bar narrows the box, which redrew the pages smaller,
     // which took the bar away again, over and over (Oct 23, Nick: "it's vibrating back and forth real chaotically").
     // The bar's space is always kept (scrollbar-gutter), and a few pixels' change is ignored
-    const ro = new ResizeObserver(() => setW((x) => { const n = Math.max(200, Math.floor(el.clientWidth - 34)); return Math.abs(n - x) > 6 ? n : x; }));
+    // never wider than the window: zoomed pages wider than their box must not widen the box itself (that ran away to
+    // 22,000-pixel pages and crashed the tab, Nov 3)
+    const ro = new ResizeObserver(() => setW((x) => { const n = Math.max(200, Math.min(window.innerWidth - 140, Math.floor(el.clientWidth - 34))); return Math.abs(n - x) > 6 ? n : x; }));
     ro.observe(el); return () => ro.disconnect();
   }, [doc]);
   // pages near view get drawn; the rest keep their room until they're scrolled to
