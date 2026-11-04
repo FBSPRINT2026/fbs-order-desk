@@ -1019,7 +1019,7 @@ export default function SeparationStudio({ id }: { id: string }) {
    *  the top target, no crop marks), a page each; nested on one sheet when "nest instead of trim" is on */
   async function filmsFile(rollIn = ROLL_IN) {
     const { pages, names } = await filmPages(), named = pages.map((p, i) => ({ ...p, ink: names[i] || `screen ${i + 1}` }));
-    let nest = false; try { nest = JSON.parse(localStorage.getItem("fbs:sep.films.nest") || "false") === true; } catch { /* no storage */ }
+    let nest = false; try { const j = JSON.parse(localStorage.getItem("fbs:sep.films.nest") || "false"); nest = (j && typeof j === "object" && "v" in j ? j.v : j) === true; } catch { /* no storage (useSticky saves { v, t }) */ }
     return nest && named.length > 1 ? filmNestPdf(named, rollIn, title, deflate, filmMarks)
       : filmPagesPdf(named, rollIn, title, deflate, filmMarks);
   }
