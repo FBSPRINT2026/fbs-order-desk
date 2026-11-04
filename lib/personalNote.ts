@@ -9,7 +9,7 @@ import { APP_VERSION } from "@/lib/version";
  * {first} is the person's first name.
  */
 export const NOTE_DEFAULT = {
-  subject: "Our new customer portal is here",
+  subject: "A message from your FBS team",
   paragraphs: [
     "Hi {first},",
     "You should have just received an email from portal@fbsprint.com introducing our new customer portal. I wanted to follow up personally, because we're really excited about it.",
@@ -22,7 +22,7 @@ export const NOTE_DEFAULT = {
 /** for customers who've worked with us through ClickUp and Printavo every day (Nov 3, Nick): the old tools stay open to
  *  mid-month, their orders are moved, and we offer their team a training. Kept in settings.personalLaunchNoteClickup. */
 export const NOTE_CLICKUP = {
-  subject: "Our new customer portal is here",
+  subject: "A message from your FBS team",
   paragraphs: [
     "Hi {first},",
     "You should have just received an email from portal@fbsprint.com introducing our new customer portal. I wanted to follow up personally, because we're really excited about it.",
@@ -57,7 +57,7 @@ export function noteHtml(t: NoteText, first: string, site: string, signature: st
 <td style="vertical-align:middle;border-left:1px solid #2C3A52;padding:0 0 0 20px;${F}">
 <div style="${F};font-size:20px;font-weight:700;letter-spacing:2px;line-height:1.2;color:#FFFFFF;white-space:nowrap">EXCITING ANNOUNCEMENT</div>
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin:10px 0 8px"><tr><td width="33%" height="3" bgcolor="#0e9bd8" style="height:3px;font-size:1px;line-height:3px;mso-line-height-rule:exactly">&nbsp;</td><td width="34%" height="3" bgcolor="#f26660" style="height:3px;font-size:1px;line-height:3px;mso-line-height-rule:exactly">&nbsp;</td><td width="33%" height="3" bgcolor="#fcb122" style="height:3px;font-size:1px;line-height:3px;mso-line-height-rule:exactly">&nbsp;</td></tr></table>
-<div style="${F};font-size:15px;line-height:1.4;color:#AEB8C8">${esc(t.subject)}</div></td>
+<div style="${F};font-size:15px;line-height:1.4;color:#AEB8C8">Our new customer portal is here</div></td>
 </tr></table></td></tr>
 <tr><td style="padding:22px 4px 4px">${body}</td></tr>
 </table>
