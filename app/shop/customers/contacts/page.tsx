@@ -26,9 +26,9 @@ const LABEL: Record<Show, string> = { notmoved: "Not moved yet", unsent: "Moved,
 type Mail = "none" | "launch" | "nick" | "amanda";
 const wasSent = (m?: MoveRow) => !!m && (!!m.launchSent || !!m.personal.sentAt);
 const mailOf = (m?: MoveRow): Mail => (!m ? "none" : !m.personal.skip && m.personal.to.length ? (/^amanda/i.test(m.personal.from) ? "amanda" : "nick") : !m.quiet && m.email ? "launch" : "none");
-type Pick = "launch" | "personal" | "none";
-const LABEL3: Record<Pick, string> = { launch: "Launch email", personal: "Personal email", none: "No email" };
-const pickOf = (m?: MoveRow): Pick => { const x = mailOf(m); return x === "nick" || x === "amanda" ? "personal" : x; };
+/** the master list's picks: the launch email and the personal email are each on or off, both can be on; neither is no email */
+type Pick = { launch: boolean; personal: boolean };
+const pickOf = (m?: MoveRow): Pick => ({ launch: !!m && !m.quiet && !!m.email, personal: !!m && !m.personal.skip && m.personal.to.length > 0 });
 const shortDay = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const ROLES = ["Orders", "Art", "Billing"];
 const when = (d: string) => (d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "");
@@ -149,17 +149,18 @@ export default function UpdateContacts() {
   /** save every pick on the master list (only what changed) */
   const submitPicks = async () => {
     setBusy(true); setErr(""); setNote("");
-    const by: Record<Pick, string[]> = { launch: [], personal: [], none: [] };
-    for (const r of list) { const x = mv?.get(r.id); const v = picks[r.id] ?? pickOf(x); if (v !== pickOf(x)) by[v].push(r.id); }
-    const steps = [
-      by.launch.length && setQuiet(by.launch, false), by.launch.length && setPersonal(by.launch, false),
-      by.personal.length && setQuiet(by.personal, true), by.personal.length && setPersonal(by.personal, true),
-      by.none.length && setQuiet(by.none, true), by.none.length && setPersonal(by.none, false),
-    ];
+    const lOn: string[] = [], lOff: string[] = [], pOn: string[] = [], pOff: string[] = [];
+    let nl = 0, np = 0, nn = 0;
+    for (const r of list) {
+      const was = pickOf(mv?.get(r.id)), v = picks[r.id] ?? was;
+      if (v.launch !== was.launch) (v.launch ? lOn : lOff).push(r.id);
+      if (v.personal !== was.personal) (v.personal ? pOn : pOff).push(r.id);
+      if (v.launch) nl++; if (v.personal) np++; if (!v.launch && !v.personal) nn++;
+    }
+    const steps = [lOn.length && setQuiet(lOn, false), lOff.length && setQuiet(lOff, true), pOn.length && setPersonal(pOn, true), pOff.length && setPersonal(pOff, false)];
     for (const st of steps) { if (!st) continue; const x = await st; if (!x.ok) { setBusy(false); return setErr(x.error); } }
     await loadMv(); setPicks({}); setBusy(false);
-    const n = list.reduce((a, r) => { const v = picks[r.id] ?? pickOf(mv?.get(r.id)); a[v]++; return a; }, { launch: 0, personal: 0, none: 0 } as Record<Pick, number>);
-    setNote(`Saved: ${n.launch} launch email, ${n.personal} personal email, ${n.none} no email. Nothing was sent.`);
+    setNote(`Saved: ${nl} launch email, ${np} personal email, ${nn} no email. Nothing was sent.`);
   };
   const m = cur ? mv?.get(cur) : undefined;
   /** move without touching contacts, and no email (Nov 4, Nick) */
@@ -235,8 +236,11 @@ export default function UpdateContacts() {
             <thead><tr><th>Company</th><th className="ucx-c">Launch email</th><th className="ucx-c">Personal email</th><th className="ucx-c">No email</th></tr></thead>
             <tbody>{list.map((r) => {
               const x = mv?.get(r.id); const has = !!x?.email; const v = picks[r.id] ?? pickOf(x);
-              const radio = (k: Pick) => <td className="ucx-c"><input type="radio" name={`pk-${r.id}`} aria-label={`${LABEL3[k]} for ${r.name}`} checked={v === k} disabled={!has && k !== "none"} onChange={() => setPicks((p) => ({ ...p, [r.id]: k }))} /></td>;
-              return <tr key={r.id}><td><b data-notranslate>{r.name}</b><div className="sub" data-notranslate>{has ? [r.contact, x!.email].filter(Boolean).join(" · ") : "No email on file"}{v === "personal" && r.owner ? ` · from ${first(r.owner)}` : ""}</div></td>{radio("launch")}{radio("personal")}{radio("none")}</tr>;
+              const put = (n: Pick) => setPicks((p) => ({ ...p, [r.id]: n }));
+              const box = (k: keyof Pick, label: string) => <td className="ucx-c"><input type="checkbox" aria-label={`${label} for ${r.name}`} checked={v[k]} disabled={!has} onChange={(e) => put({ ...v, [k]: e.target.checked })} /></td>;
+              return <tr key={r.id}><td><b data-notranslate>{r.name}</b><div className="sub" data-notranslate>{has ? [r.contact, x!.email].filter(Boolean).join(" · ") : "No email on file"}{v.personal && r.owner ? ` · personal from ${first(r.owner)}` : ""}</div></td>
+                {box("launch", "Launch email")}{box("personal", "Personal email")}
+                <td className="ucx-c"><input type="checkbox" aria-label={`No email for ${r.name}`} checked={!v.launch && !v.personal} onChange={(e) => e.target.checked && put({ launch: false, personal: false })} /></td></tr>;
             })}</tbody>
           </table></div>
           <div className="ucx-foot"><span className="faint">Personal emails go from the account owner&apos;s mailbox.</span><span className="spacer" />
