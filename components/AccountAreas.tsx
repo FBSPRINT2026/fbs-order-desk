@@ -1207,7 +1207,9 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
           const cur = subs.find((x) => x[0] === priceTab)?.[0] || subs[0][0];
           return <div className="toolbar aa-otabs aa-ptop-sw" data-toolbar><div className="chips">{subs.map(([k, t]) => <button key={k} type="button" className={"chip" + (cur === k ? " on" : "")} onClick={() => setPriceTab(k)}>{t}</button>)}</div></div>;
         })()}
-        {area === "home" && titleAsk ? titleAsk : area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}{simpleNav && <PortalSimpleMenu />}</span>
+        {area === "home" && titleAsk ? titleAsk : area !== "pricing" && search(({ home: "Search the dashboard", orders: "Search orders and quotes", quotes: "Search quotes", payments: "Search payments", artwork: "Search logos", projects: "Search projects", messages: "Search messages", receive: "Search goods" } as Record<string, string>)[area] || "Search this page")}</span>
+        {/* the simple menu: a direct child of the title row, so on a phone it stays on the title's line as a ☰ (Nov 4, Nick) */}
+        {simpleNav && <PortalSimpleMenu />}
       </div>}
       <section className="aa-body">{mode === "portal" ? <PageSearchContext.Provider value={q}>{body}</PageSearchContext.Provider> : body}</section>
     </div>

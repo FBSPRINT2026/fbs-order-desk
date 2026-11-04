@@ -20784,3 +20784,13 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .dfg th .sub{font-weight:400}
 
 .dfg .dfg-press th,.dfg .dfg-press td{border-top:2px solid var(--line)}
+
+/* the portal's simple menu on a phone: on the title's line, just the ☰ (Nov 4, Nick: "it needs to be on the same line as the header") */
+@media (max-width:640px){
+  .aa-ptop>.psmn-tl{order:0;flex:1 1 auto}
+  .aa-ptop>.psmn{order:1;flex:none}
+  .aa-ptop>.aa-ptop-r{order:2}
+  .aa-ptop>.psmn .psmn-btn>span,.aa-ptop>.psmn .psmn-btn>svg:last-child{display:none}
+  .aa-ptop>.psmn .psmn-btn{width:40px;height:40px;padding:0;justify-content:center}
+}
+.aa-ptop>.psmn-tl+.aa-ptop-r{margin-left:auto}
