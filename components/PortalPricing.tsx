@@ -6,7 +6,6 @@ import { EmbCalc, ScreenCalc } from "@/components/PricingCalc";
 import CalcSheet from "@/components/CalcSheet";
 import DtfGridTable from "@/components/DtfGridTable";
 import { dtfGridOn } from "@/lib/dtfGrid";
-import { suppliedPress } from "@/lib/pricing";
 
 /**
  * The wholesale price list, a tab in the portal for wholesale accounts (Oct 24, Nick: "on the wholesale companies, we
@@ -108,8 +107,8 @@ export default function PortalPricing({ pl, company, phone, msgHref }: { pl: Pri
             <div className="panel-b">
               {dtfGridOn(pl) ? <>
                 <p className="pl-lead">We order the transfers and press them. The price is by the print&apos;s size and how many pieces carry it.</p>
-                <div className="pl-wrap"><DtfGridTable grid={pl.dtfGrid} press={suppliedPress(pl)} /></div>
-                <p className="faint" style={{ fontSize: 12.5 }}>Sending your own transfers? We press them for {m(suppliedPress(pl))} per location, per piece.</p>
+                <div className="pl-wrap"><DtfGridTable grid={pl.dtfGrid} /></div>
+                <p className="faint" style={{ fontSize: 12.5 }}>Sending your own transfers? We press them at the pressing price in the last row, per location, per piece.</p>
               </> : <div className="pl-wrap"><table className="pl-tbl pl-narrow" data-nofit>
                 <colgroup><col /><col className="pl-c-p" /></colgroup>
                 <thead><tr><th>Pieces</th><th>Price</th></tr></thead>

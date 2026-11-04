@@ -1,4 +1,4 @@
-import { dtfEach, dtfGridOn } from "@/lib/dtfGrid";
+import { dtfEach, dtfGridOn, dtfPress } from "@/lib/dtfGrid";
 import { colorHex } from "./inkColors";
 
 // Shared pricing engine and order vocabulary.
@@ -1006,7 +1006,8 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
   }
   // their own transfers: we press them, per location (Oct 31, Nick: "$2 for everybody… $1.50 for him")
   if (d.method === "dtf" && d.patch) return { each: patchEach(d, s), setup: 0, inkFee: 0 };
-  if (d.method === "dtf") return d.supplied ? { each: d.supplied.price != null && !isNaN(+d.supplied.price) ? +d.supplied.price : suppliedPress(s), setup: 0, inkFee: 0 } : dtfGridOn(s) && x.q ? { each: dtfEach(d, x.q, suppliedPress(s), s.dtfGrid), setup: 0, inkFee } : { each: num(s.dtf[ti]), setup: 0, inkFee };
+  // their own transfers: the program's price, else pressing by pieces (lib/dtfGrid.ts), else the list's flat price
+  if (d.method === "dtf") return d.supplied ? { each: d.supplied.price != null && !isNaN(+d.supplied.price) ? +d.supplied.price : dtfGridOn(s) && x.q ? dtfPress(x.q, s.dtfGrid) : suppliedPress(s), setup: 0, inkFee: 0 } : dtfGridOn(s) && x.q ? { each: dtfEach(d, x.q, s.dtfGrid), setup: 0, inkFee } : { each: num(s.dtf[ti]), setup: 0, inkFee };
   return { each: 0, setup: 0, inkFee };
 }
 

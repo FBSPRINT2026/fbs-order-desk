@@ -1,4 +1,5 @@
 "use client";
+import { dtfGridOn } from "@/lib/dtfGrid";
 import DtfGridTable from "@/components/DtfGridTable";
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { useEffect, useState } from "react";
@@ -135,7 +136,8 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
               <div className="field"><label htmlFor="s-dig-st">Digitizing: stitches included</label><input id="s-dig-st" type="number" step="500" value={pl.digStitches ?? 6000} onChange={(e) => updPl((d) => { d.digStitches = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-dig-k">Digitizing: each 1,000 more</label><input id="s-dig-k" type="number" step="0.5" value={pl.digPer1k ?? 1} onChange={(e) => updPl((d) => { d.digPer1k = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-puff" title="Puff ink on a screen print (not embroidery 3D puff): added to each piece, per puffed location">Puff print, per piece per location</label><input id="s-puff" type="number" step="0.25" value={pl.puffPrice ?? PUFF_PRICE} onChange={(e) => updPl((d) => { d.puffPrice = n(e.target.value); })} /></div>
-              <div className="field"><label htmlFor="s-dtfsup" title="Customer supplied transfers: we press them. Added to each piece, per location. A program can set its own.">Pressing customer supplied transfers, per piece per location</label><input id="s-dtfsup" type="number" step="0.25" value={pl.dtfSupplied ?? SUPPLIED_PRESS} onChange={(e) => updPl((d) => { d.dtfSupplied = n(e.target.value); })} /></div>
+              {/* pressing their own transfers is the DTF grid's pressing row now (lib/dtfGrid.ts); this flat price is used only with the grid off */}
+              {!dtfGridOn(pl) && <div className="field"><label htmlFor="s-dtfsup" title="Customer supplied transfers: we press them. Added to each piece, per location. A program can set its own.">Pressing customer supplied transfers, per piece per location</label><input id="s-dtfsup" type="number" step="0.25" value={pl.dtfSupplied ?? SUPPLIED_PRESS} onChange={(e) => updPl((d) => { d.dtfSupplied = n(e.target.value); })} /></div>}
               <div className="field"><label htmlFor="s-patch" title="A patch heat pressed on (the Patch button on a heat press print). Added to each piece. A program can set its own.">Patch application fee, per piece</label><input id="s-patch" type="number" step="0.25" value={pl.patchApply ?? PATCH_APPLY} onChange={(e) => updPl((d) => { d.patchApply = n(e.target.value); })} /></div>
               <div className="field"><label htmlFor="s-ink">Ink change fee, each</label><input id="s-ink" type="number" step="0.5" value={pl.inkChangeFee} onChange={(e) => updPl((d) => { d.inkChangeFee = n(e.target.value); })} /></div>
               {(["2XL", "3XL", "4XL", "5XL"] as const).map((z) => (
@@ -179,7 +181,7 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
                 </div>
               );
             })()}
-            <div className="field"><label>DTF transfers we order (the transfer each; pressing is added on top)</label>
+            <div className="field"><label>DTF: the transfer each, and pressing by pieces (added on top; also their own transfers)</label>
               <div className="matrix-wrap"><DtfGridTable grid={pl.dtfGrid} onChange={(g) => updPl((d) => { d.dtfGrid = g; })} /></div></div>
             {pl.lightColors && <div className="field"><label htmlFor="s-light">Light garment colors (comma separated)</label><input id="s-light" type="text" value={pl.lightColors.join(", ")} onChange={(e) => updPl((d) => { d.lightColors = e.target.value.split(",").map((x) => x.trim()).filter(Boolean); })} /></div>}
             </>)}

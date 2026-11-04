@@ -1,4 +1,5 @@
 "use client";
+import { dtfGridOn } from "@/lib/dtfGrid";
 import DtfGridTable from "@/components/DtfGridTable";
 import { PUFF_PRICE, SUPPLIED_PRESS, PATCH_APPLY, uid, type Finishing, type PriceList } from "@/lib/pricing";
 import { FBS_CONTRACT_2024 } from "@/lib/contractPricing";
@@ -65,7 +66,8 @@ export default function WholesalePricing({ pl, upd }: { pl: PriceList; upd: (fn:
           <div className="field"><label htmlFor="ws-ink">Specialty ink (polyester, nylon, dyed), per location</label>
             <div className="row" style={{ gap: 6 }}><input id="ws-ink" type="number" step="0.05" value={inkBase} onChange={(e) => setInk(n(e.target.value), ink500)} /><span className="faint">500+</span><input type="number" step="0.05" aria-label="Specialty ink at 500 pieces and up" value={ink500} onChange={(e) => setInk(inkBase, n(e.target.value))} /></div></div>
           <div className="field"><label htmlFor="ws-puff">Puff print (puff ink, not embroidery 3D puff), per location</label><input id="ws-puff" type="number" step="0.25" value={pl.puffPrice ?? PUFF_PRICE} onChange={(e) => upd((d) => { d.puffPrice = n(e.target.value); })} /></div>
-              <div className="field"><label htmlFor="ws-dtfsup" title="Customer supplied transfers: we press them. Added to each piece, per location. A program can set its own.">Pressing customer supplied transfers, per piece per location</label><input id="ws-dtfsup" type="number" step="0.25" value={pl.dtfSupplied ?? SUPPLIED_PRESS} onChange={(e) => upd((d) => { d.dtfSupplied = n(e.target.value); })} /></div>
+              {/* pressing their own transfers is the DTF grid's pressing row now (lib/dtfGrid.ts); this flat price is used only with the grid off */}
+              {!dtfGridOn(pl) && <div className="field"><label htmlFor="ws-dtfsup" title="Customer supplied transfers: we press them. Added to each piece, per location. A program can set its own.">Pressing customer supplied transfers, per piece per location</label><input id="ws-dtfsup" type="number" step="0.25" value={pl.dtfSupplied ?? SUPPLIED_PRESS} onChange={(e) => upd((d) => { d.dtfSupplied = n(e.target.value); })} /></div>}
               <div className="field"><label htmlFor="ws-patch" title="A patch heat pressed on (the Patch button on a heat press print). Added to each piece. A program can set its own.">Patch application fee, per piece</label><input id="ws-patch" type="number" step="0.25" value={pl.patchApply ?? PATCH_APPLY} onChange={(e) => upd((d) => { d.patchApply = n(e.target.value); })} /></div>
           <div className="field"><label htmlFor="ws-sp">Special imprint (sleeve, pocket, side), per location</label><input id="ws-sp" type="number" step="0.05" value={pl.specialLocPrice ?? 0} onChange={(e) => upd((d) => { d.specialLocPrice = n(e.target.value); })} /></div>
         </div>
@@ -105,7 +107,7 @@ export default function WholesalePricing({ pl, upd }: { pl: PriceList; upd: (fn:
 
       <section className="ws-sec">
         <h3>DTF transfers we order</h3>
-        <div className="faint" style={{ fontSize: 12.5 }}>The transfer each, by print size and pieces (about a 40% margin on DTF Dallas&apos;s wholesale price). Pressing is added on top, the same as for their own transfers.</div>
+        <div className="faint" style={{ fontSize: 12.5 }}>The transfer each, by print size and pieces (about a 40% margin on DTF Dallas&apos;s wholesale price), and pressing by pieces: added on top of the transfer, and the price for pressing their own transfers.</div>
         <div className="matrix-wrap"><DtfGridTable grid={pl.dtfGrid} onChange={(g) => upd((d) => { d.dtfGrid = g; })} /></div>
       </section>
 
