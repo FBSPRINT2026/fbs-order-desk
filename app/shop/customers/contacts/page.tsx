@@ -58,10 +58,10 @@ export default function UpdateContacts() {
       // a contact on file by name only (Printavo often had no email for them) is the same person found by name in the mail
       const nameOnly = list.find((y) => !y.email && y.name && y.name.toLowerCase() === p.name.toLowerCase());
       if (nameOnly) { nameOnly.email = p.email; nameOnly.phoneFound = nameOnly.phoneFound || (!nameOnly.phone && !!p.phone); if (!nameOnly.phone) nameOnly.phone = p.phone; }
-      const have = list.find((y) => y.email === p.email);
+      const have = p.email ? list.find((y) => y.email === p.email) : undefined;
       if (have) { Object.assign(have, { n: p.n, last: p.last, boxes: p.boxes, same: p.sameCompany }); if (!have.phone && p.phone) { have.phone = p.phone; have.phoneFound = true; } continue; }
       const regular = p.sameCompany && p.n >= REGULAR;
-      list.push({ key: p.email, name: p.name, email: p.email, phone: p.phone, phoneFound: !!p.phone, contact: regular, portal: regular, main: false, roles: [],
+      list.push({ key: p.email || `ph-${p.name}`, name: p.name, email: p.email, phone: p.phone, phoneFound: !!p.phone, contact: regular, portal: regular, main: false, roles: [],
         n: p.n, last: p.last, boxes: p.boxes, same: p.sameCompany, suggested: regular, outsider: !p.sameCompany });
     }
     // one main: the one on file, else the regular we've traded the most mail with
@@ -118,9 +118,10 @@ export default function UpdateContacts() {
         <input className="ucx-in" aria-label="Name" placeholder="Name" value={p.name} onChange={(e) => edit(p.key, { name: e.target.value })} />
         {p.contactId || !p.n ? <input className="ucx-in ucx-em" aria-label="Email" placeholder="Email" value={p.email} onChange={(e) => edit(p.key, { email: e.target.value })} />
           : <div className="sub" data-notranslate>{p.email}</div>}
-        {p.n ? <div className="sub">{p.suggested && <span className="ucx-found">Suggested · </span>}{p.n.toLocaleString()} email{p.n === 1 ? "" : "s"} with {(p.boxes || []).join(", ")} · last {when(p.last || "")}</div> : null}
+        {p.n ? <div className="sub">{p.suggested && <span className="ucx-found">Suggested · </span>}{p.n.toLocaleString()} email{p.n === 1 ? "" : "s"} with {(p.boxes || []).join(", ")} · last {when(p.last || "")}</div>
+          : !p.contactId && p.boxes?.length ? <div className="sub">In {p.boxes.join(", ")}{p.email ? "" : " (no email there: add one for the portal)"}</div> : null}
       </td>
-      <td><input className="ucx-in" aria-label="Phone" placeholder="Phone" value={p.phone} onChange={(e) => edit(p.key, { phone: e.target.value, phoneFound: false })} />{p.phoneFound && <div className="sub ucx-found">From their signature</div>}</td>
+      <td><input className="ucx-in" aria-label="Phone" placeholder="Phone" value={p.phone} onChange={(e) => edit(p.key, { phone: e.target.value, phoneFound: false })} />{p.phoneFound && <div className="sub ucx-found">Found for you</div>}</td>
       <td className="ucx-c"><input type="checkbox" aria-label={`${p.name || p.email} is a contact`} checked={p.contact} onChange={(e) => tick(p.key, e.target.checked)} /></td>
       <td className="ucx-c"><input type="checkbox" aria-label={`${p.name || p.email} can sign in to the portal`} checked={p.contact && p.portal} disabled={!p.contact || !p.email} onChange={(e) => edit(p.key, { portal: e.target.checked })} /></td>
       <td className="ucx-c"><input type="radio" name="ucx-main" aria-label={`${p.name || p.email} is the main contact`} checked={p.contact && p.main} onChange={() => setMain(p.key)} /></td>

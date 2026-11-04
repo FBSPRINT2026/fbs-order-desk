@@ -142,6 +142,32 @@ export async function contactDetail(customerId: string) {
         for (const x of contacts) if (!x.phone) x.foundPhone = m.get(x.email) || "";
       }
     }
+    // staff's phone contacts (phone_contacts, from a vCard): the same people get their mobile numbers; people at the
+    // company who aren't in our mail yet are added (Nov 3, Nick: "pull from my phone contacts")
+    {
+      const { data: pcs } = await admin.from("phone_contacts").select("owner_email, name, org, title, emails, phones").is("removed_at", null).order("id").limit(1000);
+      const flat = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const nm = (x: string) => x.toLowerCase().replace(/\s+/g, " ").trim();
+      const coKeys = names.map(flat).filter((k) => k.length >= 4);
+      const orgHit = (o: string) => { const k = flat(o); return k.length >= 3 && coKeys.some((c) => c.includes(k) || k.includes(c)); };
+      for (const r of (pcs || []) as { owner_email: string; name: string; org: string; title: string; emails: string[]; phones: string[] }[]) {
+        const emails = (r.emails || []).map((e) => e.toLowerCase());
+        const phone = fmtPhone((r.phones || [])[0] || "");
+        const atCo = orgHit(r.org || "");
+        const people: { name: string; email: string; phone: string; foundPhone?: string; isFound?: boolean }[] = [...contacts, ...found.map((p) => ({ ...p, isFound: true }))];
+        let hit = people.find((p) => p.email && emails.includes(p.email)) || (r.name.includes(" ") ? people.find((p) => nm(p.name) === nm(r.name)) : undefined);
+        // "Scott" at Creative Apparel is Scott Gray there
+        if (!hit && atCo && !r.name.includes(" ")) { const same = people.filter((p) => nm(p.name).split(" ")[0] === nm(r.name)); if (same.length === 1) hit = same[0]; }
+        if (hit) {
+          const target = hit.isFound ? found.find((p) => p.email === hit!.email && p.name === hit!.name) : contacts.find((c) => c.email === hit!.email && c.name === hit!.name);
+          if (target && "isPrimary" in target) { if (!target.phone && !target.foundPhone && phone) target.foundPhone = phone; }
+          else if (target && !target.phone && phone) target.phone = phone;
+          continue;
+        }
+        if (!atCo) continue;
+        found.push({ email: emails[0] || "", name: r.name, n: 0, last: "", boxes: [`${r.owner_email.split("@")[0]}'s phone`], sameCompany: true, phone });
+      }
+    }
     return { ok: true as const, detail: { id: c.id as string, company, name: String(c.name || "").trim(), email: String(c.email || "").trim().toLowerCase(), phone: String(c.phone || "").trim(), address: String(c.address || "").trim(),
       owner: String((pr as { account_owner?: string | null } | null)?.account_owner || ""), printavoAs, contacts, found,
       taxExempt: !!c.tax_exempt, terms: String(c.payment_terms || "receipt"), priceType: String(c.price_type || "retail"), notes: String((pr as { notes?: string | null } | null)?.notes || ""), movedAt: (c.moved_at as string | null) || null } as Detail };
