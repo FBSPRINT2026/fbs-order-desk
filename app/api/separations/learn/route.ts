@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
-import { cleanChange, COACH_SETTINGS, type CoachSetting } from "@/lib/sepCoach";
+import { cleanChange, COACH_SETTINGS, feedbackJob, lessonDefaultFrom, settingApplies, settingsInUse, STARTING_SETTINGS, WHEN_DOC, type LessonDefault } from "@/lib/sepCoach";
 
 /**
  * Learning from Separo (or any outside separation): when a job had to be separated elsewhere and the result comes back
@@ -17,7 +17,9 @@ type Ink = { name: string; hex?: string };
 type Body = {
   separation_id?: string; design_id?: string | null; source?: string; why?: string;
   theirs?: { inks: Ink[]; files: string[]; method?: string };
-  ours?: { method?: string; inks?: (Ink & { fadeTo?: string[]; also?: string[] })[]; natural?: number; settings?: Record<string, unknown> };
+  ours?: { method?: string; inks?: (Ink & { fadeTo?: string[]; also?: string[] })[]; natural?: number; settings?: Record<string, unknown>;
+    /** what actually goes on press, in print order */ screens?: { name: string; kind: string }[]; underbase_prints?: boolean;
+    /** colors in the art that print no screen (the shirt shows there, or the mockup took them out) */ left_to_shirt?: string[] };
   art?: Record<string, unknown>;
   images?: { label?: string; data?: string }[];
 };
@@ -37,6 +39,10 @@ export async function POST(req: Request) {
   const st = await aiState(admin);
   if (!st.ready) return NextResponse.json({ off: true, reason: st.reason });
 
+  // the job ours was: settings that do nothing on it (the highlight white on spot, the choke with no underbase) are left
+  // out of what Claude reads, and a lesson can't start new jobs at one of them (Oct 29, S-57; Nov 3, S-72)
+  const job = feedbackJob({ ours: b.ours, art: b.art });
+  if (b.ours?.settings) b.ours.settings = settingsInUse(b.ours.settings, job);
   const { data: lessons } = await admin.from("sep_lessons").select("lesson, tags").eq("active", true).gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(60);
   const images = (b.images || []).filter((x) => typeof x.data === "string" && x.data.length > 100 && x.data.length < 4_000_000).slice(0, 2)
     .map((x) => ({ media_type: "image/jpeg" as const, data: x.data!.replace(/^data:image\/\w+;base64,/, ""), label: String(x.label || "").slice(0, 200) }));
@@ -47,8 +53,10 @@ export async function POST(req: Request) {
     ...theirs.map((k, i) => `${i + 1}. ${k.name}${k.hex ? ` (${k.hex})` : ""}`),
     b.theirs?.files?.length ? `Files: ${b.theirs.files.slice(0, 10).join(", ")}` : "",
     "",
-    b.ours?.inks?.length ? `WHAT OUR STUDIO PICKED (${b.ours.method || "spot"}; the art itself has about ${b.ours.natural || b.ours.inks.length} colors):` : "Our Studio didn't separate this one.",
+    b.ours?.inks?.length ? `WHAT OUR STUDIO PRINTS (${b.ours.method || "spot"}; the art itself has about ${b.ours.natural || b.ours.inks.length} colors):` : "Our Studio didn't separate this one.",
     ...(b.ours?.inks || []).map((k, i) => `${i + 1}. ${k.name} (${k.hex})${k.fadeTo?.length ? ` fades to ${k.fadeTo.join(", ")}` : ""}${k.also?.length ? ` combined with ${k.also.join(", ")}` : ""}`),
+    b.ours?.left_to_shirt?.length ? `In the art but NOT printed (left to the shirt or taken out on the mockup, no screen): ${b.ours.left_to_shirt.join(", ")}` : "",
+    b.ours?.screens?.length ? `Our screens in print order: ${b.ours.screens.map((p) => (p.kind === "color" ? p.name : `${p.name} (${p.kind})`)).join(", ")}. ${b.ours.underbase_prints ? "An underbase prints." : "No underbase prints."}` : "",
     b.ours?.settings ? `Our settings: ${JSON.stringify(b.ours.settings).slice(0, 1200)}` : "",
     "",
     b.why?.trim() ? `WHY THE SHOP WENT TO ${String(b.source || "Separo").toUpperCase()} / WHAT WAS WRONG WITH OURS: ${b.why.trim().slice(0, 2000)}` : "The shop didn't say why.",
@@ -56,7 +64,7 @@ export async function POST(req: Request) {
     (lessons || []).length ? "ALREADY LEARNED (don't repeat; refine if this changes one):" : "",
     ...((lessons || []) as { lesson: string }[]).map((l) => `- ${l.lesson}`),
   ].join("\n");
-  const settingsDoc = (Object.keys(COACH_SETTINGS) as CoachSetting[]).filter((k) => k !== "addMiddle" && k !== "colors").map((k) => `- ${k}: ${COACH_SETTINGS[k].about}`).join("\n");
+  const settingsDoc = STARTING_SETTINGS.filter((k) => settingApplies(k, job)).map((k) => `- ${k}: ${COACH_SETTINGS[k].about}`).join("\n");
 
   const r = await askClaude<Answer>({
     task: "sep_learn",
@@ -73,7 +81,11 @@ export async function POST(req: Request) {
       "engine_notes: 0–4 short notes for the developer who maintains the separation engine: what our automatic ink finding / fade handling / underbase should do differently to match a good separator. Be specific and testable.",
       "Settings a lesson can start new separations at:",
       settingsDoc,
-      "Don't invent differences you can't see in the data. Never mention money.",
+      WHEN_DOC,
+      "Compare what each side actually prints: our screens as listed, nothing else. A color marked NOT printed is no ink and no difference. Only the settings that do something on this job are listed; one not shown is not in use here (spot color never prints a highlight white), so never call it a difference.",
+      "The shop's rule: every shirt gets a white underbase except a white one. That isn't up for change, and no lesson can start new separations at an underbase setting.",
+      "If both sides print the same inks, say they match; no lesson and no engine note are needed for a match.",
+      "Don't invent differences you can't see in the data. Never mention money."
     ].join("\n"),
     prompt,
     tool: {
@@ -85,7 +97,7 @@ export async function POST(req: Request) {
           summary: { type: "string" },
           lessons: { type: "array", items: { type: "object", properties: {
             text: { type: "string" }, tags: { type: "array", items: { type: "string" } },
-            default: { type: "object", properties: { setting: { type: "string", enum: Object.keys(COACH_SETTINGS).filter((k) => k !== "addMiddle" && k !== "colors") }, value: {}, when: { type: "string", enum: ["all", "spot", "sim", "dark", "light"] } }, required: ["setting", "value", "when"] },
+            default: { type: "object", properties: { setting: { type: "string", enum: STARTING_SETTINGS }, value: {}, when: { type: "string", enum: ["all", "spot", "sim", "dark", "light"] } }, required: ["setting", "value", "when"] },
           }, required: ["text"] } },
           engine_notes: { type: "array", items: { type: "string" } },
         },
@@ -105,7 +117,8 @@ export async function POST(req: Request) {
     if (!L?.text?.trim()) continue;
     const d = L.default ? cleanChange({ setting: L.default.setting, value: L.default.value }) : null;
     const when = ["all", "spot", "sim", "dark", "light"].includes(L.default?.when || "") ? L.default!.when : "all";
-    const ins = await admin.from("sep_lessons").insert({ lesson: L.text.trim().slice(0, 400), tags: ["separo", ...(L.tags || []).map((t) => String(t).toLowerCase().slice(0, 30)).slice(0, 2)], default_setting: d ? { setting: d.setting, value: d.value, when } : null, by: v.email, feedback_id: fb.data?.id || null }).select("id, lesson").single();
+    const def = lessonDefaultFrom(d ? { setting: d.setting, value: d.value, when: when as LessonDefault["when"] } : null, job);
+    const ins = await admin.from("sep_lessons").insert({ lesson: L.text.trim().slice(0, 400), tags: ["separo", ...(L.tags || []).map((t) => String(t).toLowerCase().slice(0, 30)).slice(0, 2)], default_setting: def, by: v.email, feedback_id: fb.data?.id || null }).select("id, lesson").single();
     if (ins.data) saved.push(ins.data as { id: string; lesson: string });
   }
   return NextResponse.json({ id: fb.data?.id || null, summary: r.data.summary, lessons: saved, engine_notes: r.data.engine_notes || [] });

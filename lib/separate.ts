@@ -331,6 +331,9 @@ export type SepInk = { hex: string; name: string;
   shirt?: boolean };
 /** colors the shirt shows through (not printed) */
 export const isShirtInk = (k: SepInk, s: Pick<SepSettings, "dropGarment" | "garment">) => k.shirt === true || (k.shirt !== false && s.dropGarment && deltaE(k.hex, s.garment) < 12);
+/** an ink in the list that prints no screen: taken out on the mockup, or left to the shirt. With more than one shirt on
+ *  the screens (`multiShirt`) a color only stays off the screens when the mockup took it out. */
+export const leftToShirt = (k: SepInk, s: Pick<SepSettings, "dropGarment" | "garment">, multiShirt = false) => k.noPrint === true || (!multiShirt && isShirtInk(k, s));
 export type SepResult = { plates: Plate[]; w: number; h: number; underbase: boolean; dropped: string[] };
 
 const Q = (r: number, g: number, b: number) => ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
