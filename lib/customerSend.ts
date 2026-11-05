@@ -358,6 +358,9 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   matchGoodsSoon();
   // a note starts the message thread they see too (not already said with the proof)
   if (pick.note?.trim() && !pick.proof) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: me.email, author_name: settings.shop.name, body: pick.note.trim().slice(0, 2000) });
+  // anything sent is an answer: with no proof or note said on the thread, say what went, so the Message Center sees the
+  // conversation as replied (Nov 5, Nick: "we replied to Michael… it shouldn't be there now")
+  else if (email && !pick.proof && done.length) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: me.email, author_name: settings.shop.name, body: `Sent ${done.join(" and ")}.` });
   const url = proofUrl(await proofLinkFor(admin, { kind: "order", orderId, to: email ? list[0] : undefined, by: me.email }));
   if (!email) return { ok: true as const, url, emailed: false, done };
   const { data: fresh } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();

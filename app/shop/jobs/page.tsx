@@ -102,7 +102,9 @@ export default function JobCenter() {
   // a request opened from its order page: the Requests list, that customer, that one opened (Nov 2, Nick)
   const [reqPick, setReqPick] = useState<string | null>(null);
   // which conversations the column shows: all, the ones waiting on us, or the ones with something new (Nov 2, Nick)
-  const [mShow, setMShow] = useSticky<"all" | "waiting" | "new">("jobs.msgShow", "all");
+  // Needs reply first: a conversation we've answered moves to Replied (Nov 5, Nick: "we replied to Michael… there should be
+  // a tab that says… replied… it just shouldn't be there now")
+  const [mShow, setMShow] = useSticky<"waiting" | "replied" | "all">("jobs.msgShow2", "waiting");
   const padRef = useRef<HTMLDivElement | null>(null);
   const [lvl, setLvl] = useState<{ pad: number; h: number }>({ pad: 0, h: 0 });
 
@@ -195,7 +197,7 @@ export default function JobCenter() {
     return it ? { key: chat, orderId: oid, topic: "", customerId: it.customerId || null, projectId: null, number: it.number ?? null, nickname: it.title, customer: it.customer, status: it.type === "request" ? "request" : "", last: { body: "", from: "staff" as const, who: "", at: it.at }, unread: 0, waiting: false, owner: "" } : null;
   })() : null;
   const mWant = mq.trim().toLowerCase();
-  const boardChats = myChats.filter((c) => (mShow === "waiting" ? c.waiting : mShow === "new" ? c.unread > 0 : true)).filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
+  const boardChats = myChats.filter((c) => (mShow === "waiting" ? c.waiting : mShow === "replied" ? !c.waiting : true)).filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
   const chatOfJob = (orderId: string) => myChats.find((c) => c.orderId === orderId) || null;
   const colorOfChat = (c: ChatSummary) => tagOf(c).c;
   // a conversation picked is a filter (Nov 2, Nick: "when you click on a message, it should just pull up the message. There
@@ -265,7 +267,7 @@ export default function JobCenter() {
           <span className="jrl-mc-t">Message Center<i aria-hidden /></span>
           {/* who's waiting on us, big, with their initials (Nov 2, Nick picked option C) */}
           <div className="jrl-mc-big">
-            <button type="button" className="jrl-mc-w" onClick={() => setMShow(mShow === "waiting" ? "all" : "waiting")} title="Show the conversations waiting on us"><b>{waitingNow}</b><span>waiting on us<small>{myChats.reduce((a0, c) => a0 + c.unread, 0)} new</small></span></button>
+            <button type="button" className="jrl-mc-w" onClick={() => setMShow("waiting")} title="Show the conversations waiting on us"><b>{waitingNow}</b><span>waiting on us<small>{myChats.reduce((a0, c) => a0 + c.unread, 0)} new</small></span></button>
             <span className="jrl-mc-av" aria-hidden>{myChats.filter((c) => c.waiting).slice(0, 3).map((c) => <i key={c.key} title={whoOf(c)} style={{ background: colorOfChat(c) }}>{(whoOf(c) === "You" ? c.customer : whoOf(c)).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?"}</i>)}{waitingNow > 3 && <i>+{waitingNow - 3}</i>}</span>
           </div>
         </div>
@@ -299,7 +301,7 @@ export default function JobCenter() {
       <div className="jmb">
         {/* the counts on the line of the list's colored bar, the search under them (Nov 2, Nick) */}
         {/* on the line of the list's bar: which conversations to show, with their counts */}
-        <div className="jrl-mf" role="radiogroup" aria-label="Show">{([["all", "All", myChats.length], ["waiting", "Waiting", waitingNow], ["new", "New", myChats.filter((c) => c.unread > 0).length]] as const).map(([k, l, n]) => (
+        <div className="jrl-mf" role="radiogroup" aria-label="Show">{([["waiting", "Needs reply", waitingNow], ["replied", "Replied", myChats.length - waitingNow], ["all", "All", myChats.length]] as const).map(([k, l, n]) => (
           <button key={k} type="button" role="radio" aria-checked={mShow === k} className={mShow === k ? "on" : ""} onClick={() => setMShow(k)}>{l}<em>{n}</em></button>))}</div>
         <input className="jmb-s" value={mq} onChange={(e) => setMq(e.target.value)} placeholder="Search messages" aria-label="Search messages" />
         <div ref={padRef} style={{ height: lvl.pad }} aria-hidden />
