@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/config";
-import { SERVICES, SITE, STEPS, WHO, sitePhoto } from "@/lib/siteContent";
+import { SERVICES, SITE, STEPS, WHO } from "@/lib/siteContent";
 import SiteIconArt, { type SiteIcon } from "@/components/site/SiteIcons";
 import SiteRequestForm from "@/components/site/SiteRequestForm";
 
@@ -38,14 +38,14 @@ export default function SitePage() {
 
       <main id="top">
         {/* the old site's squeegee photo behind the headline (Nov 5, Nick: "I like that picture… build that into our header") */}
-        <section className="fws-hero" style={{ backgroundImage: `linear-gradient(90deg, rgba(20,29,43,.96) 0%, rgba(20,29,43,.86) 42%, rgba(20,29,43,.25) 100%), url(${sitePhoto("hero/squeegee.jpg")})` }}>
+        <section className="fws-hero">
           <div className="fws-hero-t">
             <p className="fws-kick">Apparel · print · fulfillment</p>
             <h1 className="fws-d">Shirts, hats and print, done right and on time.</h1>
             <p className="fws-lead">Screen printing, embroidery, DTF, signage and promotional products for businesses, breweries, schools and brands, plus wholesale contract printing for decorators. In Richardson, TX since {SITE.since}.</p>
             <div className="fws-row"><a className="fws-btn p lg" href="#request">Start an order or quote</a><a className="fws-btn ghost lg" href={login}>Customer login</a></div>
           </div>
-          <img className="fws-badge" src={sitePhoto("brand/badge-white.png")} alt="FBS: create, print, deliver" />
+          <div className="fws-hero-pic" aria-hidden />
         </section>
 
         <section className="fws-portal" aria-label="Customer portal">
