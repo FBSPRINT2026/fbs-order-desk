@@ -98,7 +98,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     drafts = all.filter((o) => o.draft).map((o) => ({ id: o.id, name: o.nickname || "", updated: String((o as { updated_at?: string }).updated_at || o.created_at || ""), pcs: o.qty || 0 }));
     orders = all.filter((o) => !o.draft);
     // the orders this login follows (each person their own; lib/orderFollows.ts)
-    orders = (await (await import("@/lib/orderFollows")).withMyFollows(createAdminClient(), orders, ctx.email, !!ctx.preview)) as unknown as Order[];
+    // (started beside the next reads: it only adds who follows what)
+    const follows = import("@/lib/orderFollows").then((m) => m.withMyFollows(createAdminClient(), orders, ctx.email, !!ctx.preview));
     const ids = orders.map((o) => o.id);
     const num = (id: string | null) => orders.find((o) => o.id === id)?.number ?? null;
     const [p, pr, d, m, msg] = await Promise.all([
@@ -108,6 +109,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       ctx.db.from("mockups").select("*").in("customer_id", ctx.customerIds).is("archived_at", null).eq("draft", false).order("created_at", { ascending: false }),
       ctx.db.from("messages").select("*").is("hidden_at", null).or(`customer_id.in.(${ctx.customerIds.join(",")})${ids.length ? `,order_id.in.(${ids.join(",")})` : ""}`).order("created_at"),
     ]);
+    orders = (await follows) as unknown as Order[];
+  T.lap("reads");
     const pays = (p.data || []) as { id: string; order_id: string; amount: number; method: string; paid_on: string | null; created_at: string }[];
     pays.forEach((x) => { paid[x.order_id] = (paid[x.order_id] || 0) + (+x.amount || 0); });
     payments = pays.map((x) => ({ ...x, amount: +x.amount || 0, number: num(x.order_id) || 0, nickname: orders.find((o) => o.id === x.order_id)?.nickname || "" }));
@@ -120,23 +123,24 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     for (const { data: u } of (early ? await early.used : [])) usedIds.push(...((u || []) as string[]));
   T.lap("batch2");
     const withPv = designs.filter((x) => x.preview_path);
-    if (withPv.length) {
-      const { data: sg } = await admin.storage.from("proofs").createSignedUrls(withPv.map((x) => x.preview_path), 3600);
-      withPv.forEach((x, i) => { if (sg?.[i]?.signedUrl) designUrls[x.id] = sg[i].signedUrl!; });
-    }
     logoShirts = logoShirtsFrom(orders);
     for (const [id, p] of Object.entries(logoPrintFrom(orders, (c) => colorHex(c) || guessHex(c), deltaE))) logoLooks[id] = { printed: p };
     const sh = logoShownFrom(orders), shPaths = [...new Set(Object.values(sh).map((x) => x.path))];
-    if (shPaths.length) {
-      const { data: sg } = await admin.storage.from("proofs").createSignedUrls(shPaths, 3600);
-      const at = Object.fromEntries((sg || []).map((x, i) => [shPaths[i], x.signedUrl || ""]));
-      for (const [id, v] of Object.entries(sh)) if (at[v.path]) logoLooks[id] = { ...(logoLooks[id] || {}), shown: { url: at[v.path], shirt: logoLooks[id]?.printed?.shirt || v.shirt } };
-    }
     const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null; shelved_at?: string | null }[]);
-  T.lap("preMockSign");
+    // every picture signed in one request, beside the staff list (Nov 5: Cedar Promos' portal made these one after another)
+    const mlPaths = ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]);
+    const allPaths = [...withPv.map((x) => x.preview_path as string), ...shPaths, ...mlPaths];
+    const [{ data: sgAll }, { data: stf }] = await Promise.all([
+      allPaths.length ? admin.storage.from("proofs").createSignedUrls(allPaths, 3600) : Promise.resolve({ data: [] as { signedUrl: string | null }[] }),
+      ml.length ? admin.from("staff").select("email") : Promise.resolve({ data: [] }),
+    ]);
+    const signed = (k: number) => (sgAll || [])[k]?.signedUrl || "";
+    withPv.forEach((x, i) => { if (signed(i)) designUrls[x.id] = signed(i); });
+    const at = Object.fromEntries(shPaths.map((pth, i) => [pth, signed(withPv.length + i)]));
+    for (const [id, v] of Object.entries(sh)) if (at[v.path]) logoLooks[id] = { ...(logoLooks[id] || {}), shown: { url: at[v.path], shirt: logoLooks[id]?.printed?.shirt || v.shirt } };
+    const off = withPv.length + shPaths.length;
+    const sg = mlPaths.map((_, k) => ({ signedUrl: signed(off + k) }));
     if (ml.length) {
-      const { data: sg } = await admin.storage.from("proofs").createSignedUrls(ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]), 3600);
-      const { data: stf } = await admin.from("staff").select("email");
       const staff = new Set(((stf || []) as { email: string }[]).map((x) => String(x.email || "").toLowerCase()));
       mockups = ml.map((x, i) => ({ byFbs: staff.has(String((x as { created_by?: string | null }).created_by || "").toLowerCase()), id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, shelved: !!x.shelved_at, created_at: x.created_at, url: sg?.[i * 2]?.signedUrl || "", thumb: sg?.[i * 2 + 1]?.signedUrl || sg?.[i * 2]?.signedUrl || "", detail: mockupDetail(x.snapshot as never) }));
     }
