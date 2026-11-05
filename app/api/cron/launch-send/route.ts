@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { launchWaiting, personalWaiting, sendLaunchTo, sendPersonalNote, clickupCustomers } from "@/lib/launchSend";
+import { launchWaiting, personalWaiting, sendLaunchTo, sendLaunchToPeople, sendPersonalNote, clickupCustomers } from "@/lib/launchSend";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,12 +19,16 @@ export async function GET() {
   const { data: due } = await admin.from("launch_schedule").select("step").lte("run_at", now).is("started_at", null).is("cancelled_at", null);
   const out: Record<string, unknown> = {};
   for (const { step } of (due || []) as { step: string }[]) {
-    const { data: claim } = await admin.from("launch_schedule").update({ started_at: new Date().toISOString() }).eq("step", step).is("started_at", null).is("cancelled_at", null).select("step, armed_by");
+    const { data: claim } = await admin.from("launch_schedule").update({ started_at: new Date().toISOString() }).eq("step", step).is("started_at", null).is("cancelled_at", null).select("step, armed_by, targets");
     if (!claim?.length) continue;
     const by = `${(claim[0] as { armed_by: string }).armed_by || "owner"} (scheduled)`;
     let result: Record<string, unknown>;
     try {
-      if (step === "launch") {
+      if (step === "people") {
+        // the launch email to particular contacts the owner picked (launch_schedule.targets)
+        const t = ((claim[0] as { targets?: unknown }).targets || []) as { customer_id: string; email: string; name?: string }[];
+        result = await sendLaunchToPeople(admin, Array.isArray(t) ? t : [], by);
+      } else if (step === "launch") {
         const ids = await launchWaiting(admin);
         result = await sendLaunchTo(admin, ids, by);
       } else if (step === "personal") {

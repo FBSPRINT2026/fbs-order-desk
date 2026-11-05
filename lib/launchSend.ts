@@ -52,6 +52,32 @@ export async function sendLaunchTo(admin: SupabaseClient, ids: string[], by: str
   return { sent, failed };
 }
 
+/**
+ * The launch email to particular people at a company (Nov 5, Nick: "send Carol, Cherry, and Maverick the… introductory
+ * email"), not just the main email: each person once (a person it already went to is skipped), greeted by their own name.
+ */
+export async function sendLaunchToPeople(admin: SupabaseClient, people: { customer_id: string; email: string; name?: string }[], by: string) {
+  const { sendEmail, siteUrl } = await import("@/lib/email");
+  const { LAUNCH_SUBJECT, launchEmailHtml } = await import("@/lib/launchEmail");
+  const site = siteUrl();
+  let sent = 0; const failed: { email: string; why: string }[] = []; const skipped: string[] = [];
+  for (const p of people) {
+    const to = String(p.email || "").trim().toLowerCase();
+    if (!okEmail(to)) { failed.push({ email: to, why: "Not an email address." }); continue; }
+    const { data: done } = await admin.from("launch_email_sends").select("id").eq("ok", true).eq("customer_id", p.customer_id).ilike("email", to).limit(1);
+    if (done?.length) { skipped.push(to); continue; }
+    const { data: c } = await admin.from("customers").select("company, is_test").eq("id", p.customer_id).maybeSingle();
+    if (!c || c.is_test) { failed.push({ email: to, why: "Customer not found." }); continue; }
+    const company = String(c.company || "").trim();
+    const html = launchEmailHtml({ site, portalUrl: `${site}/portal`, firstName: String(p.name || "").trim().split(/\s+/)[0] || "", company: company || undefined });
+    let ok = false, why = "";
+    try { ok = await sendEmail({ to, subject: LAUNCH_SUBJECT, html }); if (!ok) why = "The email service didn't take it."; } catch (e) { why = e instanceof Error ? e.message : String(e); }
+    await admin.from("launch_email_sends").insert({ customer_id: p.customer_id, email: to, company: company || null, ok, error: ok ? null : why.slice(0, 300), sent_by: by });
+    if (ok) sent++; else failed.push({ email: to, why });
+  }
+  return { sent, failed, skipped };
+}
+
 /** who the launch email is waiting on: moved, not quiet, not a test, a good email, not sent yet */
 export async function launchWaiting(admin: SupabaseClient) {
   const { data: cs } = await allRows((a, b) => admin.from("customers").select("id, email, moved_at, launch_quiet, is_test").not("moved_at", "is", null).order("id").range(a, b));
