@@ -362,18 +362,24 @@ export async function requestCancellation(orderId: string, reason: string, note:
  */
 export async function starMyOrder(orderId: string, starred: boolean): Promise<Result> {
   try {
-    const { supabase, user, isStaff } = await getViewer();
+    const { supabase, user, isStaff, email } = await getViewer();
     if (!user) return { ok: false, error: "Please sign in again." };
     if (isStaff) return { ok: false, error: "This is a preview." };
     const { data: o } = await supabase.from("orders").select("id, customer_id").eq("id", orderId).maybeSingle();
     if (!o) return { ok: false, error: "We couldn't find that order." };
-    // up to 9 at a time, so the tracker fits three by three (Oct 24, Nick: "no more than 9 at a time")
+    const me = String(email || "").toLowerCase();
+    if (!me) return { ok: false, error: "Please sign in again." };
+    const admin = createAdminClient();
+    // each login follows its own orders (lib/orderFollows.ts); up to 9 at a time, so the tracker fits three by three
+    // (Oct 24, Nick: "no more than 9 at a time")
     if (starred) {
-      const { count } = await createAdminClient().from("orders").select("id", { count: "exact", head: true }).eq("customer_id", o.customer_id)
-        .not("customer_starred_at", "is", null).not("status", "in", "(completed,void,canceled)").is("discarded_at", null).neq("id", orderId);
-      if ((count || 0) >= 9) return { ok: false, error: "You can track up to 9 orders at a time. Unstar one first." };
+      const { data: mine } = await admin.from("order_follows").select("order_id, orders!inner(status, discarded_at)").eq("email", me).neq("order_id", orderId)
+        .not("orders.status", "in", "(completed,void,canceled)").is("orders.discarded_at", null);
+      if ((mine || []).length >= 9) return { ok: false, error: "You can track up to 9 orders at a time. Unstar one first." };
     }
-    const { error } = await createAdminClient().from("orders").update({ customer_starred_at: starred ? new Date().toISOString() : null }).eq("id", orderId);
+    const { error } = starred
+      ? await admin.from("order_follows").upsert({ order_id: orderId, email: me }, { onConflict: "order_id,email", ignoreDuplicates: true })
+      : await admin.from("order_follows").delete().eq("order_id", orderId).eq("email", me);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/portal");
     return { ok: true };

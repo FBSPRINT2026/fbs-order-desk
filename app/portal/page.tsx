@@ -92,6 +92,8 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     const all = ((data || []) as (Order & { draft?: boolean })[]).map((o) => asCustomerSees(o, ctx.settings, specs));
     drafts = all.filter((o) => o.draft).map((o) => ({ id: o.id, name: o.nickname || "", updated: String((o as { updated_at?: string }).updated_at || o.created_at || ""), pcs: o.qty || 0 }));
     orders = all.filter((o) => !o.draft);
+    // the orders this login follows (each person their own; lib/orderFollows.ts)
+    orders = (await (await import("@/lib/orderFollows")).withMyFollows(createAdminClient(), orders, ctx.email, !!ctx.preview)) as unknown as Order[];
     const ids = orders.map((o) => o.id);
     const num = (id: string | null) => orders.find((o) => o.id === id)?.number ?? null;
     const [p, pr, d, m, msg] = await Promise.all([
