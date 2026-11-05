@@ -88,7 +88,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ simple = false, titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", orderTypes = [], dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders, payments, designs, designUrls, mockups, messages, attention, homeTop, details, creditBox, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ simple = false, titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", orderTypes = [], dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders: orders0, payments: payments0, moreOrders, designs, designUrls, mockups, messages, attention, homeTop, details, creditBox, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
@@ -128,7 +128,10 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   greeting?: string;
   /** wholesale: the customer supplied goods area (full), a compact version for the dashboard, and how many need attention */
   goodsPanel?: ReactNode; goodsHome?: ReactNode; goodsCount?: number;
-  orders: AOrder[]; payments: APayment[]; designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
+  orders: AOrder[]; payments: APayment[];
+  /** portal: the rest of a long old-order history, fetched just after the page is up (lib/portalArchive.ts) */
+  moreOrders?: () => Promise<{ orders: AOrder[]; payments: APayment[] }>;
+  designs: Design[]; designUrls: Record<string, string>; mockups: AMockup[]; messages: AMessage[];
   attention: AAttn[];
   /** shown at the top of the dashboard (portal: Start an order / Make a mockup) */
   homeTop?: ReactNode;
@@ -167,6 +170,16 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   /** false in the staff preview of a portal: sending is turned off */
   canAct?: boolean;
 }) {
+  // a long history's older orders arrive after the first paint and join the lists (Nov 5: Cedar Promos was slow)
+  const [older, setOlder] = useState<{ orders: AOrder[]; payments: APayment[] } | null>(null);
+  useEffect(() => {
+    if (!moreOrders) return;
+    let live = true;
+    const t = setTimeout(() => { moreOrders().then((r) => { if (live) setOlder(r); }).catch(() => {}); }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [moreOrders]);
+  const orders: AOrder[] = useMemo(() => (older ? [...orders0, ...older.orders.filter((o) => !orders0.some((x) => x.id === o.id))] : orders0), [orders0, older]);
+  const payments: APayment[] = useMemo(() => (older ? [...payments0, ...older.payments].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at)) : payments0), [payments0, older]);
   const router = useRouter(), path = usePathname(), sp = useSearchParams();
   const hrefs = useMemo(() => Object.fromEntries(orders.filter((o) => o.href).map((o) => [o.id, o.href as string])), [orders]);
   const orderHref = (id: string, hash?: string) => hrefs[id] || `${hrefBase}${id}${hrefQuery}${hash ? "#" + hash : ""}`;

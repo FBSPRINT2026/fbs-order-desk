@@ -1,4 +1,5 @@
 "use client";
+import { allRows } from "@/lib/readAll";
 import { holdLabel } from "@/lib/holds";
 import EmailPrefs from "@/components/EmailPrefs";
 import StaxCardImport from "@/components/StaxCardImport";
@@ -110,8 +111,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   }, [id]);
   const [archive, setArchive] = useState<(ArchiveSummary & { transactions: PvTransaction[] | null })[]>([]);
   useEffect(() => {
-    createClient().from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_staff, transactions:data->transactions`).is("removed_at", null)
-      .eq("customer_id", id).order("order_date", { ascending: false }).then(({ data }) => setArchive((data || []) as never));
+    // in pages: the database answers 1,000 rows at most (Cedar Promos has 2,337 old orders; lib/readAll.ts)
+    const sb = createClient();
+    allRows((ra, rb) => sb.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_staff, transactions:data->transactions`).is("removed_at", null)
+      .eq("customer_id", id).order("order_date", { ascending: false }).order("id").range(ra, rb)).then(({ data }) => setArchive((data || []) as never));
   }, [id]);
   const orderIds = orders.filter((o) => o.customer_id === id).map((o) => o.id).join(",");
   useEffect(() => {

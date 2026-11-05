@@ -1,6 +1,8 @@
 import { asCustomerSees, designSpecsFor, SENT_OR_SHOWN } from "@/lib/portalView";
-import { cardFeeInOld, cardFeeInOrder } from "@/lib/cardFeeIn";
+import { cardFeeInOrder } from "@/lib/cardFeeIn";
 import { allRows } from "@/lib/readAll";
+import { oldOrderRows, oldOrdersFirst } from "@/lib/portalArchive";
+import { portalOlderOrders } from "@/app/portal/older-actions";
 import CreditBox from "@/components/CreditBox";
 import { discardRequest } from "@/app/portal/request-actions";
 import { getPortalCtx, seesPriceList } from "@/lib/portal";
@@ -41,7 +43,7 @@ import { cardHasPrices, type Program, type ProgramItem } from "@/lib/programs";
 import { aiPaySelect } from "@/app/portal/pay-select";
 import { customerSendsGoods, needsGoods } from "@/lib/goods";
 import { loadGoodsItems } from "@/lib/goodsServer";
-import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvOrder, type PvTransaction, storedPath, archivePicPath, archiveMockHandles } from "@/lib/archive";
+import { type ArchiveSummary, type PvOrder, type PvTransaction, storedPath, archivePicPath, archiveMockHandles } from "@/lib/archive";
 import { fmtPhone } from "@/lib/phone";
 import PortalDesignCatalog from "@/components/PortalDesignCatalog";
 import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/lib/logoShirts";
@@ -79,10 +81,11 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   } : null;
   // past orders from before the portal (read with the server key: only the summary and payments leave the server)
   let archived: (ArchiveSummary & { transactions: PvTransaction[] | null })[] = [];
+  let moreOld = false;
   if (ctx.customerIds.length) {
     const [{ data: ar }, { data }] = await Promise.all([
-      // every one, in pages (Nov 2 portal check: Cedar Promos has 2,337 old orders and the list stopped at 1,000)
-      allRows((ra, rb) => admin.from("archived_orders").select(`${ARCHIVE_LIST_COLS}, search:search_text, transactions:data->transactions`).is("removed_at", null).in("customer_id", ctx.customerIds).order("order_date", { ascending: false }).order("id").range(ra, rb)),
+      // the newest and every owed one now; a long history's rest comes just after the page is up (lib/portalArchive.ts)
+      oldOrdersFirst(admin, ctx.customerIds).then((r) => { moreOld = r.more; return { data: r.rows }; }),
       allRows((ra, rb) => ctx.db.from("orders").select("*").in("customer_id", ctx.customerIds).or(SENT_OR_SHOWN).is("discarded_at", null).order("number", { ascending: false }).order("id").range(ra, rb)),
     ]);
     archived = (ar || []) as never;
@@ -146,26 +149,13 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     // what can be paid now (lib/payReady.ts)
     ...(() => { const ps = payState(o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: paid[o.id] || 0, depositPct: ctx.settings.depositPct, terms: ctx.customers.find((c) => c.id === o.customer_id)?.payment_terms || "receipt" }); return { payCan: ps.can, payWhy: ps.why, notFinal: ps.notFinal, payNote: ps.note }; })() }));
   const archHref = (id: string) => `/portal/archive/${id}${qs}`;
-  const owedArch = archived.filter((a) => a.kind === "invoice" && +a.balance > 0.004).map((a) => a.id);
-  const payUrls: Record<string, string> = {}, feeIns: Record<string, number> = {};
-  for (let i = 0; i < owedArch.length; i += 200) {
-    const { data: pu } = await admin.from("archived_orders").select("id, balance, pay:data->urls->>publicUrl, fees:data->fees, groups:data->groups").is("removed_at", null).in("id", owedArch.slice(i, i + 200));
-    ((pu || []) as { id: string; balance: number; pay: string | null; fees: null; groups: null }[]).forEach((r) => { if (r.pay && /^https:\/\//.test(r.pay)) payUrls[r.id] = r.pay; const n = cardFeeInOld(r, +r.balance || 0); if (n) feeIns[r.id] = n; });
-  }
   // an account that has moved to the new system pays its old invoices here too (Nov 2, Nick: "they should be able to pay
   // in our new system only"); the others keep their old invoice's own pay link until they move
   const movedIds = new Set(ctx.customers.filter((c) => !!(c as { moved_at?: string | null }).moved_at).map((c) => c.id));
-  aOrders.push(...archived.map((a) => ({ ...archiveAsOrder(a, archHref(a.id)), payUrl: payUrls[a.id], cardFeeIn: feeIns[a.id] || 0, payHere: movedIds.has((a as { customer_id?: string }).customer_id || "") })));
-  // what's been paid here on old invoices (migration 260), beside Printavo's own payments
-  const archIds = archived.map((a) => a.id), ours: APayment[] = [];
-  for (let i = 0; i < archIds.length; i += 300) {
-    const { data: op } = await admin.from("payments").select("id, archived_order_id, amount, method, paid_on, created_at, processor_id, note, fee").in("archived_order_id", archIds.slice(i, i + 300));
-    for (const x of (op || []) as { id: string; archived_order_id: string; amount: number; method: string; paid_on: string | null; created_at: string; processor_id: string | null; note: string | null; fee: number | null }[]) {
-      const a = archived.find((r) => r.id === x.archived_order_id);
-      ours.push({ id: x.id, order_id: x.archived_order_id, number: +(a?.visual_id || 0), amount: +x.amount || 0, method: x.method, paid_on: x.paid_on, created_at: x.created_at, href: archHref(x.archived_order_id), processor_id: x.processor_id, note: x.note, fee: x.fee, nickname: a?.nickname || "", archived: true });
-    }
-  }
-  payments = [...payments, ...ours, ...archived.flatMap((a) => archivePayments(a, archHref(a.id)))].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at));
+  const old = await oldOrderRows(admin, archived, { href: archHref, movedIds });
+  aOrders.push(...old.orders);
+  const payUrls = old.payUrls;
+  payments = [...payments, ...old.payments].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at));
 
   // what's waiting on the customer
   const attention: AAttn[] = [];
@@ -481,7 +471,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
             onPaySelect={aiPaySelect}
             statementHref={`/portal/statement${qs}`}
             messagesPanel={<PortalMessages initial={hubMsgs} orders={hubOrders} projects={projects.map((p) => ({ id: p.id, name: p.name, href: `/portal/projects/${p.id}${qs}` }))} shopName={ctx.settings.shop.name} as={ctx.preview?.id} canAct={!ctx.preview} start={startConvo} />}
-            orders={aOrders} payments={payments} designs={designs} designUrls={designUrls} logoShirts={logoShirts} logoLooks={logoLooks} mockups={mockups} messages={messages}
+            orders={aOrders} payments={payments} moreOrders={moreOld ? portalOlderOrders.bind(null, as || "") : undefined} designs={designs} designUrls={designUrls} logoShirts={logoShirts} logoLooks={logoLooks} mockups={mockups} messages={messages}
             attention={attention} homeTop={<StartPanel compact preview={!!ctx.preview} mockupHref={`/portal/mockup${qs}`} />} hrefBase="/portal/orders/" hrefQuery={qs} canAct={!ctx.preview}
             onSend={customerGeneralMessage} onStar={starMyDesign} usedIds={usedIds} onDelete={deleteDesign} onArchive={archiveDesign} onStarMockup={starMyMockup} onArchiveMockup={archiveMyMockup} drafts={drafts} onDiscardDraft={discardRequest} settingsHref={`/portal/settings${qs}`} pricingPanel={seesPriceList(ctx.customers) ? <PortalPricing pl={priceList(ctx.settings, "wholesale")} company={ctx.customers[0]?.company || ctx.customers[0]?.name || ""} phone={ctx.settings.shop.phone || ""} msgHref={msgLink(null)} /> : undefined}
             terms={PAY_TERMS[acct?.payment_terms || "receipt"]}
