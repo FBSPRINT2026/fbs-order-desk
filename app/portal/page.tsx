@@ -53,6 +53,7 @@ import { guessHex } from "@/lib/mockup";
 export default async function PortalHome({ searchParams }: { searchParams: Promise<{ as?: string; c?: string; tour?: string }> }) {
   const { as, c: startConvo, tour } = await searchParams;
   const ctx = await getPortalCtx(as);
+  const T = (await import("@/lib/pageTimer")).pageTimer(`portal ${ctx.preview?.company || ctx.email}`, ctx.isStaff);
   const qs = ctx.preview ? `?as=${ctx.preview.id}` : "";
   const admin = createAdminClient();
 
@@ -92,6 +93,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     // drafts aren't orders yet (Oct 24, Nick): only in "Your drafts", never in the lists
     // an order they sent in that we're still building shows as they sent it (lib/portalView.ts)
     const specs = await designSpecsFor(ctx.db, (data || []) as Order[]);
+  T.lap("first");
     const all = ((data || []) as (Order & { draft?: boolean })[]).map((o) => asCustomerSees(o, ctx.settings, specs));
     drafts = all.filter((o) => o.draft).map((o) => ({ id: o.id, name: o.nickname || "", updated: String((o as { updated_at?: string }).updated_at || o.created_at || ""), pcs: o.qty || 0 }));
     orders = all.filter((o) => !o.draft);
@@ -116,6 +118,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     rawMsgs = (msg.data || []) as typeof rawMsgs;
     designs = (d.data || []) as Design[];
     for (const { data: u } of (early ? await early.used : [])) usedIds.push(...((u || []) as string[]));
+  T.lap("batch2");
     const withPv = designs.filter((x) => x.preview_path);
     if (withPv.length) {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(withPv.map((x) => x.preview_path), 3600);
@@ -130,6 +133,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       for (const [id, v] of Object.entries(sh)) if (at[v.path]) logoLooks[id] = { ...(logoLooks[id] || {}), shown: { url: at[v.path], shirt: logoLooks[id]?.printed?.shirt || v.shirt } };
     }
     const ml = oneOfEach((m.data || []) as { id: string; title: string; file_path: string; order_id: string | null; created_at: string; starred?: boolean; number?: number | null; snapshot?: { lines?: unknown[] } | null; shelved_at?: string | null }[]);
+  T.lap("preMockSign");
     if (ml.length) {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(ml.flatMap((x) => [x.file_path, x.file_path.replace(/\.png$/, "-thumb.png")]), 3600);
       const { data: stf } = await admin.from("staff").select("email");
@@ -137,6 +141,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
       mockups = ml.map((x, i) => ({ byFbs: staff.has(String((x as { created_by?: string | null }).created_by || "").toLowerCase()), id: x.id, title: x.title, starred: !!x.starred, order_id: x.order_id, number: num(x.order_id), mno: x.number ?? null, setup: !!x.snapshot?.lines?.length, shelved: !!x.shelved_at, created_at: x.created_at, url: sg?.[i * 2]?.signedUrl || "", thumb: sg?.[i * 2 + 1]?.signedUrl || sg?.[i * 2]?.signedUrl || "", detail: mockupDetail(x.snapshot as never) }));
     }
     messages = ((msg.data || []) as AMessage[]).map((x) => ({ ...x, number: num(x.order_id) }));
+  T.lap("mockSigned");
     hubMsgs = await withFiles((msg.data || []) as never[], async (paths) => {
       const { data: sg } = await admin.storage.from("proofs").createSignedUrls(paths, 3600);
       return (sg || []).map((x) => x.signedUrl || null);
@@ -153,6 +158,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // in our new system only"); the others keep their old invoice's own pay link until they move
   const movedIds = new Set(ctx.customers.filter((c) => !!(c as { moved_at?: string | null }).moved_at).map((c) => c.id));
   const old = await oldOrderRows(admin, archived, { href: archHref, movedIds });
+  T.lap("oldRows");
   aOrders.push(...old.orders);
   const payUrls = old.payUrls;
   payments = [...payments, ...old.payments].sort((a, b) => (b.paid_on || b.created_at).localeCompare(a.paid_on || a.created_at));
@@ -180,17 +186,20 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   // goods they told us about before there was an order for them (customer_shipments): not on an order yet, on the way or
   // here within the last 10 days
   const { data: toldRows } = await admin.from("customer_shipments").select("id, job_text, vendor, vendor_order, carrier, tracking, boxes, note, track_status, est_delivery, delivered_at, created_at").in("customer_id", cids.length ? cids : ["00000000-0000-0000-0000-000000000000"]).is("linked_order_id", null).is("archived_at", null).order("created_at", { ascending: false }).limit(200);
+  T.lap("told");
   const told = ((toldRows || []) as ToldShipment[]).filter((t) => !t.delivered_at || Date.now() - Date.parse(t.delivered_at) < 10 * 86400000);
   const wholesale = ctx.customers.some((c) => c.price_type === "wholesale") || orders.some((o) => o.price_type === "wholesale") || incoming.length > 0 || told.length > 0;
   // the Goods tab lists every order with goods until it's done (Nov 2, Nick: "organized by orders"); what they're asked
   // about (the dashboard's to-dos) stays the orders still waiting on them
   const goodsAll = wholesale ? await loadGoodsItems(admin, orders.filter(needsGoods) as never, "customer", (id) => `/portal/orders/${id}${qs}`) : [];
+  T.lap("goods");
   const sendIds = new Set(orders.filter(customerSendsGoods).map((o) => o.id));
   const goodsItems = goodsAll.filter((g) => sendIds.has(g.order.id));
   const goodsOpen = goodsItems.filter((g) => g.goods.status !== "received");
   const goodsHref = `/portal${qs ? qs + "&" : "?"}area=receive`;
   // projects and program pricing
   const projects = early ? await early.projects : await projectSummaries(admin, ctx.customerIds, true);
+  T.lap("projects");
   // staff previewing see the program even while it's off, marked so (Oct 17: to check it before the customer does)
   const { data: progs } = early ? await early.progs : { data: [] };
   const program = ((progs || [])[0] || null) as Program | null;
@@ -244,6 +253,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   const picOrders = [...jobOrders, ...doneRecent, ...recentDone, ...pastPortal.slice(0, 3)];
   const picPaths = [...new Set(picOrders.map(picPath).filter(Boolean))];
   const { data: picSigned } = picPaths.length ? await admin.storage.from("proofs").createSignedUrls(picPaths, 3600) : { data: [] };
+  T.lap("pics");
   const picOf = (o: Order) => { const p = picPath(o); const i = picPaths.indexOf(p); return i >= 0 ? picSigned?.[i]?.signedUrl || "" : ""; };
   // messages by conversation (order or general), newest first; "new" = from us and not read yet
   const conv = new Map<string, { orderId: string | null; last: (typeof rawMsgs)[number]; unread: number }>();
@@ -431,6 +441,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
     ...pastPortal.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname || "", when: short(o.completed_at || o.due_date || o.created_at), qty: o.qty, pic: picOf(o), href: link(`/portal/orders/${o.id}`), total: +((o as { total?: number }).total || 0), date: o.completed_at || o.due_date || o.created_at || "" })),
     ...archHist.map((a) => ({ id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", when: short(a.due_date || a.order_date), qty: a.qty || 0, pic: archPics[a.id] || "", href: archHref(a.id), archived: true, total: +a.total || 0, date: a.due_date || a.order_date || "" })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 8);
+  T.lap("built"); T.done();
   const dash = simple ? (
     <PortalSimple support={<SupportButton email={ctx.email} portal look="row" />} search={<PortalAssistant qs={qs} canAct={!ctx.preview} wholesale={wholesale} bare pop personHref={msgLink(null)}
       ideas={["Search my orders", "What do I owe?", "Find my artwork", history[0] ? `Reorder ${history[0].nickname || `#${history[0].number}`}` : "Reorder a past job", jobs[0] ? `Where's my ${jobs[0].nickname} order?` : "Where's my order?"]} />}
