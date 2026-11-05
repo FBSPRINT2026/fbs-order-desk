@@ -20974,7 +20974,8 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .fws-sub{color:var(--ink-2);margin:0 0 22px}
 .fws-svcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px;margin-top:20px}
 .fws-svc{border-top:4px solid var(--fbs-blue);padding:16px 0 0}
-.fws-ic{display:block;color:var(--ink);margin-bottom:8px}
+.fws-ic{display:block;color:var(--ink);margin-bottom:8px;height:64px}
+.fws-ic img{height:64px;width:auto;object-fit:contain}
 .fws-svc.blue .fws-ic svg{filter:drop-shadow(3px 3px 0 color-mix(in srgb,var(--fbs-blue) 35%,transparent))}
 .fws-svc.salmon .fws-ic svg{filter:drop-shadow(3px 3px 0 color-mix(in srgb,var(--fbs-salmon) 35%,transparent))}
 .fws-svc.orange .fws-ic svg{filter:drop-shadow(3px 3px 0 color-mix(in srgb,var(--fbs-orange) 45%,transparent))}

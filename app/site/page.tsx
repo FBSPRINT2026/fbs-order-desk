@@ -52,7 +52,7 @@ export default function SitePage() {
 
         <section className="fws-sec" id="services">
           <h2 className="fws-h fws-d">What we do</h2>
-          <div className="fws-svcs">{SERVICES.map((s) => <div key={s.t} className={`fws-svc ${s.tone}`}><span className="fws-ic"><SiteIconArt name={s.icon} /></span><h3 className="fws-d">{s.t}</h3><p>{s.d}</p></div>)}</div>
+          <div className="fws-svcs">{SERVICES.map((s) => <div key={s.t} className={`fws-svc ${s.tone}`}><span className="fws-ic">{s.icon === "shirt" ? <img src="/site/screen-printing.png" alt="" width={64} height={64} /> : <SiteIconArt name={s.icon} />}</span><h3 className="fws-d">{s.t}</h3><p>{s.d}</p></div>)}</div>
         </section>
 
         <section className="fws-sec fws-alt">
