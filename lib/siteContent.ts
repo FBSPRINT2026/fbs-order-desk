@@ -13,13 +13,14 @@ export const SITE = {
   since: 2004,
 };
 
-export const SERVICES: { t: string; d: string; icon: "shirt" | "cap" | "swatch" | "sign" | "store" | "box"; tone: "blue" | "salmon" | "orange" }[] = [
-  { t: "Screen printing", d: "Full-service, high-quality screen printing and DTF on every kind of apparel and brand.", icon: "shirt", tone: "blue" },
+export const SERVICES: { t: string; d: string; icon: "shirt" | "cap" | "press" | "swatch" | "sign" | "store" | "box"; tone: "blue" | "salmon" | "orange" }[] = [
+  { t: "Screen printing", d: "Full-service, high-quality screen printing on every kind of apparel and brand.", icon: "shirt", tone: "blue" },
   { t: "Embroidery", d: "Turnkey embroidery on hats, polos, jackets and bags, with 3D puff and patches.", icon: "cap", tone: "salmon" },
-  { t: "Printing", d: "Digital, offset and grand-format printing: cards, booklets, coasters and more.", icon: "swatch", tone: "orange" },
-  { t: "Signage and promo products", d: "Banners, yard signs, conference displays and promotional products.", icon: "sign", tone: "blue" },
-  { t: "Online stores", d: "Web stores and online shops for your team, company or brand to sell your products.", icon: "store", tone: "salmon" },
-  { t: "Pick, pack and ship", d: "Full-service daily pick, pack and ship by USPS, UPS and FedEx.", icon: "box", tone: "orange" },
+  { t: "DTF and heat press", d: "Full-color DTF transfers with no color limits, pressed here or sent to you as gang sheets.", icon: "press", tone: "orange" },
+  { t: "Printing", d: "Digital, offset and grand-format printing: cards, booklets, coasters and more.", icon: "swatch", tone: "blue" },
+  { t: "Signage and promo products", d: "Banners, yard signs, conference displays and promotional products.", icon: "sign", tone: "salmon" },
+  { t: "Online stores", d: "Web stores and online shops for your team, company or brand to sell your products.", icon: "store", tone: "orange" },
+  { t: "Pick, pack and ship", d: "Full-service daily pick, pack and ship by USPS, UPS and FedEx.", icon: "box", tone: "blue" },
 ];
 
 export const STEPS = [
