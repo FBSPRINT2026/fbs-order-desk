@@ -10,14 +10,16 @@ import { billKey, cleanBill, type BillTo } from "@/lib/billTo";
  */
 const EMPTY: BillTo = { dept: "", attn: "", email: "", cc: "", address: "" };
 
-export default function BillToBox({ customerId, accountName, value, onChange, disabled }: {
+export default function BillToBox({ customerId, accountName, value, onChange, disabled, open, setOpen }: {
   customerId: string; accountName: string; value: BillTo | null; onChange: (b: BillTo | null) => void; disabled?: boolean;
+  /** opened from the customer's line ("▸ Change billing", beside "Address, email, notes") */ open: boolean; setOpen: (v: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false), [form, setForm] = useState<BillTo>(EMPTY), [err, setErr] = useState("");
+  const [form, setForm] = useState<BillTo>(EMPTY), [err, setErr] = useState("");
   const [deps, setDeps] = useState<{ b: BillTo; n: number }[] | null>(null);
   useEffect(() => { if (open && customerId) void billDepartments(customerId).then(setDeps).catch(() => setDeps([])); }, [open, customerId]);
   useEffect(() => { setDeps(null); }, [customerId]);
-  const start = () => { setForm(value ? { ...EMPTY, ...value } : EMPTY); setErr(""); setOpen(true); };
+  // each opening starts from what the order bills now
+  useEffect(() => { if (open) { setForm(value ? { ...EMPTY, ...value } : EMPTY); setErr(""); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const use = (b: BillTo | null) => { onChange(b); setOpen(false); };
   const save = () => {
     const b = cleanBill(form);
@@ -29,20 +31,17 @@ export default function BillToBox({ customerId, accountName, value, onChange, di
   const cur = value ? billKey(value) : "";
   return (
     <div className="btx">
-      <div className="btx-row">
+      {value && <div className="btx-row">
         <div className="btx-who">
           <span className="btx-k">Bill to</span>
           {value ? <>
             <b>{value.dept}</b><span className="btx-tag">This order only</span>
             <div className="btx-sub">{[value.attn && `Attn: ${value.attn}`, value.email, value.cc && `Cost center ${value.cc}`].filter(Boolean).join(" · ")}</div>
             {value.address && <div className="btx-sub">{value.address}</div>}
-          </> : <span className="btx-acct">{accountName} (account billing)</span>}
+          </> : null}
         </div>
-        {!open && <div className="btx-acts">
-          <button type="button" className="linkbtn" disabled={disabled} onClick={start}>Change billing</button>
-          {value && <button type="button" className="linkbtn" disabled={disabled} onClick={() => use(null)}>Back to account billing</button>}
-        </div>}
-      </div>
+        <div className="btx-acts"><button type="button" className="linkbtn" disabled={disabled} onClick={() => use(null)}>Back to account billing</button></div>
+      </div>}
       {open && (
         <div className="btx-pick">
           <div className="btx-list">

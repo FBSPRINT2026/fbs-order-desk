@@ -190,6 +190,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [jdTab, setJdTab] = useState<"details" | "type">("details");
   const [pickCust, setPickCust] = useState(false); // the customer picker open to change who it is
   const [addrOpen, setAddrOpen] = useState(false);
+  const [billOpen, setBillOpen] = useState(false);
   // on a phone (Oct 29, Nick): the top buttons fold into one Actions button, the customer into just the name
   const [actsOpen, setActsOpen] = useState(false);
   const [cuOpen, setCuOpen] = useState(false);
@@ -1807,6 +1808,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                           <div className="cu-line">
                             {[cust.company && cust.name && cust.name !== cust.company ? cust.name : "", fmtPhone(cust.phone)].filter(Boolean).map((x, i) => <span key={i}>{x}</span>)}
                             {(cust.address || cust.email || cust.notes || (cust.tags || []).length > 0) && <button type="button" className="cu-addr" aria-expanded={addrOpen} onClick={() => setAddrOpen((v) => !v)}>{addrOpen ? "▾" : "▸"} Address, email, notes</button>}
+                            {/* bill this order to a department (Nov 5, Nick: "a drop down… change billing" beside the address one) */}
+                            <button type="button" className="cu-addr" aria-expanded={billOpen} onClick={() => setBillOpen((v) => !v)}>{billOpen ? "▾" : "▸"} {o.bill_to?.dept ? `Billing: ${o.bill_to.dept}` : "Change billing"}</button>
                           </div>
                           {addrOpen && <div className="cu-more">
                             {cust.address && <div style={{ whiteSpace: "pre-line" }}>{cust.address}</div>}
@@ -1815,7 +1818,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                             {cust.notes && <div className="cc-note" title="Customer notes (shop only)">{cust.notes}</div>}
                           </div>}
                           {/* bill this one order to a department of the account (components/BillToBox.tsx; Nov 5) */}
-                          <BillToBox customerId={cust.id} accountName={custLabel(cust)} value={o.bill_to || null} onChange={(b) => patch((d) => { d.bill_to = b; })} />
+                          {(billOpen || !!o.bill_to?.dept) && <BillToBox customerId={cust.id} accountName={custLabel(cust)} value={o.bill_to || null} open={billOpen} setOpen={setBillOpen} onChange={(b) => patch((d) => { d.bill_to = b; })} />}
                         </div>
                     <div className="cu-price money-only">
                       <label className="cu-k" htmlFor="o-pt">Pricing</label>
