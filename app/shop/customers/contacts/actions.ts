@@ -260,3 +260,26 @@ export async function lookUpOnline(customerId: string) {
     return { ok: true as const, found: r.found };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * The portal's "It's here" launch email to one contact (Nov 5, Nick: "when we add somebody to an account… a button…
+ * save and send email… it would send them the it's here login portal thing"). Staff; the contact needs portal access and
+ * the customer has to be moved to the new system. Each person gets it once.
+ */
+export async function sendPortalEmailTo(contactId: string) {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
+    const admin = createAdminClient();
+    const { data: cc } = await admin.from("customer_contacts").select("customer_id, name, email, portal_access, removed_at").eq("id", contactId).maybeSingle();
+    if (!cc || cc.removed_at) throw new Error("That contact isn't on file.");
+    if (!cc.portal_access) throw new Error("Turn on Portal for them first.");
+    const { data: c } = await admin.from("customers").select("moved_at").eq("id", cc.customer_id).maybeSingle();
+    if (!c?.moved_at) throw new Error("This customer isn't moved to the new system yet: move them first (Portal customers).");
+    const { sendLaunchToPeople } = await import("@/lib/launchSend");
+    const r = await sendLaunchToPeople(admin, [{ customer_id: cc.customer_id, email: cc.email, name: cc.name }], v.email || "staff");
+    if (r.skipped.length) return { ok: true as const, already: true };
+    if (r.failed.length) throw new Error(r.failed[0].why);
+    return { ok: true as const, already: false };
+  } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
