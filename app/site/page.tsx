@@ -16,6 +16,9 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
+// the product-line drawings Nick picked (public/site); the rest are drawn in components/site/SiteIcons.tsx
+const ICON_ART: Partial<Record<string, string>> = { shirt: "/site/screen-printing.png", cap: "/site/embroidery.png" };
+
 export default function SitePage() {
   const login = `${SITE_URL}/login?next=/portal`;
   const tel = `tel:+1${SITE.phone.replace(/\D/g, "")}`;
@@ -52,7 +55,7 @@ export default function SitePage() {
 
         <section className="fws-sec" id="services">
           <h2 className="fws-h fws-d">What we do</h2>
-          <div className="fws-svcs">{SERVICES.map((s) => <div key={s.t} className={`fws-svc ${s.tone}`}><span className="fws-ic">{s.icon === "shirt" ? <img src="/site/screen-printing.png" alt="" width={64} height={64} /> : <SiteIconArt name={s.icon} />}</span><h3 className="fws-d">{s.t}</h3><p>{s.d}</p></div>)}</div>
+          <div className="fws-svcs">{SERVICES.map((s) => <div key={s.t} className={`fws-svc ${s.tone}`}><span className="fws-ic">{ICON_ART[s.icon] ? <img src={ICON_ART[s.icon]} alt="" height={64} /> : <SiteIconArt name={s.icon} />}</span><h3 className="fws-d">{s.t}</h3><p>{s.d}</p></div>)}</div>
         </section>
 
         <section className="fws-sec fws-alt">
