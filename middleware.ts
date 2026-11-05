@@ -1,8 +1,22 @@
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/config";
+import { SITE_URL, SUPABASE_ANON_KEY, SUPABASE_URL } from "@/lib/config";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  // the public website at fbsprint.com (app/site; Nov 5): its home page is /site; the portal's own pages go to the
+  // portal's address; the old Wix pages (/orderform, /contact…) land on the new page's matching part
+  const host = (request.headers.get("host") || "").toLowerCase().replace(/:\d+$/, "");
+  if (host === "fbsprint.com" || host === "www.fbsprint.com") {
+    const p = request.nextUrl.pathname;
+    if (p === "/") { const u = request.nextUrl.clone(); u.pathname = "/site"; return NextResponse.rewrite(u); }
+    const open = p.startsWith("/_next") || p.startsWith("/brand") || p === "/privacy" || p === "/terms" || p.startsWith("/site") || p === "/robots.txt" || p === "/sitemap.xml";
+    if (!open) {
+      const portal = /^\/(shop|portal|login|auth|proof|print|p|s|j|work|api)(\/|$)/.test(p);
+      const old: Record<string, string> = { "/orderform": "#request", "/order-form": "#request", "/contact": "#contact", "/contact-us": "#contact", "/about": "#about", "/about-us": "#about", "/services": "#services", "/our-work": "#work" };
+      const to = portal ? `${SITE_URL}${p}${request.nextUrl.search}` : `https://${host}/${old[p.toLowerCase()] || ""}`;
+      return NextResponse.redirect(to, portal ? 307 : 301);
+    }
+  }
   // Sign-in links can land on any page (e.g. the home page) carrying ?code= or ?token_hash=.
   // Send them to the page that finishes signing in.
   const sp = request.nextUrl.searchParams;
