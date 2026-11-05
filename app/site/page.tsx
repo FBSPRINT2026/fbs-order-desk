@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 };
 
 // the product-line drawings Nick picked (public/site); the rest are drawn in components/site/SiteIcons.tsx
-const ICON_ART: Partial<Record<string, string>> = { shirt: "/site/screen-printing.png", cap: "/site/embroidery.png", press: "/site/heat-press.png", swatch: "/site/printing.png", sign: "/site/signage.png", box: "/site/shipping.png" };
+const ICON_ART: Partial<Record<string, string>> = { shirt: "/site/screen-printing.png", cap: "/site/embroidery.png", press: "/site/heat-press.png", swatch: "/site/printing.png", sign: "/site/signage.png", box: "/site/shipping.png", store: "/site/online-stores.png" };
 
 export default function SitePage() {
   const login = `${SITE_URL}/login?next=/portal`;
