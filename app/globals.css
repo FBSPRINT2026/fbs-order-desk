@@ -20991,12 +20991,20 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .fws-steps li::before{content:counter(fws);display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent-hover);font:800 15px var(--display);margin-bottom:10px}
 .fws-steps h3{font-size:18px}
 .fws-steps p{margin:6px 0 0;color:var(--ink-2);font-size:14px}
-.fws-who{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:14px;margin-top:18px}
-.fws-whoc{display:flex;flex-direction:column;gap:4px;padding:18px;border-radius:12px;background:var(--bg);border-left:5px solid var(--fbs-blue)}
-.fws-whoc.salmon{border-left-color:var(--fbs-salmon)}
-.fws-whoc.orange{border-left-color:var(--fbs-orange)}
-.fws-whoc b{font-size:18px}
-.fws-whoc span{font-size:14px;color:var(--ink-2)}
+/* four featured client groups, always an even grid (4 across, 2 by 2, or 1 column), the rest named under them */
+.fws-who{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:18px}
+.fws-whoc{display:flex;flex-direction:column;gap:6px;padding:20px;border-radius:12px;background:var(--bg);border-top:5px solid var(--fbs-blue)}
+.fws-whoc.salmon{border-top-color:var(--fbs-salmon)}
+.fws-whoc.orange{border-top-color:var(--fbs-orange)}
+.fws-whoc h3{font-size:20px}
+.fws-whoc p{margin:0;font-size:14px;color:var(--ink-2)}
+.fws-whoc ul{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.fws-whoc li{font-size:13.5px;padding-left:18px;position:relative}
+.fws-whoc li::before{content:"";position:absolute;left:2px;top:.55em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.fws-also{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:18px 0 0;font-size:14px;color:var(--ink-2)}
+.fws-also b{font-weight:600;color:var(--ink);background:var(--bg);border-radius:99px;padding:5px 12px;white-space:nowrap}
+@media (max-width:1000px){.fws-who{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.fws-who{grid-template-columns:1fr}}
 .fws-about{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;align-items:start}
 .fws-about p{max-width:62ch;color:var(--ink-2)}
 .fws-facts{margin:0;display:grid;gap:10px}

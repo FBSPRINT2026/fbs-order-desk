@@ -30,12 +30,16 @@ export const STEPS = [
 ];
 
 /** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated") */
-export const WHO: { t: string; d: string; tone: "blue" | "salmon" | "orange" }[] = [
-  { t: "Breweries and restaurants", d: "Staff shirts, merch, hats and coasters", tone: "salmon" },
-  { t: "Schools and teams", d: "Spirit wear, uniforms and events", tone: "blue" },
-  { t: "Cities and companies", d: "Departments, onboarding, 5Ks and fundraisers", tone: "orange" },
-  { t: "Brands and decorators", d: "Wholesale and contract printing, blind shipped", tone: "blue" },
+export const WHO: { t: string; d: string; points: string[]; tone: "blue" | "salmon" | "orange" }[] = [
+  { t: "Wholesalers", d: "Contract decorating you can count on, run after run.", points: ["Your goods or ours, at wholesale pricing", "Blind shipped under your name", "Reorders in a couple of clicks"], tone: "blue" },
+  { t: "Private brands", d: "Retail-ready product for brands and designers selling their own line.", points: ["Custom neck tags, labels and hang tags", "Fold, bag and pack for retail", "Consistent color from drop to drop"], tone: "salmon" },
+  { t: "Contract resellers", d: "A production partner for promo and apparel distributors.", points: ["Proofs and quotes you can pass along", "Order status in your portal", "Ships straight to your client"], tone: "orange" },
+  { t: "Schools", d: "Spirit wear, teams, clubs and events, on the school's calendar.", points: ["Billing by department or booster club", "Online stores for families", "Rush jobs for game day"], tone: "blue" },
 ];
+/** everyone else we print for, named under the four above */
+export const ALSO = ["Breweries", "Churches", "Cities", "Businesses", "Designers selling product", "Teams and events"];
+/** the About box's three facts (Nov 5, Nick) */
+export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];
 
 /** what someone can tick on the request form */
 export const NEEDS = ["T-shirts", "Hoodies and sweats", "Hats", "Polos and jackets", "Embroidery", "DTF transfers", "Printing", "Signage", "Promo items", "Something else"];

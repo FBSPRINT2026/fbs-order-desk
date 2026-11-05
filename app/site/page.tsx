@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/config";
-import { SERVICES, SITE, STEPS, WHO } from "@/lib/siteContent";
+import { ALSO, FACTS, SERVICES, SITE, STEPS, WHO } from "@/lib/siteContent";
 import SiteIconArt, { type SiteIcon } from "@/components/site/SiteIcons";
 import SiteRequestForm from "@/components/site/SiteRequestForm";
 
@@ -41,8 +41,8 @@ export default function SitePage() {
         <section className="fws-hero">
           <div className="fws-hero-t">
             <p className="fws-kick">Apparel · print · fulfillment</p>
-            <h1 className="fws-d">Shirts, hats and print, done right and on time.</h1>
-            <p className="fws-lead">Screen printing, embroidery, DTF, signage and promotional products for businesses, breweries, schools and brands, plus wholesale contract printing for decorators. In Richardson, TX since {SITE.since}.</p>
+            <h1 className="fws-d">Apparel done right, for those who sell it and wear it.</h1>
+            <p className="fws-lead">Screen printing, embroidery and DTF for wholesalers, private brands, contract resellers and schools, plus breweries, churches, cities and businesses. 22 years in business, based in North Texas.</p>
             <div className="fws-row"><a className="fws-btn p lg" href="#request">Start an order or quote</a><a className="fws-btn ghost lg" href={login}>Customer login</a></div>
           </div>
           <div className="fws-hero-pic" aria-hidden />
@@ -65,7 +65,10 @@ export default function SitePage() {
 
         <section className="fws-sec" id="work">
           <h2 className="fws-h fws-d">Who we print for</h2>
-          <div className="fws-who">{WHO.map((w) => <div key={w.t} className={`fws-whoc ${w.tone}`}><b className="fws-d">{w.t}</b><span>{w.d}</span></div>)}</div>
+          <div className="fws-who">{WHO.map((w) => (
+            <div key={w.t} className={`fws-whoc ${w.tone}`}><h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
+          ))}</div>
+          <p className="fws-also"><span>We also print for</span>{ALSO.map((x) => <b key={x}>{x}</b>)}</p>
         </section>
 
         <section className="fws-sec fws-alt" id="about">
@@ -75,7 +78,7 @@ export default function SitePage() {
               <p>Since {SITE.since}, FBS has printed and embroidered for Dallas–Fort Worth businesses and for decorators who need a reliable contract shop.</p>
               <p>We keep it simple and repeatable: clear quotes, a proof before anything runs, and a portal where you can see every order, reorder in a couple of clicks and pay online.</p>
             </div>
-            <dl className="fws-facts"><div><dt>Since</dt><dd>{SITE.since}</dd></div><div><dt>Quotes</dt><dd>Same day, most days</dd></div><div><dt>Based in</dt><dd>Richardson, TX</dd></div></dl>
+            <dl className="fws-facts">{FACTS.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
           </div>
         </section>
 
