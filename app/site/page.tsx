@@ -31,8 +31,13 @@ export default function SitePage() {
           <a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a>
         </nav>
         <div className="fws-acts">
-          <a className="fws-btn" href={login}>Customer login</a>
-          <a className="fws-btn p" href="#request">Start an order</a>
+          <a className="fws-btn" href={login}><span className="fws-wide">Customer login</span><span className="fws-narrow">Log in</span></a>
+          <a className="fws-btn p fws-wide" href="#request">Start an order</a>
+          {/* phones: the section links in a menu, so the header is one short line (Nov 5, Nick) */}
+          <details className="fws-menu">
+            <summary aria-label="Menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></summary>
+            <nav aria-label="Site menu"><a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#request">Start an order</a></nav>
+          </details>
         </div>
       </header>
 
