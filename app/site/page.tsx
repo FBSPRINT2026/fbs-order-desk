@@ -40,7 +40,7 @@ export default function SitePage() {
             <p className="fws-lead">Screen printing, embroidery, DTF, signage and promotional products for businesses, breweries, schools and brands, plus wholesale contract printing for decorators.</p>
             <div className="fws-row"><a className="fws-btn p lg" href="#request">Start an order or quote</a><a className="fws-btn ghost lg" href={login}>Customer login</a></div>
           </div>
-          <div className="fws-hero-pic" aria-hidden><img src={sitePhoto("work/sleeve.jpg")} alt="" /><img src={sitePhoto("work/four-corners.jpg")} alt="" /></div>
+          <div className="fws-hero-pic" aria-hidden><img src={sitePhoto("work/four-corners.jpg")} alt="" /><img src={sitePhoto("work/custom-tag.jpg")} alt="" /></div>
         </section>
 
         <section className="fws-portal" aria-label="Customer portal">

@@ -25,6 +25,8 @@ export default function PageTitle() {
     // what customers see (their portal, their proof and approval pages) says the shop's name
     const site = /^\/(portal|proof|s)(\/|$)/.test(path) ? "FBS Print" : "FBS Order Desk";
     const set = () => {
+      // the public website (app/site) keeps its own title for search engines
+      if (document.querySelector(".fws")) return;
       // a page can name itself where it has no h1 (the customer's approval page: "Fedex Shirts #40209")
       const named = document.querySelector<HTMLElement>("[data-page-title]")?.dataset.pageTitle || "";
       const h = document.querySelector(".page-head h1, main h1, h1");

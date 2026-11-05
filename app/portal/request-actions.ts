@@ -125,11 +125,8 @@ export async function submitRequest(id: string): Promise<Result> {
     await (await import("@/lib/customerEmailServer")).emailReceived(admin, id, email).catch(() => null);
     const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const settings = mergeSettings(s?.data);
-    if (SHOP_NOTIFY_EMAIL) await sendEmail({
-      to: SHOP_NOTIFY_EMAIL,
-      subject: `New order request #${order.number} from ${cust.company || cust.name}`,
-      html: emailLayout(settings.shop.name, `New order request #${order.number}`, `${cust.company || cust.name} sent in ${order.nickname ? `"${order.nickname}", ` : ""}${pieces} pieces for pricing.`, "Review it", `${siteUrl()}/shop/orders/${id}`),
-    });
+    // the shop's email names who and what, with the order's card (lib/shopNotice.ts)
+    if (SHOP_NOTIFY_EMAIL) await (await import("@/lib/shopNotice")).notifyShopAbout(admin, id, { did: "sent an order request", head: `New order request #${order.number}`, body: `${cust.company || cust.name} sent in ${order.nickname ? `"${order.nickname}", ` : ""}${pieces} pieces for pricing.`, shopName: settings.shop.name, button: "Review it" }).catch(() => null);
     revalidatePath("/portal");
     return { ok: true };
   } catch (e) { return fail(e); }
