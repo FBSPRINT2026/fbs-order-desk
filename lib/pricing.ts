@@ -348,6 +348,9 @@ export type Group = { id: string; name?: string; /** priced by a program design'
    *  not just the group name"): under the name on the order, the quote, the invoice and the work order */
   description?: string;
   lines: GLine[]; imprints: Imprint[]; finishing?: string[];
+  /** the Mockup Creator's − / + print scale for this group's mockup, by style and side ("6210:front": 0.9); a new
+   *  mockup starts at real size (Nov 5, Nick) */
+  mockupZoom?: Record<string, number>;
   /** finishing made up on this order (a label and a price per piece), ticked by id in `finishing` like the list's */
   customFin?: Finishing[];
   /** the tag print's price a piece on this job (Private Label / relabel), typed on the group's imprints; the list's when not set */

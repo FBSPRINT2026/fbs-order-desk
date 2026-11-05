@@ -275,6 +275,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [change, setChange] = useState<{ orderId: string; orderNumber: number } | null>(null);
   const [active, setActive] = useState(0);
   const [offsets, setOffsets] = useState<Record<string, Offset>>({});
+  /** the − / + print scale per style and side for this mockup ("6210:front" → 0.9); null = a mockup saved before these
+   *  were kept per mockup, which keeps the style-wide setting it was made with (garZoom) */
+  const [zoomMap, setZoomMap] = useState<Record<string, number> | null>({});
   // a visual-only reorder (Oct 20, Nick: "a reorder mockup helper… production will confirm details on first run…
   // an adjust visual size and placement button"): the print settings are greyed, and the art moves and sizes on the
   // shirt only after "Adjust visual size & placement" (the picture only: production still sets the size on the run)
@@ -576,6 +579,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       setLines(snap.lines);
       setImprints((snap.imprints || []).map((d) => ({ ...d })));
       setOffsets(snap.offsets || {});
+      setZoomMap((snap as { zoom?: Record<string, number> }).zoom ? { ...(snap as { zoom?: Record<string, number> }).zoom } : null);
       if (snap.mockupSize) setShownSize(snap.mockupSize);
       // prints with an ink but no saved logo colors (a setup rebuilt from the pictures): painted in that ink
       autoWant.current = Object.fromEntries((snap.imprints || []).filter((d) => !d.inkMap).map((d) => [d.id, { colors: d.colors, inks: d.inks }]));
@@ -685,6 +689,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           setOrderedBy(Object.fromEntries(g.lines.map((l) => [l.id, Object.entries(l.sizes || {}).filter(([, q]) => +(q || 0) > 0).map(([z]) => z)])));
           if (g.mockupSize) setShownSize(g.mockupSize);
           if (g.mockupOffsets) setOffsets(g.mockupOffsets);
+          // its own print scale; a group never drawn starts at real size, one drawn before Nov 5 keeps the style's
+          setZoomMap(g.mockupZoom ? { ...g.mockupZoom } : (g.mockupThumbs || []).length ? null : {});
           setYouthSet(g.youthSet);
           const cm = (g.customerMockups || []).slice(0, 4);
           if (cm.length) {
@@ -1881,7 +1887,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return sortSizes(kept.length ? kept : list);
   };
   const runSizes = sizesOf(lines[active] || lines[0]);
-  const garZoom = (g: Garment | null | undefined, v: View) => { const f = (g as (Garment & { mockup_fit?: Record<string, unknown> | null }) | null | undefined)?.mockup_fit || {}; const z = +((f[`scale_${v}`] as number) || (f.scale as number) || 1); return z >= 0.7 && z <= 1.4 ? z : 1; };
+  /** the print scale nudge (− / +) on this garment's side, kept with THIS mockup (Nov 5, Nick: "anything that's created
+   *  new should reset"): a new mockup starts at real size. A mockup saved before then (no `zoom` of its own) keeps the
+   *  style-wide nudge it was drawn with (garments.mockup_fit), so reopening or redrawing it doesn't change it. */
+  const garZoom = (g: Garment | null | undefined, v: View) => {
+    if (!g) return 1;
+    const k = `${g.style}:${v}`.toLowerCase();
+    if (zoomMap && k in zoomMap) return zoomMap[k];
+    if (zoomMap) return 1;
+    const f = (g as Garment & { mockup_fit?: Record<string, unknown> | null }).mockup_fit || {};
+    const z = +((f[`scale_${v}`] as number) || (f.scale as number) || 1);
+    return z >= 0.7 && z <= 1.4 ? z : 1;
+  };
   const bodyFor = (l?: Line): Body => {
     const g = l ? garmentFor(l) : null;
     const own = l ? sizesOf(l) : runSizes;
@@ -1897,19 +1914,20 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const zoomG = !portal ? garmentFor(lines[active] || lines[0]) : null;
   const setZoomG = async (v: View, z: number) => {
     if (!zoomG) return;
-    const val0 = Math.round(Math.max(0.7, Math.min(1.4, z)) * 100) / 100;
-    const cur = { ...(((zoomG as Garment & { mockup_fit?: Record<string, unknown> | null }).mockup_fit || {}) as Record<string, unknown>) };
-    // the old one-for-both setting becomes the two sides' starting point
-    if (cur.scale != null) { cur.scale_front ??= cur.scale; cur.scale_back ??= cur.scale; delete cur.scale; }
-    if (val0 === 1) delete cur[`scale_${v}`]; else cur[`scale_${v}`] = val0;
-    const val = Object.keys(cur).length ? cur : null;
-    setCatalog((c) => c.map((x) => (x.id === zoomG.id ? ({ ...x, mockup_fit: val } as Garment) : x)));
-    await createClient().from("garments").update({ mockup_fit: val }).eq("id", zoomG.id);
+    const val = Math.round(Math.max(0.7, Math.min(1.4, z)) * 100) / 100;
+    // this mockup only: an old mockup's style-wide nudges become its own the first time one is changed
+    setZoomMap((m0) => {
+      const m: Record<string, number> = { ...(m0 || {}) };
+      if (!m0) for (const l of lines) { const g = garmentFor(l); if (g) for (const vv of ["front", "back"] as View[]) { const z0 = garZoom(g, vv); if (z0 !== 1) m[`${g.style}:${vv}`.toLowerCase()] = z0; } }
+      const k = `${zoomG.style}:${v}`.toLowerCase();
+      if (val === 1) delete m[k]; else m[k] = val;
+      return m;
+    });
   };
   // just − and + (Oct 26, Nick: "just make it a plus or minus… I don't need the percent"); the ↺ back to normal shows on
   // the left once it's changed, in a spot kept for it so − and + never move under the mouse
   const zoomCtl = (v: View) => zoomG && (
-    <span className="mk-pill mk-zoom" title={`Prints look too big or too small on the ${v} of the ${zoomG.brand} ${zoomG.style}? Set it once: kept for every color and every mockup after (now ${Math.round(garZoom(zoomG, v) * 100)}%)`}>
+    <span className="mk-pill mk-zoom" title={`Prints look too big or too small on the ${v} of the ${zoomG.brand} ${zoomG.style}? For this mockup only (now ${Math.round(garZoom(zoomG, v) * 100)}%); a new mockup starts at real size`}>
       <button type="button" className={"mk-zoom-r" + (garZoom(zoomG, v) !== 1 ? "" : " off")} onClick={() => void setZoomG(v, 1)} title="Back to normal" aria-label={`Back to normal on the ${v}`} tabIndex={garZoom(zoomG, v) !== 1 ? 0 : -1}>↺</button>
       <button type="button" aria-label={`Prints smaller on the ${v}`} onClick={() => void setZoomG(v, garZoom(zoomG, v) - 0.02)}>−</button>
       <button type="button" aria-label={`Prints bigger on the ${v}`} onClick={() => void setZoomG(v, garZoom(zoomG, v) + 0.02)}>+</button>
@@ -3307,6 +3325,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const ids = new Set(g.imprints.map((x) => x.id));
     const offs = Object.fromEntries(Object.entries(offsets).filter(([k, v]) => ids.has(k.split(":").pop() || "") && (Math.abs(v.dx) > 0.5 || Math.abs(v.dy) > 0.5)).map(([k, v]) => [k, { dx: Math.round(v.dx * 10) / 10, dy: Math.round(v.dy * 10) / 10 }]));
     g.mockupOffsets = Object.keys(offs).length ? offs : undefined;
+    if (zoomMap) g.mockupZoom = { ...zoomMap };
     if (thumbs.length) g.mockupThumbs = thumbs;
     // each print's art as shown here, saved for the order's little print tiles (staff saves; the art the blow-up uses)
     // and its proportions as it prints, so the order's size reads right (colors taken off don't count)
@@ -3453,7 +3472,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the mockup keeps its setup so it can be opened to edit and ordered; every color saved together is one set and
         // one number (Oct 24, Nick). A proof being changed isn't a library mockup.
         const set = changeId ? "" : (mockSet.current ||= crypto.randomUUID());
-        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null } : undefined;
+        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null, ...(zoomMap ? { zoom: zoomMap } : {}) } : undefined;
         for (const l of lines.filter((z) => z.style || z.color)) {
           const blob = await render(l), thumb = await render(l, true);
           const title = `${groupName || "Mockup"} — ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim();
@@ -3544,7 +3563,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!orderId && newMockups.length) {
         const set = mockSet.current || crypto.randomUUID();
         mockSet.current = set;
-        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null };
+        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null, ...(zoomMap ? { zoom: zoomMap } : {}) };
         await sb.from("mockups").update({ snapshot: snap }).in("id", newMockups);
         const { data: old } = await sb.from("mockups").select("id").eq("customer_id", customerId).is("order_id", null).is("archived_at", null).eq("snapshot->>set", set);
         const gone = ((old || []) as { id: string }[]).map((x) => x.id).filter((id) => !newMockups.includes(id));
@@ -3935,7 +3954,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // press is the starting point (the art, inks and circle finding all load by themselves before that); a save resets it.
   const editSig = JSON.stringify({
     i: imprints.map((x) => { const { shownArt: _a, center, ...rest } = x; void _a; return { ...rest, c: center?.by === "you" ? center : null }; }),
-    o: offsets, l: lines, p: Object.fromEntries(Object.entries(paints).map(([k, v]) => [k, [v.map, v.unite ?? null]])),
+    o: offsets, z: zoomMap, l: lines, p: Object.fromEntries(Object.entries(paints).map(([k, v]) => [k, [v.map, v.unite ?? null]])),
   });
   const sigNow = useRef(editSig); sigNow.current = editSig;
   const dirty = !portal && !viewId && !auto && baseSig.current !== null && baseSig.current !== editSig;
