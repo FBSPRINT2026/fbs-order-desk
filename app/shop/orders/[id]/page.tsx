@@ -6,6 +6,7 @@ import { bySupplierStyle } from "@/lib/garmentSup";
 import { ownedFiles } from "@/lib/ownedFiles";
 import ProofHistory from "@/components/ProofHistory";
 import CustomerPick from "@/components/CustomerPick";
+import BillToBox from "@/components/BillToBox";
 import ProofSide from "@/components/ProofSide";
 import OrderGoodsPanel from "@/components/OrderGoodsPanel";
 import OrderStages from "@/components/OrderStages";
@@ -416,7 +417,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const { data: savedRow, error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
       price_type: d.price_type || "retail", order_type: d.order_type || null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
-      ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
+      bill_to: d.bill_to || null, ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
     }).eq("id", d.id).select("updated_at").maybeSingle();
@@ -1813,6 +1814,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                             {(cust.tags || []).length > 0 && <div className="row" style={{ gap: 4 }}>{(cust.tags || []).map((t) => <span key={t} className="tag">{t}</span>)}</div>}
                             {cust.notes && <div className="cc-note" title="Customer notes (shop only)">{cust.notes}</div>}
                           </div>}
+                          {/* bill this one order to a department of the account (components/BillToBox.tsx; Nov 5) */}
+                          <BillToBox customerId={cust.id} accountName={custLabel(cust)} value={o.bill_to || null} onChange={(b) => patch((d) => { d.bill_to = b; })} />
                         </div>
                     <div className="cu-price money-only">
                       <label className="cu-k" htmlFor="o-pt">Pricing</label>

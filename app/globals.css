@@ -16540,6 +16540,26 @@ table.tbl.jc tr.jc-more td,table.tbl.jc tr.jc-sec td{text-align:left}
 .cu-sym{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex:none}
 .cu-ic{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;line-height:18px;padding:0 8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-3);white-space:nowrap}
 .cu-more{font-size:13px;color:var(--ink);margin-top:2px}
+/* Bill to on the order: the account's billing or a department, this order only (components/BillToBox.tsx; Nov 5) */
+.btx{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.btx-row{display:flex;gap:8px 12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.btx-who{min-width:0;flex:1 1 180px;font-size:14px;color:var(--ink)}
+.btx-who b{font-weight:700}
+.btx-k{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
+.btx-acct{color:var(--ink-3);font-size:13px}
+.btx-tag{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--warn-bg,#fff4d6);color:var(--warn-ink,#8a5a00);white-space:nowrap;vertical-align:1px}
+.btx-sub{font-size:12.5px;color:var(--ink-3);overflow-wrap:anywhere}
+.btx-acts{display:flex;gap:10px;flex-wrap:wrap;white-space:nowrap}
+.btx-pick{margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.btx-list{display:flex;flex-direction:column;gap:6px}
+.btx-dep{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);cursor:pointer;font:inherit;font-size:14px;color:var(--ink)}
+.btx-dep span{font-size:12.5px;color:var(--ink-3)}
+.btx-dep:hover{border-color:var(--accent)}
+.btx-dep.on{border-color:var(--accent);background:var(--accent-soft,var(--surface-2))}
+.btx-new{margin-top:4px}
+.btx-f{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:8px}
+.btx-wide{grid-column:1/-1}
+.btx-end{justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .cu-more summary{cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600;list-style:none}
 .cu-more summary::-webkit-details-marker{display:none}
 .cu-more summary::before{content:"▸ ";}

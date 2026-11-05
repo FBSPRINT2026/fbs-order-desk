@@ -1,3 +1,4 @@
+import { billAddressText, billToOf } from "@/lib/billTo";
 import { calcOrder, imprintLabel, PERS_SHOW, orderGroups, withoutShopPieces, payDueDate, r2, sizeLabel, SIZES, type Order, type PayTerms, type Settings } from "@/lib/pricing";
 
 /**
@@ -360,8 +361,11 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
   const due = payDueDate(o, terms || null);
   const po = s(o.po_number);
   const ship = o.delivery_method === "ship" || o.delivery_method === "deliver" ? parseAddress(o.ship_to) : null;
-  const email = cleanEmail(cu?.email);
-  const note = [`Portal order #${o.number}`, po && !qs.po_field_id ? `PO ${po}` : "", o.nickname ? `Job: ${o.nickname}` : ""].filter(Boolean).join(" · ");
+  // billed to a department (lib/billTo.ts): its email and bill-to block, same QuickBooks customer
+  const bill = billToOf(o as never);
+  const email = cleanEmail(bill?.email || cu?.email);
+  const billAddr = bill ? parseAddress(billAddressText(bill, String(cu?.company || cu?.name || ""), cu?.address)) : parseAddress(cu?.address);
+  const note = [`Portal order #${o.number}`, po && !qs.po_field_id ? `PO ${po}` : "", o.nickname ? `Job: ${o.nickname}` : "", bill ? `Bill to ${bill.dept}${bill.cc ? ` (cost center ${bill.cc})` : ""}` : ""].filter(Boolean).join(" · ");
   const body: Record<string, unknown> = {
     DocNumber: String(o.number),
     TxnDate: shopDay(o.approved_at || o.created_at),
@@ -372,7 +376,7 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
     ApplyTaxAfterDiscount: true,
     ...(termId ? { SalesTermRef: { value: termId } } : {}),
     ...(email ? { BillEmail: { Address: email } } : {}),
-    ...(parseAddress(cu?.address) ? { BillAddr: parseAddress(cu?.address) } : {}),
+    ...(billAddr ? { BillAddr: billAddr } : {}),
     ...(ship ? { ShipAddr: ship } : {}),
     ...(po && qs.po_field_id ? { CustomField: [{ DefinitionId: qs.po_field_id, Name: qs.po_field_name || "P.O. Number", Type: "StringType", StringValue: po.slice(0, 31) }] } : {}),
     ...(o.nickname ? { CustomerMemo: { value: String(o.nickname).slice(0, 1000) } } : {}),

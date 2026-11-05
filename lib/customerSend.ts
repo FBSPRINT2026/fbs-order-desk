@@ -70,6 +70,9 @@ async function recipientsFor(admin: SupabaseClient, o: Order, customer: { email?
     list = recipientsOf(pp.prefs, "approvals", pp.people);
   }
   if (!list.length && customer?.email) list = [customer.email.toLowerCase()];
+  // billed to a department (lib/billTo.ts): its contact gets it first, the account's own people still copied
+  const bill = (o as { bill_to?: { dept?: string; email?: string } | null }).bill_to, be = String(bill?.dept ? bill.email || "" : "").trim().toLowerCase();
+  if (be) { list = [be, ...list.filter((e) => e !== be)]; if (!people.some((x) => x.email === be)) people.unshift({ email: be, name: "" }); }
   if (customer?.email && !people.some((x) => x.email === customer.email!.toLowerCase())) people.unshift({ email: customer.email.toLowerCase(), name: "" });
   if (pick?.to) {
     // a person on file, or someone else at the company's own domain (a new person who wrote in)

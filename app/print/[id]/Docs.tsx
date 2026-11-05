@@ -1,4 +1,5 @@
 import { hasSpotChange, spotLines } from "@/lib/spotChange";
+import { billBlock, billToOf } from "@/lib/billTo";
 import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile, withSewThreads } from "@/lib/brands";
 import { persOf, PERS_SHOW } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
@@ -825,7 +826,7 @@ export function InvoiceDoc(p: DocData) {
   const issued = new Date(o.sent_at || o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
   const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" });
   const paidUp = !isQ && c.paid > 0 && c.balance <= 0.005;
-  const contact = cust.company && cust.name && cust.name !== cust.company ? cust.name : "";
+  const bill = billBlock(billToOf(o), cust);
   const how = o.delivery_method === "ship" ? [o.ship_method || "Ship", isThirdParty(o) ? thirdPartyLabel(o.third_party) : ""].filter(Boolean).join(", ") : o.delivery_method === "deliver" ? "Delivery" : o.delivery_method === "tbd" ? "Pickup or ship TBD" : "Pickup";
   // ship to: a box at the bottom, only when it goes somewhere other than their own address (Oct 30, Nick)
   const shipTo = (o.delivery_method === "ship" || o.delivery_method === "deliver") && (o.ship_to || "").trim() && flat(o.ship_to) !== flat(cust.address) ? String(o.ship_to).trim() : "";
@@ -846,7 +847,8 @@ export function InvoiceDoc(p: DocData) {
         <div className="iv2-no"><b className="disp">{kind} #{o.number}</b>{(o.po_number || due) && <span>{[o.po_number ? `PO ${o.po_number}` : "", due ? `Due ${due}` : ""].filter(Boolean).join(" · ")}</span>}</div>
       </div>
       <div className="iv2-who">
-        <div><div className="lbl">Bill to</div><b>{cust.company || cust.name || "—"}</b>{contact && <span>{contact}</span>}</div>
+        {/* the account, or the department this order bills (lib/billTo.ts) */}
+        <div><div className="lbl">Bill to</div><b>{bill.name}</b>{bill.lines.map((x, i) => <span key={i}>{x}</span>)}</div>
         <div className="r"><div className="lbl">Job</div><b>{o.nickname || `#${o.number}`}</b><span>{c.qty} pcs · {how}</span></div>
       </div>
       {groups.map((g, gi) => {

@@ -421,6 +421,7 @@ export const feeAmount = (f: { amount: number | ""; free?: boolean; tbd?: boolea
 export type Delivery = "pickup" | "ship" | "deliver" | "tbd";
 
 export type Order = {
+  /** this order only: billed to a department of the account (lib/billTo.ts; migration 290) */ bill_to?: import("@/lib/billTo").BillTo | null;
   /** which of the customer's order types it is (customers.order_types, Cedar: Bulk / Cart), or empty (orders.order_lane) */ order_lane?: string;
   id: string; number: number; customer_id: string | null; nickname: string; status: StatusKey; type: "quote" | "invoice";
   /** started, not saved or sent yet: no real number, in no list (Oct 24; migration 209) */ draft?: boolean; discarded_at?: string | null;

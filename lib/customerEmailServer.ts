@@ -56,7 +56,13 @@ export async function sendCustomerEmail(admin: SupabaseClient, m: { customerId: 
     if ((had || []).length) return { sent: [] as string[], why: "already sent" };
   }
   const { people, prefs } = await peopleOf(admin, m.customerId);
-  const to = recipientsOf(prefs, m.kind, people);
+  let to = recipientsOf(prefs, m.kind, people);
+  // an order billed to a department (lib/billTo.ts): its billing emails go to that department's contact too
+  if (m.orderId && (m.kind === "invoices" || m.kind === "receipts" || m.kind === "approvals")) {
+    const { data: bo } = await admin.from("orders").select("bill_to").eq("id", m.orderId).maybeSingle();
+    const b = (bo as { bill_to?: { dept?: string; email?: string } | null } | null)?.bill_to, be = String(b?.dept ? b.email || "" : "").trim().toLowerCase();
+    if (be && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(be) && !to.map((x) => x.toLowerCase()).includes(be)) to = [be, ...to];
+  }
   if (!to.length) return { sent: [] as string[], why: "they turned this email off" };
   const sent: string[] = [];
   for (const t of to) if (await sendEmail({ to: t, subject: m.subject, html: m.html, replyTo: SHOP_NOTIFY_EMAIL || undefined })) sent.push(t);
