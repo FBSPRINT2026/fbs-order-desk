@@ -14,7 +14,7 @@ import { bringOldJobFile, bringOrderArtwork, myOrderArtwork, searchMyOldJobs, ty
 import { unzip } from "@/lib/unzip";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
-import { saveGoodsInfo } from "@/app/portal/goods-actions";
+import { addTracking, saveGoodsInfo } from "@/app/portal/goods-actions";
 import GoodsInfoFields, { cleanGoodsInfo, type GoodsInfoValue } from "@/components/GoodsInfoFields";
 
 function imageSize(f: File): Promise<{ w: number; h: number } | null> {
@@ -389,6 +389,8 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
     setSimpleBusy("Sending…"); setErr("");
     await flush();
     if (goods && simple.goodsOn) { const g = await saveGoodsInfo(o.id, cleanGoodsInfo(goods)); if (!g.ok) { setSimpleBusy(""); return setErr(g.error || "Couldn't save the goods info."); } }
+    // their tracking: one shipment each, on this order's Goods (live tracking starts right away)
+    if (goods && simple.goodsOn) for (const t of goods.tracking || []) await addTracking(o.id, { carrier: "", tracking: t, boxes: null, eta: goods.ship_date, note: cleanGoodsInfo(goods).supplier ? `From ${cleanGoodsInfo(goods).supplier}${goods.supplier_po ? `, order ${goods.supplier_po}` : ""}` : "", files: [] }).catch(() => null);
     const r = await sendSimpleOrder(o.id, { name: simple.name, about: simple.about, due: simple.due || null, po: simple.po, method: simple.method, qty: +simple.qty || null, delivery: o.delivery_method || "pickup", ship_to: o.ship_to || "", garments: simple.garments, files: simple.files, type: simple.otype || "" });
     if (!r.ok) { setSimpleBusy(""); return setErr(r.error || "Couldn't send it."); }
     dropUnsaved(o.id);
@@ -651,7 +653,7 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
               {simple.goodsOn && (
                 <div className="so-goods stack" style={{ gap: 10 }}>
                   <div className="field"><label htmlFor="so-g">Style and colors</label><input id="so-g" type="text" placeholder={goods ? "e.g. Next Level 6210, Banana Cream" : "e.g. Gildan 5000 in black, or “help me pick”"} value={simple.garments} onChange={(e) => setSimple({ ...simple, garments: e.target.value })} /></div>
-                  {goods && <GoodsInfoFields v={goods} onChange={setGoods} />}
+                  {goods && <GoodsInfoFields v={goods} onChange={setGoods} withTracking />}
                 </div>
               )}
               <div className="field"><label>Files</label>

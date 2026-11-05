@@ -20909,3 +20909,15 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 
 /* a contact who has had the portal email (components/CustomerContacts.tsx) */
 .ccx-sent{font-size:12px;color:var(--ok);white-space:nowrap;align-self:center}
+
+/* the simple order form's goods: drop a confirmation, tracking numbers (components/GoodsInfoFields.tsx withTracking) */
+.gi-drop{display:flex;flex-direction:column;gap:3px;align-items:center;text-align:center;padding:14px;margin-top:10px;border:1.5px dashed var(--accent);border-radius:var(--r);background:var(--accent-soft);cursor:pointer}
+.gi-drop.over{background:var(--surface-2)}
+.gi-drop b{font-size:14px;color:var(--ink)}
+.gi-drop span{font-size:12.5px;color:var(--ink-3)}
+.gi-note{font-size:12.5px;color:var(--ink-3);margin-top:6px}
+.gi-trk{display:flex;flex-direction:column;gap:4px;margin-top:10px}
+.gi-trk textarea{width:100%;min-height:44px}
+.gi-trks{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.gi-t{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 10px;border-radius:var(--r);background:var(--surface-2);word-break:break-all}
+.gi-t .btn{margin-left:auto}
