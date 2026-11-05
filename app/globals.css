@@ -21033,6 +21033,10 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .fws-err{color:var(--danger);font-size:14px;font-weight:600}
 .fws-send{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .fws-faint{font-size:13px;color:var(--ink-3)}
+.fws-step{display:flex;align-items:center;gap:8px;font-size:16px;margin:4px 0 -4px}
+.fws-step span{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--accent-soft);color:var(--accent-hover);font-size:13px}
+.fws-step:not(:first-child){border-top:1px solid var(--line-2);padding-top:14px}
+.fws-eyebrow{margin:0 0 6px;color:var(--fbs-salmon);font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase}
 .fws-done{background:var(--ok-soft);border:1px solid var(--ok);border-radius:12px;padding:22px}
 .fws-done b{display:block;font-size:22px;margin-bottom:6px}
 .fws-done p{margin:4px 0}

@@ -24,7 +24,7 @@ export const SERVICES: { t: string; d: string; icon: "shirt" | "cap" | "press" |
 ];
 
 export const STEPS = [
-  { t: "Tell us what you need", d: "Send the form below with your art, or log in and build the order yourself." },
+  { t: "Reach out", d: "Send the new client form below with your art, or log in and build the order yourself." },
   { t: "Approve it online", d: "You get a proof and a quote by email. Approve, ask for changes and pay in one place." },
   { t: "We print and deliver", d: "Track it in your portal until it's ready for pickup or shipped to your door." },
 ];
@@ -41,7 +41,10 @@ export const ALSO = ["Breweries", "Churches", "Cities", "Businesses", "Designers
 /** the About box's three facts (Nov 5, Nick) */
 export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];
 
+/** the inquiry form's "You are a…" (Nov 5, Nick: "who am I, what my company, what am I needing") */
+export const CLIENT_KINDS = ["Wholesaler", "Private brand", "Contract reseller", "School", "Brewery", "Church", "City", "Business", "Something else"];
 /** what someone can tick on the request form */
-export const NEEDS = ["T-shirts", "Hoodies and sweats", "Hats", "Polos and jackets", "Embroidery", "DTF transfers", "Printing", "Signage", "Promo items", "Something else"];
+export const NEEDS = ["Screen printing", "Embroidery", "DTF", "Printing", "Signage", "Promo items", "Online store", "Fulfillment"];
+export const NEEDS_OLD = ["T-shirts", "Hoodies and sweats", "Hats", "Polos and jackets", "Embroidery", "DTF transfers", "Printing", "Signage", "Promo items", "Something else"];
 
 export const sitePhoto = (path: string) => `${SUPABASE_URL}/storage/v1/object/public/site/${path}`;

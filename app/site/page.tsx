@@ -85,8 +85,9 @@ export default function SitePage() {
         <section className="fws-sec" id="request">
           <div className="fws-req">
             <div className="fws-req-t">
-              <h2 className="fws-h fws-d">Tell us what you need</h2>
-              <p className="fws-sub">We&apos;ll send a quote and a proof, usually the same business day. It goes straight to our order desk.</p>
+              <p className="fws-eyebrow">New client inquiry</p>
+              <h2 className="fws-h fws-d">Reach out today</h2>
+              <p className="fws-sub">Tell us who you are and what you&apos;re working on. Someone from our team will reach out, usually the same business day, with pricing and next steps.</p>
             </div>
             <SiteRequestForm loginHref={login} />
           </div>

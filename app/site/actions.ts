@@ -11,7 +11,7 @@ import { newGroup } from "@/lib/pricing";
  * shop (lib/shopNotice.ts).
  */
 export type SiteReq = {
-  name: string; company: string; email: string; phone: string; needs: string[]; qty: string; by: string; details: string;
+  name: string; company: string; email: string; phone: string; /** their website or Instagram */ site?: string; /** "Wholesaler", "School"… */ kind?: string; needs: string[]; qty: string; by: string; details: string;
   files: { path: string; name: string; mime: string; size: number }[];
   /** bots fill this */ website?: string; /** when the form was opened (ms) */ t0: number;
 };
@@ -47,6 +47,7 @@ export async function sendSiteRequest(r: SiteReq) {
     const admin = createAdminClient(), ip = await ipOf();
     const t = (s: string, n = 200) => String(s || "").trim().slice(0, n);
     const email = t(r.email, 200).toLowerCase(), name = t(r.name, 120), company = t(r.company, 160), phone = t(r.phone, 40);
+    const site = t(r.site || "", 200), kind = t(r.kind || "", 40);
     const details = t(r.details, 5000), needs = (r.needs || []).map((x) => t(x, 40)).filter(Boolean).slice(0, 12);
     // a bot: filled the hidden field or sent it in under 3 seconds. It looks sent to them; nothing is made.
     if (r.website || Date.now() - (+r.t0 || 0) < 3000) {
@@ -71,8 +72,8 @@ export async function sendSiteRequest(r: SiteReq) {
     }
     const c = cust as { id: string; price_type?: string | null; tax_exempt?: boolean | null };
     const by = /^\d{4}-\d{2}-\d{2}$/.test(r.by || "") ? r.by : null;
-    const nick = [company || name, needs.slice(0, 2).join(" + ")].filter(Boolean).join(" · ").slice(0, 120);
-    const notes = [`From the website (fbsprint.com)${isNew ? ", a new customer" : ""}.`, `${name}${company ? `, ${company}` : ""} · ${email}${phone ? ` · ${phone}` : ""}`,
+    const nick = [company || name, kind, needs.slice(0, 2).join(" + ")].filter(Boolean).join(" · ").slice(0, 120);
+    const notes = [`New client inquiry from the website (fbsprint.com)${isNew ? ", a new customer" : ""}.`, `${name}${company ? `, ${company}` : ""} · ${email}${phone ? ` · ${phone}` : ""}`, kind ? `They are a: ${kind}` : "", site ? `Website: ${site}` : "",
       needs.length ? `Needs: ${needs.join(", ")}` : "", r.qty ? `About ${t(r.qty, 40)} pieces` : "", by ? `Needed by ${by}` : "", details].filter(Boolean).join("\n");
     const { data: o, error: oe } = await admin.from("orders").insert({
       customer_id: c.id, status: "request", type: "quote", source: "website", draft: true, nickname: nick, notes, due_date: by,
@@ -88,7 +89,7 @@ export async function sendSiteRequest(r: SiteReq) {
     await admin.from("site_requests").insert({ email, ip, order_id: o.id, customer_id: c.id, detail: { name, company, needs } });
     const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const { mergeSettings } = await import("@/lib/pricing");
-    await (await import("@/lib/shopNotice")).notifyShopAbout(admin, o.id, { did: `sent a website request${isNew ? " (new customer)" : ""}`, head: `${company || name} sent a request from the website`, body: notes, shopName: mergeSettings(s?.data).shop.name, button: "Review it" }).catch(() => null);
+    await (await import("@/lib/shopNotice")).notifyShopAbout(admin, o.id, { did: `sent a new client inquiry${kind ? ` (${kind.toLowerCase()})` : ""}`, head: `${company || name} sent a new client inquiry from the website`, body: notes, shopName: mergeSettings(s?.data).shop.name, button: "Review it" }).catch(() => null);
     return { ok: true as const, number: Number(num) || 0 };
   } catch { return fail("Something went wrong sending this. Call us at 972-487-7858."); }
 }
