@@ -259,11 +259,7 @@ export async function decideSewout(admin: SupabaseClient, s: Sewout, o: Order, d
   await admin.from("order_events").insert({ order_id: o.id, kind: decision === "approved" ? "sewout_approved" : "sewout_changes", detail: `Sew-out v${s.version}${note ? `: ${note.slice(0, 200)}` : ""}`, actor });
   if (decision === "approved") await keepOnLogo(admin, s, who, o.number);
   const { settings } = await load(admin, o.id);
-  if (SHOP_NOTIFY_EMAIL && !quiet) await sendEmail({
-    to: SHOP_NOTIFY_EMAIL,
-    subject: decision === "approved" ? `Sew-out approved on #${o.number}` : `Sew-out changes on #${o.number}`,
-    html: emailLayout(settings.shop.name, decision === "approved" ? `${who} approved the sew-out` : `${who || "The customer"} wants changes to the sew-out`, note || (decision === "approved" ? "Good to run." : "No comment."), "Open order", `${siteUrl()}/shop/orders/${o.id}`),
-  });
+  if (SHOP_NOTIFY_EMAIL && !quiet) await (await import("@/lib/shopNotice")).notifyShopAbout(admin, o.id, { did: decision === "approved" ? "approved the sew-out" : "wants sew-out changes", head: decision === "approved" ? `${who} approved the sew-out` : `${who || "The customer"} wants changes to the sew-out`, body: note || (decision === "approved" ? "Good to run." : "No comment."), shopName: settings.shop.name });
   return { ok: true as const };
 }
 

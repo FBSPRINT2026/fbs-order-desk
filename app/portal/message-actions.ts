@@ -93,7 +93,8 @@ export async function portalSend(orderId: string | null, body: string, files: At
       const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       const shop = mergeSettings(s?.data).shop.name;
       const link = orderId ? `${siteUrl()}/shop/orders/${orderId}` : `${siteUrl()}/shop/customers/${cust.id}?area=messages`;
-      await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: number ? `New ${tp ? "goods " : ""}message on #${number}` : projectName ? `New message on project ${projectName}` : `New message from ${cust.company || author}`,
+      if (orderId) await (await import("@/lib/shopNotice")).notifyShopAbout(admin, orderId, { did: tp ? "sent a goods message" : "sent a message", head: `${author} wrote about #${number}`, body: (text || "(no text)") + attachNote(attachments, "the order desk"), shopName: shop, button: "Open" });
+      else await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: number ? `New ${tp ? "goods " : ""}message on #${number}` : projectName ? `New message on project ${projectName}` : `New message from ${cust.company || author}`,
         html: emailLayout(shop, number ? `${author} wrote about #${number}` : `${author} wrote`, (text || "(no text)") + attachNote(attachments, "the order desk"), "Open", link) });
     }
     return { ok: true };

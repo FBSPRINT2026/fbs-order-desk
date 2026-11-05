@@ -31,10 +31,11 @@ async function customerOrder(orderId: string) {
   return { admin, order: order as Order, email, who, settings: mergeSettings(s?.data) };
 }
 
-async function notifyShop(subject: string, heading: string, body: string, orderId: string, shopName: string) {
-  const to = SHOP_NOTIFY_EMAIL;
-  if (!to) return;
-  await sendEmail({ to, subject, html: emailLayout(shopName, heading, body, "Open order", `${siteUrl()}/shop/orders/${orderId}`) });
+/** the shop's email about what a customer did: "Logotology wants proof changes · #40481 Spring tees", with the order's
+ *  picture (lib/shopNotice.ts) */
+async function notifyShop(did: string, heading: string, body: string, orderId: string, shopName: string) {
+  const { notifyShopAbout } = await import("@/lib/shopNotice");
+  await notifyShopAbout(createAdminClient(), orderId, { did, head: heading, body, shopName });
 }
 
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -54,7 +55,7 @@ export async function approveQuote(orderId: string, signature: string): Promise<
       { order_id: orderId, kind: "status", detail: "approved", actor: email },
     ]);
     await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "quote approved");
-    await notifyShop(`Quote #${order.number} approved`, `${name} approved quote #${order.number}`, `${order.nickname || "Order"} · ${money(order.total)}`, orderId, settings.shop.name);
+    await notifyShop("approved the quote", `${name} approved quote #${order.number}`, `${order.nickname || "Order"} · ${money(order.total)}`, orderId, settings.shop.name);
     revalidatePath(`/portal/orders/${orderId}`);
     return { ok: true };
   } catch (e) { return fail(e); }
@@ -67,7 +68,7 @@ export async function requestQuoteChanges(orderId: string, comment: string): Pro
     const { admin, order, email, who, settings } = await customerOrder(orderId);
     await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: email, author_name: who, body: `Change request: ${text}` });
     await admin.from("order_events").insert({ order_id: orderId, kind: "changes", detail: "", actor: email });
-    await notifyShop(`Changes requested on #${order.number}`, `${who} asked for changes on #${order.number}`, text, orderId, settings.shop.name);
+    await notifyShop("asked for changes", `${who} asked for changes on #${order.number}`, text, orderId, settings.shop.name);
     revalidatePath(`/portal/orders/${orderId}`);
     return { ok: true };
   } catch (e) { return fail(e); }
@@ -100,7 +101,7 @@ export async function decideProof(proofId: string, decision: "approved" | "appro
     if (status === "approved") await (await import("@/lib/simpleOrdersServer")).approveItems(admin, order.id, name, new Date().toISOString());
     const head = decision === "approved" ? "approved" : decision === "approved_changes" ? "approved with changes" : "wants changes to";
     await notifyShop(
-      decision === "approved" ? `Proof approved on #${order.number}` : decision === "approved_changes" ? `Proof approved with changes on #${order.number}` : `Proof changes on #${order.number}`,
+      decision === "approved" ? "approved the proof" : decision === "approved_changes" ? "approved the proof with changes" : "wants proof changes",
       `${name} ${head} "${proof.title}"`,
       decision === "approved_changes" ? `Make these changes before printing (no new proof):\n\n${note}` : note || "No comment.", order.id, settings.shop.name
     );
@@ -178,7 +179,7 @@ export async function submitOwnChange(proofId: string, change: { lines: { id?: s
       await admin.from("orders").update({ groups: ng }).eq("id", order.id);
     }
     await admin.from("order_events").insert({ order_id: order.id, kind: "proof_changes", detail: `${proof.title} (changed it themselves)`, actor: email });
-    await notifyShop(`Customer changed the art on #${order.number}`, `${who} made changes to "${proof.title}" in the Mockup Creator`, `${text}\n\nCheck it can print, then send the new proof.`, order.id, settings.shop.name);
+    await notifyShop("changed the art", `${who} made changes to "${proof.title}" in the Mockup Creator`, `${text}\n\nCheck it can print, then send the new proof.`, order.id, settings.shop.name);
     revalidatePath(`/portal/orders/${order.id}`);
     return { ok: true };
   } catch (e) { return fail(e); }
@@ -191,7 +192,7 @@ export async function customerMessage(orderId: string, body: string): Promise<Re
     const { admin, order, email, who, settings } = await customerOrder(orderId);
     const { error } = await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: email, author_name: who, body: text });
     if (error) return { ok: false, error: error.message };
-    await notifyShop(`New message on #${order.number}`, `${who} wrote about #${order.number}`, text, orderId, settings.shop.name);
+    await notifyShop("sent a message", `${who} wrote about #${order.number}`, text, orderId, settings.shop.name);
     revalidatePath(`/portal/orders/${orderId}`);
     return { ok: true };
   } catch (e) { return fail(e); }
@@ -350,7 +351,7 @@ export async function requestCancellation(orderId: string, reason: string, note:
     if (error) return { ok: false, error: error.message };
     await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: email, author_name: who, body: text });
     await admin.from("order_events").insert({ order_id: orderId, kind: "cancel_requested", detail: text.slice(0, 300), actor: email });
-    await notifyShop(`Cancellation requested: #${o.number}`, `${who} asked to cancel #${o.number}`, text, orderId, settings.shop.name);
+    await notifyShop("asked to cancel", `${who} asked to cancel #${o.number}`, text, orderId, settings.shop.name);
     revalidatePath(`/portal/orders/${orderId}`);
     return { ok: true };
   } catch (e) { return fail(e); }

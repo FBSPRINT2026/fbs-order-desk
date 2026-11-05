@@ -371,14 +371,15 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
   const who = name.trim().slice(0, 120), why = reason.trim().slice(0, 2000);
   const now = new Date().toISOString();
   const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-  const shop = (subject: string, head: string, body: string) => SHOP_NOTIFY_EMAIL && !quiet ? sendEmail({ to: SHOP_NOTIFY_EMAIL, subject, html: emailLayout(settings.shop.name, head, body, "Open order", `${siteUrl()}/shop/orders/${orderId}`) }) : Promise.resolve(false);
+  // the shop's email names the company, what they did and the order, with its picture (lib/shopNotice.ts)
+  const shop = (did: string, head: string, body: string) => SHOP_NOTIFY_EMAIL && !quiet ? import("@/lib/shopNotice").then((m) => m.notifyShopAbout(admin, orderId, { did, head, body, shopName: settings.shop.name })) : Promise.resolve(false);
   // changes on the final invoice (the order's already approved): it stays approved, the shop fixes the invoice
   if (decision === "changes" && o.status !== "quote_sent") {
     if (["quote", "request", "completed", "void"].includes(o.status)) return { ok: false as const, error: "This was already answered or changed. Refresh the page." };
     if (!why) return { ok: false as const, error: "Tell us what to change." };
     await admin.from("order_events").insert({ order_id: orderId, kind: "invoice_changes", detail: `${who || "The customer"}: ${why.slice(0, 500)}`, actor });
     await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `Changes to the final invoice: ${why}` });
-    await shop(`#${o.number} Invoice: changes asked`, `${who || "The customer"} asked for changes to the final invoice on #${o.number}`, why);
+    await shop("asked for invoice changes", `${who || "The customer"} asked for changes to the final invoice on #${o.number}`, why);
     return { ok: true as const };
   }
   if (o.status !== "quote_sent") return { ok: false as const, error: "This quote was already answered or changed. Refresh the page." };
@@ -389,7 +390,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     await approveItems(admin, orderId, who || actor || "customer", now);
     await admin.from("order_events").insert([{ order_id: orderId, kind: "approved", detail: `Signed "${who}" on their order page`, actor }, { order_id: orderId, kind: "status", detail: "approved", actor }]);
     await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "quote approved");
-    await shop(`Quote #${o.number} approved`, `${who} approved quote #${o.number}`, `${o.nickname || "Order"} · ${money(o.total || 0)}`);
+    await shop("approved the quote", `${who} approved quote #${o.number}`, `${o.nickname || "Order"} · ${money(o.total || 0)}`);
     matchGoodsSoon();
     return { ok: true as const };
   }
@@ -403,7 +404,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     ...(decision === "decline" ? [{ order_id: orderId, kind: "job_declined", detail: `By the customer: ${why.slice(0, 300)}`, actor }] : []),
   ]);
   await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `${decision === "decline" ? "Declined the quote" : "Changes to the quote"}: ${why}` });
-  await shop(`Quote #${o.number} ${decision === "decline" ? "declined" : "changes asked"}`, `${who || "The customer"} ${decision === "decline" ? "declined" : "asked for changes to"} quote #${o.number}`, `${decision === "decline" ? "Why" : "What to change"}: ${why}`);
+  await shop(decision === "decline" ? "declined the quote" : "asked for quote changes", `${who || "The customer"} ${decision === "decline" ? "declined" : "asked for changes to"} quote #${o.number}`, `${decision === "decline" ? "Why" : "What to change"}: ${why}`);
   return { ok: true as const };
 }
 

@@ -44,7 +44,7 @@ export async function addTracking(orderId: string, t: TrackingInput): Promise<Re
     if (SHOP_NOTIFY_EMAIL) {
       const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       const lines = [tracking && `Tracking: ${t.carrier || carrierOf(tracking) || ""} ${tracking}`.trim(), t.boxes ? `Boxes: ${t.boxes}` : "", t.eta ? `Expected: ${t.eta}` : "", note, files.length ? `${files.length} file${files.length === 1 ? "" : "s"} attached` : ""].filter(Boolean).join("\n");
-      await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Goods on the way for #${o.number} (${cust?.company || who})`, html: emailLayout(mergeSettings(s?.data).shop.name, `${who} sent goods for #${o.number}`, lines, "Open order", `${siteUrl()}/shop/orders/${orderId}`) });
+      await (await import("@/lib/shopNotice")).notifyShopAbout(admin, orderId, { did: "sent goods", head: `${who} sent goods for #${o.number}`, body: lines, shopName: mergeSettings(s?.data).shop.name });
     }
     revalidatePath("/portal");
     return { ok: true };

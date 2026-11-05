@@ -58,8 +58,8 @@ export async function approveAll(id: string, name: string, pick: { art?: { note:
       const what = [pick.art ? "the proof" : "", ...(pick.sewouts || []).map(() => "the sew-out"), pick.quote ? "the quote" : "", pick.invoice ? "the final invoice" : ""].filter(Boolean);
       const notes = [pick.art?.note.trim() ? `Proof: ${pick.art.note.trim()}` : "", ...(pick.sewouts || []).filter((x) => x.note.trim()).map((x) => `Sew-out: ${x.note.trim()}`)].filter(Boolean);
       const list = what.length > 1 ? `${what.slice(0, -1).join(", ")} and ${what[what.length - 1]}` : what[0] || "it";
-      await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `#${o?.number} approved: ${list}`, html: emailLayout(mergeSettings(s.data?.data).shop.name, `${who} approved ${list} on #${o?.number}`,
-        notes.length ? `Make these small changes before production (no new proof):\n\n${notes.join("\n")}` : `${o?.nickname || "Order"} is good to go.`, "Open order", `${siteUrl()}/shop/orders/${link.order_id}`) });
+      await (await import("@/lib/shopNotice")).notifyShopAbout(admin, link.order_id, { did: `approved ${list}`, head: `${who} approved ${list} on #${o?.number}`, shopName: mergeSettings(s.data?.data).shop.name,
+        body: notes.length ? `Make these small changes before production (no new proof):\n\n${notes.join("\n")}` : `${o?.nickname || "Order"} is good to go.` });
     }
     return { ok: true as const };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : "Something went wrong. Try again." }; }
