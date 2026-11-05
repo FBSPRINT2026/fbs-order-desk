@@ -21,7 +21,7 @@ type Opts = { to: string; name: string; proof: { version: number; mockups: numbe
   /** the account's people, ticked when their email settings send them approvals */ people?: { email: string; name: string; on: boolean }[] };
 /** what's ticked, who it goes to this time, and whether it goes from the person's own mailbox as a reply (lib/customerSend.ts) */
 type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note?: string; to?: string[]; fromMe?: boolean; reply?: { messageId: string } | null; after?: string };
-type Choice = { messageId: string; subject: string; from: string; fromEmail: string; at: string; likely?: boolean };
+type Choice = { messageId: string; subject: string; from: string; fromEmail: string; at: string; likely?: boolean; thread?: boolean };
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
@@ -170,9 +170,9 @@ export default function SendProofTool({ target, label = "Send to customer", mode
                 {pick.fromMe && <div className="spt-row"><span className="spt-rl">Reply to</span>
                   <div className="spt-rv"><select value={pick.reply?.messageId || ""} aria-label="As a reply to" onChange={(e) => { const g = choices.find((x) => x.messageId === e.target.value); if (g) answer(g); else setPick((p) => ({ ...p, reply: null })); }}>
                     <option value="">A new email (not a reply)</option>
-                    {choices.map((c) => <option key={c.messageId} value={c.messageId}>{c.subject} · {c.from} · {new Date(c.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</option>)}
+                    {choices.map((c) => <option key={c.messageId} value={c.messageId}>{c.thread ? `${c.from}'s message on this order` : c.subject}{c.thread ? "" : ` · ${c.from}`} · {new Date(c.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</option>)}
                   </select>
-                  {(() => { const g = choices.find((x) => x.messageId === pick.reply?.messageId && x.likely); return g ? <small className="spt-guess" data-notranslate>Looks like you&apos;re answering {g.from.split(/\s+/)[0]}&apos;s email from {new Date(g.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small> : null; })()}</div></div>}
+                  {(() => { const g = choices.find((x) => x.messageId === pick.reply?.messageId && x.likely); return g ? <small className="spt-guess" data-notranslate>Looks like you&apos;re answering {g.from.split(/\s+/)[0]}&apos;s {g.thread ? "message on this order" : "email"} from {new Date(g.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small> : null; })()}</div></div>}
                 {/* the email itself: your words, the FBS card as a little bar, your closing, your signature */}
                 <div className="spt-body">
                   <AutoText value={pick.note || ""} placeholder={pick.fromMe ? "Hi …" : `A note (optional): e.g. Here's the ${what} we talked about`} label={pick.fromMe ? "Your message, above the card" : "A note (optional, goes in the email)"}

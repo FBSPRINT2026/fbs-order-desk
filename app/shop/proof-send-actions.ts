@@ -81,7 +81,7 @@ export async function sendFromChoices(orderId: string, emails: string[]) {
     const admin = createAdminClient();
     const { data: o } = await admin.from("orders").select("number, nickname").eq("id", orderId).maybeSingle();
     const { replyChoices } = await import("@/lib/customerSend");
-    return { ok: true as const, box: box.email, choices: await replyChoices(admin, box, emails, { name: o?.nickname || "", number: o?.number || null }) };
+    return { ok: true as const, box: box.email, choices: await replyChoices(admin, box, emails, { name: o?.nickname || "", number: o?.number || null, orderId }) };
   } catch (e) { return fail(e); }
 }
 export async function bundleSend(orderId: string, pick: Pick3) {
