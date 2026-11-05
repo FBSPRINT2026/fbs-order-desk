@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/config";
-import { SERVICES, SITE, STEPS, WORK, sitePhoto } from "@/lib/siteContent";
+import { SERVICES, SITE, STEPS, WHO, sitePhoto } from "@/lib/siteContent";
+import SiteIconArt from "@/components/site/SiteIcons";
 import SiteRequestForm from "@/components/site/SiteRequestForm";
 
 /**
@@ -24,7 +25,7 @@ export default function SitePage() {
       <header className="fws-head">
         <a className="fws-logo" href="#top" aria-label="FBS Print home"><img src="/brand/fbs-logo.svg" alt="FBS Print" /></a>
         <nav className="fws-nav" aria-label="Site">
-          <a href="#services">Services</a><a href="#work">Our work</a><a href="#about">About</a><a href="#contact">Contact</a>
+          <a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a>
         </nav>
         <div className="fws-acts">
           <a className="fws-btn" href={login}>Customer login</a>
@@ -33,14 +34,15 @@ export default function SitePage() {
       </header>
 
       <main id="top">
-        <section className="fws-hero">
+        {/* the old site's squeegee photo behind the headline (Nov 5, Nick: "I like that picture… build that into our header") */}
+        <section className="fws-hero" style={{ backgroundImage: `linear-gradient(90deg, rgba(20,29,43,.96) 0%, rgba(20,29,43,.86) 42%, rgba(20,29,43,.25) 100%), url(${sitePhoto("hero/squeegee.jpg")})` }}>
           <div className="fws-hero-t">
-            <p className="fws-kick">Richardson, TX · since {SITE.since}</p>
+            <p className="fws-kick">Apparel · print · fulfillment</p>
             <h1 className="fws-d">Shirts, hats and print, done right and on time.</h1>
-            <p className="fws-lead">Screen printing, embroidery, DTF, signage and promotional products for businesses, breweries, schools and brands, plus wholesale contract printing for decorators.</p>
+            <p className="fws-lead">Screen printing, embroidery, DTF, signage and promotional products for businesses, breweries, schools and brands, plus wholesale contract printing for decorators. In Richardson, TX since {SITE.since}.</p>
             <div className="fws-row"><a className="fws-btn p lg" href="#request">Start an order or quote</a><a className="fws-btn ghost lg" href={login}>Customer login</a></div>
           </div>
-          <div className="fws-hero-pic" aria-hidden><img src={sitePhoto("work/four-corners.jpg")} alt="" /><img src={sitePhoto("work/custom-tag.jpg")} alt="" /></div>
+          <img className="fws-badge" src={sitePhoto("brand/badge-white.png")} alt="FBS: create, print, deliver" />
         </section>
 
         <section className="fws-portal" aria-label="Customer portal">
@@ -50,7 +52,7 @@ export default function SitePage() {
 
         <section className="fws-sec" id="services">
           <h2 className="fws-h fws-d">What we do</h2>
-          <div className="fws-svcs">{SERVICES.map((s) => <div key={s.t} className={`fws-svc ${s.tone}`}><h3 className="fws-d">{s.t}</h3><p>{s.d}</p></div>)}</div>
+          <div className="fws-svcs">{SERVICES.map((s) => <div key={s.t} className={`fws-svc ${s.tone}`}><span className="fws-ic"><SiteIconArt name={s.icon} /></span><h3 className="fws-d">{s.t}</h3><p>{s.d}</p></div>)}</div>
         </section>
 
         <section className="fws-sec fws-alt">
@@ -59,11 +61,8 @@ export default function SitePage() {
         </section>
 
         <section className="fws-sec" id="work">
-          <h2 className="fws-h fws-d">Our work</h2>
-          <p className="fws-sub">A few recent jobs.</p>
-          <div className="fws-work">{WORK.map((w) => (
-            <figure key={w.slug}><div className="fws-ph"><img src={sitePhoto(`work/${w.slug}.jpg`)} alt={`${w.t} for ${w.who}`} loading="lazy" /></div><figcaption><b>{w.t}</b><span>{w.who}</span></figcaption></figure>
-          ))}</div>
+          <h2 className="fws-h fws-d">Who we print for</h2>
+          <div className="fws-who">{WHO.map((w) => <div key={w.t} className={`fws-whoc ${w.tone}`}><b className="fws-d">{w.t}</b><span>{w.d}</span></div>)}</div>
         </section>
 
         <section className="fws-sec fws-alt" id="about">

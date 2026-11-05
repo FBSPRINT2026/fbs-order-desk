@@ -13,13 +13,13 @@ export const SITE = {
   since: 2004,
 };
 
-export const SERVICES: { t: string; d: string; tone: "blue" | "salmon" | "orange" }[] = [
-  { t: "Screen printing", d: "Plastisol, water-based, discharge, puff and simulated process. Short runs to thousands.", tone: "blue" },
-  { t: "Embroidery", d: "Hats, polos, jackets and bags, with 3D puff and sewn or embroidered patches.", tone: "salmon" },
-  { t: "DTF transfers", d: "Full-color prints with no color limits, pressed here or sent as gang sheets.", tone: "orange" },
-  { t: "Printing and signage", d: "Business cards, booklets, coasters, banners and large-format signs.", tone: "blue" },
-  { t: "Promotional products", d: "Drinkware, bags, stickers and giveaways with your logo on them.", tone: "salmon" },
-  { t: "Stores and fulfillment", d: "Online team and company stores, then pick, pack and ship.", tone: "orange" },
+export const SERVICES: { t: string; d: string; icon: "shirt" | "cap" | "swatch" | "sign" | "store" | "box"; tone: "blue" | "salmon" | "orange" }[] = [
+  { t: "Screen printing", d: "Full-service, high-quality screen printing and DTF on every kind of apparel and brand.", icon: "shirt", tone: "blue" },
+  { t: "Embroidery", d: "Turnkey embroidery on hats, polos, jackets and bags, with 3D puff and patches.", icon: "cap", tone: "salmon" },
+  { t: "Printing", d: "Digital, offset and grand-format printing: cards, booklets, coasters and more.", icon: "swatch", tone: "orange" },
+  { t: "Signage and promo products", d: "Banners, yard signs, conference displays and promotional products.", icon: "sign", tone: "blue" },
+  { t: "Online stores", d: "Web stores and online shops for your team, company or brand to sell your products.", icon: "store", tone: "salmon" },
+  { t: "Pick, pack and ship", d: "Full-service daily pick, pack and ship by USPS, UPS and FedEx.", icon: "box", tone: "orange" },
 ];
 
 export const STEPS = [
@@ -28,16 +28,12 @@ export const STEPS = [
   { t: "We print and deliver", d: "Track it in your portal until it's ready for pickup or shipped to your door." },
 ];
 
-export const WORK: { slug: string; t: string; who: string }[] = [
-  { slug: "four-corners", t: "Simulated full-color screen print", who: "Four Corners Brewing" },
-  { slug: "patches", t: "Custom patches", who: "Peticolas, St Bernard and OHB" },
-  { slug: "tie-dye", t: "Tie-dye shirts", who: "Cedar Creek Brewery" },
-  { slug: "booklet", t: "Multi-page booklet with UV coating", who: "YourCause" },
-  { slug: "sewn-patches", t: "Custom sewn patches", who: "Oak Highlands Brewery" },
-  { slug: "tech-shirt", t: "Printed tech shirt", who: "On Your Left! Marketing" },
-  { slug: "custom-tag", t: "Screen print with custom tag", who: "St Bernard Sports" },
-  { slug: "sleeve", t: "Screen print with sleeve", who: "Dallas Fire Department" },
-  { slug: "coaster", t: "Die-cut coaster", who: "Full Clip Distributing" },
+/** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated") */
+export const WHO: { t: string; d: string; tone: "blue" | "salmon" | "orange" }[] = [
+  { t: "Breweries and restaurants", d: "Staff shirts, merch, hats and coasters", tone: "salmon" },
+  { t: "Schools and teams", d: "Spirit wear, uniforms and events", tone: "blue" },
+  { t: "Cities and companies", d: "Departments, onboarding, 5Ks and fundraisers", tone: "orange" },
+  { t: "Brands and decorators", d: "Wholesale and contract printing, blind shipped", tone: "blue" },
 ];
 
 /** what someone can tick on the request form */
