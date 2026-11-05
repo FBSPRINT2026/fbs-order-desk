@@ -38,7 +38,7 @@ export function OldReorderButton({ archivedId, disabled, as, primary = true, sma
   );
 }
 
-function OldReorderForm({ s, onClose }: { s: OldReorderStart; onClose: () => void }) {
+export function OldReorderForm({ s, onClose }: { s: OldReorderStart; onClose: () => void }) {
   const router = useRouter();
   const [sizes, setSizes] = useState<Record<number, Record<string, string>>>({});
   const [off, setOff] = useState<Record<number, boolean>>({});

@@ -9,7 +9,8 @@ import type { NeckLabelSet } from "@/lib/neckLabels";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { calcOrder, newGroup, priceList, requestHints, requestProblems, uid, PREVIEWABLE_TYPES, type Design, type Garment, type Group, type Message, type Order, type Settings } from "@/lib/pricing";
-import { bringOldJobFile, bringOrderArtwork, myOrderArtwork, searchMyOldJobs, type MyOldJob, type MyOrderArt, attachMockupToRequest, describeMyOrder, discardRequest, myReorderables, ownMockupUploadUrl, readMyPo, reorderInto, requestFileUrl, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type Reorderable, type RqFile } from "@/app/portal/request-actions";
+import { OldReorderForm } from "@/components/PortalOldReorder";
+import { bringOldJobFile, bringOrderArtwork, myOrderArtwork, searchMyOldJobs, type MyOldJob, type MyOrderArt, attachMockupToRequest, describeMyOrder, discardRequest, myReorderables, ownMockupUploadUrl, readMyPo, reorderInto, startOldReorder, type OldReorderStart, requestFileUrl, saveOwnMockup, saveRequest, sendSimpleOrder, submitRequest, type PoRead, type Reorderable, type RqFile } from "@/app/portal/request-actions";
 import { unzip } from "@/lib/unzip";
 import { uploadMyLogo } from "@/lib/customerUpload";
 import { customerMessage } from "@/app/portal/actions";
@@ -318,8 +319,21 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
     const t = setTimeout(() => { void myReorderables(re.q).then((list) => setRe((x) => (x ? { ...x, list } : x))); }, re.list ? 250 : 0);
     return () => clearTimeout(t);
   }, [re?.q, !!re]); // eslint-disable-line react-hooks/exhaustive-deps
+  // an order from the old system (Printavo): the simple reorder form, the same one its own page opens (Nov 5, Nick:
+  // "if it's an old order… created in Printavo, shouldn't it detect that and do the simple reorder that we created in
+  // other places?")
+  const [oldRe, setOldRe] = useState<OldReorderStart | null>(null);
+  const pickedOld = !!re?.pick && re.pick.startsWith("a:");
+  async function startOld() {
+    if (!re?.pick) return;
+    setRe({ ...re, busy: "Opening the reorder form…" });
+    const r = await startOldReorder(re.pick.slice(2), asQ || undefined).catch(() => null);
+    if (!r?.ok || !r.start) { setRe((x) => (x ? { ...x, busy: "" } : x)); return setErr(r?.error || "Couldn't start the reorder."); }
+    setRe(null); setOldRe(r.start);
+  }
   async function pullReorder() {
     if (!re?.pick) return;
+    if (pickedOld) return startOld();
     setRe({ ...re, busy: "Pulling it in…" });
     await flush();
     const r = await reorderInto(o.id, re.pick);
@@ -574,11 +588,12 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
               <span className="faint" style={{ fontSize: 12, marginRight: "auto" }}>{re.busy}</span>
               {re.text.trim() && !re.pick
                 ? <button type="button" className="btn primary" disabled={!!re.busy || preview} onClick={() => void sendReorderText()}>Send it to FBS</button>
-                : <button type="button" className="btn primary" disabled={!!re.busy || !re.pick || preview} onClick={() => void pullReorder()}>Pull it into the form</button>}
+                : <button type="button" className="btn primary" disabled={!!re.busy || !re.pick || preview} onClick={() => void pullReorder()}>{pickedOld ? "Reorder this" : "Pull it into the form"}</button>}
             </div>
           </div>
         </div>
       )}
+      {oldRe && <OldReorderForm s={oldRe} onClose={() => { if (oldRe.id) void discardRequest(oldRe.id); setOldRe(null); }} />}
       {poRead && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Does this look right?" onClick={() => setPoRead(null)}>
           <div className="dla rq-po" onClick={(e) => e.stopPropagation()}>
