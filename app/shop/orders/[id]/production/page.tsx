@@ -165,8 +165,10 @@ export default function ProductionPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {!oneSitting && <footer className="jv-save">
-        <span>{v.step >= STEPS.length ? `Saves every print's inks, size and film to #${v.order.number} and the customer's designs. The next reorder copies this.` : "Saving as printed opens once the job has printed. Until then anything here can still change."}</span>
-        <button type="button" className="btn primary" disabled={v.step < STEPS.length || !!busy} onClick={async () => {
+        {/* never waits on the step tracker (Nov 6, Nick: "Confirm and save as printed… again isn't working"): a job that ran
+            without every step being clicked (film made, on press) can still be saved as printed */}
+        <span>{v.step >= STEPS.length ? `Saves every print's inks, size and film to #${v.order.number} and the customer's designs. The next reorder copies this.` : `Marks #${v.order.number} printed and saves every print's inks, size and film to it and the customer's designs. The next reorder copies this.`}</span>
+        <button type="button" className="btn primary" disabled={!!busy} onClick={async () => {
           setBusy("printed"); setErr("");
           const r = await confirmDetails(id, v.prints.map((p) => ({ id: p.id, size: p.size, inks: p.inks, colors: p.colors, underbase: p.underbase, drop: p.drop, screensOnFile: p.film?.state === "asPrinted", notes: "" })));
           setBusy("");
