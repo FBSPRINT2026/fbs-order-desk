@@ -99,7 +99,7 @@ export default async function ProofPage({ params, searchParams }: { params: Prom
           <ProofAnswer id={id} kind={link.kind === "sewout" ? "sewout" : "art"} status={p.status as "pending" | "approved" | "changes" | "replaced" | "gone"} decidedName={p.decidedName} decidedAt={p.decidedAt} comment={p.comment} />
         </aside>
         <section className="pfl-pdf">
-          <div className="pfl-bar"><span>{what}</span><span className="pfl-sp" /><a href={pdf.replace("&link=", "&link=")} target="_blank" rel="noreferrer">Open PDF</a></div>
+          <div className="pfl-bar"><span>{what}</span><span className="pfl-sp" /><a href={pdf}>View full size</a></div>
           <iframe src={`${pdf}&embed=1`} title={what} />
         </section>
       </div>

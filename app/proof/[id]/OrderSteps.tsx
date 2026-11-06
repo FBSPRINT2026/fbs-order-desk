@@ -28,6 +28,9 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
   const [cur, setCur] = useState((todo[0] || steps.find((s) => s.state === "todo") || steps[0])?.key || "");
   const [ok, setOk] = useState<Record<string, string>>({}); // looked over and good, with their note
   const [final, setFinal] = useState(false);
+  // View full size: the document fills the screen with the answer still under it, so nobody leaves the page to read it
+  // (Nov 6, Nick: "they're clicking the open PDF button and then they get stuck… they can't approve it")
+  const [full, setFull] = useState(false);
   const [doneMsg, setDoneMsg] = useState("");
   // what they sent back from this page (changes, or the quote declined), so the right side shows it at once
   const [back, setBack] = useState<Record<string, { kind: "changes" | "declined"; note: string }>>({});
@@ -61,24 +64,26 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
     if (next) { setCur(next.key); setFinal(false); } else setFinal(true);
   };
   return (
-    <div className="pfl-body">
+    <div className={"pfl-body" + (full ? " is-full" : "")}>
       <aside className="pfl-side">
         <ol className="pfl-steps">
           {steps.map((s, i) => { const good = s.key in ok; const st = good ? "done" : s.state === "locked" ? "todo" : s.state; return (
             <li key={s.key}>
               <button type="button" className={"pfl-step-b " + st + (s.key === step.key ? " on" : "")} onClick={() => { setCur(s.key); setFinal(false); }} aria-current={s.key === step.key}>
                 <span className="pfl-num">{s.state === "done" || good ? "✓" : i + 1}</span>
-                <span><b>{s.title}</b><small>{good ? "Looks good" : s.sub}</small></span>
+                <span><span className="pfl-stepno">Step {i + 1}</span><b>{s.title}</b><small>{good ? "Looks good" : s.sub}</small></span>
               </button>
             </li>); })}
         </ol>
+        {/* what this step is, over the document on a phone (the steps above it are tabs there) */}
+        <div className="pfl-now"><b>Step {Math.max(0, steps.findIndex((s) => s.key === pdfStep.key)) + 1}: {pdfStep.title}</b><span>{pdfStep.sub}</span></div>
         <div className="pfl-ans-wrap">
           {doneMsg ? (() => { const dp = steps.find((s) => s.kind === "deposit" && s.state === "todo"); return dp
               ? <><Result tone="ok" title="Thank you for your approval!" line={`Here's your ${dp.title === "Pay now" ? "payment" : "deposit"} of ${m(dp.amount || 0)}. Once we have it, we'll get started.`} /><PayNow orderId={orderId} label={`${dp.title} · ${m(dp.amount || 0)}`} /></>
               : <Result tone="ok" title="You're all set. Thank you!" line={doneMsg} />; })()
             : showFinal ? <Final key="final" id={id} orderId={orderId} todo={todo} ok={ok} goTo={(k) => { setCur(k); setFinal(false); }} onDone={(msg) => { setDoneMsg(msg); router.refresh(); }} onBack={(kind, note) => { if (quote) setBack((b) => ({ ...b, [quote.key]: { kind, note } })); router.refresh(); }} />
             : (step.kind === "art" || step.kind === "sewout") && step.state === "todo"
-              ? <LookOver key={step.key} id={id} step={step} note0={ok[step.key] || ""} nextLabel={next ? (next.kind === "quote" || next.kind === "invoice" ? `review ${name0(next)}` : `see ${name0(next)}`) : ""} isLast={!next} onGood={goNext} onChanges={(note) => { setBack((b) => ({ ...b, [step.key]: { kind: "changes", note } })); router.refresh(); }} />
+              ? <LookOver key={step.key} id={id} step={step} note0={ok[step.key] || ""} nextLabel={next ? `go to step ${steps.findIndex((x) => x.key === next.key) + 1}` : ""} isLast={!next} onGood={goNext} onChanges={(note) => { setBack((b) => ({ ...b, [step.key]: { kind: "changes", note } })); router.refresh(); }} />
             : (step.kind === "art" || step.kind === "sewout")
               ? <ProofAnswer key={step.key} id={id} kind={step.kind} status={step.state === "done" ? "approved" : step.state === "changes" ? "changes" : "pending"} decidedName={step.who || ""} decidedAt={step.when || ""} comment={step.comment || ""}
                   target={step.kind === "art" ? { kind: "art" } : { kind: "sewout", id: step.sewoutId! }} onAnswered={() => router.refresh()} />
@@ -93,7 +98,7 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
         </div>
       </aside>
       <section className={"pfl-pdf" + (pane ? ` is-${pane}` : "")}>
-        <div className="pfl-bar"><span title={`${pdfStep.title} · ${pdfStep.sub}`}>{pdfStep.title} · {pdfStep.sub}</span><span className="pfl-sp" /><a href={pdfStep.pdf} target="_blank" rel="noreferrer">Open PDF</a></div>
+        <div className="pfl-bar"><span title={`${pdfStep.title} · ${pdfStep.sub}`}>{pdfStep.title} · {pdfStep.sub}</span><span className="pfl-sp" /><button type="button" className="pfl-full-b" onClick={() => setFull((f) => !f)} aria-pressed={full}>{full ? "← Back" : "View full size"}</button></div>
         <div className="pfl-frame">
           <iframe ref={frame} onLoad={tell} key={pdfStep.pdf} src={`${pdfStep.pdf}&embed=1`} title={pdfStep.title} aria-hidden={pane === "changes" || pane === "declined"} />
           {(pane === "changes" || pane === "declined") && <div className="pfl-over" role="status">

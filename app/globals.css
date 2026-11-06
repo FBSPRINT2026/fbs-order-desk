@@ -21212,3 +21212,31 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .fws-f select{height:40px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);width:100%;box-sizing:border-box}
 .fws-f select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
 @media (max-width:420px){.fws-why{grid-template-columns:1fr}}
+/* The customer's approve page (app/proof/[id]/OrderSteps.tsx; Nov 6, Nick: people tapped Open PDF on a phone and got
+   lost): each step is numbered, the document is read in place (View full size fills the screen and keeps the answer under
+   it), and on a phone the steps are tabs, the document comes next, and the answer stays pinned at the bottom. */
+.pfl-stepno{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.pfl-step-b.on .pfl-stepno{color:var(--accent)}
+.pfl-now{display:none}
+.pfl-full-b{flex:none;white-space:nowrap;font:inherit;color:#fff;background:transparent;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:4px 10px;cursor:pointer}
+.pfl-full-b:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.pfl-body.is-full .pfl-pdf{position:fixed;inset:0;z-index:60;overflow:auto}
+.pfl-body.is-full .pfl-pdf iframe{min-height:100vh}
+.pfl-body.is-full .pfl-ans-wrap{position:fixed;z-index:61;right:20px;bottom:20px;width:340px;max-height:70vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:14px}
+.prt-back{margin-right:auto}
+@media (max-width:820px){
+  .pfl-body{display:flex;flex-direction:column}
+  .pfl-side{display:contents}
+  .pfl-steps{order:1;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:8px 12px;background:var(--surface);border-bottom:1px solid var(--line)}
+  .pfl-step-b{padding:7px 9px;gap:0;background:var(--surface-2)}
+  .pfl-step-b .pfl-num,.pfl-step-b small{display:none}
+  .pfl-step-b b{font-size:13px;line-height:1.25}
+  .pfl-now{order:2;display:flex;flex-direction:column;padding:10px 14px 8px;background:var(--surface)}
+  .pfl-now b{font-size:15px}
+  .pfl-now span{font-size:12.5px;color:var(--ink-3)}
+  .pfl-pdf{order:3}
+  .pfl-ans-wrap,.pfl-body.is-full .pfl-ans-wrap{order:4;position:sticky;bottom:0;z-index:61;left:auto;right:auto;width:auto;max-height:65vh;overflow:auto;background:var(--surface);border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:0 -6px 18px rgba(20,29,43,.12);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px))}
+  .pfl-body.is-full .pfl-ans-wrap{position:fixed;left:0;right:0;bottom:0}
+  .pfl-ans .pfl-q{font-size:13.5px}
+  .pfl-ans textarea{min-height:44px;height:44px}
+}
