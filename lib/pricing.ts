@@ -227,6 +227,10 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** a custom spot's area (Oct 27, Nick: "front pocket… set the artboard size… 5x4"): inches, and which side; the
    *  location is the name typed (lib/mockup.ts registerAreas) */
   area?: { w: number; h: number; view?: "front" | "back" };
+  /** printed from the customer's own separations (Nov 6, Nick: "if a customer supplies their own separations… we're not
+   *  going to make a mock-up. We're going to attach their mock-up… get the PMS information"): their films (art_files,
+   *  category film) go to the film printer as sent, their mockup is the proof, the inks come off it; no separating */
+  custSeps?: { films: string[]; mockup?: string };
   supplied?: { by?: string; ref?: string; /** where they go, in words ("Front & back"), under the picture on the work order */ where?: string; picture?: { path: string; name: string; file?: string };
     /** the press price each, set by the customer's program (its card's extraPrices.dtf_supplied, Cedar Promos $1.50);
      *  else the price list's (PriceList.dtfSupplied, $2) */ price?: number };

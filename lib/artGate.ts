@@ -69,7 +69,7 @@ export async function artGate(admin: SupabaseClient, orderId: string): Promise<{
 
   // 3. the art itself, per screen-print location
   const groups = orderGroups(order);
-  const screen = groups.flatMap((g) => g.imprints.filter((im) => im.method === "screen").map((im) => ({ g, im })));
+  const screen = groups.flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !im.custSeps).map((im) => ({ g, im })));
   const ids = [...new Set(screen.map((x) => x.im.design_id).filter((x): x is string => !!x && !x.startsWith("qt-")))];
   const { data: ds } = ids.length ? await admin.from("designs").select("id, number, name, file_path, archived_at").in("id", ids) : { data: [] };
   const dmap = new Map(((ds || []) as { id: string; number: number; name: string; file_path: string; archived_at: string | null }[]).map((d) => [d.id, d]));

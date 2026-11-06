@@ -90,7 +90,7 @@ const supplierPaper = (t: string) => /order\s*confirmation|sales\s*order|invoice
 /** staff's word on each file over the AI's reading: only "art" files stay the art of a print; a mockup is their mockup; their
  *  separations, a vendor's order confirmation, their PO and other paperwork are kept as production files under that name;
  *  "not needed" ones are left off */
-function withRoles(d: EODraft, roles: Record<string, string>, all: { path: string; name: string; type: string }[]): EODraft {
+function withRoles(d: EODraft, roles: Record<string, string>, all: { path: string; name: string; type: string }[], seps: { films: string[]; mockup: string }[] = []): EODraft {
   const notArt = (p: string) => !!roles[p] && roles[p] !== "art";
   const art = Object.fromEntries(Object.entries(d.art || {}).filter(([, p]) => !notArt(p)));
   const mockups = Object.fromEntries(Object.entries(d.mockups || {}).map(([k, v]) => [k, v.filter((p) => !roles[p] || roles[p] === "customer_mockup")]));
@@ -106,6 +106,14 @@ function withRoles(d: EODraft, roles: Record<string, string>, all: { path: strin
     const r = roles[f.path];
     if (!r || r === "not_needed" || files.some((x) => x.path === f.path)) continue;
     files.push({ path: f.path, name: f.name, type: f.type, size: 0, role: r === "art" ? "art" : r === "customer_mockup" ? "mockup" : "other", ...(r === "art" ? {} : { kind: r === "sizes" ? "order_sheet" : r }) });
+  }
+  // their own separations: every screen print is printed from their films, their mockup is every group's mockup (the
+  // proof: nothing made in the Mockup Creator), the inks are read off it, and nothing goes to separations
+  if (seps.length) {
+    const films = seps.flatMap((x) => x.films), mocks = [...new Set(seps.map((x) => x.mockup).filter(Boolean))];
+    const groups = d.groups.map((g) => ({ ...g, imprints: g.imprints.map((im) => (im.method === "screen" || !im.method ? { ...im, custSeps: { films, mockup: mocks[0] } } : im)) }));
+    for (const g of groups) mockups[g.id] = [...new Set([...(mockups[g.id] || []), ...mocks])];
+    return { ...d, groups, art, mockups, files };
   }
   return { ...d, art, mockups, files };
 }
@@ -207,7 +215,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     }
     // what staff said each file is (the Order helper, Nov 6, Nick: "I selected this file as customer separations… it's
     // asking me to put it on a mock-up"): applied to the reading here, so the AI's guess can't override it
-    if (start.roles && Object.keys(start.roles).length) d = withRoles(d, start.roles, start.roleFiles || []);
+    if (start.roles && Object.keys(start.roles).length) d = withRoles(d, start.roles, start.roleFiles || [], start.seps || []);
     { const pcs = pcsOf(d.groups), lines = d.groups.reduce((n, x) => n + x.lines.length, 0); note(`Found ${lines} garment line${lines === 1 ? "" : "s"}, ${pcs.toLocaleString("en-US")} pcs${d.kind === "reorder" ? ", a reorder" : ""}`); }
     // the sheets' own total checked in code, not left to the AI (Oct 24, Nick: In Every Season is 550 + 400 = 950 pcs and
     // came in as 1,025 every time): off, it's read once more told exactly what's off; still off, it's said plainly

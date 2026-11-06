@@ -49,6 +49,9 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
   // the sizes"), and/or their message
   const [sizes, setSizes] = useState<Set<string>>(new Set());
   const [inMsg, setInMsg] = useState(false);
+  // their separations, each with its mockup (Nov 6, Nick: "here's the customer separations, here's the mock-up… you also
+  // have to select those together"): the mockup is the proof and where the inks are read from
+  const [pairOf, setPairOf] = useState<Record<string, string>>({});
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [over, setOver] = useState(false);
   const pick = useRef<HTMLInputElement | null>(null);
@@ -66,10 +69,14 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
     });
   }, [activityId]);
   const kindOf = (p: string): Kind => kinds[p] || "other";
+  const films = files.filter((f) => kindOf(f.path) === "film");
+  const mockOf = (film: string) => { const m = pairOf[film]; if (m && files.some((f) => f.path === m) && kindOf(m) !== "film") return m; const ms = files.filter((f) => kindOf(f.path) === "customer_mockup"); return ms.length === 1 ? ms[0].path : ""; };
+  const unpaired = films.filter((f) => !mockOf(f.path));
+  const pair = (film: string, mock: string) => { setPairOf((x) => ({ ...x, [film]: mock })); if (mock) setKinds((x) => ({ ...x, [mock]: "customer_mockup" })); };
   const tick = (p: string, on: boolean) => setSizes((x) => { const y = new Set(x); if (on) y.add(p); else y.delete(p); return y; });
 
   /** files dropped, picked or pasted (a size sheet, an email, a screenshot, copied text); in step 2 they have the sizes */
-  async function add(list: File[], asSizes: boolean) {
+  async function add(list: File[], asSizes: boolean, mockFor = "") {
     if (!list.length) return;
     setErr("");
     for (const f of list) {
@@ -81,8 +88,9 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
       const r = await addActivityFile(activityId, { ...row, size: f.size });
       if (!r.ok) { setErr(r.error || `${f.name} didn't add.`); continue; }
       setFiles((a) => [...a, row]);
-      setKinds((x) => ({ ...x, [path]: asSizes ? "order_sheet" : guess(row) }));
+      setKinds((x) => ({ ...x, [path]: mockFor ? "customer_mockup" : asSizes ? "order_sheet" : guess(row) }));
       if (asSizes) tick(path, true);
+      if (mockFor) setPairOf((x) => ({ ...x, [mockFor]: path }));
     }
     setBusy("");
   }
@@ -112,11 +120,14 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
       "Staff went through the Order helper; follow it exactly.",
       sizes.size || inMsg ? `The sizes and quantities come ONLY from ${[inMsg ? "their message" : "", ...files.filter((f) => sizes.has(f.path)).map((f) => `"${f.name}"`)].filter(Boolean).join(" and ")}${many ? ": add them all up, each one's lines as they are" : ""}; take no sizes from any other file.` : "",
       ...files.map((f) => `The file "${f.name}" ${say[kindOf(f.path)]}${sizes.has(f.path) ? " and HAS THE SIZES" : kindOf(f.path) === "supplier_order" ? "; it can cover several orders, so NEVER take sizes or quantities from it" : ""}.`),
+      ...[...new Set(films.map((f) => mockOf(f.path)))].map((m) => { const mf = files.find((f) => f.path === m); return mf ? `CUSTOMER SEPARATIONS: the screen prints are printed from the customer's own films; "${mf.name}" is their mockup for them and the proof. Read each print's location, size and inks off that mockup: every PMS swatch or ink named on it ("PANTONE 267C" is PMS 267 C) and White, in order, with the color count to match. Don't ask for art; there is no art file to separate.` : ""; }),
     ].filter(Boolean).join(" ");
+    const seps: { mockup: string; films: string[] }[] = [...new Set<string>(films.map((f) => mockOf(f.path)))].map((m) => ({ mockup: m, films: films.filter((f) => mockOf(f.path) === m).map((f) => f.path) }));
     onMake({ orderType, told, note: note.trim() || undefined, roles: Object.fromEntries(files.map((f) => [f.path, kindOf(f.path)])), roleFiles: files.map((f) => ({ path: f.path, name: f.name, type: f.type })),
       // only these are read (Nov 6, Nick: "this is where you fill in what we've got… the other stuff would just be reference
       // files"): the sizes files, the art and their mockup; with no sizes ticked, their PO too
-      read: files.filter((f) => sizes.has(f.path) || ["art", "customer_mockup"].includes(kindOf(f.path)) || (!sizes.size && kindOf(f.path) === "order_sheet")).map((f) => f.path) });
+      read: files.filter((f) => sizes.has(f.path) || ["art", "customer_mockup"].includes(kindOf(f.path)) || (!sizes.size && kindOf(f.path) === "order_sheet")).map((f) => f.path),
+      ...(seps.length ? { seps } : {}) });
   }
 
   const vendor = files.filter((f) => kindOf(f.path) === "supplier_order").length;
@@ -164,9 +175,22 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
                   {KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
                 {KIND_NOTE[k] && <span className="ohp-fnote">{KIND_NOTE[k]}</span>}
+                {k === "film" && <div className="ohp-pair">
+                  <b>Which mockup goes with these separations?</b>
+                  <span>Needed: it&apos;s the proof and the inks are read off it. We don&apos;t make a mockup.</span>
+                  <select className="ohp-sel" aria-label={`The mockup for ${f.name}`} value={mockOf(f.path)} onChange={(e) => pair(f.path, e.target.value)}>
+                    <option value="">Pick their mockup</option>
+                    {files.filter((x) => x.path !== f.path && kindOf(x.path) !== "film").map((x) => <option key={x.path} value={x.path}>{x.name}</option>)}
+                  </select>
+                  <div className="ohp-drop sm" role="button" tabIndex={0} onClick={() => { if (pick.current) { pick.current.dataset.sizes = ""; pick.current.dataset.mock = f.path; pick.current.click(); } }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }} onDrop={(e) => { e.preventDefault(); e.stopPropagation(); void add(Array.from(e.dataTransfer.files || []) as File[], false, f.path); }}
+                    onPaste={(e) => { const fs = Array.from(e.clipboardData.files || []) as File[]; if (fs.length) { e.preventDefault(); void add(fs, false, f.path); } }}>
+                    <span>or drop / paste their mockup here</span>
+                  </div>
+                </div>}
               </li>); })}</ul> : <p className="ohp-p">No files.</p>}
             <button type="button" className="linkbtn" disabled={!!busy} onClick={() => { if (pick.current) { pick.current.dataset.sizes = ""; pick.current.click(); } }}>Add a file (or drop it anywhere here)</button>
-            <input ref={pick} type="file" multiple hidden onChange={(e) => { void add(Array.from(e.target.files || []) as File[], e.currentTarget.dataset.sizes === "1"); e.target.value = ""; }} />
+            <input ref={pick} type="file" multiple hidden onChange={(e) => { const mk = e.currentTarget.dataset.mock || ""; e.currentTarget.dataset.mock = ""; void add(Array.from(e.target.files || []) as File[], e.currentTarget.dataset.sizes === "1", mk); e.target.value = ""; }} />
           </div>
         </li>
         <li className="ohp-st">
@@ -178,7 +202,8 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
               <input className="ohp-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything to tell the AI? Only the tees, use the 400 sheet" aria-label="Anything to tell the AI" />
             </div>
             <div className="ohp-row">
-              <button type="button" className="btn primary" disabled={!!busy} onClick={() => void make()}>Make the order</button>
+              <button type="button" className="btn primary" disabled={!!busy || unpaired.length > 0} onClick={() => void make()}>Make the order</button>
+              {unpaired.length > 0 && <span className="ohp-warn">Pick the mockup for {unpaired.map((f) => f.name).join(", ")} first.</span>}
               {busy && <span className="faint">{busy}</span>}
             </div>
             {err && <div className="err">{err}</div>}

@@ -1321,13 +1321,13 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
-                  <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, methodLabel(d)].filter(Boolean).join(" · ")}</span>{d.supplied && <span className="imp-sup-tag">Customer supplied transfers</span>}
+                  <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, methodLabel(d)].filter(Boolean).join(" · ")}</span>{d.supplied && <span className="imp-sup-tag">Customer supplied transfers</span>}{d.custSeps && <span className="imp-cseps" title="Printed from the customer's own films: their mockup is the proof, the inks come off it, nothing to separate. Send the films to the film printer from Art & production → Their separations.">Customer separations</span>}
                   <span className="spacer" />
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
                   {!frozen && <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>}
                 </div>
-                <div className={"imp-body" + (!!onMockup && !skipped && !d.supplied ? " has-logo" : "")}>
-                {!!onMockup && !skipped && !d.supplied && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
+                <div className={"imp-body" + (!!onMockup && !skipped && !d.supplied && !d.custSeps ? " has-logo" : "")}>
+                {!!onMockup && !skipped && !d.supplied && !d.custSeps && <LogoTile imprint={d} designs={designs || []} urls={designUrls || {}} onMockup={startMockup} />}
                 {(
                 <div className={"imp-grid" + (d.supplied ? " sup" : "")}>
                   <div className="f-method"><span className="imp-l">Method</span><select aria-label="Method" value={d.method} onChange={(e) => update((x) => { const des = (designs || []).find((z) => z.id === x.imprints[di].design_id); x.imprints[di] = withMethod(x.imprints[di], e.target.value as Method, des, x.lines); })}>{Object.entries(METHODS).map(([k, v]) => <option key={k} value={k}>{k === "dtf" && d.patch ? "Heat press patch" : v}</option>)}</select></div>
