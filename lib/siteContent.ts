@@ -48,6 +48,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Walmart", img: "/site/clients/walmart.svg" },
   { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" },
   { name: "Dallas Fire-Rescue", img: "/site/clients/dallas-fire-rescue.png" },
+  { name: "Mi Cocina", img: "/site/clients/mi-cocina.png" },
   { name: "Target", img: "/site/clients/target.png" },
   { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" },
   { name: "Cedar Promo", img: "/site/clients/cedar-promo.png" },
