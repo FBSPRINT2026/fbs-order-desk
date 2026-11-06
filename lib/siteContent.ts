@@ -63,6 +63,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Dear Heart", img: "/site/clients/dear-heart.png" },
   { name: "Buc-ee's", img: "/site/clients/bucees.png" },
   { name: "McKenna", img: "/site/clients/mckenna.png" },
+  { name: "UT Dallas", img: "/site/clients/utd.png" },
   { name: "Rahr & Sons Brewing", img: "/site/clients/rahr.png" },
   { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" },
 ];
