@@ -21164,3 +21164,26 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .fws-whor li{font-size:14px;padding-left:16px;position:relative}
   .fws-whor li::before{content:"";position:absolute;left:0;top:.55em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
 }
+/* the full site (Nov 5, Nick: "make this look a little more appealing"): the main three on soft brand tints, the other
+   four as brand-color tiles, Who we print for as white cards with a color badge on the gray band */
+@media (min-width:821px){
+  .fws-svcs:not(.sm){margin-top:18px;gap:16px}
+  .fws-svcs:not(.sm) .fws-svc{border-top:0;border-radius:16px;padding:22px}
+  .fws-svcs:not(.sm) .fws-svc.blue{background:#DCF1FB}.fws-svcs:not(.sm) .fws-svc.salmon{background:#FDE3E1}.fws-svcs:not(.sm) .fws-svc.orange{background:#FEF1D5}
+  .fws-svcs:not(.sm) .fws-svc p{color:#3A4558}
+  .fws-svcs.sm{margin-top:14px;padding-top:0;gap:14px}
+  .fws-svcs.sm::before{display:none}
+  .fws-svcs.sm .fws-svc{border-top:0;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;color:#fff;background:var(--fbs-blue)}
+  .fws-svcs.sm .fws-svc.salmon{background:var(--fbs-salmon)}
+  .fws-svcs.sm .fws-svc.orange{background:var(--fbs-orange);color:var(--ink)}
+  .fws-svcs.sm .fws-svc h3{font-size:16px;color:inherit}
+  .fws-svcs.sm .fws-svc p{display:none}
+  .fws-svcs.sm .fws-ic{height:44px;margin:0;flex:none}
+  .fws-svcs.sm .fws-ic img{height:40px;max-width:56px;filter:brightness(0) invert(1)}
+  .fws-svcs.sm .fws-svc.orange .fws-ic img{filter:none}
+  .fws-whoc{background:var(--surface);border:1px solid var(--line-2);border-top:0;border-radius:16px;box-shadow:var(--shadow)}
+  .fws-also b{background:var(--surface)}
+}
+.fws-badge{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--fbs-blue);color:#fff;margin-bottom:6px}
+.fws-whoc.salmon .fws-badge{background:var(--fbs-salmon)}
+.fws-whoc.orange .fws-badge{background:var(--fbs-orange);color:var(--ink)}

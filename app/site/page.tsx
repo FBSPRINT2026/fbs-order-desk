@@ -59,8 +59,8 @@ export default function SitePage() {
         </section>
 
         <section className="fws-sec" id="services">
-          <p className="fws-eyebrow">What we do</p>
-          <h2 className="fws-h fws-d">Decorated in house, done right</h2>
+          <h2 className="fws-h fws-d">What we do</h2>
+          <p className="fws-sub">All done in house, under one roof in North Texas.</p>
           {/* the three main lines big on top, the other four smaller under the color bar (Nov 5, Nick) */}
           {[SERVICES.slice(0, 3), SERVICES.slice(3)].map((row, ri) => (
             <div key={ri} className={`fws-svcs${ri ? " sm" : ""}`}>{row.map((s) => (
@@ -73,10 +73,10 @@ export default function SitePage() {
           ))}
         </section>
 
-        <section className="fws-sec" id="work">
+        <section className="fws-sec fws-alt" id="work">
           <h2 className="fws-h fws-d">Who we print for</h2>
           <div className="fws-who">{WHO.map((w) => (
-            <div key={w.t} className={`fws-whoc ${w.tone}`}><h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
+            <div key={w.t} className={`fws-whoc ${w.tone}`}>{w.icon && <span className="fws-badge"><SiteIconArt name={w.icon} size={22} /></span>}<h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
           ))}</div>
           {/* phones: one short row each, tap to open its points (Nov 5, Nick: option A) */}
           <div className="fws-whom">{WHO.map((w) => (
