@@ -90,6 +90,17 @@ const supplierPaper = (t: string) => /order\s*confirmation|sales\s*order|invoice
 /** staff's word on each file over the AI's reading: only "art" files stay the art of a print; a mockup is their mockup; their
  *  separations, a vendor's order confirmation, their PO and other paperwork are kept as production files under that name;
  *  "not needed" ones are left off */
+/** inks named in words ("PMS 4019 C", "Pantone 7559C", "Gold Metallic", "White"): for a print whose inks were written in
+ *  its notes instead of its inks */
+function inksIn(t: string): string {
+  const out: string[] = [];
+  for (const m of t.matchAll(/\b(?:pms|pantone)\s*#?\s*(\d{3,4})\s*([cu])?\b|\b((?:gold|silver|copper)\s+metallic|metallic\s+(?:gold|silver|copper)|white|black)\b/gi)) {
+    const v = m[1] ? `PMS ${m[1]}${m[2] ? ` ${m[2].toUpperCase()}` : " C"}` : m[3].replace(/\b\w/g, (c) => c.toUpperCase());
+    if (!out.some((x) => x.toLowerCase() === v.toLowerCase())) out.push(v);
+  }
+  return out.join(", ");
+}
+
 function withRoles(d: EODraft, roles: Record<string, string>, all: { path: string; name: string; type: string }[], seps: { films: string[]; mockup: string }[] = []): EODraft {
   const notArt = (p: string) => !!roles[p] && roles[p] !== "art";
   const art = Object.fromEntries(Object.entries(d.art || {}).filter(([, p]) => !notArt(p)));
@@ -111,7 +122,7 @@ function withRoles(d: EODraft, roles: Record<string, string>, all: { path: strin
   // proof: nothing made in the Mockup Creator), the inks are read off it, and nothing goes to separations
   if (seps.length) {
     const films = seps.flatMap((x) => x.films), mocks = [...new Set(seps.map((x) => x.mockup).filter(Boolean))];
-    const groups = d.groups.map((g) => ({ ...g, imprints: g.imprints.map((im) => (im.method === "screen" || !im.method ? { ...im, custSeps: { films, mockup: mocks[0] } } : im)) }));
+    const groups = d.groups.map((g) => ({ ...g, imprints: g.imprints.map((im) => (im.method === "screen" || !im.method ? { ...im, custSeps: { films, mockup: mocks[0] }, inks: (im.inks || "").trim() || inksIn(im.notes || "") } : im)) }));
     for (const g of groups) mockups[g.id] = [...new Set([...(mockups[g.id] || []), ...mocks])];
     return { ...d, groups, art, mockups, files };
   }

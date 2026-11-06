@@ -1,6 +1,7 @@
 "use client";
 import { garmentFor } from "@/lib/garmentMatch";
 import NoCharge from "@/components/NoCharge";
+import { useRole } from "@/components/RoleContext";
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
@@ -117,6 +118,7 @@ const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
 export default function GroupEditor({ persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
+  const role0 = useRole(); const meName = role0.staffName || role0.email || "";
   // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
   const locs = locationsFor(g.lines);
   // a hat group with shirt spots on it (a reorder pulled from Printavo: "Full Back"): moved to the hat spot it means, once
@@ -1224,6 +1226,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             : (() => { const bp = g.imprints.find((x) => (x.fromBrand || x.sizeFrom === "brand") && x.design_id && designUrls?.[x.design_id]);
                 // a logo added from their brand: the logo itself, large, where the mockup goes (Oct 27, Nick)
                 if (bp) return <div className="mk-pref mk-brandlogo" style={{ "--mkbg": shirtHex } as React.CSSProperties}><MockGallery urls={[printArtUrl(designUrls, bp.design_id, bp)]} /><small>{bp.fromBrand ? `From ${bp.fromBrand}` : "From their brand"} · no mockup needed</small></div>;
+                // printed from their own separations: their mockup, as is, is the mockup (Nov 6, Nick: "a dumb mockup… a little
+                // label underneath it that said visual mock-up… just to the left of the imprints")
+                const cm = g.imprints.some((x) => x.custSeps) ? (g.customerMockups || []).find((m) => thumbUrls?.[m.path]) : undefined;
+                if (cm) return <div className="mk-pref mk-visual"><MockGallery urls={[thumbUrls![cm.path]]} /><small><b>Visual mockup</b> · theirs, printed from their films</small></div>;
                 const pr = g.imprints.find((x) => x.supplied?.picture?.path)?.supplied?.picture || g.imprints.find((x) => x.placeRef?.path)?.placeRef; const u = pr ? thumbUrls?.[pr.path] : "";
                 return u ? <div className="mk-pref"><MockGallery urls={[u]} /><small>{g.imprints.some((x) => x.supplied) ? "Placement reference · customer supplied transfers" : "Placement reference"}</small></div> : <div className="mk-none">{g.mockupSkipped ? "Entered by hand · no mockup" : "No mockup yet"}</div>; })()}
           {/* a logo mockup's background: the most-used garment color, changed here (components/MockupBg.tsx) */}
@@ -1235,7 +1241,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             return <MockupBg value={g.mockupBg} auto={auto} colors={cs} onPick={(hex) => { update((x) => { if (hex) x.mockupBg = hex; else delete x.mockupBg; }); redrawSoon(); }} />;
           })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
-          {onMockup && <button className={"btn sm mk-edit" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>
+          {onMockup && !(g.imprints.length && g.imprints.every((x) => x.custSeps || x.method !== "screen")) && <button className={"btn sm mk-edit" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>
             {/* the shirt icon shows on a phone, where the three buttons are matching tiles (Oct 29, Nick) */}
             <svg className="mk-ic" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 3.5L4 5.8 2.5 10.2l3.2 1.3.9-2.2V20.5h10.8V9.3l.9 2.2 3.2-1.3L20 5.8 15 3.5c-.4 1.6-1.6 2.6-3 2.6s-2.6-1-3-2.6z" /></svg>
             <span>{g.mockupAt ? "Edit mockup" : "Create mockup"}</span></button>}
@@ -1316,14 +1322,15 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   sortLines(x);
                 }); }} />}
 
-            {g.imprints.map((d, di) => frozen ? (
-              <PrintRow key={d.id} shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setDgzAsk(d.id) : undefined} />
+            {g.imprints.map((d, di) => frozen || d.ok ? (
+              <div key={d.id} className="imp-okw">{!frozen && d.ok && <div className="imp-ok-h"><span className="imp-ok-by">✓ Confirmed{d.ok.by ? ` by ${d.ok.by}` : ""}</span><button type="button" className="btn sm" onClick={() => update((x) => { delete x.imprints[di].ok; })}>Edit</button></div>}<PrintRow shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setDgzAsk(d.id) : undefined} /></div>
             ) : (
               <div key={d.id} className="imp-card">
                 <div className="imp-card-h">
                   <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, methodLabel(d)].filter(Boolean).join(" · ")}</span>{d.supplied && <span className="imp-sup-tag">Customer supplied transfers</span>}{d.custSeps && <span className="imp-cseps" title="Printed from the customer's own films: their mockup is the proof, the inks come off it, nothing to separate. Send the films to the film printer from Art & production → Their separations.">Customer separations</span>}
                   <span className="spacer" />
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
+                  {!frozen && <button className="btn sm primary imp-confirm" type="button" title="Its details are set: fold it down like the invoice" onClick={() => update((x) => { x.imprints[di].ok = { by: (meName || "").split(/[ @]/)[0], at: new Date().toISOString() }; })}>Confirm</button>}
                   {!frozen && <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>}
                 </div>
                 <div className={"imp-body" + (!!onMockup && !skipped && !d.supplied && !d.custSeps ? " has-logo" : "")}>

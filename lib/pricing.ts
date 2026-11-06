@@ -231,6 +231,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
    *  going to make a mock-up. We're going to attach their mock-up… get the PMS information"): their films (art_files,
    *  category film) go to the film printer as sent, their mockup is the proof, the inks come off it; no separating */
   custSeps?: { films: string[]; mockup?: string };
+  /** Confirm on the print's card (Nov 6, Nick: "a button… that says confirm… then it compresses down"): its details are
+   *  set; it shows folded like the invoice until Edit */
+  ok?: { by: string; at: string };
   supplied?: { by?: string; ref?: string; /** where they go, in words ("Front & back"), under the picture on the work order */ where?: string; picture?: { path: string; name: string; file?: string };
     /** the press price each, set by the customer's program (its card's extraPrices.dtf_supplied, Cedar Promos $1.50);
      *  else the price list's (PriceList.dtfSupplied, $2) */ price?: number };
