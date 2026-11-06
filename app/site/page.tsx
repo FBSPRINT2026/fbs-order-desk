@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/config";
-import { ALSO, FACTS, PORTAL_FEATS, SERVICES, SITE, WHO } from "@/lib/siteContent";
+import { CLIENTS, EVERYONE, FACTS, PORTAL_FEATS, SERVICES, SITE, WHO } from "@/lib/siteContent";
 import SiteIconArt, { type SiteIcon } from "@/components/site/SiteIcons";
 import SiteRequestForm from "@/components/site/SiteRequestForm";
+import SiteLogos from "@/components/site/SiteLogos";
 
 /**
  * fbsprint.com (Nov 5, Nick: "redesign our website so it looks like… our portal"): the portal's look (navy, the blue /
@@ -28,15 +29,15 @@ export default function SitePage() {
       <header className="fws-head">
         <a className="fws-logo" href="#top" aria-label="FBS Print home"><img src="/brand/fbs-logo.svg" alt="FBS Print" /></a>
         <nav className="fws-nav" aria-label="Site">
-          <a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a>
+          <a href="#services">Services</a><a href="#work">Clients</a><a href="#about">About</a><a href="#contact">Contact</a>
         </nav>
         <div className="fws-acts">
           <a className="fws-btn" href={login}><span className="fws-wide">Customer login</span><span className="fws-narrow">Log in</span></a>
-          <a className="fws-btn p fws-wide" href="#request">Start an order</a>
+          <a className="fws-btn p fws-wide" href="#request">Get started</a>
           {/* phones: the section links in a menu, so the header is one short line (Nov 5, Nick) */}
           <details className="fws-menu">
             <summary aria-label="Menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></summary>
-            <nav aria-label="Site menu"><a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#request">Start an order</a></nav>
+            <nav aria-label="Site menu"><a href="#services">Services</a><a href="#work">Clients</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#request">Get started</a></nav>
           </details>
         </div>
       </header>
@@ -48,7 +49,7 @@ export default function SitePage() {
             <p className="fws-kick">Apparel · print · fulfillment</p>
             <h1 className="fws-d">Apparel done right, for those who sell it and wear it.</h1>
             <p className="fws-lead">Screen printing, embroidery and DTF for wholesalers, private brands, contract resellers and schools, plus breweries, churches, cities and businesses. 22 years in business, based in North Texas.</p>
-            <div className="fws-row"><a className="fws-btn p lg" href="#request">Start an order or quote</a><a className="fws-btn ghost lg" href={login}>Customer login</a></div>
+            <div className="fws-row"><a className="fws-btn p lg" href="#request">Get started</a><a className="fws-btn ghost lg" href={login}>Customer login</a></div>
           </div>
           <div className="fws-hero-pic" aria-hidden />
         </section>
@@ -59,8 +60,8 @@ export default function SitePage() {
         </section>
 
         <section className="fws-sec" id="services">
-          <p className="fws-eyebrow">What we do</p>
-          <h2 className="fws-h fws-d">Decorated in house, done right</h2>
+          <h2 className="fws-h fws-d">What we do</h2>
+          <p className="fws-sub">All done in house, under one roof in North Texas.</p>
           {/* the three main lines big on top, the other four smaller under the color bar (Nov 5, Nick) */}
           {[SERVICES.slice(0, 3), SERVICES.slice(3)].map((row, ri) => (
             <div key={ri} className={`fws-svcs${ri ? " sm" : ""}`}>{row.map((s) => (
@@ -73,17 +74,21 @@ export default function SitePage() {
           ))}
         </section>
 
-        <section className="fws-sec" id="work">
+        <section className="fws-sec fws-alt" id="work">
           <h2 className="fws-h fws-d">Who we print for</h2>
+          <p className="fws-sub">Built for people who sell apparel, and the ones who wear it.</p>
+          {/* three even cards, one line and three checks each (Nov 5, Nick: "the top section looks terrible… remake it") */}
           <div className="fws-who">{WHO.map((w) => (
-            <div key={w.t} className={`fws-whoc ${w.tone}`}><h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
+            <div key={w.t} className={`fws-whoc ${w.tone}`}>
+              <span className="fws-badge"><SiteIconArt name={w.icon} size={22} /></span>
+              <h3 className="fws-d">{w.t}</h3><p>{w.d}</p>
+              <ul>{w.points.map((x) => <li key={x}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>{x}</li>)}</ul>
+            </div>
           ))}</div>
-          {/* phones: one short row each, tap to open its points (Nov 5, Nick: option A) */}
-          <div className="fws-whom">{WHO.map((w) => (
-            <details key={w.t} className={`fws-whor ${w.tone}`}><summary><span className="fws-sw" aria-hidden /><span className="fws-whot"><b className="fws-d">{w.t}</b><span>{w.short || w.d}</span></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></summary>
-              <p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></details>
-          ))}</div>
-          <p className="fws-also"><span>We also print for</span>{ALSO.map((x) => <b key={x}>{x}</b>)}</p>
+          <div className="fws-else"><p><b>And everyone else</b><span>{EVERYONE}</span></p><a href="#request">Get a quote →</a></div>
+          {/* the brands we print for, one strip that moves on its own and stops under the pointer */}
+          <h3 className="fws-logos-t fws-d">Local and national brands we work with</h3>
+          <SiteLogos clients={CLIENTS} />
         </section>
 
         {/* the portal, shown off with the "It's here" email's dashboard picture (Nov 5, Nick: in place of How ordering works) */}
@@ -136,7 +141,7 @@ export default function SitePage() {
       <footer className="fws-foot">
         <img src="/brand/fbs-logo-white.svg" alt="FBS Print" />
         <span>{SITE.address.join(", ")} · {SITE.phone}</span>
-        <span className="fws-row"><a href={login}>Customer login</a><a href="#request">Start an order</a><a href="/privacy">Privacy</a></span>
+        <span className="fws-row"><a href={login}>Customer login</a><a href="#request">Get started</a><a href="/privacy">Privacy</a></span>
       </footer>
       <div className="fws-bar" aria-hidden />
     </div>

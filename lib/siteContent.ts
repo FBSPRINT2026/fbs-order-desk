@@ -32,20 +32,55 @@ export const STEPS = [
   { t: "We print and deliver", d: "Track it in your portal until it's ready for pickup or shipped to your door." },
 ];
 
-/** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated") */
-export const WHO: { t: string; d: string; /** the one line under its name on a phone */ short?: string; points: string[]; tone: "blue" | "salmon" | "orange" }[] = [
-  { t: "Wholesalers", short: "Contract decorating, blind shipped", d: "Contract decorating you can count on, run after run.", points: ["Your goods or ours, at wholesale pricing", "Blind shipped under your name", "Reorders in a couple of clicks"], tone: "blue" },
-  { t: "Private brands", short: "Tags, labels, retail-ready packing", d: "Retail-ready product for brands and designers selling their own line.", points: ["Custom neck tags, labels and hang tags", "Fold, bag and pack for retail", "Consistent color from drop to drop"], tone: "salmon" },
-  { t: "Contract resellers", short: "Ships straight to your client", d: "A production partner for promo and apparel distributors.", points: ["Proofs and quotes you can pass along", "Order status in your portal", "Ships straight to your client"], tone: "orange" },
-  { t: "Schools", short: "Spirit wear, teams, online stores", d: "Spirit wear, teams, clubs and events, on the school's calendar.", points: ["Billing by department or booster club", "Online stores for families", "Rush jobs for game day"], tone: "blue" },
+/** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated"): three even cards, one
+ *  line and three short points each (Nov 5, Nick: "wholesalers and contract resellers… private brands… schools and
+ *  churches"), then everyone else named on one line */
+export const WHO: { t: string; d: string; icon: "warehouse" | "tag" | "school"; points: string[]; tone: "blue" | "salmon" | "orange" }[] = [
+  { t: "Wholesalers and resellers", icon: "warehouse", d: "Your contract decorator, run after run.", points: ["Wholesale pricing", "Blind shipped to your client", "Proofs you can pass along"], tone: "blue" },
+  { t: "Private brands", icon: "tag", d: "Retail-ready product for your own line.", points: ["Neck tags and hang tags", "Folded, bagged, retail packed", "Same color every drop"], tone: "salmon" },
+  { t: "Schools and churches", icon: "school", d: "Spirit wear, ministries and events.", points: ["Billing by department", "Online stores for families", "Rush jobs for game day"], tone: "orange" },
 ];
-/** everyone else we print for, named under the four above */
-export const ALSO = ["Breweries", "Churches", "Cities", "Businesses", "Designers selling product", "Teams and events"];
+export const EVERYONE = "breweries, businesses, cities, teams and events";
+/** the brands we've printed for, scrolling in one strip (Nov 5, Nick: "local and national brands we work with… rotating
+ *  logos"). Files are in public/site/clients; without one the name shows in plain type. */
+/* the national names spread out among the local ones, never two side by side (Nov 5, Nick) */
+export const CLIENTS: { name: string; img?: string }[] = [
+  { name: "Walmart", img: "/site/clients/walmart.svg" },
+  { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" },
+  { name: "Dallas Fire-Rescue", img: "/site/clients/dallas-fire-rescue.png" },
+  { name: "Mi Cocina", img: "/site/clients/mi-cocina.png" },
+  { name: "Target", img: "/site/clients/target.png" },
+  { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" },
+  { name: "University of North Texas", img: "/site/clients/unt.png" },
+  { name: "Cedar Promo", img: "/site/clients/cedar-promo.png" },
+  { name: "Little Groupies", img: "/site/clients/little-groupies.png" },
+  { name: "Oak Highlands Brewery", img: "/site/clients/oak-highlands.png" },
+  { name: "Wylie ISD", img: "/site/clients/wylie-isd.png" },
+  { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
+  { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" },
+  { name: "Perot Museum of Nature and Science", img: "/site/clients/perot-museum.png" },
+  { name: "St. Bernard", img: "/site/clients/st-bernard.png" },
+  { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" },
+  { name: "FIFA World Cup 26", img: "/site/clients/fifa-world-cup-26.png" },
+  { name: "Peticolas Brewing", img: "/site/clients/peticolas.png" },
+  { name: "Fanatics", img: "/site/clients/fanatics.png" },
+  { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" },
+  { name: "The Bar", img: "/site/clients/the-bar.png" },
+  { name: "The Mahjong Line", img: "/site/clients/mahjong-line.png" },
+  { name: "Dear Heart", img: "/site/clients/dear-heart.png" },
+  { name: "Buc-ee's", img: "/site/clients/bucees.png" },
+  { name: "McKenna", img: "/site/clients/mckenna.png" },
+  { name: "UT Dallas", img: "/site/clients/utd.png" },
+  { name: "Rahr & Sons Brewing", img: "/site/clients/rahr.png" },
+  { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" },
+];
 /** the About box's three facts (Nov 5, Nick) */
 export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];
 
 /** the inquiry form's "You are a…" (Nov 5, Nick: "who am I, what my company, what am I needing") */
-export const CLIENT_KINDS = ["Wholesaler", "Private brand", "Contract reseller", "School", "Brewery", "Church", "City", "Business", "Something else"];
+export const CLIENT_KINDS = ["Wholesaler", "Contract reseller", "Private brand", "School", "Church", "Brewery", "City", "Business", "Something else"];
+/** a new account's "About how many a month" */
+export const MONTHLY = ["Under 250", "250 to 1,000", "1,000 to 5,000", "5,000 or more", "Not sure yet"];
 /** what someone can tick on the request form */
 export const NEEDS = ["Screen printing", "Embroidery", "DTF", "Printing", "Signage", "Promo items", "Online store", "Fulfillment"];
 export const NEEDS_OLD = ["T-shirts", "Hoodies and sweats", "Hats", "Polos and jackets", "Embroidery", "DTF transfers", "Printing", "Signage", "Promo items", "Something else"];

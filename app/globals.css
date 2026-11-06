@@ -20967,7 +20967,7 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 /* the squeegee on the right, fading into the navy behind the words (Nov 5, Nick: "this is the part of the photo that I like for the right side") */
 .fws-hero{position:relative;overflow:hidden}
 .fws-hero-t{position:relative;z-index:1;max-width:560px}
-.fws-hero-pic{position:absolute;inset:0 0 0 38%;background:url(/site/hero-squeegee.jpg) center right/cover no-repeat;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 30%);mask-image:linear-gradient(90deg,transparent 0%,#000 30%)}
+.fws-hero-pic{position:absolute;inset:0 0 0 38%;background:url(/site/hero-squeegee.jpg) 28% center/cover no-repeat;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 30%);mask-image:linear-gradient(90deg,transparent 0%,#000 30%)}
 .fws-portal{display:flex;justify-content:space-between;align-items:center;gap:14px 24px;flex-wrap:wrap;margin:-28px var(--fws-x) 0;position:relative;padding:18px 22px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
 .fws-portal h2{font-size:20px}
 .fws-portal p{margin:2px 0 0;color:var(--ink-2);font-size:14px}
@@ -21019,10 +21019,6 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .fws-whoc ul{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
 .fws-whoc li{font-size:13.5px;padding-left:18px;position:relative}
 .fws-whoc li::before{content:"";position:absolute;left:2px;top:.55em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
-.fws-also{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:18px 0 0;font-size:14px;color:var(--ink-2)}
-.fws-also b{font-weight:600;color:var(--ink);background:var(--bg);border-radius:99px;padding:5px 12px;white-space:nowrap}
-@media (max-width:1000px){.fws-who{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:560px){.fws-who{grid-template-columns:1fr}}
 .fws-about{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;align-items:start}
 .fws-about p{max-width:62ch;color:var(--ink-2)}
 .fws-facts{margin:0;display:grid;gap:10px}
@@ -21143,24 +21139,76 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .fws-svcs.sm .fws-svc h3{color:#fff;font-size:14px}
   .fws-svcs.sm .fws-ic img{filter:brightness(0) invert(1)}
 }
-/* Who we print for on phones: compact rows that open (the full cards stay on wider screens) */
-.fws-whom{display:none}
-@media (max-width:820px){
-  .fws-who{display:none}
-  .fws-whom{display:block;margin-top:10px}
-  .fws-whor{border-top:1px solid var(--line-2)}
-  .fws-whor:last-child{border-bottom:1px solid var(--line-2)}
-  .fws-whor summary{list-style:none;display:flex;align-items:center;gap:12px;padding:14px 0;cursor:pointer;color:var(--ink-3)}
-  .fws-whor summary::-webkit-details-marker{display:none}
-  .fws-whor summary svg{flex:none;transition:transform .15s}
-  .fws-whor[open] summary svg{transform:rotate(180deg)}
-  .fws-sw{flex:none;width:6px;align-self:stretch;border-radius:3px;background:var(--fbs-blue)}
-  .fws-whor.salmon .fws-sw{background:var(--fbs-salmon)}.fws-whor.orange .fws-sw{background:var(--fbs-orange)}
-  .fws-whot{flex:1;min-width:0;display:flex;flex-direction:column}
-  .fws-whot b{font-size:17px;color:var(--ink)}
-  .fws-whot span{font-size:13.5px;color:var(--ink-2)}
-  .fws-whor>p{margin:0 0 8px 18px;font-size:14px;color:var(--ink-2)}
-  .fws-whor ul{margin:0 0 14px 18px;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
-  .fws-whor li{font-size:14px;padding-left:16px;position:relative}
-  .fws-whor li::before{content:"";position:absolute;left:0;top:.55em;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+/* the full site (Nov 5, Nick: "make this look a little more appealing"): the main three on soft brand tints, the other
+   four as brand-color tiles, Who we print for as white cards with a color badge on the gray band */
+@media (min-width:821px){
+  .fws-svcs:not(.sm){margin-top:18px;gap:16px}
+  .fws-svcs:not(.sm) .fws-svc{border-top:0;border-radius:16px;padding:22px}
+  .fws-svcs:not(.sm) .fws-svc.blue{background:#DCF1FB}.fws-svcs:not(.sm) .fws-svc.salmon{background:#FDE3E1}.fws-svcs:not(.sm) .fws-svc.orange{background:#FEF1D5}
+  .fws-svcs:not(.sm) .fws-svc p{color:#3A4558}
+  .fws-svcs.sm{margin-top:14px;padding-top:0;gap:14px}
+  .fws-svcs.sm::before{display:none}
+  .fws-svcs.sm .fws-svc{border-top:0;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;color:#fff;background:var(--fbs-blue)}
+  .fws-svcs.sm .fws-svc.salmon{background:var(--fbs-salmon)}
+  .fws-svcs.sm .fws-svc.orange{background:var(--fbs-orange);color:var(--ink)}
+  .fws-svcs.sm .fws-svc h3{font-size:16px;color:inherit}
+  .fws-svcs.sm .fws-svc p{display:none}
+  .fws-svcs.sm .fws-ic{height:44px;margin:0;flex:none}
+  .fws-svcs.sm .fws-ic img{height:40px;max-width:56px;filter:brightness(0) invert(1)}
+  .fws-svcs.sm .fws-svc.orange .fws-ic img{filter:none}
+  .fws-whoc{background:var(--surface);border:1px solid var(--line-2);border-top:0;border-radius:16px;box-shadow:var(--shadow)}
 }
+.fws-badge{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:50%;background:var(--fbs-blue);color:#fff;margin-bottom:6px}
+.fws-whoc.salmon .fws-badge{background:var(--fbs-salmon)}
+.fws-whoc.orange .fws-badge{background:var(--fbs-orange);color:var(--ink)}/* mid widths (a narrow window, a tablet): the words keep their own side and the squeegee starts further right, so the
+   text never runs onto the photo (Nov 5, Nick: "this moves too far to the left when the width gets small") */
+@media (min-width:821px) and (max-width:1180px){
+  .fws-hero{grid-template-columns:minmax(0,1fr) minmax(0,.7fr)}
+  .fws-hero-t{max-width:min(520px,52vw)}
+  .fws-hero h1{font-size:clamp(34px,4.6vw,52px)}
+  /* the blade and handle stay in view as the window narrows (Nov 5, Nick: "this is what i want to see when it gets smaller") */
+  .fws-hero-pic{inset:0 0 0 42%;background-position:22% center}
+}
+/* the portal picture centered beside the words and lifted off the color bar (Nov 5, Nick) */
+@media (min-width:821px){
+  .fws-portal2{padding-bottom:clamp(36px,6vw,72px)}
+  .fws-p2{align-items:center}
+  .fws-p2>div{padding-bottom:0}
+  .fws-p2-pic{align-self:center;border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+}
+/* the website's Who we print for, remade (Nov 5, Nick): three even cards with checks, everyone else on a navy line, then
+   the brands in one strip that moves on its own */
+.fws-who{grid-template-columns:repeat(3,minmax(0,1fr))}
+.fws-whoc{background:var(--surface);border:1px solid var(--line-2);border-top:0;border-radius:16px;box-shadow:var(--shadow)}
+.fws-whoc ul{border-top:1px solid var(--line-2);padding-top:12px;margin-top:8px;gap:8px}
+.fws-whoc li{padding-left:0;display:flex;align-items:center;gap:8px;font-size:14px}
+.fws-whoc li::before{content:none}
+.fws-whoc li svg{flex:none;color:var(--fbs-blue)}
+.fws-whoc.salmon li svg{color:var(--fbs-salmon)}
+.fws-whoc.orange li svg{color:var(--fbs-orange)}
+.fws-else{margin-top:14px;display:flex;align-items:center;justify-content:space-between;gap:10px 20px;flex-wrap:wrap;padding:16px 20px;border-radius:12px;background:var(--side);color:var(--side-ink)}
+.fws-else p{margin:0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:15px}
+.fws-else b{font:800 17px var(--display);color:#fff}
+.fws-else a{color:#fff;font-weight:700;white-space:nowrap;text-decoration:none}
+.fws-else a:hover{text-decoration:underline}
+.fws-logos-t{margin:40px 0 14px;text-align:center;font-size:18px}
+.fws-mq{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent)}
+.fws-mq-trk{display:flex;gap:16px;width:max-content;animation:fws-mq 40s linear infinite}
+.fws-mq:hover .fws-mq-trk{animation-play-state:paused}
+.fws-mq-lg{flex:none;display:grid;place-items:center;width:180px;height:84px;padding:12px 18px;box-sizing:border-box;border-radius:12px;background:var(--surface);border:1px solid var(--line-2)}
+.fws-mq-lg img{max-width:100%;max-height:56px;object-fit:contain}
+.fws-mq-lg span{font-weight:800;color:var(--ink-2);text-align:center;line-height:1.2}
+@keyframes fws-mq{to{transform:translateX(calc(-50% - 8px))}}
+@media (prefers-reduced-motion:reduce){.fws-mq{-webkit-mask-image:none;mask-image:none}.fws-mq-trk{animation:none;width:auto;flex-wrap:wrap;justify-content:center}.fws-mq-lg[aria-hidden]{display:none}}
+@media (max-width:760px){.fws-who{grid-template-columns:1fr}}
+@media (max-width:640px){.fws-mq-lg{width:140px;height:68px}.fws-mq-lg img{max-height:44px}}
+/* the inquiry form's first question: a quote or a new account (Nov 5, Nick) */
+.fws-why{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fws-why button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:14px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font:inherit;color:var(--ink)}
+.fws-why button b{font:800 16px var(--display)}
+.fws-why button span{font-size:13px;color:var(--ink-2)}
+.fws-why button:hover{border-color:var(--accent)}
+.fws-why button.on{border:2px solid var(--accent);padding:13px 15px;background:var(--accent-soft)}
+.fws-f select{height:40px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);width:100%;box-sizing:border-box}
+.fws-f select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+@media (max-width:420px){.fws-why{grid-template-columns:1fr}}

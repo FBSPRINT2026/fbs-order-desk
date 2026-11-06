@@ -26,7 +26,7 @@ import { allRows } from "@/lib/readAll";
  * Read from the records every page already uses: orders, mockups, proofs, sewouts, the order's history, and the AI's
  * draft orders.
  */
-export type Step = "leads" | "requests" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "sewouts" | "approved" | "declined";
+export type Step = "leads" | "requests" | "website" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "sewouts" | "approved" | "declined";
 export type TrackState = "needed" | "made" | "sent" | "changes" | "done";
 export type Track = { k: "art" | "sewout" | "numbers"; state: TrackState; label: string; note?: string };
 export type Dept = "screen" | "embroidery" | "heat";
@@ -75,7 +75,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   const now = Date.now();
   const since = new Date(now - TWO_WEEKS).toISOString();
   const [{ data: os }, { data: dec }, { data: s }, { data: leads }, { data: am }] = await Promise.all([
-    admin.from("orders").select("id, number, nickname, status, type, due_date, groups, lines, fees, discount_pct, discount_amt, discount_type, tax_exempt, tax_rate, waive_setup, price_type, total, qty, customer_id, approved_at, approved_name, submitted_at, created_at, updated_at, declined_at, declined_reason, customers(company, name)").in("status", OPEN).is("declined_at", null).eq("draft", false).is("discarded_at", null).order("number", { ascending: false }).limit(800),
+    admin.from("orders").select("id, number, nickname, status, type, source, due_date, groups, lines, fees, discount_pct, discount_amt, discount_type, tax_exempt, tax_rate, waive_setup, price_type, total, qty, customer_id, approved_at, approved_name, submitted_at, created_at, updated_at, declined_at, declined_reason, customers(company, name)").in("status", OPEN).is("declined_at", null).eq("draft", false).is("discarded_at", null).order("number", { ascending: false }).limit(800),
     admin.from("orders").select("id, number, nickname, status, due_date, groups, customer_id, declined_at, declined_reason, customers(company, name)").gte("declined_at", since).limit(200),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
     admin.from("ai_suggestions").select("id, title, body, customer_id, activity_id, created_at, customers(company, name)").eq("kind", "draft_order").eq("status", "open").gte("created_at", new Date(now - 30 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
@@ -140,7 +140,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     const depts = [...new Set(gs.flatMap((g) => (g.imprints || []).map((im) => deptOf(im.method))))];
     const base = { orderId: o.id, number: o.number, customer: cust(o.customers), customerId: o.customer_id, title: o.nickname || "Order", depts, due: o.due_date || null, qty: o.qty || 0 };
     // Incoming · Requests: built in the portal and sent in
-    if (o.status === "request") { if (o.submitted_at) out.push({ ...base, key: `req:${o.id}`, type: "request", steps: ["requests"], at: o.submitted_at, tracks: [], status: o.status }); continue; }
+    if (o.status === "request") { if (o.submitted_at) out.push({ ...base, key: `req:${o.id}`, type: "request", steps: [(o as { source?: string | null }).source === "website" ? "website" : "requests"], at: o.submitted_at, tracks: [], status: o.status }); continue; }
     const quoting = o.status === "quote" || o.status === "quote_sent", early = EARLY.includes(o.status);
     const tracks: Track[] = [];
     // the art: the current mockups and the newest proof version out with the customer

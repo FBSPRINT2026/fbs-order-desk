@@ -74,7 +74,7 @@ function Detail({ d, rows, it, step, after, close, onUndo }: { d: JobDetail; row
   const who = first(d.contact) || d.customer;
   const anyOut = d.pieces.some((x) => x.state === "sent" || x.state === "changes" || x.state === "done") || !!d.link;
   const status: [string, string] = d.declinedAt ? ["Declined", "var(--ink-3)"] : it.steps.includes("changes") ? ["Changes asked", "var(--danger)"] : it.steps.includes("ready") ? ["Ready to send", "var(--fbs-blue)"]
-    : it.steps.includes("sent") ? [`Waiting on ${who}`, "var(--warn)"] : it.steps.includes("requests") ? ["New request", "var(--fbs-violet)"] : it.steps.includes("mockups") || it.steps.includes("numbers") ? ["In the works", "var(--warn)"] : it.steps.includes("sewouts") ? ["Sew-out", "var(--ink-2)"]
+    : it.steps.includes("sent") ? [`Waiting on ${who}`, "var(--warn)"] : it.steps.includes("requests") ? ["New request", "var(--fbs-violet)"] : it.steps.includes("website") ? ["Website lead", "var(--fbs-violet)"] : it.steps.includes("mockups") || it.steps.includes("numbers") ? ["In the works", "var(--warn)"] : it.steps.includes("sewouts") ? ["Sew-out", "var(--ink-2)"]
     : [ST[d.status]?.label || d.status, "var(--ok)"];
   return (
     <div className="jcp">
