@@ -45,7 +45,7 @@ export const WHO: { t: string; d: string; /** the one line under its name on a p
  *  with these major retailers… and then local businesses"). Without a file the name shows in plain type. */
 export const CLIENT_LOGOS: { t: string; names: { name: string; img?: string }[] }[] = [
   { t: "We also work with major retailers and brands", names: [{ name: "Walmart", img: "/site/clients/walmart.svg" }, { name: "Target", img: "/site/clients/target.png" }, { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" }, { name: "Fanatics", img: "/site/clients/fanatics.png" }, { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" }] },
-  { t: "And names you know around here", names: [{ name: "On Your Left" }, { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" }, { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" }, { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" }] },
+  { t: "And names you know around here", names: [{ name: "On Your Left" }, { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" }, { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" }, { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" }, { name: "Dallas Fire-Rescue", img: "/site/clients/dallas-fire-rescue.png" }] },
 ];
 /** the About box's three facts (Nov 5, Nick) */
 export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];
