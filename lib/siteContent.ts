@@ -33,11 +33,11 @@ export const STEPS = [
 ];
 
 /** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated") */
-export const WHO: { t: string; d: string; points: string[]; tone: "blue" | "salmon" | "orange" }[] = [
-  { t: "Wholesalers", d: "Contract decorating you can count on, run after run.", points: ["Your goods or ours, at wholesale pricing", "Blind shipped under your name", "Reorders in a couple of clicks"], tone: "blue" },
-  { t: "Private brands", d: "Retail-ready product for brands and designers selling their own line.", points: ["Custom neck tags, labels and hang tags", "Fold, bag and pack for retail", "Consistent color from drop to drop"], tone: "salmon" },
-  { t: "Contract resellers", d: "A production partner for promo and apparel distributors.", points: ["Proofs and quotes you can pass along", "Order status in your portal", "Ships straight to your client"], tone: "orange" },
-  { t: "Schools", d: "Spirit wear, teams, clubs and events, on the school's calendar.", points: ["Billing by department or booster club", "Online stores for families", "Rush jobs for game day"], tone: "blue" },
+export const WHO: { t: string; d: string; /** the one line under its name on a phone */ short?: string; points: string[]; tone: "blue" | "salmon" | "orange" }[] = [
+  { t: "Wholesalers", short: "Contract decorating, blind shipped", d: "Contract decorating you can count on, run after run.", points: ["Your goods or ours, at wholesale pricing", "Blind shipped under your name", "Reorders in a couple of clicks"], tone: "blue" },
+  { t: "Private brands", short: "Tags, labels, retail-ready packing", d: "Retail-ready product for brands and designers selling their own line.", points: ["Custom neck tags, labels and hang tags", "Fold, bag and pack for retail", "Consistent color from drop to drop"], tone: "salmon" },
+  { t: "Contract resellers", short: "Ships straight to your client", d: "A production partner for promo and apparel distributors.", points: ["Proofs and quotes you can pass along", "Order status in your portal", "Ships straight to your client"], tone: "orange" },
+  { t: "Schools", short: "Spirit wear, teams, online stores", d: "Spirit wear, teams, clubs and events, on the school's calendar.", points: ["Billing by department or booster club", "Online stores for families", "Rush jobs for game day"], tone: "blue" },
 ];
 /** everyone else we print for, named under the four above */
 export const ALSO = ["Breweries", "Churches", "Cities", "Businesses", "Designers selling product", "Teams and events"];
