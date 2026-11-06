@@ -43,10 +43,21 @@ export const WHO: { t: string; d: string; icon: "warehouse" | "tag" | "school"; 
 export const EVERYONE = "breweries, businesses, cities, teams and events";
 /** the brands we've printed for, scrolling in one strip (Nov 5, Nick: "local and national brands we work with… rotating
  *  logos"). Files are in public/site/clients; without one the name shows in plain type. */
+/* the national names spread out among the local ones, never two side by side (Nov 5, Nick) */
 export const CLIENTS: { name: string; img?: string }[] = [
-  { name: "Walmart", img: "/site/clients/walmart.svg" }, { name: "Target", img: "/site/clients/target.png" }, { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
-  { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" }, { name: "Fanatics", img: "/site/clients/fanatics.png" }, { name: "Dallas Fire-Rescue", img: "/site/clients/dallas-fire-rescue.png" },
-  { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" }, { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" }, { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" }, { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" }, { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" }, { name: "Cedar Promo", img: "/site/clients/cedar-promo.png" }, { name: "McKenna", img: "/site/clients/mckenna.png" },
+  { name: "Walmart", img: "/site/clients/walmart.svg" },
+  { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" },
+  { name: "Dallas Fire-Rescue", img: "/site/clients/dallas-fire-rescue.png" },
+  { name: "Target", img: "/site/clients/target.png" },
+  { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" },
+  { name: "Cedar Promo", img: "/site/clients/cedar-promo.png" },
+  { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
+  { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" },
+  { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" },
+  { name: "Fanatics", img: "/site/clients/fanatics.png" },
+  { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" },
+  { name: "McKenna", img: "/site/clients/mckenna.png" },
+  { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" },
 ];
 /** the About box's three facts (Nov 5, Nick) */
 export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];
