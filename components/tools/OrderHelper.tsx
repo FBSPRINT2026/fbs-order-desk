@@ -1,16 +1,17 @@
 "use client";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { setRequestFileKinds } from "@/app/shop/order-helper-actions";
-import type { DeskRequest } from "@/app/shop/actions";
+import { activityFiles, addActivityFile, setRequestFileKinds } from "@/app/shop/order-helper-actions";
 import type { OrderStart } from "@/components/OrderStartPick";
 
 /**
- * The Order helper (Nov 6, Nick: "a guided order… read the request… where are the sizes… what are the other files… then
- * make the order"). Four steps on the request itself, for any customer: what we read, which file has the sizes (or their
- * message), what every other file is (one dropdown each), then Make the order. The answers are saved on the request's
- * files (art_files category, setRequestFileKinds) and read with it, then the ONE Create order tool
- * (components/tools/CreateOrderTool.tsx) makes the order, so nothing here is a second order maker.
+ * The Order helper, a choice on the Create order panel (components/OrderStartPick.tsx) beside Make the order and Other
+ * options (Nov 6, Nick: "a guided order… read the request… where are the sizes… what are the other files… then make the
+ * order… that's what I wanted to go when you create this order"). For anything Create order opens on (an email, a
+ * request, a ClickUp job), any customer: what we read, which file has the sizes (or their message), what every other
+ * file is (one dropdown each), then Make the order. The answers go to the reader with the order (told), and on a request
+ * they're also saved on its files (art_files category), so Production files keep the names. The ONE Create order tool
+ * makes the order; nothing here is a second order maker.
  */
 type Kind = "sizes" | "supplier_order" | "film" | "customer_mockup" | "art" | "order_sheet" | "other" | "not_needed";
 const KINDS: [Kind, string][] = [
@@ -22,7 +23,8 @@ const KIND_NOTE: Partial<Record<Kind, string>> = {
   film: "Printed as sent from Their separations.",
 };
 /** a first guess from the file itself (its saved label, else its name and type) */
-const guess = (f: DeskRequest["files"][number]): Kind => {
+type HF = { name: string; path: string; type: string; kind: string };
+const guess = (f: HF): Kind => {
   if (f.kind === "po") return "order_sheet";
   if (["supplier_order", "film", "customer_mockup", "art", "not_needed"].includes(f.kind)) return f.kind as Kind;
   if (f.kind === "print_art") return "art";
@@ -37,19 +39,28 @@ const guess = (f: DeskRequest["files"][number]): Kind => {
 /** sizes written in their message: "S 12, M 24…", "2XL - 6" */
 const SZ = /\b(?:y?xs|y?s|y?m|y?l|y?xl|[2-6]x(?:l)?|xxl|xxxl|small|medium|large|x-large)\b\s*[-:=x×]?\s*\(?\d{1,4}\)?/gi;
 
-export default function OrderHelper({ job, onMake, onCancel, onChanged }: { job: DeskRequest;
-  /** made with the one Create order tool, straight to making it */ onMake: (begin: OrderStart) => void; onCancel: () => void; onChanged?: () => void }) {
+export default function OrderHelper({ activityId, orderType, onMake }: { activityId: string; /** the panel's Order type */ orderType: "new" | "reorder" | "reorder_changes";
+  /** straight to making it, in the same Create order tool */ onMake: (begin: OrderStart) => void }) {
   const sb = useMemo(() => createClient(), []);
-  const [added, setAdded] = useState<DeskRequest["files"]>([]);
-  const files = [...job.files, ...added];
-  const inText = useMemo(() => (job.about.match(SZ) || []).length, [job.about]);
-  const [kinds, setKinds] = useState<Record<string, Kind>>(() => Object.fromEntries(job.files.map((f) => [f.path, guess(f)])));
-  // where the sizes are: their PO when it isn't a vendor's paper, else their message when it has sizes
-  const [sizesIn, setSizesIn] = useState<string>(() => job.files.find((f) => guess(f) === "order_sheet")?.path || (inText >= 2 ? "message" : ""));
-  const [type, setType] = useState<"new" | "reorder" | "reorder_changes">("new");
+  const [src, setSrc] = useState<null | { files: HF[]; about: string; orderId: string | null }>(null);
+  const [files, setFiles] = useState<HF[]>([]);
+  const [kinds, setKinds] = useState<Record<string, Kind>>({});
+  const [sizesIn, setSizesIn] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const pick = useRef<HTMLInputElement | null>(null);
+  const about = src?.about || "";
+  const inText = useMemo(() => (about.match(SZ) || []).length, [about]);
+  useEffect(() => {
+    void activityFiles(activityId).then((r) => {
+      if (!r.ok) { setErr(r.error); setSrc({ files: [], about: "", orderId: null }); return; }
+      setSrc(r); setFiles(r.files);
+      setKinds(Object.fromEntries(r.files.map((f) => [f.path, guess(f)])));
+      // where the sizes are: their PO when it isn't a vendor's paper, else their message when it has sizes
+      const n = (r.about.match(SZ) || []).length;
+      setSizesIn(r.files.find((f) => guess(f) === "order_sheet")?.path || (n >= 2 ? "message" : ""));
+    });
+  }, [activityId]);
   const kindOf = (p: string): Kind => (p === sizesIn ? "sizes" : kinds[p] || "other");
   const setKind = (p: string, k: Kind) => {
     if (k === "sizes") { setSizesIn(p); return; }
@@ -62,11 +73,13 @@ export default function OrderHelper({ job, onMake, onCancel, onChanged }: { job:
     setErr("");
     for (const f of Array.from(list)) {
       setBusy(`Adding ${f.name}…`);
-      const path = `requests/${job.id}/helper-${crypto.randomUUID().slice(0, 8)}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
+      const path = `${src?.orderId ? `requests/${src.orderId}` : `helper/${activityId}`}/helper-${crypto.randomUUID().slice(0, 8)}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
       const up = await sb.storage.from("proofs").upload(path, f, { contentType: f.type || undefined, upsert: false });
       if (up.error) { setErr(`${f.name} didn't upload: ${up.error.message}`); continue; }
-      const row = { name: f.name, path, type: f.type || "", kind: "", size: f.size };
-      setAdded((a) => [...a, row]);
+      const row = { name: f.name, path, type: f.type || "", kind: "" };
+      const r = await addActivityFile(activityId, { ...row, size: f.size });
+      if (!r.ok) { setErr(r.error || `${f.name} didn't add.`); continue; }
+      setFiles((a) => [...a, row]);
       setKinds((x) => ({ ...x, [path]: guess(row) }));
       if (asSizes) setSizesIn(path);
     }
@@ -74,29 +87,39 @@ export default function OrderHelper({ job, onMake, onCancel, onChanged }: { job:
   }
 
   async function make() {
-    setErr(""); setBusy("Saving what each file is…");
-    const r = await setRequestFileKinds(job.id, files.map((f) => {
-      const k = kindOf(f.path);
-      return { path: f.path, name: f.name, type: f.type, kind: k === "sizes" ? "order_sheet" : k };
-    }), { sizesIn, note });
-    setBusy("");
-    if (!r.ok) { setErr(r.error || "Couldn't save."); return; }
-    onChanged?.();
-    onMake({ orderType: type, told: "Staff went through the Order helper: the request says where the sizes are and what each file is. Follow it exactly.", note: note.trim() || undefined });
+    setErr("");
+    if (src?.orderId) {
+      setBusy("Saving what each file is…");
+      const r = await setRequestFileKinds(src.orderId, files.map((f) => { const k = kindOf(f.path); return { path: f.path, name: f.name, type: f.type, kind: k === "sizes" ? "order_sheet" : k }; }), { sizesIn, note });
+      setBusy("");
+      if (!r.ok) { setErr(r.error || "Couldn't save."); return; }
+    }
+    // what staff said about each file, word for word to the reader (the same words simpleOrderActivity uses)
+    const say: Record<Kind, string> = {
+      sizes: "has THE SIZES: take every size and quantity from it", supplier_order: "is a vendor order confirmation: read it only for who the blanks were ordered from, when they arrive and the vendor's order number; it can cover several orders, so NEVER take sizes or quantities from it",
+      film: "is the customer's own separations (films), printed as sent: not art to separate", customer_mockup: "is their mockup", art: "is the art", order_sheet: "is their work order / PO",
+      other: "is a production file to keep with the order", not_needed: "is not needed: ignore it",
+    };
+    const told = [
+      "Staff went through the Order helper; follow it exactly.",
+      sizesIn === "message" ? "The sizes and quantities are in their message, not in a file." : !sizesIn ? "" : "",
+      ...files.map((f) => `The file "${f.name}" ${say[kindOf(f.path)]}.`),
+    ].filter(Boolean).join(" ");
+    onMake({ orderType, told, note: note.trim() || undefined });
   }
 
   const sizesFile = files.find((f) => f.path === sizesIn);
   const vendor = files.filter((f) => kindOf(f.path) === "supplier_order").length;
   const counts = KINDS.map(([k, l]) => [l, files.filter((f) => kindOf(f.path) === k).length] as const).filter(([, n]) => n);
+  if (!src) return <div className="ohp"><p className="ohp-p ohp-wait">Reading what they sent…</p></div>;
   return (
     <section className="ohp" aria-label="Order helper">
-      <div className="ohp-h"><b>Order helper</b><button type="button" className="linkbtn" onClick={onCancel}>Close</button></div>
       <ol className="ohp-steps">
         <li className="ohp-st">
           <span className="ohp-no">1</span>
           <div className="ohp-b">
             <b>What they sent</b>
-            <p className="ohp-p">{files.length} file{files.length === 1 ? "" : "s"}{job.about ? " and a message" : ""}. {inText >= 2 ? `Their message has sizes in it (${inText} found).` : "No sizes in their message."}</p>
+            <p className="ohp-p">{files.length} file{files.length === 1 ? "" : "s"}{about ? " and a message" : ""}. {inText >= 2 ? `Their message has sizes in it (${inText} found).` : "No sizes in their message."}</p>
           </div>
         </li>
         <li className="ohp-st">
@@ -137,9 +160,6 @@ export default function OrderHelper({ job, onMake, onCancel, onChanged }: { job:
             <b>Make the order</b>
             <p className="ohp-p">Sizes from {sizesIn === "message" ? "their message" : sizesFile ? <span data-notranslate>{sizesFile.name}</span> : "wherever the AI finds them"}{counts.filter(([l]) => l !== "Has the sizes").map(([l, n]) => ` · ${n} ${l.toLowerCase()}`).join("")}.{vendor ? " The vendor confirmation stays with the order for who and when." : ""}</p>
             <div className="ohp-row">
-              <select className="ohp-sel ohp-type" aria-label="Order type" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
-                <option value="new">New order</option><option value="reorder">Reorder</option><option value="reorder_changes">Reorder with changes</option>
-              </select>
               <input className="ohp-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Anything to tell the AI? Only the tees, use the 400 sheet" aria-label="Anything to tell the AI" />
             </div>
             <div className="ohp-row">

@@ -21311,3 +21311,14 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 /* a website submission that reads like junk (components/RequestsDesk.tsx, Nov 6) */
 .rqd-junk{margin-top:14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--danger) 35%,var(--line));border-radius:var(--r);background:color-mix(in srgb,var(--danger) 6%,var(--surface));font-size:14px;color:var(--ink)}
 .rqd-junk>span{flex:1 1 260px;min-width:0}
+/* Create order's three ways to make it (components/OrderStartPick.tsx), stacked in the side panel (Nov 6) */
+.osp-ways{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.osp-way{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.osp-way b{font-size:14px;color:var(--ink);font-weight:700}
+.osp-way>span{font-size:12.5px;color:var(--ink-3)}
+.osp-way:hover{border-color:var(--accent)}
+.osp-way:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.osp-way.on{border-color:var(--accent);background:var(--accent-soft)}
+.osp-way.go{background:var(--accent);border-color:var(--accent)}
+.osp-way.go b,.osp-way.go>span{color:#fff}
+.ohp-wait{padding:12px 14px}

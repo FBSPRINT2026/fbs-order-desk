@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
 import { PARTIAL, type PartKind } from "@/components/tools/PartialOrder";
+import OrderHelper from "@/components/tools/OrderHelper";
 
 /**
  * Create order from an email: first ask what it is (Oct 20, Nick: "it pops up and says, okay, is this an order or
@@ -156,6 +157,8 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   // "Other options" under a card (Oct 24, Nick: "bring in the sizes only, or add the art to a blank order, or just make
   // the mock-up"): only part of the order, no questions
   const [otherFor, setOtherFor] = useState<string | null>(null), [aiNote, setAiNote] = useState("");
+  // the Order helper's steps, open under the card (components/tools/OrderHelper.tsx)
+  const [way, setWay] = useState<"" | "helper">("");
   const otherMenu = (go: (k: PartKind) => void) => (
     <div className="osp-other">
       <p className="faint osp-other-note">Here the AI helper just does what you tell it: no rules or checks.</p>
@@ -351,7 +354,13 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
               {look === "wait" ? <div className="faint osp-card-n">Comparing the picture in the email with their past jobs&apos; mockups…</div> : lookHit && cardOf(SOLO, null).job === lookHit.ref ? <div className="faint osp-card-n">{lookHit.why}{lookHit.sure === "low" ? " (not sure: check it)" : ""}</div> : null}
               {cardBody(SOLO, null)}
               {jobFor === SOLO && <div className="osp-card-jobs">{jobList}</div>}
-              <div className="osp-card-go"><button type="button" className={"btn" + (otherFor === SOLO ? " on" : "")} aria-expanded={otherFor === SOLO} onClick={() => setOtherFor(otherFor === SOLO ? null : SOLO)}>Other options</button><button type="button" className="btn primary" onClick={makeSolo}>Make the order</button></div>
+              {/* three ways to make it (Nov 6, Nick: "Make the order… Order helper… Other options"), each in this one tool */}
+              <div className="osp-ways" role="group" aria-label="How to make it">
+                <button type="button" className="osp-way go" onClick={makeSolo}><b>Make the order</b><span>The AI reads everything and makes the whole order. You check it after.</span></button>
+                <button type="button" className={"osp-way" + (way === "helper" ? " on" : "")} aria-expanded={way === "helper"} onClick={() => { setWay(way === "helper" ? "" : "helper"); setOtherFor(null); }}><b>Order helper</b><span>Step by step with you: where the sizes are, what each file is, then it makes the order.</span></button>
+                <button type="button" className={"osp-way" + (otherFor === SOLO ? " on" : "")} aria-expanded={otherFor === SOLO} onClick={() => { setOtherFor(otherFor === SOLO ? null : SOLO); setWay(""); }}><b>Other options <span aria-hidden>▾</span></b><span>Only part of it: the sizes, the art, the mockup, or their files on a blank order.</span></button>
+              </div>
+              {way === "helper" && <OrderHelper activityId={activityId} orderType={cardOf(SOLO, null).type} onMake={(st) => { const c = cardOf(SOLO, null); onPick({ ...st, told: [toldOf(c), st.told].filter(Boolean).join(" "), job: c.type === "new" ? undefined : c.job || undefined }); }} />}
               {otherFor === SOLO && otherMenu((k) => { const c = cardOf(SOLO, null); onPick({ told: toldOf(c), job: c.type === "new" ? undefined : c.job || undefined, orderType: c.type, partial: k, ...(aiNote.trim() ? { note: aiNote.trim() } : {}) }); })}
             </div>
           </div>
