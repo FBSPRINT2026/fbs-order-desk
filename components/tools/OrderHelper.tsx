@@ -113,7 +113,10 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
       sizes.size || inMsg ? `The sizes and quantities come ONLY from ${[inMsg ? "their message" : "", ...files.filter((f) => sizes.has(f.path)).map((f) => `"${f.name}"`)].filter(Boolean).join(" and ")}${many ? ": add them all up, each one's lines as they are" : ""}; take no sizes from any other file.` : "",
       ...files.map((f) => `The file "${f.name}" ${say[kindOf(f.path)]}${sizes.has(f.path) ? " and HAS THE SIZES" : kindOf(f.path) === "supplier_order" ? "; it can cover several orders, so NEVER take sizes or quantities from it" : ""}.`),
     ].filter(Boolean).join(" ");
-    onMake({ orderType, told, note: note.trim() || undefined, roles: Object.fromEntries(files.map((f) => [f.path, kindOf(f.path)])), roleFiles: files.map((f) => ({ path: f.path, name: f.name, type: f.type })) });
+    onMake({ orderType, told, note: note.trim() || undefined, roles: Object.fromEntries(files.map((f) => [f.path, kindOf(f.path)])), roleFiles: files.map((f) => ({ path: f.path, name: f.name, type: f.type })),
+      // only these are read (Nov 6, Nick: "this is where you fill in what we've got… the other stuff would just be reference
+      // files"): the sizes files, the art and their mockup; with no sizes ticked, their PO too
+      read: files.filter((f) => sizes.has(f.path) || ["art", "customer_mockup"].includes(kindOf(f.path)) || (!sizes.size && kindOf(f.path) === "order_sheet")).map((f) => f.path) });
   }
 
   const vendor = files.filter((f) => kindOf(f.path) === "supplier_order").length;

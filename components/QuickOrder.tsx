@@ -3,6 +3,7 @@ import { remakeMockup } from "@/lib/mockupFresh";
 import { sizeRank } from "@/lib/sizeOrder";
 import { clearPageFile } from "@/lib/inkColors";
 import { pdfText } from "@/lib/printavoArt";
+import { addGoodsInfo, readGoodsPaste } from "@/app/shop/goods-panel-actions";
 import { useEffect, useRef, useState } from "react";
 import type { Group } from "@/lib/pricing";
 import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
@@ -198,7 +199,7 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
         "Writing down anything to ask the customer…",
         "Getting the order ready…",
       ]);
-      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? part.told || "" : start.told || "", start.note || "", ...again, fix].filter(Boolean).join("\n"), job: part ? (part.job ?? null) : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}), include: start.include || [], exclude: start.exclude || [] }) }).catch(() => null);
+      const r = await fetch("/api/inbox/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, told: [part ? part.told || "" : start.told || "", start.note || "", ...again, fix].filter(Boolean).join("\n"), job: part ? (part.job ?? null) : start.job || null, jobs: part ? [] : start.jobs || [], reorderOk: !!(part ? part.job : start.job), ...(part ? { part: part.key } : {}), include: start.include || [], exclude: start.exclude || [], ...(start.read ? { read: start.read } : {}) }) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
       stop(); guard();
       if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");
@@ -1007,6 +1008,18 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     made0.current = new Set();
     if (replaced.length) void discardDraftArt(replaced).catch(() => null);
     await attachFilms(j.id, films);
+    // a vendor order confirmation staff named in the Order helper: who the goods come from, their order number, tracking
+    // and when they arrive go on the order's Goods (Nov 6, Nick: "the only thing you would really do with that is put it on
+    // the goods area… the goods are coming from Sanmar and this is the tracking")
+    for (const f of (start.roleFiles || []).filter((x) => start.roles?.[x.path] === "supplier_order")) {
+      const blob = (await createClient().storage.from("proofs").download(f.path).catch(() => ({ data: null }))).data;
+      const text = blob ? (/pdf/i.test(f.type) || /\.pdf$/i.test(f.name) ? await blob.arrayBuffer().then((b) => pdfText(b, 3)).catch(() => "") : /^text\//.test(f.type) ? await blob.text() : "") : "";
+      if (!text.trim()) { did.push(`${f.name}: couldn't read it for the goods; add them on the Goods tab`); continue; }
+      const rd = await readGoodsPaste(j.id, text).catch(() => null);
+      const add = rd?.ok ? rd.add : null;
+      const ok = add && (add.vendor || add.po || add.tracking) ? await addGoodsInfo(j.id, add).catch(() => null) : null;
+      did.push(ok?.ok ? `Goods from ${f.name}: ${[add!.vendor, add!.po && `order ${add!.po}`, add!.tracking && `tracking ${add!.tracking}`, add!.eta && `arriving ${add!.eta}`].filter(Boolean).join(" · ")}` : `${f.name}: the goods couldn't be read from it; add them on the Goods tab`);
+    }
     for (const h of handOff) { const x = await handOffArt(j.id, `${h.title} (#${j.number})`, h.notes).catch(() => null); if (x && !x.ok) did.push(`The to-do for production couldn't be made: ${x.error}`); }
     let url = `/shop/orders/${j.id}`, mockup = false;
     try {

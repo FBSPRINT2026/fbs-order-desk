@@ -22,7 +22,8 @@ export type OrderStart = { told?: string; job?: string; /** several past jobs re
    *  into the reorder how we have it already"): "o:<order id>" or "a:<archived id>", opened in the Reorder pop-up */ reorderOf?: string;
   /** what staff said each file is in the Order helper, by its path (sizes, supplier_order, film, customer_mockup, art,
    *  order_sheet, other, not_needed): applied to the reading in code, so it holds whatever the AI thought */ roles?: Record<string, string>;
-  /** those files, so one the AI left out is still kept */ roleFiles?: { path: string; name: string; type: string }[] };
+  /** those files, so one the AI left out is still kept */ roleFiles?: { path: string; name: string; type: string }[];
+  /** the only files the AI reads (the sizes, the art, their mockup); the rest are kept as reference, never read */ read?: string[] };
 const STOP = new Set(["the", "and", "for", "order", "orders", "reorder", "new", "shirts", "shirt", "tees", "tee", "printavo", "with", "from", "re", "fw", "fwd"]);
 const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 const fmt = (d: string) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
