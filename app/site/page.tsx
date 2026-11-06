@@ -85,7 +85,7 @@ export default function SitePage() {
               <ul>{w.points.map((x) => <li key={x}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>{x}</li>)}</ul>
             </div>
           ))}</div>
-          <div className="fws-else"><p><b>And everyone else</b><span>{EVERYONE}</span></p><a href="#request">Get a quote →</a></div>
+          <div className="fws-else"><p><b>And many more</b><span>{EVERYONE}</span></p><a href="#request">Get a quote →</a></div>
           {/* the brands we print for, one strip that moves on its own and stops under the pointer */}
           <h3 className="fws-logos-t fws-d">Local and national brands we work with</h3>
           <SiteLogos clients={CLIENTS} />
