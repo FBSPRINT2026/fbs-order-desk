@@ -21248,13 +21248,13 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .pfl-step-b.done .pfl-stepshort{color:var(--ok)}
   .pfl-now{display:none}
   .pfl-pdf{order:3;flex:1}
-  .pfl-bar{position:absolute;right:8px;top:8px;z-index:3;padding:0;background:transparent!important}
+  /* View full size on a slim strip of its own, so it never covers the paper's title */
+  .pfl-bar{padding:4px 10px;justify-content:flex-end;min-height:0}
   .pfl-bar > span:first-child{display:none}
-  .pfl-pdf{position:relative}
-  .pfl-full-b{background:rgba(20,29,43,.78);border-color:transparent;font-size:12.5px;padding:6px 10px}
+  .pfl-full-b{font-size:12.5px;padding:3px 10px}
   .pfl-ans-wrap,.pfl-body.is-full .pfl-ans-wrap{order:4;position:sticky;bottom:0;z-index:61;left:auto;right:auto;width:auto;max-height:65vh;overflow:auto;background:var(--surface);border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:0 -6px 18px rgba(20,29,43,.12);padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px))}
   .pfl-body.is-full .pfl-ans-wrap{position:fixed;left:0;right:0;bottom:0}
-  .pfl-body.is-full .pfl-bar{position:fixed}
+  .pfl-body.is-full .pfl-bar{position:sticky;top:0;z-index:2}
   .pfl-ans{gap:6px}
   .pfl-ans .pfl-q,.pfl-stepof{display:none}
   .pfl-qs{display:block;font-size:12.5px;color:var(--ink-3)}

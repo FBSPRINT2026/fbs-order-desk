@@ -74,7 +74,7 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
             <li key={s.key}>
               <button type="button" className={"pfl-step-b " + st + (s.key === step.key ? " on" : "")} onClick={() => { setCur(s.key); setFinal(false); }} aria-current={s.key === step.key}>
                 <span className="pfl-num">{s.state === "done" || good ? "✓" : i + 1}</span>
-                <span><span className="pfl-stepno">Step {i + 1}</span><span className="pfl-stepshort">{i + 1} · {SHORT[s.kind] || s.title}</span><b>{s.title}</b><small>{good ? "Looks good" : s.sub}</small></span>
+                <span><span className="pfl-stepno">Step {i + 1}</span><span className="pfl-stepshort">Step {i + 1} · {SHORT[s.kind] || s.title}</span><b>{s.title}</b><small>{good ? "Looks good" : s.sub}</small></span>
               </button>
             </li>); })}
         </ol>
