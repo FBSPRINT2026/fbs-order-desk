@@ -628,6 +628,15 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
         // each mockup picture is one garment (in the order they were saved)
         const capOf = (i: number) => { const l = shown[i]; return l ? [[l.brand, l.style].filter(Boolean).join(" "), l.color].filter(Boolean).join(" · ") : ""; };
         const gname = groups.length > 1 ? (g.name?.trim() || `Group ${gi + 1}`) : "";
+        const sameG = (y: Group["lines"][number], l: Group["lines"][number]) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase();
+        /** a garment's sizes, every line of the same garment and color added up: "S 1 · M 2 · L 6 · 16 pcs" */
+        const sizesOf = (l: Group["lines"][number]) => { const same = g.lines.filter((y) => sameG(y, l)); const sz = SIZES.map((z) => [z, same.reduce((a, y) => a + (+(y.sizes?.[z] || 0)), 0)] as const).filter(([, n]) => n > 0); return sz.length ? `${sz.map(([z, n]) => `${z} ${n}`).join(" · ")} · ${sz.reduce((a, [, n]) => a + n, 0)} pcs` : ""; };
+        /** the garment on this page: "Garment 1 of 3", its name and color, its sizes */
+        const garmentBox = (l: Group["lines"][number], i: number, n: number) => <>
+          <div className="lbl">{n > 1 ? `Garment ${i + 1} of ${n}` : "Garment"}</div>
+          <div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#ccc"} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>
+          {sizesOf(l) && <div className="pf-pr faint pf-szs">{sizesOf(l)}</div>}
+        </>;
         return (
           <div key={g.id}>
             <section className="sheet pf pf-cover">
@@ -655,15 +664,12 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                   {g.imprints.map((d) => printLine(g, d))}
                 </div>
                 <div>
-                  <div className="lbl">Garments</div>
-                  {lines.filter((l, i) => lines.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i).map((l) => {
-                    // each garment's sizes under it, like the garment pages after it (Nov 6, Nick: "you don't see the sizes on
-                    // page 1 like you do on the other pages")
-                    const same = lines.filter((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase());
-                    const sizes = SIZES.map((z) => [z, same.reduce((a, y) => a + (+(y.sizes?.[z] || 0)), 0)] as const).filter(([, n]) => n > 0);
-                    return <div key={l.id}><div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>
-                      {sizes.length > 0 && <div className="pf-pr faint pf-szs">{sizes.map(([z, n]) => `${z} ${n}`).join(" · ")} · {sizes.reduce((a, [, n]) => a + n, 0)} pcs</div>}</div>;
-                  })}
+                  {/* each page shows only the garment on it, numbered (Nov 6, Nick: "each page should just have the only
+                      garment that's on there… garment one, athletic heather, these sizes"); with no mockup yet, all of them */}
+                  {mk[0] && shown[0] ? garmentBox(shown[0], 0, Math.max(mk.length, 1)) : <>
+                    <div className="lbl">Garments</div>
+                    {lines.filter((l, i) => lines.findIndex((y) => sameG(y, l)) === i).map((l) => <div key={l.id}><div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>{sizesOf(l) && <div className="pf-pr faint pf-szs">{sizesOf(l)}</div>}</div>)}
+                  </>}
                 </div>
               </div>
               {/* no approval box on the PDF (Oct 29, Nick: "take the approval out… we're going to use this system"): the
@@ -678,15 +684,10 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 {(() => {
                   // this garment's own prints and sizes under its picture, like the cover's
                   const l = shown[idx[xi]];
-                  const same = l ? g.lines.filter((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) : [];
-                  const sizes = SIZES.map((z) => [z, same.reduce((a, y) => a + (+(y.sizes?.[z] || 0)), 0)] as const).filter(([, n]) => n > 0);
                   return l && (
                     <div className="pf-sum">
                       <div><div className="lbl">Prints</div>{g.imprints.length === 0 ? <div className="pf-pr">No prints on this group.</div> : g.imprints.map((d) => printLine(g, d, l))}</div>
-                      <div><div className="lbl">Garment</div>
-                        <div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#ccc"} /><b>{[l.brand, l.style].filter(Boolean).join(" ")}</b>{l.color ? ` · ${l.color}` : ""}</div>
-                        {sizes.length > 0 && <div className="pf-pr faint">{sizes.map(([z, n]) => `${z} ${n}`).join(" · ")} · {sizes.reduce((a, [, n]) => a + n, 0)} pcs</div>}
-                      </div>
+                      <div>{garmentBox(l, idx[xi], Math.max(mk.length, 1))}</div>
                     </div>
                   );
                 })()}
