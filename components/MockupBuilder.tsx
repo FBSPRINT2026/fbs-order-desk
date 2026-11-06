@@ -59,7 +59,7 @@ import { loadInkFormulas } from "@/lib/inkFormulas";
 import { levelBack } from "@/lib/levelBack";
 import { maskBehindHood, snapToEdge } from "@/lib/hoodSnap";
 import { FULL_WHY, isFullColorWhy } from "@/lib/fullColor";
-import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorChangeWant, colorHex, deltaE, detectColors, paintPrint, recolorTrim, suggestInk } from "@/lib/inkColors";
+import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorChangeWant, colorHex, deltaE, detectColors, paintPrint, recolorTrim, suggestInk, inkChoices } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { closestThread, isThreadName, threadByName, threadLabel } from "@/lib/embroidery";
 import { needleThreads } from "@/lib/needleThreads";
@@ -5096,7 +5096,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <button type="button" className="btn sm" title="Copy the art in Illustrator first (with Copy As: SVG Code on), or press Ctrl+V on this page" onClick={() => void pasteBtn()}>Paste from Illustrator</button>
                   <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drag a PDF, AI or picture here (from your email, ClickUp or anywhere), or copy art in Illustrator and paste it"}</span>
                 </>}
-                <datalist id="mk-ink-names">{[...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX)].slice(0, 400).map((n) => <option key={n} value={n} />)}</datalist>
+                <datalist id="mk-ink-names">{inkChoices({ pms: true }).map((n) => <option key={n} value={n} />)}</datalist>
                 <input ref={helpIn} type="file" accept={portal ? ".pdf,.ai,application/pdf,application/postscript,application/illustrator" : ".pdf,.ai,.jpg,.jpeg,.png,.webp,application/pdf,application/postscript,application/illustrator,image/jpeg,image/png,image/webp"} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
                 {helper && <>
                   <div className="mk-help-f"><b>{helper.name}</b>{!helper.busy && <button type="button" className="lc-link" onClick={() => { helper.rows.forEach((r) => URL.revokeObjectURL(r.url)); setHelper(null); }}>Start over</button>}</div>
@@ -5424,7 +5424,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
 }
 
 let inkNamesCache: string[] | null = null;
-const allInkNames = () => (inkNamesCache ||= [...Object.keys(WILFLEX_HEX), ...Object.keys(STOCK_HEX), ...Object.keys(PMS_HEX), ...Object.keys(PMS_COATED).filter((k) => !PMS_HEX[k])]);
+const allInkNames = () => (inkNamesCache ||= inkChoices({ pms: true, extra: Object.keys(PMS_HEX) }));
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
 function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex, onColor, ctr, onCenter }: {

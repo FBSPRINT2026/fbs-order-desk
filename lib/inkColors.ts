@@ -17,6 +17,12 @@ export const WILFLEX_HEX: Record<string, string> = {
   "Electric Pink": "#FF3EB5", "Black Diamond": "#101820", Black: "#111111",
 };
 
+/** the shop's everyday ink names that aren't Wilflex standard names (Nov 6, Nick: "I can see athletic gold as a color, but
+ *  I can't find it in the drop down on the mockup creator"): offered by every ink picker and shown in their color */
+export const SHOP_INK_HEX: Record<string, string> = {
+  "Athletic Gold": "#FFB612", Silver: "#A2AAAD", Red: "#C8102E", Orange: "#FF6A13", Purple: "#4B2E83",
+};
+
 /** Common PMS (coated) colors with approximate screen values. Other PMS numbers can be typed with a custom color. */
 export const PMS_HEX: Record<string, string> = {
   "PMS Black C": "#2D2926", "PMS White": "#FFFFFF", "PMS Cool Gray 1 C": "#D9D9D6", "PMS Cool Gray 6 C": "#A7A8AA",
@@ -87,7 +93,7 @@ export const parseCustom = (name: string): { desc: string; hex: string } | null 
 };
 export const colorHex = (name: string) => {
   const cu = parseCustom(name); if (cu) return cu.hex;
-  if (WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name]) return WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name];
+  if (WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name] || SHOP_INK_HEX[name]) return WILFLEX_HEX[name] || STOCK_HEX[name] || PMS_HEX[name] || SHOP_INK_HEX[name];
   if (/^#[0-9a-f]{6}$/i.test(name)) return name;
   const m = name.trim().replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "");
   // a thread by its name ("Madeira 1981 Carmine", "Isacord 0670 Cream"): its color, wherever an embroidery print's
@@ -502,4 +508,16 @@ export function colorChangeWant(img: HTMLImageElement | null, im: Record<string,
     if (t) w[q.hex.toUpperCase()] = t;
   }
   return w;
+}
+
+/**
+ * Every ink name a picker offers, one list for the whole app (the Mockup Creator, the Separation Studio, the logo
+ * editor, press sheets, the production view): the Ink Room's stocked inks first, then the standard names, the shop's
+ * everyday names, and (`pms`) every PMS coated number. Before this each picker had its own list, so a color in one
+ * couldn't be found in another.
+ */
+export function inkChoices(opts: { pms?: boolean; extra?: string[] } = {}): string[] {
+  const out = [...(opts.extra || []), ...Object.keys(STOCK_HEX), ...Object.keys(WILFLEX_HEX), ...Object.keys(SHOP_INK_HEX), ...(opts.pms ? Object.keys(PMS_COATED) : [])];
+  const seen = new Set<string>();
+  return out.filter((n) => { const k = n.trim().toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; });
 }

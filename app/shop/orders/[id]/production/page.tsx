@@ -1,10 +1,9 @@
 "use client";
 import { mockupHref } from "@/lib/mockupFresh";
-import { paintPrint } from "@/lib/inkColors";
+import { paintPrint, inkChoices } from "@/lib/inkColors";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { colorHex } from "@/lib/inkColors";
-import { PMS_COATED } from "@/lib/pms";
 import { isPmsInk, pmsKey } from "@/lib/pricing";
 import { confirmDetails } from "@/app/shop/details-actions";
 import { addPhoto, type JobFile } from "@/components/job/JobFiles";
@@ -515,7 +514,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
           </div>
         </div>
       )}
-      <datalist id="jv-pms">{["White", "Black", "Athletic Gold", "Navy", "Red", "Royal", "Kelly Green", "Orange", "Purple", "Maroon", "Silver", ...Object.keys(PMS_COATED)].map((n) => <option key={n} value={n} />)}</datalist>
+      <datalist id="jv-pms">{inkChoices({ pms: true }).map((n) => <option key={n} value={n} />)}</datalist>
       {one && p.screen && (
         <div className="jv-cp-step">
           <div className="jv-cp-n"><b>4</b>Film</div>

@@ -1,6 +1,6 @@
 "use client";
+import { inkChoices } from "@/lib/inkColors";
 import { useMemo, useState } from "react";
-import { INK_COLORS } from "@/lib/pricing";
 import { diffSetup, type PHead, type PressOption, type PressSheet } from "@/lib/pressActual";
 import { useT } from "./lang";
 
@@ -67,7 +67,7 @@ function Editor({ sheet, presses, job, onCancel, onSaved }: { sheet: PressSheet;
   const used = heads.filter((h) => h.what !== "empty").length;
   const set = (i: number, p: Partial<PHead>) => setHeads((hs) => hs.map((h, j) => (j === i ? { ...h, ...p } : h)));
   const move = (i: number, d: number) => setHeads((hs) => { const j = i + d; if (j < 0 || j >= hs.length) return hs; const n = hs.slice(); [n[i], n[j]] = [n[j], n[i]]; return n; });
-  const inkList = [...new Set([...sheet.heads.filter((h) => h.what === "screen").map((h) => h.name), ...INK_COLORS])];
+  const inkList = inkChoices({ extra: sheet.heads.filter((h) => h.what === "screen").map((h) => h.name) });
 
   async function save() {
     setBusy(true); setErr("");

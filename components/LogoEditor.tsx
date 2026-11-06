@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { colorHex, deltaE } from "@/lib/inkColors";
-import { INK_COLORS, type BrandColor, type Design } from "@/lib/pricing";
+import { colorHex, deltaE, inkChoices as allInkChoices } from "@/lib/inkColors";
+import { type BrandColor, type Design } from "@/lib/pricing";
 import { guessHex, SHIRT_COLORS } from "@/lib/mockup";
 import { useShirtBg } from "@/lib/fabricTile";
 import { AS_IS, onShirtsOf, type OnShirt } from "@/components/LogoOnShirts";
@@ -138,7 +138,7 @@ export default function LogoEditor({ d, onClose, onSaved }: { d: Design; onClose
   }, [edited, img, srcs, curActs]);
 
   // their brand inks first in the color choices
-  const inkChoices = [...new Set([...brand.map((b) => b.ink), ...INK_COLORS])];
+  const inkChoices = [...new Set([...brand.map((b) => b.ink), ...allInkChoices()])];
   // changes go to the background picked (its own version), or to the logo itself on "See-through"
   const change = (f: (x: Record<string, Act>) => Record<string, Act>) => {
     if (sel >= 0) setBgs((l) => l.map((x, k) => (k === sel ? { ...x, map: f(x.map || acts), dirty: true } : x)));
@@ -331,7 +331,7 @@ function OneInk({ onPick }: { onPick: (name: string) => void }) {
   return (
     <form className="le-one" onSubmit={(e) => { e.preventDefault(); if (v.trim()) onPick(v.trim()); }}>
       <input list="le-inks" placeholder="Navy, PMS 289 C…" aria-label="Make it one ink" value={v} onChange={(e) => setV(e.target.value)} />
-      <datalist id="le-inks">{INK_COLORS.map((n) => <option key={n} value={n} />)}</datalist>
+      <datalist id="le-inks">{allInkChoices().map((n) => <option key={n} value={n} />)}</datalist>
       <button type="submit" className="btn sm">Make it one color</button>
     </form>
   );
