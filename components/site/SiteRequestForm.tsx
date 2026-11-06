@@ -5,7 +5,7 @@ import { sendSiteRequest, siteUploadUrl, type SiteReq } from "@/app/site/actions
 import { CLIENT_KINDS, MONTHLY, NEEDS } from "@/lib/siteContent";
 
 /**
- * The website's inquiry form (app/site/actions.ts does the rest): it lands in the Job Center's Website leads. It starts by
+ * The website's inquiry form (app/site/actions.ts does the rest): it lands in the Job Center's Leads → Website submissions. It starts by
  * asking why they're here, a quote for an order they have ready or a new account (Nov 5, Nick: "there are two types of
  * people that reach out on the site"), and asks only what that one needs, with dropdowns in place of rows of bubbles.
  */

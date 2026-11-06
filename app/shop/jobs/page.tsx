@@ -32,9 +32,12 @@ const GROUPS: G[] = [
   // Leads (orders the AI found in emails) are still worked out in lib/jobCenter.ts, just not shown.
   // website inquiries beside them, so they don't mix with what customers sent from the portal (Nov 5, Nick: "it should go
   // website leads instead of into requests… next to requests")
-  { t: "Requests", line: "Portal and website", c: "var(--fbs-violet)", steps: [
-    ["requests", "Customer orders", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)],
-    ["website", "Website leads", ic(<><circle cx="12" cy="12" r="9" /><path d="M3.6 9h16.8M3.6 15h16.8" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>)]] },
+  // Leads on their own, first (Nov 6, Nick: "the website leads isn't looking good. Let's make that its own tab on the
+  // left… leads… website submissions… then… incoming orders… customer requests… the top should all be one line")
+  { t: "Leads", line: "From the website", c: "var(--fbs-salmon)", steps: [
+    ["website", "Website submissions", ic(<><circle cx="12" cy="12" r="9" /><path d="M3.6 9h16.8M3.6 15h16.8" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>)]] },
+  { t: "Incoming orders", line: "Sent in by customers", c: "var(--fbs-violet)", steps: [
+    ["requests", "Customer requests", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
   { t: "In the works", line: "Mockups and numbers", c: "var(--warn)", steps: [
     ["mockups", "Mockups", ic(<><path d="M15 4l6 2v5h-3v8a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-8H3V6l6-2a3 3 0 0 0 6 0" /></>)],
     ["numbers", "Numbers", ic(<><path d="M5 9h14M5 15h14M11 4 7 20M17 4l-4 16" /></>)]] },
@@ -336,9 +339,9 @@ export default function JobCenter() {
               const isRq = focusJob?.type === "request";
               const stl = fg?.steps.find((x) => x[0] === fst)?.[1] || "";
               return <div className="jmb-gen">
-              <div className="jmb-stat" style={{ ["--c" as string]: isRq ? GROUPS[0].c : fg?.c || "var(--ink-3)" }}>
+              <div className="jmb-stat" style={{ ["--c" as string]: isRq ? GROUPS[1].c : fg?.c || "var(--ink-3)" }}>
                 <b>{isRq ? "Request" : focusJob ? fg?.t || "Job" : "General question"}</b>
-                <span>{isRq ? "Incoming › Requests · not an order yet" : focusJob ? `${fg?.t || ""} › ${stl}` : curChat.number ? `#${curChat.number}${curChat.nickname ? ` ${curChat.nickname}` : ""} · ${ST[curChat.status]?.label || curChat.status || "not on the board"}` : "Not about an order"}</span>
+                <span>{isRq ? "Incoming orders › Customer requests · not an order yet" : focusJob ? `${fg?.t || ""} › ${stl}` : curChat.number ? `#${curChat.number}${curChat.nickname ? ` ${curChat.nickname}` : ""} · ${ST[curChat.status]?.label || curChat.status || "not on the board"}` : "Not about an order"}</span>
                 <button type="button" onClick={() => setChat(null)}>Close</button>
               </div>
               <div className="jmb-focus" style={{ ["--mc" as string]: focusJob ? colorOfChat(curChat) : "var(--ink-3)" }}>

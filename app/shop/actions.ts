@@ -9,6 +9,7 @@ import { mergeSettings, orderGroups, ST, type Order } from "@/lib/pricing";
 import { fullColorWaiting } from "@/lib/fullColor";
 import { attachNote, cleanAttachments, withFiles, type Attachment, type HubMsg } from "@/lib/messages";
 import { matchGoodsSoon } from "@/lib/goodsSoon";
+import { prodKindLabel } from "@/lib/productionFileKinds";
 
 async function requireStaff() {
   const v = await getViewer();
@@ -207,7 +208,7 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
     const admin = createAdminClient();
     const { data: o } = await admin.from("orders").select("id, number, customer_id, nickname, due_date, delivery_method, ship_to, po_number, notes, submitted_at, simple_order").eq("id", orderId).maybeSingle();
     if (!o?.simple_order) return { ok: false, error: "This isn't a simple order." };
-    const s = o.simple_order as { about?: string; qty?: number | null; garments?: string; method?: string; by?: string };
+    const s = o.simple_order as { about?: string; qty?: number | null; garments?: string; method?: string; by?: string; /** the file the Order helper said has the sizes, or "message" */ sizes_in?: string; /** what staff told the Order helper */ helper_note?: string };
     const { data: cust } = await admin.from("customers").select("company, name, email").eq("id", o.customer_id).maybeSingle();
     // the files they sent with it (simple_order.files: uploaded in the portal, or brought in from their ClickUp job)
     // The request's own list is the record: a ClickUp job brought in as a request has its files only there, not on
@@ -226,8 +227,17 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
       const { data: l } = await admin.storage.from("proofs").list(dir, { search: base, limit: 5 });
       return (l || []).find((x) => x.name === base)?.metadata?.size as number | undefined;
     }));
-    const atts = (files || []).slice(0, 12).map((f, i) => ({ name: String(f.name), path: String(f.file_path), type: String(f.file_type || ""), size: sizes[i] || 0 }));
-    const kindOf = new Map((files || []).map((f) => [String(f.file_path), f.category === "order_sheet" ? "their PO" : f.category === "art" ? "art" : "a file"]));
+    // what each file is, when staff said so (the Order helper, Production files' labels): "Not needed" files stay with
+    // the request but aren't read; a vendor's order confirmation is read for who, when and its number, never for sizes
+    // (Nov 6, Nick: "it gives us the who it was ordered from, when it's coming, and the order number… But it's not good to
+    // take the sizes off of": one confirmation can cover several of their orders)
+    const atts = (files || []).map((f, i) => ({ f, i })).filter(({ f }) => f.category !== "not_needed").slice(0, 12).map(({ f, i }) => ({ name: String(f.name), path: String(f.file_path), type: String(f.file_type || ""), size: sizes[i] || 0 }));
+    const sizesIn = s.sizes_in || "";
+    const kindWord = (c: string | null, path: string) => (path === sizesIn ? "THE SIZES: take every size and quantity from this file"
+      : c === "supplier_order" ? "a vendor order confirmation: who the blanks were ordered from, when they arrive and the vendor's order number only; it can cover several orders, so NEVER take sizes or quantities from it"
+      : c === "order_sheet" ? "their PO" : c === "art" || c === "print_art" ? "art" : c === "film" ? "their own separations (films), printed as sent: not the art to separate"
+      : c === "customer_mockup" ? "their mockup" : c ? prodKindLabel(c).toLowerCase() || "a file" : "a file");
+    const kindOf = new Map((files || []).map((f) => [String(f.file_path), kindWord(f.category, String(f.file_path))]));
     const body = [
       `${cust?.company || cust?.name || "The customer"} sent this order from our customer portal as a "simple order": they answered a few questions and uploaded files instead of filling in the order form. It is order #${o.number}; fill it in from what they sent.`,
       s.about ? `What they need, in their words:\n${s.about}` : "",
@@ -239,6 +249,8 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
       s.garments ? `The garments (what they know): ${s.garments}` : "",
       `How they'll get it: ${o.delivery_method === "ship" ? `ship to ${o.ship_to}` : o.delivery_method === "deliver" ? `local delivery to ${o.ship_to}` : "they'll pick it up"}`,
       atts.length ? `Their files: ${atts.map((f) => `${f.name} (${kindOf.get(f.path)})`).join("; ")}` : "",
+      s.sizes_in === "message" ? "The sizes and quantities are in their message above, not in a file." : "",
+      s.helper_note ? `Staff say: ${s.helper_note}` : "",
     ].filter(Boolean).join("\n\n");
     const ext = `portal-simple:${orderId}`;
     const row = { customer_id: o.customer_id, kind: "portal", direction: "in", subject: `Simple order #${o.number}${o.nickname ? `: ${o.nickname}` : ""}`, body, from_email: s.by || cust?.email || "", to_email: "",

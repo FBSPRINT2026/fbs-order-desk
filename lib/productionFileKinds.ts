@@ -18,7 +18,8 @@ export const PROD_KINDS = [
   { k: "brand", label: "Style / brand guide", hint: "Their colors, fonts, logo rules" },
   { k: "ink", label: "Ink / color reference", hint: "PMS swatches, ink formulas, color matches" },
   { k: "order_sheet", label: "Size breakdown / order sheet", hint: "Their spreadsheet, store and warehouse sheets" },
-  { k: "supplier_order", label: "Blank order (supplier)", hint: "S&S, SanMar or another supplier's order confirmation or invoice for the blanks" },
+  // Nov 6, Nick: "keep it and call it something else… vendor order confirmation": who, when and the number, never sizes
+  { k: "supplier_order", label: "Vendor order confirmation", hint: "Who the blanks were ordered from, when they're coming and the order number (S&S, SanMar, any vendor). Kept with the order; never used for sizes" },
   { k: "gang_sheet", label: "DTF gang sheet", hint: "The DTF gang sheet this job's transfers are on (from the Gang sheet builder)" },
   { k: "proof", label: "Approved proof", hint: "The signed-off proof" },
   { k: "photo", label: "Photo", hint: "A real photo: first off the press, finished product, a sample" },

@@ -6,6 +6,9 @@ import { useColumnWidths } from "@/components/ColumnWidths";
 import Link from "next/link";
 import { requestNotAnOrder, requestsDesk, simpleOrderActivity, type DeskRequest } from "@/app/shop/actions";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
+import OrderHelper from "@/components/tools/OrderHelper";
+import { PARTIAL, type PartKind } from "@/components/tools/PartialOrder";
+import type { OrderStart } from "@/components/OrderStartPick";
 import { FileTray, type MailFile } from "@/components/MailFolders";
 
 /**
@@ -37,6 +40,9 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
   useEffect(() => { if (only) setOpenId(only); }, [only]);
   useEffect(() => { if (pick && list?.some((r) => r.id === pick)) open(pick); }, [pick, list?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const [act, setAct] = useState(""), [actText, setActText] = useState("");
+  // three ways to process one (Nov 6, Nick): Make the order (the AI start to finish), the Order helper (step by step),
+  // Other options (one part only); each opens the one Create order tool
+  const [helper, setHelper] = useState(""), [begin, setBegin] = useState<OrderStart | undefined>(undefined);
   const panel = useRef<HTMLDivElement | null>(null);
   const load = async () => { const r = await requestsDesk(); if (r.ok) { rqMem = r.list; setList(r.list); } else setErr(r.error); };
   useEffect(() => { void load(); }, []);
@@ -63,12 +69,12 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
   const th = (k: SortK, col: string, l: string, cls = "") => cols.th(col, <button type="button" className={"rqd-sort" + (sort.k === k ? " on" : "")} onClick={() => setSort({ k, up: sort.k === k ? !sort.up : true })}>{l}{sort.k === k ? <span aria-hidden>{sort.up ? "▲" : "▼"}</span> : null}</button>, { className: cls, ariaSort: sort.k === k ? (sort.up ? "ascending" : "descending") : "none" });
   const job = (list || []).find((r) => r.id === (only || openId)) || null;
   const open = (id: string) => { setOpenId(id); setMsg(""); setErr(""); setTimeout(() => panel.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 40); };
-  const createOrder = async (r: DeskRequest) => {
+  const createOrder = async (r: DeskRequest, st?: OrderStart) => {
     setBusy("Bringing in what they sent…"); setErr("");
     const x = await simpleOrderActivity(r.id);
     setBusy("");
     if (!x.ok) { setErr(x.error); return; }
-    setAct(x.activityId); setActText(x.text);
+    setBegin(st); setHelper(""); setAct(x.activityId); setActText(x.text);
   };
   const notOrder = async (r: DeskRequest) => {
     setBusy("Putting it away…");
@@ -106,7 +112,14 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
             <b>Would you like to process this request?</b>
             <div className="cu-acts">
               {job.simple
-                ? <button type="button" className="btn primary" disabled={!!busy} title="The AI reads what they sent, their PO and art, and fills in this order (it keeps its number)" onClick={() => void createOrder(job)}>Process</button>
+                ? <>
+                  <button type="button" className="btn primary" disabled={!!busy} title="The AI reads what they sent, their PO and art, and fills in this order start to finish (it keeps its number)" onClick={() => void createOrder(job)}>Make the order</button>
+                  <button type="button" className={"btn" + (helper === job.id ? " on" : "")} disabled={!!busy} title="Step by step: where the sizes are, what each file is, then make it" onClick={() => setHelper(helper === job.id ? "" : job.id)}>Order helper</button>
+                  <select className="rqd-more" aria-label="Other options" value="" disabled={!!busy} onChange={(e) => { const k = e.target.value as PartKind; if (k) void createOrder(job, { partial: k, orderType: "new" }); }}>
+                    <option value="">Other options</option>
+                    {(Object.keys(PARTIAL) as PartKind[]).map((k) => <option key={k} value={k}>{PARTIAL[k].label}</option>)}
+                  </select>
+                </>
                 : <Link className="btn primary" href={`/shop/orders/${job.id}?stay=1`}>Open the order</Link>}
               {/* a question about it in the Message Center, beside the list (Nov 2, Nick: "ask him a question in the messaging
                   center… about this") */}
@@ -116,9 +129,10 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
             </div>
             {busy && <div className="faint">{busy}</div>}
           </div>
+          {helper === job.id && job.simple && <OrderHelper key={job.id} job={job} onCancel={() => setHelper("")} onChanged={() => void load()} onMake={(st) => void createOrder(job, st)} />}
         </div>
       </div>}
-      {act && <CreateOrderTool activityId={act} text={actText} onClose={() => setAct("")} onCreated={(id, n) => { setAct(""); setMsg(`Order #${n} is filled in.`); setOpenId(null); void load(); onChanged?.(); }} />}
+      {act && <CreateOrderTool key={act + (begin ? JSON.stringify(begin) : "")} activityId={act} text={actText} begin={begin} onClose={() => { setAct(""); setBegin(undefined); }} onCreated={(id, n) => { setAct(""); setMsg(`Order #${n} is filled in.`); setOpenId(null); void load(); onChanged?.(); }} />}
 
       {only ? (!job && <div className="faint">This request isn&apos;t waiting anymore. It may have been made into an order.</div>) : !shown.length ? <div className="faint">{w ? `No requests match “${q}”.` : "No requests waiting. When a customer sends one from their portal, it shows here."}</div> : (
         <div className="tbl-wrap cu-fit"><table ref={cols.tableRef} className="tbl cu-tbl rqd-tbl" data-nofit data-keep>
