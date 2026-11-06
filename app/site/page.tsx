@@ -28,7 +28,7 @@ export default function SitePage() {
       <header className="fws-head">
         <a className="fws-logo" href="#top" aria-label="FBS Print home"><img src="/brand/fbs-logo.svg" alt="FBS Print" /></a>
         <nav className="fws-nav" aria-label="Site">
-          <a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a>
+          <a href="#services">Services</a><a href="#work">Clients</a><a href="#about">About</a><a href="#contact">Contact</a>
         </nav>
         <div className="fws-acts">
           <a className="fws-btn" href={login}><span className="fws-wide">Customer login</span><span className="fws-narrow">Log in</span></a>
@@ -36,7 +36,7 @@ export default function SitePage() {
           {/* phones: the section links in a menu, so the header is one short line (Nov 5, Nick) */}
           <details className="fws-menu">
             <summary aria-label="Menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></summary>
-            <nav aria-label="Site menu"><a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#request">Get started</a></nav>
+            <nav aria-label="Site menu"><a href="#services">Services</a><a href="#work">Clients</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#request">Get started</a></nav>
           </details>
         </div>
       </header>
