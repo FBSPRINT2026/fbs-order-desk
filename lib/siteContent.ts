@@ -51,6 +51,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Mi Cocina", img: "/site/clients/mi-cocina.png" },
   { name: "Target", img: "/site/clients/target.png" },
   { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" },
+  { name: "University of North Texas", img: "/site/clients/unt.png" },
   { name: "Cedar Promo", img: "/site/clients/cedar-promo.png" },
   { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
   { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" },
