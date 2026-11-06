@@ -240,7 +240,8 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
    *  setup is charged once for the pair (calcOrder), each changed ink is an ink change, and a screen the other print
    *  doesn't have is charged as setup */ changeOf?: { imprint: string; group?: string; inks: Record<string, string> };
   /** full color art, printed as simulated process (seps made in Separo); set in the Mockup Creator (Oct 26) */ fullColor?: boolean;
-  confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string } };
+  confirm?: { size?: boolean; ink?: boolean; why: string; /** staff filled in what they think (still not confirmed): who and when */ filled?: { by: string; at: string };
+    /** asked to check again after it was confirmed (Nov 6, Nick on #40488): when, and the confirmation before; the asker hears back when production confirms */ again?: { at: string; before?: { by: string; at: string } } };
   /** changes made to the customer's art for this print (Oct 23, Nick: "here's your proof, here are the two changes we
    *  made: we flattened the black and we removed the thin stroke"): shown on the proof and the work order */
   artChanges?: string[];

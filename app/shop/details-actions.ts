@@ -36,6 +36,8 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
     // the old job this order repeats, so the next reorder of it takes what's confirmed here
     const { data: rev } = await admin.from("order_events").select("detail").eq("order_id", o.id).eq("kind", "reorder").order("created_at").limit(1).maybeSingle();
     const job = reorderLabel(rev?.detail) || reorderLabel(o.notes) || undefined;
+    // prints someone asked to be checked again: what production said this time, sent back to whoever is working the order
+    const rechecked: { loc: string; before: { size?: string; inks?: string; colors?: number }; after: { size?: string; inks?: string; colors?: number } }[] = [];
     for (const p of prints) {
       let im: Imprint | undefined;
       for (const g of groups) { im = g.imprints.find((x) => x.id === p.id); if (im) break; }
@@ -67,6 +69,7 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
       if (note) pressNotes.push(`${im.location}: ${note}`);
       im.notes = cleanPrintNotes(shopNotes(im.notes));
       if (fullIds.has(im.id)) fullDone.push(`${im.location}: ${im.colors} color${im.colors === 1 ? "" : "s"}${im.underbase ? " + underbase" : ""}${im.inks ? ` (${im.inks})` : ""}`);
+      if (im.confirm?.again) rechecked.push({ loc: im.location, before: { size: before.size, inks: before.inks, colors: before.colors }, after: { size: im.size, inks: im.inks, colors: im.colors } });
       delete im.confirm; delete im.visualOnly; // confirmed: the details are real now, the mockup no longer visual only
       im.confirmed = { by, at };
       const spec = [im.location, im.size || "size left blank", im.inks || (emb ? "threads left blank" : "inks left blank"), emb && im.stitches ? `${im.stitches.toLocaleString()} stitches` : "", emb && im.emb?.backing ? im.emb.backing : "", im.colors !== before.colors ? `${im.colors} color${im.colors === 1 ? "" : "s"} (was ${before.colors})` : "", im.underbase === true ? "underbase" : im.underbase === false ? "no underbase" : "", im.drop ? `${im.drop}" drop` : "", p.screensOnFile ? "screens on file" : "", note].filter(Boolean).join(", ");
@@ -133,6 +136,18 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
       const owner = (((evs || []) as { actor: string }[]).map((e) => String(e.actor || "").toLowerCase()).find((a) => a.includes("@") && a !== String(v.email || "").toLowerCase() && !["production", "embroidery"].includes(roleOf.get(a) || "")))
         || ((crew || []) as { email: string; role: string }[]).find((x) => x.role === "owner")?.email || "";
       if (owner && !stillWaiting) await admin.from("tasks").insert({ owner: owner.toLowerCase(), title: `#${o.number}: full color confirmed, send the quote`.slice(0, 200), notes: detail.slice(0, 1000), area: "shop", status: "open", source: "order", order_id: o.id, url: `/shop/orders/${o.id}`, created_by: v.email || "production" });
+    }
+    // checked again (Nov 6, Nick: "if… production confirms details again, you should send some sort of detail back"): the
+    // owner hears what production said, changed or the same, by email and on their to-do list
+    if (rechecked.length) {
+      const said = rechecked.map((r) => { const ch = [r.before.size !== r.after.size && `size ${r.before.size || "blank"} → ${r.after.size || "blank"}`, r.before.inks !== r.after.inks && `inks ${r.before.inks || "blank"} → ${r.after.inks || "blank"}`, r.before.colors !== r.after.colors && `${r.before.colors || "?"} → ${r.after.colors || "?"} colors`].filter(Boolean); return `${r.loc}: ${ch.length ? ch.join(", ") : `the same (${[r.after.size, r.after.inks].filter(Boolean).join(", ") || "as before"})`}`; });
+      const detail = `${by} checked the details again: ${said.join("; ")}`;
+      await admin.from("order_events").insert({ order_id: o.id, kind: "details_rechecked", detail: detail.slice(0, 500), actor: v.email || by });
+      const { data: crew } = await admin.from("staff").select("email, role");
+      const owner = ((crew || []) as { email: string; role: string }[]).find((x) => x.role === "owner")?.email || "";
+      if (owner) await admin.from("tasks").insert({ owner: owner.toLowerCase(), title: `#${o.number}: production checked the details again`.slice(0, 200), notes: detail.slice(0, 1000), area: "shop", status: "open", source: "order", order_id: o.id, url: `/shop/orders/${o.id}`, created_by: v.email || "production" }).then(() => null, () => null);
+      const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+      await (await import("@/lib/shopNotice")).notifyShopAbout(admin, o.id, { did: "details checked again by production", head: `${by} checked #${o.number}'s print details again`, body: said.join("\n"), shopName: mergeSettings(st?.data).shop.name, button: "Open the order" }).catch(() => null);
     }
     const left = groups.reduce((n, g) => n + g.imprints.filter(needsDetails).length, 0);
     return { ok: true, left };

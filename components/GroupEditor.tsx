@@ -1372,6 +1372,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                     <label className="check" title="Soft hand additive mixed into the inks"><input type="checkbox" checked={!!d.softHand} onChange={(e) => update((x) => { x.imprints[di].softHand = e.target.checked || undefined; })} />Soft hand</label>
                   </div>
                 )}
+                {/* confirmed: who and when, and asking production to check it again (Nov 6, Nick: "once production confirms, I can't
+                    go back in and ask them to reconfirm"); they hear about it in Reorder Details, and the order's people hear back */}
+                {d.confirmed && !(d.confirm && (d.confirm.size || d.confirm.ink)) && <div className="imp-conf">
+                    <span className="faint">Production confirmed{d.confirmed.by ? ` (${d.confirmed.by}` : " ("}{d.confirmed.at ? `${d.confirmed.by ? ", " : ""}${new Date(d.confirmed.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""})</span>
+                    <button type="button" className="btn sm ghost" onClick={() => update((x) => { const im = x.imprints[di]; const was = im.confirmed; im.confirm = { size: true, ink: true, why: `Asked to check again${was?.by ? ` (confirmed by ${was.by})` : ""}`, again: { at: new Date().toISOString(), ...(was ? { before: { by: was.by, at: was.at } } : {}) } }; delete im.confirmed; })}>Ask production to check again</button>
+                </div>}
                 {d.confirm && (d.confirm.size || d.confirm.ink) && <div className="imp-unconf">
                     <span><b>{confirmTitle(d.confirm.why)}</b> <span className="faint">Our best guess: {d.confirm.why}.</span></span>
                     {detailsHref ? <a className="btn sm" href={detailsHref} title="Production confirms the size and inks">{isNewOrderConfirm(d.confirm.why) ? "Production details" : "Reorder Details"}</a> : null}

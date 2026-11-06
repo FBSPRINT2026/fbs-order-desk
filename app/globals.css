@@ -21282,3 +21282,5 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .sfl-x{color:var(--ink-3)}
 .sfl-acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .sfl-msg{color:var(--ok);font-weight:600;font-size:13px;margin-bottom:6px}
+/* a print production confirmed, with Ask production to check again (Nov 6, Nick) */
+.imp-card .imp-conf{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:4px 14px 0;font-size:12.5px}
