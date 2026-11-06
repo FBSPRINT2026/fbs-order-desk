@@ -44,8 +44,8 @@ export const WHO: { t: string; d: string; /** the one line under its name on a p
 /** names we've printed for, shown as their logos once the files are in public/site/clients (Nov 5, Nick: "we also work
  *  with these major retailers… and then local businesses"). Without a file the name shows in plain type. */
 export const CLIENT_LOGOS: { t: string; names: { name: string; img?: string }[] }[] = [
-  { t: "We also work with major retailers", names: [{ name: "Walmart", img: "/site/clients/walmart.png" }, { name: "Target" }, { name: "Academy Sports + Outdoors" }, { name: "Fanatics" }] },
-  { t: "And names you know around here", names: [{ name: "On Your Left" }, { name: "Plano Balloon Festival" }, { name: "Saint Arnold Brewing" }] },
+  { t: "We also work with major retailers and brands", names: [{ name: "Walmart", img: "/site/clients/walmart.svg" }, { name: "Target", img: "/site/clients/target.png" }, { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" }, { name: "Fanatics", img: "/site/clients/fanatics.png" }, { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" }] },
+  { t: "And names you know around here", names: [{ name: "On Your Left" }, { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" }, { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" }, { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" }] },
 ];
 /** the About box's three facts (Nov 5, Nick) */
 export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];
