@@ -3,6 +3,7 @@ import { SITE_URL } from "@/lib/config";
 import { CLIENTS, EVERYONE, FACTS, PORTAL_FEATS, SERVICES, SITE, WHO } from "@/lib/siteContent";
 import SiteIconArt, { type SiteIcon } from "@/components/site/SiteIcons";
 import SiteRequestForm from "@/components/site/SiteRequestForm";
+import SiteLogos from "@/components/site/SiteLogos";
 
 /**
  * fbsprint.com (Nov 5, Nick: "redesign our website so it looks like… our portal"): the portal's look (navy, the blue /
@@ -87,11 +88,7 @@ export default function SitePage() {
           <div className="fws-else"><p><b>And everyone else</b><span>{EVERYONE}</span></p><a href="#request">Get a quote →</a></div>
           {/* the brands we print for, one strip that moves on its own and stops under the pointer */}
           <h3 className="fws-logos-t fws-d">Local and national brands we work with</h3>
-          <div className="fws-mq" aria-label="Brands we work with">
-            <div className="fws-mq-trk">{[0, 1].map((k) => CLIENTS.map((c) => (
-              <div key={`${k}${c.name}`} className="fws-mq-lg" aria-hidden={k ? true : undefined}>{c.img ? <img src={c.img} alt={k ? "" : c.name} loading="lazy" /> : <span className="fws-d">{c.name}</span>}</div>
-            )))}</div>
-          </div>
+          <SiteLogos clients={CLIENTS} />
         </section>
 
         {/* the portal, shown off with the "It's here" email's dashboard picture (Nov 5, Nick: in place of How ordering works) */}
