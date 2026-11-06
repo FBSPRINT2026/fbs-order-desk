@@ -21322,3 +21322,8 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .osp-way.go{background:var(--accent);border-color:var(--accent)}
 .osp-way.go b,.osp-way.go>span{color:#fff}
 .ohp-wait{padding:12px 14px}
+/* Create order: no customer rules found, pick one (components/OrderStartPick.tsx, Nov 6) */
+.osp-norule{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
+.osp-norule b{font-size:14px;color:var(--ink)}
+.osp-norule>span{font-size:12.5px}
+.osp-norule select{margin-top:4px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:14px var(--body);color:var(--ink);padding:0 10px;width:100%}

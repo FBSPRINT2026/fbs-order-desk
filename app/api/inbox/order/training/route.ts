@@ -16,6 +16,16 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
+  const admin0 = createAdminClient();
+  // every customer's rules, for "No customer rules found: use one?" (Nov 6, Nick: "say all my sons or MEI")
+  if (new URL(req.url).searchParams.get("list")) {
+    const { data } = await admin0.from("order_trainings").select("id, name, customer_id, rules").is("archived_at", null).order("name");
+    const rows = ((data || []) as { id: string; name: string | null; customer_id: string; rules: string | null }[]).filter((t) => (t.rules || "").trim());
+    const ids = [...new Set(rows.map((t) => t.customer_id))];
+    const { data: cs } = ids.length ? await admin0.from("customers").select("id, company, name").in("id", ids) : { data: [] };
+    const nm = new Map(((cs || []) as { id: string; company: string | null; name: string | null }[]).map((c) => [c.id, c.company || c.name || ""]));
+    return NextResponse.json({ list: rows.map((t) => ({ id: t.id, customer: nm.get(t.customer_id) || "", name: t.name || "" })) });
+  }
   const activity = new URL(req.url).searchParams.get("activity") || "";
   if (!/^[0-9a-f-]{36}$/i.test(activity)) return NextResponse.json({ applies: false });
   const admin = createAdminClient();

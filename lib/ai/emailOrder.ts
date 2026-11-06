@@ -448,7 +448,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-01a";
+export const READER_REV = "2026-11-06a";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** which emails make up the order, picked in Create order (Oct 24, Nick): other emails brought in, conversation emails left out */ include?: string[]; exclude?: string[] } = {}): Promise<{ ok: true; draft: EODraft; past: PastJob[] } | { ok: false; error: string }> {
@@ -510,7 +510,10 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // orders staff finished from this customer's past emails, the closest first (lib/ai/orderExamples.ts): read the same way
   // the shop's own trainings for this customer that this job is for (lib/orderTrainings.ts, Oct 30: a big client's
   // playbook, one per end client), in full
-  const trns = a.customer_id ? trainingsForText(await customerTrainings(admin, a.customer_id as string).catch(() => []), `${told} ${said} ${String(a.body || "").slice(3000, 6000)}`) : [];
+  const trns0 = a.customer_id ? trainingsForText(await customerTrainings(admin, a.customer_id as string).catch(() => []), `${told} ${said} ${String(a.body || "").slice(3000, 6000)}`) : [];
+  // rules staff picked on the Create order card when none were found ("[training:<id>]", Nov 6): any customer's, in full
+  const pickedRules = [...new Set([...String(told || "").matchAll(/\[training:([0-9a-f-]{36})\]/gi)].map((m) => m[1]))].filter((id) => !trns0.some((t) => t.id === id));
+  const trns = pickedRules.length ? [...trns0, ...(((await admin.from("order_trainings").select("id, customer_id, name, when_words, rules, updated_at, updated_by, defaults").in("id", pickedRules)).data || []) as typeof trns0)] : trns0;
   // with the training's order defaults in words (lib/orderTrainings.ts; Create order also puts them on the order itself)
   // with the training's shipping default in words (lib/orderTrainings.ts). Only shipping: the order type and production
   // confirmation are put on the order after it's made, never read (Oct 31, #40311's next cart: "ORDER DEFAULTS: Reorder"

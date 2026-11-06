@@ -51,8 +51,14 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
     fetch(`/api/inbox/order/emails?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).then((j) => { if (live) setMails({ convo: j.convo || [], others: j.others || [] }); }).catch(() => { if (live) setMails({ convo: [], others: [] }); });
     return () => { live = false; };
   }, [activityId]);
+  // rules picked by hand when none were found for this job (Nov 6, Nick: "didn't detect any pre-made rules… select one…
+  // all my sons or MEI"): they go with whatever is picked below and win over it (lib/ai/emailOrder.ts reads "[training:<id>]")
+  const [rule, setRule] = useState(""), [rules, setRules] = useState<{ id: string; customer: string; name: string }[] | null>(null);
+  const ruleOf = rules?.find((r) => r.id === rule);
+  const ruleName = (r: { customer: string; name: string }) => (r.name && r.name !== r.customer ? `${r.customer} · ${r.name}` : r.customer || r.name);
   const onPick = (st0: OrderStart) => {
-    const st = { ...st0, ...(mOn.size ? { include: [...mOn] } : {}), ...(mOff.size ? { exclude: [...mOff] } : {}) };
+    const ruleTold = ruleOf ? `[training:${ruleOf.id}] Make this order EXACTLY by the shop's training "${ruleName(ruleOf)}" (HOW TO MAKE ${ruleName(ruleOf).toUpperCase()} ORDERS): it wins over everything else. Don't ask about anything the training settles.` : "";
+    const st = { ...st0, ...(ruleTold && !st0.reorderOf ? { told: [ruleTold, st0.told].filter(Boolean).join(" ") } : {}), ...(mOn.size ? { include: [...mOn] } : {}), ...(mOff.size ? { exclude: [...mOff] } : {}) };
     onPick0(st);
   };
   const [past, setPast] = useState<PastJob[] | null>(null);
@@ -193,9 +199,11 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   // a customer with Create order training, and this job is theirs (Oct 30, Nick: "I detected this is a 918 All My Sons
   // order. Would you like me to enter this with the rules?… it's going to trump everything in the create orders")
   const [trained, setTrained] = useState<{ customer: string; name: string } | null>(null);
+  const [trainChecked, setTrainChecked] = useState(false);
   useEffect(() => {
     let live = true;
-    fetch(`/api/inbox/order/training?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).then((j) => { if (live && j?.applies) setTrained({ customer: j.customer || "", name: j.name || "" }); }).catch(() => null);
+    fetch(`/api/inbox/order/training?activity=${encodeURIComponent(activityId)}`).then((r) => r.json()).then((j) => { if (!live) return; if (j?.applies) setTrained({ customer: j.customer || "", name: j.name || "" }); setTrainChecked(true); }).catch(() => { if (live) setTrainChecked(true); });
+    fetch("/api/inbox/order/training?list=1").then((r) => r.json()).then((j) => { if (live) setRules(j?.list || []); }).catch(() => { if (live) setRules([]); });
     return () => { live = false; };
   }, [activityId]);
   const RULES = (n: string) => `Make this order EXACTLY by the shop's training for this customer (HOW TO MAKE ${n.toUpperCase()} ORDERS): it wins over everything else, this card included. Don't ask about anything the training settles.`;
@@ -341,6 +349,16 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
                 <b>This looks like a{/^[aeiou]/i.test(trained.customer) ? "n" : ""} {trained.customer}{trained.name && trained.name !== trained.customer ? ` · ${trained.name}` : ""} order.</b>
                 <span>Make it with the {trained.name || trained.customer} rules? They win over everything on this card.</span>
                 <div className="osp-card-go"><button type="button" className="btn primary" onClick={() => onPick({ told: [RULES(trained.name || trained.customer), aiNote.trim()].filter(Boolean).join(" ") })}>Make it with the rules</button><button type="button" className="btn" onClick={() => setTrained(null)}>No, use the card</button></div>
+              </div>
+            )}
+            {trainChecked && !trained && !!rules?.length && (
+              <div className="osp-norule">
+                <b>{ruleOf ? `Using the ${ruleName(ruleOf)} rules.` : "No customer rules found for this one."}</b>
+                <span className="faint">{ruleOf ? "They win over everything below." : "If it follows a customer's rules, pick them. They win over everything below."}</span>
+                <select aria-label="Customer rules" value={rule} onChange={(e) => setRule(e.target.value)}>
+                  <option value="">No rules · read it as it is</option>
+                  {rules.map((r) => <option key={r.id} value={r.id}>{ruleName(r)}</option>)}
+                </select>
               </div>
             )}
             {/* one order: the same card (Oct 24) */}
