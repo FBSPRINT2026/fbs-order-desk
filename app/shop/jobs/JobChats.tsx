@@ -34,6 +34,7 @@ export function ChatLine({ c, color, on, onClick, full = false }: { c: ChatSumma
  */
 export function ChatThread({ c, color, onSent, onClose, onArchived, narrow = false }: { c: ChatSummary; color: string; onSent: () => void; onClose: () => void; /** archived or brought back: off the list */ onArchived?: () => void; /** in the message column: one column */ narrow?: boolean }) {
   const [arcBusy, setArcBusy] = useState(false);
+  const reply = useRef<HTMLTextAreaElement | null>(null);
   // Archive (Nov 6, Nick: "customer says… quote declined, too late, but I already called him… just click archive"): off the
   // Message Center with no reply; it comes back when they write again, and Archived shows it till then
   const archive = async (on: boolean) => { setArcBusy(true); const r = await archiveJobChat(c.key, on); setArcBusy(false); if (r.ok) onArchived?.(); };
@@ -77,7 +78,17 @@ export function ChatThread({ c, color, onSent, onClose, onArchived, narrow = fal
   return (
     <div className={"jmb-t" + (narrow ? " narrow" : "")} style={{ ["--mc" as string]: color }}>
       <div className="jmb-th">
-        <div className="jmb-th-h"><b>{c.last.from === "customer" ? c.last.who || c.customer : c.customer}</b><span className="faint">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General"}{c.customer ? ` · ${c.customer}` : ""}</span>{onArchived && <button type="button" className="linkbtn jmb-arc" disabled={arcBusy} onClick={() => void archive(!c.archived)} title={c.archived ? "Back on the Message Center" : "Finished: off New and Waiting on them; back in New when they write again"}>{c.archived ? "Not done" : "Done"}</button>}<button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
+        {/* Outlook-style (Nov 6, Nick: "the word done is on here 3 times, close is on here twice… more Outlook style…
+            archive, reply"): who and what on the left, one row of plain buttons on the right */}
+        <div className="jmb-th-h">
+          <span className="jmb-th-who"><b>{c.last.from === "customer" ? c.last.who || c.customer : c.customer}</b><span className="faint">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General question"}{c.customer ? ` · ${c.customer}` : ""}</span></span>
+          <span className="jmb-tools" data-toolbar>
+            <button type="button" className="btn sm" onClick={() => { reply.current?.focus(); reply.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M9 14 4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 6 6v5" /></svg><span>Reply</span></button>
+            {onArchived && <button type="button" className="btn sm" disabled={arcBusy} onClick={() => void archive(!c.archived)} title={c.archived ? "Back to New" : "Finished: off the list; back in New if they write again"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>{c.archived ? <><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></> : <><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" /><path d="M10 12h4" /></>}</svg><span>{c.archived ? "Move to New" : "Archive"}</span></button>}
+            {c.orderId && <a className="btn sm" href={`/shop/orders/${c.orderId}`}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M14 4h6v6" /><path d="M20 4 10 14" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></svg><span>Open order</span></a>}
+            <button type="button" className="btn sm ghost" aria-label="Close" title="Close" onClick={onClose}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+          </span>
+        </div>
         <div className="jmb-msgs" ref={box}>
           {!msgs ? <span className="faint">Loading…</span> : msgs.slice(-40).map((m) => (
             <div key={m.id} className={"jmb-b " + m.from}>
@@ -89,7 +100,7 @@ export function ChatThread({ c, color, onSent, onClose, onArchived, narrow = fal
         </div>
       </div>
       <div className="jmb-rep">
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder={`Write a reply${c.last.from === "customer" && c.last.who ? ` to ${c.last.who.split(/\s+/)[0]}` : ""}…`} aria-label="Reply"
+        <textarea ref={reply} value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder={`Write a reply${c.last.from === "customer" && c.last.who ? ` to ${c.last.who.split(/\s+/)[0]}` : ""}…`} aria-label="Reply"
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(text); } }} />
         {files.length > 0 && <div className="jmb-files">{files.map((f, i) => <span key={f.path}>📎 {f.name}<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((x) => x.filter((_, k) => k !== i))}>×</button></span>)}</div>}
         <div className="jmb-bar">

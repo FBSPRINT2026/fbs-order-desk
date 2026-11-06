@@ -227,7 +227,9 @@ export default function JobCenter() {
       raf = 0;
       const sp = padRef.current, th = document.querySelector(".jct-body table.jc thead tr") as HTMLElement | null;
       if (!sp) return;
-      const nx = th ? { pad: Math.max(0, Math.round(th.getBoundingClientRect().top - sp.getBoundingClientRect().top)), h: Math.round(th.getBoundingClientRect().height) } : { pad: 0, h: 0 };
+      // a conversation open: the list starts at the top, not lowered to the jobs' heading (Nov 6, Nick: "when you click a
+      // message, this whole left screen drops down")
+      const nx = chat ? { pad: 0, h: 0 } : th ? { pad: Math.max(0, Math.round(th.getBoundingClientRect().top - sp.getBoundingClientRect().top)), h: Math.round(th.getBoundingClientRect().height) } : { pad: 0, h: 0 };
       setLvl((p) => (Math.abs(p.pad - nx.pad) > 1 || Math.abs(p.h - nx.h) > 1 ? nx : p));
     };
     const later = () => { if (!raf) raf = requestAnimationFrame(measure); };
@@ -346,9 +348,9 @@ export default function JobCenter() {
               const stl = fg?.steps.find((x) => x[0] === fst)?.[1] || "";
               return <div className="jmb-gen">
               <div className="jmb-stat" style={{ ["--c" as string]: isRq ? GROUPS[1].c : fg?.c || "var(--ink-3)" }}>
-                <b>{isRq ? "Request" : focusJob ? fg?.t || "Job" : "General question"}</b>
-                <span>{isRq ? "Incoming orders › Customer requests · not an order yet" : focusJob ? `${fg?.t || ""} › ${stl}` : curChat.number ? `#${curChat.number}${curChat.nickname ? ` ${curChat.nickname}` : ""} · ${ST[curChat.status]?.label || curChat.status || "not on the board"}` : "Not about an order"}</span>
-                <button type="button" onClick={() => setChat(null)}>Close</button>
+                {/* where the job is, only: the conversation's own buttons are under it (Nov 6) */}
+                <b>{isRq ? "Customer request" : focusJob ? stl || fg?.t || "Job" : "General question"}</b>
+                <span>{isRq ? "Not an order yet" : focusJob ? `${fg?.t && fg.t !== stl ? `${fg.t} · ` : ""}#${focusJob.number ?? ""}` : curChat.number ? `#${curChat.number} · ${ST[curChat.status]?.label || curChat.status || "not on the board"}` : "Not about an order"}</span>
               </div>
               <div className="jmb-focus" style={{ ["--mc" as string]: focusJob ? colorOfChat(curChat) : "var(--ink-3)" }}>
                 <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} onArchived={() => { setChat(null); setCn((x) => x + 1); }} />
