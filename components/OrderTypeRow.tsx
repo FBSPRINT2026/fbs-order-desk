@@ -31,23 +31,36 @@ export const ORDER_TYPE_LABEL: Record<T, string> = { new: "New order", reorder: 
 export default function OrderTypeRow({ o, patch, bare }: { o: O; patch: (fn: (d: Order) => void) => void; /** inside Job details' Order type tab */ bare?: boolean }) {
   const t = orderTypeOf(o);
   const prints = o.groups.flatMap((g) => g.imprints);
-  const open = prints.filter((im) => !im.confirmed);
+  // every print counts, confirmed ones too: ticking the box on a job production already confirmed asks them to check it
+  // again (Nov 6, Nick on #40488: "I changed an actual spec in the job, but I can't… check the box")
+  const open = prints;
   const on = (im: Imprint) => !!im.confirm && (!!im.confirm.size || !!im.confirm.ink);
   const anyOn = open.some(on), pictureOnly = open.some((im) => on(im) && im.visualOnly);
   // what production checks, across the prints that are on (both when none is on yet)
   const onNow = open.filter(on);
   const chkInk = !onNow.length || onNow.some((im) => !!im.confirm?.ink), chkSize = !onNow.length || onNow.some((im) => !!im.confirm?.size);
   const setOn = (im: Imprint, v: boolean, picture: boolean, type: T, what = { size: chkSize, ink: chkInk }) => {
-    if (im.confirmed) return; // production already confirmed it
-    if (v) { im.confirm = im.confirm && (im.confirm.size || im.confirm.ink) ? im.confirm : { size: what.size, ink: what.ink, why: CONFIRM_WHY[type] }; im.visualOnly = picture || undefined; }
-    else { delete im.confirm; delete im.visualOnly; }
+    if (v) {
+      if (im.confirmed) {
+        // confirmed already: back to production to check again; they hear the new specs and the owner hears back
+        const was = im.confirmed;
+        im.confirm = { size: what.size, ink: what.ink, why: `Asked to check again (confirmed by ${was.by || "production"})`, again: { at: new Date().toISOString(), before: { by: was.by, at: was.at } } };
+        delete im.confirmed;
+      } else im.confirm = im.confirm && (im.confirm.size || im.confirm.ink) ? im.confirm : { size: what.size, ink: what.ink, why: CONFIRM_WHY[type] };
+      im.visualOnly = picture || undefined;
+    } else {
+      // taking back a "check again": it's confirmed as it was
+      const before = im.confirm?.again?.before;
+      delete im.confirm; delete im.visualOnly;
+      if (before?.at) im.confirmed = { by: before.by, at: before.at };
+    }
   };
   const each = (fn: (im: Imprint) => void) => patch((d) => { for (const g of d.groups) for (const im of g.imprints) fn(im); });
   const pick = (v: T) => patch((d) => {
     d.order_type = v;
     // a reorder: every print waits for production (Reorder with changes: untick the prints you changed); a new order:
     // none until it's asked for
-    if (v !== "reorder_changes") for (const g of d.groups) for (const im of g.imprints) setOn(im, v === "reorder", pictureOnly, v);
+    if (v !== "reorder_changes") for (const g of d.groups) for (const im of g.imprints) if (!im.confirmed) setOn(im, v === "reorder", pictureOnly, v);
     // the prints still waiting say why for the new type
     for (const g of d.groups) for (const im of g.imprints) if (!im.confirmed && im.confirm && (im.confirm.size || im.confirm.ink) && !im.confirm.filled) im.confirm.why = CONFIRM_WHY[v];
   });
@@ -96,10 +109,10 @@ export default function OrderTypeRow({ o, patch, bare }: { o: O; patch: (fn: (d:
                   <div key={g.id} className="otp-g">
                     {o.groups.filter((x) => x.imprints.length).length > 1 && <div className="otp-gh">{g.name || `Group ${gi + 1}`}{(() => { const cs = [...new Set(g.lines.map((l) => String(l.color || "").trim()).filter(Boolean))]; return cs.length ? ` · ${cs.join(", ")}` : ""; })()}</div>}
                     {g.imprints.map((im) => (
-                      <label key={im.id} className="otp-r" title={im.confirmed ? `Confirmed by ${im.confirmed.by}` : undefined}>
-                        <input type="checkbox" disabled={!!im.confirmed} checked={!!im.confirmed || on(im)} onChange={(e) => patch((d) => { const x = d.groups.flatMap((gg) => gg.imprints).find((y) => y.id === im.id); if (x) setOn(x, e.target.checked, pictureOnly, t); })} />
+                      <label key={im.id} className="otp-r" title={im.confirmed ? `Confirmed by ${im.confirmed.by}: tick it to have production check it again` : undefined}>
+                        <input type="checkbox" checked={on(im)} onChange={(e) => patch((d) => { const x = d.groups.flatMap((gg) => gg.imprints).find((y) => y.id === im.id); if (x) setOn(x, e.target.checked, pictureOnly, t); })} />
                         <span className="otp-n">{label(im)}</span>
-                        <span className="otp-s">{im.confirmed ? "confirmed" : !on(im) && t === "reorder_changes" ? "changed" : im.size || ""}</span>
+                        <span className="otp-s">{im.confirmed ? `confirmed${im.confirmed.by ? ` by ${im.confirmed.by}` : ""}` : im.confirm?.again ? "check again" : !on(im) && t === "reorder_changes" ? "changed" : im.size || ""}</span>
                       </label>
                     ))}
                   </div>
