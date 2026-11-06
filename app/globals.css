@@ -21195,3 +21195,10 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   /* the blade and handle stay in view as the window narrows (Nov 5, Nick: "this is what i want to see when it gets smaller") */
   .fws-hero-pic{inset:0 0 0 42%;background-position:22% center}
 }
+/* the portal picture centered beside the words and lifted off the color bar (Nov 5, Nick) */
+@media (min-width:821px){
+  .fws-portal2{padding-bottom:clamp(36px,6vw,72px)}
+  .fws-p2{align-items:center}
+  .fws-p2>div{padding-bottom:0}
+  .fws-p2-pic{align-self:center;border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.35)}
+}
