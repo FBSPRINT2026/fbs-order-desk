@@ -112,7 +112,7 @@ export default function JobCenter() {
   // which conversations the column shows: all, the ones waiting on us, or the ones with something new (Nov 2, Nick)
   // Needs reply first: a conversation we've answered moves to Replied (Nov 5, Nick: "we replied to Michael… there should be
   // a tab that says… replied… it just shouldn't be there now")
-  const [mShow, setMShow] = useSticky<"waiting" | "replied" | "all">("jobs.msgShow2", "waiting");
+  const [mShow, setMShow] = useSticky<"waiting" | "replied" | "all" | "archived">("jobs.msgShow2", "waiting");
   const padRef = useRef<HTMLDivElement | null>(null);
   const [lvl, setLvl] = useState<{ pad: number; h: number }>({ pad: 0, h: 0 });
 
@@ -180,7 +180,9 @@ export default function JobCenter() {
   // joins the panel under it, which holds that tab's messages (left) and its jobs (right)
   const curG = all ? null : GROUPS.find((g) => g.steps.some((x) => x[0] === step)) || null;
   const byOrder = useMemo(() => new Map((items || []).filter((it) => it.orderId).map((it) => [it.orderId!, it])), [items]);
-  const myChats = chats.filter((c) => !mine || !c.owner || c.owner === me);
+  // archived conversations are off every list and count, in Archived until the customer writes again (Nov 6, Nick)
+  const myAll = chats.filter((c) => !mine || !c.owner || c.owner === me);
+  const myChats = myAll.filter((c) => !c.archived), myArchived = myAll.filter((c) => c.archived);
   // the pipeline's signal: once when the page opens, and again whenever more messages are waiting on us
   const [signal, setSignal] = useState(false);
   const waitingNow = myChats.filter((c) => c.waiting).length;
@@ -206,7 +208,7 @@ export default function JobCenter() {
     return it ? { key: chat, orderId: oid, topic: "", customerId: it.customerId || null, projectId: null, number: it.number ?? null, nickname: it.title, customer: it.customer, status: it.type === "request" ? "request" : "", last: { body: "", from: "staff" as const, who: "", at: it.at }, unread: 0, waiting: false, owner: "" } : null;
   })() : null;
   const mWant = mq.trim().toLowerCase();
-  const boardChats = myChats.filter((c) => (mShow === "waiting" ? c.waiting : mShow === "replied" ? !c.waiting : true)).filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
+  const boardChats = (mShow === "archived" ? myArchived : myChats).filter((c) => (mShow === "waiting" ? c.waiting : mShow === "replied" ? !c.waiting : true)).filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
   const chatOfJob = (orderId: string) => myChats.find((c) => c.orderId === orderId) || null;
   const colorOfChat = (c: ChatSummary) => tagOf(c).c;
   // a conversation picked is a filter (Nov 2, Nick: "when you click on a message, it should just pull up the message. There
@@ -312,7 +314,7 @@ export default function JobCenter() {
         {/* on the line of the list's bar: which conversations to show, with their counts */}
         {/* like an inbox, on one line (Nov 6, Nick: "needs reply needs to be one line… act like an inbox… say new… then they
             should be highlighted, like red, unread"): New is what waits on us; an unread one is tinted red below */}
-        <div className="jrl-mf" role="radiogroup" aria-label="Show">{([["waiting", "New", waitingNow], ["replied", "Replied", myChats.length - waitingNow], ["all", "All", myChats.length]] as const).map(([k, l, n]) => (
+        <div className="jrl-mf" role="radiogroup" aria-label="Show">{([["waiting", "New", waitingNow], ["replied", "Replied", myChats.length - waitingNow], ["all", "All", myChats.length], ["archived", "Archived", myArchived.length]] as const).map(([k, l, n]) => (
           <button key={k} type="button" role="radio" aria-checked={mShow === k} className={mShow === k ? "on" : ""} onClick={() => setMShow(k)}>{l}<em>{n}</em></button>))}</div>
         <input className="jmb-s" value={mq} onChange={(e) => setMq(e.target.value)} placeholder="Search messages" aria-label="Search messages" />
         <div ref={padRef} style={{ height: lvl.pad }} aria-hidden />
@@ -346,7 +348,7 @@ export default function JobCenter() {
                 <button type="button" onClick={() => setChat(null)}>Close</button>
               </div>
               <div className="jmb-focus" style={{ ["--mc" as string]: focusJob ? colorOfChat(curChat) : "var(--ink-3)" }}>
-                <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} />
+                <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} onArchived={() => { setChat(null); setCn((x) => x + 1); }} />
               </div>
               {isRq && focusJob?.orderId ? <RequestsDesk q="" only={focusJob.orderId} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} />
                 : focusJob ? <div className="tbl-wrap"><table className="tbl jc" data-nofit>

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatMsg, ChatSummary } from "@/lib/jobChats";
-import { jobChatSend, jobChatThread } from "./actions";
+import { archiveJobChat, jobChatSend, jobChatThread } from "./actions";
 
 export const ago = (s: string) => {
   const m = Math.floor((Date.now() - new Date(s).getTime()) / 60000);
@@ -32,7 +32,11 @@ export function ChatLine({ c, color, on, onClick, full = false }: { c: ChatSumma
  * line… in the big area… a big typing area, reply, send attachments… send links"): the thread on the left, the reply on
  * the right with quick answers, files, the order's portal link and the pay link. Opening it marks it read.
  */
-export function ChatThread({ c, color, onSent, onClose, narrow = false }: { c: ChatSummary; color: string; onSent: () => void; onClose: () => void; /** in the message column: one column */ narrow?: boolean }) {
+export function ChatThread({ c, color, onSent, onClose, onArchived, narrow = false }: { c: ChatSummary; color: string; onSent: () => void; onClose: () => void; /** archived or brought back: off the list */ onArchived?: () => void; /** in the message column: one column */ narrow?: boolean }) {
+  const [arcBusy, setArcBusy] = useState(false);
+  // Archive (Nov 6, Nick: "customer says… quote declined, too late, but I already called him… just click archive"): off the
+  // Message Center with no reply; it comes back when they write again, and Archived shows it till then
+  const archive = async (on: boolean) => { setArcBusy(true); const r = await archiveJobChat(c.key, on); setArcBusy(false); if (r.ok) onArchived?.(); };
   const [msgs, setMsgs] = useState<ChatMsg[] | null>(null);
   const [text, setText] = useState(""), [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const [files, setFiles] = useState<{ path: string; name: string; mime: string; size: number }[]>([]);
@@ -73,7 +77,7 @@ export function ChatThread({ c, color, onSent, onClose, narrow = false }: { c: C
   return (
     <div className={"jmb-t" + (narrow ? " narrow" : "")} style={{ ["--mc" as string]: color }}>
       <div className="jmb-th">
-        <div className="jmb-th-h"><b>{c.last.from === "customer" ? c.last.who || c.customer : c.customer}</b><span className="faint">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General"}{c.customer ? ` · ${c.customer}` : ""}</span><button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
+        <div className="jmb-th-h"><b>{c.last.from === "customer" ? c.last.who || c.customer : c.customer}</b><span className="faint">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General"}{c.customer ? ` · ${c.customer}` : ""}</span>{onArchived && <button type="button" className="linkbtn jmb-arc" disabled={arcBusy} onClick={() => void archive(!c.archived)} title={c.archived ? "Back on the Message Center" : "Off the Message Center with no reply; back when they write again"}>{c.archived ? "Unarchive" : "Archive"}</button>}<button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
         <div className="jmb-msgs" ref={box}>
           {!msgs ? <span className="faint">Loading…</span> : msgs.slice(-40).map((m) => (
             <div key={m.id} className={"jmb-b " + m.from}>

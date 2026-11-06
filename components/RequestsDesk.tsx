@@ -85,11 +85,11 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
     void leadInfo(j.id).then((x) => { if (x.ok) setLead({ id: j.id, email: x.email, domain: x.domain, ip: x.ip, phone: x.phone, junk: x.junk }); });
   }, [openId, only, list]); // eslint-disable-line react-hooks/exhaustive-deps
   const ignore = async (r: DeskRequest, block: boolean) => {
-    setBusy(block ? "Ignoring and blocking…" : "Ignoring it…");
+    setBusy(block ? "Ignoring and blocking…" : "Archiving it…");
     const x = await ignoreLead(r.id, block);
     setBusy("");
     if (!x.ok) { setErr(x.error); return; }
-    setMsg(block ? `#${r.number} ignored. Blocked ${x.blocked.length ? x.blocked.join(", ") : "nothing new"}: what they send next won't show here.` : `#${r.number} ignored.`);
+    setMsg(block ? `#${r.number} ignored. Blocked ${x.blocked.length ? x.blocked.join(", ") : "nothing new"}: what they send next won't show here.` : `#${r.number} archived.`);
     setOpenId(null); await load(); onChanged?.();
   };
   const notOrder = async (r: DeskRequest) => {
@@ -139,7 +139,7 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
               {only ? null : onMessage ? <button type="button" className="btn ghost" onClick={() => onMessage(job.id)}>Message them</button> : <Link className="btn ghost" href={`/shop/orders/${job.id}#messages`}>Message them</Link>}
               {/* on the far right, two clicks (Nov 3, Nick) */}
               {job.web ? <>
-                <ClickTwice className="btn ghost cu-not" label="Ignore" again="Click again: ignore" disabled={!!busy} onConfirm={() => ignore(job, false)} />
+                <ClickTwice className="btn ghost cu-not" label="Archive" again="Click again: archive" disabled={!!busy} onConfirm={() => ignore(job, false)} />
                 <ClickTwice className="btn ghost" label="Ignore and block" again="Click again: block them" disabled={!!busy} onConfirm={() => ignore(job, true)} />
               </> : <ClickTwice className="btn ghost cu-not" label="Not an order" again="Click again: not an order" disabled={!!busy} onConfirm={() => notOrder(job)} />}
             </div>

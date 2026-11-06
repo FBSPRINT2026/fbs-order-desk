@@ -14,6 +14,7 @@ export type ChatSummary = {
   number: number | null; nickname: string; customer: string; status: string;
   last: { body: string; from: "customer" | "staff"; who: string; at: string };
   unread: number; /** the customer wrote last: waiting on us */ waiting: boolean; owner: string;
+  /** archived by staff after its last message (chat_archive): off the Message Center's lists, in Archived */ archived?: boolean;
 };
 export type ChatMsg = { id: string; from: "customer" | "staff"; who: string; body: string; at: string; files: { name: string; url: string }[] };
 
@@ -49,6 +50,11 @@ export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
     for (const c of (cs || []) as { id: string; company: string | null; name: string | null }[]) custs.set(c.id, c.company || c.name || "");
   }
   const owners = await accountOwners(admin, cids);
+  const arch = new Map<string, string>();
+  for (let i = 0; i < keys.length; i += 200) {
+    const { data: ar } = await admin.from("chat_archive").select("key, archived_at").in("key", keys.slice(i, i + 200)).not("archived_at", "is", null);
+    for (const a of (ar || []) as { key: string; archived_at: string }[]) arch.set(a.key, a.archived_at);
+  }
   const out: ChatSummary[] = [];
   for (const k of keys) {
     const ms = by.get(k)!;
@@ -63,6 +69,7 @@ export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
       last: { body: String(last.body || (last.attachments?.length ? "Sent a file" : "")).slice(0, 160), from: last.author_type === "customer" ? "customer" : "staff", who: last.author_name || "", at: last.created_at },
       unread: ms.filter((r) => r.author_type === "customer" && !r.read_at).length,
       waiting: last.author_type === "customer", owner: cid ? owners.get(cid) || "" : "",
+      archived: !!arch.get(k) && arch.get(k)! >= last.created_at,
     });
   }
   return out.sort((a, b) => Number(b.unread > 0) - Number(a.unread > 0) || b.last.at.localeCompare(a.last.at));

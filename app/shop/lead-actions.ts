@@ -59,7 +59,7 @@ export async function ignoreLead(orderId: string, block: boolean): Promise<{ ok:
         if (!e2) blocked.push(r.value);
       }
     }
-    await admin.from("order_events").insert({ order_id: orderId, kind: "request_put_away", detail: block ? `Ignored and blocked in Leads${blocked.length ? ` (${blocked.join(", ")})` : ""}` : "Ignored in Leads", actor: v.email });
+    await admin.from("order_events").insert({ order_id: orderId, kind: "request_put_away", detail: block ? `Ignored and blocked in Leads${blocked.length ? ` (${blocked.join(", ")})` : ""}` : "Archived in Leads", actor: v.email });
     return { ok: true, blocked };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
 }

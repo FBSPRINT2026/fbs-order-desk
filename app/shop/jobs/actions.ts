@@ -104,6 +104,17 @@ export async function loadJobChats() {
   } catch (e) { return fail(e); }
 }
 
+/** Archive a conversation (or bring it back): off the Message Center until the customer writes again (Nov 6, Nick) */
+export async function archiveJobChat(key: string, on: boolean) {
+  try {
+    const { admin, email } = await me();
+    const { error } = await admin.from("chat_archive").upsert({ key, archived_at: on ? new Date().toISOString() : null, archived_by: email || null });
+    if (error) throw new Error(error.message);
+    if (on) { const { markThreadRead } = await import("@/lib/jobChats"); await markThreadRead(admin, key); }
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
 /** One conversation; opening it marks the customer's messages in it read. */
 export async function jobChatThread(key: string, markRead = true) {
   try {

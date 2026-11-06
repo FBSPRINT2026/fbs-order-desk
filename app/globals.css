@@ -21336,3 +21336,7 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .ohp-drop span{font-size:12px;color:var(--ink-3)}
 .ohp-drop.over,.ohp-drop:focus-visible{border-color:var(--accent);background:var(--accent-soft);outline:none}
 .ohp-sz{margin-left:6px;font-size:12px;color:var(--ok);white-space:nowrap}
+/* Message Center: New / Replied / All / Archived (Nov 6) */
+.jrl-mf{grid-template-columns:repeat(4,minmax(0,1fr))}
+.jrl-mf button{font-size:12.5px;gap:4px}
+.jmb-arc{margin-left:auto}
