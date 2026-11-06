@@ -46,7 +46,7 @@ export const EVERYONE = "breweries, businesses, cities, teams and events";
 export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Walmart", img: "/site/clients/walmart.svg" }, { name: "Target", img: "/site/clients/target.png" }, { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
   { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" }, { name: "Fanatics", img: "/site/clients/fanatics.png" }, { name: "Dallas Fire-Rescue", img: "/site/clients/dallas-fire-rescue.png" },
-  { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" }, { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" }, { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" }, { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" }, { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" },
+  { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" }, { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" }, { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" }, { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" }, { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" }, { name: "Cedar Promo", img: "/site/clients/cedar-promo.png" },
 ];
 /** the About box's three facts (Nov 5, Nick) */
 export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];
