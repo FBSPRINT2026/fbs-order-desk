@@ -55,6 +55,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Cedar Promo", img: "/site/clients/cedar-promo.png" },
   { name: "Little Groupies", img: "/site/clients/little-groupies.png" },
   { name: "Oak Highlands Brewery", img: "/site/clients/oak-highlands.png" },
+  { name: "Wylie ISD", img: "/site/clients/wylie-isd.png" },
   { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
   { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" },
   { name: "Perot Museum of Nature and Science", img: "/site/clients/perot-museum.png" },
