@@ -15,7 +15,7 @@ import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
 import { findBackdrop, fitToShapes, withoutBackdrop } from "@/lib/vectorBg";
-import { artCropBox, takeOutWhite, whiteIsBackdrop } from "@/lib/artBackdrop";
+import { artCropBox, cropSvg, takeOutWhite, whiteIsBackdrop } from "@/lib/artBackdrop";
 import CustomerPick from "@/components/CustomerPick";
 import PicZoom from "@/components/PicZoom";
 import { shirtSets } from "@/lib/shirtSets";
@@ -225,6 +225,12 @@ async function cropImgToArt(img: HTMLImageElement, white: boolean): Promise<HTML
   if (!box) return img;
   const { x: bx, y: by, w: bw, h: bh } = box;
   if (bw >= W * 0.97 && bh >= H * 0.97) return img;
+  // an SVG stays an SVG: its window moves, so it still draws sharp at the print size (never frozen at this small size)
+  const src = await fetch(img.src).then((r) => r.blob()).catch(() => null);
+  if (src && /svg/i.test(src.type)) {
+    const t = cropSvg(await src.text(), box, W, H);
+    if (t) return loadImg(URL.createObjectURL(new Blob([t], { type: "image/svg+xml" })));
+  }
   const o = document.createElement("canvas"); o.width = bw; o.height = bh;
   o.getContext("2d")!.drawImage(c, bx, by, bw, bh, 0, 0, bw, bh);
   const blob = await new Promise<Blob | null>((res) => o.toBlob(res, "image/png"));
