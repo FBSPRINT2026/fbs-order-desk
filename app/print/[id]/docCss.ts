@@ -247,6 +247,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .pf-pr{font-size:10.5pt;margin-top:3px;line-height:1.3}
 .pdoc .pf-pr .faint{font-size:9.5pt;margin-left:20px}
 .pdoc .pf-szs{margin:0 0 3px 20px;font-size:9.5pt}
+.pdoc .pf-pr .nw{white-space:nowrap}
 .pdoc .pf-inks{display:flex;flex-wrap:wrap;gap:3px 12px;margin-top:3px;font-size:10pt;color:var(--ink2)}
 .pdoc .pf-inks span{display:inline-flex;align-items:center;white-space:nowrap}
 .pdoc .so .so-head h2{font-family:var(--disp,inherit);font-size:17pt;margin:10px 0 2px;line-height:1.15}

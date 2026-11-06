@@ -634,8 +634,8 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
         /** the garment on this page: "Garment 1 of 3", its name and color, its sizes */
         const garmentBox = (l: Group["lines"][number], i: number, n: number) => <>
           <div className="lbl">{n > 1 ? `Garment ${i + 1} of ${n}` : "Garment"}</div>
-          <div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#ccc"} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>
-          {sizesOf(l) && <div className="pf-pr faint pf-szs">{sizesOf(l)}</div>}
+          <div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || "#ccc"} /><b className="nw">{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? <> <span className="nw">· {l.color}</span></> : ""}</div>
+          {sizesOf(l) && <div className="pf-pr faint pf-szs">{sizesOf(l).split(" · ").map((x, k) => <span key={k}>{k ? " · " : ""}<span className="nw">{x}</span></span>)}</div>}
         </>;
         return (
           <div key={g.id}>
@@ -668,7 +668,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                       garment that's on there… garment one, athletic heather, these sizes"); with no mockup yet, all of them */}
                   {mk[0] && shown[0] ? garmentBox(shown[0], 0, Math.max(mk.length, 1)) : <>
                     <div className="lbl">Garments</div>
-                    {lines.filter((l, i) => lines.findIndex((y) => sameG(y, l)) === i).map((l) => <div key={l.id}><div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>{sizesOf(l) && <div className="pf-pr faint pf-szs">{sizesOf(l)}</div>}</div>)}
+                    {lines.filter((l, i) => lines.findIndex((y) => sameG(y, l)) === i).map((l) => <div key={l.id}><div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b className="nw">{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? <> <span className="nw">· {l.color}</span></> : ""}</div>{sizesOf(l) && <div className="pf-pr faint pf-szs">{sizesOf(l).split(" · ").map((x, k) => <span key={k}>{k ? " · " : ""}<span className="nw">{x}</span></span>)}</div>}</div>)}
                   </>}
                 </div>
               </div>
