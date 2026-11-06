@@ -86,6 +86,29 @@ const pcsOf = (gs: Group[]) => gs.reduce((n, g) => n + g.lines.reduce((m, l) => 
 /** a supplier's order confirmation or invoice for blanks (S&S Activewear, SanMar, alphabroder), by its own words */
 const supplierPaper = (t: string) => /order\s*confirmation|sales\s*order|invoice/i.test(t) && /s\s*&\s*s\s*activewear|ssactivewear|\bS&S\b|sanmar|alphabroder|\bwarehouse:/i.test(t);
 
+/** staff's word on each file over the AI's reading: only "art" files stay the art of a print; a mockup is their mockup; their
+ *  separations, a vendor's order confirmation, their PO and other paperwork are kept as production files under that name;
+ *  "not needed" ones are left off */
+function withRoles(d: EODraft, roles: Record<string, string>, all: { path: string; name: string; type: string }[]): EODraft {
+  const notArt = (p: string) => !!roles[p] && roles[p] !== "art";
+  const art = Object.fromEntries(Object.entries(d.art || {}).filter(([, p]) => !notArt(p)));
+  const mockups = Object.fromEntries(Object.entries(d.mockups || {}).map(([k, v]) => [k, v.filter((p) => !roles[p] || roles[p] === "customer_mockup")]));
+  const files = d.files.filter((f) => roles[f.path] !== "not_needed").map((f) => {
+    const r = roles[f.path];
+    if (!r) return f;
+    if (r === "art") return { ...f, role: "art" as const };
+    if (r === "customer_mockup") return { ...f, role: "mockup" as const, kind: "customer_mockup" };
+    return { ...f, role: "other" as const, kind: r === "sizes" ? "order_sheet" : r };
+  });
+  // a file staff named that the reading left out: kept too (their separations, the vendor's confirmation…)
+  for (const f of all) {
+    const r = roles[f.path];
+    if (!r || r === "not_needed" || files.some((x) => x.path === f.path)) continue;
+    files.push({ path: f.path, name: f.name, type: f.type, size: 0, role: r === "art" ? "art" : r === "customer_mockup" ? "mockup" : "other", ...(r === "art" ? {} : { kind: r === "sizes" ? "order_sheet" : r }) });
+  }
+  return { ...d, art, mockups, files };
+}
+
 export default function QuickOrder({ activityId, start, onClose, onCreated, onReview, dock }: { activityId: string; start: OrderStart; onClose: () => void;
   /** a panel on the right, the email and its attachments still there to look at (Oct 23, Nick) */ dock?: boolean;
   /** each order made (for the email's notes) */ onCreated: (id: string, number: number, label: string) => void;
@@ -181,6 +204,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
       if (!r?.ok || !j.draft) throw new Error(j.error || "The AI couldn't read this email.");
       d = j.draft as EODraft; g.past = j.past || g.past;
     }
+    // what staff said each file is (the Order helper, Nov 6, Nick: "I selected this file as customer separations… it's
+    // asking me to put it on a mock-up"): applied to the reading here, so the AI's guess can't override it
+    if (start.roles && Object.keys(start.roles).length) d = withRoles(d, start.roles, start.roleFiles || []);
     { const pcs = pcsOf(d.groups), lines = d.groups.reduce((n, x) => n + x.lines.length, 0); note(`Found ${lines} garment line${lines === 1 ? "" : "s"}, ${pcs.toLocaleString("en-US")} pcs${d.kind === "reorder" ? ", a reorder" : ""}`); }
     // the sheets' own total checked in code, not left to the AI (Oct 24, Nick: In Every Season is 550 + 400 = 950 pcs and
     // came in as 1,025 every time): off, it's read once more told exactly what's off; still off, it's said plainly

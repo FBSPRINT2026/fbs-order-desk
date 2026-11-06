@@ -345,7 +345,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // a request filled in where it is already has its own files on it (from the portal or brought in from their ClickUp):
   // not a second copy
   const onIt = intoId ? new Set(((await admin.from("art_files").select("file_path").eq("order_id", oid)).data || []).map((x) => String(x.file_path))) : new Set<string>();
-  for (const f of (d.files || []).filter((x) => (x.role === "sheet" || (x.role === "other" && !isPicture(x))) && !onIt.has(x.path))) {
+  for (const f of (d.files || []).filter((x) => (x.role === "sheet" || (x.role === "other" && (!isPicture(x) || !!x.kind))) && !onIt.has(x.path))) {
     const to = `art/${oid}/${Date.now().toString(36)}-${safe(f.name)}`;
     const cp = await admin.storage.from("proofs").copy(f.path, to);
     if (cp.error) continue;

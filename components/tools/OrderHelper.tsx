@@ -105,7 +105,7 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
       sizesIn === "message" ? "The sizes and quantities are in their message, not in a file." : !sizesIn ? "" : "",
       ...files.map((f) => `The file "${f.name}" ${say[kindOf(f.path)]}.`),
     ].filter(Boolean).join(" ");
-    onMake({ orderType, told, note: note.trim() || undefined });
+    onMake({ orderType, told, note: note.trim() || undefined, roles: Object.fromEntries(files.map((f) => [f.path, kindOf(f.path)])), roleFiles: files.map((f) => ({ path: f.path, name: f.name, type: f.type })) });
   }
 
   const sizesFile = files.find((f) => f.path === sizesIn);
