@@ -24,6 +24,7 @@ async function getIce(): Promise<Ice> {
 }
 type Sig = { t: "hello" | "join" | "offer" | "answer" | "ice" | "bye"; sdp?: RTCSessionDescriptionInit; c?: RTCIceCandidateInit; from: string };
 type Invite = { id: string; host_email: string; host_name: string; note: string; created_at: string };
+const listNames = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
 const first = (n: string) => (n || "").split(/[\s@._]+/)[0].replace(/^./, (c) => c.toUpperCase());
 
 /** start sharing (Report an issue): the call opens in its own window */
@@ -40,12 +41,16 @@ function openViewer(id: string) {
 export default function ScreenShareDock({ email, owner }: { email: string; name?: string; owner: boolean }) {
   const sb = useMemo(() => createClient(), []);
   const [invites, setInvites] = useState<Invite[]>([]), [hidden, setHidden] = useState<string[]>([]);
+  // the invites for me: anyone's screen shared with me by name (Nov 6, Nick: "have it so i can share my screen to
+  // train"), and for the owner the ones shared with no one named (Report an issue), as before
   useEffect(() => {
-    if (!owner) return;
+    if (!email) return;
     let on = true;
     const look = async () => {
       const since = new Date(Date.now() - 45 * 60000).toISOString();
-      const { data } = await sb.from("screen_sessions").select("id, host_email, host_name, note, created_at").eq("status", "waiting").neq("host_email", email).gte("created_at", since).order("created_at", { ascending: false }).limit(5);
+      const me = email.toLowerCase().replace(/[{}",]/g, "");
+      const q = sb.from("screen_sessions").select("id, host_email, host_name, note, created_at").eq("status", "waiting").neq("host_email", email).gte("created_at", since);
+      const { data } = await (owner ? q.or(`invite_emails.is.null,invite_emails.cs.{${me}}`) : q.contains("invite_emails", [me])).order("created_at", { ascending: false }).limit(5);
       if (on) setInvites((data || []) as Invite[]);
     };
     void look(); const t = setInterval(look, 8000);
@@ -70,6 +75,16 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
   const idRef = useRef<string | null>(sessionId);
   const setId = (v: string) => { idRef.current = v; setIdState(v); };
   const [state, setState] = useState<"ready" | "waiting" | "live" | "away" | "ended">(mode === "watch" ? "waiting" : "ready");
+  // who's asked to watch: the team, the owner picked to start with (training: the owner picks who)
+  const [team, setTeam] = useState<{ email: string; name: string; role: string }[]>([]), [to, setTo] = useState<string[]>([]);
+  useEffect(() => {
+    if (mode !== "share") return;
+    void sb.from("staff").select("email, name, role").order("name").then(({ data }) => {
+      const t = ((data || []) as { email: string; name: string; role: string }[]).filter((x) => x.email && x.email.toLowerCase() !== email.toLowerCase());
+      setTeam(t); setTo(t.filter((x) => x.role === "owner").map((x) => x.email.toLowerCase()));
+    });
+  }, [mode, sb, email]);
+  const toNames = team.filter((x) => to.includes(x.email.toLowerCase())).map((x) => first(x.name || x.email));
   const [muted, setMuted] = useState(false), [hasMic, setHasMic] = useState(false), [err, setErr] = useState(""), [who, setWho] = useState(""), [soundOff, setSoundOff] = useState(false);
   const pc = useRef<RTCPeerConnection | null>(null), chan = useRef<RealtimeChannel | null>(null);
   const screen = useRef<MediaStream | null>(null), mic = useRef<MediaStream | null>(null), remote = useRef<MediaStream | null>(null);
@@ -118,7 +133,7 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
     ice.current = await getIce();
     let sid = id;
     if (!sid) {
-      const { data, error } = await sb.from("screen_sessions").insert({ host_email: email, host_name: name || first(email), note: note.slice(0, 300) }).select("id").single();
+      const { data, error } = await sb.from("screen_sessions").insert({ host_email: email, host_name: name || first(email), note: note.slice(0, 300), invite_emails: to.length ? to : null }).select("id").single();
       if (error || !data) { stopAll(); setErr("Couldn't start sharing: " + (error?.message || "try again")); return; }
       sid = data.id as string; setId(sid);
       window.history.replaceState(null, "", `/call?share=1&s=${sid}`);
@@ -241,8 +256,12 @@ export function ScreenCall({ email, name, mode, sessionId, note }: { email: stri
     <div className="ss-host">
       <div className="ss-host-h"><span className={"ss-live" + (state === "live" ? " on" : "")} aria-hidden /><h1>Support call with Nick</h1></div>
       {state === "ready" && <>
-        <p>{id ? "This window was refreshed, so the sharing stopped. Click to pick up where you left off." : "Nick will see your screen and you can talk it through together."}</p>
-        <button type="button" className="btn primary ss-big" onClick={() => void share()}>{id ? "Resume sharing" : "Share my screen"}</button>
+        <p>{id ? "This window was refreshed, so the sharing stopped. Click to pick up where you left off." : toNames.length ? `${listNames(toNames)} will see your screen and you can talk it through together.` : "Pick who should see your screen."}</p>
+        {!id && team.length > 0 && <div className="ss-who" role="group" aria-label="Who will watch">
+          {team.map((x) => { const e = x.email.toLowerCase(), on = to.includes(e); return (
+            <button type="button" key={e} className={"chip" + (on ? " on" : "")} aria-pressed={on} onClick={() => setTo((t) => (on ? t.filter((y) => y !== e) : [...t, e]))}>{first(x.name || x.email)}</button>); })}
+        </div>}
+        <button type="button" className="btn primary ss-big" disabled={!id && !to.length} onClick={() => void share()}>{id ? "Resume sharing" : "Share my screen"}</button>
         <ol className="sup-steps">
           <li>Click <b>{id ? "Resume sharing" : "Share my screen"}</b>.</li>
           <li>Click your screen under <b>Entire screen</b>, then click <b>Share</b>.</li>

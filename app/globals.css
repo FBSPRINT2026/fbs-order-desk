@@ -21268,3 +21268,5 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .pfl-two .pfl-big.btn{height:40px;font-size:14px;padding:0 8px}
   .pfl-long{display:none}
 }
+/* the call window: who watches (Nov 6, Nick: share my screen to train) */
+.ss-who{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}

@@ -194,10 +194,12 @@ export default function SupportButton({ email, portal = false, look = "icon" }: 
               {/* talk it through live instead (Oct 26, Nick: "make this clearer… next step, once she says report an issue,
                   share screen, do the thing"): the choice first, with the steps spelled out. Shown when the owner views
                   as someone too, so he can see what they see. */}
-              {!portal && (realRole !== "owner" || !!viewAs) && <div className="sup-live">
+              {/* the owner shares too, to train someone (Nov 6, Nick: "have it so i can share my screen to train"): he picks who
+                  watches in the call window */}
+              {!portal && <div className="sup-live">
                 <div className="sup-live-h">
                   <svg viewBox="0 0 24 24" aria-hidden><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>
-                  <div><b>Easier to show Nick?</b><span>Share your screen and talk it through together, live.</span></div>
+                  {realRole === "owner" && !viewAs ? <div><b>Training someone?</b><span>Share your screen with them and talk them through it, live.</span></div> : <div><b>Easier to show Nick?</b><span>Share your screen and talk it through together, live.</span></div>}
                   <button type="button" className="btn primary" disabled={!!busy} onClick={() => { setOpen(false); shareMyScreen(text.trim()); }}>Share my screen</button>
                 </div>
                 <ol className="sup-steps">
