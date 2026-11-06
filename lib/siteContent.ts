@@ -60,6 +60,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Peticolas Brewing", img: "/site/clients/peticolas.png" },
   { name: "Fanatics", img: "/site/clients/fanatics.png" },
   { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" },
+  { name: "The Bar", img: "/site/clients/the-bar.png" },
   { name: "Dear Heart", img: "/site/clients/dear-heart.png" },
   { name: "Buc-ee's", img: "/site/clients/bucees.png" },
   { name: "McKenna", img: "/site/clients/mckenna.png" },
