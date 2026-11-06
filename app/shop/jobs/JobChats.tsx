@@ -77,7 +77,7 @@ export function ChatThread({ c, color, onSent, onClose, onArchived, narrow = fal
   return (
     <div className={"jmb-t" + (narrow ? " narrow" : "")} style={{ ["--mc" as string]: color }}>
       <div className="jmb-th">
-        <div className="jmb-th-h"><b>{c.last.from === "customer" ? c.last.who || c.customer : c.customer}</b><span className="faint">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General"}{c.customer ? ` · ${c.customer}` : ""}</span>{onArchived && <button type="button" className="linkbtn jmb-arc" disabled={arcBusy} onClick={() => void archive(!c.archived)} title={c.archived ? "Back on the Message Center" : "Off the Message Center with no reply; back when they write again"}>{c.archived ? "Unarchive" : "Archive"}</button>}<button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
+        <div className="jmb-th-h"><b>{c.last.from === "customer" ? c.last.who || c.customer : c.customer}</b><span className="faint">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : "General"}{c.customer ? ` · ${c.customer}` : ""}</span>{onArchived && <button type="button" className="linkbtn jmb-arc" disabled={arcBusy} onClick={() => void archive(!c.archived)} title={c.archived ? "Back on the Message Center" : "Finished: off New and Waiting on them; back in New when they write again"}>{c.archived ? "Not done" : "Done"}</button>}<button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
         <div className="jmb-msgs" ref={box}>
           {!msgs ? <span className="faint">Loading…</span> : msgs.slice(-40).map((m) => (
             <div key={m.id} className={"jmb-b " + m.from}>

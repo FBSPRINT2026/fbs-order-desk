@@ -21346,3 +21346,4 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .osp-seg button + button{border-left:1px solid var(--line)}
 .osp-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700;box-shadow:inset 0 -2px 0 var(--accent)}
 .osp-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.jrl-mf{grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr) minmax(0,.9fr)}

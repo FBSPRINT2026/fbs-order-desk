@@ -69,7 +69,9 @@ export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
       last: { body: String(last.body || (last.attachments?.length ? "Sent a file" : "")).slice(0, 160), from: last.author_type === "customer" ? "customer" : "staff", who: last.author_name || "", at: last.created_at },
       unread: ms.filter((r) => r.author_type === "customer" && !r.read_at).length,
       waiting: last.author_type === "customer", owner: cid ? owners.get(cid) || "" : "",
-      archived: !!arch.get(k) && arch.get(k)! >= last.created_at,
+      // Done: archived after its last message, or we answered and they've said nothing for 14 days (Nov 6, Nick); a new
+      // message from them brings it back to New
+      archived: (!!arch.get(k) && arch.get(k)! >= last.created_at) || (last.author_type !== "customer" && Date.now() - Date.parse(last.created_at) > 14 * 864e5),
     });
   }
   return out.sort((a, b) => Number(b.unread > 0) - Number(a.unread > 0) || b.last.at.localeCompare(a.last.at));
