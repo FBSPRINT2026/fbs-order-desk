@@ -14,6 +14,9 @@ import { InvoiceDoc, ProofDoc, SewoutDoc, WorkOrderDoc, type DocData, type Sewou
 export const dynamic = "force-dynamic";
 
 // Quote/invoice for customers, or (?work=1, shop only) a work order for the press with no prices.
+const EMBED_JS = "(function(){var R=document.documentElement;R.classList.add('fbs-embed');function H(){try{var d=document.querySelector('.pdoc');parent.postMessage({fbsFrameH:Math.ceil(d?d.getBoundingClientRect().height:R.scrollHeight)},location.origin)}catch(e){}}addEventListener('load',H);addEventListener('resize',H);if(window.ResizeObserver)new ResizeObserver(H).observe(document.body);setTimeout(H,600);addEventListener('message',function(e){if(e.origin===location.origin&&e.data&&'fbsFull' in e.data){R.classList.toggle('fbs-full',!!e.data.fbsFull);setTimeout(H,50)}});var u=1,s0=0,u0=1;function sh(){return document.querySelectorAll('.pdoc .sheet')}function apply(){sh().forEach(function(el){var b=parseFloat(el.dataset.fit||el.style.zoom||'1')||1;if(!el.dataset.fit)el.dataset.fit=String(b);el.style.zoom=String(b*u)});H()}function dist(t){var x=t[0].clientX-t[1].clientX,y=t[0].clientY-t[1].clientY;return Math.sqrt(x*x+y*y)}addEventListener('touchstart',function(e){if(e.touches.length===2){s0=dist(e.touches);u0=u}},{passive:true});addEventListener('touchmove',function(e){if(e.touches.length===2&&s0){e.preventDefault();u=Math.min(4,Math.max(1,u0*dist(e.touches)/s0));apply()}},{passive:false});addEventListener('touchend',function(e){if(e.touches.length<2)s0=0});addEventListener('gesturestart',function(e){e.preventDefault()});})()";
+const EMBED_CSS = 'html.fbs-embed .pdoc{min-height:0}html.fbs-embed{touch-action:pan-x pan-y;overflow-x:auto}@media (max-width:840px){html.fbs-embed:not(.fbs-full) .pdoc .print-bar>.btn{display:none}html.fbs-embed:not(.fbs-full) .pdoc .print-bar{padding:0}}';
+
 export default async function PrintPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ work?: string; proof?: string; sewout?: string; link?: string; embed?: string }> }) {
   const { id } = await params;
   const { work, proof, sewout, link, embed } = await searchParams;
@@ -30,7 +33,10 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   // framed in the customer's page: the approval stamp on the top row (StampSlot), right side
   // inside the customer's approve page: the sheets are fitted once, by PrintButton (Nov 2: a second zoom on the page
   // made them a quarter size on a phone), and the page tells the frame its height so it grows to show every page
-  const bar = (n: string) => embed ? <><script dangerouslySetInnerHTML={{ __html: "(function(){function h(){try{parent.postMessage({fbsFrameH:document.documentElement.scrollHeight},location.origin)}catch(e){}}addEventListener('load',h);addEventListener('resize',h);if(window.ResizeObserver)new ResizeObserver(h).observe(document.documentElement);setTimeout(h,600)})()" }} /><div className="print-bar"><PrintButton fileName={n} framed /><StampSlot /></div></> : <div className="print-bar">{link && /^[\w-]{8,80}$/.test(link) && <a className="btn primary prt-back" href={`/proof/${link}`}>← Back to approve</a>}<PrintButton fileName={n} /></div>;
+  // inside the customer's approve page (Nov 6, Nick on a phone: "a long, long grey space after the last page… when you
+  // pinch… just pinch in on the PDF"): the paper is as tall as its pages (no full-screen minimum, which grew with the
+  // frame), a pinch zooms the pages and not the page around them, and Save PDF / Print show in View full size
+  const bar = (n: string) => embed ? <><style dangerouslySetInnerHTML={{ __html: EMBED_CSS }} /><script dangerouslySetInnerHTML={{ __html: EMBED_JS }} /><div className="print-bar"><PrintButton fileName={n} framed /><StampSlot /></div></> : <div className="print-bar">{link && /^[\w-]{8,80}$/.test(link) && <a className="btn primary prt-back" href={`/proof/${link}`}>← Back to approve</a>}<PrintButton fileName={n} /></div>;
   const { data: od } = await db.from("orders").select("*").eq("id", id).maybeSingle();
   if (!od) notFound();
   // the customer's documents (invoice, quote, proof, sew-out) never show the shop's own pieces; the work order does

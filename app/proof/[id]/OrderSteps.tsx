@@ -14,6 +14,8 @@ import { answerProof, answerQuote, approveAll } from "./actions";
  * changes. The last screen (the quote, or the last proof when there's no quote) lists what they looked over and takes
  * their name once for all of it (actions.ts approveAll). Then the confirmation, and the deposit.
  */
+/** a step's name in a phone's tabs */
+const SHORT: Record<string, string> = { art: "Proof", sewout: "Sew-out", quote: "Quote", invoice: "Invoice", deposit: "Pay" };
 const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const whoWhen = (s: StepView) => [s.who, s.when ? new Date(s.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""].filter(Boolean).join(" · ");
 const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
@@ -36,7 +38,8 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
   const [back, setBack] = useState<Record<string, { kind: "changes" | "declined"; note: string }>>({});
   const frame = useRef<HTMLIFrameElement | null>(null), paneNow = useRef("");
   // the stamp sits in the document's own top row (app/print/[id]/StampSlot.tsx): tell it what to show, and answer when it asks
-  const tell = () => frame.current?.contentWindow?.postMessage({ fbsStamp: paneNow.current }, location.origin);
+  const fullNow = useRef(false);
+  const tell = () => { const w = frame.current?.contentWindow; w?.postMessage({ fbsStamp: paneNow.current }, location.origin); w?.postMessage({ fbsFull: fullNow.current }, location.origin); };
   useEffect(() => {
     const on = (e: MessageEvent) => { if (e.origin === location.origin && e.data?.fbsStampAsk && e.source === frame.current?.contentWindow) tell(); };
     addEventListener("message", on);
@@ -56,7 +59,7 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
   // over → the approved check across it
   const sentBack = back[pdfStep.key] || (pdfStep.state === "changes" ? { kind: /declined/i.test(pdfStep.title) ? "declined" as const : "changes" as const, note: pdfStep.comment || "" } : null);
   const pane: "" | "ok" | "looks" | "changes" | "declined" = sentBack ? sentBack.kind : doneMsg || pdfStep.state === "done" ? "ok" : pdfStep.key in ok ? "looks" : "";
-  paneNow.current = pane;
+  paneNow.current = pane; fullNow.current = full;
   if (typeof window !== "undefined") queueMicrotask(tell);
   const what0 = pdfStep.kind === "art" ? "proof" : pdfStep.kind === "sewout" ? "sew-out" : pdfStep.kind === "invoice" ? "invoice" : "quote";
   const goNext = (note: string) => {
@@ -71,7 +74,7 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
             <li key={s.key}>
               <button type="button" className={"pfl-step-b " + st + (s.key === step.key ? " on" : "")} onClick={() => { setCur(s.key); setFinal(false); }} aria-current={s.key === step.key}>
                 <span className="pfl-num">{s.state === "done" || good ? "✓" : i + 1}</span>
-                <span><span className="pfl-stepno">Step {i + 1}</span><b>{s.title}</b><small>{good ? "Looks good" : s.sub}</small></span>
+                <span><span className="pfl-stepno">Step {i + 1}</span><span className="pfl-stepshort">{i + 1} · {SHORT[s.kind] || s.title}</span><b>{s.title}</b><small>{good ? "Looks good" : s.sub}</small></span>
               </button>
             </li>); })}
         </ol>
@@ -94,7 +97,7 @@ function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: Ste
               ? <Result tone="ok" title={step.title} line={step.sub} />
               : <div className="pfl-ans"><div style={{ fontSize: 14 }}><b>{m(step.amount || 0)}</b> {step.title === "Pay now" ? "is due to start your order" : "starts production"}.</div>
                   <PayNow orderId={orderId} label={step.title} /></div>)}
-          {!doneMsg && !showFinal && last && !(step.key in ok) && idx >= 0 && <div className="pfl-fine" style={{ marginTop: 8 }}>Step {idx + 1} of {todo.length}. You&apos;ll approve everything together at the end.</div>}
+          {!doneMsg && !showFinal && last && !(step.key in ok) && idx >= 0 && <div className="pfl-fine pfl-stepof" style={{ marginTop: 8 }}>Step {idx + 1} of {todo.length}. You&apos;ll approve everything together at the end.</div>}
         </div>
       </aside>
       <section className={"pfl-pdf" + (pane ? ` is-${pane}` : "")}>
@@ -118,6 +121,7 @@ function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { i
   const what = step.kind === "art" ? "proof" : "sew-out";
   const pv = usePreview();
   const [note, setNote] = useState(note0), [mode, setMode] = useState<"" | "changes">(""), [err, setErr] = useState(""), [sent, setSent] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false); // on a phone the notes box opens from "Add a note"
   const [pending, start] = useTransition();
   if (sent) return <Result tone="chg" title="Changes sent" line={`We'll make them and send you a new ${what} to look over.`} note={note} />;
   const sendChanges = () => start(async () => {
@@ -131,10 +135,15 @@ function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { i
     <div className="pfl-ans">
       <div className="pfl-q">Does the {what} look right? Check the spelling, colors, sizes and placement.</div>
       {mode === "" && <>
-        <label className="pfl-lbl" htmlFor="pfl-note">Notes (optional)</label>
-        <textarea id="pfl-note" rows={3} placeholder="A small tweak we can make without a new proof" value={note} onChange={(e) => setNote(e.target.value)} />
-        <button type="button" className="btn primary pfl-ok pfl-big" onClick={() => onGood(note.trim())}>{isLast ? "Looks good" : `Looks good, ${nextLabel}`} →</button>
-        <button type="button" className="btn pfl-big" onClick={() => setMode("changes")}>Needs changes</button>
+        <div className="pfl-qs">Check spelling, colors, sizes and placement{!noteOpen && <> · <button type="button" className="linkbtn" onClick={() => setNoteOpen(true)}>Add a note</button></>}</div>
+        <div className={"pfl-notebox" + (noteOpen || note ? " open" : "")}>
+          <label className="pfl-lbl" htmlFor="pfl-note">Notes (optional)</label>
+          <textarea id="pfl-note" rows={3} placeholder="A small tweak we can make without a new proof" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <div className="pfl-two">
+          <button type="button" className="btn primary pfl-ok pfl-big" onClick={() => onGood(note.trim())}>Looks good<span className="pfl-long">{isLast ? "" : `, ${nextLabel}`}</span> →</button>
+          <button type="button" className="btn pfl-big" onClick={() => setMode("changes")}>Needs changes</button>
+        </div>
         {note.trim() && <div className="pfl-fine">We&apos;ll make your note as a small change, with no new {what}.</div>}
       </>}
       {mode === "changes" && <div className="pfl-step">

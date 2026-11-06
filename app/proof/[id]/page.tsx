@@ -33,12 +33,12 @@ export default async function ProofPage({ params, searchParams }: { params: Prom
     const backHref = from === "portal" ? `/portal/orders/${os.o.id}?view=1${preview ? `&as=${as}` : ""}` : "";
     return (
       <div className="pfl">
-        <header className="pfl-top">
+        <header className="pfl-top pfl-top-o">
           <img src={sh0.logoUrl || "/brand/fbs-logo.svg"} alt={sh0.name} />
           <div className="pfl-ttl" data-page-title={`${os.o.nickname ? `${os.o.nickname} ` : ""}#${os.o.number}`}><b data-notranslate>{os.o.nickname || `Order #${os.o.number}`}</b><span>Order #{os.o.number}</span></div>
           <span className="pfl-sp" />
           {backHref && <a className="pfl-back" href={backHref}>See the whole order</a>}
-          {sh0.phone && <a href={`tel:${sh0.phone.replace(/[^\d+]/g, "")}`}>Questions? {fmtPhone(sh0.phone)}</a>}
+          {sh0.phone && <a className="pfl-tel" href={`tel:${sh0.phone.replace(/[^\d+]/g, "")}`}>Questions? {fmtPhone(sh0.phone)}</a>}
           {/* back to their portal, from an email link too (Nov 3, Nick: "a button… return to customer portal"); signs in if needed */}
           <a className="pfl-portal" href={preview ? `/portal?as=${as}` : "/portal"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg>Back to your portal</a>
         </header>
