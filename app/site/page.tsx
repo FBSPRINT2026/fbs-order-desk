@@ -32,11 +32,11 @@ export default function SitePage() {
         </nav>
         <div className="fws-acts">
           <a className="fws-btn" href={login}><span className="fws-wide">Customer login</span><span className="fws-narrow">Log in</span></a>
-          <a className="fws-btn p fws-wide" href="#request">Start an order</a>
+          <a className="fws-btn p fws-wide" href="#request">Get started</a>
           {/* phones: the section links in a menu, so the header is one short line (Nov 5, Nick) */}
           <details className="fws-menu">
             <summary aria-label="Menu"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg></summary>
-            <nav aria-label="Site menu"><a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#request">Start an order</a></nav>
+            <nav aria-label="Site menu"><a href="#services">Services</a><a href="#work">Who we print for</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#request">Get started</a></nav>
           </details>
         </div>
       </header>
@@ -48,7 +48,7 @@ export default function SitePage() {
             <p className="fws-kick">Apparel · print · fulfillment</p>
             <h1 className="fws-d">Apparel done right, for those who sell it and wear it.</h1>
             <p className="fws-lead">Screen printing, embroidery and DTF for wholesalers, private brands, contract resellers and schools, plus breweries, churches, cities and businesses. 22 years in business, based in North Texas.</p>
-            <div className="fws-row"><a className="fws-btn p lg" href="#request">Start an order or quote</a><a className="fws-btn ghost lg" href={login}>Customer login</a></div>
+            <div className="fws-row"><a className="fws-btn p lg" href="#request">Get started</a><a className="fws-btn ghost lg" href={login}>Customer login</a></div>
           </div>
           <div className="fws-hero-pic" aria-hidden />
         </section>
@@ -136,7 +136,7 @@ export default function SitePage() {
       <footer className="fws-foot">
         <img src="/brand/fbs-logo-white.svg" alt="FBS Print" />
         <span>{SITE.address.join(", ")} · {SITE.phone}</span>
-        <span className="fws-row"><a href={login}>Customer login</a><a href="#request">Start an order</a><a href="/privacy">Privacy</a></span>
+        <span className="fws-row"><a href={login}>Customer login</a><a href="#request">Get started</a><a href="/privacy">Privacy</a></span>
       </footer>
       <div className="fws-bar" aria-hidden />
     </div>
