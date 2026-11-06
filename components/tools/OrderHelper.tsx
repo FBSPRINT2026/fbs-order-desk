@@ -53,6 +53,7 @@ export default function OrderHelper({ activityId, orderType, onMake, auto = fals
   // their separations, each with its mockup (Nov 6, Nick: "here's the customer separations, here's the mock-up… you also
   // have to select those together"): the mockup is the proof and where the inks are read from
   const [pairOf, setPairOf] = useState<Record<string, string>>({});
+  const [szOpen, setSzOpen] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [over, setOver] = useState(false);
   const pick = useRef<HTMLInputElement | null>(null);
@@ -169,20 +170,24 @@ export default function OrderHelper({ activityId, orderType, onMake, auto = fals
           <span className="ohp-no">2</span>
           <div className="ohp-b">
             <b>Where are the sizes?</b>
-            <span className="ohp-p">Tick every one that has sizes. They&apos;re added together.</span>
-            <ul className="ohp-szl">
-              {about && <li><label className="ohp-ck"><input type="checkbox" checked={inMsg} onChange={(e) => setInMsg(e.target.checked)} /> <span>In their message{inText ? ` (${inText} sizes found)` : ""}</span></label></li>}
-              {files.map((f) => <li key={f.path}><label className="ohp-ck"><input type="checkbox" checked={sizes.has(f.path)} onChange={(e) => tick(f.path, e.target.checked)} /> <span data-notranslate>{f.name}</span></label></li>)}
-            </ul>
-            <div className={"ohp-drop" + (over ? " over" : "")} role="button" tabIndex={0} aria-label="Drop, paste or pick a file with the sizes"
-              onClick={() => { if (pick.current) { pick.current.dataset.sizes = "1"; pick.current.click(); } }}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick.current?.click(); } }}
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true); }} onDragLeave={() => setOver(false)}
-              onDrop={(e) => { e.stopPropagation(); onDrop(e, true); }} onPaste={onPaste}>
-              <b>Drop, paste or pick the sizes</b>
-              <span>A size sheet, an email, a screenshot, or text copied from anywhere (click here, then Ctrl+V)</span>
+            {/* one field, like the other dropdowns (Nov 6, Nick: "make this box a dropdown… select multiple… a lot on one
+                page"): click to open, click each one with sizes, click again to unpick; it opens in the page, not over it */}
+            <div className="ohp-ms">
+              <button type="button" className={"ohp-ms-f" + (szOpen ? " open" : "")} aria-expanded={szOpen} onClick={() => setSzOpen(!szOpen)}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={(e) => { e.stopPropagation(); onDrop(e, true); }} onPaste={onPaste}>
+                <span className="ohp-ms-t" data-notranslate>{from.length ? from[0] : "Pick where the sizes are"}</span>
+                {from.length > 1 && <span className="ohp-ms-n">+{from.length - 1}</span>}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path d={szOpen ? "m6 15 6-6 6 6" : "m6 9 6 6 6-6"} /></svg>
+              </button>
+              {szOpen && <div className={"ohp-ms-l" + (over ? " over" : "")} role="listbox" aria-multiselectable="true" aria-label="Where the sizes are">
+                {about && <button type="button" role="option" aria-selected={inMsg} className={"ohp-ms-i" + (inMsg ? " on" : "")} onClick={() => setInMsg(!inMsg)}><span className="ohp-ms-c">{inMsg ? "✓" : ""}</span><span>In their message{inText ? ` (${inText} sizes found)` : ""}</span></button>}
+                {files.map((f) => { const on = sizes.has(f.path); return <button key={f.path} type="button" role="option" aria-selected={on} className={"ohp-ms-i" + (on ? " on" : "")} title={f.name} onClick={() => tick(f.path, !on)}><span className="ohp-ms-c">{on ? "✓" : ""}</span><span data-notranslate>{f.name}</span></button>; })}
+                <button type="button" className="ohp-ms-add" onClick={() => { if (pick.current) { pick.current.dataset.sizes = "1"; pick.current.click(); } }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true); }} onDrop={(e) => { e.stopPropagation(); onDrop(e, true); }} onPaste={onPaste}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden><path d="M12 16V4M7 9l5-5 5 5" /><path d="M5 20h14" /></svg>Add a sizes file · drop, paste (Ctrl+V) or pick</button>
+              </div>}
             </div>
-            {!from.length && <p className="ohp-p">Not sure? Leave them unticked and the AI looks through everything.</p>}
+            {!from.length && <p className="ohp-p">Not sure? Leave it and the AI looks through everything.</p>}
           </div>
         </li>
         <li className="ohp-st">

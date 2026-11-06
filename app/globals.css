@@ -21379,3 +21379,18 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .ohp-chip.k-supplier_order{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:color-mix(in srgb,var(--warn) 60%,var(--ink))}
 .ohp-chip.k-other,.ohp-chip.k-not_needed{background:var(--surface-2);color:var(--ink-3)}
 @container ohp (max-width:480px){.ohp-f{grid-template-columns:minmax(0,1fr) auto}}
+/* Order helper: where the sizes are, one multi-pick field (Nov 6) */
+.ohp-ms{width:100%}
+.ohp-ms-f{all:unset;box-sizing:border-box;cursor:pointer;width:100%;height:36px;display:flex;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:14px var(--body);color:var(--ink)}
+.ohp-ms-f.open,.ohp-ms-f:focus-visible{border-color:var(--accent)}
+.ohp-ms-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ohp-ms-n{font-size:12px;font-weight:700;padding:2px 7px;border-radius:6px;background:color-mix(in srgb,var(--ok) 16%,var(--surface));color:color-mix(in srgb,var(--ok) 70%,var(--ink))}
+.ohp-ms-l{margin-top:4px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.ohp-ms-l.over{border-color:var(--accent)}
+.ohp-ms-i,.ohp-ms-add{all:unset;box-sizing:border-box;cursor:pointer;width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;font:14px var(--body);color:var(--ink);border-top:1px solid var(--line)}
+.ohp-ms-i:first-child{border-top:0}
+.ohp-ms-i>span:last-child{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ohp-ms-i.on{background:color-mix(in srgb,var(--ok) 10%,var(--surface));color:color-mix(in srgb,var(--ok) 70%,var(--ink))}
+.ohp-ms-c{flex:0 0 14px;font-weight:700}
+.ohp-ms-add{background:var(--surface-2);color:var(--ink-3);font-size:13px}
+.ohp-ms-i:hover,.ohp-ms-add:hover{background:var(--surface-2)}
