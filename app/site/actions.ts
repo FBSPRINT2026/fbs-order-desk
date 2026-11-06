@@ -60,6 +60,15 @@ export async function sendSiteRequest(r: SiteReq) {
     if (!EMAIL.test(email)) return fail("Enter an email we can reply to.");
     if (!details && !needs.length) return fail("Tell us a little about what you need.");
     if (await tooMany(admin, ip, email)) return fail("We've already got a few requests from you this hour. Call us at 972-487-7858 if it's urgent.");
+    // blocked by staff (Leads → Ignore and block): it looks sent to them, nothing is made (lib/siteJunk.ts)
+    const { blockedBy, junkReason } = await import("@/lib/siteJunk");
+    const blocked = await blockedBy(admin, { email, ip, phone });
+    if (blocked) {
+      await admin.from("site_requests").insert({ email, ip, spam: true, detail: { name, company, blocked, details: details.slice(0, 1000) } });
+      return { ok: true as const, number: 0 };
+    }
+    // reads like junk (a sales pitch, a bot): still a lead, flagged, and nobody is emailed about it
+    const junk = await junkReason(admin, [`From: ${name}${company ? `, ${company}` : ""} <${email}>`, needs.length ? `Needs: ${needs.join(", ")}` : "", r.qty ? `Pieces: ${t(r.qty, 40)}` : "", details].filter(Boolean).join("\n"));
 
     // who they are: any account's person with this email, else the account's own email, else a new customer
     const { data: ct } = await admin.from("customer_contacts").select("customer_id").ilike("email", email).is("removed_at", null).limit(1).maybeSingle();
@@ -88,7 +97,8 @@ export async function sendSiteRequest(r: SiteReq) {
     const files = (r.files || []).filter((f) => f.path.startsWith("site-requests/")).slice(0, 10);
     await admin.from("messages").insert({ order_id: o.id, author_type: "customer", author_email: email, author_name: name, body: notes, attachments: files });
     await admin.from("order_events").insert({ order_id: o.id, kind: "request_submitted", detail: `From the website${files.length ? ` · ${files.length} file${files.length === 1 ? "" : "s"}` : ""}`, actor: email });
-    await admin.from("site_requests").insert({ email, ip, order_id: o.id, customer_id: c.id, detail: { name, company, needs, intent: account ? "account" : "quote", kind, monthly } });
+    await admin.from("site_requests").insert({ email, ip, order_id: o.id, customer_id: c.id, detail: { name, company, needs, intent: account ? "account" : "quote", kind, monthly, junk: junk || null, checked: true } });
+    if (junk) { await admin.from("order_events").insert({ order_id: o.id, kind: "note", detail: `Looks like junk: ${junk}`, actor: "system" }); return { ok: true as const, number: Number(num) || 0 }; }
     const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const { mergeSettings } = await import("@/lib/pricing");
     await (await import("@/lib/shopNotice")).notifyShopAbout(admin, o.id, { did: account ? `wants to set up an account${kind ? ` (${kind.toLowerCase()})` : ""}` : "sent a quote request", head: account ? `${company || name} wants to set up an account` : `${company || name} sent a quote request from the website`, body: notes, shopName: mergeSettings(s?.data).shop.name, button: "Review it" }).catch(() => null);

@@ -269,14 +269,15 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
  *  we haven't built yet, with what they told us and their files (a simple order's answers, or a form they filled in). */
 export type DeskRequest = { id: string; number: number; name: string; customerId: string; customer: string; contact: string; sentAt: string; due: string | null; po: string;
   delivery: string; shipTo: string; simple: boolean; method: string; qty: number | null; garments: string; about: string; pieces: number; /** what they filled in on their side, word for word (ClickUp's Customer Name) */ fields: Record<string, string>; /** their order type (Cedar: Bulk / Cart) */ lane: string; /** what the customer calls its order types (Nine18: Entered by), or empty */ laneLabel: string;
-  files: { name: string; path: string; type: string; kind: string; size: number }[] };
+  files: { name: string; path: string; type: string; kind: string; size: number }[];
+  /** sent from the website's form (Leads → Website submissions): Ignore / Ignore and block instead of Not an order */ web?: boolean };
 export async function requestsDesk(): Promise<{ ok: true; list: DeskRequest[] } | { ok: false; error: string }> {
   try {
     await requireStaff();
     const admin = createAdminClient();
-    const { data: os } = await admin.from("orders").select("id, number, customer_id, nickname, due_date, po_number, delivery_method, ship_to, submitted_at, simple_order, groups, qty, order_lane")
+    const { data: os } = await admin.from("orders").select("id, number, customer_id, nickname, due_date, po_number, delivery_method, ship_to, submitted_at, simple_order, groups, qty, order_lane, source")
       .eq("status", "request").not("submitted_at", "is", null).is("discarded_at", null).order("submitted_at", { ascending: false }).limit(200);
-    const rows = (os || []) as { id: string; number: number; customer_id: string; nickname: string | null; due_date: string | null; po_number: string | null; delivery_method: string | null; ship_to: string | null; submitted_at: string; simple_order: { about?: string; qty?: number | null; garments?: string; method?: string; files?: { path: string; name: string; kind?: string }[] } | null; groups: Order["groups"]; qty: number | null }[];
+    const rows = (os || []) as { id: string; number: number; customer_id: string; nickname: string | null; due_date: string | null; po_number: string | null; delivery_method: string | null; ship_to: string | null; submitted_at: string; simple_order: { about?: string; qty?: number | null; garments?: string; method?: string; files?: { path: string; name: string; kind?: string }[] } | null; groups: Order["groups"]; qty: number | null; source?: string | null }[];
     const custIds = [...new Set(rows.map((r) => r.customer_id))];
     const ids = rows.map((r) => r.id);
     const [{ data: cs }, { data: af }] = await Promise.all([
@@ -302,6 +303,7 @@ export async function requestsDesk(): Promise<{ ok: true; list: DeskRequest[] } 
         sentAt: r.submitted_at, due: r.due_date, po: r.po_number || "", delivery: r.delivery_method || "pickup", shipTo: r.ship_to || "",
         simple: !!so, method: so?.method || "", qty: so?.qty ?? r.qty ?? null, garments: so?.garments || "", about: so?.about || "", pieces, fields: ((so as { fields?: Record<string, string> } | null)?.fields) || {}, lane: String((r as { order_lane?: string }).order_lane || ""), laneLabel: String(c?.order_type_label || ""),
         files: (filesOf.get(r.id) || []).map((f) => ({ name: f.name, path: f.file_path, type: f.file_type || "", kind: f.category === "order_sheet" ? "po" : f.category || "", size: size.get(f.file_path) || 0 })),
+        web: r.source === "website",
       };
     });
     return { ok: true, list };

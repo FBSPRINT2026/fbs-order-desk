@@ -193,7 +193,6 @@ export default function JobCenter() {
     return () => clearTimeout(t);
   }, [waitingNow]);
   const inGroup = (c: ChatSummary, g: G) => { const it = c.orderId ? byOrder.get(c.orderId) : null; return !!it && it.steps.some((s0) => g.steps.some((x) => x[0] === s0)); };
-  const newIn = (g: G | null) => (g ? myChats.filter((c) => inGroup(c, g)) : myChats).reduce((a, c) => a + c.unread, 0);
   const tagOf = (c: ChatSummary) => {
     const g = GROUPS.find((x) => inGroup(c, x));
     if (g) return { t: g.t, c: g.c };
@@ -286,13 +285,13 @@ export default function JobCenter() {
           small number underneath the bubble. I don't like the notification style bubble"): the picked one tinted, with an
           arrow down to its list */}
       <div className="jrl" role="tablist" aria-label="Steps">
-        {GROUPS.map((g) => { const on = !solo && curG?.t === g.t; const nm = newIn(g); const tot = items ? g.steps.reduce((a0, [k]) => a0 + (k === "declined" ? 0 : count(k)), 0) : null; return (
+        {GROUPS.map((g) => { const on = !solo && curG?.t === g.t; const tot = items ? g.steps.reduce((a0, [k]) => a0 + (k === "declined" ? 0 : count(k)), 0) : null; return (
           <div key={g.t} role="tab" aria-selected={on} className={"jrl-sec" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--f" as string]: g.steps.length > 1 ? 2 : 1 }}>
             <button type="button" className="jrl-h" onClick={() => go(g.steps[0][0])} title={g.line}>
               <span className="jrl-t">{g.t}</span>
               <span className="jrl-n">{tot ?? "…"}</span>
             </button>
-            {nm > 0 && <span className="jrl-nm">{nm} new message{nm === 1 ? "" : "s"}</span>}
+            {/* no "N new messages" on the cards: it pushed the row down; new ones show as dots in the Message Center (Nov 6, Nick) */}
             {/* the steps joined by a line, each step's count in the card's corner on its side (Nov 2, Nick: "leads would have a
                 46 all the way on the left side, and requests would have a 2 on the right side… and then we need the line") */}
             <div className={"jrl-ss" + (g.steps.length > 1 ? " two" : "")}>
@@ -311,7 +310,9 @@ export default function JobCenter() {
       <div className="jmb">
         {/* the counts on the line of the list's colored bar, the search under them (Nov 2, Nick) */}
         {/* on the line of the list's bar: which conversations to show, with their counts */}
-        <div className="jrl-mf" role="radiogroup" aria-label="Show">{([["waiting", "Needs reply", waitingNow], ["replied", "Replied", myChats.length - waitingNow], ["all", "All", myChats.length]] as const).map(([k, l, n]) => (
+        {/* like an inbox, on one line (Nov 6, Nick: "needs reply needs to be one line… act like an inbox… say new… then they
+            should be highlighted, like red, unread"): New is what waits on us; an unread one is tinted red below */}
+        <div className="jrl-mf" role="radiogroup" aria-label="Show">{([["waiting", "New", waitingNow], ["replied", "Replied", myChats.length - waitingNow], ["all", "All", myChats.length]] as const).map(([k, l, n]) => (
           <button key={k} type="button" role="radio" aria-checked={mShow === k} className={mShow === k ? "on" : ""} onClick={() => setMShow(k)}>{l}<em>{n}</em></button>))}</div>
         <input className="jmb-s" value={mq} onChange={(e) => setMq(e.target.value)} placeholder="Search messages" aria-label="Search messages" />
         <div ref={padRef} style={{ height: lvl.pad }} aria-hidden />

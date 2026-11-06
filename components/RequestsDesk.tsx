@@ -7,6 +7,7 @@ import Link from "next/link";
 import { requestNotAnOrder, requestsDesk, simpleOrderActivity, type DeskRequest } from "@/app/shop/actions";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import OrderHelper from "@/components/tools/OrderHelper";
+import { ignoreLead, leadInfo } from "@/app/shop/lead-actions";
 import { PARTIAL, type PartKind } from "@/components/tools/PartialOrder";
 import type { OrderStart } from "@/components/OrderStartPick";
 import { FileTray, type MailFile } from "@/components/MailFolders";
@@ -76,6 +77,22 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
     if (!x.ok) { setErr(x.error); return; }
     setBegin(st); setHelper(""); setAct(x.activityId); setActText(x.text);
   };
+  // a website submission: who sent it and whether it reads like junk (checked once, kept), then Ignore / Ignore and block
+  const [lead, setLead] = useState<{ id: string; email: string; domain: string; ip: string; phone: string; junk: string } | null>(null);
+  useEffect(() => {
+    const j = (list || []).find((r) => r.id === (only || openId));
+    if (!j?.web || lead?.id === j.id) return;
+    setLead(null);
+    void leadInfo(j.id).then((x) => { if (x.ok) setLead({ id: j.id, email: x.email, domain: x.domain, ip: x.ip, phone: x.phone, junk: x.junk }); });
+  }, [openId, only, list]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ignore = async (r: DeskRequest, block: boolean) => {
+    setBusy(block ? "Ignoring and blocking…" : "Ignoring it…");
+    const x = await ignoreLead(r.id, block);
+    setBusy("");
+    if (!x.ok) { setErr(x.error); return; }
+    setMsg(block ? `#${r.number} ignored. Blocked ${x.blocked.length ? x.blocked.join(", ") : "nothing new"}: what they send next won't show here.` : `#${r.number} ignored.`);
+    setOpenId(null); await load(); onChanged?.();
+  };
   const notOrder = async (r: DeskRequest) => {
     setBusy("Putting it away…");
     const x = await requestNotAnOrder(r.id);
@@ -108,6 +125,10 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
           {job.about ? <div className="cu-notes"><span className="lbl">Original message</span><p style={{ margin: "2px 0 0", whiteSpace: "pre-wrap" }}>{job.about}</p></div> : !job.simple ? <p className="cu-notes faint">They filled in the order form: {job.pieces.toLocaleString("en-US")} pieces. Open the order to see their garments and prints.</p> : null}
           {job.garments && <p className="cu-notes rqd-g"><b>Garments:</b> {job.garments}</p>}
           {job.files.length > 0 ? <div className="cu-sec"><FileTray files={asMail(job)} /></div> : <div className="cu-sec faint">No files with this request.</div>}
+          {job.web && lead?.id === job.id && lead.junk && <div className="rqd-junk" role="status">
+            <span><b>This looks like junk:</b> {lead.junk}. Block it? What they send next is ignored by itself ({[lead.email, lead.domain && `anyone @${lead.domain}`, lead.phone].filter(Boolean).join(", ")}).</span>
+            <button type="button" className="btn sm" disabled={!!busy} onClick={() => void ignore(job, true)}>Ignore and block</button>
+          </div>}
           <div className="cu-ask">
             <b>Would you like to process this request?</b>
             <div className="cu-acts">
@@ -125,7 +146,10 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
                   center… about this") */}
               {only ? null : onMessage ? <button type="button" className="btn ghost" onClick={() => onMessage(job.id)}>Message them</button> : <Link className="btn ghost" href={`/shop/orders/${job.id}#messages`}>Message them</Link>}
               {/* on the far right, two clicks (Nov 3, Nick) */}
-              <ClickTwice className="btn ghost cu-not" label="Not an order" again="Click again: not an order" disabled={!!busy} onConfirm={() => notOrder(job)} />
+              {job.web ? <>
+                <ClickTwice className="btn ghost cu-not" label="Ignore" again="Click again: ignore" disabled={!!busy} onConfirm={() => ignore(job, false)} />
+                <ClickTwice className="btn ghost" label="Ignore and block" again="Click again: block them" disabled={!!busy} onConfirm={() => ignore(job, true)} />
+              </> : <ClickTwice className="btn ghost cu-not" label="Not an order" again="Click again: not an order" disabled={!!busy} onConfirm={() => notOrder(job)} />}
             </div>
             {busy && <div className="faint">{busy}</div>}
           </div>
