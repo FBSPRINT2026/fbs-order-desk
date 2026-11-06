@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { activityFiles, addActivityFile, setRequestFileKinds } from "@/app/shop/order-helper-actions";
+import { activityFiles, addActivityFile, helperLearned, saveHelperLesson, setRequestFileKinds } from "@/app/shop/order-helper-actions";
 import type { OrderStart } from "@/components/OrderStartPick";
 
 /**
@@ -39,7 +39,8 @@ const guess = (f: HF): Kind => {
 /** sizes written in their message: "S 12, M 24…", "2XL - 6" */
 const SZ = /\b(?:y?xs|y?s|y?m|y?l|y?xl|[2-6]x(?:l)?|xxl|xxxl|small|medium|large|x-large)\b\s*[-:=x×]?\s*\(?\d{1,4}\)?/gi;
 
-export default function OrderHelper({ activityId, orderType, onMake }: { activityId: string; /** the panel's Order type */ orderType: "new" | "reorder" | "reorder_changes";
+export default function OrderHelper({ activityId, orderType, onMake, auto = false }: { activityId: string; /** the panel's Order type */ orderType: "new" | "reorder" | "reorder_changes";
+  /** make it straight away with what was learned (Create order's "Make it the way I learned") */ auto?: boolean;
   /** straight to making it, in the same Create order tool */ onMake: (begin: OrderStart) => void }) {
   const sb = useMemo(() => createClient(), []);
   const [src, setSrc] = useState<null | { files: HF[]; about: string; orderId: string | null }>(null);
@@ -57,15 +58,28 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
   const pick = useRef<HTMLInputElement | null>(null);
   const about = src?.about || "";
   const inText = useMemo(() => (about.match(SZ) || []).length, [about]);
+  // what it learned from this customer's past orders made here (lib/helperLearn.ts): those answers first
+  const [learnt, setLearnt] = useState<{ customer: string; n: number; used: number } | null>(null);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
-    void activityFiles(activityId).then((r) => {
+    void Promise.all([activityFiles(activityId), helperLearned(activityId).catch(() => null)]).then(([r, L]) => {
       if (!r.ok) { setErr(r.error); setSrc({ files: [], about: "", orderId: null }); return; }
       setSrc(r); setFiles(r.files);
-      setKinds(Object.fromEntries(r.files.map((f) => [f.path, guess(f)])));
-      // first guess: their PO, else their message when it has sizes
-      const po = r.files.filter((f) => guess(f) === "order_sheet").map((f) => f.path);
-      setSizes(new Set(po));
-      setInMsg(!po.length && (r.about.match(SZ) || []).length >= 2);
+      const lg = L && L.ok ? L : null;
+      const used = lg ? r.files.filter((f) => lg.guesses[f.path]).length : 0;
+      setKinds(Object.fromEntries(r.files.map((f) => [f.path, (lg?.guesses[f.path]?.kind as Kind) || guess(f)])));
+      if (lg && used) {
+        setSizes(new Set(r.files.filter((f) => lg.guesses[f.path]?.sizes).map((f) => f.path)));
+        setPairOf(lg.pairs);
+        setInMsg(lg.inMsg ?? (r.about.match(SZ) || []).length >= 2);
+        setLearnt({ customer: lg.customer, n: lg.n, used });
+      } else {
+        // first guess: their PO, else their message when it has sizes
+        const po = r.files.filter((f) => guess(f) === "order_sheet").map((f) => f.path);
+        setSizes(new Set(po));
+        setInMsg(!po.length && (r.about.match(SZ) || []).length >= 2);
+      }
+      setReady(true);
     });
   }, [activityId]);
   const kindOf = (p: string): Kind => kinds[p] || "other";
@@ -122,6 +136,8 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
       ...files.map((f) => `The file "${f.name}" ${say[kindOf(f.path)]}${sizes.has(f.path) ? " and HAS THE SIZES" : kindOf(f.path) === "supplier_order" ? "; it can cover several orders, so NEVER take sizes or quantities from it" : ""}.`),
       ...[...new Set(films.map((f) => mockOf(f.path)))].map((m) => { const mf = files.find((f) => f.path === m); return mf ? `CUSTOMER SEPARATIONS: the screen prints are printed from the customer's own films; "${mf.name}" is their mockup for them and the proof. Read each print's location, size and inks off that mockup: every PMS swatch or ink named on it ("PANTONE 267C" is PMS 267 C) and White, in order, with the color count to match. Don't ask for art; there is no art file to separate.` : ""; }),
     ].filter(Boolean).join(" ");
+    // what staff said, kept to learn this customer's next orders from
+    void saveHelperLesson(activityId, files.map((f) => ({ name: f.name, kind: kindOf(f.path), sizes: sizes.has(f.path), ...(kindOf(f.path) === "film" && mockOf(f.path) ? { mockFor: files.find((x) => x.path === mockOf(f.path))?.name || "" } : {}) })), inMsg, note).catch(() => null);
     const seps: { mockup: string; films: string[] }[] = [...new Set<string>(films.map((f) => mockOf(f.path)))].map((m) => ({ mockup: m, films: films.filter((f) => mockOf(f.path) === m).map((f) => f.path) }));
     onMake({ orderType, told, note: note.trim() || undefined, roles: Object.fromEntries(files.map((f) => [f.path, kindOf(f.path)])), roleFiles: files.map((f) => ({ path: f.path, name: f.name, type: f.type })),
       // only these are read (Nov 6, Nick: "this is where you fill in what we've got… the other stuff would just be reference
@@ -130,10 +146,14 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
       ...(seps.length ? { seps } : {}) });
   }
 
+  const autoDone = useRef(false);
+  useEffect(() => { if (auto && ready && !autoDone.current && !unpaired.length) { autoDone.current = true; void make(); } }); // eslint-disable-line react-hooks/exhaustive-deps
   const vendor = files.filter((f) => kindOf(f.path) === "supplier_order").length;
   const counts = KINDS.map(([k, l]) => [l, files.filter((f) => kindOf(f.path) === k).length] as const).filter(([, n]) => n);
   const from = [inMsg ? "their message" : "", ...files.filter((f) => sizes.has(f.path)).map((f) => f.name)].filter(Boolean);
   if (!src) return <div className="ohp"><p className="ohp-p ohp-wait">Reading what they sent…</p></div>;
+  // a separations file with no mockup: the steps show instead, to pick it
+  if (auto && !err && !unpaired.length) return <div className="ohp"><p className="ohp-p ohp-wait">Making it the way you&apos;ve done their last orders…</p></div>;
   return (
     <section className="ohp" aria-label="Order helper" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, false)}>
       <ol className="ohp-steps">
@@ -141,6 +161,7 @@ export default function OrderHelper({ activityId, orderType, onMake }: { activit
           <span className="ohp-no">1</span>
           <div className="ohp-b">
             <b>What they sent</b>
+            {learnt && <p className="ohp-learn">Filled in from what you did on {learnt.customer || "their"}&apos;s last {learnt.n} order{learnt.n === 1 ? "" : "s"}. Check it and fix anything; that teaches it too.</p>}
             <p className="ohp-p">{files.length} file{files.length === 1 ? "" : "s"}{about ? " and a message" : ""}. {inText >= 2 ? `Their message has sizes in it (${inText} found).` : "No sizes in their message."}</p>
           </div>
         </li>

@@ -72,3 +72,50 @@ export async function addActivityFile(activityId: string, f: { name: string; pat
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Couldn't add it." }; }
 }
+
+/** what the Order helper learned from this customer's past orders, for the files on this job (lib/helperLearn.ts) */
+export async function helperLearned(activityId: string): Promise<{ ok: true; customer: string; n: number; streak: number; sure: boolean; guesses: Record<string, { kind: string; sizes: boolean }>; pairs: Record<string, string>; inMsg: boolean | null } | { ok: false; error: string }> {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff) return { ok: false, error: "Only shop staff can do that." };
+    const admin = createAdminClient();
+    const { guessFiles, pairGuess, streakOf, SURE_AFTER } = await import("@/lib/helperLearn");
+    const { data: a } = await admin.from("activities").select("customer_id, meta").eq("id", activityId).maybeSingle();
+    const cid = (a?.customer_id as string) || "";
+    if (!cid) return { ok: true, customer: "", n: 0, streak: 0, sure: false, guesses: {}, pairs: {}, inMsg: null };
+    const [{ data: ls }, { data: c }] = await Promise.all([
+      admin.from("helper_lessons").select("files, in_message, created_at").eq("customer_id", cid).order("created_at", { ascending: false }).limit(30),
+      admin.from("customers").select("company, name").eq("id", cid).maybeSingle(),
+    ]);
+    const lessons = (ls || []) as { files: { name: string; kind: string; sizes: boolean }[]; in_message: boolean }[];
+    const atts = (((a?.meta || {}) as { attachments?: { name?: string; path?: string }[] }).attachments || []).filter((f) => f?.path).map((f) => ({ path: String(f.path), name: String(f.name || f.path!.split("/").pop()) }));
+    const g = guessFiles(lessons, atts.map((f) => f.name));
+    const byName = pairGuess(atts.map((f) => f.name), g);
+    const pathOf = new Map(atts.map((f) => [f.name, f.path]));
+    const guesses = Object.fromEntries(atts.map((f, i) => [f.path, { kind: g[i].kind, sizes: g[i].sizes }]).filter(([, x]) => (x as { kind: string }).kind));
+    const pairs = Object.fromEntries(Object.entries(byName).map(([fn, mn]) => [pathOf.get(fn) || fn, pathOf.get(mn) || mn]));
+    const msgVotes = lessons.map((l) => l.in_message);
+    const inMsg = msgVotes.length ? msgVotes.filter(Boolean).length / msgVotes.length >= 0.75 ? true : msgVotes.filter((x) => !x).length / msgVotes.length >= 0.75 ? false : null : null;
+    const streak = streakOf(lessons);
+    // sure: right by itself on their last orders, and it knows every file on this one
+    const sure = streak >= SURE_AFTER && atts.length > 0 && atts.every((f) => guesses[f.path]);
+    return { ok: true, customer: String(c?.company || c?.name || ""), n: lessons.length, streak, sure, guesses, pairs, inMsg };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }
+}
+
+/** an order made with the Order helper: what staff said each file was, kept to learn from (helper_lessons) */
+export async function saveHelperLesson(activityId: string, files: { name: string; kind: string; sizes: boolean; mockFor?: string }[], inMessage: boolean, note: string): Promise<{ ok: boolean }> {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff) return { ok: false };
+    const admin = createAdminClient();
+    const { wouldMatch } = await import("@/lib/helperLearn");
+    const { data: a } = await admin.from("activities").select("customer_id").eq("id", activityId).maybeSingle();
+    const cid = (a?.customer_id as string) || null;
+    const { data: ls } = cid ? await admin.from("helper_lessons").select("files, in_message").eq("customer_id", cid).order("created_at", { ascending: false }).limit(30) : { data: [] };
+    const lesson = { files: files.map((f) => ({ name: f.name.slice(0, 200), kind: f.kind, sizes: !!f.sizes, ...(f.mockFor ? { mockFor: f.mockFor } : {}) })), in_message: inMessage };
+    const matched = wouldMatch((ls || []) as never, lesson);
+    await admin.from("helper_lessons").insert({ customer_id: cid, activity_id: activityId, files: lesson.files, in_message: inMessage, note: note.trim().slice(0, 1000) || null, matched, created_by: v.email });
+    return { ok: true };
+  } catch { return { ok: false }; }
+}
