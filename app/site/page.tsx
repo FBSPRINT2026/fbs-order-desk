@@ -59,13 +59,15 @@ export default function SitePage() {
         </section>
 
         <section className="fws-sec" id="services">
-          <h2 className="fws-h fws-d">What we do</h2>
+          <p className="fws-eyebrow">What we do</p>
+          <h2 className="fws-h fws-d">Decorated in house, done right</h2>
           {/* the three main lines big on top, the other four smaller under the color bar (Nov 5, Nick) */}
           {[SERVICES.slice(0, 3), SERVICES.slice(3)].map((row, ri) => (
             <div key={ri} className={`fws-svcs${ri ? " sm" : ""}`}>{row.map((s) => (
               <div key={s.t} className={`fws-svc ${s.tone}`}>
                 <span className="fws-ic">{ICON_ART[s.icon] ? <img src={ICON_ART[s.icon]} alt="" height={64} className={s.icon === "shirt" ? "tall" : undefined} /> : <SiteIconArt name={s.icon as SiteIcon} />}</span>
                 <h3 className="fws-d">{s.t}</h3><p>{s.d}</p>
+                {!ri && <a className="fws-q" href="#request">Get a quote →</a>}
               </div>
             ))}</div>
           ))}
