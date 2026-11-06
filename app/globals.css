@@ -21099,3 +21099,15 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .fws-svcs.sm .fws-svc h3{font-size:15px}
   .fws-svcs.sm .fws-svc p{display:none}
 }
+/* the portal section: navy, the words and four things on the left, the dashboard picture on the right (under on phones) */
+.fws-portal2{background:var(--side);color:#fff;padding-bottom:0}
+.fws-portal2 .fws-h{color:#fff;font-size:clamp(28px,3.6vw,40px)}
+.fws-p2{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.3fr);gap:40px;align-items:end}
+.fws-p2>div{padding-bottom:clamp(36px,5vw,64px)}
+.fws-p2-l{color:var(--side-ink);font-size:16px;max-width:44ch;margin:0 0 22px}
+.fws-p2-f{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:24px}
+.fws-p2-f div{background:var(--side-hover);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column}
+.fws-p2-f b{font-size:15px}
+.fws-p2-f span{color:var(--side-ink);font-size:13px}
+.fws-p2-pic{display:block;width:100%;height:auto;align-self:end}
+@media (max-width:820px){.fws-p2{grid-template-columns:1fr;gap:20px}.fws-p2>div{padding-bottom:0}}

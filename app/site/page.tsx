@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/config";
-import { ALSO, FACTS, SERVICES, SITE, STEPS, WHO } from "@/lib/siteContent";
+import { ALSO, FACTS, PORTAL_FEATS, SERVICES, SITE, WHO } from "@/lib/siteContent";
 import SiteIconArt, { type SiteIcon } from "@/components/site/SiteIcons";
 import SiteRequestForm from "@/components/site/SiteRequestForm";
 
@@ -71,10 +71,20 @@ export default function SitePage() {
           ))}
         </section>
 
-        <section className="fws-sec fws-alt">
-          <h2 className="fws-h fws-d">How ordering works</h2>
-          <ol className="fws-steps">{STEPS.map((s) => <li key={s.t}><h3 className="fws-d">{s.t}</h3><p>{s.d}</p></li>)}</ol>
+        {/* the portal, shown off with the "It's here" email's dashboard picture (Nov 5, Nick: in place of How ordering works) */}
+        <section className="fws-sec fws-portal2" id="portal">
+          <div className="fws-p2">
+            <div>
+              <p className="fws-kick">Your own portal</p>
+              <h2 className="fws-h fws-d">Every order, in one place.</h2>
+              <p className="fws-p2-l">Every FBS client gets their own portal. No chasing emails: see where each job is, and take care of what needs you.</p>
+              <div className="fws-p2-f">{PORTAL_FEATS.map(([t, d]) => <div key={t}><b className="fws-d">{t}</b><span>{d}</span></div>)}</div>
+              <a className="fws-btn p lg" href={login}>Log in to your portal</a>
+            </div>
+            <img className="fws-p2-pic" src="/site/portal-dashboard.png" alt="The FBS customer portal: your jobs with their status, and what needs you" loading="lazy" />
+          </div>
         </section>
+        <div className="fws-bar" aria-hidden />
 
         <section className="fws-sec" id="work">
           <h2 className="fws-h fws-d">Who we print for</h2>

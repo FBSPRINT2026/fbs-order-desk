@@ -23,6 +23,9 @@ export const SERVICES: { t: string; d: string; icon: "shirt" | "cap" | "press" |
   { t: "Pick, pack and ship", d: "Full-service daily pick, pack and ship by USPS, UPS and FedEx.", icon: "box", tone: "blue" },
 ];
 
+/** what clients do in their portal (the website's portal section) */
+export const PORTAL_FEATS: [string, string][] = [["Approve proofs", "See it, approve it, done"], ["Reorder in clicks", "Past jobs, ready to run"], ["Track goods", "From the supplier to your door"], ["Pay invoices", "Card or ACH, any time"]];
+
 export const STEPS = [
   { t: "Reach out", d: "Send the new client form below with your art, or log in and build the order yourself." },
   { t: "Approve it online", d: "You get a proof and a quote by email. Approve, ask for changes and pay in one place." },
