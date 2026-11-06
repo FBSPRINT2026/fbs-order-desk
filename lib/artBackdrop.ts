@@ -100,3 +100,24 @@ export function takeOutWhite(data: Rgba, w: number, h: number) {
     data[o + 3] = Math.round(data[o + 3] * a);
   }
 }
+
+/**
+ * An SVG cropped to a box (in the picture's own pixels, `W` × `H`) and still an SVG: only its window moves, so it draws
+ * sharp at any size. Cropping through a canvas froze it at its small on-screen size (#40435's back: 690 × 1200 px for a
+ * 9" print, blown back up for the film, with lumpy letters). Null when there's no <svg> in it.
+ */
+export function cropSvg(text: string, box: { x: number; y: number; w: number; h: number }, W: number, H: number): string | null {
+  const m = /<svg\b[^>]*>/i.exec(text);
+  if (!m || !(W > 0 && H > 0)) return null;
+  const vb = /\sviewBox\s*=\s*["']\s*([-\d.eE]+)[\s,]+([-\d.eE]+)[\s,]+([-\d.eE]+)[\s,]+([-\d.eE]+)/i.exec(m[0]);
+  const [vx, vy, vw, vh] = vb ? vb.slice(1).map(Number) : [0, 0, W, H];
+  if (!(vw > 0 && vh > 0)) return null;
+  // how the file's own units land on the picture's pixels: fitted and centered, unless it asks to be stretched
+  const stretch = /\spreserveAspectRatio\s*=\s*["']\s*none/i.test(m[0]);
+  const sx = stretch ? W / vw : Math.min(W / vw, H / vh), sy = stretch ? H / vh : sx;
+  const ox = stretch ? 0 : (W - vw * sx) / 2, oy = stretch ? 0 : (H - vh * sy) / 2;
+  const n = (v: number) => +v.toFixed(4);
+  const view = [vx + (box.x - ox) / sx, vy + (box.y - oy) / sy, box.w / sx, box.h / sy].map(n).join(" ");
+  const open = m[0].replace(/\s(width|height|viewBox)\s*=\s*("[^"]*"|'[^']*')/gi, "").replace(/\s*\/?>$/, "");
+  return text.slice(0, m.index) + `${open} width="${box.w}" height="${box.h}" viewBox="${view}">` + text.slice(m.index + m[0].length);
+}
