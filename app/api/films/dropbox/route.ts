@@ -19,6 +19,21 @@ const HOT_FOLDER = "/FILM DIRECT TO PRINT";
 export async function POST(req: Request) {
   const v = await getViewer();
   if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });
+  // a file already in our storage (a customer's own separations, components/SuppliedFilms.tsx): read here, so a big PDF
+  // never has to go up through the request (a request body tops out around 4 MB)
+  if ((req.headers.get("content-type") || "").includes("application/json")) {
+    const b = (await req.json().catch(() => ({}))) as { path?: string; name?: string };
+    const path = String(b.path || "");
+    if (!/^art\/[0-9a-f-]{36}\//i.test(path)) return NextResponse.json({ error: "That isn't an order's file." }, { status: 400 });
+    const name = String(b.name || path.split("/").pop() || "film.pdf").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 180);
+    const admin = createAdminClient();
+    const { data, error } = await admin.storage.from("proofs").download(path);
+    if (error || !data) return NextResponse.json({ error: "Couldn't read that file." }, { status: 404 });
+    try {
+      const e = await uploadFile(admin, `${HOT_FOLDER}/${name}`, new Uint8Array(await data.arrayBuffer()));
+      return NextResponse.json({ ok: true, name: e.name });
+    } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); }
+  }
   const fd = await req.formData().catch(() => null);
   const f = fd?.get("file");
   if (!(f instanceof Blob)) return NextResponse.json({ error: "No film to send." }, { status: 400 });

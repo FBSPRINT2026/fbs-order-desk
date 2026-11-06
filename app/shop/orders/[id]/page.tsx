@@ -8,6 +8,7 @@ import ProofHistory from "@/components/ProofHistory";
 import CustomerPick from "@/components/CustomerPick";
 import BillToBox from "@/components/BillToBox";
 import ProofSide from "@/components/ProofSide";
+import SuppliedFilms from "@/components/SuppliedFilms";
 import OrderGoodsPanel from "@/components/OrderGoodsPanel";
 import OrderStages from "@/components/OrderStages";
 import JobLabor from "@/components/team/JobLabor";
@@ -2229,6 +2230,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </div>
               </div>
             )}
+            {/* the customer's own separations, printed as sent (Nov 6, Nick: Tiger Blue sends his) */}
+            <SuppliedFilms orderId={o.id} orderNumber={o.number} customerId={o.customer_id} onChanged={loadSide} />
             <ProofSide orderId={o.id} bump={proofs.length * 1000 + events.length} onChanged={loadSide} customer={cust?.name || cust?.company || ""} email={cust?.email || ""} />
             <JobLabor orderId={o.id} qty={o.qty} total={+o.total || 0} />
           </aside>

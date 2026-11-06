@@ -21270,3 +21270,15 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 }
 /* the call window: who watches (Nov 6, Nick: share my screen to train) */
 .ss-who{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+/* Their separations (components/SuppliedFilms.tsx; Nov 6, Nick): the customer's own films, printed as sent */
+.sfl-ask{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px}
+.sfl-ask .linkbtn{font-size:13px}
+.sfl-p{margin:0 0 8px;font-size:12.5px}
+.sfl-list{margin:0 0 10px;padding:0 0 0 18px;display:flex;flex-direction:column;gap:6px}
+.sfl-list li{display:flex;align-items:center;gap:8px;font-size:13.5px}
+.sfl-n{flex:1;min-width:0;overflow-wrap:anywhere}
+.sfl-ok{font-size:12px;font-weight:700;color:var(--ok);white-space:nowrap}
+.sfl-list .linkbtn{font-size:12.5px;white-space:nowrap}
+.sfl-x{color:var(--ink-3)}
+.sfl-acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.sfl-msg{color:var(--ok);font-weight:600;font-size:13px;margin-bottom:6px}
