@@ -21400,3 +21400,7 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .imp-ok-by{font-size:12.5px;color:var(--ok);font-weight:700}
 .imp-confirm{margin-right:4px}
 .mk-visual small b{color:var(--fbs-violet)}
+/* a print that still needs its details under a visual mockup (Nov 6) */
+.imp-card.imp-need{border-color:var(--danger);box-shadow:0 0 0 1px var(--danger)}
+.mk-need-d{display:inline-block;margin-top:4px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger)}
+label.mk-tile{cursor:pointer}

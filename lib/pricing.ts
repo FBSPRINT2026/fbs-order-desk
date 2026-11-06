@@ -391,6 +391,9 @@ export type Group = { id: string; name?: string; /** priced by a program design'
   reprintOf?: string;
   /** mockups the customer supplied themselves (their own software, or saved from the portal builder): storage paths */
   customerMockups?: { path: string; name: string }[];
+  /** Add visual mockup (Nov 6, Nick: "sometimes it just doesn't make sense to make an actual mockup, but I have to nail
+   *  down the details still"): a picture as the mockup; every print must be filled in and confirmed */
+  visualMockup?: { path: string; name: string; by?: string; at: string };
   /** Tag Print: the label art the customer uploaded in the portal when there's no tag on file (storage path) */
   tagArt?: { path: string; name: string };
   /** a reorder of an old Printavo job: its mockup PDF(s), where the art is pulled from when the order is made */

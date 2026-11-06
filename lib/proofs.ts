@@ -89,6 +89,10 @@ export async function sendProofs(admin: SupabaseClient, orderId: string, me: Sta
   const email = opts.email !== false;
   const { order, customer, settings } = await load(admin, orderId);
   if (email && !customer?.email) return { ok: false as const, error: "This order's customer has no email address." };
+  // a visual mockup (a picture) or their separations: every print filled in and confirmed first (Nov 6, Nick: "you cannot
+  // put that in there without filling out… the print one, print two")
+  { const { orderGroups } = await import("@/lib/pricing"); const open = orderGroups(order as never).flatMap((g) => g.imprints.filter((im) => (g.visualMockup || im.custSeps) && !im.ok).map((im) => im.location || "a print"));
+    if (open.length) return { ok: false as const, error: `Confirm every print first (${[...new Set(open)].join(", ")}): a visual mockup is only a picture, so its inks, threads and sizes have to be filled in.` }; }
   const mocks = await currentMockups(admin, orderId);
   if (!mocks.length) return { ok: false as const, error: "Make a mockup in the Mockup Creator first." };
   const { live } = await liveProofs(admin, orderId);
