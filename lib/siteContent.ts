@@ -65,6 +65,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Fanatics", img: "/site/clients/fanatics.png" },
   { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" },
   { name: "The Bar", img: "/site/clients/the-bar.png" },
+  { name: "The Mahjong Line", img: "/site/clients/mahjong-line.png" },
   { name: "Dear Heart", img: "/site/clients/dear-heart.png" },
   { name: "Buc-ee's", img: "/site/clients/bucees.png" },
   { name: "McKenna", img: "/site/clients/mckenna.png" },
