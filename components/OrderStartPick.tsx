@@ -226,11 +226,12 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
     return (
       <div className="osp-cb">
         <div className="osp-cb-f">
-          <div className="field"><label htmlFor={`ot-${key}`}>Order type</label>
-            {/* New order or Reorder, first (Nov 6, Nick): a reorder's changes are asked in the Reorder pop-up */}
-            <select id={`ot-${key}`} value={c.type === "new" ? "new" : "reorder"} onChange={(e) => { const t = e.target.value as OT; setCard(key, { type: t }); if (key === SOLO) { setWay(""); setOtherFor(null); setJobFor(t === "new" ? null : SOLO); } }}>
-              <option value="new">New order</option><option value="reorder">Reorder</option>
-            </select>
+          <div className="field"><label id={`ot-${key}`}>Order type</label>
+            {/* two buttons, not a dropdown: its open list sat over Make the order and a pick clicked through (Nov 6, Nick) */}
+            <div className="osp-seg" role="radiogroup" aria-labelledby={`ot-${key}`}>
+              {([["new", "New order"], ["reorder", "Reorder"]] as const).map(([t, l]) => { const on = (c.type === "new" ? "new" : "reorder") === t; return (
+                <button key={t} type="button" role="radio" aria-checked={on} className={on ? "on" : ""} onClick={() => { if (on) return; setCard(key, { type: t }); if (key === SOLO) { setWay(""); setOtherFor(null); setJobFor(t === "new" ? null : SOLO); } }}>{l}</button>); })}
+            </div>
           </div>
           {c.type !== "new" && (
             <div className="field"><label>Of past job</label>

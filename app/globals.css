@@ -21340,3 +21340,9 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .jrl-mf{grid-template-columns:repeat(4,minmax(0,1fr))}
 .jrl-mf button{font-size:12.5px;gap:4px}
 .jmb-arc{margin-left:auto}
+/* Create order: New order / Reorder as a two-part bar (Nov 6) */
+.osp-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));height:36px;border:1px solid var(--line);border-radius:6px;overflow:hidden;min-width:min(240px,100%)}
+.osp-seg button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;font:14px var(--body);color:var(--ink);background:var(--surface);white-space:nowrap}
+.osp-seg button + button{border-left:1px solid var(--line)}
+.osp-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700;box-shadow:inset 0 -2px 0 var(--accent)}
+.osp-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
