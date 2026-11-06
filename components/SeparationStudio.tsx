@@ -15,6 +15,7 @@ import { illustratorPdf } from "@/lib/illustratorPdf";
 import { parseSvg, type VArt } from "@/lib/svgVector";
 import { parseEps, vartSvg, vpathD } from "@/lib/epsVector";
 import { findBackdrop, fitToShapes, withoutBackdrop } from "@/lib/vectorBg";
+import { artCropBox, takeOutWhite, whiteIsBackdrop } from "@/lib/artBackdrop";
 import CustomerPick from "@/components/CustomerPick";
 import PicZoom from "@/components/PicZoom";
 import { shirtSets } from "@/lib/shirtSets";
@@ -152,8 +153,8 @@ function inkKind(name: string, art: string): { kind: string; word: string; dE: n
 
 /**
  * The art as pixels, at most `side` on the long side (vector art is drawn at exactly that size; pictures are never
- * blown up). With removeBg, a white background around the art becomes transparent, and the soft pixels along the
- * art's edge have the white taken back out of them (color-to-alpha), so no pale fringe prints around the outline.
+ * blown up). With removeBg, a white background around the art becomes transparent (lib/artBackdrop.ts); a see-through
+ * picture's white is art and stays.
  */
 /**
  * Vector art: what each ink covers, drawn straight from the shapes at the size of `px` (spot color). Each shape's fill
@@ -212,7 +213,7 @@ function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver:
   return { cover, knock, white: draw(m, false) };
 }
 
-/** the picture cropped to its art: see-through margins always, near-white margins when the white isn't printed */
+/** the picture cropped to its art: see-through margins always, near-white margins when the white is a background (lib/artBackdrop.ts) */
 async function cropImgToArt(img: HTMLImageElement, white: boolean): Promise<HTMLImageElement> {
   const W = img.naturalWidth, H = img.naturalHeight;
   if (!W || !H || W * H > 40_000_000) return img;
@@ -220,14 +221,9 @@ async function cropImgToArt(img: HTMLImageElement, white: boolean): Promise<HTML
   const x = c.getContext("2d", { willReadFrequently: true })!; x.drawImage(img, 0, 0);
   let d: Uint8ClampedArray;
   try { d = x.getImageData(0, 0, W, H).data; } catch { return img; }
-  let x0 = W, y0 = H, x1 = -1, y1 = -1;
-  for (let y = 0; y < H; y++) for (let X = 0; X < W; X++) {
-    const o = (y * W + X) * 4;
-    if (d[o + 3] < 12 || (white && d[o] > 242 && d[o + 1] > 242 && d[o + 2] > 242)) continue;
-    if (X < x0) x0 = X; if (X > x1) x1 = X; if (y < y0) y0 = y; y1 = y;
-  }
-  if (x1 < 0) return img;
-  const pad = 2, bx = Math.max(0, x0 - pad), by = Math.max(0, y0 - pad), bw = Math.min(W - bx, x1 - x0 + 1 + pad * 2), bh = Math.min(H - by, y1 - y0 + 1 + pad * 2);
+  const box = artCropBox(d, W, H, white && whiteIsBackdrop(d, W, H));
+  if (!box) return img;
+  const { x: bx, y: by, w: bw, h: bh } = box;
   if (bw >= W * 0.97 && bh >= H * 0.97) return img;
   const o = document.createElement("canvas"); o.width = bw; o.height = bh;
   o.getContext("2d")!.drawImage(c, bx, by, bw, bh, 0, 0, bw, bh);
@@ -242,46 +238,7 @@ function pixelsOf(img: HTMLImageElement, removeBg: boolean, vector = false, side
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const x = c.getContext("2d", { willReadFrequently: true })!; x.imageSmoothingQuality = "high"; x.drawImage(img, 0, 0, w, h);
   const data = x.getImageData(0, 0, w, h).data;
-  if (removeBg) {
-    const n = w * h;
-    // flood from the edges through near-white, opaque pixels (each pixel is marked when it's queued, so it's queued once)
-    const near = (i: number) => data[i * 4 + 3] > 200 && data[i * 4] > 242 && data[i * 4 + 1] > 242 && data[i * 4 + 2] > 242;
-    const gone = new Uint8Array(n), stack = new Int32Array(n); let sp = 0, removed = 0;
-    const seed = (i: number) => { if (!gone[i] && near(i)) { gone[i] = 1; stack[sp++] = i; } };
-    for (let i = 0; i < w; i++) { seed(i); seed((h - 1) * w + i); }
-    for (let j = 0; j < h; j++) { seed(j * w); seed(j * w + w - 1); }
-    while (sp) {
-      const i = stack[--sp]; data[i * 4 + 3] = 0; removed++;
-      const xx = i % w, yy = (i - xx) / w;
-      if (xx > 0) seed(i - 1); if (xx < w - 1) seed(i + 1); if (yy > 0) seed(i - w); if (yy < h - 1) seed(i + w);
-    }
-    // the edge ring (within 2 px of the removed background): take the white back out. Found by growing the removed
-    // area 2 px (across, then down), and only if anything was removed
-    const ring = new Uint8Array(n);
-    if (removed) {
-      const tmp = new Uint8Array(n);
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; if (gone[i]) for (let k = Math.max(0, x - 2); k <= Math.min(w - 1, x + 2); k++) tmp[y * w + k] = 1; }
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { if (!tmp[y * w + x]) continue; for (let k = Math.max(0, y - 2); k <= Math.min(h - 1, y + 2); k++) ring[k * w + x] = 1; }
-    }
-    for (let i = 0; i < n; i++) {
-      if (!ring[i] || gone[i]) continue;
-      const xx = i % w, yy = (i - xx) / w;
-      const o = i * 4, r = data[o], g = data[o + 1], b = data[o + 2];
-      // the art's own color here: the strongest (farthest from white) pixel close by that isn't background
-      let F = [r, g, b], fd = (255 - r) ** 2 + (255 - g) ** 2 + (255 - b) ** 2;
-      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
-        const X = xx + dx, Y = yy + dy; if (X < 0 || Y < 0 || X >= w || Y >= h) continue; const j = Y * w + X; if (gone[j]) continue;
-        const q = j * 4, d = (255 - data[q]) ** 2 + (255 - data[q + 1]) ** 2 + (255 - data[q + 2]) ** 2; if (d > fd) { fd = d; F = [data[q], data[q + 1], data[q + 2]]; }
-      }
-      if (fd < 30 * 30) continue; // a pale color: nothing to take out
-      // how much of the pixel is that color (the rest is the white it was blended with)
-      const a = Math.max(0, Math.min(1, ((255 - r) * (255 - F[0]) + (255 - g) * (255 - F[1]) + (255 - b) * (255 - F[2])) / fd));
-      if (a >= 0.98) continue;
-      if (a < 0.02) { data[o + 3] = 0; continue; }
-      data[o] = Math.round((r - (1 - a) * 255) / a); data[o + 1] = Math.round((g - (1 - a) * 255) / a); data[o + 2] = Math.round((b - (1 - a) * 255) / a);
-      data[o + 3] = Math.round(data[o + 3] * a);
-    }
-  }
+  if (removeBg && whiteIsBackdrop(data, w, h)) takeOutWhite(data, w, h);
   return { w, h, data };
 }
 /** art uploaded straight to a separation (no order): kept in its folder, remembered in settings.art */
@@ -582,7 +539,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   useEffect(() => { load(); }, [load]);
   // vector art: the picture the Studio works from is drawn from its shapes (without the background, when removed)
   useEffect(() => { if (vart?.ok && (fromShapes.current || vart !== vraw || vart.w !== vraw?.w)) setArtUrl(URL.createObjectURL(new Blob([vartSvg(vart)], { type: "image/svg+xml" }))); }, [vart]);
-  // a picture is cropped to its art (empty see-through space, or the white background when that isn't printed), so the
+  // a picture is cropped to its art (empty see-through space, or a white background when that isn't printed), so the
   // print width, the ppi and the films measure the graphic, not the box around it
   useEffect(() => { if (!artUrl) return; loadImg(artUrl).then((im) => (vart?.ok ? im : cropImgToArt(im, st.removeBg))).then(setImg).catch((e) => setErr(e.message)); }, [artUrl, st.removeBg]); // eslint-disable-line react-hooks/exhaustive-deps
   // vector art drawn from its shapes has no white background: flooding near-white from the edges took out white
