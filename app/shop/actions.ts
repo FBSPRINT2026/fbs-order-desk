@@ -233,7 +233,8 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
     // take the sizes off of": one confirmation can cover several of their orders)
     const atts = (files || []).map((f, i) => ({ f, i })).filter(({ f }) => f.category !== "not_needed").slice(0, 12).map(({ f, i }) => ({ name: String(f.name), path: String(f.file_path), type: String(f.file_type || ""), size: sizes[i] || 0 }));
     const sizesIn = s.sizes_in || "";
-    const kindWord = (c: string | null, path: string) => (path === sizesIn ? "THE SIZES: take every size and quantity from this file"
+    const sizeSet = new Set(sizesIn.split("|").filter(Boolean));
+    const kindWord = (c: string | null, path: string) => (sizeSet.has(path) ? `HAS THE SIZES${c === "supplier_order" ? " (a vendor order confirmation)" : ""}: take its sizes and quantities${sizeSet.size > 1 ? ", added to the other files marked HAS THE SIZES" : ""}`
       : c === "supplier_order" ? "a vendor order confirmation: who the blanks were ordered from, when they arrive and the vendor's order number only; it can cover several orders, so NEVER take sizes or quantities from it"
       : c === "order_sheet" ? "their PO" : c === "art" || c === "print_art" ? "art" : c === "film" ? "their own separations (films), printed as sent: not the art to separate"
       : c === "customer_mockup" ? "their mockup" : c ? prodKindLabel(c).toLowerCase() || "a file" : "a file");
@@ -249,7 +250,7 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
       s.garments ? `The garments (what they know): ${s.garments}` : "",
       `How they'll get it: ${o.delivery_method === "ship" ? `ship to ${o.ship_to}` : o.delivery_method === "deliver" ? `local delivery to ${o.ship_to}` : "they'll pick it up"}`,
       atts.length ? `Their files: ${atts.map((f) => `${f.name} (${kindOf.get(f.path)})`).join("; ")}` : "",
-      s.sizes_in === "message" ? "The sizes and quantities are in their message above, not in a file." : "",
+      sizeSet.has("message") ? `The sizes and quantities are in their message above${sizeSet.size > 1 ? " (with the files marked HAS THE SIZES)" : ", not in a file"}.` : "",
       s.helper_note ? `Staff say: ${s.helper_note}` : "",
     ].filter(Boolean).join("\n\n");
     const ext = `portal-simple:${orderId}`;
