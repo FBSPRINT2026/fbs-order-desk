@@ -21365,3 +21365,17 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .osp-learned b{font-size:14px;color:var(--ink)}
 .osp-learned>span{font-size:12.5px;color:var(--ink-2,var(--ink))}
 .ohp-learn{margin:0;font-size:12.5px;color:var(--ok)}
+/* Order helper files, E1 (Nov 6): name left in plain text, a colored chip for what it is, a green Sizes tag */
+.ohp-f{grid-template-columns:minmax(0,1fr) auto;padding:6px 0;border-top:1px solid var(--line)}
+.ohp-f:first-child{border-top:0}
+.ohp-fn{color:var(--ink);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
+.ohp-fn:hover{text-decoration:underline}
+.ohp-rt{display:inline-flex;align-items:center;gap:6px}
+.ohp-szt{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 9px;border-radius:6px;background:var(--ok);color:#fff;font-size:12.5px;font-weight:700;white-space:nowrap}
+.ohp-chip{height:28px;border:0;border-radius:6px;padding:0 8px;font:600 12.5px var(--body);cursor:pointer;max-width:180px}
+.ohp-chip.k-order_sheet{background:color-mix(in srgb,var(--ok) 16%,var(--surface));color:color-mix(in srgb,var(--ok) 70%,var(--ink))}
+.ohp-chip.k-film{background:color-mix(in srgb,var(--fbs-violet) 14%,var(--surface));color:var(--fbs-violet)}
+.ohp-chip.k-customer_mockup,.ohp-chip.k-art{background:color-mix(in srgb,var(--fbs-blue) 14%,var(--surface));color:color-mix(in srgb,var(--fbs-blue) 75%,var(--ink))}
+.ohp-chip.k-supplier_order{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:color-mix(in srgb,var(--warn) 60%,var(--ink))}
+.ohp-chip.k-other,.ohp-chip.k-not_needed{background:var(--surface-2);color:var(--ink-3)}
+@container ohp (max-width:480px){.ohp-f{grid-template-columns:minmax(0,1fr) auto}}

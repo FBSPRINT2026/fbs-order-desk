@@ -191,10 +191,15 @@ export default function OrderHelper({ activityId, orderType, onMake, auto = fals
             <b>What are the files?</b>
             {files.length ? <ul className="ohp-files">{files.map((f) => { const k = kindOf(f.path); return (
               <li key={f.path} className="ohp-f">
-                <a className="ohp-fn" href={`/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}`} target="_blank" rel="noreferrer" title={f.name} data-notranslate>{f.name}{sizes.has(f.path) ? <span className="ohp-sz">has the sizes</span> : null}</a>
-                <select className="ohp-sel" aria-label={`What ${f.name} is`} value={k} onChange={(e) => setKinds((x) => ({ ...x, [f.path]: e.target.value as Kind }))}>
-                  {KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                </select>
+                {/* E1 (Nov 6, Nick): the start of the name in plain text, what it is on the right as a colored chip, and a green
+                    Sizes tag when it has the sizes (tap to turn it on or off) */}
+                <a className="ohp-fn" href={`/api/files/open?${new URLSearchParams({ p: f.path, n: f.name })}`} target="_blank" rel="noreferrer" title={f.name} data-notranslate>{f.name}</a>
+                <span className="ohp-rt">
+                  {sizes.has(f.path) && <button type="button" className="ohp-szt" title="Has the sizes: tap to take them off this file" onClick={() => tick(f.path, false)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} aria-hidden><path d="m5 12 5 5 9-10" /></svg>Sizes</button>}
+                  <select className={"ohp-chip k-" + k} aria-label={`What ${f.name} is`} value={k} onChange={(e) => setKinds((x) => ({ ...x, [f.path]: e.target.value as Kind }))}>
+                    {KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </span>
                 {KIND_NOTE[k] && <span className="ohp-fnote">{KIND_NOTE[k]}</span>}
                 {k === "film" && <div className="ohp-pair">
                   <b>Which mockup goes with these separations?</b>
