@@ -43,6 +43,7 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
   const [act, setAct] = useState(""), [actText, setActText] = useState("");
   // Process opens Create order at its start (the three ways to make it are there); begin = straight to making it
   const [begin, setBegin] = useState<OrderStart | undefined>(undefined);
+  const made = useRef(false);
   const panel = useRef<HTMLDivElement | null>(null);
   const load = async () => { const r = await requestsDesk(); if (r.ok) { rqMem = r.list; setList(r.list); } else setErr(r.error); };
   useEffect(() => { void load(); }, []);
@@ -147,7 +148,11 @@ export default function RequestsDesk({ q, onChanged, onMessage, only, pick, only
           </div>
         </div>
       </div>}
-      {act && <CreateOrderTool key={act + (begin ? JSON.stringify(begin) : "")} activityId={act} text={actText} begin={begin} onClose={() => { setAct(""); setBegin(undefined); }} onCreated={(id, n) => { setAct(""); setMsg(`Order #${n} is filled in.`); setOpenId(null); void load(); onChanged?.(); }} />}
+      {act && <CreateOrderTool key={act + (begin ? JSON.stringify(begin) : "")} activityId={act} text={actText} begin={begin} onClose={() => { setAct(""); setBegin(undefined); if (made.current) { made.current = false; setOpenId(null); void load(); onChanged?.(); } }}
+        // the panel stays open after the order is made, to go on with it (the AI order helper, the mockup), like Create order
+        // everywhere else (Nov 6, Nick: "after we finished the order, it just quit… went back to the job board"); the list
+        // refreshes when it's closed, so the request doesn't vanish from under it
+        onCreated={(_id, n) => { made.current = true; setMsg(`Order #${n} is filled in.`); }} />}
 
       {only ? (!job && <div className="faint">This request isn&apos;t waiting anymore. It may have been made into an order.</div>) : !shown.length ? <div className="faint">{w ? `No requests match “${q}”.` : "No requests waiting. When a customer sends one from their portal, it shows here."}</div> : (
         <div className="tbl-wrap cu-fit"><table ref={cols.tableRef} className="tbl cu-tbl rqd-tbl" data-nofit data-keep>
