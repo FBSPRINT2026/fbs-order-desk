@@ -17,7 +17,9 @@ export type OrderStart = { told?: string; job?: string; /** several past jobs re
   /** which emails make up the order (Oct 24, Nick): other emails brought in, and conversation emails left out */ include?: string[]; exclude?: string[];
   /** New order / Reorder / Reorder with changes, picked on the card: the order's Order type */ orderType?: "new" | "reorder" | "reorder_changes";
   /** "Other options": only part of the order, made with no questions (components/tools/PartialOrder.tsx) */ partial?: PartKind;
-  /** "Anything to tell the AI?" with an Other option */ note?: string };
+  /** "Anything to tell the AI?" with an Other option */ note?: string;
+  /** Reorder with a past job picked (Nov 6, Nick: "if you click reorder… find the order in the client's files. And then we go
+   *  into the reorder how we have it already"): "o:<order id>" or "a:<archived id>", opened in the Reorder pop-up */ reorderOf?: string };
 const STOP = new Set(["the", "and", "for", "order", "orders", "reorder", "new", "shirts", "shirt", "tees", "tee", "printavo", "with", "from", "re", "fw", "fwd"]);
 const words = (s: string) => new Set(s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w)));
 const fmt = (d: string) => (d ? new Date(d.length === 10 ? d + "T12:00:00" : d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
@@ -214,8 +216,9 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
       <div className="osp-cb">
         <div className="osp-cb-f">
           <div className="field"><label htmlFor={`ot-${key}`}>Order type</label>
-            <select id={`ot-${key}`} value={c.type} onChange={(e) => setCard(key, { type: e.target.value as OT })}>
-              {(Object.keys(OT_LABEL) as OT[]).map((k) => <option key={k} value={k}>{OT_LABEL[k]}</option>)}
+            {/* New order or Reorder, first (Nov 6, Nick): a reorder's changes are asked in the Reorder pop-up */}
+            <select id={`ot-${key}`} value={c.type === "new" ? "new" : "reorder"} onChange={(e) => { const t = e.target.value as OT; setCard(key, { type: t }); if (key === SOLO) { setWay(""); setOtherFor(null); setJobFor(t === "new" ? null : SOLO); } }}>
+              <option value="new">New order</option><option value="reorder">Reorder</option>
             </select>
           </div>
           {c.type !== "new" && (
@@ -226,11 +229,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
             </div>
           )}
         </div>
-        <div className="osp-cb-how" role="group" aria-label="How it's decorated">
-          <span className="faint">Decoration</span>
-          <div className="chips">{(Object.keys(HOW_LABEL) as M[]).map((k) => { const on = (c.how || []).includes(k); return <button key={k} type="button" className={"chip" + (on ? " on" : "")} aria-pressed={on} onClick={() => setCard(key, { how: on ? (c.how || []).filter((x) => x !== k) : [...(c.how || []), k] })}>{HOW_LABEL[k]}</button>; })}</div>
-          {!(c.how || []).length && <span className="faint">from the email · pick one or more</span>}
-        </div>
+        {/* no Decoration question (Nov 6, Nick: "get rid of the thing that says decoration… just forget that question"): the AI reads it */}
       </div>
     );
   };
@@ -354,7 +353,12 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
               {look === "wait" ? <div className="faint osp-card-n">Comparing the picture in the email with their past jobs&apos; mockups…</div> : lookHit && cardOf(SOLO, null).job === lookHit.ref ? <div className="faint osp-card-n">{lookHit.why}{lookHit.sure === "low" ? " (not sure: check it)" : ""}</div> : null}
               {cardBody(SOLO, null)}
               {jobFor === SOLO && <div className="osp-card-jobs">{jobList}</div>}
-              {/* three ways to make it (Nov 6, Nick: "Make the order… Order helper… Other options"), each in this one tool */}
+              {/* a reorder: find the past job, then the Reorder pop-up does the rest, as it does from an order (Nov 6, Nick) */}
+              {cardOf(SOLO, null).type !== "new" ? <div className="osp-reo">
+                {cardOf(SOLO, null).job ? <button type="button" className="btn primary" onClick={() => onPick({ reorderOf: cardOf(SOLO, null).job!, orderType: "reorder" })}>Reorder {(cardOf(SOLO, null).jobLabel || "this job").replace(/\s*\(Printavo\)$/, "")}</button>
+                  : <span className="faint">Pick the past job above to reorder it.</span>}
+              </div> : <>
+              {/* a new order: three ways to make it (Nov 6, Nick: "Make the order… Order helper… Other options"), each in this one tool */}
               <div className="osp-ways" role="group" aria-label="How to make it">
                 <button type="button" className="osp-way go" onClick={makeSolo}><b>Make the order</b><span>The AI reads everything and makes the whole order. You check it after.</span></button>
                 <button type="button" className={"osp-way" + (way === "helper" ? " on" : "")} aria-expanded={way === "helper"} onClick={() => { setWay(way === "helper" ? "" : "helper"); setOtherFor(null); }}><b>Order helper</b><span>Step by step with you: where the sizes are, what each file is, then it makes the order.</span></button>
@@ -362,6 +366,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
               </div>
               {way === "helper" && <OrderHelper activityId={activityId} orderType={cardOf(SOLO, null).type} onMake={(st) => { const c = cardOf(SOLO, null); onPick({ ...st, told: [toldOf(c), st.told].filter(Boolean).join(" "), job: c.type === "new" ? undefined : c.job || undefined }); }} />}
               {otherFor === SOLO && otherMenu((k) => { const c = cardOf(SOLO, null); onPick({ told: toldOf(c), job: c.type === "new" ? undefined : c.job || undefined, orderType: c.type, partial: k, ...(aiNote.trim() ? { note: aiNote.trim() } : {}) }); })}
+              </>}
             </div>
           </div>
         )}

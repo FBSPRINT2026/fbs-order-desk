@@ -4,6 +4,7 @@ import OrderStartPick, { type OrderStart } from "@/components/OrderStartPick";
 import QuickOrder from "@/components/QuickOrder";
 import PartialOrder from "@/components/tools/PartialOrder";
 import ReorderPick from "@/components/tools/ReorderPick";
+import { activityFiles } from "@/app/shop/order-helper-actions";
 
 /**
  * THE Create order / Create reorder tool (Oct 23, Nick: "think of each of these as an individual tool that just gets
@@ -34,6 +35,9 @@ export default function CreateOrderTool({ activityId = "", archivedId, text = ""
     return () => { window.dispatchEvent(new CustomEvent("fbs:dock", { detail: { open: false } })); };
   }, []);
   if (archivedId) return <ReorderPick archivedId={archivedId} onClose={onClose} onCreated={onCreated} />;
+  // New order or Reorder (Nov 6): a reorder with its past job picked goes into the Reorder pop-up, filling in the request
+  // it was opened on when there is one (it keeps its number)
+  if (quick?.reorderOf) return <ReorderOf key={quick.n} activityId={activityId} ref0={quick.reorderOf} onClose={() => { setQuick(null); onClose(); }} onCreated={onCreated} />;
   // "Other options": only part of the order, no questions (components/tools/PartialOrder.tsx)
   if (quick?.partial) return <PartialOrder key={quick.n} activityId={activityId} start={{ ...quick, partial: quick.partial }} onClose={() => { setQuick(null); onClose(); }} onCreated={(id, n, label) => onCreated?.(id, n, label)} />;
   if (quick) return (
@@ -45,4 +49,13 @@ export default function CreateOrderTool({ activityId = "", archivedId, text = ""
     <OrderStartPick dock activityId={activityId} text={text} guess={guess} suggested={suggested} onClose={onClose}
       onPick={(st) => { if (st.review && onReview) { onReview(st); return; } setQuick({ ...st, review: false, n: Date.now() }); }} />
   );
+}
+
+/** the Reorder pop-up for a past job picked on the Create order card: ours ("o:<id>") or Printavo's ("a:<id>") */
+function ReorderOf({ activityId, ref0, onClose, onCreated }: { activityId: string; ref0: string; onClose: () => void; onCreated?: (id: string, number: number, label: string) => void }) {
+  const [into, setInto] = useState<string | null | undefined>(activityId ? undefined : null);
+  useEffect(() => { if (activityId) void activityFiles(activityId).then((r) => setInto(r.ok ? r.orderId : null)); }, [activityId]);
+  if (into === undefined) return null;
+  const ours = ref0.startsWith("o:"), id = ref0.replace(/^[oa]:/, "");
+  return <ReorderPick {...(ours ? { orderId: id } : { archivedId: id })} into={into || undefined} onClose={onClose} onCreated={onCreated} />;
 }
