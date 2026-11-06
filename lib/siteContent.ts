@@ -54,6 +54,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
   { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" },
   { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" },
+  { name: "FIFA World Cup 26", img: "/site/clients/fifa-world-cup-26.png" },
   { name: "Peticolas Brewing", img: "/site/clients/peticolas.png" },
   { name: "Fanatics", img: "/site/clients/fanatics.png" },
   { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" },
