@@ -73,6 +73,19 @@ export default function SitePage() {
           ))}
         </section>
 
+        <section className="fws-sec" id="work">
+          <h2 className="fws-h fws-d">Who we print for</h2>
+          <div className="fws-who">{WHO.map((w) => (
+            <div key={w.t} className={`fws-whoc ${w.tone}`}><h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
+          ))}</div>
+          {/* phones: one short row each, tap to open its points (Nov 5, Nick: option A) */}
+          <div className="fws-whom">{WHO.map((w) => (
+            <details key={w.t} className={`fws-whor ${w.tone}`}><summary><span className="fws-sw" aria-hidden /><span className="fws-whot"><b className="fws-d">{w.t}</b><span>{w.short || w.d}</span></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></summary>
+              <p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></details>
+          ))}</div>
+          <p className="fws-also"><span>We also print for</span>{ALSO.map((x) => <b key={x}>{x}</b>)}</p>
+        </section>
+
         {/* the portal, shown off with the "It's here" email's dashboard picture (Nov 5, Nick: in place of How ordering works) */}
         <section className="fws-sec fws-portal2" id="portal">
           <div className="fws-p2">
@@ -87,19 +100,6 @@ export default function SitePage() {
           </div>
         </section>
         <div className="fws-bar" aria-hidden />
-
-        <section className="fws-sec" id="work">
-          <h2 className="fws-h fws-d">Who we print for</h2>
-          <div className="fws-who">{WHO.map((w) => (
-            <div key={w.t} className={`fws-whoc ${w.tone}`}><h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
-          ))}</div>
-          {/* phones: one short row each, tap to open its points (Nov 5, Nick: option A) */}
-          <div className="fws-whom">{WHO.map((w) => (
-            <details key={w.t} className={`fws-whor ${w.tone}`}><summary><span className="fws-sw" aria-hidden /><span className="fws-whot"><b className="fws-d">{w.t}</b><span>{w.short || w.d}</span></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></summary>
-              <p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></details>
-          ))}</div>
-          <p className="fws-also"><span>We also print for</span>{ALSO.map((x) => <b key={x}>{x}</b>)}</p>
-        </section>
 
         <section className="fws-sec fws-alt" id="about">
           <div className="fws-about">
