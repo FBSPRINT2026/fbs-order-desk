@@ -21137,4 +21137,7 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .fws-svcs.sm .fws-svc{background:var(--side);color:#fff}
   .fws-svcs.sm .fws-svc h3{color:#fff;font-size:14px}
   .fws-svcs.sm .fws-ic img{filter:brightness(0) invert(1)}
-}
+}/* the main three's icons get a solid brand-color shadow behind them, like a misregistered print (Nov 5, Nick: option C) */
+.fws-svcs:not(.sm) .fws-svc.blue .fws-ic img{filter:drop-shadow(4px 4px 0 var(--fbs-blue))}
+.fws-svcs:not(.sm) .fws-svc.salmon .fws-ic img{filter:drop-shadow(4px 4px 0 var(--fbs-salmon))}
+.fws-svcs:not(.sm) .fws-svc.orange .fws-ic img{filter:drop-shadow(4px 4px 0 var(--fbs-orange))}
