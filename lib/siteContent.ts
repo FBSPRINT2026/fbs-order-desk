@@ -57,6 +57,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Fanatics", img: "/site/clients/fanatics.png" },
   { name: "Aubrey ISD", img: "/site/clients/aubrey-isd.png" },
   { name: "McKenna", img: "/site/clients/mckenna.png" },
+  { name: "Rahr & Sons Brewing", img: "/site/clients/rahr.png" },
   { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" },
 ];
 /** the About box's three facts (Nov 5, Nick) */
