@@ -53,6 +53,7 @@ export const CLIENTS: { name: string; img?: string }[] = [
   { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" },
   { name: "University of North Texas", img: "/site/clients/unt.png" },
   { name: "Cedar Promo", img: "/site/clients/cedar-promo.png" },
+  { name: "Little Groupies", img: "/site/clients/little-groupies.png" },
   { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
   { name: "City of Richardson", img: "/site/clients/city-of-richardson.png" },
   { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" },
