@@ -656,7 +656,14 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
                 </div>
                 <div>
                   <div className="lbl">Garments</div>
-                  {lines.filter((l, i) => lines.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i).map((l) => <div className="pf-pr" key={l.id}><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>)}
+                  {lines.filter((l, i) => lines.findIndex((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase()) === i).map((l) => {
+                    // each garment's sizes under it, like the garment pages after it (Nov 6, Nick: "you don't see the sizes on
+                    // page 1 like you do on the other pages")
+                    const same = lines.filter((y) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase());
+                    const sizes = SIZES.map((z) => [z, same.reduce((a, y) => a + (+(y.sizes?.[z] || 0)), 0)] as const).filter(([, n]) => n > 0);
+                    return <div key={l.id}><div className="pf-pr"><Swatch c={(lineHex(l) || "") || colorHex(l.color) || guessHex(l.color) || hex} /><b>{[l.brand, l.style].filter(Boolean).join(" ") || "Garment"}</b>{l.color ? ` · ${l.color}` : ""}</div>
+                      {sizes.length > 0 && <div className="pf-pr faint pf-szs">{sizes.map(([z, n]) => `${z} ${n}`).join(" · ")} · {sizes.reduce((a, [, n]) => a + n, 0)} pcs</div>}</div>;
+                  })}
                 </div>
               </div>
               {/* no approval box on the PDF (Oct 29, Nick: "take the approval out… we're going to use this system"): the
