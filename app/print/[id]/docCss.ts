@@ -333,11 +333,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .pf-appr{margin-top:8px;font-size:10pt;font-weight:700;color:var(--ok)}
 .pdoc .pf-appr.bad{color:var(--danger,#b42318)}
 .pdoc .pf-cover .pf-hero span{font-size:9.5pt}
-.pdoc .pf-cover .pf-sum{margin-top:2px;padding-top:4px;gap:14px}
-.pdoc .pf-cover .pf-sum .lbl{font-size:7.5pt}
-.pdoc .pf-cover .pf-pr{font-size:9pt;margin-top:1px;line-height:1.25}
-.pdoc .pf-cover .pf-inks{font-size:8.5pt;margin-top:1px}
-.pdoc .pf-cover .pf-inks .sw,.pdoc .pf-cover .pf-pr .sw{width:10px;height:10px;margin-right:4px}
+/* the cover's Prints and Garment are the same size as on the garment pages (Nov 6, Nick); the picture gives the room */
 .pdoc .pf-cover .pf-ok{margin-top:auto;padding:6px 12px 8px;border-width:1.5px}
 .pdoc .pf-cover .pf-ok .t{font-size:10pt}
 .pdoc .pf-cover .pf-ok .s{font-size:8pt;line-height:1.3;margin-top:1px}
