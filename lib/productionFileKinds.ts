@@ -9,7 +9,7 @@ export const PROD_KINDS = [
   { k: "mailing", label: "Mailing list / addresses", hint: "Ship-to lists for drop ships and mailing" },
   { k: "packing", label: "Packing instructions", hint: "Folding, bagging, sorting by store, kits" },
   { k: "packing_slip", label: "Packing slip / paperwork", hint: "The customer's paperwork that goes in the box" },
-  { k: "film", label: "Film / separations", hint: "Printed films, separated files, spot color seps" },
+  { k: "film", label: "Customer separations / film", hint: "Their own separations or films: printed as sent from the order's Their separations panel" },
   { k: "print_art", label: "Print-ready art", hint: "The file we print from: AI, EPS, PDF, PNG" },
   { k: "embroidery", label: "Embroidery file", hint: "DST, EMB, PES…" },
   { k: "old_mockup", label: "Old mockup", hint: "Our earlier mockup, for reference" },

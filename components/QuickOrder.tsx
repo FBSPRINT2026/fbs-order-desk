@@ -1503,7 +1503,9 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
             </select>;
           })()}
           {(it.where === "old" || brought.includes(it.key)) && <button type="button" role="radio" aria-checked={v === "mockup"} className={"chip" + (v === "mockup" ? " on" : "")} onClick={() => answer(it.key, "mockup")}>{brought.includes(it.key) ? "Customer mockup" : "Mockup"}</button>}
-          {(it.where === "old" || brought.includes(it.key)) && <button type="button" role="radio" aria-checked={v === "production"} className={"chip" + (v === "production" ? " on" : "")} onClick={() => answer(it.key, "production")} title="Goes in this order's Production files (barcodes, labels, film, separations…)">Production file</button>}
+          {(it.where === "old" || brought.includes(it.key)) && <button type="button" role="radio" aria-checked={v === "production" && kindOf[it.key] !== "film"} className={"chip" + (v === "production" && kindOf[it.key] !== "film" ? " on" : "")} onClick={() => { answer(it.key, "production"); if (kindOf[it.key] === "film") setKindOf((x) => { const y = { ...x }; delete y[it.key]; return y; }); }} title="Goes in this order's Production files (barcodes, labels, placement guides…)">Production file</button>}
+          {/* the customer's own separations, printed as sent from the order's Their separations panel (Nov 6, Nick: Tiger Blue) */}
+          {(it.where === "old" || brought.includes(it.key)) && <button type="button" role="radio" aria-checked={v === "production" && kindOf[it.key] === "film"} className={"chip" + (v === "production" && kindOf[it.key] === "film" ? " on" : "")} onClick={() => { answer(it.key, "production"); setKindOf((x) => ({ ...x, [it.key]: "film" })); }} title="Their own separations: they go to the film printer as they are, from the order's Art & production tab">Customer separations</button>}
           {!it.only && <button type="button" role="radio" aria-checked={v === "none"} className={"chip" + (v === "none" ? " on" : "")} onClick={() => answer(it.key, "none")}>Not needed</button>}
         </div>
         {v.startsWith("loc:") && linesAt(v.slice(4)).length > 1 && (() => {
@@ -1567,7 +1569,8 @@ function ArtHelp({ help, onCancel }: { help: Help; onCancel: () => void }) {
               <span className="ap-pic">{f.d?.asIsUrl ? <img src={f.d.asIsUrl} alt="" /> : null}</span>
               <span className="arc-other-n"><span data-notranslate>{f.name}</span>{aiG[f.path]?.kind && aiG[f.path].kind !== "?" ? <span className="faint">Looks like {prodKindLabel(aiG[f.path].kind).toLowerCase()}</span> : null}</span>
               <span className="arc-chips">
-                <button type="button" className={"chip" + (as[k] === "production" ? " on" : "")} onClick={() => setAs((a) => ({ ...a, [k]: "production" }))}>Keep in Production files</button>
+                <button type="button" className={"chip" + (as[k] === "production" && kindOf[k] !== "film" ? " on" : "")} onClick={() => { setAs((a) => ({ ...a, [k]: "production" })); if (kindOf[k] === "film") setKindOf((x) => { const y = { ...x }; delete y[k]; return y; }); }}>Keep in Production files</button>
+                <button type="button" className={"chip" + (as[k] === "production" && kindOf[k] === "film" ? " on" : "")} onClick={() => { setAs((a) => ({ ...a, [k]: "production" })); setKindOf((x) => ({ ...x, [k]: "film" })); }}>Customer separations</button>
                 <button type="button" className={"chip" + (as[k] === "none" ? " on" : "")} onClick={() => setAs((a) => ({ ...a, [k]: "none" }))}>Not needed</button>
               </span>
             </div>

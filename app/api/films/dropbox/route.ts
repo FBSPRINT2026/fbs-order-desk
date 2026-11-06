@@ -24,9 +24,11 @@ export async function POST(req: Request) {
   if ((req.headers.get("content-type") || "").includes("application/json")) {
     const b = (await req.json().catch(() => ({}))) as { path?: string; name?: string };
     const path = String(b.path || "");
-    if (!/^art\/[0-9a-f-]{36}\//i.test(path)) return NextResponse.json({ error: "That isn't an order's file." }, { status: 400 });
-    const name = String(b.name || path.split("/").pop() || "film.pdf").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 180);
     const admin = createAdminClient();
+    // only a file that is one of an order's production files (wherever it's kept: uploaded here, or brought from an old job)
+    const { data: own } = path ? await admin.from("art_files").select("id").eq("file_path", path).limit(1).maybeSingle() : { data: null };
+    if (!own) return NextResponse.json({ error: "That isn't an order's file." }, { status: 400 });
+    const name = String(b.name || path.split("/").pop() || "film.pdf").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 180);
     const { data, error } = await admin.storage.from("proofs").download(path);
     if (error || !data) return NextResponse.json({ error: "Couldn't read that file." }, { status: 404 });
     try {
