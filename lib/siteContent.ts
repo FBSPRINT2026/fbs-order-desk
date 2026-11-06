@@ -32,20 +32,21 @@ export const STEPS = [
   { t: "We print and deliver", d: "Track it in your portal until it's ready for pickup or shipped to your door." },
 ];
 
-/** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated"). The last card names
- *  everyone else in a short list (Nov 5, Nick: "wholesalers and contract resellers… private brands… schools and
- *  churches… the other ones can be like breweries, business, team events"). */
-export const WHO: { t: string; d: string; /** the one line under its name on a phone */ short?: string; icon?: "warehouse" | "tag" | "swap" | "school"; points: string[]; /** a list of names, not points */ list?: boolean; tone: "blue" | "salmon" | "orange" | "navy" }[] = [
-  { t: "Wholesalers and contract resellers", icon: "warehouse", short: "Wholesale pricing, blind shipped", d: "A contract decorating partner for wholesalers and promo distributors, run after run.", points: ["Your goods or ours, at wholesale pricing", "Blind shipped under your name, or straight to your client", "Proofs and quotes you can pass along"], tone: "blue" },
-  { t: "Private brands", icon: "tag", short: "Tags, labels, retail-ready packing", d: "Retail-ready product for brands and designers selling their own line.", points: ["Custom neck tags, labels and hang tags", "Fold, bag and pack for retail", "Consistent color from drop to drop"], tone: "salmon" },
-  { t: "Schools and churches", icon: "school", short: "Spirit wear, ministries, events", d: "Spirit wear, teams, ministries and events, on your calendar.", points: ["Billing by department or booster club", "Online stores for families and members", "Rush jobs for game day and events"], tone: "orange" },
-  { t: "And everyone else", short: "Breweries, businesses, cities, teams", d: "Whatever you're putting your name on.", points: ["Breweries", "Businesses", "Cities", "Teams and events", "Designers selling product"], list: true, tone: "navy" },
+/** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated"): three even cards, one
+ *  line and three short points each (Nov 5, Nick: "wholesalers and contract resellers… private brands… schools and
+ *  churches"), then everyone else named on one line */
+export const WHO: { t: string; d: string; icon: "warehouse" | "tag" | "school"; points: string[]; tone: "blue" | "salmon" | "orange" }[] = [
+  { t: "Wholesalers and resellers", icon: "warehouse", d: "Your contract decorator, run after run.", points: ["Wholesale pricing", "Blind shipped to your client", "Proofs you can pass along"], tone: "blue" },
+  { t: "Private brands", icon: "tag", d: "Retail-ready product for your own line.", points: ["Neck tags and hang tags", "Folded, bagged, retail packed", "Same color every drop"], tone: "salmon" },
+  { t: "Schools and churches", icon: "school", d: "Spirit wear, ministries and events.", points: ["Billing by department", "Online stores for families", "Rush jobs for game day"], tone: "orange" },
 ];
-/** names we've printed for, shown as their logos once the files are in public/site/clients (Nov 5, Nick: "we also work
- *  with these major retailers… and then local businesses"). Without a file the name shows in plain type. */
-export const CLIENT_LOGOS: { t: string; names: { name: string; img?: string }[] }[] = [
-  { t: "We also work with major retailers and brands", names: [{ name: "Walmart", img: "/site/clients/walmart.svg" }, { name: "Target", img: "/site/clients/target.png" }, { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" }, { name: "Fanatics", img: "/site/clients/fanatics.png" }, { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" }] },
-  { t: "And names you know around here", names: [{ name: "On Your Left" }, { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" }, { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" }, { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" }, { name: "Dallas Fire-Rescue", img: "/site/clients/dallas-fire-rescue.png" }] },
+export const EVERYONE = "breweries, businesses, cities, teams and events";
+/** the brands we've printed for, scrolling in one strip (Nov 5, Nick: "local and national brands we work with… rotating
+ *  logos"). Files are in public/site/clients; without one the name shows in plain type. */
+export const CLIENTS: { name: string; img?: string }[] = [
+  { name: "Walmart", img: "/site/clients/walmart.svg" }, { name: "Target", img: "/site/clients/target.png" }, { name: "Academy Sports + Outdoors", img: "/site/clients/academy.png" },
+  { name: "Saint Arnold Brewing", img: "/site/clients/saint-arnold.png" }, { name: "Fanatics", img: "/site/clients/fanatics.png" }, { name: "Dallas Fire-Rescue", img: "/site/clients/dallas-fire-rescue.png" },
+  { name: "Keurig Dr Pepper", img: "/site/clients/keurig-dr-pepper.png" }, { name: "Plano Balloon Festival", img: "/site/clients/plano-balloon.png" }, { name: "Cowboy Cool", img: "/site/clients/cowboy-cool.png" },
 ];
 /** the About box's three facts (Nov 5, Nick) */
 export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];

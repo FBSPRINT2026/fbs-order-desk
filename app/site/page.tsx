@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/config";
-import { CLIENT_LOGOS, FACTS, PORTAL_FEATS, SERVICES, SITE, WHO } from "@/lib/siteContent";
+import { CLIENTS, EVERYONE, FACTS, PORTAL_FEATS, SERVICES, SITE, WHO } from "@/lib/siteContent";
 import SiteIconArt, { type SiteIcon } from "@/components/site/SiteIcons";
 import SiteRequestForm from "@/components/site/SiteRequestForm";
 
@@ -75,21 +75,23 @@ export default function SitePage() {
 
         <section className="fws-sec fws-alt" id="work">
           <h2 className="fws-h fws-d">Who we print for</h2>
+          <p className="fws-sub">Built for people who sell apparel, and the ones who wear it.</p>
+          {/* three even cards, one line and three checks each (Nov 5, Nick: "the top section looks terrible… remake it") */}
           <div className="fws-who">{WHO.map((w) => (
-            <div key={w.t} className={`fws-whoc ${w.tone}${w.list ? " list" : ""}`}>{w.icon && <span className="fws-badge"><SiteIconArt name={w.icon} size={22} /></span>}<h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
-          ))}</div>
-          {/* phones: one short row each, tap to open its points (Nov 5, Nick: option A) */}
-          <div className="fws-whom">{WHO.map((w) => (
-            <details key={w.t} className={`fws-whor ${w.tone}`}><summary><span className="fws-sw" aria-hidden /><span className="fws-whot"><b className="fws-d">{w.t}</b><span>{w.short || w.d}</span></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></summary>
-              <p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></details>
-          ))}</div>
-          {/* the names we print for, as their logos once the files are in (lib/siteContent.ts CLIENT_LOGOS) */}
-          {CLIENT_LOGOS.map((g) => (
-            <div key={g.t} className="fws-logos">
-              <p className="fws-logos-t">{g.t}</p>
-              <ul>{g.names.map((n) => <li key={n.name}>{n.img ? <img src={n.img} alt={n.name} loading="lazy" /> : <span className="fws-d">{n.name}</span>}</li>)}</ul>
+            <div key={w.t} className={`fws-whoc ${w.tone}`}>
+              <span className="fws-badge"><SiteIconArt name={w.icon} size={22} /></span>
+              <h3 className="fws-d">{w.t}</h3><p>{w.d}</p>
+              <ul>{w.points.map((x) => <li key={x}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>{x}</li>)}</ul>
             </div>
-          ))}
+          ))}</div>
+          <div className="fws-else"><p><b>And everyone else</b><span>{EVERYONE}</span></p><a href="#request">Get a quote →</a></div>
+          {/* the brands we print for, one strip that moves on its own and stops under the pointer */}
+          <h3 className="fws-logos-t fws-d">Local and national brands we work with</h3>
+          <div className="fws-mq" aria-label="Brands we work with">
+            <div className="fws-mq-trk">{[0, 1].map((k) => CLIENTS.map((c) => (
+              <div key={`${k}${c.name}`} className="fws-mq-lg" aria-hidden={k ? true : undefined}>{c.img ? <img src={c.img} alt={k ? "" : c.name} loading="lazy" /> : <span className="fws-d">{c.name}</span>}</div>
+            )))}</div>
+          </div>
         </section>
 
         {/* the portal, shown off with the "It's here" email's dashboard picture (Nov 5, Nick: in place of How ordering works) */}
