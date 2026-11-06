@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_URL } from "@/lib/config";
-import { ALSO, FACTS, PORTAL_FEATS, SERVICES, SITE, WHO } from "@/lib/siteContent";
+import { CLIENT_LOGOS, FACTS, PORTAL_FEATS, SERVICES, SITE, WHO } from "@/lib/siteContent";
 import SiteIconArt, { type SiteIcon } from "@/components/site/SiteIcons";
 import SiteRequestForm from "@/components/site/SiteRequestForm";
 
@@ -76,14 +76,20 @@ export default function SitePage() {
         <section className="fws-sec fws-alt" id="work">
           <h2 className="fws-h fws-d">Who we print for</h2>
           <div className="fws-who">{WHO.map((w) => (
-            <div key={w.t} className={`fws-whoc ${w.tone}`}>{w.icon && <span className="fws-badge"><SiteIconArt name={w.icon} size={22} /></span>}<h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
+            <div key={w.t} className={`fws-whoc ${w.tone}${w.list ? " list" : ""}`}>{w.icon && <span className="fws-badge"><SiteIconArt name={w.icon} size={22} /></span>}<h3 className="fws-d">{w.t}</h3><p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></div>
           ))}</div>
           {/* phones: one short row each, tap to open its points (Nov 5, Nick: option A) */}
           <div className="fws-whom">{WHO.map((w) => (
             <details key={w.t} className={`fws-whor ${w.tone}`}><summary><span className="fws-sw" aria-hidden /><span className="fws-whot"><b className="fws-d">{w.t}</b><span>{w.short || w.d}</span></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></summary>
               <p>{w.d}</p><ul>{w.points.map((x) => <li key={x}>{x}</li>)}</ul></details>
           ))}</div>
-          <p className="fws-also"><span>We also print for</span>{ALSO.map((x) => <b key={x}>{x}</b>)}</p>
+          {/* the names we print for, as their logos once the files are in (lib/siteContent.ts CLIENT_LOGOS) */}
+          {CLIENT_LOGOS.map((g) => (
+            <div key={g.t} className="fws-logos">
+              <p className="fws-logos-t">{g.t}</p>
+              <ul>{g.names.map((n) => <li key={n.name}>{n.img ? <img src={n.img} alt={n.name} loading="lazy" /> : <span className="fws-d">{n.name}</span>}</li>)}</ul>
+            </div>
+          ))}
         </section>
 
         {/* the portal, shown off with the "It's here" email's dashboard picture (Nov 5, Nick: in place of How ordering works) */}

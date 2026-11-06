@@ -30,8 +30,11 @@ const GROUPS: G[] = [
   // one card for now: what customers sent in (Nov 3, Nick: "hide leads… one card thing that says incoming… customer
   // request, customer sent… leads I will deal with later as more of a sales pipeline thing… people are getting confused").
   // Leads (orders the AI found in emails) are still worked out in lib/jobCenter.ts, just not shown.
-  { t: "Portal requests", line: "Customer orders", c: "var(--fbs-violet)", steps: [
-    ["requests", "Customer orders", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
+  // website inquiries beside them, so they don't mix with what customers sent from the portal (Nov 5, Nick: "it should go
+  // website leads instead of into requests… next to requests")
+  { t: "Requests", line: "Portal and website", c: "var(--fbs-violet)", steps: [
+    ["requests", "Customer orders", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)],
+    ["website", "Website leads", ic(<><circle cx="12" cy="12" r="9" /><path d="M3.6 9h16.8M3.6 15h16.8" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>)]] },
   { t: "In the works", line: "Mockups and numbers", c: "var(--warn)", steps: [
     ["mockups", "Mockups", ic(<><path d="M15 4l6 2v5h-3v8a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-8H3V6l6-2a3 3 0 0 0 6 0" /></>)],
     ["numbers", "Numbers", ic(<><path d="M5 9h14M5 15h14M11 4 7 20M17 4l-4 16" /></>)]] },
@@ -46,11 +49,13 @@ const GROUPS: G[] = [
     ["approved", "Approved", ic(<><circle cx="12" cy="12" r="9" /><path d="m9 12 2 2 4-4" /></>)],
     ["declined", "Declined", ic(<><circle cx="12" cy="12" r="9" /><path d="m10 10 4 4m0-4-4 4" /></>)]] },
 ];
+/** the two lists of what came in: the portal's and the website's */
+const isReq = (s: Step) => s === "requests" || s === "website";
 const ALL_STEPS = GROUPS.flatMap((g) => g.steps.map((s) => s[0]));
 const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g) => g.steps.some((x) => x[0] === s))!.c);
 const DEPTS: [Dept | "all", string][] = [["all", "All"], ["screen", "Screen printing"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const EMPTY: Record<Step, string> = {
-  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
+  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", website: "No new inquiries from the website.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
   ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
 };
 /** the tracks a step is about */
@@ -123,6 +128,8 @@ export default function JobCenter() {
     return () => { live = false; };
   }, [n]);
 
+  // a link to one request opens the list it's in (a website inquiry is under Website leads)
+  useEffect(() => { if (!reqPick || !items) return; const it = items.find((x) => x.orderId === reqPick); const st = it?.steps.find(isReq); if (st && st !== step) setStep(st); }, [reqPick, items]); // eslint-disable-line react-hooks/exhaustive-deps
   const mine = mineOn && hasAcc; // someone with no accounts (production) sees everyone's
   const whose = (it: JobItem) => !mine || it.owner === me;
   const inDept = (it: JobItem) => dept === "all" || it.depts.includes(dept) || (it.type !== "order" && it.type !== "request");
@@ -136,7 +143,7 @@ export default function JobCenter() {
   const pool = (s: Step) => (SHOP_WIDE.includes(s) ? flagged : base);
   const count = (s: Step) => pool(s).filter((it) => it.steps.includes(s) && inDept(it)).length;
   const shown = useMemo(() => pool(step).filter((it) => it.steps.includes(step) && inDept(it) && match(it))
-    .sort((a, b) => (step === "approved" || step === "declined" || step === "leads" || step === "requests" ? (b.at || "").localeCompare(a.at || "") : (a.due || "9999").localeCompare(b.due || "9999") || (a.at || "").localeCompare(b.at || ""))), // eslint-disable-line react-hooks/exhaustive-deps
+    .sort((a, b) => (step === "approved" || step === "declined" || step === "leads" || isReq(step) ? (b.at || "").localeCompare(a.at || "") : (a.due || "9999").localeCompare(b.due || "9999") || (a.at || "").localeCompare(b.at || ""))), // eslint-disable-line react-hooks/exhaustive-deps
   [items, step, dept, q, mine, me, cameBack, artOnly]);
   const deptCount = (d: Dept | "all") => pool(step).filter((it) => it.steps.includes(step) && (d === "all" || it.depts.includes(d))).length;
   const after = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 6000); setN((x) => x + 1); };
@@ -155,7 +162,7 @@ export default function JobCenter() {
     if (it) { const st = it.steps.find((x) => x !== "leads") || it.steps[0]; if (st && st !== step) setStep(st); setTimeout(() => document.querySelector(".jc-hl")?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 80); }
   };
   // View all: each job once, in the first step it's at (Requests through Declined; not Leads)
-  const sortIn = (s: Step) => (a: JobItem, b: JobItem) => (s === "approved" || s === "declined" || s === "requests" ? (b.at || "").localeCompare(a.at || "") : (a.due || "9999").localeCompare(b.due || "9999") || (a.at || "").localeCompare(b.at || ""));
+  const sortIn = (s: Step) => (a: JobItem, b: JobItem) => (s === "approved" || s === "declined" || isReq(s) ? (b.at || "").localeCompare(a.at || "") : (a.due || "9999").localeCompare(b.due || "9999") || (a.at || "").localeCompare(b.at || ""));
   const sections = useMemo(() => {
     const seen = new Set<string>();
     return GROUPS.map((g) => {
@@ -357,9 +364,9 @@ export default function JobCenter() {
               {step === "mockups" && !all && <div className="chips"><button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button></div>}
               <span className="jc-search"><SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} /></span>
             </div>
-            <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{curG?.t}</b><span>›</span><b>{(curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && step !== "requests" ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}</div>
+            <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{curG?.t}</b><span>›</span><b>{(curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && !isReq(step) ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}</div>
             {/* Requests: laid out like ClickUp Jobs' New list, the picked one opened on top (components/RequestsDesk.tsx) */}
-            {step === "requests" && !all ? <RequestsDesk q={q} onlyIds={items ? new Set(pool("requests").filter((it) => it.steps.includes("requests") && inDept(it) && it.orderId).map((it) => it.orderId!)) : undefined} pick={reqPick || undefined} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
+            {isReq(step) && !all ? <RequestsDesk key={step} q={q} onlyIds={items ? new Set(pool(step).filter((it) => it.steps.includes(step) && inDept(it) && it.orderId).map((it) => it.orderId!)) : undefined} pick={reqPick || undefined} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
                 <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
                 <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [
@@ -372,7 +379,7 @@ export default function JobCenter() {
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
                 <thead><tr>{step === "leads" ? <><th>Lead</th><th>Came in</th><th /></>
                   : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
-                  : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : step === "requests" ? "Pieces" : "Needs"}</th><th>Also</th><th>{step === "requests" ? "Sent in" : "Due"}</th></>}</tr></thead>
+                  : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : isReq(step) ? "Pieces" : "Needs"}</th><th>Also</th><th>{isReq(step) ? "Sent in" : "Due"}</th></>}</tr></thead>
                 <tbody>{shown.flatMap((it) => { const c0 = it.orderId ? chatOfJob(it.orderId) : null; return [
                   <Row key={it.key} it={it} step={step} msgs={unreadOf(it.orderId)} mc={c0 ? colorOfChat(c0) : undefined} onChat={c0 ? () => openChat(chat === c0.key ? null : c0.key) : undefined} hl={!!chatOrder && chatOrder === it.orderId} on={pick === it.key} onPick={() => setPick(pick === it.key ? null : it.key)} after={after} onLead={() => setLead(it)} />,
                   // the conversation opens on the next line, in the big panel (Nov 2, Nick)
@@ -416,11 +423,11 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, 
     <tr className={(on ? "on" : "") + (hl && !linked ? " jc-hl" : "") + (linked ? " jc-linked" : "")} onClick={onPick} {...keys} data-job={it.orderId || ""} style={linked && mc ? { ["--mc" as string]: mc } : undefined}>
       <td>{who}</td>
       <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
-      <td>{step === "requests" ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
+      <td>{isReq(step) ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
         : <div className="jc-tags">{here.map(tag)}</div>}</td>
       {/* what else is going on, in quiet words (Nov 2, Nick: "statuses are weird"): one colored status per job, in Where it is */}
       <td><span className="jc-also">{[...(step === "approved" ? [] : also).map((t) => t.label), it.revised && step !== "changes" ? "came back once" : ""].filter(Boolean).join(" · ")}</span></td>
-      <td className="nowrap">{step === "requests" ? day(it.at) : it.due ? day(it.due) : <span className="faint">No date</span>}</td>
+      <td className="nowrap">{isReq(step) ? day(it.at) : it.due ? day(it.due) : <span className="faint">No date</span>}</td>
     </tr>
   );
 }

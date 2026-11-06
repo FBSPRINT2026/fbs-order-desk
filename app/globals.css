@@ -21202,3 +21202,26 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
   .fws-p2>div{padding-bottom:0}
   .fws-p2-pic{align-self:center;border-radius:12px;box-shadow:0 18px 40px rgba(0,0,0,.35)}
 }
+/* the website's Who we print for: the last card is a list of names in navy, then the clients' logos (Nov 5, Nick) */
+.fws-whoc.navy{border-top-color:var(--side)}
+.fws-whoc.list ul{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px}
+.fws-whoc.navy li::before,.fws-whor.navy li::before{background:var(--side)}
+.fws-whor.navy .fws-sw{background:var(--side)}
+.fws-logos{margin-top:26px}
+.fws-logos-t{margin:0 0 10px;font-size:14px;font-weight:700;color:var(--ink-2)}
+.fws-logos ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px}
+.fws-logos li{display:grid;place-items:center;height:72px;padding:10px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--line-2);text-align:center}
+.fws-logos li span{font-size:15px;font-weight:800;color:var(--ink-3);line-height:1.2}
+.fws-logos img{max-height:44px;max-width:100%;object-fit:contain;filter:grayscale(1);opacity:.75;transition:filter .2s,opacity .2s}
+.fws-logos li:hover img{filter:none;opacity:1}
+@media (max-width:820px){.fws-logos ul{grid-template-columns:repeat(2,minmax(0,1fr))}.fws-logos li{height:60px}}
+/* the inquiry form's first question: a quote or a new account (Nov 5, Nick) */
+.fws-why{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fws-why button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:14px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font:inherit;color:var(--ink)}
+.fws-why button b{font:800 16px var(--display)}
+.fws-why button span{font-size:13px;color:var(--ink-2)}
+.fws-why button:hover{border-color:var(--accent)}
+.fws-why button.on{border:2px solid var(--accent);padding:13px 15px;background:var(--accent-soft)}
+.fws-f select{height:40px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface);width:100%;box-sizing:border-box}
+.fws-f select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+@media (max-width:420px){.fws-why{grid-template-columns:1fr}}

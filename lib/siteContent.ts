@@ -32,20 +32,28 @@ export const STEPS = [
   { t: "We print and deliver", d: "Track it in your portal until it's ready for pickup or shipped to your door." },
 ];
 
-/** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated") */
-export const WHO: { t: string; d: string; /** the one line under its name on a phone */ short?: string; icon?: "warehouse" | "tag" | "swap" | "school"; points: string[]; tone: "blue" | "salmon" | "orange" }[] = [
-  { t: "Wholesalers", icon: "warehouse", short: "Contract decorating, blind shipped", d: "Contract decorating you can count on, run after run.", points: ["Your goods or ours, at wholesale pricing", "Blind shipped under your name", "Reorders in a couple of clicks"], tone: "blue" },
+/** who we print for (in place of job photos; Nov 5, Nick: "the pictures we have are pretty dated"). The last card names
+ *  everyone else in a short list (Nov 5, Nick: "wholesalers and contract resellers… private brands… schools and
+ *  churches… the other ones can be like breweries, business, team events"). */
+export const WHO: { t: string; d: string; /** the one line under its name on a phone */ short?: string; icon?: "warehouse" | "tag" | "swap" | "school"; points: string[]; /** a list of names, not points */ list?: boolean; tone: "blue" | "salmon" | "orange" | "navy" }[] = [
+  { t: "Wholesalers and contract resellers", icon: "warehouse", short: "Wholesale pricing, blind shipped", d: "A contract decorating partner for wholesalers and promo distributors, run after run.", points: ["Your goods or ours, at wholesale pricing", "Blind shipped under your name, or straight to your client", "Proofs and quotes you can pass along"], tone: "blue" },
   { t: "Private brands", icon: "tag", short: "Tags, labels, retail-ready packing", d: "Retail-ready product for brands and designers selling their own line.", points: ["Custom neck tags, labels and hang tags", "Fold, bag and pack for retail", "Consistent color from drop to drop"], tone: "salmon" },
-  { t: "Contract resellers", icon: "swap", short: "Ships straight to your client", d: "A production partner for promo and apparel distributors.", points: ["Proofs and quotes you can pass along", "Order status in your portal", "Ships straight to your client"], tone: "orange" },
-  { t: "Schools", icon: "school", short: "Spirit wear, teams, online stores", d: "Spirit wear, teams, clubs and events, on the school's calendar.", points: ["Billing by department or booster club", "Online stores for families", "Rush jobs for game day"], tone: "blue" },
+  { t: "Schools and churches", icon: "school", short: "Spirit wear, ministries, events", d: "Spirit wear, teams, ministries and events, on your calendar.", points: ["Billing by department or booster club", "Online stores for families and members", "Rush jobs for game day and events"], tone: "orange" },
+  { t: "And everyone else", short: "Breweries, businesses, cities, teams", d: "Whatever you're putting your name on.", points: ["Breweries", "Businesses", "Cities", "Teams and events", "Designers selling product"], list: true, tone: "navy" },
 ];
-/** everyone else we print for, named under the four above */
-export const ALSO = ["Breweries", "Churches", "Cities", "Businesses", "Designers selling product", "Teams and events"];
+/** names we've printed for, shown as their logos once the files are in public/site/clients (Nov 5, Nick: "we also work
+ *  with these major retailers… and then local businesses"). Without a file the name shows in plain type. */
+export const CLIENT_LOGOS: { t: string; names: { name: string; img?: string }[] }[] = [
+  { t: "We also work with major retailers", names: [{ name: "Walmart", img: "/site/clients/walmart.png" }, { name: "Target" }, { name: "Academy Sports + Outdoors" }, { name: "Fanatics" }] },
+  { t: "And names you know around here", names: [{ name: "On Your Left" }, { name: "Plano Balloon Festival" }, { name: "Saint Arnold Brewing" }] },
+];
 /** the About box's three facts (Nov 5, Nick) */
 export const FACTS: [string, string][] = [["Experience", "22 years in business"], ["Garments decorated", "Millions"], ["Based in", "North Texas"]];
 
 /** the inquiry form's "You are a…" (Nov 5, Nick: "who am I, what my company, what am I needing") */
-export const CLIENT_KINDS = ["Wholesaler", "Private brand", "Contract reseller", "School", "Brewery", "Church", "City", "Business", "Something else"];
+export const CLIENT_KINDS = ["Wholesaler", "Contract reseller", "Private brand", "School", "Church", "Brewery", "City", "Business", "Something else"];
+/** a new account's "About how many a month" */
+export const MONTHLY = ["Under 250", "250 to 1,000", "1,000 to 5,000", "5,000 or more", "Not sure yet"];
 /** what someone can tick on the request form */
 export const NEEDS = ["Screen printing", "Embroidery", "DTF", "Printing", "Signage", "Promo items", "Online store", "Fulfillment"];
 export const NEEDS_OLD = ["T-shirts", "Hoodies and sweats", "Hats", "Polos and jackets", "Embroidery", "DTF transfers", "Printing", "Signage", "Promo items", "Something else"];
