@@ -3,7 +3,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Group, Imprint } from "@/lib/pricing";
-import { BACKINGS, TOPPINGS } from "@/lib/embroidery";
+import { BACKINGS, TOPPINGS, threadByName } from "@/lib/embroidery";
+import { colorHex } from "@/lib/inkColors";
 import type { DetailsInput } from "@/lib/productionDetails";
 import { latestSpecs, type DesignSpecs, type SpecEntry } from "@/lib/designSpecs";
 import { digitizingHref, embSpecsOf } from "@/lib/digitizeStatus";
@@ -27,6 +28,10 @@ type Spot = { key: string; loc: string; items: Item[]; hasFile: boolean; last: S
 type Logo = { key: string; des: Des | null; customer: string; spots: Spot[]; items: Item[]; hasFile: boolean };
 type Filter = "all" | "nofile" | "threads";
 const lc = (s: string) => (s || "").trim().toLowerCase();
+/** a print's threads as a set, any order ("Carmine, Black" = "Black, Carmine"): its thread version on the logo */
+const threadsOf = (inks: string | undefined) => (inks || "").split(/\s*,\s*/).map((x) => x.trim()).filter(Boolean);
+const verKey = (inks: string | undefined) => threadsOf(inks).map(lc).sort().join("|");
+const swatch = (n: string) => threadByName(n)?.hex || colorHex(n) || (/white/i.test(n) ? "#FFFFFF" : /black/i.test(n) ? "#111111" : "#9aa1ab");
 const blank = (id: string): DetailsInput => ({ id, size: "", inks: "", colors: 1, underbase: "", drop: "", screensOnFile: false, notes: "", stitches: "", backing: "", topping: "" });
 
 export default function EmbDetails({ rows, sets, custs, canConfirm, onChanged }: {
@@ -38,7 +43,7 @@ export default function EmbDetails({ rows, sets, custs, canConfirm, onChanged }:
   const sb = useMemo(() => createClient(), []);
   const [des, setDes] = useState<Record<string, Des>>({}), [sameArt, setSameArt] = useState<Des[]>([]), [pv, setPv] = useState<Record<string, string>>({});
   const [filter, setFilter] = useSticky<Filter>("details.emb.filter", "all");
-  const [open, setOpen] = useState(""), [f, setF] = useState<DetailsInput>(blank("")), [sizes, setSizes] = useState<Record<string, string>>({}), [pick, setPick] = useState<Record<string, boolean>>({});
+  const [open, setOpen] = useState(""), [f, setF] = useState<DetailsInput>(blank("")), [sizes, setSizes] = useState<Record<string, string>>({}), [vInks, setVInks] = useState<Record<string, string>>({}), [pick, setPick] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState<{ key: string; text: string; bad?: boolean } | null>(null);
   const [finder, setFinder] = useState<{ L: Logo; S: Spot } | null>(null);
 
@@ -92,7 +97,7 @@ export default function EmbDetails({ rows, sets, custs, canConfirm, onChanged }:
     setOpen(L.key); setMsg(null);
     setPick(Object.fromEntries(L.items.map((it) => [pk(it), true])));
     // blank, our guess greyed in each box; what production confirmed before for this logo, a click away
-    setF(blank(L.items[0].lead.id)); setSizes({});
+    setF(blank(L.items[0].lead.id)); setSizes({}); setVInks({});
   }
   async function confirm(L: Logo) {
     const chosen = L.items.filter((it) => pick[pk(it)]);
@@ -103,7 +108,7 @@ export default function EmbDetails({ rows, sets, custs, canConfirm, onChanged }:
     const bad: string[] = [];
     for (const [oid, its] of byOrder) {
       // the threads once for the logo; each spot its own size
-      const r = await confirmDetails(oid, its.flatMap((it) => it.ims.map((im) => ({ ...f, size: sizes[lc(it.lead.location)] || "", id: im.id }))));
+      const r = await confirmDetails(oid, its.flatMap((it) => it.ims.map((im) => { const t = (vInks[verKey(it.lead.inks)] || "").trim(); return { ...f, inks: t, colors: Math.max(1, threadsOf(t).length || it.lead.colors || 1), size: sizes[lc(it.lead.location)] || "", id: im.id }; })));
       if (!r.ok) bad.push(`#${its[0].order.number}: ${r.error}`);
     }
     setBusy("");
@@ -115,11 +120,20 @@ export default function EmbDetails({ rows, sets, custs, canConfirm, onChanged }:
   function fillLast(L: Logo) {
     const lasts = L.spots.map((S) => S.last).filter(Boolean) as SpecEntry[];
     if (!lasts.length) return;
-    const top = [...lasts].sort((a, b) => b.at.localeCompare(a.at))[0];
-    setF({ ...f, inks: top.inks || f.inks, colors: top.colors || f.colors });
     setSizes(Object.fromEntries(L.spots.filter((S) => S.last?.size).map((S) => [S.key, S.last!.size])));
+    // each thread version takes what its spot sewed last time
+    const vi: Record<string, string> = { ...vInks };
+    for (const S of L.spots) if (S.last?.inks) for (const it of S.items) vi[verKey(it.lead.inks)] ||= S.last.inks;
+    setVInks(vi);
   }
 
+  /** the logo's thread versions: the prints that sew the same threads, wherever they are (red and black on light goods,
+   *  cream and red on dark…), each confirmed on its own (Nov 9, Nick: "am I confirming the red or the black?") */
+  const versionsOf = (L: Logo) => {
+    const m = new Map<string, { key: string; threads: string[]; items: Item[] }>();
+    for (const it of L.items) { const k = verKey(it.lead.inks); if (!m.has(k)) m.set(k, { key: k, threads: threadsOf(it.lead.inks), items: [] }); m.get(k)!.items.push(it); }
+    return [...m.values()].sort((a, b) => b.items.length - a.items.length);
+  };
   const guess = (L: Logo) => [...new Set(L.items.map((it) => it.lead.inks).filter(Boolean))];
   return (
     <>
@@ -135,7 +149,7 @@ export default function EmbDetails({ rows, sets, custs, canConfirm, onChanged }:
           {shown.map((L) => {
             const isOpen = open === L.key, orders = [...new Map<string, EdgRow>(L.items.map((it) => [it.order.id, it.order])).values()];
             const n = L.items.reduce((a, it) => a + it.ims.length, 0), g = guess(L);
-            const first = L.items[0], noFile = L.spots.filter((S) => !S.hasFile);
+            const first = L.items[0], noFile = L.spots.filter((S) => !S.hasFile), vs = versionsOf(L);
             const nPick = new Set(L.items.filter((it) => pick[pk(it)]).map((it) => it.order.id)).size;
             const fileBtns = (S: Spot) => <>
               <button type="button" className="btn sm primary" onClick={() => setFinder({ L, S })}>Find or upload the files</button>
@@ -161,9 +175,28 @@ export default function EmbDetails({ rows, sets, custs, canConfirm, onChanged }:
                 {isOpen && (
                   <div className="edg-body">
                     {L.spots.some((S) => S.last) && <div className="pdd-why faint">Confirmed before: {L.spots.filter((S) => S.last).map((S) => `${S.loc} on #${S.last!.order_number}: ${[S.last!.size, S.last!.inks].filter(Boolean).join(", ")}`).join("; ")}. <button type="button" className="linkbtn" onClick={() => fillLast(L)}>Use the same</button></div>}
+                    {/* the threads, one version at a time: what we think it sews, where, and what really sewed */}
+                    <div className="edg-vers">
+                      <div className="edg-vh"><b>Threads</b><span className="faint">{vs.length > 1 ? `This logo sews ${vs.length} ways. Confirm each one.` : "Confirm what it sews."}</span>
+                        <button type="button" className="linkbtn" onClick={() => setVInks(Object.fromEntries(vs.map((v) => [v.key, v.threads.join(", ")])))}>Our guesses are right</button></div>
+                      {vs.map((v, vi) => {
+                        const where = v.items.map((it) => `${it.lead.location} #${it.order.number}`);
+                        const typed = vInks[v.key] ?? "";
+                        return (
+                          <div key={v.key || "none"} className="edg-v">
+                            <span className="edg-vl">{String.fromCharCode(65 + vi)}</span>
+                            <div className="edg-vg">
+                              <div className="edg-chips">{v.threads.length ? v.threads.map((t) => <span key={t} className="edg-th"><i style={{ background: swatch(t) }} />{t}</span>) : <span className="faint">No threads guessed</span>}</div>
+                              <span className="faint edg-where">Our guess · {v.threads.length} thread{v.threads.length === 1 ? "" : "s"} · on {where.join(", ")}</span>
+                            </div>
+                            <label className="field edg-vin"><span>What it sews</span><input type="text" value={typed} placeholder={v.threads.length ? "Type the threads, or click Same" : "Madeira 1843, Isacord 0015"} onChange={(e) => setVInks({ ...vInks, [v.key]: e.target.value })} /></label>
+                            {v.threads.length > 0 && <button type="button" className="btn sm" onClick={() => setVInks({ ...vInks, [v.key]: v.threads.join(", ") })}>Same</button>}
+                            {typed && <div className="edg-chips edg-now">{threadsOf(typed).map((t) => <span key={t} className="edg-th"><i style={{ background: swatch(t) }} />{t}</span>)}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
                     <div className="pdd-grid">
-                      <label className="field pdd-wide"><span>Threads (by number)</span><input type="text" value={f.inks} placeholder={g[0] ? `Guess: ${g[0]}` : "Madeira 1843, Isacord 0015"} onChange={(e) => setF({ ...f, inks: e.target.value })} /></label>
-                      <label className="field"><span>Thread colors</span><input type="number" min={1} max={15} value={f.colors} onChange={(e) => setF({ ...f, colors: +e.target.value || 1 })} /></label>
                       <label className="field"><span>Backing</span><select value={f.backing || ""} onChange={(e) => setF({ ...f, backing: e.target.value })}><option value="">Not sure</option>{BACKINGS.map((b) => <option key={b}>{b}</option>)}</select></label>
                       <label className="field"><span>Topping</span><select value={f.topping || ""} onChange={(e) => setF({ ...f, topping: e.target.value })}><option value="">Not sure</option>{TOPPINGS.map((b) => <option key={b}>{b}</option>)}</select></label>
                       <label className="field pdd-full"><span>Sew notes (optional)</span><input type="text" value={f.notes} placeholder="Machine, hoop, needle, speed, anything for next time" onChange={(e) => setF({ ...f, notes: e.target.value })} /></label>

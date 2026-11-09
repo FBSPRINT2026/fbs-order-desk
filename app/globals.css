@@ -21599,3 +21599,15 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .edg-sh>b{font-size:14px;align-self:center;min-width:110px}
 .edg-sz{width:160px}
 .edg-sh .edg-file{align-self:center}
+.edg-vers{display:grid;gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:8px 10px}
+.edg-vh{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.edg-vh b{font-size:14px}
+.edg-v{display:grid;grid-template-columns:26px minmax(0,1.3fr) minmax(200px,1fr) auto;gap:10px;align-items:end;padding-top:8px;border-top:1px dashed var(--line)}
+.edg-vl{width:26px;height:26px;border-radius:6px;background:var(--ink);color:var(--surface);display:grid;place-items:center;font-weight:700;font-size:13px;align-self:center}
+.edg-vg{display:grid;gap:4px;min-width:0;align-self:center}
+.edg-chips{display:flex;flex-wrap:wrap;gap:6px}
+.edg-th{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;color:var(--ink);white-space:nowrap}
+.edg-th i{width:14px;height:14px;border-radius:50%;border:1px solid var(--line)}
+.edg-where{font-size:12px}
+.edg-now{grid-column:2/-1}
+@media (max-width:760px){.edg-v{grid-template-columns:26px minmax(0,1fr)}.edg-vin,.edg-v>.btn{grid-column:2}}
