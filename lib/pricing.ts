@@ -922,6 +922,9 @@ export function frontFirst<T extends { location: string }>(list: T[]): T[] {
  * by JSON edits had no size or notes, and the order page crashed on "reading 'trim'"). Filled in place, nothing else
  * changed; used wherever groups are written (lib/ai/orderFix.ts) and read (orderGroups).
  */
+/** a print's parts that are always a box of fields; the ones a yes / no can stand for (customer supplied transfers, a patch) */
+const OBJ_FIELDS = ["supplied", "patch", "emb", "film", "inkMap", "inkBy", "colorwayBy", "changeOf", "ok", "area"];
+const YESNO_FIELDS = ["supplied", "patch"];
 export function shapeGroups(gs: Group[]): Group[] {
   for (const g of gs || []) {
     if (!g || typeof g !== "object") continue;
@@ -942,6 +945,14 @@ export function shapeGroups(gs: Group[]): Group[] {
       if (!["screen", "embroidery", "dtf"].includes(String(x.method))) x.method = "screen";
       if (!(+(x.colors as number) > 0)) x.colors = 1;
       if (!x.id) x.id = globalThis.crypto?.randomUUID?.() || `i${Math.random().toString(36).slice(2)}`;
+      // a part of a print that is a box of its own, written as a word (Nov 9, #40400: the order check wrote supplied: "no"
+      // on 11 heat transfers and the order page couldn't open): read as the yes / no it says
+      for (const k of OBJ_FIELDS) {
+        const v = x[k];
+        if (v == null || (typeof v === "object" && !Array.isArray(v))) continue;
+        if (YESNO_FIELDS.includes(k) && (v === true || /^(y|yes|on|true)\b/i.test(String(v)))) x[k] = {};
+        else delete x[k];
+      }
     }
   }
   return gs;

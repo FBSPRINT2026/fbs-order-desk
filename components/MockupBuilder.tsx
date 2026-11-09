@@ -1123,10 +1123,18 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const matchStandard = (im: Imprint) => setInks(im.id, Object.fromEntries(unsetColors(im).map((h) => [h, closestInk(h)])));
   /** Every color in the logo to the nearest of the customer's brand colors. */
   const matchBrand = (im: Imprint, key: string) => { const pt = paints[im.id]; const g = brand.groups.find((x) => x.key === key); if (!pt || !g?.colors.length) return; setInks(im.id, Object.fromEntries(pt.sources.map((x) => { const n = nearestBrand(x.hex, g); return [x.hex, n ? { name: n.c.ink, hex: n.c.hex } : null]; }))); };
+  /** Oversized by size (Nov 9, Nick: "anytime you go over 13… oversized up to 15… just a little indicator"): a screen or
+   *  DTF print sized past the spot's normal max becomes oversized, up to OVERSIZE_IN; back under it, it isn't. */
+  const overFit = (im: Imprint, normal: number, want: number) => {
+    const can = !!designOf(im) && (im.method === "screen" || im.method === "dtf");
+    const over = can && want > normal + 0.01;
+    return { over, cap: over ? Math.max(normal, Math.min(OVERSIZE_IN, (normal * OVERSIZE_IN) / NORMAL_MAX_IN)) : normal };
+  };
   /** Resize a sleeve print (sleeves stay a sleeve: capped at the sleeve's max area). */
   const growTo = (im: Imprint, inches: number) => {
-    const v = Math.max(0.5, Math.min(maxWidthFor(im.location, ratioIm(im)), Math.round(inches * 100) / 100));
-    setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${v}" wide` } : x)));
+    const { over, cap } = overFit(im, maxWidthFor0(im.location, ratioIm(im), fitBody(body)), inches);
+    const v = Math.max(0.5, Math.min(cap, Math.round(inches * 100) / 100));
+    setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: `${v}" wide`, oversize: over || undefined } : x)));
     return v;
   };
   /** Top-left of a print on the reference shirt (reference px), where it sits now including any hand move. */
@@ -1146,13 +1154,14 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const sp = spotFor(im.location);
     if (sp.wrap) return growTo(im, wantW);
     const d = designOf(im), r = ratioIm(im) || 0.6;
-    const wIn = Math.max(0.5, Math.min(sideMaxWidth(im.location, ratioIm(im)), Math.round(wantW * 100) / 100));
+    const { over, cap } = overFit(im, sideMaxWidth0(im.location, ratioIm(im), fitBody(body)), wantW);
+    const wIn = Math.max(0.5, Math.min(cap, Math.round(wantW * 100) / 100));
     const ppi = PX_PER_IN * scale;
     const z = autoSpot(im.location, sp.view, (at.left + (wIn * ppi) / 2 - CENTER_X) / ppi, (at.top - COLLAR_Y[sp.view]) / ppi, wIn, wIn * r);
     const drop = im.drop && !isNaN(+im.drop) ? +im.drop : null;
     const nb = basePlacement(z, wIn, r, drop, scale);
     setOffsets((o) => ({ ...o, [im.id]: { dx: at.left - nb.x, dy: at.top - nb.y } }));
-    setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: z, size: `${wIn}" wide`, keepLocation: false } : x)));
+    setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, location: z, size: `${wIn}" wide`, keepLocation: false, oversize: over || undefined } : x)));
     return wIn;
   };
   /** After typing a size: the width asked for (not cut to the current location), then let the location follow. */
@@ -5022,12 +5031,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         );
                       })()}
                       {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
-                      {designOf(im) && (im.method === "screen" || im.method === "dtf") && <label className={"mk-over" + (im.oversize ? " on" : "")} title={`Past the normal ${NORMAL_MAX_IN}" max, up to ${OVERSIZE_IN}": harder to run, so it's marked on the work order and runs slower`}><input type="checkbox" checked={!!im.oversize} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, oversize: e.target.checked || undefined } : x)))} /> Oversized <span className="faint">up to {OVERSIZE_IN}&quot;</span>{im.oversize ? <b> · harder to run: marked on the work order, slower on the schedule</b> : null}</label>}
+                      {im.oversize && <div className="mk-over on" title={`Past the normal ${NORMAL_MAX_IN}" max, up to ${OVERSIZE_IN}": marked on the work order and runs slower. Size it back to ${NORMAL_MAX_IN}" or under and it's a normal print`}><b>Oversized</b> <span className="faint">up to {OVERSIZE_IN}&quot; · harder to run: marked on the work order, slower on the schedule</span></div>}
                       {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
-                      {/* the location's actions together on the right (Oct 9, Nick) */}
-                      <div className="mk-imp-acts">
-                        <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
-                      </div>
                       {/* puff ink (Oct 30, Nick: "add a puff print option to the screen print imprint… $1 typically"; not
                           embroidery's 3D puff): a raised print, charged per piece, slower on press with a flash */}
                       {im.method === "screen" && im.colors < FULL_COLOR && !portal && (
@@ -5074,6 +5079,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           </div>
                         );
                       })()}
+                      {/* the location's actions together on the right (Oct 9, Nick), last: the add-ons (puff…) sit right
+                          above Brand standards (Nov 9, Nick) */}
+                      <div className="mk-imp-acts">
+                        <button className="btn sm ghost danger" type="button" onClick={() => setImprints((xs) => xs.filter((x) => x.id !== im.id))}>Remove location</button>
+                      </div>
                     </div>
                   </div>
                 );
