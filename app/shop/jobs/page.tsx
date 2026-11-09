@@ -423,7 +423,10 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, 
   const here = it.tracks.filter((t) => forStep(step, t)), also = it.tracks.filter((t) => !forStep(step, t));
   const tag = (t: Track, i: number) => <span key={i} className="pill" style={{ ["--sc" as string]: TONE[t.state] }}><span className="pill-t">{t.label}</span></span>;
   const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b>{mc && <button type="button" className={"jc-msgn" + (msgs ? " new" : "")} style={{ ["--mc" as string]: mc }} title={msgs ? `${msgs} new message${msgs === 1 ? "" : "s"}: open` : "Open the messages"} onClick={(e) => { e.stopPropagation(); onChat?.(); }}>💬{msgs ? ` ${msgs}` : ""}</button>}<div className="sub">{it.title}</div></>;
-  const keys = { tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(); } }, "aria-selected": on };
+  // double-click a job with an order: open the order (Nov 9, Nick)
+  const keys = { tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(); } }, "aria-selected": on,
+    onDoubleClick: (e: React.MouseEvent) => { if (!it.orderId || (e.target as HTMLElement).closest("button, a, input, select")) return; window.getSelection()?.removeAllRanges(); window.location.href = `/shop/orders/${it.orderId}`; },
+    title: it.orderId ? "Double-click to open the order" : undefined };
   if (it.type === "lead") return (
     <tr className={on ? "on" : ""} onClick={onPick} {...keys} data-job="">
       <td><b>{it.title}</b><div className="sub">{it.customer ? `${it.customer} · ` : ""}{it.sub}{it.tracks.length ? " · has questions to answer" : ""}</div></td>
