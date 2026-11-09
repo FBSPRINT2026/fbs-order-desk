@@ -114,10 +114,12 @@ export default function Digitizing() {
   const openParam = useRef(typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("open") || "" : "");
   useEffect(() => {
     const k = openParam.current; if (!k || !orders) return;
-    const it = items.find((x) => x.key === k); if (!it) return;
+    // ?open=<order> alone (the Job Center): that order's first print still being worked on, else its first
+    const mine = items.filter((x) => x.key.startsWith(`${k}:`));
+    const it = items.find((x) => x.key === k) || mine.find((x) => stateOf(x) !== "ok") || mine[0]; if (!it) return;
     openParam.current = "";
-    setFilter(stateOf(it)); setOpen(k);
-    setTimeout(() => document.querySelector(`[data-dgz="${CSS.escape(k)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
+    setFilter(stateOf(it)); setOpen(it.key);
+    setTimeout(() => document.querySelector(`[data-dgz="${CSS.escape(it.key)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
   }, [orders, items, sws]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = items.filter((it) => filter === "all" || stateOf(it) === filter);
   const count = (f: Filter) => items.filter((it) => f === "all" || stateOf(it) === f).length;

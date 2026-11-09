@@ -420,8 +420,31 @@ export default function JobCenter() {
       </div>
       </div>
       {/* Make a job: the one Create order tool (components/tools/CreateOrderTool.tsx), the same as on emails and ClickUp jobs */}
+      <DzAsk />
       {lead?.activityId && <CreateOrderTool activityId={lead.activityId} text={lead.leadText || lead.title} onClose={() => { setLead(null); setN((x) => x + 1); }} onCreated={(_, num) => after(`Order #${num} made.`)} />}
     </>
+  );
+}
+
+/** double-click a job in Digitizing: open it in the Digitizing center or open the order */
+function DzAsk() {
+  const [at, setAt] = useState<{ x: number; y: number; orderId: string; number?: number } | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setAt((e as CustomEvent).detail);
+    const off = (e: KeyboardEvent) => { if (e.key === "Escape") setAt(null); };
+    window.addEventListener("jc-dz-ask", on); window.addEventListener("keydown", off);
+    return () => { window.removeEventListener("jc-dz-ask", on); window.removeEventListener("keydown", off); };
+  }, []);
+  if (!at) return null;
+  const left = Math.max(8, Math.min(at.x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 230));
+  return (
+    <div className="jcd-bg" onClick={() => setAt(null)}>
+      <div className="jcd" role="menu" style={{ left, top: at.y + 6 }} onClick={(e) => e.stopPropagation()}>
+        <span className="jcd-h">{at.number ? `#${at.number}` : "This job"}</span>
+        <a role="menuitem" className="jcd-i" href={`/shop/digitizing?open=${encodeURIComponent(at.orderId)}`}>Open in Digitizing</a>
+        <a role="menuitem" className="jcd-i" href={`/shop/orders/${at.orderId}`}>Open the order</a>
+      </div>
+    </div>
   );
 }
 
@@ -432,7 +455,13 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, 
   const who = <>{it.number ? <span className="ordno">#{it.number}</span> : null}{" "}<b>{it.customer || "No customer yet"}</b>{mc && <button type="button" className={"jc-msgn" + (msgs ? " new" : "")} style={{ ["--mc" as string]: mc }} title={msgs ? `${msgs} new message${msgs === 1 ? "" : "s"}: open` : "Open the messages"} onClick={(e) => { e.stopPropagation(); onChat?.(); }}>💬{msgs ? ` ${msgs}` : ""}</button>}<div className="sub">{it.title}</div></>;
   // double-click a job with an order: open the order (Nov 9, Nick)
   const keys = { tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(); } }, "aria-selected": on,
-    onDoubleClick: (e: React.MouseEvent) => { if (!it.orderId || (e.target as HTMLElement).closest("button, a, input, select")) return; window.getSelection()?.removeAllRanges(); window.location.href = `/shop/orders/${it.orderId}`; },
+    onDoubleClick: (e: React.MouseEvent) => {
+      if (!it.orderId || (e.target as HTMLElement).closest("button, a, input, select")) return;
+      window.getSelection()?.removeAllRanges();
+      // in the digitizing step: ask where (Nov 9, Nick: "a pop-up that says open in digitizing or open the order")
+      if (step === "sewouts") { window.dispatchEvent(new CustomEvent("jc-dz-ask", { detail: { x: e.clientX, y: e.clientY, orderId: it.orderId, number: it.number } })); return; }
+      window.location.href = `/shop/orders/${it.orderId}`;
+    },
     title: it.orderId ? "Double-click to open the order" : undefined };
   if (it.type === "lead") return (
     <tr className={on ? "on" : ""} onClick={onPick} {...keys} data-job="">
