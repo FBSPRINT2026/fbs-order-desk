@@ -21490,3 +21490,6 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .ogq-b{width:100%;box-sizing:border-box;font:inherit;font-size:13px;border:1px solid var(--line);border-radius:6px;padding:8px}
 .ogq-a{display:flex;justify-content:flex-end;gap:8px}
 .ogq-ok{margin-top:8px}
+/* the job panel's pieces wrap onto more rows instead of squeezing (Nov 9, #40400) */
+.jcp-seg{grid-auto-flow:row;grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+.jcp-sg{border-bottom:1px solid var(--line)}

@@ -73,7 +73,13 @@ const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && 
 /** the same tag many times once, with how many on its label */
 const tagsOnce = (ts: Track[]) => { const by = new Map<string, Track[]>(); for (const t of ts) by.set(t.label + "|" + t.state, [...(by.get(t.label + "|" + t.state) || []), t]); return [...by.values()].map((g) => (g.length > 1 ? { ...g[0], label: `${g[0].label} ×${g.length}` } : g[0])); };
 /** the same note many times once, with how many ("Needs digitizing · Left Chest ×3") */
-const collapseLabels = (ls: string[]) => [...new Set(ls)].map((l) => { const n = ls.filter((x) => x === l).length; return n > 1 ? `${l} ×${n}` : l; });
+const collapseLabels = (ls0: string[]) => {
+  // the same first part on several spots ("Needs digitizing · Left Chest", "… · Right Sleeve") is one note with the count
+  const head = (l: string) => (l.includes(" · ") ? l.split(" · ")[0] : ""), heads = new Map<string, number>();
+  for (const l of new Set(ls0)) if (head(l)) heads.set(head(l), (heads.get(head(l)) || 0) + 1);
+  const ls = ls0.map((l) => (head(l) && (heads.get(head(l)) || 0) > 1 ? `${head(l)} (${heads.get(head(l))} spots)` : l));
+  return [...new Set(ls)].map((l) => { const n = ls.filter((x) => x === l).length; return n > 1 && !/ spots\)$/.test(l) ? `${l} ×${n}` : l; });
+};
 const TONE: Record<Track["state"], string> = { needed: "var(--warn)", made: "var(--fbs-blue)", sent: "var(--fbs-violet)", changes: "var(--danger)", done: "var(--ok)" };
 const day = (s?: string | null) => (s ? new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" }) : "");
 const ago = (s: string) => { const d = Math.floor((Date.now() - new Date(s).getTime()) / 864e5); return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };

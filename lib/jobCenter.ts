@@ -324,9 +324,15 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
   // each embroidered print's sew-out, or where it is in digitizing before there is one (lib/digitizeStatus.ts)
   const dIds = [...new Set(gs.flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id))))];
   const { data: dzs } = dIds.length ? await admin.from("designs").select("id, specs").in("id", dIds) : { data: [] };
+  // one per logo (or per spot, before a logo is picked): the same logo on many garments is one sew-out (Nov 9: #40400's
+  // panel had a tab for each of its 20 prints)
+  const pieceSeen = new Set<string>();
   for (const g of gs) for (const im of g.imprints || []) {
     if (im.method !== "embroidery") continue;
     const x = sws.find((y) => y.imprint_id === im.id);
+    const pk = x ? `sw:${x.id}` : im.design_id ? `d:${im.design_id}` : `loc:${String(im.location || "").toLowerCase()}`;
+    if (pieceSeen.has(pk)) continue;
+    pieceSeen.add(pk);
     const where = `${im.location || "Embroidery"}${im.size ? `, ${im.size}` : ""}`;
     if (!x) {
       const st = digitizeState(im, ((dzs || []) as { id: string; specs: unknown }[]).find((z) => z.id === im.design_id) as never, undefined);
