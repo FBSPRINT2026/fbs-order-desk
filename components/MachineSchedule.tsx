@@ -403,6 +403,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   // the "schedule too tight" prompt shows once a day (again if more jobs go late)
   const [toolsOpen, setToolsOpen] = useSticky("cal.toolsOpen", true);
   const [tightOpen, setTightOpen] = useSticky("cal.tightOpen", false);
+  const [listOpen, setListOpen] = useState(""); // a same-art list opened to show all its jobs
   // Re-plan results for the calendar as it is (the Re-plan window asks on every redraw): worked out again when anything changes
   const planCache = useRef<{ deps: unknown[]; v: Map<boolean, unknown> }>({ deps: [], v: new Map() });
 
@@ -1142,6 +1143,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     const [vS, vE] = o.win ?? [vStart, vEnd], rng = vE - vS;
     const hrsL = Array.from({ length: Math.round(rng / 60) }, (_, i) => vS + i * 60);
     const shade = (m: Machine) => offShade(m, day).map(([x, y]) => [Math.max(x, vS), Math.min(y, vE)]).filter(([x, y]) => y > x);
+    const inList = new Set<string>(); // jobs drawn as rows of a same-art list (filled per press column, before its cards)
     return (
     <div className={"ms-dv" + (o.sub ? " cont" : "")} key={"dv" + day}>
       {o.title ? <div className="ms-dv-t">{o.title}</div> : null}
@@ -1179,28 +1181,45 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
             {(day < today || (day === today && now.min > vS)) && <div className="ms-pastv" style={{ height: ((Math.min(day < today ? vE : now.min, vE) - vS) / 60) * HOUR_PX }} />}
             {day === today && now.min >= vS && now.min <= vE && <div className="ms-now" style={{ top: ((now.min - vS) / 60) * HOUR_PX }} />}
             {(() => {
-              // same-art jobs run back to back: one box around the run (option G, Nov 9)
-              const js = joined(m, day), runs: { a: number; b: number; n: number; saved: number }[] = [];
+              // same-art jobs run back to back: one box around the run (option G, Nov 9); when its jobs are too short to read
+              // as cards, the box is a list: the customer and total, then a thin row per job (option N)
+              const js = joined(m, day), runs: { a: number; b: number; items: typeof js; saved: number }[] = [];
               for (let i = 1; i < js.length; i++) {
                 const c = js[i].g.c;
                 if (!c.sameArt || c.sameArt.with !== js[i - 1].g.c.job.number) continue;
                 const last = runs[runs.length - 1];
-                if (last && last.b === js[i - 1].end) { last.b = js[i].end; last.n++; last.saved += c.sameArt.saved; }
-                else runs.push({ a: js[i - 1].start, b: js[i].end, n: 2, saved: c.sameArt.saved });
+                if (last && last.b === js[i - 1].end) { last.b = js[i].end; last.items.push(js[i]); last.saved += c.sameArt.saved; }
+                else runs.push({ a: js[i - 1].start, b: js[i].end, items: [js[i - 1], js[i]], saved: c.sameArt.saved });
               }
-              return runs.map((r) => { const a = Math.max(r.a, vS), b = Math.min(r.b, vE); if (b <= a) return null; return (
-                <div key={"ar" + r.a} className="msar-box" style={{ top: ((a - vS) / 60) * HOUR_PX - 3, height: ((b - a) / 60) * HOUR_PX + 4 }} title={`Same art: ${r.n} jobs run back to back, one setup (${fmtMin(r.saved)} saved)`}>
-                  <span className="msar-h">🔗 Same art · {r.n} jobs · one setup</span>
-                </div>
-              ); });
+              inList.clear();
+              return runs.map((r) => {
+                const a = Math.max(r.a, vS), b = Math.min(r.b, vE); if (b <= a) return null;
+                const H = ((b - a) / 60) * HOUR_PX + 4, list = r.items.some((x) => ((x.end - x.start) / 60) * HOUR_PX < 40);
+                const n = r.items.length, title = `Same art: ${n} jobs run back to back, one setup (${fmtMin(r.saved)} saved)`;
+                if (!list) return <div key={"ar" + r.a} className="msar-box" style={{ top: ((a - vS) / 60) * HOUR_PX - 3, height: H }} title={title}><span className="msar-h">🔗 Same art · {n} jobs · one setup</span></div>;
+                for (const x of r.items) inList.add(x.g.c.key);
+                const c0 = r.items[0].g.c, pcs = r.items.reduce((t, x) => t + x.g.c.need.qty, 0), gl0 = glance(c0.need, c0.minutes);
+                const open = listOpen === m.id + day + r.a, fit = Math.max(1, Math.floor((H - 22) / 16)), show = open || n <= fit ? r.items : r.items.slice(0, Math.max(1, fit - 1));
+                return (
+                  <div key={"ar" + r.a} className={"msar-box msar-list" + (open ? " open" : "")} style={{ top: ((a - vS) / 60) * HOUR_PX - 3, minHeight: H, ...(open ? {} : { height: H }) }} title={title}>
+                    <span className="msar-lh">🔗 {abbrCo(c0.job.customer)} · same art · {gl0.colors} · {pcs.toLocaleString()} P</span>
+                    {show.map((x) => <button key={x.g.c.key} type="button" className="msar-row" draggable onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} title={tip(x.g)}><b>#{x.g.c.job.number}</b>{flags(x.g.c.job)}<span>{x.g.c.need.qty.toLocaleString()} P</span></button>)}
+                    {show.length < n ? <button type="button" className="msar-more" onClick={() => setListOpen(m.id + day + r.a)}>+{n - show.length} more</button> : open ? <button type="button" className="msar-more" onClick={() => setListOpen("")}>Show less</button> : null}
+                  </div>
+                );
+              });
             })()}
-            {joined(m, day).map(({ g, start: gs0, end: ge0, gaps, n: nj }) => { const h = Math.max(22, ((ge0 - gs0) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes), whole = nj > 1 && nj >= g.parts; return (
-              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "") + (gaps.length ? " ms-thru" : "")} style={{ top: ((gs0 - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
+            {joined(m, day).filter((x) => !inList.has(x.g.c.key)).map(({ g, start: gs0, end: ge0, gaps, n: nj }) => { const h = Math.max(22, ((ge0 - gs0) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes), whole = nj > 1 && nj >= g.parts;
+              // carries over (option J): the end-of-day piece is open at the bottom, the next morning's open at the top
+              const all = segs.ofCard.get(g.c.key) || [], lastPart = g.part + nj - 1, nxt = all.find((x) => x.part === lastPart + 1 && x.day !== day), prv = all.find((x) => x.part === g.part - 1 && x.day !== day);
+              return (
+              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "") + (gaps.length ? " ms-thru" : "") + (nxt ? " mscv-out" : "") + (prv ? " mscv-in" : "")} style={{ top: ((gs0 - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
+                {prv ? <span className="mscv-from">continued from {dayLbl(prv.day).split(",")[0]} · {g.part} of {g.parts}</span> : null}
                 <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b>{flags(g.c.job)}<span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span><span className="l1x">{gl.colors} · {gl.units.toLocaleString()} P</span></span>
                 <span className="ms-l2">{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.name || g.c.need.label}</span>
                 <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 && !whole ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()} P</i></span>
-              {gaps.map(([a0, b0]) => <span key={"gp" + a0} className="ms-thru-l" aria-hidden style={{ top: ((a0 - gs0) / 60) * HOUR_PX, height: ((b0 - a0) / 60) * HOUR_PX }}>{((b0 - a0) / 60) * HOUR_PX >= 13 ? <em>Lunch</em> : null}</span>)}
+              {nxt ? <span className="mscv-to" aria-hidden>↓ continues {dayLbl(nxt.day).split(",")[0]} {clock(nxt.start)}</span> : null}{gaps.map(([a0, b0]) => <span key={"gp" + a0} className="ms-thru-l" aria-hidden style={{ top: ((a0 - gs0) / 60) * HOUR_PX, height: ((b0 - a0) / 60) * HOUR_PX }}>{((b0 - a0) / 60) * HOUR_PX >= 13 ? <em>Lunch</em> : null}</span>)}
               </button>
             ); })}
           </div>

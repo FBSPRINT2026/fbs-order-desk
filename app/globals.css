@@ -21439,3 +21439,18 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .msar-box{position:absolute;left:0;right:0;z-index:1;border:1.5px solid var(--fbs-violet);border-radius:9px;background:color-mix(in srgb,var(--fbs-violet) 10%,transparent);pointer-events:none}
 .msar-h{position:absolute;right:4px;top:-9px;z-index:4;font-size:10.5px;font-weight:700;line-height:15px;padding:0 6px;border-radius:8px;background:var(--surface);color:var(--fbs-violet);border:1px solid var(--fbs-violet);white-space:nowrap;max-width:calc(100% - 8px);overflow:hidden;text-overflow:ellipsis}
 .msar-offer .ms-ot-i{color:var(--fbs-violet)}
+/* option N: a same-art run too short for cards is one list: header, then a thin row per job */
+.msar-list{z-index:3;pointer-events:auto;background:color-mix(in srgb,var(--fbs-violet) 9%,var(--surface));padding:2px 5px 3px;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box}
+.msar-list.open{z-index:6;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.msar-lh{font-size:11px;font-weight:700;color:var(--fbs-violet);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:16px}
+.msar-row{all:unset;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:11.5px;line-height:15px;color:var(--ink);border-top:1px solid color-mix(in srgb,var(--fbs-violet) 25%,transparent);white-space:nowrap}
+.msar-row span{margin-left:auto;color:var(--ink-2)}
+.msar-row:hover{color:var(--accent)}
+.msar-more{all:unset;cursor:pointer;font-size:11px;font-weight:700;color:var(--fbs-violet);line-height:15px}
+/* option J: a job that carries over to the next working day */
+.ms-blk.card.mscv-out{border-bottom-left-radius:0;border-bottom-right-radius:0;padding-bottom:16px}
+.ms-blk.card.mscv-out::after{content:"";position:absolute;left:0;right:0;bottom:0;height:14px;background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--fbs-blue) 45%,transparent) 0 6px,transparent 6px 10px);pointer-events:none}
+.mscv-to{position:absolute;left:6px;bottom:1px;z-index:1;font-size:10.5px;font-weight:700;color:var(--accent);background:color-mix(in srgb,var(--surface) 85%,transparent);border-radius:4px;padding:0 4px;white-space:nowrap}
+.ms-blk.card.mscv-in{border-top-left-radius:0;border-top-right-radius:0;padding-top:10px}
+.ms-blk.card.mscv-in::before{content:"";position:absolute;left:0;right:0;top:0;height:8px;background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--fbs-blue) 45%,transparent) 0 6px,transparent 6px 10px);pointer-events:none}
+.mscv-from{display:block;font-size:10.5px;font-weight:700;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
