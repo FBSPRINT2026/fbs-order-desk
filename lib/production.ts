@@ -426,7 +426,14 @@ export type Estimate = { minutes: number; setup: number; run: number; teardown: 
  * button) takes that time, as said; the rest is worked out (estimateRaw) and then scaled by the press operator's learned
  * pace (Machine.pace, lib/runLearn.ts).
  */
+/** no job takes less than this on a machine, however few pieces (Nov 9, Nick: "you're never going to take 30 minutes to do
+ *  less than anything"): getting it on, set up, printed and off is half an hour */
+export const MIN_JOB_MIN = 30;
+const floorJob = (e: Estimate): Estimate => (e.minutes > 0 && e.minutes < MIN_JOB_MIN ? { ...e, minutes: MIN_JOB_MIN, run: e.run + (MIN_JOB_MIN - e.minutes) } : e);
 export function estimate(s: ProductionSettings, need: Need, mach: Machine): Estimate {
+  return floorJob(estimateWith(s, need, mach));
+}
+function estimateWith(s: ProductionSettings, need: Need, mach: Machine): Estimate {
   const said = new Map<string, { min: number; by: string; name: string }>();
   for (const st of need.steps) if (st.over && st.over.min > 0 && !said.has(locKey(st))) said.set(locKey(st), { ...st.over, name: st.location });
   if (!said.size) return estimateRaw(s, need, mach);
