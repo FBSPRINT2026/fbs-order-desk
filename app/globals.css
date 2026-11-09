@@ -21411,3 +21411,5 @@ html body .pr.pr-nologo{grid-template-columns:minmax(0,1fr)}
 .jv-ccv input{height:32px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);min-width:120px}
 /* a color change's line note spans the whole garment row (Nov 9) */
 html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
+/* the job's name on a Ready To Schedule card (Nov 9) */
+.ms-rc-nm{font-size:13px;color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
