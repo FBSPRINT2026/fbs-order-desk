@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { uaPunches, uaRaw, uaSkipped, uaUserFields, uaUsers, uattendReady, type UaUser } from "@/lib/uattend";
+import { uaPunches, uaRaw, uaSkipped, uaUserFields, uaUsers, uattendReady, type UaPunch, type UaUser } from "@/lib/uattend";
 import { addDays, localDay, localToIso } from "@/lib/timeclock";
 import { settleDoubleEntries } from "@/lib/timeclockServer";
 import { allRows } from "@/lib/readAll";
@@ -122,6 +122,37 @@ export async function GET(req: Request) {
   const raw = new URL(req.url).searchParams.get("raw");
   if (raw) { const n = Math.max(1, Math.min(31, +(new URL(req.url).searchParams.get("back") || 3) || 3)); try { return NextResponse.json(await uaRaw(addDays(today, -n), today, +raw || undefined, +(new URL(req.url).searchParams.get("max") || 40) || 40)); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
   const sp = new URL(req.url).searchParams;
+  // ?bring=1&from=&to= (Nov 9, Nick: "if a person has a punch in uAttend… and doesn't have a punch here, can you bring in
+  // those punches… I don't want to turn the sync back on"): uAttend's punches for people already linked here, each one
+  // only when they have no punch here within 30 minutes of it (from any clock), never one still ahead of now. Nothing
+  // else the sync does (no new employees, no voiding). &dry=1 lists what it would add.
+  if (sp.get("bring") && /^\d{4}-\d{2}-\d{2}$/.test(sp.get("from") || "") && /^\d{4}-\d{2}-\d{2}$/.test(sp.get("to") || "")) {
+    try {
+      const dry = !!sp.get("dry");
+      const ps = await uaPunches(sp.get("from")!, sp.get("to")!);
+      const { data: es } = await admin.from("employees").select("id, first_name, last_name, uattend_id").not("uattend_id", "is", null);
+      const byUa = new Map(((es || []) as { id: string; first_name: string; last_name: string; uattend_id: string }[]).map((e) => [e.uattend_id, e]));
+      const ids = [...new Set(ps.map((p) => byUa.get(p.user)?.id).filter(Boolean))] as string[];
+      const lo = new Date(Date.parse(localToIso(sp.get("from")!, 0)) - 864e5).toISOString(), hi = new Date(Date.parse(localToIso(sp.get("to")!, 0)) + 2 * 864e5).toISOString();
+      const { data: mine } = ids.length ? await admin.from("time_punches").select("employee_id, at, uattend_id").in("employee_id", ids).gte("at", lo).lt("at", hi).limit(5000) : { data: [] };
+      const ours = (mine || []) as { employee_id: string; at: string; uattend_id: string | null }[];
+      const keys = new Set(ours.map((r) => r.uattend_id).filter(Boolean));
+      const add: Record<string, unknown>[] = [], skipped: string[] = [], who = (p: UaPunch) => `${p.first} ${p.last}`.trim();
+      for (const p of ps) {
+        const e = byUa.get(p.user);
+        if (!e) { skipped.push(`${who(p)} ${p.kind} ${p.at}: not linked here`); continue; }
+        if (keys.has(p.key)) continue;
+        if (Date.parse(p.at) > Date.now()) { skipped.push(`${who(p)} ${p.kind} ${p.at}: still ahead of now`); continue; }
+        const near = ours.find((r) => r.employee_id === e.id && Math.abs(Date.parse(r.at) - Date.parse(p.at)) <= 30 * 60000);
+        if (near) { skipped.push(`${who(p)} ${p.kind} ${p.at}: already a punch here at ${near.at}`); continue; }
+        add.push({ employee_id: e.id, kind: p.kind, at: p.at, source: "uattend", uattend_id: p.key, note: "uAttend (brought in by hand, Nov 9)" });
+        ours.push({ employee_id: e.id, at: p.at, uattend_id: p.key }); keys.add(p.key);
+      }
+      if (!dry && add.length) { const { error } = await admin.from("time_punches").upsert(add, { onConflict: "uattend_id", ignoreDuplicates: true }); if (error) throw new Error(error.message); }
+      const name = new Map(((es || []) as { id: string; first_name: string; last_name: string }[]).map((e) => [e.id, `${e.first_name} ${e.last_name}`]));
+      return NextResponse.json({ dry, added: add.map((r) => `${name.get(r.employee_id as string)} ${r.kind} ${r.at}`), skipped });
+    } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); }
+  }
   // ?fields=1: the field names uAttend keeps on a person (names only), e.g. whether it has pay rates
   if (sp.get("fields")) { try { return NextResponse.json({ fields: await uaUserFields() }); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
   // ?from=yyyy-mm-dd&to=yyyy-mm-dd (four months or less): history, for the 3-year catch-up run from the database
