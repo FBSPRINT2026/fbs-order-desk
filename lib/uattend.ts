@@ -78,10 +78,10 @@ function when(day: unknown, time: unknown): string | null {
   return d && m != null ? localToIso(d, m) : null;
 }
 /** raw punch-report lines (for checking what uAttend sends), optionally for one user */
-export async function uaRaw(from: string, to: string, user?: number) {
+export async function uaRaw(from: string, to: string, user?: number, max = 40) {
   const j = await call("/reports/punch", { StartDate: from, EndDate: to, UsePaging: false, ...(user ? { UserIds: [user] } : {}) });
   const items = list(j, "PunchReportLineItems");
-  return { keys: Object.keys(j), count: items.length, items: items.slice(0, 40) };
+  return { keys: Object.keys(j), count: items.length, items: items.slice(0, Math.max(1, Math.min(2000, max))) };
 }
 /** punches from `from` through `to` (yyyy-mm-dd, at most ~3 months apart), every user, paged */
 export async function uaPunches(from: string, to: string): Promise<UaPunch[]> {

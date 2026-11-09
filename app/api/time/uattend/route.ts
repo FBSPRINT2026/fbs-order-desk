@@ -120,7 +120,7 @@ export async function GET(req: Request) {
   const today = localDay(new Date());
   // ?raw=<uAttend user id>&back=N: what uAttend sends for one person (read only, nothing saved), for checking the fields
   const raw = new URL(req.url).searchParams.get("raw");
-  if (raw) { const n = Math.max(1, Math.min(31, +(new URL(req.url).searchParams.get("back") || 3) || 3)); try { return NextResponse.json(await uaRaw(addDays(today, -n), today, +raw || undefined)); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
+  if (raw) { const n = Math.max(1, Math.min(31, +(new URL(req.url).searchParams.get("back") || 3) || 3)); try { return NextResponse.json(await uaRaw(addDays(today, -n), today, +raw || undefined, +(new URL(req.url).searchParams.get("max") || 40) || 40)); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
   const sp = new URL(req.url).searchParams;
   // ?fields=1: the field names uAttend keeps on a person (names only), e.g. whether it has pay rates
   if (sp.get("fields")) { try { return NextResponse.json({ fields: await uaUserFields() }); } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); } }
