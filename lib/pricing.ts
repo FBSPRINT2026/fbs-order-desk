@@ -220,6 +220,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** puff ink (Oct 30, Nick: "add a puff print option to the screen print imprint… It's $1 typically"; "puff screen
    *  print is different than puff 3D embroidery"): a raised screen print, charged per piece (PriceList.puffPrice) and
    *  printed slower with a flash (lib/production.ts). Screen prints only; embroidery's 3D puff is emb.puff */ puff?: boolean;
+  /** oversized (Nov 9, Nick: "for the bar, we actually print 15 inches wide… we still want to set our normal max imprint
+   *  size to like 13"): the Mockup Creator lets this print go past the normal max, up to OVERSIZE_IN; it says so on the work
+   *  order and runs slower on the schedule */ oversize?: boolean;
   /** not known for sure (a reorder of an old Printavo job with no film found): production confirms before printing */
   /** a color change (Oct 24, Nick: "on the mauve sweatshirts… a burgundy print… on the blue spruce… white"): by garment
    *  color (lowercase), each of the print's inks that prints differently there: ink name → the ink on that color.
@@ -450,7 +453,8 @@ export type Order = {
   approved_name: string | null; created_at: string; updated_at: string;
   /** the customer walked away (Job Center → Mark declined; migration 232): under Declined for two weeks */ declined_at?: string | null; declined_reason?: string; /** Revision: the customer asked for changes on this quote (statusKey → "revision") */ revision_at?: string | null;
   /** what it sells: apparel (null) or an outsourced kind with simple item lines (lib/simpleOrders.ts; orders.product_kind) */ product_kind?: import("@/lib/simpleOrders").ProductKind | null;
-  /** New order / Reorder / Reorder with changes (Oct 24, Nick; orders.order_type). Null = worked out from the order */ order_type?: "new" | "reorder" | "reorder_changes" | null;
+  /** New order / Reorder / Reorder with changes (Oct 24, Nick; orders.order_type). Null = worked out from the order */ order_type?: "new" | "reorder" | "reorder_changes" | "sample" | null;
+  /** a sample's price rule, copied from the customer's (or the shop's) when it was made a Sample (orders.sample) */ sample?: SampleRule | null;
   price_type: PriceType; /** priced by the customer's program rate card (the chip next to Retail / Wholesale) */ use_program?: boolean; /** which of the customer's rate cards (programs.rate_cards id, "main" = the first) */ program_card?: string | null; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; /** firm in-hands (can't slip), and the time it's needed that day (minutes; null = end of day) */ firm?: boolean; due_time?: number | null; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string; /** bill third party: the carrier account this shipment is billed to (lib/thirdParty.ts) */ third_party?: import("@/lib/thirdParty").ThirdParty | null;
 };
 export type Garment = { id: string; style: string; brand: string; description: string; colors: string[]; cost: number; sizes?: string[]; /** the supplier's size chart: flat body width / length per size (inches) */ specs?: import("@/lib/garmentBody").GarmentSpecs | null; size_costs?: Record<string, number>; /** each color's own cost by size (suppliers price colors differently; Oct 20) */ color_size_costs?: Record<string, Record<string, number>> | null; ss_style_id?: number | null; image?: string; synced_at?: string | null; color_images?: Record<string, { front: string; back: string; side: string; hex: string; /** the hood's edge on the back photo (photo px), traced in the Mockup Creator: prints go behind the hood */ hoodBack?: [number, number][]; /** where the back photo came from when the supplier had none: sanmar, model, side, upload, picked, or drawn (Oct 26) */ back_from?: string }>; /** fiber content lines from the supplier ("100% polyester") */ fabric?: string; /** "ss" or "sanmar" */ supplier?: string | null; supplier_style?: string | null };
@@ -1068,8 +1072,21 @@ export type SeenScreens = Set<string> & { links?: Map<string, string>; linkScree
   /** pieces carrying each logo across the order ("<method>:<design id>" → pieces): the same logo in several groups is
    *  priced at the break for all of them together (Oct 27, Nick: "if you use it in two separate locations, so like sleeves
    *  and left chest, it's the same logo… he can get the quantity discount") */ designQty?: Map<string, number> };
-export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: SeenScreens) {
+/**
+ * Samples (Nov 9, Nick: "pre-press samples… they don't follow our normal pricing… I'm charging them $40 for the sample…
+ * we charge the bar $20 per sample… flat fee, no screens… we do charge them to make the PMS colors"). A sample is priced by
+ * a rule, not the price list: a flat price per piece, and whether screens, PMS matching and extras (puff, special
+ * locations) are charged. Each customer can have their own (customers.sample_rule); the shop's is the default. A
+ * changed price says why (`why`, `by`).
+ */
+export type SampleRule = { each: number; screens: "free" | "charge"; pms: "free" | "charge"; extras: "free" | "charge"; why?: string; by?: string; from?: "customer" | "shop" | "changed" };
+/** the widest an oversized print can be, and the normal widest (the Mockup Creator's limits) */
+export const OVERSIZE_IN = 15, NORMAL_MAX_IN = 13;
+export const SAMPLE_DEFAULT: SampleRule = { each: 40, screens: "free", pms: "charge", extras: "charge" };
+
+export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType; order_type?: Order["order_type"]; sample?: SampleRule | null }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: SeenScreens) {
   const pl = priceList(s, o.price_type || "retail");
+  const smp = (o as { order_type?: string | null; sample?: SampleRule | null }).order_type === "sample" ? (o as { sample?: SampleRule | null }).sample || SAMPLE_DEFAULT : null;
   const qty = (g.lines || []).reduce((a, l) => a + billQty(l), 0);
   const ti = tierIndex(qty, pl);
   // embroidery has its own quantity breaks on contract pricing
@@ -1191,13 +1208,15 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const linePrint = r2(basePrint + locExtra + inkExtra + puffExtra + embSpecial(l));
     const calcEach = r2(garmentRaw + linePrint + finishEach);
     const hasOv = !!l.shopUse || (l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride));
-    const each = l.shopUse ? 0 : hasOv ? r2(+(l.priceOverride as number)) : calcEach;
+    // a sample: its flat price each (plus extras when the rule charges them), not the price list
+    const smpEach = smp ? r2(num(smp.each) + (smp.extras === "charge" ? locExtra + puffExtra : 0)) : null;
+    const each = l.shopUse ? 0 : hasOv ? r2(+(l.priceOverride as number)) : smpEach != null ? smpEach : calcEach;
     let sub = 0, upTotal = 0;
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
       const up = l.sizeUpSet?.[sz] != null && (l.sizeUpSet[sz] as unknown) !== "" ? num(l.sizeUpSet[sz]) : pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
       sub += q * each; // 2XL+ Materials Charge are billed as their own line
-      if (!l.shopUse) upTotal += q * up;
+      if (!l.shopUse && !smp) upTotal += q * up;
     });
     return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
@@ -1227,13 +1246,14 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (k && seen) { if (seen.has(k)) return { ...y, setup: 0, shared: true }; seen.add(k); }
     return { ...y, shared: false };
   });
-  const noSetup = !!o.waive_setup || !!g.allIn;
+  const noSetup = !!o.waive_setup || !!g.allIn || smp?.screens === "free";
   const screens = noSetup ? 0 : setups.reduce((a, d) => a + d.setup, 0) + youthSetups.reduce((a, d) => a + (d?.setup || 0), 0);
-  const inkFees = g.allIn ? 0 : imprints.reduce((a, d) => a + d.inkFee, 0);
+  const noInk = !!g.allIn || smp?.pms === "free";
+  const inkFees = noInk ? 0 : imprints.reduce((a, d) => a + d.inkFee, 0);
   const sub = r2(lines.reduce((a, l) => a + l.sub, 0) + persTotal);
   // contract minimum: a job under minQty pieces is charged as minQty pieces (the missing pieces at the average price)
   // (screen printing: embroidery has its own 6-11 break)
-  const minCharge = !g.allIn && pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
+  const minCharge = !g.allIn && !smp && pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
   const setup = r2(screens + inkFees + minCharge);
   // the setup charge itemized (as Printavo lists it: new / repeat screens, digitizing, PMS match, ink changes, minimum)
   const setupItems: { kind: "screens" | "remake" | "digitize" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number; /** an embroidery thread change */ thread?: boolean; /** a print's own youth screens / file */ youth?: boolean }[] = [];
@@ -1251,7 +1271,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     one(d.setup, (d as { screens?: number }).screens);
     const ys = youthSetups[i]; if (ys) one(ys.setup, ys.screens, true);
   });
-  if (!g.allIn) imprints.forEach((_, i) => {
+  if (!noInk) imprints.forEach((_, i) => {
     const im = (g.imprints || [])[i]; if (!im) return;
     const pms = pmsFresh[i] ?? (im.method === "screen" ? pmsCount(im) : num(im.pms)), ic = num(im.inkChanges);
     if (pms && num(pl.pmsFee)) setupItems.push({ kind: "pms", qty: pms, unit: num(pl.pmsFee), amount: r2(pms * num(pl.pmsFee)) });
@@ -1263,7 +1283,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
 export function calcOrder(
-  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup"> & { price_type?: PriceType; discount_amt?: number; discount_type?: "pct" | "amt" },
+  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup"> & { price_type?: PriceType; discount_amt?: number; discount_type?: "pct" | "amt"; order_type?: Order["order_type"]; sample?: SampleRule | null },
   s: Settings,
   payments: Pick<Payment, "amount">[] = []
 ) {

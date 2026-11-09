@@ -29,7 +29,7 @@ import RequestAsk from "@/components/RequestAsk";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, CLOSED_QUOTE, REVISION, isClosedQuote, statusKey, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, CLOSED_QUOTE, REVISION, type SampleRule, isClosedQuote, statusKey, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -419,7 +419,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const startedAt = Date.now();
     const { data: savedRow, error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      price_type: d.price_type || "retail", order_type: d.order_type || null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", order_type: d.order_type || null, sample: d.order_type === "sample" ? d.sample || null : null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       bill_to: d.bill_to || null, ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
@@ -2045,7 +2045,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </div>
                 {/* the job's type, standing out at the bottom: the dropdown, and what it means for this order under it */}
                 <div className="jd-typebox">
-                  <OrderTypeRow o={o} patch={patch} bare />
+                  <OrderTypeRow o={o} patch={patch} bare sampleRule={(cust as { sample_rule?: SampleRule | null } | undefined)?.sample_rule || null} me={who.staffName || who.email || ""} />
                 </div>
                 <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved${o.approved_name ? ` by ${o.approved_name}` : ""} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
               </div>

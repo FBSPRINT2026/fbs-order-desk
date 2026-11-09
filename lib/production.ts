@@ -238,7 +238,8 @@ export type Step = { method: MachineType; location: string; colors: number; scre
   /** this print only runs on one press (Imprint.pressOnly, set on the production mockup) */ only?: { id: string; name: string };
   /** times around the press set on the press setup (Imprint.rounds): every piece goes around that many times */ rounds?: number;
   /** staff set how long this print location takes (all its garments together), on the schedule: used as is */ over?: { min: number; by: string };
-  /** the art it prints (design + inks): jobs that print the same art share screens, so they run together (artKey) */ art?: string };
+  /** the art it prints (design + inks): jobs that print the same art share screens, so they run together (artKey) */ art?: string;
+  /** an oversized print (Imprint.oversize): slower */ oversize?: boolean };
 /** Everything to run on one kind of machine, and the most colors any of it needs. */
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
@@ -291,7 +292,7 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
         const only = method === "screen" && i.pressOnly?.id ? { id: i.pressOnly.id, name: i.pressOnly.name } : undefined;
         const rounds = method === "screen" && (i.rounds || 1) > 1 ? Math.min(3, i.rounds!) : 0;
         const art = artKey(method, i.design_id, i.inks, colors);
-        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}), ...(art ? { art } : {}) });
+        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}), ...(art ? { art } : {}), ...((i as unknown as { oversize?: boolean }).oversize ? { oversize: true } : {}) });
       }
     }
   }
@@ -459,6 +460,8 @@ export function estimateRaw(s: ProductionSettings, need: Need, mach: Machine): E
       if (st.garment === "heavy") rate *= S.heavyFactor;
       if (st.garment === "bag") rate *= S.bagFactor;
       if (smallLoc(st.location)) rate *= S.smallLocFactor;
+      // oversized (past the normal max): harder to run (Nov 9, Nick: "they don't run perfect when we run them oversized")
+      if (st.oversize) rate *= 0.8;
       // the crew's own pace (100 = standard): setup, teardown, printing, long / short runs, darks, many colors
       const k = mach.skill, pct = (x: number | undefined) => Math.max(0.3, (x ?? 100) / 100);
       let suF = 1, rateF = 1;

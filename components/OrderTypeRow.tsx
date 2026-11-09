@@ -1,6 +1,7 @@
 "use client";
 import { isReorder } from "@/components/ReorderPanel";
-import type { Imprint, Order } from "@/lib/pricing";
+import { SAMPLE_DEFAULT, type Imprint, type Order, type SampleRule } from "@/lib/pricing";
+import { useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 
 /**
@@ -17,18 +18,19 @@ import { useSticky } from "@/lib/useSticky";
  *  - Production confirms: the print's size and inks are our best guess (`confirm`) until production saves what printed.
  *  - The customer sees "Picture only": the same, and the proof shows the picture with none of the details (`visualOnly`).
  */
-type O = Pick<Order, "order_type" | "notes" | "groups">;
+type O = Pick<Order, "order_type" | "notes" | "groups"> & { sample?: SampleRule | null };
 type T = NonNullable<Order["order_type"]>;
-export const CONFIRM_WHY: Record<T, string> = { new: "New order: production confirms the details before printing", reorder: "Reorder: production confirms on the run", reorder_changes: "Reorder: production confirms on the run" };
+export const CONFIRM_WHY: Record<T, string> = { new: "New order: production confirms the details before printing", reorder: "Reorder: production confirms on the run", reorder_changes: "Reorder: production confirms on the run", sample: "Sample: production confirms the details before printing" };
 /** a print waiting on production from a new order (not a reorder): its banner and links say so */
 export const isNewOrderConfirm = (why?: string | null) => /^(new order|full color art)\b/i.test(why || "");
 /** the banner on a print waiting on production: a reorder's details, a new order's details, or full color art's colors */
 export const confirmTitle = (why?: string | null) => (/^full color art\b/i.test(why || "") ? "Production to confirm colors" : /^new order\b/i.test(why || "") ? "Production to confirm details" : "Reorder details needed");
 
 export const orderTypeOf = (o: O): T => o.order_type || (isReorder(o) ? "reorder" : "new");
-export const ORDER_TYPE_LABEL: Record<T, string> = { new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes" };
+export const ORDER_TYPE_LABEL: Record<T, string> = { new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes", sample: "Sample" };
 
-export default function OrderTypeRow({ o, patch, bare }: { o: O; patch: (fn: (d: Order) => void) => void; /** inside Job details' Order type tab */ bare?: boolean }) {
+export default function OrderTypeRow({ o, patch, bare, sampleRule, me = "" }: { o: O; patch: (fn: (d: Order) => void) => void; /** inside Job details' Order type tab */ bare?: boolean; /** the customer's sample rule (else the shop's): a Sample is priced by it */ sampleRule?: SampleRule | null; me?: string }) {
+  const [chg, setChg] = useState<{ each: string; why: string } | null>(null);
   const t = orderTypeOf(o);
   const prints = o.groups.flatMap((g) => g.imprints);
   // every print counts, confirmed ones too: ticking the box on a job production already confirmed asks them to check it
@@ -58,6 +60,8 @@ export default function OrderTypeRow({ o, patch, bare }: { o: O; patch: (fn: (d:
   const each = (fn: (im: Imprint) => void) => patch((d) => { for (const g of d.groups) for (const im of g.imprints) fn(im); });
   const pick = (v: T) => patch((d) => {
     d.order_type = v;
+    // a Sample takes the customer's sample rule (else the shop's) as it is now, so its price doesn't move under it
+    if (v === "sample") d.sample = { ...(sampleRule || SAMPLE_DEFAULT), from: sampleRule ? "customer" : "shop" };
     // a reorder: every print waits for production (Reorder with changes: untick the prints you changed); a new order:
     // none until it's asked for
     if (v !== "reorder_changes") for (const g of d.groups) for (const im of g.imprints) if (!im.confirmed) setOn(im, v === "reorder", pictureOnly, v);
@@ -84,7 +88,22 @@ export default function OrderTypeRow({ o, patch, bare }: { o: O; patch: (fn: (d:
         <option value="new">New order</option>
         <option value="reorder">Reorder</option>
         <option value="reorder_changes">Reorder with changes</option>
+        <option value="sample">Sample</option>
       </select>
+      {t === "sample" && (() => { const r = o.sample || sampleRule || SAMPLE_DEFAULT; return (
+        <div className="osm">
+          <span className="osm-p">Sample pricing · {r.from === "changed" ? `changed by ${r.by || "staff"}` : r.from === "customer" || (sampleRule && !o.sample) ? "their sample rule" : "the shop's sample rule"}</span>
+          <span className="osm-t">${(+r.each || 0).toFixed(2)} a piece · screens {r.screens === "free" ? "no charge" : "charged"} · PMS {r.pms === "free" ? "no charge" : "charged"} · extras {r.extras === "free" ? "no charge" : "charged"}{r.why ? ` · why: ${r.why}` : ""}</span>
+          {!chg ? <button type="button" className="linkbtn" onClick={() => setChg({ each: String(r.each), why: "" })}>Change price</button> : (
+            <span className="osm-chg">
+              <input className="input" type="number" min={0} step="0.01" value={chg.each} onChange={(e) => setChg({ ...chg, each: e.target.value })} aria-label="Price per sample" />
+              <input className="input" value={chg.why} placeholder="Why (it's noted on the order)" onChange={(e) => setChg({ ...chg, why: e.target.value })} aria-label="Why" />
+              <button type="button" className="btn sm primary" disabled={!chg.why.trim() || !(+chg.each >= 0)} onClick={() => { const each = +chg.each, why = chg.why.trim(); patch((d) => { d.sample = { ...r, each, why, by: me, from: "changed" }; }); setChg(null); }}>Save</button>
+              <button type="button" className="btn sm ghost" onClick={() => setChg(null)}>Cancel</button>
+            </span>
+          )}
+        </div>
+      ); })()}
       {prints.length > 0 && (
         <>
           <label className="check ot-conf" title="Our colors, inks and size stay the best guess until production saves what they'll print">

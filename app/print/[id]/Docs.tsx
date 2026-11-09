@@ -546,6 +546,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
       {(d.printStyle === "fashion" || d.softHand) && <div className="n2 hit">{d.printStyle === "fashion" && <><span className="flag">FASHION HIT</span> No underbase. Print, flash, print each color through the same screen (2 hits).</>}{d.softHand && <>{d.printStyle === "fashion" ? " " : ""}<span className="flag">SOFT HAND</span> Mix soft hand additive into each ink.</>}</div>}
       {/* puff ink (Oct 30): what the press does differently */}
       {d.method === "screen" && d.puff && <div className="n2 hit"><span className="flag">PUFF INK</span> Puff print. {needsUnderbase(d) ? "Underbase set on this print." : "No underbase."}</div>}
+      {d.oversize && <div className="n2 hit"><span className="flag">OVERSIZED</span> {d.size || "Past the normal max"}: harder to run. Check the platen and registration.</div>}
       {/* a color change (Oct 24): this print in another ink on a garment color */}
       {inkChanges(d).length > 0 && <div className="n2"><b>{changeWord(d.method).toUpperCase()}:</b> {inkChangesText(d)}</div>}
       {/* a color change across variations (Oct 27): the same screens as a print in another group */}

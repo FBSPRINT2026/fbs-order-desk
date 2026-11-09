@@ -21520,3 +21520,19 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .hst-seg button.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:700}
 .hst-note{font-size:12.5px;margin:0}
 .hst-a{display:flex;justify-content:flex-end;gap:8px}
+/* Samples: the customer's sample price (csr-) and a Sample order's pricing line (osm-), Nov 9 */
+.csr{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:6px 0}
+.csr-h{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:8px}
+.csr-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.csr-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden;height:36px}
+.csr-seg button{all:unset;text-align:center;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.csr-seg button.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:700}
+.osm{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12.5px;margin-top:6px}
+.osm-p{font-weight:700;color:var(--fbs-violet);white-space:nowrap}
+.osm-t{color:var(--ink-2)}
+.osm-chg{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex-basis:100%}
+.osm-chg .input{height:32px;min-width:90px}
+.osm-chg .input:nth-child(2){flex:1 1 200px}
+/* oversized print switch in the Mockup Creator (mk-over, Nov 9) */
+.mk-over{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;margin:6px 0}
+.mk-over.on{color:var(--warn)}

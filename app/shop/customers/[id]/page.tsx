@@ -28,7 +28,7 @@ import { fmtDateLong } from "@/lib/format";
 import { previewUrls } from "@/lib/designs";
 import { staffCustomerMessage } from "@/app/shop/actions";
 import { archiveDesign, deleteDesign, deleteDesignForever } from "@/app/artwork-actions";
-import { PAY_TERMS, orderGroups, payDueDate, type Design, type PayTerms } from "@/lib/pricing";
+import { PAY_TERMS, SAMPLE_DEFAULT, orderGroups, payDueDate, type Design, type PayTerms, type SampleRule } from "@/lib/pricing";
 import Timeline from "@/components/Timeline";
 import CustomerTexts from "@/components/CustomerTexts";
 import { customerTextCount } from "@/app/shop/texts-actions";
@@ -328,6 +328,16 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
               </select>
             </div>
             <label className="check"><input type="checkbox" checked={c.tax_exempt} onChange={(e) => set("tax_exempt", e.target.checked)} /> Tax exempt (new quotes start exempt)</label>
+            {/* their sample price (Nov 9, Nick): a Sample order for them is priced by this, else the shop's ($40 flat) */}
+            {(() => { const r = ((c as unknown as { sample_rule?: SampleRule | null }).sample_rule) || null, cur = r || SAMPLE_DEFAULT; const put = (x: Partial<SampleRule> | null) => set("sample_rule" as never, (x ? { ...cur, ...x } : null) as never); const seg = (k: "screens" | "pms" | "extras", label: string) => <div className="field"><label>{label}</label><div className="csr-seg">{(["free", "charge"] as const).map((v) => <button key={v} type="button" className={cur[k] === v ? "on" : ""} onClick={() => put({ [k]: v })}>{v === "free" ? "No charge" : "Charge"}</button>)}</div></div>; return (
+              <div className="csr">
+                <div className="csr-h"><b>Samples</b><span className="faint">{r ? "Their own sample price" : "Using the shop's sample price"}{r ? <> · <button type="button" className="linkbtn" onClick={() => put(null)}>Use the shop&apos;s</button></> : null}</span></div>
+                <div className="csr-g">
+                  <div className="field"><label htmlFor="cu-smp">Price per sample</label><input id="cu-smp" type="number" min={0} step="0.01" value={cur.each} onChange={(e) => put({ each: +e.target.value || 0 })} /></div>
+                  {seg("screens", "Screens")}{seg("pms", "PMS matching")}{seg("extras", "Puff, oversized, extras")}
+                </div>
+              </div>
+            ); })()}
             <DesignCatalogSetting customerId={id} on={!!c.design_catalog} onChange={(v) => set("design_catalog", v)} portalOn={!!c.design_catalog_portal} onPortal={(v) => set("design_catalog_portal", v)} />
               <div className="field"><label htmlFor="cu-notes">Notes (only your shop sees these)</label><textarea id="cu-notes" rows={3} placeholder="Preferred inks, art files, pickup details…" value={c.notes} onChange={(e) => set("notes", e.target.value)} /></div>
               {/* Create order training lives on Program & training (Oct 30, Nick: "think of program pricing and training as the

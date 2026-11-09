@@ -11,7 +11,7 @@ import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
 import { changeVersions, inkChanges, inksOnColor } from "@/lib/inkBy";
-import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2 } from "@/lib/pricing";
+import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2, OVERSIZE_IN, NORMAL_MAX_IN } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -1965,10 +1965,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const c = spotFor0(loc, cb);
     return { ...s0, maxW: Math.min(s0.maxW, c.maxW), maxH: Math.min(s0.maxH, c.maxH), defW: Math.min(s0.defW, c.defW) };
   };
-  const maxWidthFor = (loc: string, r: number, b: Body = body) => maxWidthFor0(loc, r, fitBody(b));
+  // an oversized print (Imprint.oversize) may go past the normal max, up to 15" (OVERSIZE_IN)
+  const overLocs = new Set(imprints.filter((x) => x.oversize).map((x) => (x.location || "").toLowerCase()));
+  const overCap = (loc: string, w: number) => (overLocs.has((loc || "").toLowerCase()) ? Math.max(w, Math.min(OVERSIZE_IN, (w * OVERSIZE_IN) / NORMAL_MAX_IN)) : w);
+  const maxWidthFor = (loc: string, r: number, b: Body = body) => overCap(loc, maxWidthFor0(loc, r, fitBody(b)));
   // a size off the job's film was printed before on these same garments: it's kept (up to what the shown size takes)
   const printWidth = (im: Imprint, loc: string, r: number, b: Body = body) => printWidth0(im.size, loc, r, im.sizeFrom === "film" ? b : fitBody(b));
-  const sideMaxWidth = (loc: string, r: number, b: Body = body) => sideMaxWidth0(loc, r, fitBody(b));
+  const sideMaxWidth = (loc: string, r: number, b: Body = body) => overCap(loc, sideMaxWidth0(loc, r, fitBody(b)));
   const autoSpot = (cur: string, v: View, dx: number, top: number, w: number, h: number) => autoSpot0(cur, v, dx, top, w, h, body);
   const basePlacement = (loc: string, wIn: number, r: number, drop: number | null, sc: number, view?: View, fit?: Fit | null, b: Body = body) => basePlacement0(loc, wIn, r, drop, sc, view, fit, b);
   // the art's own proportions: cropped to what's left after the background came out (this session, or saved on the design)
@@ -5008,6 +5011,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                         );
                       })()}
                       {capBody && designOf(im) && im.sizeFrom === "customer" && (() => { const r = ratioIm(im) || 0, m = (im.size || "").match(/^([\d.]+)/), want = m ? (/tall/i.test(im.size) ? (r ? +m[1] / r : +m[1]) : +m[1]) : 0, cap = Math.floor(sideMaxWidth(im.location, r) * 4) / 4; return want > cap + 0.01 ? <div className="mk-cust-size">The customer asked for {im.size}, bigger than fits the {capBody.size} ({cap}&quot; max). Check with them.</div> : null; })()}
+                      {designOf(im) && (im.method === "screen" || im.method === "dtf") && <label className={"mk-over" + (im.oversize ? " on" : "")} title={`Past the normal ${NORMAL_MAX_IN}" max, up to ${OVERSIZE_IN}": harder to run, so it's marked on the work order and runs slower`}><input type="checkbox" checked={!!im.oversize} onChange={(e) => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, oversize: e.target.checked || undefined } : x)))} /> Oversized <span className="faint">up to {OVERSIZE_IN}&quot;</span>{im.oversize ? <b> · harder to run: marked on the work order, slower on the schedule</b> : null}</label>}
                       {capBody && designOf(im) && <div className="mk-capnote">Up to {Math.floor(sideMaxWidth(im.location, ratioIm(im) || 0) * 4) / 4}&quot; wide: the largest that fits the {capBody.size}, the smallest size ordered (one screen prints every size).</div>}
                       {/* the location's actions together on the right (Oct 9, Nick) */}
                       <div className="mk-imp-acts">
