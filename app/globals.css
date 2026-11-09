@@ -4086,7 +4086,8 @@ button.ms-h.today{background:var(--accent-soft);color:var(--accent)}
 @media (max-width: 700px){.ms-acts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* rush 🔥 / firm ⛰️ / overtime on the calendar */
 .ms-flags{font-style:normal;font-size:11px;margin-left:3px;flex:none;letter-spacing:-1px}
-.ms-firm{display:inline-block;margin-right:5px;padding:0 5px;border-radius:4px;background:#8a4b00;color:#fff;font-size:10px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;vertical-align:1px}
+/* firm date on a job card: dark brown text on a pale tint, readable at card size (Nov 9, Nick: "no one can read") */
+.ms-firm,.ms-l2 b.ms-firm,.ms-pj-2 b.ms-firm{display:inline-block;margin-right:5px;padding:0 5px;border-radius:4px;background:#fdf1e3;color:#8a4b00;border:1px solid #e9c49a;font-size:11px;font-weight:700;line-height:1.35;letter-spacing:0;text-transform:none;white-space:nowrap;vertical-align:0}
 .ms-blk.is-firm,.ms-chip.is-firm{box-shadow:inset 0 0 0 1.5px #8a4b00}
 .ms-blk.ot,.ms-chip.ot{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--warn) 22%,var(--surface)) 0 6px,color-mix(in srgb,var(--warn) 12%,var(--surface)) 6px 12px)!important;border-left-color:var(--warn)!important}
 .ms-dl{position:absolute;left:0;right:0;height:0;border-top:2.5px solid #8a4b00;z-index:4;pointer-events:auto}
