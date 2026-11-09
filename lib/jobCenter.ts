@@ -230,7 +230,9 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
       // the Job Center is the sales side: once the goods are ordered (or the customer sends theirs) it's Receiving's, and the
       // job sits under Approved (Nov 9, Nick: "why would there be a coming tab… that would be in receiving")
       if (!["production", "ready"].includes(o.status) && !here && !ordered && !theirs) { steps.push("goods_order"); tracks.push({ k: "goods", state: "needed", label: "Goods to order" }); }
-      else steps.push("approved");
+      // goods handled: it's the production schedule's now (Nov 9, Nick: "now that job should be off the board"); it shows
+      // under Done › Approved for three days after it's approved, like a receipt, then it's off
+      else if (Date.parse(o.approved_at || o.updated_at || o.created_at) > now - 3 * 864e5) steps.push("approved");
     }
     if (!steps.length) continue;
     const mg = gs.find((g) => (g.imprints || []).length && !mine.some((m) => m.group_id === g.id)) || gs.find((g) => (g.imprints || []).length);

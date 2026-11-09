@@ -657,7 +657,9 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     // what's booked per job and kind of machine: everything, or just some print locations
     const onCal = new Map<string, string[] | "all">();
     for (const c of cards) { const k = c.job.key + ":" + c.need.type, cur = onCal.get(k); if (cur === "all") continue; const l = c.slot?.locations; onCal.set(k, !l || !l.length ? "all" : [...(cur || []), ...l]); }
-    const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "production" : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
+    // approved orders wait here (Nov 9, Nick: "a job that's marked invoiced… and approved should just go on to the production
+    // scheduler"); booking one makes it In Production (a database trigger, migration 302)
+    const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "approved" || j.status === "production" : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
     const ld = JSON.parse(JSON.stringify(loadMap)) as Record<string, Record<string, number>>;
     const out: { job: Job; need: Need; sug: Suggestion | null }[] = [];
     // where each art already runs (booked, not done), and later where it's suggested: same art goes together (Nov 9)
@@ -684,7 +686,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     }
     return out;
   }, [s, jobs, cards, loadMap, today, mine, owners, me, typeF]);
-  const coming = (jobs || []).filter((j) => j.kind === "o" && ["approved", "art", "blanks"].includes(j.status));
+  const coming = (jobs || []).filter((j) => j.kind === "o" && j.status === "art");
   // too tight: waiting jobs with no room before in-hands, and booked jobs that finish after their in-hands date
   const tight = useMemo(() => {
     const out: { job: Job; why: string }[] = [], seen = new Set<string>();
@@ -1840,7 +1842,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
             onDrop={(e) => { e.preventDefault(); setOver(""); if (drag?.card?.slot) unbookMany(drag.group || [drag.card]); setDrag(null); }}>
             <div className="ms-ready-h">
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
-              <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art, blanks) · ` : ""}{tray.length ? "drag onto a press and day, or take the suggested spot" : "nothing waiting"}</span>
+              <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{tray.length ? "drag onto a press and day, or take the suggested spot" : "nothing waiting"}</span>
               <span className="spacer" />
               {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind !== "h").length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={() => { setRestart(false); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind !== "h")); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
               {trayOpen && tray.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}

@@ -28,7 +28,7 @@ import RequestAsk from "@/components/RequestAsk";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, CLOSED_QUOTE, isClosedQuote, statusKey, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, CLOSED_QUOTE, REVISION, isClosedQuote, statusKey, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -1042,11 +1042,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       setO((p) => (p ? ({ ...p, status: "quote", declined_at: null, declined_reason: "" } as Order) : p));
       if (k === "quote") { if (latest.current) latest.current = { ...latest.current, status: "quote", type: "quote" }; return loadSide(); }
     }
-    const { error } = await sb.from("orders").update({ status: k, type: ST[k].type }).eq("id", o.id);
+    // Revision is a quote with revision_at; any other status clears it
+    const dbk = (k === "revision" ? "quote" : k) as StatusKey, rev = k === "revision" ? new Date().toISOString() : null;
+    const { error } = await sb.from("orders").update({ status: dbk, type: ST[k].type, revision_at: rev }).eq("id", o.id);
     if (error) return say("Couldn't change status: " + error.message);
     await sb.from("order_events").insert({ order_id: o.id, kind: "status", detail: k, actor: "shop" });
-    setO((p) => (p ? { ...p, status: k, type: ST[k].type } : p));
-    if (latest.current) latest.current = { ...latest.current, status: k, type: ST[k].type };
+    setO((p) => (p ? ({ ...p, status: dbk, type: ST[k].type, revision_at: rev } as Order) : p));
+    if (latest.current) latest.current = { ...latest.current, status: dbk, type: ST[k].type, revision_at: rev } as Order;
     loadSide();
     if (ST[k].type === "invoice") sepsIfReady("status");
     // Ready (pickup) / Completed (our delivery): the customer's email, if they get it (lib/customerEmailServer.ts)
@@ -1572,7 +1574,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           : <select className={"status-select" + (holdOf((o as { flags?: unknown }).flags) ? " ohs-held" : "")} style={{ ["--sc" as string]: holdOf((o as { flags?: unknown }).flags) ? "var(--warn)" : st.c }} aria-label="Status" value={holdOf((o as { flags?: unknown }).flags) ? "hold" : statusKey(o)} onChange={(e) => void statusPicked(e.target.value)}>
             {/* a hold is for an order (Nov 3, Nick: "once it goes to invoice, it should say on hold"); a quote isn't held */}
             {(o.type === "invoice" || !!holdOf((o as { flags?: unknown }).flags)) && <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>}
-            <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote"), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
+            <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote").flatMap((s) => (s.k === "quote_sent" ? [s, REVISION] : [s])), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
           </select>}
           {/* phone only: Documents, Production, Ask AI and More behind one button (the next step stays showing under it) */}

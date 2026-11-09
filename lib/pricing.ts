@@ -32,15 +32,16 @@ export const sizeLabel = (z: string) => (z === ONE_SIZE ? "Qty" : isWaist(z) ? `
 export type Size = (typeof SIZES)[number];
 
 export type StatusKey =
-  | "request" | "quote" | "quote_sent" | "approved" | "art" | "blanks" | "production" | "ready" | "completed";
+  | "request" | "quote" | "quote_sent" | "revision" | "approved" | "art" | "blanks" | "production" | "ready" | "completed";
 
 export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quote" | "invoice"; c: string }[] = [
   { k: "request", label: "Order request", portal: "Sent to FBS", type: "quote", c: "#0E9F9A" },
   { k: "quote", label: "Quote", portal: "Draft", type: "quote", c: "#7C8799" },
   { k: "quote_sent", label: "Quote Sent", portal: "Awaiting your approval", type: "quote", c: "#6477D6" },
+  // Art & Proofs is a quote status: the art is approved before the order is (Nov 9, Nick); Blanks Ordered is gone: the
+  // goods are on the Goods tab, and an approved order goes to the production schedule (booking it makes it In Production)
+  { k: "art", label: "Art & Proofs", portal: "Artwork", type: "quote", c: "#A152C9" },
   { k: "approved", label: "Approved", portal: "Approved", type: "invoice", c: "#0A8FC0" },
-  { k: "art", label: "Art & Proofs", portal: "Artwork", type: "invoice", c: "#A152C9" },
-  { k: "blanks", label: "Blanks Ordered", portal: "Ordering garments", type: "invoice", c: "#C98A0C" },
   { k: "production", label: "In Production", portal: "Printing", type: "invoice", c: "#E0582E" },
   { k: "ready", label: "Ready for Pickup", portal: "Ready for pickup", type: "invoice", c: "#2E9D5B" },
   { k: "completed", label: "Completed", portal: "Completed", type: "invoice", c: "#6B7688" },
@@ -54,8 +55,16 @@ export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quo
 export const CLOSED_QUOTE = { k: "closed" as StatusKey, label: "Closed Quote", portal: "Closed quote", type: "quote" as const, c: "#8A93A3" };
 export const isClosedQuote = (o: { status?: string | null; type?: string | null } | null | undefined) => !!o && o.status === "completed" && o.type === "quote";
 /** the status to show for an order: its own, or "closed" for a closed quote (look it up in ST) */
-export const statusKey = (o: { status?: string | null; type?: string | null }) => (isClosedQuote(o) ? "closed" : String(o.status || ""));
-export const ST: Record<string, (typeof STATUSES)[number]> = { ...Object.fromEntries(STATUSES.map((s) => [s.k, s])), closed: CLOSED_QUOTE };
+export const statusKey = (o: { status?: string | null; type?: string | null; revision_at?: string | null }) => (isClosedQuote(o) ? "closed" : o.status === "quote" && o.revision_at ? "revision" : String(o.status || ""));
+/**
+ * Revision (Nov 9, Nick: "if a job goes to revision needed… within quotes… a status called revision, after quote sent"):
+ * a quote the customer asked changes on, until the new version is sent. Stored as status `quote` with `revision_at`
+ * (so everything that works on a quote works on it), shown and picked as "Revision" (`statusKey(o)` → "revision").
+ */
+export const REVISION = { k: "revision" as StatusKey, label: "Revision", portal: "Updating your quote", type: "quote" as const, c: "#D2554B" };
+/** a status no longer used, for an old record that still has it */
+const LEGACY = { k: "blanks" as StatusKey, label: "Approved", portal: "Approved", type: "invoice" as const, c: "#0A8FC0" };
+export const ST: Record<string, (typeof STATUSES)[number]> = { ...Object.fromEntries(STATUSES.map((s) => [s.k, s])), closed: CLOSED_QUOTE, revision: REVISION, blanks: LEGACY };
 
 export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "Heat press (DTF)" };
 /** what a print's way of decorating is called: a patch pressed on is "Heat press patch" (Oct 31, Nick: "instead of
@@ -439,7 +448,7 @@ export type Order = {
   due_date: string | null; lines: Line[]; groups: Group[]; fees: Fee[]; discount_pct: number; discount_amt?: number; discount_type?: "pct" | "amt"; tax_exempt: boolean; tax_rate: number | null;
   waive_setup: boolean; notes: string; /** print the customer notes on the quote / invoice (Oct 30, Nick: a checkbox) */ notes_on_invoice?: boolean; total: number; qty: number; sent_at: string | null; approved_at: string | null;
   approved_name: string | null; created_at: string; updated_at: string;
-  /** the customer walked away (Job Center → Mark declined; migration 232): under Declined for two weeks */ declined_at?: string | null; declined_reason?: string;
+  /** the customer walked away (Job Center → Mark declined; migration 232): under Declined for two weeks */ declined_at?: string | null; declined_reason?: string; /** Revision: the customer asked for changes on this quote (statusKey → "revision") */ revision_at?: string | null;
   /** what it sells: apparel (null) or an outsourced kind with simple item lines (lib/simpleOrders.ts; orders.product_kind) */ product_kind?: import("@/lib/simpleOrders").ProductKind | null;
   /** New order / Reorder / Reorder with changes (Oct 24, Nick; orders.order_type). Null = worked out from the order */ order_type?: "new" | "reorder" | "reorder_changes" | null;
   price_type: PriceType; /** priced by the customer's program rate card (the chip next to Retail / Wholesale) */ use_program?: boolean; /** which of the customer's rate cards (programs.rate_cards id, "main" = the first) */ program_card?: string | null; submitted_at?: string | null; completed_at?: string | null; source?: string; po_number: string; production_date: string | null; rush: boolean; /** firm in-hands (can't slip), and the time it's needed that day (minutes; null = end of day) */ firm?: boolean; due_time?: number | null; delivery_method: Delivery; ship_to: string; ship_method: string; tracking: string; /** bill third party: the carrier account this shipment is billed to (lib/thirdParty.ts) */ third_party?: import("@/lib/thirdParty").ThirdParty | null;

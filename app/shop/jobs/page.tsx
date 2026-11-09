@@ -51,7 +51,7 @@ const GROUPS: G[] = [
   // the goods after the approval (Nov 9, Nick: "after a job is ordered… there's one more step… goods… need to order")
   { t: "Goods", line: "Approved, garments to order", c: "var(--fbs-orange)", steps: [
     ["goods_order", "To Order", ic(<><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6" /><circle cx="9" cy="20" r="1.4" /><circle cx="17" cy="20" r="1.4" /></>)]] },
-  { t: "Done", line: "Approved or declined", c: "var(--ok)", steps: [
+  { t: "Done", line: "Approved (last 3 days) or declined", c: "var(--ok)", steps: [
     ["approved", "Approved", ic(<><circle cx="12" cy="12" r="9" /><path d="m9 12 2 2 4-4" /></>)],
     ["declined", "Declined", ic(<><circle cx="12" cy="12" r="9" /><path d="m10 10 4 4m0-4-4 4" /></>)]] },
 ];
@@ -62,7 +62,7 @@ const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g
 const DEPTS: [Dept | "all", string][] = [["all", "All"], ["screen", "Screen printing"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const EMPTY: Record<Step, string> = {
   leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", website: "No new inquiries from the website.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
-  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", goods_order: "Nothing approved and waiting for its goods to be ordered.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
+  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", goods_order: "Nothing approved and waiting for its goods to be ordered.", approved: "Nothing approved in the last three days.", declined: "Nothing declined in the last two weeks.",
 };
 /** the tracks a step is about */
 // Mockups lists mockups still missing their numbers (the numbers are what it needs); Numbers the other way round

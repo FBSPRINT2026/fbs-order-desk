@@ -118,7 +118,7 @@ export async function addGoodsInfo(orderId: string, a: GoodsAdd): Promise<{ ok: 
         lines: [], total: null, expected_date: eta, note: (a.note || "").slice(0, 500), created_by: v.email || "staff" }).select("id").single();
       if (error) return { ok: false, error: error.message };
       buyId = made?.id || null;
-      await admin.from("orders").update({ status: "blanks" }).eq("id", orderId).in("status", ["approved", "art"]);
+      // no Blanks Ordered status any more (Nov 9): the goods show on the Goods tab; the order stays approved
     }
     // the box goes where the nightly manifests put ours (blank_shipments), followed live
     if (tracking) {

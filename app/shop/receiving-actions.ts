@@ -40,7 +40,7 @@ export async function blanksPlan(orderId: string): Promise<{ ok: boolean; error?
 
 /** After blanks are ordered, the job moves to "Blanks Ordered" (unless it's already further along). */
 async function markOrdered(admin: ReturnType<typeof createAdminClient>, orderId: string) {
-  await admin.from("orders").update({ status: "blanks" }).eq("id", orderId).in("status", ["approved", "art"]);
+      // no Blanks Ordered status any more (Nov 9): the goods show on the Goods tab; the order stays approved
 }
 
 /**

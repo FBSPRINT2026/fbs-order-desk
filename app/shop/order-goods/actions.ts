@@ -216,7 +216,7 @@ export async function placeGoods(p: { lines: { sku: string; qty: number; label: 
       const { error } = ins;
       // bought already: say so plainly if it couldn't be recorded (the migration isn't run yet)
       if (error) return { ok: true as const, results, warn: `Ordered with S&S (${row.supplier_order}), but it couldn't be saved here: ${/order_id|customer_id|activity_id|label/.test(error.message) ? "run supabase/migrations/117_goods_orders_without_order.sql in Supabase" : error.message}.` };
-      if (p.orderId) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
+      // no Blanks Ordered status any more (Nov 9): the goods show on the Goods tab; the order stays approved
       // no order yet: a to-do on the email, so it isn't forgotten (closed when Create order uses these goods)
       else if (p.activityId && ins.data?.id) {
         const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
@@ -284,7 +284,7 @@ export async function linkGoods(goodsId: string, orderId: string) {
     if (error) return { ok: false as const, error: error.message };
     // its reminder to-do is done now
     await admin.from("tasks").update({ status: "done", done_at: new Date().toISOString(), done_by: "Create order: used the goods" }).eq("ref", `goods:${goodsId}`).eq("status", "open");
-    await admin.from("orders").update({ status: "blanks" }).eq("id", orderId).in("status", ["approved", "art"]);
+      // no Blanks Ordered status any more (Nov 9): the goods show on the Goods tab; the order stays approved
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
@@ -539,7 +539,7 @@ export async function placeOneStop(p: { lines: { code: string; qty: number; labe
     };
     const ins = await admin.from("blank_orders").insert(row).select("id").single();
     if (ins.error) return { ok: true as const, po: r.orderNumber, warn: `Ordered with One Stop (${r.orderNumber}), but it couldn't be saved here: ${ins.error.message}` };
-    if (p.orderId) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
+      // no Blanks Ordered status any more (Nov 9): the goods show on the Goods tab; the order stays approved
     return { ok: true as const, po: r.orderNumber, total: r.total, freight: r.shipping, live: osOrdersLive() };
   } catch (e) { return fail(e); }
 }
@@ -585,7 +585,7 @@ export async function placeSanmar(p: { lines: (SanMarPOLine & { label: string; p
     };
     const ins = await admin.from("blank_orders").insert(row).select("id").single();
     if (ins.error) return { ok: true as const, po: order.poNum, warn: `Ordered with SanMar (PO ${order.poNum}), but it couldn't be saved here: ${ins.error.message}` };
-    if (p.orderId) await admin.from("orders").update({ status: "blanks" }).eq("id", p.orderId).in("status", ["approved", "art"]);
+      // no Blanks Ordered status any more (Nov 9): the goods show on the Goods tab; the order stays approved
     return { ok: true as const, po: order.poNum, id: ins.data.id };
   } catch (e) { return fail(e); }
 }

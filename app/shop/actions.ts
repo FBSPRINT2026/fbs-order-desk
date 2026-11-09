@@ -181,8 +181,7 @@ export async function acceptRequest(orderId: string, note: string, mode: "as_is"
     // and send it back for their OK).
     let status = "art";
     if (mode === "as_is") {
-      const { data: g } = await admin.from("order_goods").select("status").eq("order_id", orderId).maybeSingle();
-      status = g?.status === "received" ? "production" : "blanks";
+      status = "approved"; // goods in or not, it goes to the production schedule (Nov 9: no Blanks Ordered; In Production = booked)
     }
     const { error } = await admin.from("orders").update({ status, type: "invoice", sent_at: now, approved_at: now, approved_name: "Sent in by the customer" }).eq("id", orderId).eq("status", "request");
     if (error) return { ok: false, error: error.message };
