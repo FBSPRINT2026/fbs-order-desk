@@ -2062,7 +2062,7 @@ function PrintRow({ youth, shown, d, n, hex, mainBg, mainAt = 0, designs, urls, 
         <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
           {youth && <span className="pr-ynote">{youth.note}</span>}
-          {d.custSeps && <span className="pr-csf">Customer supplied film</span>}
+          {d.custSeps && <span>Customer supplied film</span>}
           {!youth && size && !d.custSeps && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
           {!youth && !(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
           {d.method === "screen" && d.puff && <span className="pr-puff">Puff print</span>}
