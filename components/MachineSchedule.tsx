@@ -585,6 +585,17 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   // every machine's work laid out on its hours, split into per-day pieces
   const segs = useMemo(() => (s ? layoutAll(cards, ord(now.day) * 1440 + now.min) : { by: new Map<string, Seg[]>(), ofCard: new Map<string, Seg[]>(), lunch: new Map<string, number>() }), [cards, s, now]);
   const at = (m: Machine, d: string) => segs.by.get(m.id + "|" + d) || [];
+  /** a day's pieces with a job that runs through lunch (or a warm-up) drawn as one card over it (Nov 9, Nick: "when
+   *  lunch falls within a job it shouldn't split it up… if lunch falls between jobs it should split between the job") */
+  const joined = (m: Machine, d: string) => {
+    const out: { g: Seg; start: number; end: number; gaps: [number, number][]; n: number }[] = [];
+    for (const g of at(m, d).slice().sort((x, y) => x.start - y.start)) {
+      const last = out[out.length - 1];
+      if (last && last.g.c.key === g.c.key && g.start - last.end > 0 && g.start - last.end <= 90) { last.gaps.push([last.end, g.start]); last.end = g.end; last.n++; }
+      else out.push({ g, start: g.start, end: g.end, gaps: [], n: 1 });
+    }
+    return out;
+  };
   // when each crew goes into overtime that day (cached until the settings / hours change)
   const otCache = useMemo(() => new Map<string, number | null>(), [s]);
   const otOn = (m: Machine, d: string) => { const k = m.id + "|" + d; if (!otCache.has(k)) otCache.set(k, otFromOn(m, d)); return otCache.get(k)!; };
@@ -1042,13 +1053,13 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
             </button>
           ))}
           {machines.map((m) => {
-            const lanes = Math.max(1, ...ds.map((d) => at(m, d).length));
+            const lanes = Math.max(1, ...ds.map((d) => joined(m, d).length));
             const wkUsed = ds.reduce((a, d) => a + used(m, d), 0), wkCap = ds.reduce((a, d) => a + capacityMin(s, m, d), 0);
             return [
               <div key={m.id + w} className={"ms-wg-m " + m.type} title={`${m.name}: ${fmtMin(wkUsed)} of ${fmtMin(wkCap)} booked`}><b>{shortName(m)}<IssueTag m={m} />{crewOf(m) ? <span className="ms-op"> · {crewOf(m)!.leader}</span> : null}</b><small>{m.type === "screen" ? `${m.colors}C` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat"} · <span className="ms-used">{Math.round(wkUsed / 60)}/{Math.round(wkCap / 60)}h</span></small>
                 <div className={"ms-cap" + (wkUsed > wkCap ? " full" : wkUsed > wkCap * s.fillTarget ? " warn" : "")}><i style={{ width: `${Math.min(100, wkCap ? (wkUsed / wkCap) * 100 : 0)}%` }} /></div></div>,
               ...ds.map((d) => {
-                const gs = at(m, d).slice().sort((a, b) => a.start - b.start);
+                const gs = joined(m, d).map((x) => ({ ...x.g, start: x.start, end: x.end }));
                 const u = used(m, d), cap = capacityMin(s, m, shiftOn(m, d) ? d : undefined);
                 return (
                   <div key={m.id + d} className={"ms-wc" + (d === today ? " today" : d < today ? " past" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "") + (u >= cap ? " full" : "")} style={{ minHeight: lanes * LANE + 10, backgroundSize: `${(180 / range) * 100}% 100%` }}
@@ -1122,12 +1133,13 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
               : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
             {(day < today || (day === today && now.min > vS)) && <div className="ms-pastv" style={{ height: ((Math.min(day < today ? vE : now.min, vE) - vS) / 60) * HOUR_PX }} />}
             {day === today && now.min >= vS && now.min <= vE && <div className="ms-now" style={{ top: ((now.min - vS) / 60) * HOUR_PX }} />}
-            {at(m, day).map((g) => { const h = Math.max(22, ((g.end - g.start) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes); return (
-              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "")} style={{ top: ((g.start - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
+            {joined(m, day).map(({ g, start: gs0, end: ge0, gaps, n: nj }) => { const h = Math.max(22, ((ge0 - gs0) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes), whole = nj > 1 && nj >= g.parts; return (
+              <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "") + (gaps.length ? " ms-thru" : "")} style={{ top: ((gs0 - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
                 <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b>{flags(g.c.job)}<span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span><span className="l1x">{gl.colors} · {gl.units.toLocaleString()} P</span></span>
                 <span className="ms-l2">{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.name || g.c.need.label}</span>
-                <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()} P</i></span>
+                <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 && !whole ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()} P</i></span>
+              {gaps.map(([a0, b0]) => <span key={"gp" + a0} className="ms-thru-l" aria-hidden style={{ top: ((a0 - gs0) / 60) * HOUR_PX, height: ((b0 - a0) / 60) * HOUR_PX }}>{((b0 - a0) / 60) * HOUR_PX >= 13 ? <em>Lunch</em> : null}</span>)}
               </button>
             ); })}
           </div>
@@ -1142,7 +1154,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   const phoneView = () => {
     const next = Array.from({ length: 7 }, (_, i) => addDay(today, i + 1)).find((d) => machines.some((m) => shiftOn(m, d) || at(m, d).length)) || addDay(today, 1);
     const dayBlock = (d: string) => {
-      const rows = machines.map((m) => ({ m, gs: at(m, d).slice().sort((a, b) => a.start - b.start), sh: shiftOn(m, d) }));
+      const rows = machines.map((m) => ({ m, gs: joined(m, d).map((x) => ({ ...x.g, start: x.start, end: x.end })), sh: shiftOn(m, d) }));
       const gone = (r: { sh: [number, number] | null }) => d === today && !!r.sh && r.sh[1] <= now.min;
       const busy = rows.filter((r) => r.gs.length), open = rows.filter((r) => !r.gs.length && r.sh && !gone(r)), done = rows.filter((r) => !r.gs.length && gone(r)), off = rows.filter((r) => !r.gs.length && !r.sh);
       const booked = rows.reduce((t, r) => t + used(r.m, d), 0);
@@ -1243,7 +1255,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
               newWeek ? <div key={"wk" + d} className="ms-lg-wk" style={{ gridColumn: `1 / span ${machines.length + 1}` }}>{o.compact ? wkName(d) : d >= nextMon ? "Next Week" : "This Week"} · {dayLbl(monday(d))}</div> : null,
               <div key={"d" + d} className={"ms-lg-d" + (isToday ? " today" : d < today ? " past" : "")}><b>{isToday ? "Today" : new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}</b><span>{new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span><small>{Math.round(dayUsed / 60)}h{o.compact ? "" : " booked"}</small></div>,
               ...groups.flatMap((g) => g.ms).map((m) => {
-                const gs = at(m, d).slice().sort((x, y) => x.start - y.start);
+                const gs = joined(m, d).map((x) => ({ ...x.g, start: x.start, end: x.end }));
                 const u = used(m, d), works = !!shiftOn(m, d) || gs.length > 0, cap = capacityMin(s, m, works && !shiftOn(m, d) ? undefined : d);
                 return (
                   <div key={m.id + d} className={"ms-lc" + (isToday ? " today" : d < today ? " past" : "") + (!works || isOffDay(m, d) ? " off" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")}
