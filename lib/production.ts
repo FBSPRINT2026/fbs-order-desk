@@ -27,6 +27,8 @@ export type Machine = {
   active: boolean;
   /** this machine's own speed vs the standard (1 = standard, 1.2 = 20% faster) */
   speed: number;
+  /** learned from its press operator's runs (lib/runLearn.ts): their time ÷ the standard time (0.85 = 15% faster); who, and from how many jobs */
+  pace?: number; paceWho?: string; paceN?: number;
   /** the crew that runs it (Settings → Production → Crews); its hours replace the machine's own */
   crew?: string;
   /** worked out when settings load: this machine's hours for each weekday (0 = Sunday), [start, end] minutes, null = off */
@@ -234,7 +236,8 @@ export function mergeProduction(d: unknown): ProductionSettings {
 /** One decoration to run: a location on a group of garments. */
 export type Step = { method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string; /** puff ink (raised print): slower printing, longer setup */ puff?: boolean; /** puff picked as a job condition: its slower printing is already in the speed slider */ puffInSpeed?: boolean;
   /** this print only runs on one press (Imprint.pressOnly, set on the production mockup) */ only?: { id: string; name: string };
-  /** times around the press set on the press setup (Imprint.rounds): every piece goes around that many times */ rounds?: number };
+  /** times around the press set on the press setup (Imprint.rounds): every piece goes around that many times */ rounds?: number;
+  /** staff set how long this print location takes (all its garments together), on the schedule: used as is */ over?: { min: number; by: string } };
 /** Everything to run on one kind of machine, and the most colors any of it needs. */
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
@@ -404,11 +407,28 @@ export function restNeed(need: Need, booked: string[] | "all"): Need | null {
 
 /* ---------- how long it takes ---------- */
 
-export type Estimate = { minutes: number; setup: number; run: number; teardown: number; parts: { label: string; minutes: number }[] };
+export type Estimate = { minutes: number; setup: number; run: number; teardown: number; parts: { label: string; minutes: number; /** its print location (locKey) */ loc?: string; /** set by staff */ by?: string }[] };
 
-/** Minutes for a need on a given machine (embroidery depends on the heads; screen on the press's own speed). */
+/**
+ * Minutes for a need on a given machine. A print location staff set a time for (Step.over, from the schedule's edit
+ * button) takes that time, as said; the rest is worked out (estimateRaw) and then scaled by the press operator's learned
+ * pace (Machine.pace, lib/runLearn.ts).
+ */
 export function estimate(s: ProductionSettings, need: Need, mach: Machine): Estimate {
-  const f = (s.factor[need.type] || 1) / (mach.speed || 1) / Math.max(0.3, need.speed || 1);
+  const said = new Map<string, { min: number; by: string; name: string }>();
+  for (const st of need.steps) if (st.over && st.over.min > 0 && !said.has(locKey(st))) said.set(locKey(st), { ...st.over, name: st.location });
+  if (!said.size) return estimateRaw(s, need, mach);
+  const rest = need.steps.filter((st) => !said.has(locKey(st)));
+  const e = rest.length ? estimateRaw(s, needOf(need.type, rest), mach) : { minutes: 0, setup: 0, run: 0, teardown: 0, parts: [] };
+  const parts = [...e.parts];
+  let add = 0;
+  for (const [loc, x] of said) { parts.push({ label: `${x.name}: set by ${x.by || "staff"}`, minutes: x.min, loc, by: x.by || "staff" }); add += x.min; }
+  return { ...e, minutes: e.minutes + Math.round(add), run: e.run + Math.round(add), parts };
+}
+
+/** The worked-out time, without anything staff set (the learning compares runs to this, at the standard pace with pace 1). */
+export function estimateRaw(s: ProductionSettings, need: Need, mach: Machine): Estimate {
+  const f = ((s.factor[need.type] || 1) * (mach.pace || 1)) / (mach.speed || 1) / Math.max(0.3, need.speed || 1);
   let setup = 0, run = 0, teardown = 0;
   const parts: Estimate["parts"] = [];
   if (need.type === "screen") {
@@ -440,7 +460,7 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
       const tot = Math.max(S.minMinutes, su + r + td);
       setup += su; run += tot - su - td; teardown += td;
       const fl = flashesFor(st);
-      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}${need.steps.some((o) => o !== st && locKey(o) === locKey(st)) ? ` · ${st.garment === "heavy" ? "sweats / hoodies" : st.garment === "tee" ? "tees" : st.garment === "bag" ? "bags" : "caps"}` : ""}: ${again ? "same screens" : `${st.screens} screens`}${fl ? ` + ${fl} flash${fl === 1 ? "" : "es"}` : ""}, ${st.qty} pcs @ ${Math.round(rate)}/hr${rounds > 1 ? ` · 2 rounds (${st.screens + fl} heads needed, ${mach.colors} on this press)` : ""}`, minutes: tot * f });
+      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}${need.steps.some((o) => o !== st && locKey(o) === locKey(st)) ? ` · ${st.garment === "heavy" ? "sweats / hoodies" : st.garment === "tee" ? "tees" : st.garment === "bag" ? "bags" : "caps"}` : ""}: ${again ? "same screens" : `${st.screens} screens`}${fl ? ` + ${fl} flash${fl === 1 ? "" : "es"}` : ""}, ${st.qty} pcs @ ${Math.round(rate)}/hr${rounds > 1 ? ` · 2 rounds (${st.screens + fl} heads needed, ${mach.colors} on this press)` : ""}`, minutes: tot * f, loc: locKey(st) });
     }
   } else if (need.type === "embroidery") {
     const E = s.embroidery;
@@ -450,11 +470,11 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
       const runs = Math.ceil(st.qty / Math.max(1, mach.heads));
       const su = i === 0 ? E.setupMin : E.extraLocationSetupMin;
       setup += su; run += runs * cycleMin;
-      parts.push({ label: `${st.location}: ${Math.round(st.stitches / 1000)}k stitches, ${runs} runs × ${cycleMin.toFixed(1)} min on ${mach.heads} head${mach.heads === 1 ? "" : "s"}`, minutes: (su + runs * cycleMin) * f });
+      parts.push({ label: `${st.location}: ${Math.round(st.stitches / 1000)}k stitches, ${runs} runs × ${cycleMin.toFixed(1)} min on ${mach.heads} head${mach.heads === 1 ? "" : "s"}`, minutes: (su + runs * cycleMin) * f, loc: locKey(st) });
     });
   } else {
     const H = s.heat;
-    need.steps.forEach((st, i) => { const su = i === 0 ? H.setupMin : 0, r = (st.qty * H.secsPerPiece) / 60; setup += su; run += r; parts.push({ label: `${st.location}: ${st.qty} pcs @ ${H.secsPerPiece}s`, minutes: (su + r) * f }); });
+    need.steps.forEach((st, i) => { const su = i === 0 ? H.setupMin : 0, r = (st.qty * H.secsPerPiece) / 60; setup += su; run += r; parts.push({ label: `${st.location}: ${st.qty} pcs @ ${H.secsPerPiece}s`, minutes: (su + r) * f, loc: locKey(st) }); });
   }
   return { minutes: Math.round((setup + run + teardown) * f), setup: Math.round(setup * f), run: Math.round(run * f), teardown: Math.round(teardown * f), parts };
 }

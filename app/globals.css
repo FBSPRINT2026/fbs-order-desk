@@ -21414,3 +21414,17 @@ html body .pr.pr-nologo{grid-template-columns:minmax(0,1fr)}
 html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 /* the job's name on a Ready To Schedule card (Nov 9) */
 .ms-rc-nm{font-size:13px;color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Schedule job panel: run times staff can set, per print location (rtm-, Nov 9) */
+.rtm .ms-parts li{align-items:center}
+.rtm-t{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.rtm-sub{color:var(--ink-3);font-weight:500;white-space:nowrap}
+.rtm-loc span{font-weight:700;color:var(--ink)}
+.rtm-pen{border:1px solid var(--line);background:var(--surface);border-radius:6px;width:26px;height:26px;padding:0;cursor:pointer;color:var(--accent);font-size:13px;line-height:1}
+.rtm-pen:hover{border-color:var(--accent)}
+.rtm-ed{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.rtm-ed .input{width:110px;height:36px}
+.rtm-q{font-weight:700;white-space:nowrap}
+.rtm-n{flex-basis:100%;font-size:12px}
+.rtm-err{color:var(--danger)}
+.rtm-pace{font-size:12px;margin-top:4px}

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
 import { createClient } from "@/lib/supabase/client";
-import { mergeProduction, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { withPace, operatorOf, parseDuration, type RunLesson } from "@/lib/runLearn";
+import { setRunTime, learnRun } from "@/app/shop/run-time-actions";
+import { mergeProduction, estimateRaw, locKey, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
@@ -278,6 +280,9 @@ function layoutAll(cards: Card[], nowAbs: number) {
 /** "When can we print it?" answered for an order that isn't booked yet (Inbox → Create order): in-hands dates per option */
 export type WhenDates = { soonest: string | null; aggressive: string | null; regular: string | null; slow: string | null; press: string; minutes: number; noMachine: boolean };
 
+/** the run times staff set on an order (orders.run_times, by print location) put on its steps */
+const withRunTimes = (needs: Need[], rt: Record<string, { min: number; by: string }> | null | undefined): Need[] =>
+  !rt ? needs : needs.map((n) => ({ ...n, steps: n.steps.map((st) => (rt[locKey(st)] ? { ...st, over: { min: +rt[locKey(st)].min, by: rt[locKey(st)].by } } : st)) }));
 /** the customer and the job's name together (Nov 9, Nick: "I need to see the job names") */
 const who = (j: { customer: string; name: string }) => (j.customer && j.name ? `${j.customer} · ${j.name}` : j.customer || j.name);
 
@@ -406,7 +411,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }, { data: ho0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       // not a job on hold for payment: production gets it once it's paid (lib/holds.ts)
-      sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines, rush, firm, due_time").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
+      sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
       sb.from("production_slots").select("*").or("order_id.not.is.null,hold_id.not.is.null").gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
@@ -416,6 +421,8 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     ]);
     // Equipment Status: presses running with heads out, slow, or down
     const { data: eq0 } = await sb.from("production_equipment").select("*");
+    // what runs taught about each press operator's pace (lib/runLearn.ts)
+    const { data: rl0 } = await sb.from("run_lessons").select("operator, crew_id, kind, est_min, real_min, created_at").order("created_at", { ascending: false }).limit(800);
     const eqList = (eq0 || []) as EquipRow[];
     setEquip(eqList);
     const exList = (ex0 || []) as Extra[];
@@ -474,7 +481,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     const ps0 = mergeProduction((st?.data as { production?: unknown } | null)?.production);
     // each machine carries its days off (its crew's and its own) so the calendar and suggestions skip them
     // whole days off vs downtime for part of a day (maintenance at noon)
-    const ps = { ...ps0, machines: ps0.machines.map((m) => {
+    const ps = withPace({ ...ps0, machines: ps0.machines.map((m) => {
       const off: Record<string, string> = {}, down: Record<string, Down[]> = {};
       for (const x of offList) if (x.machine === m.id || (x.crew_id && x.crew_id === m.crew)) {
         const rate = Math.max(0, Math.min(100, x.capacity || 0)) / 100, why = x.employee ? `${x.employee} out` : x.note || "Down";
@@ -485,7 +492,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
       const extra: Record<string, [number, number]> = {};
       for (const x of exList) if (x.machine === m.id) { const e = extra[x.day]; extra[x.day] = e ? [Math.min(e[0], x.start_min), Math.max(e[1], x.end_min)] : [x.start_min, x.end_min]; }
       return withIssue({ ...m, off, down, extra }, eqList.find((e) => e.machine === m.id), today);
-    }) };
+    }) }, ((rl0 || []) as RunLesson[]).map((r) => ({ ...r, est_min: +r.est_min, real_min: +r.real_min })));
     setS(ps); setSlots(sl);
     const pv = ((a || []) as { id: string; visual_id: string; nickname: string; due_date: string | null; qty: number; status_name: string; customer_id: string | null; start: string | null; pend: string | null; pvgroups: unknown }[]).filter((x) => !PV_DONE.test(x.status_name || "") || PV_READY.test(x.status_name || ""));
     const ids = [...new Set([...((o || []) as { customer_id: string | null }[]).map((x) => x.customer_id), ...pv.map((x) => x.customer_id)].filter(Boolean))] as string[];
@@ -508,7 +515,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
       }
     }
     const js: Job[] = [
-      ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null }[]).map((x) => ({ rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: needsForOrder(ps, x as never), href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" })),
+      ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null; run_times?: Record<string, { min: number; by: string }> | null }[]).map((x) => ({ rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: withRunTimes(needsForOrder(ps, x as never), x.run_times), href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" })),
       ...pv.map((x) => ({ key: "a:" + x.id, kind: "a" as const, id: x.id, number: x.visual_id, customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status_name, needs: needsForPrintavo(ps, { qty: x.qty, status_name: x.status_name, nickname: x.nickname, data: { groups: x.pvgroups as never } }), href: `/shop/archive/${x.id}`, owner: "" })),
       // Planner holds: jobs we know are coming, holding time before there's an order
       ...((ho0 || []) as Hold[]).map((h) => ({ key: "h:" + h.id, kind: "h" as const, id: h.id, number: "PLAN", customer: h.customer || "Planned", name: h.name || "Planned job", due: h.due_date, dueTime: h.due_time, firm: h.due_time != null, qty: +(h.spec as QuickJob)?.qty || 0, status: "planned", needs: [quickNeed(ps, h.spec as QuickJob)], href: "", owner: "" })),
@@ -644,6 +651,12 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     const sb = createClient();
     await sb.from("production_slots").update(patch).eq("id", sl.id);
     await sb.from("production_slot_log").insert({ slot_id: sl.id, order_id: sl.order_id, machine: sl.machine, action, progress: patch.progress ?? p, by: me.name || me.email });
+    // a finished run teaches the operator's pace: its real time against the standard time (lib/runLearn.ts)
+    const cd = action === "done" && s ? cards.find((c) => c.slot?.id === sl.id) : null;
+    if (cd && s) {
+      const op = operatorOf(s, cd.machine), brk = cd.machine.brk || s.breaks;
+      await learnRun({ slotId: sl.id, machine: cd.machine.id, crewId: op.crew, operator: op.id, estMin: estimateRaw(s, cd.need, { ...cd.machine, pace: undefined }).minutes, qty: cd.need.qty, lunchAt: brk.lunchAt, lunchMin: brk.lunchMin }).catch(() => null);
+    }
     if (reload) { setOpen(null); load(); }
   }
   async function setStatus(sl: Slot, status: Slot["status"]) { await logAction(sl, status === "done" ? "done" : status === "running" ? (sl.status === "paused" ? "resume" : "start") : status === "paused" ? "pause" : "not_started"); }
@@ -1750,13 +1763,59 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
         </div>
       ); })()}
       {downEdit && <DownPanel machines={machines} crews={s.crews} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
-      {open && <CardPanel s={s} c={open} cost={crewCost} otMin={(segs.ofCard.get(open.key) || []).reduce((t, g) => { const oa = otOn(g.c.machine, g.day); return t + (oa == null ? 0 : Math.max(0, g.end - Math.max(g.start, oa))); }, 0)} onFlags={async (x) => { const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", open.job.id); if (r.error) { setMsg(r.error.message); return; } const j = { ...open.job, ...(x.rush !== undefined ? { rush: x.rush } : {}), ...(x.firm !== undefined ? { firm: x.firm } : {}), ...(x.due_time !== undefined ? { dueTime: x.due_time } : {}), ...(x.due_date !== undefined ? { due: x.due_date } : {}) }; setOpen({ ...open, job: j }); load(); }} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} onLog={(a, p) => open.slot && logAction(open.slot, a, p)} onSplit={(off) => splitByLocation(open, off)} />}
+      {open && <CardPanel s={s} c={open} cost={crewCost} otMin={(segs.ofCard.get(open.key) || []).reduce((t, g) => { const oa = otOn(g.c.machine, g.day); return t + (oa == null ? 0 : Math.max(0, g.end - Math.max(g.start, oa))); }, 0)} onFlags={async (x) => { const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", open.job.id); if (r.error) { setMsg(r.error.message); return; } const j = { ...open.job, ...(x.rush !== undefined ? { rush: x.rush } : {}), ...(x.firm !== undefined ? { firm: x.firm } : {}), ...(x.due_time !== undefined ? { dueTime: x.due_time } : {}), ...(x.due_date !== undefined ? { due: x.due_date } : {}) }; setOpen({ ...open, job: j }); load(); }} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} onLog={(a, p) => open.slot && logAction(open.slot, a, p)} onSplit={(off) => splitByLocation(open, off)} onRunTime={() => { setOpen(null); load(); }} />}
     </div>
   );
 }
 
 /** A job on the calendar: when it runs (every day it spans), the time breakdown, move it, mark it running or done, or take it off. */
-function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMove, onStatus, onUnbook, onLog, onSplit }: { s: ProductionSettings; c: Card; cost: (m: Machine) => { perHour: number; who: string[] } | null; otMin: number; onFlags: (x: { rush?: boolean; firm?: boolean; due_time?: number | null; due_date?: string | null }) => void; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onStatus: (sl: Slot, st: Slot["status"]) => void; onUnbook: (sl: Slot) => void; onLog: (a: "start" | "pause" | "resume" | "progress" | "done" | "not_started" | "reopen", p?: number) => void; onSplit: (off: string[]) => void }) {
+/**
+ * The job's time on the job panel, each print location with a pencil (Nov 9, Nick: "Jose… should be able to… go, hey,
+ * this job, it took 3 hours and 30 minutes on the front… override your settings… you should be learning from that").
+ * A time set here is the location's time on every press; it's also kept as a lesson about the operator's pace.
+ */
+function RunTimes({ s, c, m, est, onSaved }: { s: ProductionSettings; c: Card; m: Machine; est: ReturnType<typeof estimate>; onSaved: () => void }) {
+  const [edit, setEdit] = useState<string | null>(null), [txt, setTxt] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState(false);
+  const locs = [...new Set(est.parts.map((p) => p.loc || ""))];
+  const canEdit = c.job.kind === "o";
+  const raw = (loc: string) => { const n = subNeed(c.need, [loc]); return estimateRaw(s, { ...n, steps: n.steps.map((st) => ({ ...st, over: undefined })) }, { ...m, pace: undefined }).minutes; };
+  async function save(loc: string, minutes: number | null) {
+    if (minutes !== null && !(minutes > 0)) { setErr("Type a time like 3h 30m, 3:30 or 3.5"); return; }
+    setBusy(true); setErr("");
+    const op = operatorOf(s, m);
+    const r = await setRunTime({ orderId: c.job.id, loc, minutes, estMin: raw(loc), qty: c.need.steps.filter((st) => locKey(st) === loc).reduce((t, st) => t + st.qty, 0), machine: m.id, crewId: op.crew, operator: op.id });
+    setBusy(false);
+    if (!r.ok) { setErr(r.error || "Couldn't save."); return; }
+    setEdit(null); onSaved();
+  }
+  const op = operatorOf(s, m);
+  return (
+    <div className="rtm">
+      <ul className="ms-parts">
+        {locs.map((loc) => {
+          const ps = est.parts.filter((p) => (p.loc || "") === loc), tot = ps.reduce((t, p) => t + p.minutes, 0), by = ps.find((p) => p.by)?.by;
+          const name = c.need.steps.find((st) => locKey(st) === loc)?.location || loc;
+          return [
+            ...ps.map((p, i) => <li key={loc + i}><span>{p.label}</span>{ps.length === 1 ? null : <b className="rtm-sub">{fmtMin(p.minutes)}</b>}{ps.length === 1 && edit !== loc ? <b className="rtm-t">{fmtMin(p.minutes)}{canEdit && loc ? <button type="button" className="rtm-pen" title={`Set how long ${name} takes`} aria-label={`Edit ${name} time`} onClick={() => { setEdit(loc); setTxt(fmtMin(tot)); setErr(""); }}>✎</button> : null}</b> : null}</li>),
+            ps.length > 1 && edit !== loc ? <li key={loc + "t"} className="rtm-loc"><span>{name}{by ? "" : " total"}</span><b className="rtm-t">{fmtMin(tot)}{canEdit && loc ? <button type="button" className="rtm-pen" title={`Set how long ${name} takes`} aria-label={`Edit ${name} time`} onClick={() => { setEdit(loc); setTxt(fmtMin(tot)); setErr(""); }}>✎</button> : null}</b></li> : null,
+            edit === loc ? <li key={loc + "e"} className="rtm-ed">
+              <span className="rtm-q">{name} takes</span>
+              <input className="input" autoFocus value={txt} onChange={(e) => setTxt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(loc, parseDuration(txt) ?? 0); if (e.key === "Escape") setEdit(null); }} aria-label={`${name} time`} placeholder="3h 30m" />
+              <button type="button" className="btn sm primary" disabled={busy} onClick={() => save(loc, parseDuration(txt) ?? 0)}>Save</button>
+              {by ? <button type="button" className="btn sm" disabled={busy} onClick={() => save(loc, null)}>Use the estimate</button> : null}
+              <button type="button" className="btn sm ghost" onClick={() => setEdit(null)}>Cancel</button>
+              <span className="faint rtm-n">Worked out: {fmtMin(raw(loc))} at the standard pace{err ? <b className="rtm-err"> · {err}</b> : null}</span>
+            </li> : null,
+          ];
+        })}
+        <li className="tot"><span>Setup {fmtMin(est.setup)} · run {fmtMin(est.run)}{est.teardown ? ` · teardown ${fmtMin(est.teardown)}` : ""}</span><b>{fmtMin(est.minutes)}</b></li>
+      </ul>
+      {op.who ? <div className="faint rtm-pace">{m.pace ? `${op.who}'s crew runs ${m.pace < 1 ? `${Math.round((1 - m.pace) * 100)}% faster` : m.pace > 1 ? `${Math.round((m.pace - 1) * 100)}% slower` : "at"} than the standard${m.pace === 1 ? " pace" : ""}, learned from ${m.paceN} job${m.paceN === 1 ? "" : "s"}; worked-out times include it.` : `Learning ${op.who}'s pace from finished runs and times set here (${m.paceN || 0} of 2 so far).`}</div> : null}
+    </div>
+  );
+}
+
+function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMove, onStatus, onUnbook, onLog, onSplit, onRunTime }: { onRunTime: () => void; s: ProductionSettings; c: Card; cost: (m: Machine) => { perHour: number; who: string[] } | null; otMin: number; onFlags: (x: { rush?: boolean; firm?: boolean; due_time?: number | null; due_date?: string | null }) => void; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onStatus: (sl: Slot, st: Slot["status"]) => void; onUnbook: (sl: Slot) => void; onLog: (a: "start" | "pause" | "resume" | "progress" | "done" | "not_started" | "reopen", p?: number) => void; onSplit: (off: string[]) => void }) {
   const [splitting, setSplitting] = useState<string[] | null>(null);
   const [sepsOpen, setSepsOpen] = useState(false);
   const [log, setLog] = useState<{ id: string; action: string; progress: number | null; note: string; at: string; by: string }[]>([]);
@@ -1794,7 +1853,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             {c.fromPv ? <span className="faint">From its Printavo schedule{c.carried ? ` (was ${dayLbl(c.carried)}, still in the machine status)` : ""}.</span> : c.carried ? <span className="faint">Rolled forward from {dayLbl(c.carried)} (not marked Done).</span> : null}
           </div>
           <div><b>{TYPE_LBL[c.need.type]}:</b> {c.need.label} · {c.need.qty} pcs{c.need.steps.some((x) => x.note) ? <span className="faint"> ({c.need.steps.find((x) => x.note)?.note})</span> : null}</div>
-          <ul className="ms-parts">{est.parts.map((p, i) => <li key={i}><span>{p.label}</span><b>{fmtMin(p.minutes)}</b></li>)}<li className="tot"><span>Setup {fmtMin(est.setup)} · run {fmtMin(est.run)}{est.teardown ? ` · teardown ${fmtMin(est.teardown)}` : ""}</span><b>{fmtMin(est.minutes)}</b></li></ul>
+          <RunTimes s={s} c={c} m={m} est={est} onSaved={onRunTime} />
           {(() => {
             const k = cost(m); if (!k) return null;
             // time that runs after the crew passes 40 hours this pay week is paid at the overtime rate (1.5×)
