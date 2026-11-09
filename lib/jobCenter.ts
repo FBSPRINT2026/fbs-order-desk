@@ -75,7 +75,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   const now = Date.now();
   const since = new Date(now - TWO_WEEKS).toISOString();
   const [{ data: os }, { data: dec }, { data: s }, { data: leads }, { data: am }] = await Promise.all([
-    admin.from("orders").select("id, number, nickname, status, type, source, due_date, groups, lines, fees, discount_pct, discount_amt, discount_type, tax_exempt, tax_rate, waive_setup, price_type, total, qty, customer_id, approved_at, approved_name, submitted_at, created_at, updated_at, declined_at, declined_reason, customers(company, name)").in("status", OPEN).is("declined_at", null).eq("draft", false).is("discarded_at", null).order("number", { ascending: false }).limit(800),
+    admin.from("orders").select("id, number, nickname, status, type, source, due_date, flags, groups, lines, fees, discount_pct, discount_amt, discount_type, tax_exempt, tax_rate, waive_setup, price_type, total, qty, customer_id, approved_at, approved_name, submitted_at, created_at, updated_at, declined_at, declined_reason, customers(company, name)").in("status", OPEN).is("declined_at", null).eq("draft", false).is("discarded_at", null).order("number", { ascending: false }).limit(800),
     admin.from("orders").select("id, number, nickname, status, due_date, groups, customer_id, declined_at, declined_reason, customers(company, name)").gte("declined_at", since).limit(200),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
     admin.from("ai_suggestions").select("id, title, body, customer_id, activity_id, created_at, customers(company, name)").eq("kind", "draft_order").eq("status", "open").gte("created_at", new Date(now - 30 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
@@ -212,7 +212,8 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     if (!quoting && allDone) {
       const og = ogs.find((x) => x.order_id === o.id), here = og && (og.status === "arrived" || og.status === "received");
       const ordered = !!og && (!!og.supplier_po || !!og.supplier || og.status !== "waiting");
-      const theirs = o.price_type === "wholesale";
+      // wholesale, or the customer supplies the garments (the Customer goods flag): theirs to send, nothing for us to order
+      const theirs = o.price_type === "wholesale" || ((o as { flags?: { key?: string }[] | null }).flags || []).some((f) => f?.key === "customer_goods");
       if (["production", "ready"].includes(o.status) || here) steps.push("approved");
       else if (!ordered && !theirs) { steps.push("goods_order"); tracks.push({ k: "goods", state: "needed", label: "Goods to order" }); }
       else { steps.push("goods_coming"); tracks.push({ k: "goods", state: "sent", label: theirs && !ordered ? "Waiting on their goods" : og?.status === "on_way" ? "Goods on the way" : og?.status === "partial" ? "Some goods here" : og?.status === "issue" ? "Goods issue" : "Goods ordered" }); }
