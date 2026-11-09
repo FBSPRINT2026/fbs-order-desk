@@ -65,7 +65,7 @@ function glance(need: Need, minutes: number) {
 /** one day's piece of a job: clock start/end, and the work minutes it covers (less than the clock time when the press runs slow) */
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean; work: number; slow?: number };
 type View = "split" | "timeline" | "day";
-type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number };
+type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number; /** a same-art run dragged by its header: every job in it moves */ group?: Card[] };
 type WhatIf = { id: string; kind: "split" | "ot" | "sat" | "combo"; title: string; detail: string; split: boolean; shifts: { machine: string; crew_id: string | null; day: string; start_min: number; end_min: number }[]; splits: number; lateAfter: number; stillLate: string[]; addedHours: number; cost: number };
 type WhenOpt = { m: Machine; start: number; end: number; minutes: number; ot: number; extra?: number; cost?: number; bumped?: { job: Job; late: boolean }[] };
 type WhenResult = { need: Need; minutes: number; soonest: WhenOpt | null; aggressive: WhenOpt | null; open: WhenOpt | null; slow: WhenOpt | null; noMachine: boolean };
@@ -404,6 +404,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   const [toolsOpen, setToolsOpen] = useSticky("cal.toolsOpen", true);
   const [tightOpen, setTightOpen] = useSticky("cal.tightOpen", false);
   const [listOpen, setListOpen] = useState(""); // a same-art list opened to show all its jobs
+  const [grpEdit, setGrpEdit] = useState<Card[] | null>(null); // a same-art run's time being edited
   // Re-plan results for the calendar as it is (the Re-plan window asks on every redraw): worked out again when anything changes
   const planCache = useRef<{ deps: unknown[]; v: Map<boolean, unknown> }>({ deps: [], v: new Map() });
 
@@ -1066,8 +1067,24 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     if (!drag) return;
     const t = minuteAtPointer - drag.grabMin;
     const inCell = at(mach, d).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag.card?.key && g.c.slot.status !== "done").sort((x, y) => x.start - y.start);
+    if (drag.group) { const ids = new Set(drag.group.map((c) => c.key)); placeGroup(drag.group, mach, d, inCell.find((g) => !ids.has(g.c.key) && (g.start + g.end) / 2 > t)?.c.key); return; }
     const before = inCell.find((g) => (g.start + g.end) / 2 > t);
     place(drag.card ? { card: drag.card } : { job: drag.job, need: drag.need }, mach, d, before?.c.key);
+  }
+  /** a same-art run moved as one: its jobs land back to back where it's dropped, in the order they were in */
+  async function placeGroup(group: Card[], mach: Machine, d: string, beforeKey?: string) {
+    const bad = group.find((c) => !fits(c.need, mach));
+    if (bad) { setMsg(`#${bad.job.number} ${whyUnfit(bad.need, mach)}.`); return; }
+    const ids = new Set(group.map((c) => c.key));
+    const lane = cards.filter((c) => c.slot && c.machine.id === mach.id && c.day === d && !ids.has(c.key)).sort((x, y) => (x.startMin ?? 99999) - (y.startMin ?? 99999) || x.slot!.position - y.slot!.position);
+    const i = beforeKey ? Math.max(0, lane.findIndex((c) => c.key === beforeKey)) : lane.length;
+    const ordered = [...lane.slice(0, i), ...group, ...lane.slice(i)], sb = createClient(), stamp = new Date().toISOString();
+    for (let k = 0; k < ordered.length; k++) {
+      const c = ordered[k], mine2 = ids.has(c.key);
+      await sb.from("production_slots").update({ position: k, updated_at: stamp, ...(mine2 ? { machine: mach.id, day: d, start_min: null, minutes: estimate(s!, c.need, mach).minutes } : {}) }).eq("id", c.slot!.id);
+    }
+    setMsg(`Moved the run (${group.map((c) => "#" + c.job.number).join(", ")}) to ${mach.name}, ${dayLbl(d)}.`);
+    load();
   }
   const cls = (g: Seg) => {
     const c = g.c, late = ord(g.day) * 1440 + g.end > dueAbs(c.job);
@@ -1196,13 +1213,13 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
                 const a = Math.max(r.a, vS), b = Math.min(r.b, vE); if (b <= a) return null;
                 const H = ((b - a) / 60) * HOUR_PX + 4, list = r.items.some((x) => ((x.end - x.start) / 60) * HOUR_PX < 40);
                 const n = r.items.length, title = `Same art: ${n} jobs run back to back, one setup (${fmtMin(r.saved)} saved)`;
-                if (!list) return <div key={"ar" + r.a} className="msar-box" style={{ top: ((a - vS) / 60) * HOUR_PX - 3, height: H }} title={title}><span className="msar-h">🔗 Same art · {n} jobs · one setup</span></div>;
+                if (!list) return <div key={"ar" + r.a} className="msar-box" style={{ top: ((a - vS) / 60) * HOUR_PX - 3, height: H }} title={title}><span className="msar-h" draggable onDragStart={(e) => startDrag(e, { card: r.items[0].g.c, grabMin: 0, group: r.items.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }} onDoubleClick={() => setGrpEdit(r.items.map((x) => x.g.c))} title="Drag to move the whole run · double-click to edit its time">🔗 Same art · {n} jobs · one setup</span></div>;
                 for (const x of r.items) inList.add(x.g.c.key);
                 const c0 = r.items[0].g.c, pcs = r.items.reduce((t, x) => t + x.g.c.need.qty, 0), gl0 = glance(c0.need, c0.minutes);
                 const open = listOpen === m.id + day + r.a, fit = Math.max(1, Math.floor((H - 22) / 16)), show = open || n <= fit ? r.items : r.items.slice(0, Math.max(1, fit - 1));
                 return (
                   <div key={"ar" + r.a} className={"msar-box msar-list" + (open ? " open" : "")} style={{ top: ((a - vS) / 60) * HOUR_PX - 3, minHeight: H, ...(open ? {} : { height: H }) }} title={title}>
-                    <span className="msar-lh">🔗 {abbrCo(c0.job.customer)} · same art · {gl0.colors} · {pcs.toLocaleString()} P</span>
+                    <span className="msar-lh" draggable onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: r.items.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }} onDoubleClick={() => setGrpEdit(r.items.map((x) => x.g.c))} title="Drag to move the whole run · double-click to edit its time">🔗 {abbrCo(c0.job.customer)} · same art · {gl0.colors} · {pcs.toLocaleString()} P</span>
                     {show.map((x) => <button key={x.g.c.key} type="button" className="msar-row" draggable onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} title={tip(x.g)}><b>#{x.g.c.job.number}</b>{flags(x.g.c.job)}<span>{x.g.c.need.qty.toLocaleString()} P</span></button>)}
                     {show.length < n ? <button type="button" className="msar-more" onClick={() => setListOpen(m.id + day + r.a)}>+{n - show.length} more</button> : open ? <button type="button" className="msar-more" onClick={() => setListOpen("")}>Show less</button> : null}
                   </div>
@@ -1262,7 +1279,8 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   };
 
   /* ---------- Week list (default): machines across, days down; each cell = that machine's jobs that day, in run order ---------- */
-  async function place(c: { card?: Card; job?: Job; need?: Need }, mach: Machine, d: string, beforeKey?: string) {
+  async function place(c: { card?: Card; job?: Job; need?: Need; group?: Card[] }, mach: Machine, d: string, beforeKey?: string) {
+    if (c.group) return placeGroup(c.group, mach, d, beforeKey);
     setOver(""); setDrag(null);
     const job = c.card?.job || c.job, need = c.card?.need || c.need;
     if (!s || !job || !need) return;
@@ -1884,6 +1902,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
         </div>
       ); })()}
       {downEdit && <DownPanel machines={machines} crews={s.crews} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
+      {grpEdit && s && <RunGroupTime s={s} cards={grpEdit} onClose={() => setGrpEdit(null)} onSaved={() => { setGrpEdit(null); load(); }} />}
       {open && <CardPanel s={s} c={open} cost={crewCost} otMin={(segs.ofCard.get(open.key) || []).reduce((t, g) => { const oa = otOn(g.c.machine, g.day); return t + (oa == null ? 0 : Math.max(0, g.end - Math.max(g.start, oa))); }, 0)} onFlags={async (x) => { const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", open.job.id); if (r.error) { setMsg(r.error.message); return; } const j = { ...open.job, ...(x.rush !== undefined ? { rush: x.rush } : {}), ...(x.firm !== undefined ? { firm: x.firm } : {}), ...(x.due_time !== undefined ? { dueTime: x.due_time } : {}), ...(x.due_date !== undefined ? { due: x.due_date } : {}) }; setOpen({ ...open, job: j }); load(); }} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => setOpen(null)} onMove={(mach, d, st) => { book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} onStatus={setStatus} onUnbook={unbook} onLog={(a, p) => open.slot && logAction(open.slot, a, p)} onSplit={(off) => splitByLocation(open, off)} onRunTime={() => { setOpen(null); load(); }} />}
     </div>
   );
@@ -1933,6 +1952,60 @@ function RunTimes({ s, c, m, est, onSaved }: { s: ProductionSettings; c: Card; m
       </ul>
       {c.sameArt ? <div className="rtm-same">Runs right after #{c.sameArt.with} with the same screens: {fmtMin(c.sameArt.saved)} less setup and teardown.</div> : null}
       {op.who ? <div className="faint rtm-pace">{m.pace ? `${op.who}'s crew runs ${m.pace < 1 ? `${Math.round((1 - m.pace) * 100)}% faster` : m.pace > 1 ? `${Math.round((m.pace - 1) * 100)}% slower` : "at"} than the standard${m.pace === 1 ? " pace" : ""}, learned from ${m.paceN} job${m.paceN === 1 ? "" : "s"}; worked-out times include it.` : `Learning ${op.who}'s pace from finished runs and times set here (${m.paceN || 0} of 2 so far).`}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * A same-art run's time (Nov 9, Nick: "double click on it… do you want to edit the individual job time or the total job
+ * time?… add another 2 hours… override the group and not have to go to each individual one"). Each job, or the whole run:
+ * a total is shared out over the jobs by their current times, and each job's over its print locations the same way; every
+ * time set is a print location's time on the order (setRunTime), so it's kept and learned from like one set on a job.
+ */
+function RunGroupTime({ s, cards, onClose, onSaved }: { s: ProductionSettings; cards: Card[]; onClose: () => void; onSaved: () => void }) {
+  const cur = cards.map((c) => c.minutes);
+  const [mode, setMode] = useState<"each" | "all">("all");
+  const [tot, setTot] = useState(fmtMin(cur.reduce((t, x) => t + x, 0)));
+  const [each, setEach] = useState(cur.map((x) => fmtMin(x)));
+  const [err, setErr] = useState(""), [busy, setBusy] = useState(false);
+  /** one job to a total: over its print locations by their share of its worked-out time */
+  async function setJob(c: Card, target: number | null) {
+    const est = estimate(s, c.need, c.machine), op = operatorOf(s, c.machine);
+    const locs = [...new Set(est.parts.map((p) => p.loc || ""))].filter(Boolean);
+    const share = locs.map((l) => est.parts.filter((p) => p.loc === l).reduce((t, p) => t + p.minutes, 0)), sum = share.reduce((t, x) => t + x, 0) || 1;
+    for (let i = 0; i < locs.length; i++) {
+      const n = subNeed(c.need, [locs[i]]), raw = estimateRaw(s, { ...n, steps: n.steps.map((st) => ({ ...st, over: undefined })) }, { ...c.machine, pace: undefined }).minutes;
+      const r = await setRunTime({ orderId: c.job.id, loc: locs[i], minutes: target == null ? null : Math.max(5, Math.round((target * share[i]) / sum)), estMin: raw, qty: n.qty, machine: c.machine.id, crewId: op.crew, operator: op.id });
+      if (!r.ok) throw new Error(r.error || "Couldn't save.");
+    }
+  }
+  async function save(clear = false) {
+    setErr("");
+    let targets: (number | null)[];
+    if (clear) targets = cards.map(() => null);
+    else if (mode === "all") {
+      const T = parseDuration(tot); if (!T) { setErr("Type a time like 6h 30m, 6:30 or 6.5"); return; }
+      const sum = cur.reduce((t, x) => t + x, 0) || 1; targets = cur.map((x) => Math.round((T * x) / sum));
+    } else {
+      const ts = each.map((x) => parseDuration(x)); const i = ts.findIndex((x) => !x); if (i >= 0) { setErr(`#${cards[i].job.number}: type a time like 45m or 1:15`); return; }
+      targets = ts as number[];
+    }
+    setBusy(true);
+    try { for (let i = 0; i < cards.length; i++) if (cards[i].job.kind === "o") await setJob(cards[i], targets[i]); onSaved(); }
+    catch (e) { setErr(e instanceof Error ? e.message : "Couldn't save."); setBusy(false); }
+  }
+  return (
+    <div className="pp-modal" onClick={onClose}>
+      <div className="pp-sheet tmx-ed msgt" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Run time">
+        <div className="pp-sheet-h"><b>{cards[0].job.customer} · {cards.length} jobs, same art</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="tmx-ed-b">
+          <div className="msgt-seg" role="tablist"><button type="button" className={mode === "all" ? "on" : ""} onClick={() => setMode("all")}>Total for the run</button><button type="button" className={mode === "each" ? "on" : ""} onClick={() => setMode("each")}>Each job</button></div>
+          {mode === "all" ? <label className="msgt-row"><span>The {cards.length} jobs take</span><input className="input" autoFocus value={tot} onChange={(e) => setTot(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} placeholder="6h 30m" /><span className="faint">now {fmtMin(cur.reduce((t, x) => t + x, 0))}, shared out by each job's time</span></label>
+            : <ul className="ms-parts">{cards.map((c, i) => <li key={c.key}><span>#{c.job.number} · {c.need.qty.toLocaleString()} P <span className="faint">now {fmtMin(cur[i])}</span></span><input className="input msgt-in" value={each[i]} onChange={(e) => setEach(each.map((x, k) => (k === i ? e.target.value : x)))} aria-label={`#${c.job.number} time`} /></li>)}</ul>}
+          {err ? <div className="msgt-err">{err}</div> : null}
+          <div className="msgt-act"><button type="button" className="btn ghost" disabled={busy} onClick={() => save(true)}>Use the estimates</button><span className="spacer" /><button type="button" className="btn" onClick={onClose}>Cancel</button><button type="button" className="btn primary" disabled={busy} onClick={() => save()}>{busy ? "Saving…" : "Save"}</button></div>
+        </div>
+      </div>
     </div>
   );
 }
