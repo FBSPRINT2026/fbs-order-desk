@@ -406,7 +406,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }, { data: ho0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       // not a job on hold for payment: production gets it once it's paid (lib/holds.ts)
-      sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines, rush, firm, due_time").is("discarded_at", null).in("status", ["approved", "art", "blanks", "production"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
+      sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines, rush, firm, due_time").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
       sb.from("production_slots").select("*").or("order_id.not.is.null,hold_id.not.is.null").gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
@@ -423,6 +423,13 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     const offList = (off0 || []) as DayOff[];
     setOffs(offList);
     let sl = (sl0 || []) as Slot[];
+    // jobs taken off the schedule (already past printing when it went live, Nov 9): their open bookings go too
+    const slOids = [...new Set(sl.filter((x) => x.order_id && x.status !== "done").map((x) => x.order_id!))];
+    if (slOids.length) {
+      const { data: offO } = await sb.from("orders").select("id").in("id", slOids).not("schedule_off_at", "is", null);
+      const offIds = new Set(((offO || []) as { id: string }[]).map((x) => x.id));
+      if (offIds.size) sl = sl.filter((x) => !(x.order_id && offIds.has(x.order_id) && x.status !== "done"));
+    }
     // not marked done by the end of its day → it moves forward to today (first in line), remembering where it started
     const stale = sl.filter((x) => (x.order_id || x.hold_id) && x.day < today && x.status !== "done");
     // (the hidden "when can we print it?" mode only looks: it lays stale jobs on today without saving anything)
