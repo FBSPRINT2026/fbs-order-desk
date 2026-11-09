@@ -76,9 +76,40 @@ export function applySpec(im: Imprint, e: SpecEntry, designId: string) {
  * each guessed print takes the confirmed specs of the same location. Returns what it took, for the order's history.
  */
 export async function applyConfirmedSpecs(admin: SupabaseClient, customerId: string, job: string | null, groups: Group[]): Promise<string[]> {
-  if (!job) return [];
-  const guessed = groups.flatMap((g) => g.imprints).filter((im) => im.confirm && (im.confirm.size || im.confirm.ink));
-  if (!guessed.length) return [];
+  const guessed0 = groups.flatMap((g) => g.imprints).filter((im) => im.confirm && (im.confirm.size || im.confirm.ink));
+  if (!guessed0.length) return [];
+  const byJob = job ? await bySameJob(admin, customerId, job, guessed0) : [];
+  // the same logo at the same spot, confirmed on any order before (Nov 9, Nick: "10 jobs in there asking about the same
+  // thing"): a store cart's logo is a new logo record each time, so it's matched by its art, not by the record
+  const left = guessed0.filter((im) => im.confirm && (im.confirm.size || im.confirm.ink));
+  return [...byJob, ...(left.length ? await bySameArt(admin, customerId, left) : [])];
+}
+
+/** each guessed print takes what production confirmed for the same art at the same location (and method) */
+async function bySameArt(admin: SupabaseClient, customerId: string, guessed: Imprint[]): Promise<string[]> {
+  const ids = [...new Set(guessed.map((im) => im.design_id).filter(Boolean))] as string[];
+  if (!ids.length) return [];
+  const { data: mine } = await admin.from("designs").select("id, art_hash").in("id", ids);
+  const hashOf = new Map(((mine || []) as { id: string; art_hash: string | null }[]).map((d) => [d.id, d.art_hash || ""]));
+  const hashes = [...new Set([...hashOf.values()].filter(Boolean))];
+  const q = admin.from("designs").select("id, art_hash, specs").eq("customer_id", customerId).not("specs->history", "is", null).limit(500);
+  const { data } = hashes.length ? await q.or(`id.in.(${ids.join(",")}),art_hash.in.(${hashes.join(",")})`) : await q.in("id", ids);
+  const cands: { id: string; hash: string; e: SpecEntry }[] = [];
+  for (const d of (data || []) as { id: string; art_hash: string | null; specs: DesignSpecs }[]) for (const e of latestSpecs(d.specs)) cands.push({ id: d.id, hash: d.art_hash || "", e });
+  const took: string[] = [];
+  for (const im of guessed) {
+    const h = hashOf.get(im.design_id || "") || "";
+    const c = cands.filter((x) => (x.id === im.design_id || (h && x.hash === h)) && loc(x.e.location) === loc(im.location) && (!x.e.method || x.e.method === im.method))
+      .sort((a, b) => b.e.at.localeCompare(a.e.at))[0];
+    if (!c) continue;
+    applySpec(im, c.e, im.design_id || c.id);
+    took.push(`${im.location}: ${[c.e.size, c.e.inks].filter(Boolean).join(", ")} (the same logo, confirmed ${day(c.e.at)} on #${c.e.order_number})`);
+  }
+  return took;
+}
+
+/** each guessed print takes the confirmed specs of the same old job at the same location */
+async function bySameJob(admin: SupabaseClient, customerId: string, job: string, guessed: Imprint[]): Promise<string[]> {
   const { data } = await admin.from("designs").select("id, name, specs").eq("customer_id", customerId).not("specs->history", "is", null).limit(500);
   const cands: { id: string; e: SpecEntry }[] = [];
   for (const d of (data || []) as { id: string; specs: DesignSpecs }[]) for (const e of latestSpecs(d.specs)) if (e.job === job || `#${e.order_number}` === job) cands.push({ id: d.id, e });

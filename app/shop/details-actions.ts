@@ -153,3 +153,42 @@ export async function confirmDetails(orderId: string, prints: DetailsInput[], ed
     return { ok: true, left };
   } catch (e) { return fail(e); }
 }
+
+/**
+ * Stitch files found or uploaded once for a logo on Reorder Details (Nov 9, Nick: "upload these files? Help me find it.
+ * Can't find it. Request digitizing"): every waiting print of that logo and spot, on every order, sews the same file, as
+ * the order page's "Already digitized?" does for one print. `sewout`: the prints still need their sew-out.
+ */
+export async function attachStitchFile(targets: { orderId: string; imprintId: string }[], set: import("@/lib/digitizedFiles").DigitizedSet, sewout: boolean): Promise<{ ok: true; n: number } | { ok: false; error: string }> {
+  try {
+    const v = await getViewer(", name");
+    if (!v.user || !v.isStaff) throw new Error("Only shop staff can do that.");
+    if (!set?.path) throw new Error("No stitch file to put on the prints.");
+    const admin = createAdminClient();
+    const by = new Map<string, Set<string>>();
+    for (const t of targets.slice(0, 200)) { if (!by.has(t.orderId)) by.set(t.orderId, new Set()); by.get(t.orderId)!.add(t.imprintId); }
+    let n = 0;
+    for (const [orderId, ids] of by) {
+      const { data: o } = await admin.from("orders").select("id, groups").eq("id", orderId).maybeSingle();
+      if (!o) continue;
+      const groups = (o.groups || []) as Group[];
+      let hit = 0;
+      for (const g of groups) for (const im of g.imprints || []) {
+        if (!ids.has(im.id) || im.method !== "embroidery") continue;
+        im.emb = { ...(im.emb || {}), stitchesFrom: "file", file: set } as Imprint["emb"];
+        delete (im.emb as { fileByProduction?: unknown }).fileByProduction;
+        if (set.stitches) im.stitches = set.stitches;
+        const w = /(\d+(?:\.\d+)?)/.exec(im.size || "");
+        if (set.wIn && (!w || Math.abs(+w[1] - set.wIn) > 0.05)) im.size = `${Math.round(set.wIn * 100) / 100}" wide`;
+        if (sewout) delete im.digitized; else im.digitized = true;
+        hit++;
+      }
+      if (!hit) continue;
+      const { error } = await admin.from("orders").update({ groups }).eq("id", orderId);
+      if (error) throw new Error(error.message);
+      await admin.from("order_events").insert({ order_id: orderId, kind: "edited", detail: `Stitch file ${set.name} put on ${hit} print${hit === 1 ? "" : "s"} from Reorder Details${sewout ? " (still needs its sew-out)" : ""}`.slice(0, 500), actor: v.email });
+      n += hit;
+    }
+    return { ok: true, n };
+  } catch (e) { return fail(e); }
+}

@@ -12,7 +12,9 @@ import type { Group, Imprint } from "@/lib/pricing";
 export const DETAILS_LABEL = "Reorder Details Needed";
 export const DETAILS_SHORT = "Details needed";
 
-export const needsDetails = (im: Pick<Imprint, "confirm"> | null | undefined) => !!im?.confirm && (!!im.confirm.size || !!im.confirm.ink);
+/** heat press never waits on Reorder Details (Nov 9, Nick: "the people putting in the order… ordered the heat press. So
+ *  they're their own confirmer"): a DTF / heat transfer print is confirmed by whoever enters the order */
+export const needsDetails = (im: (Pick<Imprint, "confirm"> & { method?: string }) | null | undefined) => !!im?.confirm && (!!im.confirm.size || !!im.confirm.ink) && im.method !== "dtf";
 export const orderNeedsDetails = (groups: Pick<Group, "imprints">[] | null | undefined) => (groups || []).some((g) => (g.imprints || []).some(needsDetails));
 export const detailsCount = (groups: Pick<Group, "imprints">[] | null | undefined) => (groups || []).reduce((n, g) => n + (g.imprints || []).filter(needsDetails).length, 0);
 

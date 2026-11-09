@@ -9,6 +9,7 @@ import { METHODS, methodLabel, type Group, type Imprint } from "@/lib/pricing";
 import { BACKINGS, TOPPINGS } from "@/lib/embroidery";
 import { DETAILS_LABEL, needsDetails, ordersNeedingDetails, type DetailsInput } from "@/lib/productionDetails";
 import { confirmDetails } from "../details-actions";
+import EmbDetails from "@/components/EmbDetails";
 
 /**
  * Reorder Details (Production → Reorder Details): reorders of old Printavo jobs waiting on production to say
@@ -205,20 +206,25 @@ export default function ProductionDetailsPage() {
       );
     });
   const waiting = (rows || []).filter((r) => waitingOf(r).length > 0);
+  const isEmb = role === "embroidery" || side === "embroidery", isHeat = !isEmb && side === "heat";
   return (
     <>
       <div className="page-head">
         <div><div className="eyebrow">Production · {(role === "embroidery" || side === "embroidery") ? "Embroidery" : side === "heat" ? "Heat press" : "Screen printing"}</div><h1>Reorder Details</h1>
-          <p className="muted pdd-intro">Reorders of old Printavo jobs. The print size and inks are our best guess from the old film or mockup. Check them against what we printed before, fix anything that&apos;s off, and confirm. Leave a field blank if nobody knows.</p></div>
+          <p className="muted pdd-intro">{isEmb ? "Each logo and spot once, for every order waiting on it: bring in its stitch file, confirm its threads and size, and the next order with it comes in confirmed." : "Reorders of old Printavo jobs. The print size and inks are our best guess from the old film or mockup. Check them against what we printed before, fix anything that's off, and confirm. Leave a field blank if nobody knows."}</p></div>
       </div>
       <div className="aa-sub pd-tabs pdd-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === "waiting"} className={tab === "waiting" ? "on" : ""} onClick={() => setTab("waiting")}>Waiting on details<span className="aa-n">{waiting.length}</span></button>
+        <button type="button" role="tab" aria-selected={tab === "waiting"} className={tab === "waiting" ? "on" : ""} onClick={() => setTab("waiting")}>Waiting on details<span className="aa-n">{isHeat ? 0 : waiting.length}</span></button>
         <button type="button" role="tab" aria-selected={tab === "done"} className={tab === "done" ? "on" : ""} onClick={() => setTab("done")}>Recently confirmed<span className="aa-n">{done.length}</span></button>
       </div>
       {msg && !msg.bad && <div className="banner pdd-ok" role="status">{msg.text}</div>}
       {open0 && rows && !rows.some((r) => r.id === open0) && <div className="banner pdd-ok" role="status">This order&apos;s print specs are already confirmed (or it has nothing waiting). <Link href={`/shop/orders/${open0}`}>Open the order</Link></div>}
 
-      {tab === "waiting" && (rows === null ? <div className="empty">Loading…</div> : !waiting.length ? <div className="empty">Nothing waiting. Reorders of old Printavo jobs show up here until their print details are confirmed.</div> : (
+      {/* heat press confirms itself: whoever enters the order ordered the transfers (Nov 9, Nick) */}
+      {tab === "waiting" && isHeat && <div className="empty">Heat press doesn&apos;t use Reorder Details: whoever enters the order sets the transfers, so there&apos;s nothing to confirm here.</div>}
+      {/* embroidery: one row per logo and spot across every waiting order, with its stitch file (components/EmbDetails.tsx) */}
+      {tab === "waiting" && isEmb && (rows === null ? <div className="empty">Loading…</div> : <EmbDetails rows={rows} sets={waitingOf} custs={custs} canConfirm={canConfirm} onChanged={load} />)}
+      {tab === "waiting" && !isEmb && !isHeat && (rows === null ? <div className="empty">Loading…</div> : !waiting.length ? <div className="empty">Nothing waiting. Reorders of old Printavo jobs show up here until their print details are confirmed.</div> : (
         <div className="pdd-list">
           {waiting.map((r) => {
             const prints = waitingOf(r);

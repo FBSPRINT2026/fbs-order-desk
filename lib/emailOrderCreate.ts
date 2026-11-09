@@ -264,6 +264,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     if (tdef.confirm === false) { delete im.confirm; delete im.visualOnly; }
     else if (!(im.confirm && (im.confirm.size || im.confirm.ink))) im.confirm = { size: true, ink: true, why: tdef.order_type === "new" || !tdef.order_type ? "New order: production confirms the details before printing" : "Reorder: production confirms on the run" };
   }
+  // a print still asking production: the same logo at the same spot confirmed before takes those details instead (Nov 9:
+  // six MEI cart orders asked about the same four logos; lib/designSpecs.ts bySameArt)
+  if (custId) tookSpecs = [...tookSpecs, ...(await applyConfirmedSpecs(admin, custId, null, groups).catch(() => [] as string[]))];
   const tDelivery = !shipSaid && tdef.delivery_method ? tdef.delivery_method : "";
   const orderRow = {
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
