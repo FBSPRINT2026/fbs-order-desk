@@ -30,7 +30,7 @@ export default function HoldSpotTool({ order, customer }: { order: { id: string;
   const pcs0 = gs.reduce((a, g) => a + g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, n) => c + (+(n as number) || 0), 0), 0), 0);
   const m0: Method = imps[0]?.method === "embroidery" ? "embroidery" : imps[0] && ["dtf", "dtg", "heat"].includes(imps[0].method) ? "heat" : "screen";
   const [due, setDue] = useState(order.due_date || ""), [pcs, setPcs] = useState(String(pcs0 || "")), [method, setMethod] = useState<Method>(m0);
-  const [prints, setPrints] = useState(String(Math.max(1, imps.length || 1))), [colors, setColors] = useState(imps.length ? String(Math.max(...imps.map((i) => +i.colors || 1))) : ""), [art, setArt] = useState(imps.some((i) => i.design_id) ? "ready" : "coming");
+  const [prints, setPrints] = useState(String(Math.max(1, new Set(imps.map((i) => (i.location || "").toLowerCase())).size || 1))), [colors, setColors] = useState(imps.length ? String(Math.max(...imps.map((i) => +i.colors || 1))) : ""), [art, setArt] = useState(imps.some((i) => i.design_id) ? "ready" : "coming");
 
   const load = useCallback(async () => {
     const { data: h } = await sb.from("production_holds").select("id, details_due").eq("order_id", order.id).eq("status", "planned").order("created_at", { ascending: false }).limit(1).maybeSingle();
