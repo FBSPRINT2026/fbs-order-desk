@@ -21493,3 +21493,6 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 /* the job panel's pieces wrap onto more rows instead of squeezing (Nov 9, #40400) */
 .jcp-seg{grid-auto-flow:row;grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
 .jcp-sg{border-bottom:1px solid var(--line)}
+.jcp-sg{overflow:hidden}
+.jcp-sg>span:last-child,.jcp-sg>div{min-width:0}
+.jcp-sg small{overflow:hidden;text-overflow:ellipsis}
