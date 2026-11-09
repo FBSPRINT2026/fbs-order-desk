@@ -127,12 +127,13 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   }
   // In the works · art with no order yet (made for a customer before the details). Not art whose logo went on to an order
   // made after it, kept or cleared (Nov 9: ABC Test Company's mockups stayed after its orders were deleted): that job was
-  // taken care of, and the mockup just never got linked to its order
+  // taken care of, and the mockup just never got linked to its order (an order of theirs from up to two weeks before counts
+  // too: Fossil sent their own mockup on Nov 5 for #40460, made Nov 4)
   type AM = { id: string; customer_id: string | null; title: string; created_at: string; design_ids: string[] | null; customers?: { company?: string; name?: string } | null };
   const ams = ((am || []) as unknown as AM[]).filter((m) => m.customer_id);
   const amCust = [...new Set(ams.map((m) => m.customer_id!))], amFrom = ams.reduce((t, m) => (m.created_at < t ? m.created_at : t), new Date().toISOString());
-  const later = await inChunks<{ customer_id: string; created_at: string; groups: unknown }>(amCust, (p) => admin.from("orders").select("customer_id, created_at, groups").in("customer_id", p).gte("created_at", new Date(Date.parse(amFrom) - 3600e3).toISOString()).order("id").limit(1000), 50);
-  const usedLater = (m: AM) => !!m.design_ids?.length && later.some((o) => o.customer_id === m.customer_id && o.created_at >= new Date(Date.parse(m.created_at) - 3600e3).toISOString() && ((o.groups || []) as { imprints?: { design_id?: string }[] }[]).some((g) => (g.imprints || []).some((im) => !!im.design_id && m.design_ids!.includes(im.design_id))));
+  const later = await inChunks<{ customer_id: string; created_at: string; groups: unknown }>(amCust, (p) => admin.from("orders").select("customer_id, created_at, groups").in("customer_id", p).gte("created_at", new Date(Date.parse(amFrom) - 14 * 864e5).toISOString()).is("declined_at", null).order("id").limit(1000), 50);
+  const usedLater = (m: AM) => !!m.design_ids?.length && later.some((o) => o.customer_id === m.customer_id && o.created_at >= new Date(Date.parse(m.created_at) - 14 * 864e5).toISOString() && ((o.groups || []) as { imprints?: { design_id?: string }[] }[]).some((g) => (g.imprints || []).some((im) => !!im.design_id && m.design_ids!.includes(im.design_id))));
   const amByCust = new Map<string, { ids: string[]; at: string; title: string; c: string }>();
   for (const m of ams) {
     if (usedLater(m)) continue;
