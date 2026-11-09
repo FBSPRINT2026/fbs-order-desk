@@ -21434,3 +21434,8 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .ms-blk.ms-thru{z-index:3}
 .ms-thru-l{position:absolute;left:0;right:0;pointer-events:none;border-top:1.5px dotted color-mix(in srgb,var(--ink) 55%,transparent);border-bottom:1.5px dotted color-mix(in srgb,var(--ink) 55%,transparent);background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 7%,transparent) 0 5px,transparent 5px 10px);display:flex;align-items:center;justify-content:flex-end;padding-right:5px;box-sizing:border-box}
 .ms-thru-l em{font-style:normal;font-size:10.5px;font-weight:600;color:var(--ink-3);background:color-mix(in srgb,var(--surface) 85%,transparent);border-radius:4px;padding:0 4px}
+
+/* Schedule: same-art jobs run back to back, one box around the run (msar-, option G, Nov 9) */
+.msar-box{position:absolute;left:0;right:0;z-index:1;border:1.5px solid var(--fbs-violet);border-radius:9px;background:color-mix(in srgb,var(--fbs-violet) 10%,transparent);pointer-events:none}
+.msar-h{position:absolute;right:4px;top:-9px;z-index:4;font-size:10.5px;font-weight:700;line-height:15px;padding:0 6px;border-radius:8px;background:var(--surface);color:var(--fbs-violet);border:1px solid var(--fbs-violet);white-space:nowrap;max-width:calc(100% - 8px);overflow:hidden;text-overflow:ellipsis}
+.msar-offer .ms-ot-i{color:var(--fbs-violet)}

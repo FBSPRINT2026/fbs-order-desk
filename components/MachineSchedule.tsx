@@ -601,6 +601,51 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   const otOn = (m: Machine, d: string) => { const k = m.id + "|" + d; if (!otCache.has(k)) otCache.set(k, otFromOn(m, d)); return otCache.get(k)!; };
   const inOT = (g: Seg) => { const oa = otOn(g.c.machine, g.day); return oa != null && g.end > oa + 1; };
   const used = (m: Machine, d: string) => at(m, d).reduce((a, g) => a + g.work, 0);
+  /**
+   * Jobs printing the same art that are booked apart (Nov 9, Nick: "how do you… look at the scheduler and go, hey, we've
+   * got these jobs. Would you like me to run them all together?"): one offer per set, to run them back to back on the
+   * press and day that already has the most of them, where it fits each job and keeps it on time.
+   */
+  const artOffers = useMemo(() => {
+    if (!s) return [] as { key: string; cards: Card[]; machine: Machine; day: string; saves: number }[];
+    const by = new Map<string, Card[]>();
+    for (const c of cards) if (c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind === "o") for (const a of artsOf(c.need)) by.set(a, [...(by.get(a) || []), c]);
+    const out: { key: string; cards: Card[]; machine: Machine; day: string; saves: number }[] = [], seen = new Set<string>();
+    for (const cs0 of by.values()) {
+      const cs = [...new Map(cs0.map((c) => [c.key, c])).values()];
+      if (cs.length < 2) continue;
+      const lanes = new Map<string, Card[]>();
+      for (const c of cs) lanes.set(c.machine.id + "|" + c.day, [...(lanes.get(c.machine.id + "|" + c.day) || []), c]);
+      if (lanes.size === 1 && cs.filter((c) => c.sameArt).length === cs.length - 1) continue; // already together
+      const [lane] = [...lanes.entries()].sort((x, y) => y[1].length - x[1].length || x[0].split("|")[1].localeCompare(y[0].split("|")[1]));
+      const [mid, day] = lane[0].split("|"), machine = s.machines.find((x) => x.id === mid)!;
+      const go = cs.filter((c) => fits(c.need, machine) && (!c.job.due || day <= c.job.due));
+      if (go.length < 2) continue;
+      const key = go.map((c) => c.key).sort().join(",");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const saves = go.slice(1).reduce((t, c) => { const sh = c.need.steps.filter((st) => st.art && go[0].need.steps.some((x) => x.art === st.art)); if (!sh.length) return t; const e = estimateRaw(s, { ...c.need, steps: sh }, machine); return t + e.setup + e.teardown; }, 0);
+      out.push({ key, cards: go, machine, day, saves: Math.round(saves) });
+    }
+    return out;
+  }, [s, cards, today]);
+  /** run a set of same-art jobs back to back: they move next to the first of them already on that press and day */
+  async function runTogether(o: { cards: Card[]; machine: Machine; day: string }) {
+    const sb = createClient(), ids = new Set(o.cards.map((c) => c.slot!.id));
+    const lane = cards.filter((c) => c.slot && c.machine.id === o.machine.id && c.day === o.day).sort((x, y) => (x.startMin ?? 99999) - (y.startMin ?? 99999) || x.slot!.position - y.slot!.position);
+    const at0 = lane.findIndex((c) => ids.has(c.slot!.id));
+    const before = (at0 < 0 ? lane : lane.slice(0, at0)).filter((c) => !ids.has(c.slot!.id)), after = at0 < 0 ? [] : lane.slice(at0).filter((c) => !ids.has(c.slot!.id));
+    const group = [...o.cards].sort((x, y) => (x.machine.id === o.machine.id && x.day === o.day ? 0 : 1) - (y.machine.id === o.machine.id && y.day === o.day ? 0 : 1) || (x.job.due || "9").localeCompare(y.job.due || "9"));
+    const ordered = [...before, ...group, ...after], stamp = new Date().toISOString();
+    for (let i = 0; i < ordered.length; i++) {
+      const c = ordered[i], inGroup = ids.has(c.slot!.id), first = inGroup && c === group[0];
+      const patch: Record<string, unknown> = { position: i, updated_at: stamp };
+      if (inGroup) Object.assign(patch, { machine: o.machine.id, day: o.day, ...(first ? {} : { start_min: null }), minutes: estimate(s!, c.need, o.machine).minutes });
+      await sb.from("production_slots").update(patch).eq("id", c.slot!.id);
+    }
+    setMsg(`Running ${group.map((c) => "#" + c.job.number).join(", ")} together on ${o.machine.name}, ${dayLbl(o.day)}.`);
+    load();
+  }
   const loadMap = useMemo(() => { const m: Record<string, Record<string, number>> = {}; for (const [k, gs] of segs.by) { const [id, d] = k.split("|"); (m[id] ||= {})[d] = gs.filter((g) => g.c.slot?.status !== "done").reduce((a, g) => a + g.work, 0); } return m; }, [segs]);
 
   // ready to schedule: in production (goods here, art done) or a Printavo "ready for production / scheduling" status, not booked yet
@@ -1133,6 +1178,22 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
               : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
             {(day < today || (day === today && now.min > vS)) && <div className="ms-pastv" style={{ height: ((Math.min(day < today ? vE : now.min, vE) - vS) / 60) * HOUR_PX }} />}
             {day === today && now.min >= vS && now.min <= vE && <div className="ms-now" style={{ top: ((now.min - vS) / 60) * HOUR_PX }} />}
+            {(() => {
+              // same-art jobs run back to back: one box around the run (option G, Nov 9)
+              const js = joined(m, day), runs: { a: number; b: number; n: number; saved: number }[] = [];
+              for (let i = 1; i < js.length; i++) {
+                const c = js[i].g.c;
+                if (!c.sameArt || c.sameArt.with !== js[i - 1].g.c.job.number) continue;
+                const last = runs[runs.length - 1];
+                if (last && last.b === js[i - 1].end) { last.b = js[i].end; last.n++; last.saved += c.sameArt.saved; }
+                else runs.push({ a: js[i - 1].start, b: js[i].end, n: 2, saved: c.sameArt.saved });
+              }
+              return runs.map((r) => { const a = Math.max(r.a, vS), b = Math.min(r.b, vE); if (b <= a) return null; return (
+                <div key={"ar" + r.a} className="msar-box" style={{ top: ((a - vS) / 60) * HOUR_PX - 3, height: ((b - a) / 60) * HOUR_PX + 4 }} title={`Same art: ${r.n} jobs run back to back, one setup (${fmtMin(r.saved)} saved)`}>
+                  <span className="msar-h">🔗 Same art · {r.n} jobs · one setup</span>
+                </div>
+              ); });
+            })()}
             {joined(m, day).map(({ g, start: gs0, end: ge0, gaps, n: nj }) => { const h = Math.max(22, ((ge0 - gs0) / 60) * HOUR_PX - 2), gl = glance(g.c.need, g.c.minutes), whole = nj > 1 && nj >= g.parts; return (
               <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "") + (gaps.length ? " ms-thru" : "")} style={{ top: ((gs0 - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
@@ -1718,6 +1779,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
             </div>
           ) : null}
 
+            {artOffers.map((o) => <div key={o.key} className="ms-otline msar-offer"><span className="ms-ot-i" aria-hidden>🔗</span><span className="ms-idle-t"><b>{o.cards.length} jobs print the same art</b> but are booked apart<span className="faint"> · {o.cards.map((c) => `#${c.job.number}`).join(", ")} · run them together on {shortName(o.machine)} {dayLbl(o.day)}{o.saves ? `, about ${fmtMin(o.saves)} less setup` : ""}</span></span><span className="spacer" /><button type="button" className="btn sm" onClick={() => runTogether(o)}>Run together</button></div>)}
             {eqIssues.length > 0 && <div className="ms-otline"><span className="ms-ot-i" aria-hidden>⚙</span><span className="ms-idle-t"><b>{eqIssues.map((m) => shortName(m)).join(", ")}</b> {eqIssues.length === 1 ? "has" : "have"} an equipment issue<span className="faint"> · {eqIssues.map((m) => m.issue!.down ? `${shortName(m)} down` : [m.issue!.colors != null ? `${shortName(m)} ${m.issue!.colors}/${m.issue!.full} ${m.type === "screen" ? "colors" : "heads"}` : "", m.issue!.flashes != null ? `${m.issue!.flashes}/${m.issue!.fullFlashes} flashes` : "", m.issue!.speed != null ? `${m.issue!.speed}% speed` : ""].filter(Boolean).join(" ")).join(" · ")}</span></span><span className="spacer" /><button type="button" className="btn sm ghost" onClick={() => canEquip && setEqOpen(true)}>Details</button></div>}
             </div>
           </div>
