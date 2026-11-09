@@ -31,6 +31,8 @@ export async function ordersNeedingDetails<T extends { id: string }>(sb: any, co
  * An order editor left open while production confirmed: its copy still has the flags. Before it saves, the prints
  * production confirmed since are taken from the saved order, so the editor can't put the flag back.
  */
+/** a print staff asked production to check again after (or without) the confirmation saved: keep the ask */
+export const againAfter = (im: Imprint, saved: Imprint) => !!im.confirm?.again?.at && (!saved.confirmed?.at || im.confirm.again.at >= saved.confirmed.at);
 export function keepConfirmed(local: Group[], saved: Pick<Group, "id" | "imprints">[] | null | undefined): { groups: Group[]; changed: boolean } {
   if (!saved?.length || !orderNeedsDetails(local)) return { groups: local, changed: false };
   const done = new Map<string, Imprint>();
@@ -41,7 +43,9 @@ export function keepConfirmed(local: Group[], saved: Pick<Group, "id" | "imprint
     ...g,
     imprints: g.imprints.map((im) => {
       const s = needsDetails(im) ? done.get(im.id) : undefined;
-      if (!s) return im;
+      // asked to check again after that confirmation (Nov 9, Nick on #40488: "you can click it for a second and then it
+      // goes away"): that's on purpose, not a stale copy
+      if (!s || againAfter(im, s)) return im;
       changed = true;
       // the confirmed details, keeping anything else changed here (art, location, notes)
       return { ...im, size: s.size, inks: s.inks, colors: s.colors, underbase: s.underbase, drop: s.drop, sizeFrom: s.sizeFrom, remake: s.remake, notes: s.notes, design_id: s.design_id || im.design_id, confirm: undefined, confirmed: s.confirmed };

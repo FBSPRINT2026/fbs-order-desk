@@ -1,4 +1,5 @@
 "use client";
+import { againAfter } from "@/lib/productionDetails";
 import { garmentFor as catalogGarment } from "@/lib/garmentMatch";
 import { sameColorAs } from "@/lib/colorMatch";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
@@ -3278,7 +3279,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     g.imprints = sized.map((im) => {
       const saved = g.imprints.find((x) => x.id === im.id);
       // production confirmed this print while the builder was open: its confirmed specs win (lib/designSpecs.ts)
-      if (saved?.confirmed && !saved.confirm && im.confirm) return { ...saved, ...im, size: saved.size, inks: saved.inks, colors: saved.colors, underbase: saved.underbase, drop: saved.drop, sizeFrom: saved.sizeFrom, remake: saved.remake, notes: saved.notes, confirm: undefined, confirmed: saved.confirmed };
+      if (saved?.confirmed && !saved.confirm && im.confirm && !againAfter(im, saved)) return { ...saved, ...im, size: saved.size, inks: saved.inks, colors: saved.colors, underbase: saved.underbase, drop: saved.drop, sizeFrom: saved.sizeFrom, remake: saved.remake, notes: saved.notes, confirm: undefined, confirmed: saved.confirmed };
       // only what was changed here goes back: anything else changed on the order meanwhile (production's drop, the
       // notes, the AI order helper) is kept (Oct 23: #40133's cleaned notes and confirmed drops came back from an open
       // Mockup Creator)
