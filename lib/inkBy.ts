@@ -6,7 +6,13 @@
 import type { Imprint } from "@/lib/pricing";
 
 const ck = (c: string) => (c || "").trim().toLowerCase();
-export const titleColor = (c: string) => c.replace(/\b\w/g, (m) => m.toUpperCase());
+/** A colorway of a group (Nov 9, Nick: "the same garment color can be in two colorways… Mauve in B and C"): a line with
+ *  `cw` keeps its own inks under "mauve ~c" in Imprint.inkBy, so two lines of one garment color can print different
+ *  inks in one group (one set of screens). Every place that looks up a line's inks goes through inkKeyOf(line). */
+export const inkKeyOf = (l: { color?: string | null; cw?: string | null }) => (l.cw ? `${(l.color || "").trim()} ~${l.cw}` : (l.color || ""));
+/** the garment color of an ink key ("Mauve ~c" → "Mauve") for showing it and for its color */
+export const baseColor = (k: string) => (k || "").replace(/\s*~[\w-]+$/, "");
+export const titleColor = (c: string) => baseColor(c).replace(/\b\w/g, (m) => m.toUpperCase());
 
 export type InkChange = { from: string; to: string; colors: string[] };
 /** each change once (Contact Blue → PMS 230) with the garment colors it's on, as the order writes them */
@@ -16,7 +22,7 @@ export function inkChanges(im: Pick<Imprint, "inkBy" | "visualOnly">, colorNames
   for (const [color, m] of Object.entries(im.inkBy || {})) {
     for (const [from, to] of Object.entries(m || {})) {
       if (!to || ck(from) === ck(to)) continue;
-      const named = colorNames.find((c) => ck(c) === ck(color)) || titleColor(color);
+      const named = colorNames.find((c) => ck(c) === ck(baseColor(color))) || titleColor(color);
       const hit = out.find((x) => ck(x.from) === ck(from) && ck(x.to) === ck(to));
       if (hit) { if (!hit.colors.some((c) => ck(c) === ck(named))) hit.colors.push(named); } else out.push({ from, to, colors: [named] });
     }
@@ -42,12 +48,14 @@ export const inkChangesText = (im: Pick<Imprint, "inkBy" | "visualOnly">, colorN
  *  A version is everything that changes on a garment color (Oct 31: a colorway change changes several threads at once,
  *  one version, not one per thread); a colorway change's version carries its colorway's name. */
 export type ChangeVersion = { letter: string; colors: string[]; styles: string; swap: Record<string, string> | null; ink: string; from: string; colorway?: string };
-export function changeVersions(im: Pick<Imprint, "inks" | "inkBy" | "visualOnly" | "colorwayBy" | "colorway">, lines: { color?: string; brand?: string; style?: string }[]): ChangeVersion[] {
+export function changeVersions(im: Pick<Imprint, "inks" | "inkBy" | "visualOnly" | "colorwayBy" | "colorway">, lines0: { color?: string; brand?: string; style?: string; cw?: string }[]): ChangeVersion[] {
   if (im.visualOnly) return [];
-  const ls = lines.filter((l) => (l.color || "").trim());
+  // each line by its ink key (a colorway's own line of a garment color is its own key, inkKeyOf)
+  const ls = lines0.filter((l) => (l.color || "").trim()).map((l) => ({ ...l, color: inkKeyOf(l) }));
   const k2 = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const stylesOn = (colors: string[]) => [...new Set(ls.filter((l) => colors.some((c) => k2(c) === k2(l.color || ""))).map((l) => [l.brand, l.style].filter(Boolean).join(" ")).filter(Boolean))].join(", ");
-  const named = (c: string) => ls.find((l) => ck(l.color || "") === ck(c))?.color || titleColor(c);
+  const named = (c: string) => ls.find((l) => ck(l.color || "") === ck(c))?.color || c;
+  const shown = (cs: string[]) => [...new Set(cs.map(baseColor))];
   const vers: { key: string; colors: string[]; swap: Record<string, string>; from: string[]; to: string[]; cw?: string }[] = [];
   const keys = [...new Set([...Object.keys(im.inkBy || {}), ...Object.keys(im.colorwayBy || {})].map(ck))];
   for (const color of keys) {
@@ -66,7 +74,7 @@ export function changeVersions(im: Pick<Imprint, "inks" | "inkBy" | "visualOnly"
   const asIs = [...new Set(ls.map((l) => l.color || "").filter((c) => !changed.has(k2(c))))];
   const inks = (im.inks || "").split(/\s*,\s*/).filter(Boolean).join(", ");
   return [
-    { letter: "A", colors: asIs, styles: stylesOn(asIs), swap: null, ink: inks, from: "", ...(im.colorwayBy && im.colorway ? { colorway: im.colorway } : {}) },
-    ...vers.map((v, i) => ({ letter: String.fromCharCode(66 + i), colors: v.colors, styles: stylesOn(v.colors), swap: Object.keys(v.swap).length ? v.swap : null, ink: [...new Set(v.to)].join(", "), from: [...new Set(v.from)].join(", "), ...(v.cw ? { colorway: v.cw } : {}) })),
+    { letter: "A", colors: shown(asIs), styles: stylesOn(asIs), swap: null, ink: inks, from: "", ...(im.colorwayBy && im.colorway ? { colorway: im.colorway } : {}) },
+    ...vers.map((v, i) => ({ letter: String.fromCharCode(66 + i), colors: shown(v.colors), styles: stylesOn(v.colors), swap: Object.keys(v.swap).length ? v.swap : null, ink: [...new Set(v.to)].join(", "), from: [...new Set(v.from)].join(", "), ...(v.cw ? { colorway: v.cw } : {}) })),
   ].filter((v) => v.colors.length);
 }

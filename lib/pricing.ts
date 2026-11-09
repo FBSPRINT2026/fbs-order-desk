@@ -304,6 +304,9 @@ export type GLine = {
   /** the email didn't name the style: what they called it ("tees"); Create order asks which blank, their preferred goods
    *  first (Oct 26, Nick), and clears this once it's picked */
   called?: string;
+  /** the group colorway this line prints in when its garment color is in two (Nov 9, "Mauve in B and C"): its inks are
+   *  Imprint.inkBy["mauve ~c"] (lib/inkBy.ts inkKeyOf); unset = the garment color's own */
+  cw?: string;
   /** a note for this line only (Oct 22, Nick: "add line item description… for each specific line"): under the line
    *  on the order, the invoice and the work order */
   note?: string;
@@ -388,6 +391,8 @@ export type Group = { id: string; name?: string; /** priced by a program design'
   /** each section's close-up background when a print has a color or colorway change (Oct 31, Nick: "change the background
    *  on the individual colorway swatches"): by the section's ink or colorway (lower case), "_a" for the as-printed one;
    *  not set = that section's garment with the most pieces */ mockupBgBy?: Record<string, string>;
+  /** how the group's garments show (Nov 9, Nick): "colorway" = by colorway, each with its prints' art in its inks over its
+   *  lines and sizes (GroupEditor CwStrip); unset = by garment */ view?: "colorway";
   /** the group is a brand's master mockup (lib/masterMockups.ts): its prints and picture came from M-<number>, and only
    *  its garments and quantities were read off the paperwork */ masterMockup?: number;
   /** what the saved pictures were drawn from: when it changes they're drawn again by themselves (lib/mockupFresh.ts) */ mockupArt?: import("@/lib/mockupFresh").MockupArt;

@@ -4,7 +4,7 @@ import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, w
 import { persOf, PERS_SHOW } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
-import { changeVersions, inkChanges, inkChangesText, inksOnColor } from "@/lib/inkBy";
+import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksOnColor } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
 import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
@@ -87,7 +87,7 @@ function variantsOf(d: Imprint, colors: string[]): Variant[] {
     const m = Object.entries(d.inkBy || {}).find(([k]) => ckey(k) === ckey(color))?.[1] || {};
     const swap: Record<string, string> = {};
     for (const [a, b] of Object.entries(m)) if (b && b.trim().toLowerCase() !== a.trim().toLowerCase()) swap[a.trim().toLowerCase()] = b.trim();
-    return { color, swap };
+    return { color: baseColor(color), swap };
   }).filter((v) => Object.keys(v.swap).length);
 }
 const swapInk = (k: string, sw?: Record<string, string> | null) => (sw && sw[k.trim().toLowerCase()]) || k;
@@ -190,7 +190,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
     // notes too long to sit under the mockup get their own page (Oct 27, Nick: "they're flowing over… going everywhere")
     const veryLong = noteText.length + extra * 120 > 900 || vis + extra * 2 > 13;
     const notesPage = longNotes && (!mk.length || veryLong);
-    const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
+    const colorList = [...new Set(lines.filter((l) => l.color).map((l) => inkKeyOf(l)))] as string[];
     const vars = g.imprints.map((d) => variantsOf(d, colorList));
     // one press sheet per print: a color change is noted on it, not a second set of pages (Oct 26, Nick: "if the art
     // doesn't change, you just need one close-up")
@@ -594,7 +594,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
     const key = (i: number) => { const l = shown0[i]; return l ? `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}` : `#${i}`; };
     const seen = new Set([key(0)]), idx: number[] = [];
     for (let i = 1; i < mk.length; i++) { const k = key(i); if (seen.has(k)) continue; seen.add(k); idx.push(i); extra.push([mk[i]]); }
-    const pcols = [...new Set(g.lines.filter((l) => lineQty(l) > 0).map((l) => l.color).filter(Boolean))] as string[];
+    const pcols = [...new Set(g.lines.filter((l) => lineQty(l) > 0 && l.color).map((l) => inkKeyOf(l)))] as string[];
     const pvars = g.imprints.map((d) => variantsOf(d, pcols));
     return { mk, extra, idx, prints: g.imprints.length, pvars };
   });
@@ -906,7 +906,7 @@ export function InvoiceDoc(p: DocData) {
                               or heat press, whatever it is, then go into the front") */}
                           <div className="iv2-pr iv2-how"><em>Decoration</em><span>{[...new Set(prints.map(({ d }) => (d.patch ? "Heat press patch" : DECO[d.method]) || methodLabel(d)).filter(Boolean))].join(" + ")}</span></div>
                           {/* each print's inks or threads on this garment's color: a color change or colorway split swaps them in */}
-                          {prints.map(({ d, inks: inks0 }) => { const inks = d.visualOnly ? inks0 : [...new Set(inksOnColor(d, l.color || "").map((x) => x.name))]; return (
+                          {prints.map(({ d, inks: inks0 }) => { const inks = d.visualOnly ? inks0 : [...new Set(inksOnColor(d, inkKeyOf(l)).map((x) => x.name))]; return (
                             <div className="iv2-pr" key={d.id}>
                               <em>{d.location || "Print"}</em>
                               {inks.length

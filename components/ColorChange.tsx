@@ -5,6 +5,7 @@ import { guessHex, lineColor } from "@/lib/mockup";
 import { threadByName } from "@/lib/embroidery";
 import { colorHex } from "@/lib/inkColors";
 import { InkSelect, ThreadSelect } from "@/components/InkSelect";
+import { inkKeyOf } from "@/lib/inkBy";
 
 /**
  * Color change on a print (Oct 27, Nick on #40192's ShipStation polos: "you click a color change button and you go, okay,
@@ -52,9 +53,11 @@ export function versionOfColor(im: Imprint, color: string, vers = versionsOf(im)
 
 export default function ColorChange({ im, lines, onSave, onClose }: { im: Imprint; lines: GLine[]; onSave: (inkBy: Imprint["inkBy"]) => void; onClose: () => void }) {
   const inks = (im.inks || "").split(/\s*,\s*/).filter(Boolean);
-  const colors = [...new Map(lines.filter((l) => (l.color || "").trim()).map((l) => [ck(l.color), l])).values()];
+  // one row per ink key: a garment color, or its own colorway's lines of it (GLine.cw, lib/inkBy.ts inkKeyOf)
+  const ik = (l: GLine) => ck(inkKeyOf(l));
+  const colors = [...new Map(lines.filter((l) => (l.color || "").trim()).map((l) => [ik(l), l])).values()];
   const [vers, setVers] = useState<Ver[]>(() => { const v = versionsOf(im); return v.length ? v : [{ from: inks[0] || "", to: "" }]; });
-  const [pick, setPick] = useState<Record<string, number>>(() => Object.fromEntries(colors.map((l) => [ck(l.color), versionOfColor(im, l.color)])));
+  const [pick, setPick] = useState<Record<string, number>>(() => Object.fromEntries(colors.map((l) => [ik(l), versionOfColor(im, inkKeyOf(l))])));
   const thread = im.method === "embroidery";
   const word = thread ? "thread" : "ink";
   const ok = vers.every((v) => v.from.trim() && v.to.trim());
@@ -62,8 +65,8 @@ export default function ColorChange({ im, lines, onSave, onClose }: { im: Imprin
   function save() {
     const inkBy: NonNullable<Imprint["inkBy"]> = {};
     for (const l of colors) {
-      const k = pick[ck(l.color)] || 0, v = vers[k - 1];
-      if (k && v && v.from.trim() && v.to.trim()) inkBy[ck(l.color)] = { [v.from.trim()]: v.to.trim() };
+      const k = pick[ik(l)] || 0, v = vers[k - 1];
+      if (k && v && v.from.trim() && v.to.trim()) inkBy[ik(l)] = { [v.from.trim()]: v.to.trim() };
     }
     onSave(Object.keys(inkBy).length ? inkBy : undefined);
   }
@@ -94,9 +97,9 @@ export default function ColorChange({ im, lines, onSave, onClose }: { im: Imprin
         {/* garments against the versions: one tick per garment color */}
         <div className="tbl-wrap"><table className="tbl cc-tbl">
           <thead><tr><th>Garment</th><th>A · as printed</th>{vers.map((v, i) => <th key={i}>{String.fromCharCode(66 + i)} · {v.to || "…"}</th>)}</tr></thead>
-          <tbody>{colors.map((l) => { const k = ck(l.color), on = pick[k] || 0; const n = lines.filter((x) => ck(x.color) === k).length; return (
+          <tbody>{colors.map((l) => { const k = ik(l), on = pick[k] || 0; const n = lines.filter((x) => ik(x) === k).length; return (
             <tr key={k}>
-              <td><span className="cc-g"><i style={{ background: guessHex(lineColor(l)) }} /><b>{l.color}</b>{n > 1 ? <span className="faint">{n} styles</span> : <span className="faint">{l.style}</span>}</span></td>
+              <td><span className="cc-g"><i style={{ background: guessHex(lineColor(l)) }} /><b>{l.color}</b>{l.cw && <span className="faint">its own colorway</span>}{n > 1 ? <span className="faint">{n} styles</span> : <span className="faint">{l.style}</span>}</span></td>
               {[0, ...vers.map((_, i) => i + 1)].map((vi) => (
                 <td key={vi}><label className="cc-tick"><input type="radio" name={`cc-${k}`} checked={on === vi} onChange={() => setPick({ ...pick, [k]: vi })} aria-label={`${l.color}: ${vi ? `change ${String.fromCharCode(65 + vi)}` : "as printed"}`} /></label></td>
               ))}

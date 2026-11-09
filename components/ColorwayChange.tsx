@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { colorwayOnColor, colorwaysOf, printColorway } from "@/lib/brands";
 import { printArtUrl } from "@/lib/designs";
 import { isLightArtUrl } from "@/lib/lightArt";
+import { baseColor, inkKeyOf } from "@/lib/inkBy";
 import { lineQty, type Design, type GLine, type Imprint } from "@/lib/pricing";
 
 /**
@@ -19,7 +20,7 @@ export default function ColorwayChange({ im, d, lines, urls, onClose, onSave }: 
   const base = printColorway(im, d);
   const ck = (c: string) => (c || "").trim().toLowerCase();
   // one row per garment color (its styles and pieces under it)
-  const colors = [...new Map(lines.filter((l) => (l.color || "").trim() && lineQty(l) > 0).map((l) => [ck(l.color), l.color.trim()])).entries()];
+  const colors = [...new Map(lines.filter((l) => (l.color || "").trim() && lineQty(l) > 0).map((l) => [ck(inkKeyOf(l)), inkKeyOf(l).trim()])).entries()];
   const [pick, setPick] = useState<Record<string, string>>(() => Object.fromEntries(colors.map(([k, c]) => [k, colorwayOnColor(im, d, c)?.name || base?.name || ""])));
   const changed = colors.some(([k]) => pick[k] && base && pick[k] !== base.name) || Object.keys(im.colorwayBy || {}).length > 0;
   // each colorway's picture on the backdrop it needs (a white logo on charcoal), as in the Swap list
@@ -37,11 +38,11 @@ export default function ColorwayChange({ im, d, lines, urls, onClose, onSave }: 
             <th key={c.name} className="cwc-h"><span className="cwc-col"><span className={"cwc-pic" + (dark[i] ? " dk" : "")}>{pics[i] ? <img src={pics[i]} alt="" /> : null}</span><b>{String.fromCharCode(65 + i)}</b><span className="cwc-n">{c.name}</span></span></th>
           ))}</tr></thead>
           <tbody>{colors.map(([k, c]) => {
-            const ls = lines.filter((l) => ck(l.color) === k), n = ls.reduce((a, l) => a + lineQty(l), 0);
+            const ls = lines.filter((l) => ck(inkKeyOf(l)) === k), n = ls.reduce((a, l) => a + lineQty(l), 0);
             return (
               <tr key={k}>
-                <td><span className="cwc-g"><b>{[...new Set(ls.map((l) => l.style).filter(Boolean))].join(", ") || "Garment"}</b><span className="faint">{c} · {n} pc{n === 1 ? "" : "s"}</span></span></td>
-                {cws.map((cw) => <td key={cw.name} className="cwc-c"><label className="cc-tick"><input type="radio" name={`cw-${k}`} checked={pick[k] === cw.name} disabled={!base} onChange={() => setPick({ ...pick, [k]: cw.name })} aria-label={`${c}: ${cw.name}`} /></label></td>)}
+                <td><span className="cwc-g"><b>{[...new Set(ls.map((l) => l.style).filter(Boolean))].join(", ") || "Garment"}</b><span className="faint">{baseColor(c)}{c !== baseColor(c) ? " (its own colorway)" : ""} · {n} pc{n === 1 ? "" : "s"}</span></span></td>
+                {cws.map((cw) => <td key={cw.name} className="cwc-c"><label className="cc-tick"><input type="radio" name={`cw-${k}`} checked={pick[k] === cw.name} disabled={!base} onChange={() => setPick({ ...pick, [k]: cw.name })} aria-label={`${baseColor(c)}: ${cw.name}`} /></label></td>)}
               </tr>
             );
           })}</tbody>

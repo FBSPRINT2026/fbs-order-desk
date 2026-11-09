@@ -10,7 +10,7 @@ import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
-import { changeVersions, inkChanges, inksOnColor } from "@/lib/inkBy";
+import { changeVersions, inkChanges, inkKeyOf, inksOnColor } from "@/lib/inkBy";
 import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2, OVERSIZE_IN, NORMAL_MAX_IN } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -87,7 +87,8 @@ type Line = { id: string; style: string; brand: string; color: string; garment: 
   /** a garment that isn't in the catalog: the photos they uploaded (storage paths; Oct 24, Nick: "LA Apparel isn't offered at either of those two suppliers") */ own?: { front: string; back?: string };
   /** the shirt's color picked off the photo with the eyedropper (close-ups and logo tiles; Oct 24, Nick) */ hex?: string;
   /** a garment we have no photo of, drawn (Oct 27): what it looks like, read off the customer's mockup (trim, stripes, quilted…) */ look?: GarmentLook;
-  /** the color it was last saved in (GLine.shade): a logo mockup's background stays this unless someone picks another */ shade?: string };
+  /** the color it was last saved in (GLine.shade): a logo mockup's background stays this unless someone picks another */ shade?: string;
+  /** its own colorway of its garment color (GLine.cw): its inks are Imprint.inkBy[inkKeyOf(line)] */ cw?: string };
 type Offset = { dx: number; dy: number };
 /** Per imprint: colors found in the logo and the ink each one prints as. */
 type Side = "front" | "back" | "sleeve";
@@ -682,7 +683,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const pcsOf = (c: string) => g.lines.filter((x) => (x.color || "").trim().toLowerCase() === (c || "").trim().toLowerCase()).reduce((n, x) => n + Object.values(x.sizes || {}).reduce((a: number, q) => a + (+(q || 0) || 0), 0), 0);
           const byPcs = logoOnly && !g.imprints.some((x) => Object.keys(x.inkBy || {}).length) ? [...g.lines].sort((a, b) => pcsOf(b.color) - pcsOf(a.color)) : g.lines;
           setMockBg(logoOnly && g.mockupBg && /^#[0-9a-f]{6}$/i.test(g.mockupBg) ? g.mockupBg.toLowerCase() : "");
-          setLines(byPcs.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${(l.color || "").trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}), ...(l.shade ? { shade: l.shade } : {}) })));
+          setLines(byPcs.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${inkKeyOf(l).trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}), ...(l.shade ? { shade: l.shade } : {}), ...(l.cw ? { cw: l.cw } : {}) })));
           setImprints(g.imprints.map((d) => ({ ...d })));
           setPieceCount(g.lines.reduce((n, l) => n + Object.values(l.sizes || {}).reduce((a: number, v) => a + (+(v || 0)), 0), 0));
           loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
@@ -1176,7 +1177,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       return np;
     });
   }
-  const artUrl = (im: Imprint, on?: Line) => { const k = on && (im.inkBy || im.colorwayBy) ? paintedBy[`${im.id}|${colorKey(on.color)}`] : ""; if (k) return k; const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (hasColorwayArt(urls, d.id, im) && printArtUrl(urls, d.id, im)) || (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
+  const artUrl = (im: Imprint, on?: Line) => { const k = on && (im.inkBy || im.colorwayBy) ? paintedBy[`${im.id}|${colorKey(inkKeyOf(on))}`] : ""; if (k) return k; const d = designs.find((x) => x.id === im.design_id); return painted[im.id] || (d ? (hasColorwayArt(urls, d.id, im) && printArtUrl(urls, d.id, im)) || (im.distress === "off" && urls[d.id + ":clean"]) || clean[d.id] || urls[d.id] : ""); };
 
   // ---- a garment not in the catalog: their own photos (Oct 24, Nick) ----
   /** "Need help picking garments?": our most popular garments to pick from (Oct 24, Nick) */
@@ -1863,7 +1864,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const designOf = (im: Imprint) => designs.find((d) => d.id === im.design_id);
   /** The colors printed at a location: each logo color with the ink it's set to (or as uploaded), else the imprint's typed inks. */
   /** a garment color's threads / inks across the prints, in words (Add logo's picture titles) */
-  const inkListFor = (l: Line) => [...new Set(imprints.flatMap((im) => { const m = Object.entries(im.inkBy || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1] || {}; return inkList(im).map((t) => m[t.name] || t.name); }))].join(", ");
+  const inkListFor = (l: Line) => [...new Set(imprints.flatMap((im) => { const m = Object.entries(im.inkBy || {}).find(([k]) => colorKey(k) === colorKey(inkKeyOf(l)))?.[1] || {}; return inkList(im).map((t) => m[t.name] || t.name); }))].join(", ");
   const inkList = (im: Imprint): { hex: string; name: string }[] => {
     const pt = paints[im.id];
     if (pt && pt.design === im.design_id && pt.sources.length) {
@@ -3093,7 +3094,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         let y = head2(x, capOf(l) || "Mockup", order ? `#${order.number} · ${order.nickname || ""}` : groupName) + 12 * PX;
         // this shirt's inks where a print changes on it (Oct 30: the Navy page showed pink art with no word of PMS 230)
         for (const im of prints) {
-          const on = inksOnColor(im, l.color || "");
+          const on = inksOnColor(im, inkKeyOf(l));
           if (!on.some((t) => t.changed)) continue;
           y += 10.5 * PT; let ix = L;
           x.fillStyle = C.ink; x.font = body(700, 10.5); const head = `${im.location} · ${changeWord(im.method).toLowerCase()} on ${l.color}: `;
@@ -3541,10 +3542,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (orderId) { const c = await sb.rpc("order_commit", { p_id: orderId }); if (c.error) throw new Error(c.error.message); }
       const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id, title, snapshot").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null; title: string; snapshot: unknown }[] : [];
       // Add logo: one picture per thread (the lines whose color changes the same way share it), not one per garment
-      const threadKey = (l: Line) => imprints.map((im) => JSON.stringify(Object.entries(im.inkBy || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1] || {})).join("|");
+      const threadKey = (l: Line) => imprints.map((im) => JSON.stringify(Object.entries(im.inkBy || {}).find(([k]) => colorKey(k) === colorKey(inkKeyOf(l)))?.[1] || {})).join("|");
       // in the order of their versions' letters (A, B…), as the order and the work order list them, so the group's main
       // picture is version A (Oct 31, #40336: the B picture, Maroon / Off White on black, led the group)
-      const letterOf = (l: Line) => { for (const im of imprints) { const d = designs.find((x) => x.id === im.design_id); if (!d) continue; const name = Object.entries(im.colorwayBy || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1] || im.colorway; const i = name ? colorwaysOf(d).findIndex((c) => c.name.toLowerCase().replace(/[^a-z0-9]/g, "") === name.toLowerCase().replace(/[^a-z0-9]/g, "")) : -1; if (i >= 0) return i; } return 99; };
+      const letterOf = (l: Line) => { for (const im of imprints) { const d = designs.find((x) => x.id === im.design_id); if (!d) continue; const name = Object.entries(im.colorwayBy || {}).find(([k]) => colorKey(k) === colorKey(inkKeyOf(l)))?.[1] || im.colorway; const i = name ? colorwaysOf(d).findIndex((c) => c.name.toLowerCase().replace(/[^a-z0-9]/g, "") === name.toLowerCase().replace(/[^a-z0-9]/g, "")) : -1; if (i >= 0) return i; } return 99; };
       const toSave = lines.filter((z) => z.style || z.color).filter((l, i, all) => !logoOnly || all.findIndex((y) => threadKey(y) === threadKey(l)) === i)
         .map((l, i) => ({ l, i })).sort((a, b) => letterOf(a.l) - letterOf(b.l) || a.i - b.i).map((x) => x.l);
       for (const l of toSave) {
@@ -4930,8 +4931,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           change… confirm you're changing the color on this garment only… select the color"): this garment's ink(s) */}
                       {designOf(im) && im.method !== "dtf" && line && (() => {
                         const first = lines.find((l) => (l.color || "").trim()) || lines[0];
-                        if (!first || colorKey(first.color) === colorKey(line.color) || !(line.color || "").trim()) return null;
-                        const ck = colorKey(line.color), cur = im.inkBy?.[ck];
+                        if (!first || colorKey(inkKeyOf(first)) === colorKey(inkKeyOf(line)) || !(line.color || "").trim()) return null;
+                        // a line in its own colorway keeps its inks under its own key (lib/inkBy.ts inkKeyOf)
+                        const ck = line.cw ? inkKeyOf(line).trim().toLowerCase() : colorKey(line.color), cur = im.inkBy?.[ck];
                         const names = [...new Set([...Object.values(paints[im.id]?.map || {}).map((v) => v.name).filter((n) => n && n !== "none"), ...(im.inks || "").split(",").map((x) => x.trim()).filter(Boolean)])].slice(0, 8);
                         const put = (next: Record<string, string> | null) => setImprints((xs) => xs.map((x) => {
                           if (x.id !== im.id) return x;

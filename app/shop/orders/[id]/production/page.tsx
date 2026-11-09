@@ -1,4 +1,5 @@
 "use client";
+import { baseColor } from "@/lib/inkBy";
 import { mockupHref } from "@/lib/mockupFresh";
 import { paintPrint, inkChoices } from "@/lib/inkColors";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -492,8 +493,8 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
                     <thead><tr><th>Shirts</th><th>Prints</th></tr></thead>
                     <tbody>{cc.map((v, i) => (
                       <tr key={i}>
-                        <td>{v.shirts.join(", ")}</td>
-                        <td>{v.to ? <span className="jv-ccv"><span className="faint">{v.from} →</span> <input value={v.to} list="jv-pms" aria-label={`Ink on ${v.shirts.join(", ")}`} onChange={(e) => setCc((a) => a.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)))} /></span> : <span>{(screens.map((x) => x.name.trim()).filter(Boolean).join(", ")) || p.inks || "As printed"} <span className="faint">(as printed)</span></span>}</td>
+                        <td>{v.shirts.map((x, k) => <span key={k}>{k ? ", " : ""}{baseColor(x)}{x !== baseColor(x) ? " (own colorway)" : ""}</span>)}</td>
+                        <td>{v.to ? <span className="jv-ccv"><span className="faint">{v.from} →</span> <input value={v.to} list="jv-pms" aria-label={`Ink on ${v.shirts.map(baseColor).join(", ")}`} onChange={(e) => setCc((a) => a.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)))} /></span> : <span>{(screens.map((x) => x.name.trim()).filter(Boolean).join(", ")) || p.inks || "As printed"} <span className="faint">(as printed)</span></span>}</td>
                       </tr>
                     ))}</tbody>
                   </table>

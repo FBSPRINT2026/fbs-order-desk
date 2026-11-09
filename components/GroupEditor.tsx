@@ -22,6 +22,7 @@ import { confirmTitle, isNewOrderConfirm } from "@/components/OrderTypeRow";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
 import ColorChange, { versionOfColor, versionsOf } from "@/components/ColorChange";
+import { baseColor, inkKeyOf, inksOnColor } from "@/lib/inkBy";
 import LocationChange from "@/components/LocationChange";
 import { hasSpotChange, spotKey, spotLines, spotOf, spotsOf, needsSettle, settleSpots } from "@/lib/spotChange";
 import { colorChanges } from "@/lib/pricing";
@@ -288,7 +289,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // (with a color or colorway change: the most pieces among the garments printed as it is, Group A)
   const ccAny = g.imprints.some((x) => Object.keys(x.inkBy || {}).length || Object.keys(x.colorwayBy || {}).length);
   const styled = g.lines.filter((x) => (x.style || "").trim()).length ? g.lines.filter((x) => (x.style || "").trim()) : g.lines;
-  const asIs = ccAny ? styled.filter((l) => g.imprints.every((x) => versionOfColor(x, l.color) === 0)) : styled;
+  const asIs = ccAny ? styled.filter((l) => g.imprints.every((x) => versionOfColor(x, inkKeyOf(l)) === 0)) : styled;
   const showLine = mainLine(asIs.length ? asIs : styled) || styled[0];
   const shirtHex = (() => {
     // a logo mockup's background picked on the order (Group.mockupBg) is what its pictures show
@@ -302,7 +303,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     return garmentHex(ci?.hex, l.color) || "#9aa1ab";
   })();
   // each garment color's own shirt color, for a print's color change close-up (Oct 26)
-  const hexOfColor = (color: string) => {
+  const hexOfColor = (color0: string) => {
+    const color = baseColor(color0);
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const l = g.lines.find((x) => key(x.color) === key(color));
     if (lineHex(l)) return lineHex(l);
@@ -313,12 +315,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const firstColor = showLine?.color || "";
   const changesOf = (d: Group["imprints"][number]) => {
     const key = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const colors = [...new Set(g.lines.map((l) => l.color).filter(Boolean))].filter((c) => key(c) !== key(firstColor));
+    const colors = [...new Set(g.lines.filter((l) => l.color).map((l) => inkKeyOf(l)))].filter((c) => key(c) !== key(firstColor));
     return colors.map((color) => {
       const m = Object.entries(d.inkBy || {}).find(([k]) => key(k) === key(color))?.[1] || {};
       const swap: Record<string, string> = {};
       for (const [a, b] of Object.entries(m)) if (b && b.trim().toLowerCase() !== a.trim().toLowerCase()) swap[a.trim().toLowerCase()] = b.trim();
-      return { color, hex: hexOfColor(color), swap };
+      return { color: baseColor(color), hex: hexOfColor(color), swap };
     }).filter((x) => Object.keys(x.swap).length);
   };
   // color changes across the group's prints: each garment color's version (A as printed, B… a change), for grouping lines
@@ -328,7 +330,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const sectionKey = (imps: Imprint[], color: string) => imps.filter((x) => versionsOf(x).length > 0).map((x) => (isCw(x) ? cwLetter(designOf(x)!, cwOn(x, color)) || "?" : String(versionOfColor(x, color)))).join(".");
   const verKey = (color: string) => sectionKey(g.imprints, color);
   /** the group's lines in their sections' order (the order otherwise kept), after a color change or colorway split */
-  const sortLines = (x: Group) => { x.lines = x.lines.map((ln, i) => ({ ln, i })).sort((a, b) => sectionKey(x.imprints, a.ln.color).localeCompare(sectionKey(x.imprints, b.ln.color)) || a.i - b.i).map((v) => v.ln); };
+  const sortLines = (x: Group) => { x.lines = x.lines.map((ln, i) => ({ ln, i })).sort((a, b) => sectionKey(x.imprints, inkKeyOf(a.ln)).localeCompare(sectionKey(x.imprints, inkKeyOf(b.ln))) || a.i - b.i).map((v) => v.ln); };
   // a colorway change (Imprint.colorwayBy, Oct 31): each section is a colorway of the logo, by its letter and name
   const designOf = (x: Imprint) => (x.design_id ? (designs || []).find((y) => y.id === x.design_id) : undefined);
   const isCw = (x: Imprint) => Object.keys(x.colorwayBy || {}).length > 0;
@@ -341,7 +343,21 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // the sections only show when a version has more than one line (Oct 27: a Dear Heart order with one line per color
   // looked broken with them); a colorway change always shows them (Oct 31, Nick: "separate them into subgroups like we do
   // with location change")
-  const ccShow = ccImps.length > 0 && (ccImps.some(isCw) || (() => { const n: Record<string, number> = {}; for (const l of g.lines) { const k = verKey(l.color); n[k] = (n[k] || 0) + 1; } return Object.values(n).some((v) => v > 1); })());
+  const ccShow = ccImps.length > 0 && (ccImps.some(isCw) || (() => { const n: Record<string, number> = {}; for (const l of g.lines) { const k = verKey(inkKeyOf(l)); n[k] = (n[k] || 0) + 1; } return Object.values(n).some((v) => v > 1); })());
+  // by colorway (Nov 9, Nick): every colorway is a section, even one line each, with its prints' art in its inks on top
+  const cwView = g.view === "colorway" && g.imprints.some((x) => !x.visualOnly) && g.lines.length > 0;
+  const secOn = ccShow || cwView;
+  /** one print as a colorway prints it: its picture painted in that colorway's inks, and the inks in words */
+  const cwPrint = (x: Imprint, key: string): CwPrintT => {
+    const des = designOf(x), url = x.design_id ? designUrls?.[x.design_id] || "" : "";
+    if (isCw(x) && des) {
+      const cw = cwOn(x, key), own = cw && hasColorwayArt(designUrls, des.id, { colorway: cw.name }) ? printArtUrl(designUrls, des.id, { colorway: cw.name }) : "";
+      return { d: x, url: own || url, own: !!own, swap: null, where: x.location, inks: cw ? [{ name: cw.name, changed: versionOfColor(x, key) > 0 }] : [{ name: x.colorway || "As printed", changed: false }] };
+    }
+    const m = Object.entries(x.inkBy || {}).find(([c]) => c.trim().toLowerCase() === key.trim().toLowerCase())?.[1] || {};
+    const swap = Object.fromEntries(Object.entries(m).filter(([a, b]) => b && a.trim().toLowerCase() !== b.trim().toLowerCase()).map(([a, b]) => [a.trim().toLowerCase(), b.trim()]));
+    return { d: x, url, own: false, swap: Object.keys(swap).length ? swap : null, where: x.location, inks: inksOnColor(x, key) };
+  };
   // location change (Oct 30): one embroidery print sewn at another spot on some garments, shown like a color change
   const scImps = g.imprints.filter((x) => x.method === "embroidery" && hasSpotChange(x, g.lines));
   // both can be true (Nov 3, Nick on #40461: "if you have both a color change and a location change, they can't work
@@ -354,17 +370,17 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // both change are one version, B, not "BB"; a colorway keeps its own letter
   const verLetter0 = (color: string) => ccImps.some(isCw)
     ? ccImps.map((x) => (isCw(x) ? cwLetter(designOf(x)!, cwOn(x, color)) : "") || String.fromCharCode(65 + versionOfColor(x, color))).join("")
-    : String.fromCharCode(65 + Math.max(0, [...new Set(g.lines.map((l) => verKey(l.color)))].sort().indexOf(verKey(color))));
+    : String.fromCharCode(65 + Math.max(0, [...new Set(g.lines.map((l) => verKey(inkKeyOf(l))))].sort().indexOf(verKey(color))));
   // a color change and a location change together (Nov 3, Nick on #40461: "section one, which is blueberry smash, then A is
   // left chest, B is left sleeve… section two, which is super white… A, B, C"): the color sections are numbered 1, 2, 3
   // and the spots inside each keep their letters
-  const secKeys = () => [...new Set(g.lines.map((l) => verKey(l.color)))].sort();
+  const secKeys = () => [...new Set(g.lines.map((l) => verKey(inkKeyOf(l))))].sort();
   const verLetter = (color: string) => (ccShow && spShow ? String(secKeys().indexOf(verKey(color)) + 1) : verLetter0(color));
   const lightHex = (h: string) => { const v = parseInt((h || "").replace("#", "").padEnd(6, "0").slice(0, 6), 16); return 0.299 * ((v >> 16) & 255) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 160; };
   const verHex = (color: string) => { const x = ccImps[0]; if (!x) return "transparent"; const n = isCw(x) ? cwOn(x, color)?.inks[0] || "" : inkOfVer(x, color); return threadByName(n)?.hex || colorHex(n) || (/white/i.test(n) ? "#F4F4F1" : "#9aa1ab"); };
   /** a print's close-ups by section when the lines are grouped: Group B, C… each on its first garment color */
   const groupTiles = (d: Group["imprints"][number]) => versionsOf(d).map((v, i) => {
-    const ls = g.lines.filter((x) => versionOfColor(d, x.color) === i + 1);
+    const ls = g.lines.filter((x) => versionOfColor(d, inkKeyOf(x)) === i + 1);
     const l = mainLine(ls) || ls[0];
     // each section's picture has its own background (Group.mockupBgBy, Oct 31, Nick: "change the background on the
     // individual colorway swatches"), else its garment with the most pieces
@@ -375,7 +391,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       // a colorway change: that colorway's own picture, as it is (its inks painted on the logo when it has none)
       const des = designOf(d), cw = des ? colorwaysOf(des).find((c) => c.name === v.to) : undefined;
       const own = des && hasColorwayArt(designUrls, des.id, { colorway: v.to }) ? printArtUrl(designUrls, des.id, { colorway: v.to }) : "";
-      const swap = Object.fromEntries(Object.entries((l && Object.entries(d.inkBy || {}).find(([c]) => c.trim().toLowerCase() === l.color.trim().toLowerCase())?.[1]) || {}).filter(([a, b]) => b && a.trim().toLowerCase() !== b.trim().toLowerCase()).map(([a, b]) => [a.trim().toLowerCase(), b.trim()]));
+      const swap = Object.fromEntries(Object.entries((l && Object.entries(d.inkBy || {}).find(([c]) => c.trim().toLowerCase() === inkKeyOf(l).trim().toLowerCase())?.[1]) || {}).filter(([a, b]) => b && a.trim().toLowerCase() !== b.trim().toLowerCase()).map(([a, b]) => [a.trim().toLowerCase(), b.trim()]));
       const L = des && cw ? cwLetter(des, cw) : "";
       if (L) color = `Group ${L}`;
       return { color, hex, swap, bg, caption: `Colorway ${L ? `${L} · ` : ""}${v.to}`, ...(own && cw ? { url: own, to: cw.inks.join(", ") } : {}) };
@@ -453,7 +469,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   /** "B Maroon / Off White  ⟳  A Maroon / Black · EB530 Charcoal Gray (12)" */
   const cwChangeText = (d: Imprint) => {
     const des = designOf(d)!, base = printColorway(d, des);
-    const on = (name: string) => g.lines.filter((l) => lineQty(l) > 0 && cwOn(d, l.color)?.name === name).map((l) => `${l.style ? `${l.style} ` : ""}${l.color} (${lineQty(l)})`).join(", ");
+    const on = (name: string) => g.lines.filter((l) => lineQty(l) > 0 && cwOn(d, inkKeyOf(l))?.name === name).map((l) => `${l.style ? `${l.style} ` : ""}${l.color} (${lineQty(l)})`).join(", ");
     return [base ? `${cwLetter(des, base)} ${base.name}` : "", ...versionsOf(d).map((v) => `${cwLetter(des, { name: v.to })} ${v.to} · ${on(v.to)}`)].filter(Boolean).join("  ⟳  ");
   };
   /** a names & numbers print (Imprint.roster, the Mockup Creator's Name & number builder): its list, and the gang sheet */
@@ -971,6 +987,9 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
           value={g.description || ""} onChange={(e) => update((x) => { x.description = e.target.value; })}
           onBlur={(e) => { if (!e.target.value.trim() && g.description != null) update((x) => { delete x.description; }); }} />}
         <span className="spacer" />
+        {g.imprints.some((x) => !x.visualOnly) && g.lines.length > 0 && <span className="gcw-seg" role="radiogroup" aria-label="Show the garments">
+          {([["", "By garment"], ["colorway", "By colorway"]] as const).map(([k, t]) => <button key={t} type="button" role="radio" aria-checked={(g.view || "") === k} className={(g.view || "") === k ? "on" : ""} disabled={fixed} onClick={() => update((x) => { if (k) x.view = k; else delete x.view; if (k) sortLines(x); })}>{t}</button>)}
+        </span>}
         {!fixed && <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>}
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>
@@ -989,10 +1008,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
           {/* with a color change, the lines show grouped by version (A's together, then B's), each keeping its own index */}
-          {(ccShow || spShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => (ccShow ? verKey(a.l.color).localeCompare(verKey(b.l.color)) : 0) || (spShow ? spKey(a.l).localeCompare(spKey(b.l)) : 0) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
+          {(secOn || spShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => (secOn ? verKey(inkKeyOf(a.l)).localeCompare(verKey(inkKeyOf(b.l))) : 0) || (spShow ? spKey(a.l).localeCompare(spKey(b.l)) : 0) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
             const lc = gc.lines[li];
             // grouped by color change (Oct 27): a heading where the version changes (A · 1743 Oxford Blue, B · 1801 White)
-            const vk = verKey(l.color), vHead = ccShow && (pos === 0 || verKey(order[pos - 1].l.color) !== vk);
+            const vk = verKey(inkKeyOf(l)), vHead = secOn && (pos === 0 || verKey(inkKeyOf(order[pos - 1].l)) !== vk);
             const sHead = spShow && (pos === 0 || vHead || spKey(order[pos - 1].l) !== spKey(l));
             const hit = findStyle(l.style, l.brand);
             const sized = !l.oneSize && lineTotal(l) > 0; // sizes entered below, so Qty is their total
@@ -1002,20 +1021,21 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             const same = !!prev && !!(l.style || "").trim() && (prev.style || "").trim().toLowerCase() === (l.style || "").trim().toLowerCase() && (prev.brand || "") === (l.brand || "") && (prev.garment || "") === (l.garment || "");
             return (
               <Fragment key={l.id}>
-              {vHead && (() => { const n = g.lines.filter((x) => verKey(x.color) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
+              {vHead && (() => { const n = g.lines.filter((x) => verKey(inkKeyOf(x)) === vk); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
                 {/* a color change between the sections: its own divider line, so B lines up with A (Oct 27, Nick) */}
-                {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />{ccImps.some(isCw) ? "Colorway split" : "Color change"}</span></div>}
-                <div className="gl-ver"><span className={"gl-vt" + (lightHex(verHex(l.color)) ? " lt" : "")} style={{ background: verHex(l.color) }}>{verLetter(l.color)}</span><b>{verLabel(l.color)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
+                {pos > 0 && <div className="gl-ccdiv"><span><CcIcon />{ccImps.some(isCw) ? "Colorway split" : cwView ? "Colorway" : "Color change"}</span></div>}
+                {cwView ? <CwStrip letter={verLetter(inkKeyOf(l))} keyOf={inkKeyOf(l)} hex={hexOfColor(inkKeyOf(mainLine(n) || l))} lines={n.length} pcs={pcs}
+                  prints={g.imprints.filter((x) => !x.visualOnly).map((x) => cwPrint(x, inkKeyOf(mainLine(n) || l)))} onInks={fixed ? undefined : (i) => setCcAt(g.imprints.indexOf(g.imprints.filter((x) => !x.visualOnly)[i]))} /> : <div className="gl-ver"><span className={"gl-vt" + (lightHex(verHex(inkKeyOf(l))) ? " lt" : "")} style={{ background: verHex(inkKeyOf(l)) }}>{verLetter(inkKeyOf(l))}</span><b>{verLabel(inkKeyOf(l))}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>}
               </>); })()}
-              {sHead && (() => { const n = g.lines.filter((x) => spKey(x) === spKey(l) && (!ccShow || verKey(x.color) === vk)); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
+              {sHead && (() => { const n = g.lines.filter((x) => spKey(x) === spKey(l) && (!secOn || verKey(inkKeyOf(x)) === vk)); const pcs = n.reduce((a, x) => a + lineQty(x), 0); return (<>
                 {pos > 0 && !vHead && <div className="gl-ccdiv"><span><CcIcon />Location change</span></div>}
-                <div className={"gl-ver" + (ccShow ? " gl-sub" : "")}><span className={"gl-vt" + (spLetter(l).startsWith("A") ? "" : " lt")} style={{ background: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" }}>{spLetter(l)}</span><b>{spLabel(l)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
+                <div className={"gl-ver" + (secOn ? " gl-sub" : "")}><span className={"gl-vt" + (spLetter(l).startsWith("A") ? "" : " lt")} style={{ background: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" }}>{spLetter(l)}</span><b>{spLabel(l)}</b><span className="faint">{n.length} line{n.length === 1 ? "" : "s"} · {pcs} pcs</span></div>
               </>); })()}
-              <div className={"gl" + (same && !vHead && !sHead ? " same" : "") + (ccShow || spShow ? " ver" : "") + (slot?.id === l.id ? (slot.after ? " gl-slot-a" : " gl-slot-b") : "")}
+              <div className={"gl" + (same && !vHead && !sHead ? " same" : "") + (secOn || spShow ? " ver" : "") + (slot?.id === l.id ? (slot.after ? " gl-slot-a" : " gl-slot-b") : "")}
                 onDragOver={onMoveLine && !fixed ? (e) => { if (!dragging || dragging.from !== g.id || dragging.lineId === l.id) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move"; const r = e.currentTarget.getBoundingClientRect(); const after = e.clientY > r.top + r.height / 2; if (slot?.id !== l.id || slot.after !== after) setSlot({ id: l.id, after }); } : undefined}
                 onDragLeave={onMoveLine && !fixed ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null) && slot?.id === l.id) setSlot(null); } : undefined}
                 onDrop={onMoveLine && !fixed ? (e) => { const d = dragging; if (!d || d.from !== g.id) return; e.preventDefault(); e.stopPropagation(); const after = slot?.id === l.id ? slot.after : false; setSlot(null); dragging = null; reorder(d.lineId, l.id, after); } : undefined}
-                style={ccShow ? { ["--ver" as string]: verHex(l.color) } : spShow ? { ["--ver" as string]: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" } : undefined}>
+                style={secOn ? { ["--ver" as string]: cwView && !ccShow ? hexOfColor(inkKeyOf(l)) : verHex(inkKeyOf(l)) } : spShow ? { ["--ver" as string]: spLetter(l).startsWith("A") ? "var(--ink)" : "var(--surface-3)" } : undefined}>
                 {(!same || vHead || sHead) && <div className="gl-sty" inert={fixed || undefined}>
                   <div className="a-st">
                     <StylePicker value={l.style} catalog={catalog} busy={!!lookingUp}
@@ -1031,7 +1051,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {same && !vHead && <div className="gl-ditto" aria-hidden>{l.style}</div>}
                 {/* a color change whose sections don't show (one line per color): each line still says what it sews in (Nov 3,
                     Nick on #40461's caps: "it doesn't indicate color change, although it says it") */}
-                {!ccShow && ccImps.length > 0 && <div className="gl-thr"><span className={"gl-vt" + (lightHex(verHex(l.color)) ? " lt" : "")} style={{ background: verHex(l.color) }}>{verLetter0(l.color)}</span>{ccImps.some((x) => versionOfColor(x, l.color) > 0 || isCw(x)) ? "Color change: " : ""}{verLabel(l.color)}</div>}
+                {!secOn && ccImps.length > 0 && <div className="gl-thr"><span className={"gl-vt" + (lightHex(verHex(inkKeyOf(l))) ? " lt" : "")} style={{ background: verHex(inkKeyOf(l)) }}>{verLetter0(inkKeyOf(l))}</span>{ccImps.some((x) => versionOfColor(x, inkKeyOf(l)) > 0 || isCw(x)) ? "Color change: " : ""}{verLabel(inkKeyOf(l))}</div>}
                 <div className="gl-row gl-r2">
                   <div className="a-co" inert={fixed || undefined}>
                     <ColorPicker value={l.color} colors={hit?.colors || []} onChange={(v) => update((x) => {
@@ -1161,6 +1181,20 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
               <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { x.lines.push(newGLine()); }); }}>New garment</button>
               <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, extras: undefined, shopUse: undefined, id: uid(), color: "", sizes: {}, priceOverride: null }); }); }}>Same style, new color</button>
               <button type="button" disabled={!!yth?.busy || !!cmp?.busy} title="The youth, women's, long sleeve… styles that go with this garment, in the same color" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; void openCompanions(); }}>{cmp?.busy ? "Finding companion styles…" : "Companion style (youth, women's…)"}</button>
+            </div>
+          </details>}
+          {/* a garment color in a second colorway (Nov 9, Nick: "Mauve in B and C"): a line of it of its own, with its own
+              sizes and inks, in this one group (one set of screens) */}
+          {!fixed && cwView && <details className="ot-more gl-addm" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) e.currentTarget.open = false; }}>
+            <summary className="btn sm" title="Print some of a garment color in other inks">+ Add colorway ▾</summary>
+            <div className="ot-menu">
+              <span className="gcw-mh faint">Split which garment?</span>
+              {g.lines.filter((l) => (l.color || "").trim() && !l.extras).map((l) => <button key={l.id} type="button" onClick={(e) => {
+                (e.currentTarget.closest("details") as HTMLDetailsElement).open = false;
+                const at = g.imprints.findIndex((x) => !x.visualOnly && !isCw(x));
+                update((x) => { const i = x.lines.findIndex((y) => y.id === l.id); if (i < 0) return; x.lines.splice(i + 1, 0, { ...x.lines[i], id: uid(), cw: Math.random().toString(36).slice(2, 6), sizes: {}, priceOverride: null, extras: undefined, shopUse: undefined }); });
+                if (at >= 0) setCcAt(at);
+              }}>{[l.style, l.color].filter(Boolean).join(" · ")}{l.cw ? " (own colorway)" : ""} <span className="faint">{lineQty(l)} pcs</span></button>)}
             </div>
           </details>}
           </span><span className="lbl2">Total pieces</span></span>
@@ -1416,7 +1450,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {!d.supplied && !isCw(d) && new Set(g.lines.map((x) => (x.color || "").trim().toLowerCase()).filter(Boolean)).size > 1 && (d.inks || "").trim() && (
                   <div className="imp-cc">
                     <span className="imp-l">Color change</span>
-                    {versionsOf(d).length ? <span className="imp-cc-v">{versionsOf(d).map((v, i) => { const on = [...new Set(g.lines.filter((x) => versionOfColor(d, x.color) === i + 1).map((x) => x.color))]; return <span key={i}><b>{String.fromCharCode(66 + i)}</b> {v.from} → {v.to} on {on.join(", ")}</span>; })}</span> : <span className="faint">Same {d.method === "embroidery" ? "thread" : "inks"} on every color</span>}
+                    {versionsOf(d).length ? <span className="imp-cc-v">{versionsOf(d).map((v, i) => { const on = [...new Set(g.lines.filter((x) => versionOfColor(d, inkKeyOf(x)) === i + 1).map((x) => x.color))]; return <span key={i}><b>{String.fromCharCode(66 + i)}</b> {v.from} → {v.to} on {on.join(", ")}</span>; })}</span> : <span className="faint">Same {d.method === "embroidery" ? "thread" : "inks"} on every color</span>}
                     <button type="button" className="btn sm ghost" onClick={() => setCcAt(di)}>{versionsOf(d).length ? "Change" : "Add color change"}</button>
                   </div>
                 )}
@@ -1942,6 +1976,34 @@ function usePainted(url: string, imp: { design_id?: string; inkMap?: Imprint["in
 
 /** a print's close-up on another garment color with a color change: the color's name over it, "Color change" under it (Oct 26) */
 /** the color change symbol: two arrows going around a dot (Oct 27, Nick: "a couple arrows flopping around it") */
+/** a print as one colorway prints it (GroupEditor cwPrint) */
+type CwPrintT = { d: Imprint; url: string; own: boolean; swap: Record<string, string> | null; where: string; inks: { name: string; changed: boolean; from?: string }[] };
+const isPms = (n: string) => /\bpms\b|pantone|^\s*\d{3,4}\s*[cu]?\s*$/i.test(n);
+/** By colorway (Nov 9, Nick: "you just would have the art for each colorway right there"): a colorway's strip over its
+ *  lines: each print's picture in that colorway's inks on its garment color, the inks in words ("7640 for White") and
+ *  what it costs to change (Color change, PMS match). Click a picture to change that print's inks. */
+function CwStrip({ letter, hex, prints, lines, pcs, onInks }: { letter: string; keyOf: string; hex: string; prints: CwPrintT[]; lines: number; pcs: number; onInks?: (i: number) => void }) {
+  const changed = prints.some((p) => p.inks.some((k) => k.changed));
+  const pms = prints.some((p) => p.inks.some((k) => k.changed && isPms(k.name)));
+  return (
+    <div className="gcw">
+      <span className="gcw-l">{letter}</span>
+      <div className="gcw-arts">{prints.map((p, i) => <CwArt key={p.d.id} p={p} hex={hex} onClick={onInks ? () => onInks(i) : undefined} />)}</div>
+      <div className="gcw-tx">
+        {prints.map((p) => <div key={p.d.id} className="gcw-ink">{prints.length > 1 && <b>{p.where}:</b>} {p.inks.map((k, j) => <span key={j} className={k.changed ? "chg" : ""}>{k.changed && k.from ? `${k.name} for ${k.from}` : k.name}{j < p.inks.length - 1 ? ", " : ""}</span>)}{!p.inks.length && <span className="faint">No inks named</span>}</div>)}
+        <div className="gcw-tags">
+          <span className={"gcw-tag" + (changed ? " on" : "")}>{changed ? "Color change" : "As printed"}</span>
+          {pms && <span className="gcw-tag pms">PMS match</span>}
+          <span className="faint">{lines} line{lines === 1 ? "" : "s"} · {pcs} pcs</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+function CwArt({ p, hex, onClick }: { p: CwPrintT; hex: string; onClick?: () => void }) {
+  const pic = usePainted(p.url, p.own ? { ...p.d, inkMap: undefined } : p.d, p.own ? undefined : p.swap);
+  return <button type="button" className="gcw-a" style={{ background: hex }} disabled={!onClick} onClick={onClick} title={onClick ? `${p.where}: change its inks for this colorway` : p.where}>{pic ? <img src={pic} alt="" /> : <span>{p.where}</span>}</button>;
+}
 /** Group.mockupBgBy's key for the as-printed section's picture (the others are keyed by their ink or colorway) */
 const ASIS_BG = "_a";
 function CcIcon() {

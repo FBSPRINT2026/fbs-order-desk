@@ -21536,3 +21536,25 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 /* oversized print switch in the Mockup Creator (mk-over, Nov 9) */
 .mk-over{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:12.5px;margin:6px 0}
 .mk-over.on{color:var(--warn)}
+
+/* By colorway (GroupEditor CwStrip, Nov 9): the group toggle, and each colorway's strip of art over its lines */
+.gcw-seg{display:inline-grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden;flex:none}
+.gcw-seg button{all:unset;text-align:center;padding:5px 10px;font-size:12.5px;cursor:pointer;color:var(--ink-2);white-space:nowrap}
+.gcw-seg button+button{border-left:1px solid var(--line)}
+.gcw-seg button.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:700}
+.gcw-seg button:disabled{cursor:default}
+.gcw{grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;margin:6px 0 2px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
+.gcw-l{flex:none;width:26px;height:26px;border-radius:6px;display:grid;place-items:center;background:var(--ink);color:var(--surface);font-weight:700;font-size:13px}
+.gcw-arts{display:flex;gap:8px;flex-wrap:wrap}
+.gcw-a{all:unset;cursor:pointer;width:64px;height:64px;border-radius:6px;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden;box-sizing:border-box;padding:6px}
+.gcw-a:disabled{cursor:default}
+.gcw-a:not(:disabled):hover{outline:2px solid var(--accent);outline-offset:1px}
+.gcw-a img{max-width:100%;max-height:100%;object-fit:contain}
+.gcw-a span{font-size:11px;color:var(--ink-3)}
+.gcw-tx{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--ink)}
+.gcw-ink .chg{color:var(--accent);font-weight:700}
+.gcw-tags{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+.gcw-tag{padding:2px 8px;border-radius:999px;background:var(--surface-3);color:var(--ink-3);font-size:12px;white-space:nowrap}
+.gcw-tag.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:700}
+.gcw-tag.pms{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:var(--ink)}
+.gcw-mh{display:block;padding:6px 10px 2px;font-size:12px}
