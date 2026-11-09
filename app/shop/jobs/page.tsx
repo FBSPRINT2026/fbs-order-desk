@@ -70,6 +70,8 @@ const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && 
   : s === "sewouts" ? (t.k === "sewout" && t.state !== "done")
   : s === "goods_order" ? (t.k === "goods" && t.state === "needed")
   : s === "ready" ? (t.k !== "sewout" && t.state === "made") : s === "sent" ? (t.k !== "sewout" && t.state === "sent") : s === "changes" ? (t.k !== "sewout" && t.state === "changes") : s === "approved" ? t.state === "done" : false);
+/** the same tag many times once, with how many on its label */
+const tagsOnce = (ts: Track[]) => { const by = new Map<string, Track[]>(); for (const t of ts) by.set(t.label + "|" + t.state, [...(by.get(t.label + "|" + t.state) || []), t]); return [...by.values()].map((g) => (g.length > 1 ? { ...g[0], label: `${g[0].label} ×${g.length}` } : g[0])); };
 /** the same note many times once, with how many ("Needs digitizing · Left Chest ×3") */
 const collapseLabels = (ls: string[]) => [...new Set(ls)].map((l) => { const n = ls.filter((x) => x === l).length; return n > 1 ? `${l} ×${n}` : l; });
 const TONE: Record<Track["state"], string> = { needed: "var(--warn)", made: "var(--fbs-blue)", sent: "var(--fbs-violet)", changes: "var(--danger)", done: "var(--ok)" };
@@ -444,7 +446,7 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, 
       <td>{who}</td>
       <td className="nowrap">{it.depts.map((d) => <span key={d} className={"prf-dept " + d}>{DEPT_TAG[d]}</span>)}</td>
       <td>{isReq(step) ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
-        : <div className="jc-tags">{here.map(tag)}</div>}</td>
+        : <div className="jc-tags">{tagsOnce(here).map(tag)}</div>}</td>
       {/* what else is going on, in quiet words (Nov 2, Nick: "statuses are weird"): one colored status per job, in Where it is */}
       <td><span className="jc-also">{collapseLabels([...(step === "approved" ? [] : also).map((t) => t.label), it.revised && step !== "changes" ? "came back once" : ""].filter(Boolean)).join(" · ")}</span></td>
       <td className="nowrap">{isReq(step) ? day(it.at) : it.due ? day(it.due) : <span className="faint">No date</span>}</td>

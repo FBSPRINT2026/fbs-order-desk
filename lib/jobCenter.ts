@@ -171,7 +171,8 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     const sewSeen = new Set<string>();
     for (const g of gs) for (const im of g.imprints || []) {
       if (im.method !== "embroidery") continue;
-      const sk = String(im.design_id || im.id || "");
+      // no logo picked yet: the same spot on every garment is one note (#40400: 20 prints, 4 spots, no logos)
+      const sk = im.design_id ? String(im.design_id) : `loc:${String(im.location || "").toLowerCase()}`;
       if (sk && sewSeen.has(sk)) continue;
       sewSeen.add(sk);
       const t = sewTrack(im, embDesigns.get(String(im.design_id || "")), sws.filter((x) => x.order_id === o.id));
