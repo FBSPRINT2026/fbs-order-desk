@@ -1033,7 +1033,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
                   : !m.number && (m.setup || mode === "portal") && (
                     <div className="mk-card-acts">
                       {m.setup && <a className="btn sm" title={(mode === "portal" ? !m.byFbs : !!m.byFbs) ? undefined : "Made by the other side: open it to look, or make your own copy to change"} href={mode === "portal" ? `/portal/mockup?mockup=${m.id}${hrefQuery ? "&" + hrefQuery.replace(/^\?/, "") : ""}` : `/shop/artwork/mockup?mockup=${m.id}`}>{(mode === "portal" ? !m.byFbs : !!m.byFbs) ? "Edit" : "View"}</a>}
-                      {mode === "portal" && <MockupOrderButton id={m.id} canAct={canAct} />}
+                      {mode === "portal" ? <MockupOrderButton id={m.id} canAct={canAct} /> : m.setup ? <MockupOrderButton id={m.id} canAct shop /> : null}
                     </div>
                   )}
                 </div>
@@ -1056,7 +1056,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
             const x = viewSet.find((y) => y.id === m.id) || m0;
             return <>
               {x.number && x.order_id ? <Link className="btn primary" href={orderHref(x.order_id)}>Open order #{x.number}</Link>
-                : <>{mode === "portal" && x.setup && <MockupOrderButton id={x.id} canAct={canAct} className="btn primary" />}
+                : <>{x.setup && <MockupOrderButton id={x.id} canAct={mode === "portal" ? canAct : true} shop={mode !== "portal"} className="btn primary" />}
                   {x.setup && <a className="btn" href={mode === "portal" ? `/portal/mockup?mockup=${x.id}${hrefQuery ? "&" + hrefQuery.replace(/^\?/, "") : ""}` : `/shop/artwork/mockup?mockup=${x.id}`}>Edit</a>}</>}
             </>;
           }} />

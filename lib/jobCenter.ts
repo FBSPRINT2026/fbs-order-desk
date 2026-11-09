@@ -79,7 +79,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     admin.from("orders").select("id, number, nickname, status, due_date, groups, customer_id, declined_at, declined_reason, customers(company, name)").gte("declined_at", since).is("discarded_at", null).limit(200),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
     admin.from("ai_suggestions").select("id, title, body, customer_id, activity_id, created_at, customers(company, name)").eq("kind", "draft_order").eq("status", "open").gte("created_at", new Date(now - 30 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
-    admin.from("mockups").select("id, customer_id, title, created_at, design_ids, customers(company, name)").is("order_id", null).is("archived_at", null).is("shelved_at", null).gte("created_at", new Date(now - 45 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
+    admin.from("mockups").select("id, customer_id, title, created_at, design_ids, created_by, customers(company, name)").is("order_id", null).is("archived_at", null).is("shelved_at", null).gte("created_at", new Date(now - 45 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
   ]);
   tm("first");
   const settings = mergeSettings(s?.data);
@@ -131,7 +131,12 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   // taken care of, and the mockup just never got linked to its order (an order of theirs from up to two weeks before counts
   // too: Fossil sent their own mockup on Nov 5 for #40460, made Nov 4)
   type AM = { id: string; customer_id: string | null; title: string; created_at: string; design_ids: string[] | null; customers?: { company?: string; name?: string } | null };
-  const ams = ((am || []) as unknown as AM[]).filter((m) => m.customer_id);
+  // only art the customer sent us themselves (their own mockup or picture, from their portal): mockups the shop saves to a
+  // customer are just saved; one that's a real job is made a job (Start a job: a quote waiting on sizes, under Numbers)
+  // (Nov 9, Nick: "we're just going to have a ton of stuff show up on here that's not real orders")
+  const { data: staffRows } = await admin.from("staff").select("email");
+  const staffEmails = new Set(((staffRows || []) as { email: string }[]).map((x) => String(x.email || "").toLowerCase()));
+  const ams = ((am || []) as unknown as (AM & { created_by?: string | null })[]).filter((m) => m.customer_id && !staffEmails.has(String(m.created_by || "").toLowerCase()) && !/@fbsprint\.com$/i.test(String(m.created_by || "")));
   const amCust = [...new Set(ams.map((m) => m.customer_id!))], amFrom = ams.reduce((t, m) => (m.created_at < t ? m.created_at : t), new Date().toISOString());
   const later = await inChunks<{ customer_id: string; created_at: string; groups: unknown }>(amCust, (p) => admin.from("orders").select("customer_id, created_at, groups").in("customer_id", p).gte("created_at", new Date(Date.parse(amFrom) - 14 * 864e5).toISOString()).is("declined_at", null).order("id").limit(1000), 50);
   const usedLater = (m: AM) => !!m.design_ids?.length && later.some((o) => o.customer_id === m.customer_id && o.created_at >= new Date(Date.parse(m.created_at) - 14 * 864e5).toISOString() && ((o.groups || []) as { imprints?: { design_id?: string }[] }[]).some((g) => (g.imprints || []).some((im) => !!im.design_id && m.design_ids!.includes(im.design_id))));

@@ -3570,6 +3570,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const { data: old } = await sb.from("mockups").select("id").eq("customer_id", customerId).is("order_id", null).is("archived_at", null).eq("snapshot->>set", set);
         const gone = ((old || []) as { id: string }[]).map((x) => x.id).filter((id) => !newMockups.includes(id));
         if (gone.length) await sb.from("mockups").update({ archived_at: new Date().toISOString() }).in("id", gone);
+        setSavedMock({ id: newMockups[0], num: 0 });
       }
       if (before.length) {
         const at = new Date().toISOString();
@@ -4686,6 +4687,13 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           )}
           {/* saved from the customer's portal: order it right here (Oct 24, Nick: "when you make the mock-up and you save it
               from the customer view… the order button needs to be in there too") */}
+          {/* saved to a customer from the shop: make it a job when they'll come back with sizes (Nov 9, Nick) */}
+          {!portal && !orderId && savedMock && (
+            <div className="mk-saved-order">
+              <span><b>Saved to the customer.</b> If they&apos;ll come back with sizes, make it a job so it shows in the Job Center.</span>
+              <MockupOrderButton id={savedMock.id} canAct shop />
+            </div>
+          )}
           {portal && savedMock && (
             <div className="mk-saved-order">
               <span><b>{savedMock.num ? `M-${savedMock.num}` : "Your mockup"} is saved</b> in your artwork. Order it now, or come back any time.</span>

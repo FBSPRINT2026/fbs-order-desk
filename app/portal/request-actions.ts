@@ -377,6 +377,30 @@ export async function orderFromMockup(mockupId: string): Promise<Result> {
   } catch (e) { return fail(e); }
 }
 
+/**
+ * Start a job from a mockup saved to a customer (Nov 9, Nick: "a customer reaches out… they have us put together a
+ * mock-up and say… we're going to come back and give you sizes later"): a quote with the mockup's garments, prints and
+ * inks and no sizes yet, so it's a real job (Job Center › In The Works › Numbers: "No sizes yet") with its own number.
+ */
+export async function staffJobFromMockup(mockupId: string): Promise<Result> {
+  try {
+    const v = await getViewer();
+    if (!v.user || !v.isStaff) return { ok: false, error: "Only shop staff can do that." };
+    const admin = createAdminClient();
+    const m = await groupFromMockup(admin as never, admin, mockupId);
+    if (!m) return { ok: false, error: "Couldn't find that mockup." };
+    const { data: c } = await admin.from("customers").select("price_type, tax_exempt").eq("id", m.customerId).maybeSingle();
+    const { data, error } = await admin.from("orders").insert({
+      customer_id: m.customerId, status: "quote", type: "quote", source: "shop", draft: false,
+      price_type: c?.price_type || "retail", tax_exempt: !!c?.tax_exempt, groups: [m.g], total: 0,
+      nickname: m.name.slice(0, 120), notes: `From mockup ${m.tag === "your mockup" ? "" : m.tag}`.trim() + ". Waiting on sizes.",
+    }).select("id").single();
+    if (error) return { ok: false, error: error.message };
+    await admin.from("order_events").insert({ order_id: data.id, kind: "from_mockup", detail: `Job started from ${m.tag === "your mockup" ? "a saved mockup" : m.tag}: waiting on sizes`, actor: v.email });
+    return { ok: true, id: data.id };
+  } catch (e) { return fail(e); }
+}
+
 /** An order group built from one of the customer's mockups (row security: their own mockups only). */
 async function groupFromMockup(supabase: Awaited<ReturnType<typeof me>>["supabase"], admin: ReturnType<typeof createAdminClient>, mockupId: string) {
   const { data: mk } = await supabase.from("mockups").select("id, customer_id, number, title, snapshot").eq("id", mockupId).maybeSingle();
