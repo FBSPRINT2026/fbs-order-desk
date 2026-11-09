@@ -201,9 +201,13 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     if (artNeed) steps.push("numbers");
     // the mockup and the quote go through Ready, Sent and Make changes; a sew-out is its own step (Sew-outs)
     const mq = tracks.filter((t) => t.k !== "sewout");
-    if (mq.some((t) => t.state === "made")) steps.push("ready");
-    if (mq.some((t) => t.state === "sent")) steps.push("sent");
+    // one place: the customer asked for changes on the mockup or the quote, so it's ours to fix (Make Changes) and not
+    // also out with them under Sent (Nov 9, Nick: #40493 showed in Sent and Revisions)
     if (mq.some((t) => t.state === "changes")) steps.push("changes");
+    else {
+      if (mq.some((t) => t.state === "made")) steps.push("ready");
+      if (mq.some((t) => t.state === "sent")) steps.push("sent");
+    }
     if (tracks.some((t) => t.k === "sewout" && t.state !== "done")) steps.push("sewouts");
     const allDone = tracks.every((t) => t.state === "done");
     const appr = o.approved_at || evs.find((e) => e.order_id === o.id && e.kind === "approved")?.created_at || "";
