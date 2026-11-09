@@ -14,7 +14,7 @@ import { sizeRank } from "@/lib/sizeOrder";
 import SizeRunsAsk, { garmentStep, type Run, type RunPick } from "@/components/SizeRunsAsk";
 import ColorCheck, { applyColors, checkColors, type ColorRow } from "@/components/ColorCheck";
 import type { PreferredGood } from "@/lib/preferredGoods";
-import { addExtrasToOrder, goodsFromGroups, goodsOptions, goodsStart, placeGoods, placeOneStop, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
+import { addExtrasToOrder, askRepForQuote, goodsFromGroups, goodsOptions, goodsReps, goodsStart, placeGoods, placeOneStop, placeSanmar, setSanmarFee, type SanMarRef } from "@/app/shop/order-goods/actions";
 import { arriveOn, dayOptions, pickOption, shipKey, supName, whInfo, type DayOption, type Src, type Sup } from "@/lib/goodsPlan";
 import { useSeesMoney } from "@/components/RoleContext";
 import PointsDecision from "@/components/PointsDecision";
@@ -60,6 +60,11 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const [label0, setLabel0] = useState(""), [orderNo, setOrderNo] = useState<number | null>(null);
   // the PO name sent to S&S and SanMar: filled in (lib/goodsPo.ts), typed over when you want your own
   const [po, setPo] = useState("");
+  // a custom quote from our rep (Nov 9, Nick: "I want to order 40460, but I want to have my rep quote it… a button… request
+  // quote… to either the S&S or SanMar rep"): an email from your own mailbox with the list, then their quote # on the order
+  const [qOpen, setQOpen] = useState(false), [qSup, setQSup] = useState<"ss" | "sanmar">("ss"), [qBody, setQBody] = useState(""), [qSent, setQSent] = useState(""), [quote, setQuote] = useState("");
+  const [reps, setReps] = useState<{ ss: { name: string; email: string } | null; sanmar: { name: string; email: string } | null } | null>(null);
+  useEffect(() => { void goodsReps().then((r) => { if (r.ok) setReps({ ss: r.ss, sanmar: r.sanmar }); }); }, []);
   const [steps, setSteps] = useState<Step[]>([]), [err, setErr] = useState("");
   const [who, setWho] = useState(""), [cust, setCust] = useState<{ id: string; name: string } | null>(null);
   const [runsAsk, setRunsAsk] = useState<{ runs: Run[]; prefs: PreferredGood[]; company: string; sender: string; done: (a: { picks: Record<string, RunPick | null>; remember: boolean } | null) => void } | null>(null);
@@ -232,6 +237,20 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
   const extrasNote = xPcs ? <p className="og-note og-xn">{[...new Set(xRows.map(gkOf))].map((gk) => { const rs = xRows.filter((x) => gkOf(x) === gk), e = rs[0].extra!; return `${rs.reduce((a, x) => a + x.qty, 0)} extra ${rs[0].style} ${rs[0].color} (${rs.map((x) => `${x.qty} ${x.size}`).join(", ")}): ${e.reason || "say what it's for"}, ${e.print ? "printed" : "not printed"}, ${e.free ? "no charge" : "charged"}`; }).join(" · ")}. Goes on the order as Extras when it's placed.</p> : null;
   const dayShort = (d: Date) => d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
   const paidLines = () => paidShipLines([...(ssParts.length ? [{ sup: "ss" as const, code: ship }] : []), ...(smParts.length && smOn ? [{ sup: "sm" as const, code: smShip }] : []), ...(osParts.length && osOn ? [{ sup: "os" as const, code: osShip, amount: osParts.reduce((a, p) => a + p.qty * p.each, 0) }] : [])]);
+  function quoteText(sup: "ss" | "sanmar") {
+    const rep = sup === "ss" ? reps?.ss : reps?.sanmar, by = new Map<string, typeof wanted>();
+    for (const x of wanted) { const k = `${[x.brand, x.style].filter(Boolean).join(" ")} - ${x.color}`; by.set(k, [...(by.get(k) || []), x]); }
+    const list = [...by].map(([k, xs]) => `${k}: ${xs.map((x) => `${x.size} ${x.qty}`).join(", ")} (${xs.reduce((a, x) => a + x.qty, 0)} pcs)`).join("\n");
+    return `Hi ${(rep?.name || "").split(" ")[0] || "there"},\n\nCould you send us a custom quote on the following?\n\n${list}\n\nTotal: ${pcs} pcs${po ? `\nPO: ${po}` : ""}\nShipping to our shop.\n\nThanks,`;
+  }
+  function openQuote() { const sup = reps?.sanmar && smParts.length && !ssParts.length ? "sanmar" : "ss"; setQSup(sup); setQBody(quoteText(sup)); setQOpen(true); setErr(""); }
+  async function sendQuote() {
+    setBusy("quote"); setErr("");
+    const r = await askRepForQuote({ supplier: qSup, subject: `Custom quote request: ${pcs} pcs${po ? ` (${po})` : ""}`, body: qBody, orderId: orderId || null });
+    setBusy("");
+    if (!r.ok) { setErr(r.error); return; }
+    setQOpen(false); setQSent(`Sent to ${r.rep.name} (${r.rep.email}) at ${new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.${qSup === "ss" ? " When the quote number comes back, put it in S&S quote # and check again: the order is priced against it." : " When their quote comes back, order it on sanmar.com or here at the quoted price."}`);
+  }
   async function run(test: boolean, paidOk = false) {
     if (!plan) return;
     if (!test && !paidOk) { const pl = paidLines(); if (pl.length) { setPaidAsk(pl); return; } }
@@ -245,7 +264,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
       const per = new Map<string, number>();
       for (const p of ssParts) { const x = byKey.get(p.key); if (x?.sku) per.set(x.sku, (per.get(x.sku) || 0) + p.qty); }
       const r = await placeGoods({ lines: [...per].map(([sku, qty]) => { const x = wanted.find((y) => y.sku === sku)!; return { sku, qty, label: `${x.brand} ${x.style} ${x.color} ${x.size}`, price: x.price }; }),
-        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, paidShipOk: paidOk, label, po, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
+        from: ssParts.map((p) => ({ sku: byKey.get(p.key)?.sku || "", qty: p.qty, warehouse: p.wh })), shippingMethod: ship, test, paidShipOk: paidOk, label, po, quote: quote.trim() || undefined, orderId: orderId || null, customerId: cust?.id || null, activityId: activityId || null, garments: orderId ? undefined : garmentsLeft });
       if (!r.ok) { setBusy(""); setErr(r.error); return; }
       garmentsLeft = undefined;
       const res = (r as { results?: { orderNumber: string; warehouse: string; total: number; expected: string | null }[] }).results || [];
@@ -466,6 +485,7 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
               ? <>SanMar card fee <input type="number" step="0.05" min={0} max={19} defaultValue={opts.fee} autoFocus aria-label="SanMar card fee, percent" onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} onBlur={(e) => { const v = +e.target.value; setFeeEdit(false); if (isFinite(v) && v !== opts.fee) void setSanmarFee(v).then((r) => { if (r.ok) setOpts((o) => (o ? { ...o, fee: r.fee, money: r.money } : o)); }); }} />%</>
               : <>SanMar prices include our {opts.fee}% card fee; S&amp;S has none, so a tie goes to S&amp;S. <button type="button" className="linkbtn" onClick={() => setFeeEdit(true)}>Change</button>{ssOnly && <> · S&amp;S only. <button type="button" className="linkbtn" onClick={() => { setSsOnly(false); setCheck(null); }}>Show SanMar too</button></>}</>}</p>}
             <div className="field"><label htmlFor="og-po">PO name</label><input id="og-po" type="text" value={po} maxLength={GOODS_PO_MAX} placeholder={defaultGoodsPo({ orderNo, customer: who })} onChange={(e) => { setPo(e.target.value); setCheck(null); }} onBlur={(e) => setPo(cleanGoodsPo(e.target.value))} /><small className="faint">On the S&amp;S and SanMar orders and their boxes. Keep the job number first so receiving matches it.</small></div>
+            {ssParts.length > 0 && <div className="field"><label htmlFor="og-quote">S&amp;S quote #</label><input id="og-quote" type="text" value={quote} placeholder="optional" onChange={(e) => { setQuote(e.target.value.trim()); setCheck(null); setSure(false); }} /><small className="faint">The number our rep sends back for a custom quote: the S&amp;S part is priced against it.</small></div>}
             {ssParts.length > 0 && <div className="field"><label htmlFor="og-ship">S&amp;S shipping</label><select id="og-ship" value={ship} onChange={(e) => { setShip(e.target.value); setCheck(null); }}>{SS_SHIP.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>}
             {smParts.length > 0 && smOn && <div className="field"><label htmlFor="og-smship">SanMar shipping</label><select id="og-smship" value={smShip} onChange={(e) => { setSmShip(e.target.value); setCheck(null); }}>{SM_SHIP_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>{smShip === "psst" && <small className="faint">We&apos;re a PSST decorator: SanMar ships it its own way (usually UPS Ground), free. Ordered by 1 pm, it ships today.</small>}</div>}
             {osParts.length > 0 && osOn && <div className="og-2f">
@@ -480,10 +500,22 @@ export default function OrderGoodsTool({ activityId, orderId, onClose }: { activ
         {paidAsk && <PaidShipAsk lines={paidAsk} pcs={pcs} onClose={() => setPaidAsk(null)}
           onFree={() => { setPaidAsk(null); setShip(FREE_CODE.ss); setSmShip(FREE_CODE.sm); setCheck(null); setSure(false); }}
           onPay={() => { setPaidAsk(null); void run(false, true); }} />}
+        {qSent && <div className="okmsg ogq-ok">{qSent}</div>}
+        {qOpen && <div className="ogq">
+          <div className="ogq-h"><b>Request a custom quote</b><button type="button" className="btn icon ghost" onClick={() => setQOpen(false)} aria-label="Close">✕</button></div>
+          <div className="ogq-seg" role="radiogroup" aria-label="Which rep">
+            {(["ss", "sanmar"] as const).map((k) => { const r = k === "ss" ? reps?.ss : reps?.sanmar; return <button key={k} type="button" role="radio" aria-checked={qSup === k} className={qSup === k ? "on" : ""} disabled={!r} onClick={() => { setQSup(k); setQBody(quoteText(k)); }} title={r ? r.email : "No rep saved"}>{k === "ss" ? "S&S" : "SanMar"}{r ? ` · ${r.name.split(" ")[0]}` : ""}</button>; })}
+          </div>
+          <textarea className="ogq-b" rows={9} value={qBody} onChange={(e) => setQBody(e.target.value)} aria-label="The email" />
+          <small className="faint">Goes from your email to {(qSup === "ss" ? reps?.ss : reps?.sanmar)?.email || "the rep"}{orderId ? `, and it's noted on #${orderNo ?? ""}` : ""}.</small>
+          <div className="ogq-a"><button type="button" className="btn" onClick={() => setQOpen(false)}>Cancel</button><button type="button" className="btn primary" disabled={!!busy || !qBody.trim()} onClick={() => void sendQuote()}>{busy === "quote" ? "Sending…" : "Send request"}</button></div>
+        </div>}
         <div className="dla-acts og-foot">
-          <button type="button" className="btn og-view" onClick={() => setMin(true)}>
+          {activityId ? <button type="button" className="btn og-view" onClick={() => setMin(true)} title="Tuck this away and see the email">
             <svg viewBox="0 0 24 24" aria-hidden><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>View email
-          </button>
+          </button> : null}
+          {rows && wanted.length > 0 && !placed && !qOpen && <button type="button" className="btn" disabled={!!busy || !reps} onClick={openQuote} title="Email our S&S or SanMar rep this list for a custom quote">Request quote</button>}
+          <span className="spacer" />
           {rows && lines.length > 0 && !placed && (!check
             ? <button type="button" className="btn primary" disabled={!!busy || !plan || !(ssParts.length || (smParts.length && smOn))} onClick={() => void run(true)}>{busy === "check" ? "Checking…" : ssParts.length && smParts.length && smOn ? "Check with S&S and SanMar" : ssParts.length ? "Check with S&S" : "Check with SanMar"}</button>
             : !sure ? <button type="button" className="btn primary" disabled={!!busy} onClick={() => setSure(true)}>Place order</button>

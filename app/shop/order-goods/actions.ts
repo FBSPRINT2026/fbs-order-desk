@@ -306,23 +306,38 @@ export async function goodsRep() { return { ...SS_REP }; }
  * Ask our S&S rep (Tiffany Clark) for a custom quote on these goods: an email from your own mailbox with the list.
  * She replies with a quote number; put it in "S&S quote #" and the order is priced against it.
  */
-export async function askRepForQuote(p: { subject: string; body: string }) {
+/** who a quote request goes to: S&S's rep, or the rep saved for that supplier (goods_reps: SanMar's Lisa Nighswonger) */
+export async function repFor(supplier: "ss" | "sanmar") {
+  if (supplier === "ss") return { ...SS_REP };
+  const admin = createAdminClient();
+  const { data } = await admin.from("goods_reps").select("email, name").eq("supplier", supplier).is("customer_id", null).limit(1).maybeSingle();
+  return data?.email ? { name: String(data.name || data.email), email: String(data.email) } : null;
+}
+/** the reps the Order goods tool can ask for a quote */
+export async function goodsReps() {
+  try { await staff(); return { ok: true as const, ss: await repFor("ss"), sanmar: await repFor("sanmar") }; } catch (e) { return fail(e); }
+}
+
+export async function askRepForQuote(p: { subject: string; body: string; supplier?: "ss" | "sanmar"; orderId?: string | null }) {
   try {
     const v = await staff();
     if (!p.body.trim()) return { ok: false as const, error: "Write the email first." };
     const admin = createAdminClient();
+    const rep = await repFor(p.supplier || "ss");
+    if (!rep) return { ok: false as const, error: "No SanMar rep saved yet." };
     const from = await accountForUser(admin, v.user!.id);
     if (!from?.enabled) return { ok: false as const, error: "Connect your email in the Inbox first, so the request goes out from your address." };
     const signature = from.signature_on !== false ? from.signature_html || "" : "";
     const page = replyHtml({ body: p.body, signature, css: signature ? from.signature_css : "" });
     const { html, attachments } = inlineImages(page);
     const subject = (p.subject || "Quote request").slice(0, 200);
-    const { messageId } = await sendFromMailbox(cfgOf(from), { to: SS_REP.email, subject, text: replyText({ body: p.body, signature }), html, attachments });
+    const { messageId } = await sendFromMailbox(cfgOf(from), { to: rep.email, subject, text: replyText({ body: p.body, signature }), html, attachments });
     await admin.from("activities").insert({
-      customer_id: null, kind: "email", direction: "out", subject, body: p.body.trim(), from_email: from.email, to_email: SS_REP.email, external_id: messageId,
-      occurred_at: new Date().toISOString(), created_by: v.user!.email || "staff", ai_processed_at: new Date().toISOString(), meta: { mailbox: "sent", via: "portal", account_id: from.id, account: from.email, goods_quote: true },
+      customer_id: null, kind: "email", direction: "out", subject, body: p.body.trim(), from_email: from.email, to_email: rep.email, external_id: messageId,
+      occurred_at: new Date().toISOString(), created_by: v.user!.email || "staff", ai_processed_at: new Date().toISOString(), meta: { mailbox: "sent", via: "portal", account_id: from.id, account: from.email, goods_quote: true, supplier: p.supplier || "ss", ...(p.orderId ? { order_id: p.orderId } : {}) },
     }).then(() => null, () => null);
-    return { ok: true as const };
+    if (p.orderId) await admin.from("order_events").insert({ order_id: p.orderId, kind: "note", detail: `Asked ${rep.name} (${p.supplier === "sanmar" ? "SanMar" : "S&S"}) for a custom quote on the goods`, actor: v.user!.email || "staff" }).then(() => null, () => null);
+    return { ok: true as const, rep };
   } catch (e) { return fail(e); }
 }
 
