@@ -423,10 +423,11 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     const offList = (off0 || []) as DayOff[];
     setOffs(offList);
     let sl = (sl0 || []) as Slot[];
-    // jobs taken off the schedule (already past printing when it went live, Nov 9): their open bookings go too
+    // a booking for a job that's past printing is off the calendar: taken off when the schedule went live (Nov 9, already
+    // past printing in Printavo), or Ready / Completed / voided / discarded here (#40096 was completed and still booked)
     const slOids = [...new Set(sl.filter((x) => x.order_id && x.status !== "done").map((x) => x.order_id!))];
     if (slOids.length) {
-      const { data: offO } = await sb.from("orders").select("id").in("id", slOids).not("schedule_off_at", "is", null);
+      const { data: offO } = await sb.from("orders").select("id").in("id", slOids).or("schedule_off_at.not.is.null,discarded_at.not.is.null,status.in.(ready,completed,void,quote,quote_sent,request)");
       const offIds = new Set(((offO || []) as { id: string }[]).map((x) => x.id));
       if (offIds.size) sl = sl.filter((x) => !(x.order_id && offIds.has(x.order_id) && x.status !== "done"));
     }
