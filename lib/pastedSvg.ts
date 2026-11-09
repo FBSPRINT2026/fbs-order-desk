@@ -4,6 +4,8 @@
  * Clipboard), a copy puts the art on the clipboard as SVG text: still vector, its own colors, and its size in points
  * (72 to the inch). Without it, the browser only gets a picture. Pure, so it can be tested.
  */
+import { fitRoundedImages } from "@/lib/svgFit";
+
 export type PastedSvg = { svg: string; wPt: number; hPt: number };
 
 /** the SVG in what was pasted, or null; sized for showing (Illustrator's code often has only a viewBox) */
@@ -24,6 +26,8 @@ export function pastedSvg(text: string): PastedSvg | null {
     const k = 1200 / Math.max(wPt, hPt);
     svg = svg.replace(/<svg([^>]*)>/i, (_m, a: string) => `<svg${a.replace(/\s(width|height)\s*=\s*["'][^"']*["']/gi, "")} width="${Math.round(wPt * k)}" height="${Math.round(hPt * k)}"${vb ? "" : ` viewBox="0 0 ${wPt} ${hPt}"`}>`);
   }
+  // a picture inside it set back to the art's exact box (Illustrator rounds its scale, and its clip cut the edge off)
+  svg = fitRoundedImages(svg).svg;
   return { svg, wPt, hPt };
 }
 
