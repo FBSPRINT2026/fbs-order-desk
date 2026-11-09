@@ -21470,3 +21470,13 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .ms-ready.drop-back{outline:2px dashed var(--accent);outline-offset:2px}
 .ms-ready.drop-back.over{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
 .ms-restart{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--danger);white-space:nowrap}
+
+/* Job Center stage cards fit their row (Nov 9, Nick: "this looks bad"): a step's name wraps onto two short lines instead
+   of running into the next card, the card titles may wrap too, and when the row is still too narrow it wraps to a second
+   row instead of running off the side */
+.jcx>.jrl{container:jrl / inline-size}
+.jrl-sl{white-space:normal;text-align:center;line-height:1.2;text-wrap:balance;max-width:100%;overflow-wrap:normal}
+.jrl-sec{min-width:96px}
+.jrl-h .jrl-t{white-space:normal;text-wrap:balance;line-height:1.2;text-align:center}
+@container jrl (max-width:880px){.jrl-sec{flex:1 1 calc(25% - 8px)}}
+.jcx>.jrl{flex-wrap:wrap;row-gap:12px}
