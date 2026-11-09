@@ -22,7 +22,7 @@ export type PvPlate = { name: string; hex: string; mesh: string; coverage: numbe
 export type PvHead = { what: string; name: string; hex: string; mesh: string; /** printed on round 2 or 3 */ round?: number; /** hit again on these later rounds */ again?: number[] };
 export type PvPrint = {
   id: string; groupId: string; group: string; location: string; method: string; screen: boolean;
-  colors: number; inks: string; size: string; drop: string; underbase: "" | "yes" | "no"; notes: string;
+  colors: number; /** a color change: the ink each shirt color gets */ inkBy: { from: string; to: string; shirts: string[] }[]; inks: string; size: string; drop: string; underbase: "" | "yes" | "no"; notes: string;
   confirm: Imprint["confirm"] | null; confirmed: Imprint["confirmed"] | null; film: Imprint["film"] | null;
   sep: { id: string; number: number; status: string; plates: PvPlate[] } | null;
   press: { press: string; pressId?: string; heads: PvHead[]; asPrinted: boolean; /** where it came from: saved as printed, the separation's setup, or laid out here */ from?: "actual" | "sep" | "auto" } | null;
@@ -154,6 +154,23 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
       id: im.id, groupId: g.id, group: g.name || "", location: im.location, method: im.method, screen,
       colors: im.colors, inks: im.inks || "", size: im.size || "", drop: im.drop || "", underbase: im.underbase === true ? "yes" : im.underbase === false ? "no" : "",
       notes: im.notes || "", confirm: im.confirm || null, confirmed: im.confirmed || null,
+      // a color change (Imprint.inkBy): which ink each shirt color gets, for production to confirm (Nov 9, Nick on #40351:
+      // "it's not asking him to confirm the color change… a black shirt with [white], a white shirt with the PMS")
+      inkBy: (() => {
+        const ck = (c: string) => (c || "").trim().toLowerCase();
+        const by = new Map<string, { from: string; to: string; shirts: string[] }>();
+        for (const l of g.lines || []) {
+          const c = (l.color || "").trim(); if (!c) continue;
+          const m = Object.entries(im.inkBy || {}).find(([k]) => ck(k) === ck(c))?.[1] || {};
+          const e = Object.entries(m).find(([a, b]) => b && ck(a) !== ck(b));
+          const key = e ? `${ck(e[0])}>${ck(e[1])}` : "";
+          const v = by.get(key) || { from: e ? e[0] : "", to: e ? e[1] : "", shirts: [] };
+          if (!v.shirts.some((x) => ck(x) === ck(c))) v.shirts.push(c);
+          by.set(key, v);
+        }
+        const out = [...by.values()];
+        return out.some((v) => v.to) ? out : [];
+      })(),
       film: im.film ? { ...im.film, files: (im.film.files || []).map((f) => ({ ...f, url: signed.get(f.path) || "" })) as never } : null,
       sep: s ? { id: s.id, number: s.number, status: s.status, plates: chans.map((c) => ({ name: c.name || "", hex: c.hex || "#000000", mesh: String(c.mesh || ""), coverage: typeof c.coverage === "number" ? c.coverage : null, url: c.file ? signed.get(c.file) || "" : "" })) } : null,
       press, pressOnly: im.pressOnly?.id ? { id: im.pressOnly.id, name: im.pressOnly.name } : null, sample: typeof im.sample?.have === "boolean" ? im.sample.have : null, skip: im.byColor?.skip || {}, rounds: im.rounds || 1, minutes: { setup: Math.round(m.setup), run: Math.round(m.run) },

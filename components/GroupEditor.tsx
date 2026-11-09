@@ -350,7 +350,11 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const spKey = (l: GLine) => scImps.map((x) => spotsOf(x, g.lines).indexOf(spotOf(x, l))).join(".");
   const spLetter = (l: GLine) => scImps.map((x) => String.fromCharCode(65 + Math.max(0, spotsOf(x, g.lines).indexOf(spotOf(x, l))))).join("");
   const spLabel = (l: GLine) => scImps.map((x) => spotOf(x, l)).join("  /  ");
-  const verLetter0 = (color: string) => ccImps.map((x) => (isCw(x) ? cwLetter(designOf(x)!, cwOn(x, color)) : "") || String.fromCharCode(65 + versionOfColor(x, color))).join("");
+  // one letter per version of the whole group (Nov 9, Nick on #40351: "AA… BB has gotten weird"): a front and a back that
+  // both change are one version, B, not "BB"; a colorway keeps its own letter
+  const verLetter0 = (color: string) => ccImps.some(isCw)
+    ? ccImps.map((x) => (isCw(x) ? cwLetter(designOf(x)!, cwOn(x, color)) : "") || String.fromCharCode(65 + versionOfColor(x, color))).join("")
+    : String.fromCharCode(65 + Math.max(0, [...new Set(g.lines.map((l) => verKey(l.color)))].sort().indexOf(verKey(color))));
   // a color change and a location change together (Nov 3, Nick on #40461: "section one, which is blueberry smash, then A is
   // left chest, B is left sleeve… section two, which is super white… A, B, C"): the color sections are numbered 1, 2, 3
   // and the spots inside each keep their letters

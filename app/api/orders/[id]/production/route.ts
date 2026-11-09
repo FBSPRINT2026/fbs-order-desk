@@ -140,6 +140,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       const n = Math.max(1, Math.min(3, Math.round(+(b.n as number) || 1)));
       if ((im.rounds || 1) !== n) events.push(`${im.location}: ${n > 1 ? `${n} rounds on press` : "one round on press"}`);
       if (n > 1) im.rounds = n; else delete im.rounds;
+    } else if (b.op === "inkBy") {
+      // a color change as production ran it (Nov 9): each shirt color's ink, from the Reorder details screen
+      const ck = (c: string) => c.trim().toLowerCase();
+      const next: Record<string, Record<string, string>> = { ...(im.inkBy || {}) };
+      const said: string[] = [];
+      for (const v of (Array.isArray(b.cc) ? b.cc : []).slice(0, 20) as { from?: unknown; to?: unknown; shirts?: unknown }[]) {
+        const from = clip(v.from, 60), to = clip(v.to, 60), shirts = (Array.isArray(v.shirts) ? v.shirts : []).map((x) => clip(x, 60)).filter(Boolean).slice(0, 40);
+        if (!from || !to) continue;
+        for (const sh of shirts) { const k = Object.keys(next).find((x) => ck(x) === ck(sh)) || sh; next[k] = { [from]: to }; }
+        said.push(`${shirts.join(", ")}: ${from} → ${to}`);
+      }
+      if (said.length && JSON.stringify(next) !== JSON.stringify(im.inkBy || {})) { im.inkBy = next; events.push(`${im.location}: color change ${said.join("; ")}`); }
     } else if (b.op === "byColor") {
       // prints differently by shirt color (Oct 21, Nick: "you may not print the black on one mockup")
       const skip: Record<string, string[]> = {};

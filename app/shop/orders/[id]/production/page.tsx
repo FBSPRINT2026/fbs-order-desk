@@ -203,6 +203,9 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
   const [skip, setSkip] = useState<Record<string, string[]>>(p.skip || {});
   const [byColor, setByColor] = useState(Object.keys(p.skip || {}).length > 0);
   const [shirt, setShirt] = useState("");
+  // a color change (Nov 9, Nick on #40351): the ink each shirt color gets, shown for production to confirm or correct
+  const [cc, setCc] = useState(p.inkBy || []);
+  const ccDirty = JSON.stringify(cc) !== JSON.stringify(p.inkBy || []);
   const skipNow = byColor ? Object.fromEntries(Object.entries(skip).filter(([, n]) => n.length)) : {};
   const skipDirty = JSON.stringify(skipNow) !== JSON.stringify(p.skip || {});
   const [size, setSize] = useState(p.size), [loc, setLoc] = useState(p.location), [drop, setDrop] = useState(p.drop), [ub, setUb] = useState(p.underbase);
@@ -338,6 +341,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     let ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
     if (ok && p.screen && screens.length) { setSaving("Saving colors and screens…"); ok = await post({ op: "colors", print: p.id, screens, map: assign }, "save"); }
     if (ok && p.screen && skipDirty) { setSaving("Saving the shirt colors…"); ok = await post({ op: "byColor", print: p.id, skip: skipNow }, "save"); }
+    if (ok && ccDirty) { setSaving("Saving the color change…"); ok = await post({ op: "inkBy", print: p.id, cc }, "save"); }
     if (ok && p.screen && film && film !== p.film?.state) { setSaving("Saving the film…"); ok = await post({ op: "film", print: p.id, state: film }, "save"); }
     if (ok && p.screen && onPress && onPress.heads.some((h) => h.startsWith("p:"))) {
       setSaving("Saving the press setup…");
@@ -361,7 +365,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     if (ok) setErr("");
     return ok;
   }
-  const dirty = skipDirty || size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(named) || JSON.stringify(assign) !== JSON.stringify(start.assign);
+  const dirty = skipDirty || ccDirty || size !== p.size || loc !== p.location || drop !== p.drop || ub !== p.underbase || JSON.stringify(screens) !== JSON.stringify(named) || JSON.stringify(assign) !== JSON.stringify(start.assign);
   const pending = !!p.confirm && !p.confirmed;
   const changed = dirty || !!pnotes.trim() || (!!film && film !== (p.film?.state || ""));
   useEffect(() => { register(p.id, { save: one ? saveAll : save, dirty: changed, pending: one && pending }); });
@@ -369,6 +373,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
     let ok = await post({ op: "draft", print: p.id, size, location: loc, drop, underbase: ub }, "save");
     if (ok && p.screen && screens.length) ok = await post({ op: "colors", print: p.id, screens, map: assign }, "save");
     if (ok && p.screen && skipDirty) ok = await post({ op: "byColor", print: p.id, skip: skipNow }, "save");
+    if (ok && ccDirty) ok = await post({ op: "inkBy", print: p.id, cc }, "save");
     return ok;
   }
   // the art on the shirt color, like the Mockup Creator's close-ups (Oct 21, Nick): the picked shirt, else the first
@@ -480,6 +485,21 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
               })}
               {!p.plan.length && <button type="button" className="btn sm ghost" onClick={() => setScreens((a) => [...a, { name: "", hex: "#888888", mix: "" }])}>+ Screen</button>}
               <div className="jv-ub"><span>Underbase</span>{([["", "Not sure"], ["yes", "Yes"], ["no", "No"]] as const).map(([k, l]) => <button key={k} type="button" className={"chip" + (ub === k ? " on" : "")} onClick={() => setUb(k)}>{l}</button>)}</div>
+              {cc.length > 0 && (
+                <div className="jv-bc">
+                  <h3 className="jv-cc-h">Color change: the ink on each shirt color</h3>
+                  <table className="jv-bc-t">
+                    <thead><tr><th>Shirts</th><th>Prints</th></tr></thead>
+                    <tbody>{cc.map((v, i) => (
+                      <tr key={i}>
+                        <td>{v.shirts.join(", ")}</td>
+                        <td>{v.to ? <span className="jv-ccv"><span className="faint">{v.from} →</span> <input value={v.to} list="jv-pms" aria-label={`Ink on ${v.shirts.join(", ")}`} onChange={(e) => setCc((a) => a.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)))} /></span> : <span>{(screens.map((x) => x.name.trim()).filter(Boolean).join(", ")) || p.inks || "As printed"} <span className="faint">(as printed)</span></span>}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                  <div className="jv-cc-hint">Check the ink each shirt color gets; fix it here if it ran differently. Confirm saves it for the work order and the next reorder.</div>
+                </div>
+              )}
               {shirts.length > 1 && screens.some((x) => x.name.trim()) && (
                 <div className="jv-bc">
                   <h3 className="jv-cc-h">On each shirt color</h3>

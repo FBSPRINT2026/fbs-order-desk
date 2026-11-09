@@ -21407,3 +21407,7 @@ label.mk-tile{cursor:pointer}
 .pr-csf{display:inline-block;font-size:12px;padding:1px 8px;border-radius:6px;background:color-mix(in srgb,var(--fbs-violet) 12%,var(--surface));color:var(--fbs-violet);white-space:nowrap}
 /* a print from their films has no logo box: the details take the whole row (Nov 9) */
 html body .pr.pr-nologo{grid-template-columns:minmax(0,1fr)}
+.jv-ccv{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.jv-ccv input{height:32px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);min-width:120px}
+/* a color change's line note spans the whole garment row (Nov 9) */
+html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
