@@ -160,7 +160,10 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     // the art: the current mockups and the newest proof version out with the customer
     const all = pfs.filter((p) => p.order_id === o.id), cur = all.filter((p) => !p.archived_at), top = Math.max(0, ...cur.map((p) => p.version));
     const mine = mks.filter((m) => m.order_id === o.id), live = cur.filter((p) => p.version === top);
-    const unsent = early && mine.length > 0 && mine.some((m) => !cur.some((p) => p.mockup_id === m.id));
+    // a mockup not sent yet is sales' to send only while it's a quote: once the order's approved, a mockup made after (a
+    // visual mockup for a reorder production confirms, a production mockup) isn't for the customer (Nov 9, Nick: #40488
+    // "there's nothing for the sales team to do, so this one should just move off the list and be marked approved")
+    const unsent = quoting && mine.length > 0 && mine.some((m) => !cur.some((p) => p.mockup_id === m.id));
     const hasPrints = gs.some((g) => (g.imprints || []).length > 0);
     if (unsent) tracks.push({ k: "art", state: "made", label: `Mockup v${Math.max(0, ...all.map((p) => p.version)) + 1} made` });
     else if (live.length) {
@@ -327,7 +330,7 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
     return { v, state, sentAt: r0.sent_at, sentTo: r0.sent_to, viewedAt: rs.map((p) => p.viewed_at).filter(Boolean).sort()[0] || null, views: Math.max(0, ...rs.map((p) => p.view_count || 0)),
       decidedAt: r0.decided_at, decidedName: r0.decided_name, comment: rs.map((p) => p.customer_comment).find(Boolean) || "", pics: pics(rs.map((p) => p.file_path)) };
   });
-  const unsent = early && mks.length > 0 && mks.some((m) => !live.some((p) => p.mockup_id === m.id));
+  const unsent = quoting && mks.length > 0 && mks.some((m) => !live.some((p) => p.mockup_id === m.id));
   const hasPrints = gs.some((g) => (g.imprints || []).length);
   if (vs.length || unsent || (quoting && hasPrints)) pieces.push({ k: "art", state: unsent ? "made" : vs[0] ? (vs[0].state === "replaced" ? "done" : vs[0].state) : "needed", versions: vs, next: unsent ? pics(mks.map((m) => m.file_path)) : null, pdf: `/print/${orderId}?proof=1` });
   // each embroidered print's sew-out, or where it is in digitizing before there is one (lib/digitizeStatus.ts)
