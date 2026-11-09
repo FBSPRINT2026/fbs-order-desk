@@ -6,7 +6,7 @@ import SepRequest from "@/components/SepRequest";
 import { createClient } from "@/lib/supabase/client";
 import { withPace, operatorOf, parseDuration, type RunLesson } from "@/lib/runLearn";
 import { setRunTime, learnRun } from "@/app/shop/run-time-actions";
-import { mergeProduction, estimateRaw, locKey, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { mergeProduction, estimateRaw, locKey, artsOf, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, type Group, type AccountOwner } from "@/lib/pricing";
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
@@ -33,7 +33,7 @@ type Slot = { id: string; order_id: string | null; archived_order_id: string | n
   /** job log: when it really started / finished, how far along (0–1) as of progress_at; which print locations this booking covers (null = all) */
   started_at?: string | null; finished_at?: string | null; progress?: number; progress_at?: string | null; locations?: string[] | null };
 /** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
-type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null };
+type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null; /** runs right after a job with the same art: the setup it skips */ sameArt?: { with: string; saved: number } };
 /** the locations a booking covers when it's only part of the job's work on that kind of machine (null = all of it) */
 const locsFor = (job: { needs: Need[] }, need: Need) => { const full = job.needs.find((n) => n.type === need.type); return full && locsOf(need).length < locsOf(full).length ? locsOf(need) : null; };
 /** Screen print colors the way the shop says them: front / back, then any sleeves etc. A front-only 4 color is "4/0". */
@@ -564,6 +564,21 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
       if (!need || booked.has(p.job.key + ":" + p.machine.type)) continue;
       out.push({ key: "pv:" + p.job.key, job: p.job, need, machine: p.machine, day: p.day, minutes: p.minutes || estimate(s, need, p.machine).minutes, startMin: p.startMin, slot: null, fromPv: true, carried: p.carried });
     }
+    // back to back with the same art on one press and day: the screens stay up, so the second one skips their setup
+    // and the first one their teardown (Nov 9, "jobs with the same imprint should go together")
+    const lanes = new Map<string, Card[]>();
+    for (const c of out) if (c.slot && c.slot.status !== "done") lanes.set(c.machine.id + "|" + c.day, [...(lanes.get(c.machine.id + "|" + c.day) || []), c]);
+    for (const ls of lanes.values()) {
+      ls.sort((a, b) => (a.startMin ?? 99999) - (b.startMin ?? 99999) || a.slot!.position - b.slot!.position);
+      for (let i = 1; i < ls.length; i++) {
+        const prev = artsOf(ls[i - 1].need), c = ls[i];
+        const shared = c.need.steps.filter((st) => st.art && prev.has(st.art) && !st.over);
+        if (!shared.length || c.slot!.status !== "scheduled") continue;
+        const e = estimateRaw(s, { ...c.need, steps: shared }, c.machine);
+        const save = Math.round(e.setup + e.teardown);
+        if (save > 0) { c.minutes = Math.max(15, c.minutes - save); c.sameArt = { with: ls[i - 1].job.number, saved: save }; }
+      }
+    }
     return out;
   }, [s, jobs, slots, pvLane, byKey]);
 
@@ -586,13 +601,26 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "production" : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
     const ld = JSON.parse(JSON.stringify(loadMap)) as Record<string, Record<string, number>>;
     const out: { job: Job; need: Need; sug: Suggestion | null }[] = [];
-    for (const j of [...ready].sort((a, b) => (a.due || "9").localeCompare(b.due || "9"))) for (const n0 of j.needs) {
+    // where each art already runs (booked, not done), and later where it's suggested: same art goes together (Nov 9)
+    const artAt = new Map<string, { machine: string; day: string; with: string }[]>();
+    const putArt = (need: Need, machine: string, day: string, num: string) => { for (const a of artsOf(need)) artAt.set(a, [...(artAt.get(a) || []), { machine, day, with: `#${num}` }]); };
+    for (const c of cards) if (c.slot?.status !== "done" && c.day >= today) putArt(c.need, c.machine.id, c.day, c.job.number);
+    // by in-hands date, each job followed by the other ready jobs printing the same art
+    const byDue = [...ready].sort((a, b) => (a.due || "9").localeCompare(b.due || "9")), order: Job[] = [], taken = new Set<string>();
+    for (const j of byDue) {
+      if (taken.has(j.key)) continue;
+      taken.add(j.key); order.push(j);
+      const arts = new Set(j.needs.flatMap((n) => [...artsOf(n)]));
+      if (arts.size) for (const k of byDue) if (!taken.has(k.key) && k.needs.some((n) => [...artsOf(n)].some((a) => arts.has(a)))) { taken.add(k.key); order.push(k); }
+    }
+    for (const j of order) for (const n0 of j.needs) {
       // Screen Print / Embroidery / Heat Press picked: the tools only deal with that kind of work
       if (typeF && n0.type !== typeF) continue;
       const bk = onCal.get(j.key + ":" + n0.type), n = bk ? restNeed(n0, bk) : n0;
       if (!n) continue;
-      const sug = suggest(s, n, j.due, today, ld);
-      if (sug) (ld[sug.machine.id] ||= {})[sug.day] = (ld[sug.machine.id]?.[sug.day] || 0) + sug.minutes; // later jobs see this one's room taken
+      const near = [...artsOf(n)].flatMap((a) => artAt.get(a) || []);
+      const sug = suggest(s, n, j.due, today, ld, 30, near);
+      if (sug) { (ld[sug.machine.id] ||= {})[sug.day] = (ld[sug.machine.id]?.[sug.day] || 0) + sug.minutes; putArt(n, sug.machine.id, sug.day, j.number); } // later jobs see this one's room taken
       out.push({ job: j, need: n, sug });
     }
     return out;
@@ -1810,6 +1838,7 @@ function RunTimes({ s, c, m, est, onSaved }: { s: ProductionSettings; c: Card; m
         })}
         <li className="tot"><span>Setup {fmtMin(est.setup)} · run {fmtMin(est.run)}{est.teardown ? ` · teardown ${fmtMin(est.teardown)}` : ""}</span><b>{fmtMin(est.minutes)}</b></li>
       </ul>
+      {c.sameArt ? <div className="rtm-same">Runs right after #{c.sameArt.with} with the same screens: {fmtMin(c.sameArt.saved)} less setup and teardown.</div> : null}
       {op.who ? <div className="faint rtm-pace">{m.pace ? `${op.who}'s crew runs ${m.pace < 1 ? `${Math.round((1 - m.pace) * 100)}% faster` : m.pace > 1 ? `${Math.round((m.pace - 1) * 100)}% slower` : "at"} than the standard${m.pace === 1 ? " pace" : ""}, learned from ${m.paceN} job${m.paceN === 1 ? "" : "s"}; worked-out times include it.` : `Learning ${op.who}'s pace from finished runs and times set here (${m.paceN || 0} of 2 so far).`}</div> : null}
     </div>
   );

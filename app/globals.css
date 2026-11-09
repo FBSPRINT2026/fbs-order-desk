@@ -21422,9 +21422,10 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .rtm-loc span{font-weight:700;color:var(--ink)}
 .rtm-pen{border:1px solid var(--line);background:var(--surface);border-radius:6px;width:26px;height:26px;padding:0;cursor:pointer;color:var(--accent);font-size:13px;line-height:1}
 .rtm-pen:hover{border-color:var(--accent)}
-.rtm-ed{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.rtm .ms-parts li.rtm-ed{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-start}
 .rtm-ed .input{width:110px;height:36px}
 .rtm-q{font-weight:700;white-space:nowrap}
 .rtm-n{flex-basis:100%;font-size:12px}
 .rtm-err{color:var(--danger)}
 .rtm-pace{font-size:12px;margin-top:4px}
+.rtm-same{font-size:12.5px;color:var(--ok);font-weight:600;margin-top:4px}

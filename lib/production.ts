@@ -237,7 +237,8 @@ export function mergeProduction(d: unknown): ProductionSettings {
 export type Step = { method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string; /** puff ink (raised print): slower printing, longer setup */ puff?: boolean; /** puff picked as a job condition: its slower printing is already in the speed slider */ puffInSpeed?: boolean;
   /** this print only runs on one press (Imprint.pressOnly, set on the production mockup) */ only?: { id: string; name: string };
   /** times around the press set on the press setup (Imprint.rounds): every piece goes around that many times */ rounds?: number;
-  /** staff set how long this print location takes (all its garments together), on the schedule: used as is */ over?: { min: number; by: string } };
+  /** staff set how long this print location takes (all its garments together), on the schedule: used as is */ over?: { min: number; by: string };
+  /** the art it prints (design + inks): jobs that print the same art share screens, so they run together (artKey) */ art?: string };
 /** Everything to run on one kind of machine, and the most colors any of it needs. */
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
@@ -251,6 +252,16 @@ export function stitchesFor(s: ProductionSettings, location: string, given?: num
   const k = Object.keys(s.embroidery.stitches).find((x) => x.toLowerCase() === location.trim().toLowerCase());
   return s.embroidery.stitches[k || "default"] || 8000;
 }
+
+/**
+ * The art a print runs (Nov 9, Nick: "jobs with the same imprint should go together… All My Sons run every week because
+ * they all have the same imprint… lock by design"): the same design in the same inks is the same screens (or the same
+ * DST on an embroidery machine), wherever it's printed, so jobs that share one set up once when they run back to back.
+ */
+export const artKey = (method: string, designId: string | undefined | null, inks: string | undefined | null, colors: number) =>
+  designId ? `${method === "embroidery" ? "e" : method === "screen" ? "s" : "h"}|${designId}|${method === "screen" ? `${colors}|${(inks || "").toLowerCase().replace(/\s+/g, " ").trim()}` : ""}` : "";
+/** the art keys a need prints */
+export const artsOf = (need: Need) => new Set(need.steps.map((st) => st.art || "").filter(Boolean));
 
 /** What a new order needs, from its groups (garments + imprints). */
 export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "lines" | "number" | "nickname">, groupsIn?: Group[]): Need[] {
@@ -279,7 +290,8 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
         const puff = method === "screen" && (!!(i as unknown as { puff?: boolean }).puff || /puff/i.test(`${i.inks || ""} ${i.notes || ""} ${(i as unknown as { size?: string }).size || ""}`));
         const only = method === "screen" && i.pressOnly?.id ? { id: i.pressOnly.id, name: i.pressOnly.name } : undefined;
         const rounds = method === "screen" && (i.rounds || 1) > 1 ? Math.min(3, i.rounds!) : 0;
-        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}) });
+        const art = artKey(method, i.design_id, i.inks, colors);
+        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}), ...(art ? { art } : {}) });
       }
     }
   }
@@ -737,18 +749,18 @@ export const otFromOn = (mach: Machine, day: string) => weekOvertime(mach, payWe
 export function plusWorkdays(d: string, n: number) { let x = d, k = n; while (k > 0) { x = addDay(x, 1); if (dow(x) !== 0 && dow(x) !== 6) k--; } return x; }
 export function minusWorkdays(d: string, n: number) { let x = d, k = n; while (k > 0) { x = addDay(x, -1); if (dow(x) !== 0 && dow(x) !== 6) k--; } return x; }
 
-export type Suggestion = { machine: Machine; day: string; minutes: number; late: boolean; reason: string; alternatives: { machine: Machine; day: string; minutes: number }[] };
+export type Suggestion = { machine: Machine; day: string; minutes: number; late: boolean; reason: string; /** put with a job printing the same art ("#40454") */ with?: string; alternatives: { machine: Machine; day: string; minutes: number }[] };
 
 /**
  * The earliest day a machine that can run it has room, finishing before (in-hands − buffer). Among machines free
  * the same day, the one that wastes the least (don't put a 1-color job on the 12-color press; embroidery on the
  * head count that fits the quantity). `load` is minutes already booked: load[machineId][day].
  */
-export function suggest(s: ProductionSettings, need: Need, due: string | null, today: string, load: Record<string, Record<string, number>>, horizon = 30): Suggestion | null {
+export function suggest(s: ProductionSettings, need: Need, due: string | null, today: string, load: Record<string, Record<string, number>>, horizon = 30, near: { machine: string; day: string; with: string }[] = []): Suggestion | null {
   const machines = s.machines.filter((x) => fits(need, x));
   if (!machines.length) return null;
   const latest = due ? minusWorkdays(due, s.bufferDays) : null;
-  const options: { machine: Machine; day: string; minutes: number; score: number }[] = [];
+  const options: { machine: Machine; day: string; minutes: number; score: number; with?: string }[] = [];
   for (const mach of machines) {
     const est = estimate(s, need, mach).minutes;
     for (let i = 0; i < horizon; i++) {
@@ -766,15 +778,25 @@ export function suggest(s: ProductionSettings, need: Need, due: string | null, t
       }
     }
   }
+  // same art already booked or suggested (near): run it right after on that press, the screens stay up. Taken over an
+  // earlier open day unless it would make the job late; a full day still takes it (the setup it saves makes room)
+  for (const nr of near) {
+    const mach = machines.find((x) => x.id === nr.machine);
+    if (!mach || nr.day < today || !shiftOn(mach, nr.day) || (latest && nr.day > latest)) continue;
+    const est = estimate(s, need, mach).minutes, used = load[mach.id]?.[nr.day] || 0;
+    if (used + est > capacityMin(s, mach, nr.day) * 1.1 && used > 0) continue;
+    const i = Math.round((Date.parse(nr.day) - Date.parse(today)) / 86400000);
+    options.push({ machine: mach, day: nr.day, minutes: est, score: i * 100 - 600, with: nr.with });
+  }
   if (!options.length) return null;
   options.sort((a, b) => a.score - b.score);
-  const best = options[0];
+  const best = options[0], withJob = best.with || "";
   let finish = best.day;
   for (let k = Math.max(0, Math.ceil(best.minutes / Math.max(1, capacityMin(s, best.machine))) - 1), g = 0; k > 0 && g < 60; g++) { finish = addDay(finish, 1); if (shiftOn(best.machine, finish)) k--; }
   const late = !!latest && finish > latest;
   const needTxt = need.type === "screen" ? `${need.needColors} screens + flashes → needs ${stationsNeeded(need)} heads in one round` : need.type === "embroidery" ? `${need.qty} pcs, ${need.label}` : `${need.qty} pcs heat press`;
-  const reason = `${needTxt}. ${best.machine.name} is open ${best.day === today ? "today" : best.day}${due ? `; in-hands ${due}${late ? " — too late, needs attention" : " ✓"}` : ""}. About ${fmtMin(best.minutes)}.`;
-  return { machine: best.machine, day: best.day, minutes: best.minutes, late, reason, alternatives: options.slice(1, 4).map(({ machine, day, minutes }) => ({ machine, day, minutes })) };
+  const reason = withJob ? `Same art as ${withJob}: run it right after on ${best.machine.name} ${best.day === today ? "today" : best.day}, the screens stay up.${due ? ` In-hands ${due}${late ? " — too late, needs attention" : " ✓"}` : ""} About ${fmtMin(best.minutes)}.` : `${needTxt}. ${best.machine.name} is open ${best.day === today ? "today" : best.day}${due ? `; in-hands ${due}${late ? " — too late, needs attention" : " ✓"}` : ""}. About ${fmtMin(best.minutes)}.`;
+  return { machine: best.machine, day: best.day, minutes: best.minutes, late, reason, ...(withJob ? { with: withJob } : {}), alternatives: options.slice(1, 4).map(({ machine, day, minutes }) => ({ machine, day, minutes })) };
 }
 
 export const fmtMin = (min: number) => { const h = Math.floor(min / 60), mm = Math.round(min % 60); return h ? `${h}h ${String(mm).padStart(2, "0")}m` : `${mm}m`; };
