@@ -35,19 +35,23 @@ const GROUPS: G[] = [
   // Leads on their own, first (Nov 6, Nick: "the website leads isn't looking good. Let's make that its own tab on the
   // left… leads… website submissions… then… incoming orders… customer requests… the top should all be one line")
   { t: "Leads", line: "From the website", c: "var(--fbs-salmon)", steps: [
-    ["website", "Website submissions", ic(<><circle cx="12" cy="12" r="9" /><path d="M3.6 9h16.8M3.6 15h16.8" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>)]] },
-  { t: "Incoming orders", line: "Sent in by customers", c: "var(--fbs-violet)", steps: [
-    ["requests", "Customer requests", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
-  { t: "In the works", line: "Mockups and numbers", c: "var(--warn)", steps: [
+    ["website", "Website Submissions", ic(<><circle cx="12" cy="12" r="9" /><path d="M3.6 9h16.8M3.6 15h16.8" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>)]] },
+  { t: "Inc. Orders", line: "Incoming orders: sent in by customers", c: "var(--fbs-violet)", steps: [
+    ["requests", "Customer Requests", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
+  { t: "In The Works", line: "Mockups and numbers", c: "var(--warn)", steps: [
     ["mockups", "Mockups", ic(<><path d="M15 4l6 2v5h-3v8a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-8H3V6l6-2a3 3 0 0 0 6 0" /></>)],
     ["numbers", "Numbers", ic(<><path d="M5 9h14M5 15h14M11 4 7 20M17 4l-4 16" /></>)]] },
   { t: "Quotes", line: "Ready or sent", c: "var(--fbs-blue)", steps: [
     ["ready", "Ready", ic(<><path d="M10 14 21 3" /><path d="m21 3-6.5 18a.55.55 0 0 1-1 0L10 14l-7-3.5a.55.55 0 0 1 0-1z" /></>)],
     ["sent", "Sent", ic(<><path d="M6.5 7h11M6.5 17h11" /><path d="M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z" /><path d="M6 4v2a6 6 0 1 0 12 0V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z" /></>)]] },
   { t: "Revisions", line: "On hold", c: "var(--danger)", steps: [
-    ["changes", "Make changes", ic(<><path d="M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>)]] },
+    ["changes", "Make Changes", ic(<><path d="M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>)]] },
   { t: "Digitizing", line: "Embroidery only", c: "var(--ink-2)", steps: [
-    ["sewouts", "Sew-outs", ic(<><path d="M5 19 17.5 6.5" /><circle cx="19" cy="5" r="2" /><path d="M3.5 20.5c1.5-.5 2.5-2 1.5-3.5s.5-3 2-3" /></>)]] },
+    ["sewouts", "Sew-Outs", ic(<><path d="M5 19 17.5 6.5" /><circle cx="19" cy="5" r="2" /><path d="M3.5 20.5c1.5-.5 2.5-2 1.5-3.5s.5-3 2-3" /></>)]] },
+  // the goods after the approval (Nov 9, Nick: "after a job is ordered… there's one more step… goods… need to order")
+  { t: "Goods", line: "After it's approved", c: "var(--fbs-orange)", steps: [
+    ["goods_order", "To Order", ic(<><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6" /><circle cx="9" cy="20" r="1.4" /><circle cx="17" cy="20" r="1.4" /></>)],
+    ["goods_coming", "Coming", ic(<><path d="M3 7h11v9H3z" /><path d="M14 10h4l3 3v3h-7" /><circle cx="7" cy="18" r="1.6" /><circle cx="17" cy="18" r="1.6" /></>)]] },
   { t: "Done", line: "Approved or declined", c: "var(--ok)", steps: [
     ["approved", "Approved", ic(<><circle cx="12" cy="12" r="9" /><path d="m9 12 2 2 4-4" /></>)],
     ["declined", "Declined", ic(<><circle cx="12" cy="12" r="9" /><path d="m10 10 4 4m0-4-4 4" /></>)]] },
@@ -59,13 +63,16 @@ const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g
 const DEPTS: [Dept | "all", string][] = [["all", "All"], ["screen", "Screen printing"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const EMPTY: Record<Step, string> = {
   leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", website: "No new inquiries from the website.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
-  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
+  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", goods_order: "Nothing approved and waiting for its goods to be ordered.", goods_coming: "No goods on the way for approved jobs.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
 };
 /** the tracks a step is about */
 // Mockups lists mockups still missing their numbers (the numbers are what it needs); Numbers the other way round
 const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && t.state === "needed") : s === "numbers" ? (t.k === "art" && t.state === "needed")
   : s === "sewouts" ? (t.k === "sewout" && t.state !== "done")
+  : s === "goods_order" ? (t.k === "goods" && t.state === "needed") : s === "goods_coming" ? (t.k === "goods" && t.state === "sent")
   : s === "ready" ? (t.k !== "sewout" && t.state === "made") : s === "sent" ? (t.k !== "sewout" && t.state === "sent") : s === "changes" ? (t.k !== "sewout" && t.state === "changes") : s === "approved" ? t.state === "done" : false);
+/** the same note many times once, with how many ("Needs digitizing · Left Chest ×3") */
+const collapseLabels = (ls: string[]) => [...new Set(ls)].map((l) => { const n = ls.filter((x) => x === l).length; return n > 1 ? `${l} ×${n}` : l; });
 const TONE: Record<Track["state"], string> = { needed: "var(--warn)", made: "var(--fbs-blue)", sent: "var(--fbs-violet)", changes: "var(--danger)", done: "var(--ok)" };
 const day = (s?: string | null) => (s ? new Date(s.length === 10 ? s + "T12:00:00" : s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" }) : "");
 const ago = (s: string) => { const d = Math.floor((Date.now() - new Date(s).getTime()) / 864e5); return d <= 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
@@ -437,7 +444,7 @@ function Row({ it, step, wide, on, onPick, after, onLead, msgs = 0, hl = false, 
       <td>{isReq(step) ? (wide ? <span className="pill" style={{ ["--sc" as string]: "var(--fbs-violet)" }}><span className="pill-t">New request · {it.qty || 0} pcs</span></span> : <span className="nowrap">{it.qty || 0} pcs</span>) : step === "approved" ? <span className="pill" style={{ ["--sc" as string]: ST[it.status || ""]?.c || "var(--ok)" }}><span className="pill-t">{ST[it.status || ""]?.label || it.status}</span></span>
         : <div className="jc-tags">{here.map(tag)}</div>}</td>
       {/* what else is going on, in quiet words (Nov 2, Nick: "statuses are weird"): one colored status per job, in Where it is */}
-      <td><span className="jc-also">{[...(step === "approved" ? [] : also).map((t) => t.label), it.revised && step !== "changes" ? "came back once" : ""].filter(Boolean).join(" · ")}</span></td>
+      <td><span className="jc-also">{collapseLabels([...(step === "approved" ? [] : also).map((t) => t.label), it.revised && step !== "changes" ? "came back once" : ""].filter(Boolean)).join(" · ")}</span></td>
       <td className="nowrap">{isReq(step) ? day(it.at) : it.due ? day(it.due) : <span className="faint">No date</span>}</td>
     </tr>
   );

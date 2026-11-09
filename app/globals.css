@@ -21477,6 +21477,6 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .jcx>.jrl{container:jrl / inline-size}
 .jrl-sl{white-space:normal;text-align:center;line-height:1.2;text-wrap:balance;max-width:100%;overflow-wrap:normal}
 .jrl-sec{min-width:96px}
-.jrl-h .jrl-t{white-space:normal;text-wrap:balance;line-height:1.2;text-align:center}
+.jrl-h .jrl-t{white-space:nowrap}
 @container jrl (max-width:880px){.jrl-sec{flex:1 1 calc(25% - 8px)}}
 .jcx>.jrl{flex-wrap:wrap;row-gap:12px}

@@ -26,9 +26,9 @@ import { allRows } from "@/lib/readAll";
  * Read from the records every page already uses: orders, mockups, proofs, sewouts, the order's history, and the AI's
  * draft orders.
  */
-export type Step = "leads" | "requests" | "website" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "sewouts" | "approved" | "declined";
+export type Step = "leads" | "requests" | "website" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "sewouts" | "goods_order" | "goods_coming" | "approved" | "declined";
 export type TrackState = "needed" | "made" | "sent" | "changes" | "done";
-export type Track = { k: "art" | "sewout" | "numbers"; state: TrackState; label: string; note?: string };
+export type Track = { k: "art" | "sewout" | "numbers" | "goods"; state: TrackState; label: string; note?: string };
 export type Dept = "screen" | "embroidery" | "heat";
 export type JobItem = {
   key: string; type: "lead" | "request" | "artonly" | "order";
@@ -87,11 +87,12 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   const orders = (os || []) as unknown as O[];
   const ids = orders.map((o) => o.id);
   tm("main");
-  const [mks, pfs, sws, evs] = await Promise.all([
+  const [mks, pfs, sws, evs, ogs] = await Promise.all([
     inChunks<{ id: string; order_id: string; group_id: string | null }>(ids, (p) => admin.from("mockups").select("id, order_id, group_id").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; version: number; status: string; mockup_id: string | null; sent_at: string | null; decided_at: string | null; customer_comment: string; archived_at: string | null }>(ids, (p) => admin.from("proofs").select("order_id, version, status, mockup_id, sent_at, decided_at, customer_comment, archived_at").in("order_id", p).not("version", "is", null)),
     inChunks<{ id: string; order_id: string; imprint_id: string; status: string; sent_at: string | null; customer_comment: string; created_at: string }>(ids, (p) => admin.from("sewouts").select("id, order_id, imprint_id, status, sent_at, customer_comment, created_at").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; kind: string; detail: string; created_at: string }>(ids, (p) => admin.from("order_events").select("order_id, kind, detail, created_at").in("order_id", p).in("kind", ["quote_declined", "quote_changes", "sent", "approved", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at", { ascending: false })),
+    inChunks<{ order_id: string; status: string; supplier: string | null; supplier_po: string | null }>(ids, (p) => admin.from("order_goods").select("order_id, status, supplier, supplier_po").in("order_id", p)),
   ]);
   // the logos on embroidered prints: where each is in digitizing comes from them (lib/digitizeStatus.ts)
   const embDesignIds = [...new Set(orders.flatMap((o) => orderGroups(o).flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id)))))];
@@ -165,8 +166,14 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     else if (quoting && !hasPrints) tracks.push({ k: "art", state: "needed", label: "No prints yet" });
     // each embroidered print in the Digitizing Center: where it is there (Oct 29, Nick: "on sew-outs… a list of all of the
     // jobs that are in the Digitizing Center right now"), by the same answer the Digitizing page and the order use
+    // one per logo: the same logo on many garments is digitized and sewn out once (Nov 9: #40400 listed "Needs digitizing ·
+    // Left Chest" over twenty times)
+    const sewSeen = new Set<string>();
     for (const g of gs) for (const im of g.imprints || []) {
       if (im.method !== "embroidery") continue;
+      const sk = String(im.design_id || im.id || "");
+      if (sk && sewSeen.has(sk)) continue;
+      sewSeen.add(sk);
       const t = sewTrack(im, embDesigns.get(String(im.design_id || "")), sws.filter((x) => x.order_id === o.id));
       if (t) tracks.push(t);
     }
@@ -199,8 +206,17 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     if (tracks.some((t) => t.k === "sewout" && t.state !== "done")) steps.push("sewouts");
     const allDone = tracks.every((t) => t.state === "done");
     const appr = o.approved_at || evs.find((e) => e.order_id === o.id && e.kind === "approved")?.created_at || "";
-    // approved, with nothing left out with the customer: stays under Approved until the job is completed
-    if (!quoting && allDone) steps.push("approved");
+    // approved, with nothing left out with the customer: the goods next (Nov 9, Nick: "it's been approved, but it needs goods
+    // ordered… there's one more step… goods"): To order while nothing's been ordered for a job we buy the garments for,
+    // Coming while they're ordered or the customer is sending theirs, then Approved (ready to print) until it's completed
+    if (!quoting && allDone) {
+      const og = ogs.find((x) => x.order_id === o.id), here = og && (og.status === "arrived" || og.status === "received");
+      const ordered = !!og && (!!og.supplier_po || !!og.supplier || og.status !== "waiting");
+      const theirs = o.price_type === "wholesale";
+      if (["production", "ready"].includes(o.status) || here) steps.push("approved");
+      else if (!ordered && !theirs) { steps.push("goods_order"); tracks.push({ k: "goods", state: "needed", label: "Goods to order" }); }
+      else { steps.push("goods_coming"); tracks.push({ k: "goods", state: "sent", label: theirs && !ordered ? "Waiting on their goods" : og?.status === "on_way" ? "Goods on the way" : og?.status === "partial" ? "Some goods here" : og?.status === "issue" ? "Goods issue" : "Goods ordered" }); }
+    }
     if (!steps.length) continue;
     const mg = gs.find((g) => (g.imprints || []).length && !mine.some((m) => m.group_id === g.id)) || gs.find((g) => (g.imprints || []).length);
     const sw0 = sws.filter((x) => x.order_id === o.id && x.status === "pending");

@@ -67,6 +67,7 @@ import { needleThreads } from "@/lib/needleThreads";
 import { loadThreadStock } from "@/lib/threadStock";
 import { stitchLook } from "@/lib/stitchLook";
 import { mockupArtStamp } from "@/lib/mockupFresh";
+import { mockupContentKey } from "@/lib/mockupFresh";
 import EmbroideryPanel from "@/components/EmbroideryPanel";
 import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
@@ -3535,7 +3536,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const draft = orderId ? ["quote", "request"].includes(String((await sb.from("orders").select("status").eq("id", orderId).maybeSingle()).data?.status || "")) : false;
       // a mockup saved to a draft order makes it an order (Oct 24: saving commits; the mockup needs an order to belong to)
       if (orderId) { const c = await sb.rpc("order_commit", { p_id: orderId }); if (c.error) throw new Error(c.error.message); }
-      const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null }[] : [];
+      const before = orderId && groupId ? ((await sb.from("mockups").select("id, proof_id, title, snapshot").eq("order_id", orderId).eq("group_id", groupId).is("archived_at", null)).data || []) as { id: string; proof_id: string | null; title: string; snapshot: unknown }[] : [];
       // Add logo: one picture per thread (the lines whose color changes the same way share it), not one per garment
       const threadKey = (l: Line) => imprints.map((im) => JSON.stringify(Object.entries(im.inkBy || {}).find(([k]) => colorKey(k) === colorKey(l.color))?.[1] || {})).join("|");
       // in the order of their versions' letters (A, B…), as the order and the work order list them, so the group's main
@@ -3581,7 +3582,19 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (orderId && newMockups.length) {
         const { data: od } = await sb.from("orders").select("groups").eq("id", orderId).maybeSingle();
         const sg = ((od?.groups || []) as Order["groups"]).find((x) => x.id === groupId);
-        if (sg) await sb.from("mockups").update({ snapshot: { lines: sg.lines.map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.hex ? { hex: l.hex } : {}) })), imprints: sg.imprints, mockupSize: sg.mockupSize || null, mockupThumbs: sg.mockupThumbs || [] } }).in("id", newMockups);
+        const snapNew = sg ? { lines: sg.lines.map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.hex ? { hex: l.hex } : {}) })), imprints: sg.imprints, mockupSize: sg.mockupSize || null, mockupThumbs: sg.mockupThumbs || [] } : null;
+        if (snapNew) await sb.from("mockups").update({ snapshot: snapNew }).in("id", newMockups);
+        // saved again with nothing changed (only new picture files): it's the same version, so a proof sent or approved on
+        // the earlier save follows it, and the order doesn't show a new version to send (Nov 9, #40460)
+        if (snapNew && before.length) {
+          const k = mockupContentKey(snapNew);
+          const { data: nms } = await sb.from("mockups").select("id, title").in("id", newMockups);
+          for (const b of before) {
+            if (mockupContentKey(b.snapshot) !== k) continue;
+            const to = ((nms || []) as { id: string; title: string }[]).find((x) => x.title === b.title);
+            if (to) await sb.from("proofs").update({ mockup_id: to.id }).eq("order_id", orderId).eq("mockup_id", b.id).is("archived_at", null);
+          }
+        }
       }
       saveOk.current = true;
       baseSig.current = sigNowRef.current();

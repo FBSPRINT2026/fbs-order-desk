@@ -83,3 +83,14 @@ export function remakeMockup(orderId: string, g: Pick<Group, "id" | "mockupKind"
     document.body.appendChild(f);
   });
 }
+
+/**
+ * What a saved mockup shows, without the picture files themselves (Nov 9: #40460's mockup was saved again after the
+ * customer approved it, nothing changed, and the order said "Version 2 · not sent"). Two saves with the same key are the
+ * same mockup: the garments, prints, sizes and inks, not the file names a new render gets.
+ */
+export function mockupContentKey(snap: unknown): string {
+  const drop = new Set(["shownArt", "mockupThumbs", "file_path", "path", "url", "thumb"]);
+  const clean = (v: unknown): unknown => Array.isArray(v) ? v.map(clean) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k]) => !drop.has(k)).sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, clean(x)])) : v;
+  return JSON.stringify(clean(snap ?? null));
+}
