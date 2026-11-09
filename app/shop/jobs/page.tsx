@@ -49,9 +49,8 @@ const GROUPS: G[] = [
   { t: "Digitizing", line: "Embroidery only", c: "var(--ink-2)", steps: [
     ["sewouts", "Sew-Outs", ic(<><path d="M5 19 17.5 6.5" /><circle cx="19" cy="5" r="2" /><path d="M3.5 20.5c1.5-.5 2.5-2 1.5-3.5s.5-3 2-3" /></>)]] },
   // the goods after the approval (Nov 9, Nick: "after a job is ordered… there's one more step… goods… need to order")
-  { t: "Goods", line: "After it's approved", c: "var(--fbs-orange)", steps: [
-    ["goods_order", "To Order", ic(<><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6" /><circle cx="9" cy="20" r="1.4" /><circle cx="17" cy="20" r="1.4" /></>)],
-    ["goods_coming", "Coming", ic(<><path d="M3 7h11v9H3z" /><path d="M14 10h4l3 3v3h-7" /><circle cx="7" cy="18" r="1.6" /><circle cx="17" cy="18" r="1.6" /></>)]] },
+  { t: "Goods", line: "Approved, garments to order", c: "var(--fbs-orange)", steps: [
+    ["goods_order", "To Order", ic(<><path d="M3 4h2l2.4 11.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6" /><circle cx="9" cy="20" r="1.4" /><circle cx="17" cy="20" r="1.4" /></>)]] },
   { t: "Done", line: "Approved or declined", c: "var(--ok)", steps: [
     ["approved", "Approved", ic(<><circle cx="12" cy="12" r="9" /><path d="m9 12 2 2 4-4" /></>)],
     ["declined", "Declined", ic(<><circle cx="12" cy="12" r="9" /><path d="m10 10 4 4m0-4-4 4" /></>)]] },
@@ -63,13 +62,13 @@ const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g
 const DEPTS: [Dept | "all", string][] = [["all", "All"], ["screen", "Screen printing"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const EMPTY: Record<Step, string> = {
   leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", website: "No new inquiries from the website.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
-  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", goods_order: "Nothing approved and waiting for its goods to be ordered.", goods_coming: "No goods on the way for approved jobs.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
+  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", goods_order: "Nothing approved and waiting for its goods to be ordered.", approved: "Nothing approved and still open.", declined: "Nothing declined in the last two weeks.",
 };
 /** the tracks a step is about */
 // Mockups lists mockups still missing their numbers (the numbers are what it needs); Numbers the other way round
 const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && t.state === "needed") : s === "numbers" ? (t.k === "art" && t.state === "needed")
   : s === "sewouts" ? (t.k === "sewout" && t.state !== "done")
-  : s === "goods_order" ? (t.k === "goods" && t.state === "needed") : s === "goods_coming" ? (t.k === "goods" && t.state === "sent")
+  : s === "goods_order" ? (t.k === "goods" && t.state === "needed")
   : s === "ready" ? (t.k !== "sewout" && t.state === "made") : s === "sent" ? (t.k !== "sewout" && t.state === "sent") : s === "changes" ? (t.k !== "sewout" && t.state === "changes") : s === "approved" ? t.state === "done" : false);
 /** the same note many times once, with how many ("Needs digitizing · Left Chest ×3") */
 const collapseLabels = (ls: string[]) => [...new Set(ls)].map((l) => { const n = ls.filter((x) => x === l).length; return n > 1 ? `${l} ×${n}` : l; });

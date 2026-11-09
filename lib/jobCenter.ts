@@ -26,7 +26,7 @@ import { allRows } from "@/lib/readAll";
  * Read from the records every page already uses: orders, mockups, proofs, sewouts, the order's history, and the AI's
  * draft orders.
  */
-export type Step = "leads" | "requests" | "website" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "sewouts" | "goods_order" | "goods_coming" | "approved" | "declined";
+export type Step = "leads" | "requests" | "website" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "sewouts" | "goods_order" | "approved" | "declined";
 export type TrackState = "needed" | "made" | "sent" | "changes" | "done";
 export type Track = { k: "art" | "sewout" | "numbers" | "goods"; state: TrackState; label: string; note?: string };
 export type Dept = "screen" | "embroidery" | "heat";
@@ -208,15 +208,16 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     const appr = o.approved_at || evs.find((e) => e.order_id === o.id && e.kind === "approved")?.created_at || "";
     // approved, with nothing left out with the customer: the goods next (Nov 9, Nick: "it's been approved, but it needs goods
     // ordered… there's one more step… goods"): To order while nothing's been ordered for a job we buy the garments for,
-    // Coming while they're ordered or the customer is sending theirs, then Approved (ready to print) until it's completed
+    // then Approved until it's completed
     if (!quoting && allDone) {
       const og = ogs.find((x) => x.order_id === o.id), here = og && (og.status === "arrived" || og.status === "received");
       const ordered = !!og && (!!og.supplier_po || !!og.supplier || og.status !== "waiting");
       // wholesale, or the customer supplies the garments (the Customer goods flag): theirs to send, nothing for us to order
       const theirs = o.price_type === "wholesale" || ((o as { flags?: { key?: string }[] | null }).flags || []).some((f) => f?.key === "customer_goods");
-      if (["production", "ready"].includes(o.status) || here) steps.push("approved");
-      else if (!ordered && !theirs) { steps.push("goods_order"); tracks.push({ k: "goods", state: "needed", label: "Goods to order" }); }
-      else { steps.push("goods_coming"); tracks.push({ k: "goods", state: "sent", label: theirs && !ordered ? "Waiting on their goods" : og?.status === "on_way" ? "Goods on the way" : og?.status === "partial" ? "Some goods here" : og?.status === "issue" ? "Goods issue" : "Goods ordered" }); }
+      // the Job Center is the sales side: once the goods are ordered (or the customer sends theirs) it's Receiving's, and the
+      // job sits under Approved (Nov 9, Nick: "why would there be a coming tab… that would be in receiving")
+      if (!["production", "ready"].includes(o.status) && !here && !ordered && !theirs) { steps.push("goods_order"); tracks.push({ k: "goods", state: "needed", label: "Goods to order" }); }
+      else steps.push("approved");
     }
     if (!steps.length) continue;
     const mg = gs.find((g) => (g.imprints || []).length && !mine.some((m) => m.group_id === g.id)) || gs.find((g) => (g.imprints || []).length);
