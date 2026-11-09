@@ -21558,3 +21558,7 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .gcw-tag.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:700}
 .gcw-tag.pms{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:var(--ink)}
 .gcw-mh{display:block;padding:6px 10px 2px;font-size:12px}
+/* Mockup Creator: another colorway of a garment color (Nov 9) */
+.mk-gcw{all:unset;cursor:pointer;height:30px;padding:0 12px;border:1px dashed var(--line);border-radius:999px;font-size:13px;color:var(--accent);white-space:nowrap;display:inline-flex;align-items:center}
+.mk-gcw:hover{border-color:var(--accent)}
+.mk-gc-cw{margin-left:4px;font-size:11px;font-weight:700;color:var(--ink-3)}

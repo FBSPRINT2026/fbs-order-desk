@@ -3329,6 +3329,16 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     // a garment drawn here from the customer's sheet (Oct 27): its look goes on the order's line, and its name and color
     // when the order's line had none
     const scKey = (x: { style?: string; color?: string }) => `${(x.style || "").trim().toLowerCase()}|${(x.color || "").trim().toLowerCase()}`;
+    // a second colorway of a garment color made here (Nov 9, Nick: "another black with pink and white"): its own line on
+    // the order, right under the color it came from, sizes to fill in; its inks are Imprint.inkBy[inkKeyOf(line)]
+    for (const l of lines) {
+      if (!l.cw || g.lines.some((x) => x.id === l.id)) continue;
+      const at = g.lines.findIndex((x) => scKey(x) === scKey(l) && !x.cw), src = at >= 0 ? g.lines[at] : g.lines.find((x) => scKey(x) === scKey(l));
+      if (!src) continue;
+      const ln = { ...src, id: l.id, cw: l.cw, sizes: {}, priceOverride: null } as typeof src;
+      delete ln.extras; delete ln.shopUse;
+      g.lines.splice((at >= 0 ? at : g.lines.indexOf(src)) + 1, 0, ln);
+    }
     for (const l of lines) {
       const ol = g.lines.find((x) => x.id === l.id); if (!ol) continue;
       if (l.look) ol.look = l.look;
@@ -3496,7 +3506,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         // the mockup keeps its setup so it can be opened to edit and ordered; every color saved together is one set and
         // one number (Oct 24, Nick). A proof being changed isn't a library mockup.
         const set = changeId ? "" : (mockSet.current ||= crypto.randomUUID());
-        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null, ...(zoomMap ? { zoom: zoomMap } : {}) } : undefined;
+        const snap = set ? { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.cw ? { cw: z.cw } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null, ...(zoomMap ? { zoom: zoomMap } : {}) } : undefined;
         for (const l of lines.filter((z) => z.style || z.color)) {
           const blob = await render(l), thumb = await render(l, true);
           const title = `${groupName || "Mockup"} — ${[l.brand, l.style].filter(Boolean).join(" ")} ${l.color}`.trim();
@@ -3515,7 +3525,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         if (changeId) {
           // their version goes to the shop with the proof; we check it and send a new proof
           const r2 = await submitOwnChange(changeId, {
-            lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })),
+            lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.cw ? { cw: z.cw } : {}), ...(z.look ? { look: z.look } : {}) })),
             imprints: imprints.map((d) => ({ ...d })),
             mockupPaths: paths, note: "",
           });
@@ -3587,7 +3597,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!orderId && newMockups.length) {
         const set = mockSet.current || crypto.randomUUID();
         mockSet.current = set;
-        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null, ...(zoomMap ? { zoom: zoomMap } : {}) };
+        const snap = { set, name: groupName, lines: lines.filter((z) => z.style || z.color).map((z) => ({ id: z.id, style: z.style, brand: z.brand, color: z.color, garment: z.garment, ...(z.own ? { own: z.own } : {}), ...(z.hex ? { hex: z.hex } : {}), ...(z.cw ? { cw: z.cw } : {}), ...(z.look ? { look: z.look } : {}) })), imprints: imprints.map((d) => ({ ...d })), offsets, mockupSize: shownSize || null, ...(zoomMap ? { zoom: zoomMap } : {}) };
         await sb.from("mockups").update({ snapshot: snap }).in("id", newMockups);
         const { data: old } = await sb.from("mockups").select("id").eq("customer_id", customerId).is("order_id", null).is("archived_at", null).eq("snapshot->>set", set);
         const gone = ((old || []) as { id: string }[]).map((x) => x.id).filter((id) => !newMockups.includes(id));
@@ -4279,11 +4289,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                                 onDragEnd={() => setDragC(null)}
                                 onDragOver={(e) => { if (dragC != null && dragC !== i && gr.idx.includes(dragC)) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }}
                                 onDrop={(e) => { e.preventDefault(); const from = dragC; setDragC(null); if (from == null || from === i || !gr.idx.includes(from)) return; moveLine(from, i); }}>
-                                <button type="button" className="mk-gc-pick" onClick={() => setActive(i)} title={`Show ${l.color}`}><span className="mk-gc-dot" style={{ background: hex }} />{l.color}</button>
+                                <button type="button" className="mk-gc-pick" onClick={() => setActive(i)} title={`Show ${l.color}${l.cw ? " (its own colorway)" : ""}`}><span className="mk-gc-dot" style={{ background: hex }} />{l.color}{(() => { const same = gr.idx.filter((j) => (lines[j].color || "").trim().toLowerCase() === (l.color || "").trim().toLowerCase()); return same.length > 1 ? <span className="mk-gc-cw">{same.indexOf(i) + 1}</span> : null; })()}</button>
                                 <button type="button" className="mk-gc-x" aria-label={`Remove ${l.color}`} onClick={() => removeLine(i)}>✕</button>
                               </span>
                             );
                           })}
+                          {/* the same garment color in other inks (Nov 9, Nick: "black with pink and white where one is blue and
+                              yellow"): a copy of the color picked, its inks set under each print ("this garment's inks") */}
+                          {gr.idx.includes(active) && lines[active]?.color && !portal && <button type="button" className="mk-gcw" title={`Another colorway on ${lines[active].color}: the same garment printed in other inks (one set of screens)`}
+                            onClick={() => { const src = lines[active]; setLines((ls) => { const at = ls.indexOf(src); const nl = [...ls]; nl.splice(at + 1, 0, { ...src, id: uid(), cw: Math.random().toString(36).slice(2, 6) }); return nl; }); setActive(active + 1); }}>＋ Colorway</button>}
                           {l0.own && <button type="button" className="mk-gc-add mk-own-add" title="Add another color: upload its photos" onClick={() => setOwnUp({ name: l0.style, color: "", front: null, back: null, lock: true })}>＋ Color</button>}
                           {g && <AddColor colors={(g.colors || []).filter((c) => !have.includes(c))} onAdd={(c) => {
                             const blank = gr.idx.find((i) => !lines[i].color);
