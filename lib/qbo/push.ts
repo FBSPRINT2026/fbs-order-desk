@@ -419,6 +419,12 @@ export class Pusher {
     // paid in the portal on an old Printavo invoice (migration 260): Printavo made that invoice in QuickBooks, so the
     // payment is applied there by hand, never made by us
     const oldInv = (p as OurPayment & { archived_order_id?: string | null }).archived_order_id;
+    // a charge in the portal goes to QuickBooks as it was paid (Nov 9, Nick: "mark them in real time as they get paid"):
+    // one QuickBooks payment per charge, applied to each invoice it paid, by the invoice's number, whether the invoice is
+    // an old Printavo one, a 40,000 one Printavo made, or ours; one charge, one payment, so it matches the bank deposit
+    const pid0 = String((p as { processor_id?: string | null }).processor_id || "");
+    const charge = pid0 && !/^(credit|stax-refund|printavo|achoff):/.test(pid0) && r2(+p.amount) > 0;
+    if (charge && (oldInv || !(p.order_id && (await this.link("invoice", p.order_id))))) return this.chargePayment(row, p);
     if (oldInv) {
       const { data: a } = await this.admin.from("archived_orders").select("visual_id").eq("id", oldInv).maybeSingle();
       if (String((p as { processor_id?: string | null }).processor_id || "").startsWith("achoff:")) return { status: "needs_review", reason: `Paid by ACH in the portal: the credit card surcharge (${r2(+p.amount).toFixed(2)}) on old Printavo invoice #${a?.visual_id || "?"} was taken off. In QuickBooks, take that surcharge off the invoice (or credit it), then Skip.` };
@@ -515,6 +521,73 @@ export class Pusher {
     const made = await this.qbo.with({ entity: "payment", localId: p.id }).create<Rec>("Payment", build.body, this.key(row, "create"));
     await this.saveLink({ entity: "payment", local_id: p.id, qbo_id: made.Id, source: "created", rec: made, hash: hashOf(build.body), pushed: true });
     return { status: "done", reason: `Applied ${build.amount.toFixed(2)} to QuickBooks invoice #${n} (payment #${made.Id}).`, preview, result: { qboId: made.Id } };
+  }
+
+  /** one portal charge (all the payments with its processor id) as one QuickBooks payment, on the invoices it paid */
+  async chargePayment(row: QRow, p: OurPayment): Promise<Outcome> {
+    const pid = String((p as { processor_id?: string | null }).processor_id || "");
+    const { data: sib } = await this.admin.from("payments").select("id, order_id, archived_order_id, amount, method, paid_on, note").eq("processor_id", pid).gt("amount", 0).order("id");
+    const all = (sib || []) as { id: string; order_id: string | null; archived_order_id: string | null; amount: number; method: string | null; paid_on: string | null }[];
+    const lead = all[0]?.id === p.id;
+    if (!lead) {
+      if (await this.link("payment_also", p.id) || await this.link("payment", all[0]?.id || "")) return { status: "done", reason: "Sent with the rest of its charge, as one QuickBooks payment." };
+      return { status: "pending", reason: "Goes with the rest of its charge, as one QuickBooks payment.", retryMin: 10 };
+    }
+    // each payment's invoice number
+    const parts: { id: string; amount: number; doc: string }[] = [];
+    for (const x of all) {
+      if (x.archived_order_id) {
+        const { data: a } = await this.admin.from("archived_orders").select("visual_id").eq("id", x.archived_order_id).maybeSingle();
+        if (a?.visual_id) parts.push({ id: x.id, amount: r2(+x.amount), doc: String(a.visual_id) });
+      } else if (x.order_id) {
+        const o = await this.order(x.order_id);
+        const cust = o?.customer_id ? await this.ourCustomer(o.customer_id) : null;
+        if (o && !cust?.is_test) parts.push({ id: x.id, amount: r2(+x.amount), doc: String((o as { printavo_visual_id?: string | null }).printavo_visual_id || o.number) });
+      }
+    }
+    if (!parts.length) return { status: "skipped", reason: "Test customer or no invoice: never sent." };
+    if (!this.qbo) return { status: "pending", reason: `Not connected: would apply ${parts.reduce((t, x) => t + x.amount, 0).toFixed(2)} to QuickBooks invoices ${parts.map((x) => "#" + x.doc).join(", ")}.` };
+    const docs = [...new Set(parts.map((x) => x.doc))];
+    type Inv = Rec & { DocNumber?: string; Balance?: number; CustomerRef?: { value: string }; PrivateNote?: string };
+    const q = this.qbo.with({ entity: "payment", localId: p.id });
+    const invs: Inv[] = [];
+    for (let i = 0; i < docs.length; i += 30) invs.push(...await q.query<Inv>("Invoice", `WHERE DocNumber IN (${docs.slice(i, i + 30).map((d) => `'${esc(d)}'`).join(", ")})`));
+    const byDoc = new Map<string, Inv[]>();
+    for (const v of invs) { const k = String(v.DocNumber || ""); byDoc.set(k, [...(byDoc.get(k) || []), v]); }
+    const missing = docs.filter((d) => !byDoc.get(d)?.length), twice = docs.filter((d) => (byDoc.get(d) || []).length > 1);
+    if (missing.length) return { status: row.attempts >= 12 ? "needs_review" : "pending", reason: `Invoice ${missing.map((d) => "#" + d).join(", ")} isn't in QuickBooks yet.`, retryMin: 60 };
+    if (twice.length) return { status: "needs_review", reason: `QuickBooks has more than one invoice numbered ${twice.map((d) => "#" + d).join(", ")}: apply the payment there by hand, then Skip.` };
+    // already paid there (entered by hand, or by Printavo): left as it is
+    const lines: { inv: Inv; amount: number }[] = [], paid: string[] = [];
+    for (const x of parts) {
+      const inv = byDoc.get(x.doc)![0], bal = r2(+(inv.Balance || 0));
+      if (bal <= 0.004) { paid.push(x.doc); continue; }
+      if (bal + 0.004 < x.amount) return { status: "needs_review", reason: `Invoice #${x.doc} has ${bal.toFixed(2)} open in QuickBooks, but ${x.amount.toFixed(2)} was paid here: apply it there by hand, then Skip.` };
+      lines.push({ inv, amount: x.amount });
+    }
+    if (!lines.length) {
+      await this.saveLink({ entity: "payment", local_id: p.id, qbo_id: `paid:${pid}`.slice(0, 60), source: "matched_payment", note: "Already paid in QuickBooks" });
+      return { status: "done", reason: `Already paid in QuickBooks (${paid.map((d) => "#" + d).join(", ")}); nothing sent.` };
+    }
+    const custs = [...new Set(lines.map((l) => String(l.inv.CustomerRef?.value || "")))];
+    if (custs.length > 1 || !custs[0]) return { status: "needs_review", reason: `This charge paid invoices under ${custs.length} QuickBooks customers: apply it there by hand, then Skip.` };
+    const total = r2(lines.reduce((t, l) => t + l.amount, 0));
+    const m = String(p.method || "").toLowerCase();
+    const map = (this.qs as { payment_method_map?: Record<string, string> }).payment_method_map || {};
+    const methodId = m.startsWith("ach") ? map["ACH"] : /card/.test(m) ? map["Credit card"] || map["Card"] : m.startsWith("check") ? map["Check"] : m.startsWith("cash") ? map["Cash"] : "";
+    const body: Record<string, unknown> = {
+      CustomerRef: { value: custs[0] }, TotalAmt: total, TxnDate: p.paid_on || undefined,
+      ...(methodId ? { PaymentMethodRef: { value: methodId } } : {}),
+      ...((this.qs as { deposit_account_id?: string }).deposit_account_id ? { DepositToAccountRef: { value: (this.qs as { deposit_account_id?: string }).deposit_account_id } } : {}),
+      PrivateNote: `Paid in the FBS portal (${p.method || "payment"}${pid ? `, ${pid.slice(0, 8)}` : ""}): ${lines.map((l) => "#" + l.inv.DocNumber).join(", ")}`.slice(0, 4000),
+      Line: lines.map((l) => ({ Amount: l.amount, LinkedTxn: [{ TxnId: l.inv.Id, TxnType: "Invoice" }] })),
+    };
+    const preview = { action: "create", body };
+    if (!this.live) return { status: "pending", reason: `Preview: would apply ${total.toFixed(2)} to ${lines.map((l) => "#" + l.inv.DocNumber).join(", ")}.`, preview };
+    const made = await q.create<Rec>("Payment", body, this.key(row, "create"));
+    await this.saveLink({ entity: "payment", local_id: p.id, qbo_id: made.Id, source: "created", rec: made, hash: hashOf(body), pushed: true });
+    for (const x of all.slice(1)) await this.saveLink({ entity: "payment_also", local_id: x.id, qbo_id: `${made.Id}:${x.id}`.slice(0, 80), source: "created", note: `Part of QuickBooks payment #${made.Id}` });
+    return { status: "done", reason: `Applied ${total.toFixed(2)} to QuickBooks invoices ${lines.map((l) => "#" + l.inv.DocNumber).join(", ")} (payment #${made.Id})${paid.length ? `; ${paid.map((d) => "#" + d).join(", ")} were already paid there` : ""}.`, preview, result: { qboId: made.Id } };
   }
 
   async deletePayment(row: QRow): Promise<Outcome> {

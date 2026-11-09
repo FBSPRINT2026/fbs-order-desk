@@ -20,10 +20,18 @@ export async function GET(req: Request) {
   // one queue row sent for real, as a test, while the sync is otherwise off or previewing (Nov 4, Nick: "send it to
   // QuickBooks like you would normally… and I can see")
   const one = Number(new URL(req.url).searchParams.get("one") || 0);
+  // payments only (Nov 9): every waiting portal payment, sent for real even while the rest of the sync is off
+  const pays = new URL(req.url).searchParams.get("payments") === "1";
+  let payIds: number[] = [];
+  if (pays) {
+    const { data: q } = await admin.from("qbo_queue").select("id").eq("entity", "payment").eq("status", "pending").lte("run_after", new Date().toISOString()).order("id").limit(200);
+    payIds = ((q || []) as { id: number }[]).map((r) => r.id);
+    if (!payIds.length) return NextResponse.json({ payments: 0 });
+  }
   const lockId = await claimLock(admin);
   if (!lockId) return NextResponse.json({ busy: true });
   try {
-    const stats = await runQueue(admin, one > 0 ? { mode: "auto", deadline: Date.now() + 120000, lockId, ids: [one], forceLive: true } : { mode: preview ? "preview" : "auto", deadline: Date.now() + 280000, lockId });
+    const stats = await runQueue(admin, payIds.length ? { mode: "auto", deadline: Date.now() + 280000, lockId, ids: payIds, forceLive: true } : one > 0 ? { mode: "auto", deadline: Date.now() + 120000, lockId, ids: [one], forceLive: true } : { mode: preview ? "preview" : "auto", deadline: Date.now() + 280000, lockId });
     return NextResponse.json(stats);
   } catch (e) {
     const msg = (e instanceof Error ? e.message : String(e)).slice(0, 500);
