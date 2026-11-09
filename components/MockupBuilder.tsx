@@ -1960,18 +1960,27 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const capBody = youthOn ? (onYouth ? capKid : null) : capAll;
   const fitBody = (b: Body) => { const cb = youthOn ? (b.kind === "adult" ? null : capKid) : capAll; return !b.cap && cb && cb.widthIn < b.widthIn ? cb : b; };
   // where a print sits follows the shown size; how big it can be follows the smallest size ordered
-  const spotFor = (loc: string, b: Body = body) => {
-    const s0 = spotFor0(loc, b), cb = fitBody(b);
-    if (cb === b) return s0;
-    const c = spotFor0(loc, cb);
-    return { ...s0, maxW: Math.min(s0.maxW, c.maxW), maxH: Math.min(s0.maxH, c.maxH), defW: Math.min(s0.defW, c.defW) };
-  };
   // an oversized print (Imprint.oversize) may go past the normal max, up to 15" (OVERSIZE_IN)
   const overLocs = new Set(imprints.filter((x) => x.oversize).map((x) => (x.location || "").toLowerCase()));
   const overCap = (loc: string, w: number) => (overLocs.has((loc || "").toLowerCase()) ? Math.max(w, Math.min(OVERSIZE_IN, (w * OVERSIZE_IN) / NORMAL_MAX_IN)) : w);
+  // the spot's max print area follows it too (Nov 9, Nick: "set to 15, you don't see it as actually 15 on the blow up"):
+  // the close-up's box, its "max" label, and every size check read the spot
+  const spotFor = (loc: string, b: Body = body) => {
+    const s1 = spotFor0(loc, b), cb = fitBody(b);
+    const s0 = cb === b ? s1 : (() => { const c = spotFor0(loc, cb); return { ...s1, maxW: Math.min(s1.maxW, c.maxW), maxH: Math.min(s1.maxH, c.maxH), defW: Math.min(s1.defW, c.defW) }; })();
+    const w = overCap(loc, s0.maxW);
+    return w === s0.maxW ? s0 : { ...s0, maxW: Math.round(w * 100) / 100 };
+  };
   const maxWidthFor = (loc: string, r: number, b: Body = body) => overCap(loc, maxWidthFor0(loc, r, fitBody(b)));
   // a size off the job's film was printed before on these same garments: it's kept (up to what the shown size takes)
-  const printWidth = (im: Imprint, loc: string, r: number, b: Body = body) => printWidth0(im.size, loc, r, im.sizeFrom === "film" ? b : fitBody(b));
+  const printWidth = (im: Imprint, loc: string, r: number, b: Body = body) => {
+    const w0 = printWidth0(im.size, loc, r, im.sizeFrom === "film" ? b : fitBody(b));
+    // an oversized print is held to the oversized max, not the normal one (lib/mockup printWidth stops at the normal)
+    const m = overLocs.has((loc || "").toLowerCase()) ? (im.size || "").trim().match(/^([\d.]+)/) : null;
+    if (!m) return w0;
+    const v = +m[1], w = /tall/i.test(im.size || "") ? (r ? v / r : v) : v;
+    return Math.max(w0, Math.min(w, maxWidthFor(loc, r, b)));
+  };
   const sideMaxWidth = (loc: string, r: number, b: Body = body) => overCap(loc, sideMaxWidth0(loc, r, fitBody(b)));
   const autoSpot = (cur: string, v: View, dx: number, top: number, w: number, h: number) => autoSpot0(cur, v, dx, top, w, h, body);
   const basePlacement = (loc: string, wIn: number, r: number, drop: number | null, sc: number, view?: View, fit?: Fit | null, b: Body = body) => basePlacement0(loc, wIn, r, drop, sc, view, fit, b);
