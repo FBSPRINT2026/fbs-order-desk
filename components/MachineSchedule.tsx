@@ -405,6 +405,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
   const [tightOpen, setTightOpen] = useSticky("cal.tightOpen", false);
   const [listOpen, setListOpen] = useState(""); // a same-art list opened to show all its jobs
   const [grpEdit, setGrpEdit] = useState<Card[] | null>(null); // a same-art run's time being edited
+  const [restart, setRestart] = useState(false); // asking: take every not-started job off the calendar?
   // Re-plan results for the calendar as it is (the Re-plan window asks on every redraw): worked out again when anything changes
   const planCache = useRef<{ deps: unknown[]; v: Map<boolean, unknown> }>({ deps: [], v: new Map() });
 
@@ -712,14 +713,28 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
     load();
   }
   async function acceptAll() {
-    const pos: Record<string, number> = {};
-    const rows = tray.filter((t) => t.sug && !t.sug.late).map((t) => {
+    // every suggestion, late ones too (Nov 9, Nick: "if a job is… past due… all that would mean is they just have to go
+    // first in the list"): a late or past-due job goes ahead of the day's jobs that haven't started, most overdue first
+    const pos: Record<string, number> = {}, early: Record<string, number> = {};
+    const late = (t: (typeof tray)[number]) => !!t.sug?.late || (!!t.job.due && t.job.due < today);
+    const list = tray.filter((t) => t.sug).sort((x, y) => Number(late(y)) - Number(late(x)) || (x.job.due || "9").localeCompare(y.job.due || "9"));
+    const rows = list.map((t) => {
       const k = t.sug!.machine.id + t.sug!.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === t.sug!.machine.id && c.day === t.sug!.day).length;
-      return { order_id: t.job.kind === "o" ? t.job.id : null, archived_order_id: t.job.kind === "a" ? t.job.id : null, machine: t.sug!.machine.id, day: t.sug!.day, minutes: t.sug!.minutes, position: pos[k]++, kind: t.need.type, label: t.need.label, source: "suggested", locations: locsFor(t.job, t.need) };
+      const position = late(t) ? -1000 + (early[k] = (early[k] ?? 0) + 1) : pos[k]++;
+      return { order_id: t.job.kind === "o" ? t.job.id : null, archived_order_id: t.job.kind === "a" ? t.job.id : null, machine: t.sug!.machine.id, day: t.sug!.day, minutes: t.sug!.minutes, position, kind: t.need.type, label: t.need.label, source: "suggested", locations: locsFor(t.job, t.need) };
     });
     if (!rows.length) return;
     const r = await createClient().from("production_slots").insert(rows);
-    setMsg(r.error ? r.error.message : `Booked ${rows.length} job${rows.length === 1 ? "" : "s"}. Late ones stay in the list for you to place.`);
+    const nLate = list.filter(late).length;
+    setMsg(r.error ? r.error.message : `Booked ${rows.length} job${rows.length === 1 ? "" : "s"}${nLate ? `; ${nLate} late or past due went first on their day` : ""}.`);
+    load();
+  }
+  /** jobs dragged off the calendar back to Ready To Schedule (not started ones only): their bookings go, the jobs wait again */
+  async function unbookMany(cs: Card[]) {
+    const ids = [...new Set(cs.filter((c) => c.slot && c.slot.status === "scheduled").map((c) => c.slot!.id))];
+    if (!ids.length) { setMsg("Started jobs stay on the calendar."); return; }
+    const r = await createClient().from("production_slots").delete().in("id", ids);
+    setMsg(r.error ? r.error.message : `${ids.length === 1 ? "Moved back" : `${ids.length} jobs moved back`} to Ready To Schedule.`);
     load();
   }
   /** Start / pause / resume / progress / done on a booked job: updates it and writes the job log. */
@@ -1184,7 +1199,7 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
           <div key={m.id} className={"ms-dv-col" + (over === m.id + day ? (canDrop(m) ? " over" : " no") : "")} style={{ height: (rng / 60) * HOUR_PX, backgroundSize: `100% ${HOUR_PX}px` }}
             onDragOver={(e) => { e.preventDefault(); setOver(m.id + day); }} onDragLeave={() => setOver("")}
             onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, day, vS + ((e.clientY - r.top) / HOUR_PX) * 60); }}
-            onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button, .ms-warm, .ms-lunch")) return; const r = e.currentTarget.getBoundingClientRect(); setDownEdit({ machine: m.id, day, start: Math.floor((vS + ((e.clientY - r.top) / HOUR_PX) * 60) / 30) * 30 }); }}
+            onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button, .ms-warm, .ms-lunch, .msar-box")) return; const r = e.currentTarget.getBoundingClientRect(); setDownEdit({ machine: m.id, day, start: Math.floor((vS + ((e.clientY - r.top) / HOUR_PX) * 60) / 30) * 30 }); }}
             title="Click an open time to add downtime here">
             {shade(m).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
             {/* a firm job's deadline is said on its card ("Firm Wed 12p"), not as a line on the calendar (Nov 9, Nick) */}
@@ -1213,13 +1228,13 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
                 const a = Math.max(r.a, vS), b = Math.min(r.b, vE); if (b <= a) return null;
                 const H = ((b - a) / 60) * HOUR_PX + 4, list = r.items.some((x) => ((x.end - x.start) / 60) * HOUR_PX < 40);
                 const n = r.items.length, title = `Same art: ${n} jobs run back to back, one setup (${fmtMin(r.saved)} saved)`;
-                if (!list) return <div key={"ar" + r.a} className="msar-box" style={{ top: ((a - vS) / 60) * HOUR_PX - 3, height: H }} title={title}><span className="msar-h" draggable onDragStart={(e) => startDrag(e, { card: r.items[0].g.c, grabMin: 0, group: r.items.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }} onDoubleClick={() => setGrpEdit(r.items.map((x) => x.g.c))} title="Drag to move the whole run · double-click to edit its time">🔗 Same art · {n} jobs · one setup</span></div>;
+                if (!list) return <div key={"ar" + r.a} className="msar-box" style={{ top: ((a - vS) / 60) * HOUR_PX - 3, height: H }} title={title}><span className="msar-h" draggable onDragStart={(e) => startDrag(e, { card: r.items[0].g.c, grabMin: 0, group: r.items.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={(e) => { e.stopPropagation(); if (e.detail >= 2) setGrpEdit(r.items.map((x) => x.g.c)); }} title="Drag to move the whole run · double-click to edit its time">🔗 Same art · {n} jobs · one setup</span></div>;
                 for (const x of r.items) inList.add(x.g.c.key);
                 const c0 = r.items[0].g.c, pcs = r.items.reduce((t, x) => t + x.g.c.need.qty, 0), gl0 = glance(c0.need, c0.minutes);
                 const open = listOpen === m.id + day + r.a, fit = Math.max(1, Math.floor((H - 22) / 16)), show = open || n <= fit ? r.items : r.items.slice(0, Math.max(1, fit - 1));
                 return (
                   <div key={"ar" + r.a} className={"msar-box msar-list" + (open ? " open" : "")} style={{ top: ((a - vS) / 60) * HOUR_PX - 3, minHeight: H, ...(open ? {} : { height: H }) }} title={title}>
-                    <span className="msar-lh" draggable onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: r.items.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }} onDoubleClick={() => setGrpEdit(r.items.map((x) => x.g.c))} title="Drag to move the whole run · double-click to edit its time">🔗 {abbrCo(c0.job.customer)} · same art · {gl0.colors} · {pcs.toLocaleString()} P</span>
+                    <span className="msar-lh" draggable onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: r.items.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={(e) => { e.stopPropagation(); if (e.detail >= 2) setGrpEdit(r.items.map((x) => x.g.c)); }} title="Drag to move the whole run · double-click to edit its time">🔗 {abbrCo(c0.job.customer)} · same art · {gl0.colors} · {pcs.toLocaleString()} P</span>
                     {show.map((x) => <button key={x.g.c.key} type="button" className="msar-row" draggable onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} title={tip(x.g)}><b>#{x.g.c.job.number}</b>{flags(x.g.c.job)}<span>{x.g.c.need.qty.toLocaleString()} P</span></button>)}
                     {show.length < n ? <button type="button" className="msar-more" onClick={() => setListOpen(m.id + day + r.a)}>+{n - show.length} more</button> : open ? <button type="button" className="msar-more" onClick={() => setListOpen("")}>Show less</button> : null}
                   </div>
@@ -1820,12 +1835,15 @@ export default function MachineSchedule({ when }: { /** hidden mode: no calendar
             {eqIssues.length > 0 && <div className="ms-otline"><span className="ms-ot-i" aria-hidden>⚙</span><span className="ms-idle-t"><b>{eqIssues.map((m) => shortName(m)).join(", ")}</b> {eqIssues.length === 1 ? "has" : "have"} an equipment issue<span className="faint"> · {eqIssues.map((m) => m.issue!.down ? `${shortName(m)} down` : [m.issue!.colors != null ? `${shortName(m)} ${m.issue!.colors}/${m.issue!.full} ${m.type === "screen" ? "colors" : "heads"}` : "", m.issue!.flashes != null ? `${m.issue!.flashes}/${m.issue!.fullFlashes} flashes` : "", m.issue!.speed != null ? `${m.issue!.speed}% speed` : ""].filter(Boolean).join(" ")).join(" · ")}</span></span><span className="spacer" /><button type="button" className="btn sm ghost" onClick={() => canEquip && setEqOpen(true)}>Details</button></div>}
             </div>
           </div>
-          <div className="ms-ready">
+          <div className={"ms-ready" + (drag?.card?.slot ? " drop-back" : "") + (over === "tray" ? " over" : "")}
+            onDragOver={(e) => { if (drag?.card?.slot) { e.preventDefault(); setOver("tray"); } }} onDragLeave={() => setOver((o) => (o === "tray" ? "" : o))}
+            onDrop={(e) => { e.preventDefault(); setOver(""); if (drag?.card?.slot) unbookMany(drag.group || [drag.card]); setDrag(null); }}>
             <div className="ms-ready-h">
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
               <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art, blanks) · ` : ""}{tray.length ? "drag onto a press and day, or take the suggested spot" : "nothing waiting"}</span>
               <span className="spacer" />
-              {trayOpen && tray.some((t) => t.sug && !t.sug.late) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
+              {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind !== "h").length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={() => { setRestart(false); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind !== "h")); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
+              {trayOpen && tray.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
             </div>
             {trayOpen && tray.length > 0 && (
               <>
