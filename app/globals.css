@@ -21594,3 +21594,8 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .edg-o{display:inline-flex;align-items:center;gap:6px}
 .edg-o .faint{font-size:12px}
 @media (max-width:760px){.edg-head{grid-template-columns:52px minmax(0,1fr)}.edg-thr,.edg-file{grid-column:2;justify-self:start}}
+.edg-spot{border:1px solid var(--line);border-radius:var(--r);padding:8px 10px;display:grid;gap:8px}
+.edg-sh{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.edg-sh>b{font-size:14px;align-self:center;min-width:110px}
+.edg-sz{width:160px}
+.edg-sh .edg-file{align-self:center}
