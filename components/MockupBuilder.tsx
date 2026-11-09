@@ -4690,8 +4690,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           {/* saved to a customer from the shop: make it a job when they'll come back with sizes (Nov 9, Nick) */}
           {!portal && !orderId && savedMock && (
             <div className="mk-saved-order">
-              <span><b>Saved to the customer.</b> If they&apos;ll come back with sizes, make it a job so it shows in the Job Center.</span>
-              <MockupOrderButton id={savedMock.id} canAct shop />
+              <span><b>Saved to the customer.</b> Send it to them for approval, or make it a job if they&apos;ll come back with sizes. Either one shows it in the Job Center.</span>
+              <span className="mk-so-b"><MockupOrderButton id={savedMock.id} canAct shop send /><MockupOrderButton id={savedMock.id} canAct shop className="btn sm" /></span>
             </div>
           )}
           {portal && savedMock && (

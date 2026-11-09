@@ -9,16 +9,16 @@ import { orderFromMockup, staffJobFromMockup } from "@/app/portal/request-action
  * for them to add sizes and send in like any order they start.
  */
 /** shop: "Start a job" (a quote with no sizes yet, opened in the shop) instead of the customer's "Order" */
-export default function MockupOrderButton({ id, canAct, className = "btn sm primary", shop = false }: { id: string; canAct: boolean; className?: string; shop?: boolean }) {
+export default function MockupOrderButton({ id, canAct, className = "btn sm primary", shop = false, send = false }: { id: string; canAct: boolean; className?: string; shop?: boolean; /** shop: "Send for approval": the job, opened on Art & production to send the mockup as version 1 */ send?: boolean }) {
   const router = useRouter();
   const [msg, setMsg] = useState("");
   const [pending, start] = useTransition();
   if (msg) return <span className="faint mk-ord-msg">{msg}</span>;
   return (
-    <button type="button" className={className} disabled={!canAct || pending} title={!canAct ? "Turned off in preview" : shop ? "Make this a job: a quote with this mockup on it, waiting on their sizes (it shows in the Job Center)" : "Start an order with this mockup filled in: add your sizes and send it in"}
+    <button type="button" className={className} disabled={!canAct || pending} title={!canAct ? "Turned off in preview" : shop && send ? "Makes it a job (a quote waiting on sizes) and opens it to send this mockup to the customer for approval" : shop ? "Make this a job: a quote with this mockup on it, waiting on their sizes (it shows in the Job Center)" : "Start an order with this mockup filled in: add your sizes and send it in"}
       onClick={() => start(async () => {
         const r = shop ? await staffJobFromMockup(id) : await orderFromMockup(id);
-        if (r.ok && r.id) router.push(shop ? `/shop/orders/${r.id}` : `/portal/request/${r.id}`); else setMsg(r.error || "Couldn't start the order.");
-      })}>{pending ? "Starting…" : shop ? "Start a job" : "Order"}</button>
+        if (r.ok && r.id) router.push(shop ? `/shop/orders/${r.id}${send ? "?tab=prod" : ""}` : `/portal/request/${r.id}`); else setMsg(r.error || "Couldn't start the order.");
+      })}>{pending ? "Starting…" : shop ? (send ? "Send for approval" : "Start a job") : "Order"}</button>
   );
 }

@@ -21496,3 +21496,4 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .jcp-sg{overflow:hidden}
 .jcp-sg>span:last-child,.jcp-sg>div{min-width:0}
 .jcp-sg small{overflow:hidden;text-overflow:ellipsis}
+.mk-so-b{display:inline-flex;gap:6px;flex-wrap:wrap}

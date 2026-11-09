@@ -18,7 +18,7 @@ import JobFiles from "@/components/job/JobFiles";
 import JobTalk, { OriginalJobTalk } from "@/components/JobTalk";
 import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
-import SendToPrintavo, { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
+import { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
 import { SITE_URL } from "@/lib/config";
 import { type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
@@ -1586,10 +1586,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               any invoice status makes it an invoice); then the menus: Documents, Production, Ask AI, More. On a phone the
               next steps are full-width buttons and the menus sit two by two under them */}
           <span className="ed-main">
-          {/* a draft too (Oct 27, Nick: "we lost the send to Printavo button"): sending saves it first, which gives it its
-              40,000-series number */}
-          {(o.draft || (o.number >= 40000 && o.number < 50000)) && !(o as Order & { printavo_id?: string | null }).printavo_id && !(cust && needsMove(cust as unknown as Record<string, unknown>)) &&
-            <SendToPrintavo orderId={o.id} onSaved={o.draft ? commitDraft : save} onSent={(r) => setO((x) => (x ? ({ ...x, printavo_id: "sent", printavo_visual_id: r.visualId, printavo_state: { url: r.url, publicUrl: r.publicUrl, status: r.status } } as Order) : x))} />}
+          {/* no Send to Printavo any more (Nov 9, Nick: "we're not using Printavo anymore… we don't wanna send things that way") */}
           {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
           {quoteLock.closed && !lockOverride ? <button type="button" className="btn" onClick={() => setClosedAsk(true)}>Open anyway</button>
             : o.status === "quote_sent" && quoteLock.locked ? <button type="button" className="btn primary" onClick={() => void makeChanges()}>Make changes</button>

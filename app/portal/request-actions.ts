@@ -396,6 +396,16 @@ export async function staffJobFromMockup(mockupId: string): Promise<Result> {
       nickname: m.name.slice(0, 120), notes: `From mockup ${m.tag === "your mockup" ? "" : m.tag}`.trim() + ". Waiting on sizes.",
     }).select("id").single();
     if (error) return { ok: false, error: error.message };
+    // the mockup's pictures on the job, as its mockup (ready to send to the customer for approval as version 1)
+    const { data: mk } = await admin.from("mockups").select("id, number, customer_id, snapshot").eq("id", mockupId).maybeSingle();
+    const setId = (mk?.snapshot as { set?: string } | null)?.set;
+    const { data: rows } = mk?.number ? await admin.from("mockups").select("title, file_path, design_ids").eq("customer_id", mk.customer_id).eq("number", mk.number).is("archived_at", null).is("order_id", null)
+      : setId ? await admin.from("mockups").select("title, file_path, design_ids").eq("customer_id", mk!.customer_id).eq("snapshot->>set", setId).is("archived_at", null).is("order_id", null)
+      : await admin.from("mockups").select("title, file_path, design_ids").eq("id", mockupId);
+    const snap = { lines: m.g.lines.map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment })), imprints: m.g.imprints, mockupSize: m.g.mockupSize || null, mockupThumbs: m.g.mockupThumbs || [] };
+    const copies = ((rows || []) as { title: string; file_path: string; design_ids: string[] | null }[]).filter((r) => r.file_path).slice(0, 12)
+      .map((r) => ({ customer_id: m.customerId, order_id: data.id, group_id: m.g.id, title: r.title, file_path: r.file_path, design_ids: r.design_ids || [], created_by: v.email || "", draft: false, snapshot: snap }));
+    if (copies.length) await admin.from("mockups").insert(copies);
     await admin.from("order_events").insert({ order_id: data.id, kind: "from_mockup", detail: `Job started from ${m.tag === "your mockup" ? "a saved mockup" : m.tag}: waiting on sizes`, actor: v.email });
     return { ok: true, id: data.id };
   } catch (e) { return fail(e); }

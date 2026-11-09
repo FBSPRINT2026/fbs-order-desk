@@ -77,7 +77,7 @@ export default function CustomerMove({ customerId, onClose, onMoved }: { custome
       const line = `Special pricing: ${(list.pricing_note || "").trim()}`;
       if (!(priv?.notes || "").includes(line)) await sb.from("customer_private").upsert({ customer_id: c.id, notes: [priv?.notes, line].filter(Boolean).join("\n\n") });
     }
-    if (next === "moved") await sb.from("activities").insert({ customer_id: c.id, kind: "note", direction: "none", subject: "Moved to the new system", body: `Checklist done; new orders are 40,000-series and go to Printavo by Send to Printavo.`, occurred_at: new Date().toISOString() }).then(() => {});
+    if (next === "moved") await sb.from("activities").insert({ customer_id: c.id, kind: "note", direction: "none", subject: "Moved to the new system", body: `Checklist done; new orders are made here.`, occurred_at: new Date().toISOString() }).then(() => {});
     setC((x) => (x ? { ...x, move_checklist: checklist, ...(next === "moved" ? { moved_at: fields.moved_at as string } : {}) } : x));
     setBusy(false);
     if (next === "moved") { onMoved?.(); onClose(); } else setStep(next);
