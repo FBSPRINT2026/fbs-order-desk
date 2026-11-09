@@ -1996,7 +1996,7 @@ function PrintRow({ youth, shown, d, n, hex, mainBg, mainAt = 0, designs, urls, 
   const [ask, setAsk] = useState(false), [opened, setOpened] = useState(false), [sewPic, setSewPic] = useState(false);
   const dgzGo = () => { if (dgz?.tone === "ok" && sewout?.url) setSewPic(true); else if (orderId) window.location.href = digitizingHref(orderId, d.id); };
   return (
-    <div className={"pr" + ((vis && !opened) || dgz?.gray ? " pr-vis" : "")}>
+    <div className={"pr" + ((vis && !opened) || dgz?.gray ? " pr-vis" : "") + (d.custSeps ? " pr-nologo" : "")}>
       {vis && !opened && <button type="button" className="pr-vis-stamp" onClick={() => setAsk(true)} title="Set the print details (production)"><span><b>Visual mockup</b><small>Production confirming details on print run</small></span></button>}
       {/* embroidery not digitized yet (Oct 27, Nick: "a stamp on embroidery orders that say needs digitizing… the price
           right now is not firm… until we email Volikes, get it back, sew it out, get it approved"): the stitches, size

@@ -21405,3 +21405,5 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .mk-need-d{display:inline-block;margin-top:4px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger)}
 label.mk-tile{cursor:pointer}
 .pr-csf{display:inline-block;font-size:12px;padding:1px 8px;border-radius:6px;background:color-mix(in srgb,var(--fbs-violet) 12%,var(--surface));color:var(--fbs-violet);white-space:nowrap}
+/* a print from their films has no logo box: the details take the whole row (Nov 9) */
+html body .pr.pr-nologo{grid-template-columns:minmax(0,1fr)}
