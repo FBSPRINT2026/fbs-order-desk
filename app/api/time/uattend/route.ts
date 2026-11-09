@@ -138,15 +138,18 @@ export async function GET(req: Request) {
       const ours = (mine || []) as { employee_id: string; at: string; uattend_id: string | null }[];
       const keys = new Set(ours.map((r) => r.uattend_id).filter(Boolean));
       const add: Record<string, unknown>[] = [], skipped: string[] = [], who = (p: UaPunch) => `${p.first} ${p.last}`.trim();
+      const before = [...ours]; // only punches already here count as "already a punch" (not a lunch start brought in just now)
       for (const p of ps) {
         const e = byUa.get(p.user);
         if (!e) { skipped.push(`${who(p)} ${p.kind} ${p.at}: not linked here`); continue; }
         if (keys.has(p.key)) continue;
         if (Date.parse(p.at) > Date.now()) { skipped.push(`${who(p)} ${p.kind} ${p.at}: still ahead of now`); continue; }
-        const near = ours.find((r) => r.employee_id === e.id && Math.abs(Date.parse(r.at) - Date.parse(p.at)) <= 30 * 60000);
+        // typed in by hand in uAttend: it fills whole days ahead (Nov 4: Yolanda's, voided), so those wait for a person
+        if (/manual/i.test(p.how || "")) { skipped.push(`${who(p)} ${p.kind} ${p.at}: typed in by hand in uAttend, check it`); continue; }
+        const near = before.find((r) => r.employee_id === e.id && Math.abs(Date.parse(r.at) - Date.parse(p.at)) <= 30 * 60000);
         if (near) { skipped.push(`${who(p)} ${p.kind} ${p.at}: already a punch here at ${near.at}`); continue; }
         add.push({ employee_id: e.id, kind: p.kind, at: p.at, source: "uattend", uattend_id: p.key, note: "uAttend (brought in by hand, Nov 9)" });
-        ours.push({ employee_id: e.id, at: p.at, uattend_id: p.key }); keys.add(p.key);
+        keys.add(p.key);
       }
       if (!dry && add.length) { const { error } = await admin.from("time_punches").upsert(add, { onConflict: "uattend_id", ignoreDuplicates: true }); if (error) throw new Error(error.message); }
       const name = new Map(((es || []) as { id: string; first_name: string; last_name: string }[]).map((e) => [e.id, `${e.first_name} ${e.last_name}`]));

@@ -67,7 +67,7 @@ function noteSkipped(x: Record<string, unknown>) {
 }
 export function uaSkipped() { const s = skipped; skipped = {}; return s; }
 
-export type UaPunch = { key: string; user: string; first: string; last: string; kind: "in" | "out" | "break_start" | "break_end"; at: string };
+export type UaPunch = { key: string; user: string; first: string; last: string; kind: "in" | "out" | "break_start" | "break_end"; at: string; /** how it was punched in uAttend ("Smartphone App", "Time Clock", "Manual Edit") */ how?: string };
 /** uAttend's pay code for an unpaid lunch line */
 const UA_LUNCH = 7;
 /** wall time in the shop's zone → an instant; InTime may be "07:02 AM", "07:02:00" or a full date-time */
@@ -108,8 +108,8 @@ export async function uaPunches(from: string, to: string): Promise<UaPunch[]> {
       const [a, b] = lunch ? (["break_start", "break_end"] as const) : (["in", "out"] as const);
       if (lunch && !(inAt && outAt)) continue; // a lunch with no end yet comes over once it's finished
       // uAttend's "Id" is only the line number in the report, so a punch is known by who and when
-      if (inAt) out.push({ key: `ua:${user}:${a}:${inAt}`, user, first, last, kind: a, at: inAt });
-      if (outAt) out.push({ key: `ua:${user}:${b}:${outAt}`, user, first, last, kind: b, at: outAt });
+      if (inAt) out.push({ key: `ua:${user}:${a}:${inAt}`, user, first, last, kind: a, at: inAt, how: String(f(x, "InPunchMethod") ?? "") });
+      if (outAt) out.push({ key: `ua:${user}:${b}:${outAt}`, user, first, last, kind: b, at: outAt, how: String(f(x, "OutPunchMethod") ?? "") });
     }
     if (items.length < 500) break;
   }
