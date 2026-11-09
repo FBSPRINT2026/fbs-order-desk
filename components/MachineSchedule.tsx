@@ -2123,9 +2123,12 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
   const [mach, setMach] = useState(init.machine || machines[0]?.id || "");
   const m = machines.find((x) => x.id === mach);
   const crew0 = m?.crew ? crews.find((c) => c.id === m.crew) : undefined;
-  const [reason, setReason] = useState(init.allDay && crew0 ? "Employee out" : "Maintenance");
+  // a new entry starts as Maintenance with no one named: it used to start as "Employee out · Juan" on a whole day, so
+  // opening it again to look and pressing Save added "Juan out" rows (Nov 9, Nick: Walmart days on Press 4 came back as
+  // "Employee out"). Pick Employee out to name who's out.
+  const [reason, setReason] = useState("Maintenance");
   const [other, setOther] = useState("");
-  const [emp, setEmp] = useState(crew0?.leader || "");
+  const [emp, setEmp] = useState("");
   const [from, setFrom] = useState(init.day || today), [to, setTo] = useState(init.day || today);
   const [allDay, setAllDay] = useState(!!init.allDay || init.start == null);
   const start0 = init.start ?? 720;
