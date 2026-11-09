@@ -19,6 +19,7 @@ import JobTalk, { OriginalJobTalk } from "@/components/JobTalk";
 import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
+import HoldSpotTool from "@/components/tools/HoldSpotTool";
 import { SITE_URL } from "@/lib/config";
 import { type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
@@ -1589,6 +1590,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               next steps are full-width buttons and the menus sit two by two under them */}
           <span className="ed-main">
           {/* no Send to Printavo any more (Nov 9, Nick: "we're not using Printavo anymore… we don't wanna send things that way") */}
+          {/* Hold the spot: save press time for a quote before its details are firm (components/tools/HoldSpotTool.tsx) */}
+          {!o.draft && ["quote", "quote_sent", "art"].includes(o.status) && o.type === "quote" && <HoldSpotTool order={{ id: o.id, number: o.number, nickname: o.nickname || null, due_date: o.due_date || null, groups: o.groups }} customer={cust ? custLabel(cust) : ""} />}
           {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
           {quoteLock.closed && !lockOverride ? <button type="button" className="btn" onClick={() => setClosedAsk(true)}>Open anyway</button>
             : o.status === "quote_sent" && quoteLock.locked ? <button type="button" className="btn primary" onClick={() => void makeChanges()}>Make changes</button>
