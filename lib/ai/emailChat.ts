@@ -73,8 +73,8 @@ export async function emailChat(admin: SupabaseClient, s: Settings, activityId: 
     emailChatThread(admin, activityId),
     cid ? admin.from("customers").select("company, name, email, price_type, notes").eq("id", cid).maybeSingle() : Promise.resolve({ data: null }),
     pastJobs(admin, cid).catch(() => []),
-    cid ? admin.from("orders").select("number, nickname, status, due_date").eq("customer_id", cid).not("status", "in", "(completed,request)").order("number", { ascending: false }).limit(10) : Promise.resolve({ data: [] as { number: number; nickname: string | null; status: string; due_date: string | null }[] }),
-    admin.from("orders").select("due_date, status, groups").not("status", "in", "(completed,request,quote,quote_sent,ready)").gte("due_date", today).lte("due_date", in21).limit(300),
+    cid ? admin.from("orders").select("number, nickname, status, due_date").is("discarded_at", null).eq("customer_id", cid).not("status", "in", "(completed,request)").order("number", { ascending: false }).limit(10) : Promise.resolve({ data: [] as { number: number; nickname: string | null; status: string; due_date: string | null }[] }),
+    admin.from("orders").select("due_date, status, groups").is("discarded_at", null).not("status", "in", "(completed,request,quote,quote_sent,ready)").gte("due_date", today).lte("due_date", in21).limit(300),
     cid ? admin.from("activities").select("direction, subject, body, occurred_at").eq("customer_id", cid).neq("id", a.id || "00000000-0000-0000-0000-000000000000").lt("occurred_at", a.occurred_at as string).order("occurred_at", { ascending: false }).limit(6) : Promise.resolve({ data: [] as { direction: string; subject: string | null; body: string | null; occurred_at: string }[] }),
     a.id ? signaturePaths(admin, { id: a.id, from_email: (a.from_email as string) || null }, atts).catch(() => new Set<string>()) : Promise.resolve(new Set<string>()),
   ]);

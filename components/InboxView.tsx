@@ -269,7 +269,7 @@ export default function InboxView({ mode }: { mode: Mode }) {
     const [{ data: sg }, { data: cs }, { data: os }] = await Promise.all([
       ids.length ? sb.from("ai_suggestions").select("id, kind, status, activity_id, title, body, draft, payload, order_id").in("activity_id", ids) : Promise.resolve({ data: [] }),
       cIds.length ? sb.from("customers").select("id, company, name, email").in("id", cIds) : Promise.resolve({ data: [] }),
-      cIds.length ? sb.from("orders").select("id, number, nickname, customer_id, status").in("customer_id", cIds).order("number", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
+      cIds.length ? sb.from("orders").select("id, number, nickname, customer_id, status").is("discarded_at", null).in("customer_id", cIds).order("number", { ascending: false }).limit(500) : Promise.resolve({ data: [] }),
     ]);
     setSugs((sg || []) as Sug[]);
     setCusts(new Map(((cs || []) as Cust[]).map((c) => [c.id, c])));

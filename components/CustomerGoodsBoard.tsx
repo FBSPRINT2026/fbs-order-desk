@@ -32,7 +32,7 @@ export default function CustomerGoodsBoard({ pending, onPending, refreshKey }: {
   const groups = pending.filter((g) => !g.us && g.customer);
   const load = useCallback(async () => {
     const sb = createClient();
-    const { data: os } = await sb.from("orders").select("id, customer_id, price_type, type, status, submitted_at").eq("price_type", "wholesale").neq("status", "completed").limit(500);
+    const { data: os } = await sb.from("orders").select("id, customer_id, price_type, type, status, submitted_at").is("discarded_at", null).eq("price_type", "wholesale").neq("status", "completed").limit(500);
     const list = ((os || []) as { id: string; customer_id: string | null; price_type: string; type: string; status: string; submitted_at: string | null }[]).filter(needsGoods);
     setOrderCust(Object.fromEntries(list.map((o) => [o.id, o.customer_id || ""])));
     const cids = [...new Set(list.map((o) => o.customer_id).filter(Boolean))] as string[];

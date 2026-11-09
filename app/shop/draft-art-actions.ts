@@ -115,7 +115,7 @@ export async function listDrafts() {
     const { data: ds } = await admin.from("designs").select("id, number, name, preview_path, file_path, customer_id, created_at").eq("draft", true).is("archived_at", null).order("created_at", { ascending: false }).limit(200);
     const { data: ms } = await admin.from("mockups").select("id, title, file_path, customer_id, order_id, created_at").eq("draft", true).is("archived_at", null).order("created_at", { ascending: false }).limit(200);
     // which order each draft logo is on
-    const { data: os } = await admin.from("orders").select("id, number, groups, updated_at").in("status", ["quote", "request"]).limit(1000);
+    const { data: os } = await admin.from("orders").select("id, number, groups, updated_at").is("discarded_at", null).in("status", ["quote", "request"]).limit(1000);
     const onOrder = new Map<string, { id: string; number: number; updated_at: string }>();
     for (const o of os || []) for (const id of designIdsOf(o.groups)) if (!onOrder.has(id)) onOrder.set(id, { id: o.id, number: o.number, updated_at: o.updated_at });
     const mOrders = new Map((os || []).map((o) => [o.id as string, { id: o.id as string, number: o.number as number, updated_at: o.updated_at as string }]));

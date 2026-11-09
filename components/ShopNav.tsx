@@ -245,7 +245,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     fastAt.current = Date.now();
     sb.from("messages").select("id", { count: "exact", head: true }).is("hidden_at", null).eq("author_type", "customer").is("read_at", null)
       .then(({ count }) => setUnread(count || 0));
-    sb.from("orders").select("id", { count: "exact", head: true }).eq("status", "request").not("submitted_at", "is", null)
+    sb.from("orders").select("id", { count: "exact", head: true }).is("discarded_at", null).eq("status", "request").not("submitted_at", "is", null)
       .then(({ count }) => setIncoming(count || 0));
     sb.from("clickup_tasks").select("id", { count: "exact", head: true }).eq("waiting", true)
       .then(({ count }) => setClickup(count || 0), () => null);

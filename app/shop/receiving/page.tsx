@@ -213,7 +213,7 @@ export default function GoodsReceiving() {
   }
   const load = useCallback(async () => {
     const [{ data: os }, { data: bo }, { data: st }] = await Promise.all([
-      sb.from("orders").select("id, number, nickname, status, type, due_date, production_date, qty, customer_id, price_type, submitted_at").not("status", "in", "(completed,ready,quote,quote_sent,request)").order("due_date", { ascending: true, nullsFirst: false }).limit(800),
+      sb.from("orders").select("id, number, nickname, status, type, due_date, production_date, qty, customer_id, price_type, submitted_at").is("discarded_at", null).not("status", "in", "(completed,ready,quote,quote_sent,request)").order("due_date", { ascending: true, nullsFirst: false }).limit(800),
       sb.from("blank_orders").select("*").neq("status", "cancelled").order("created_at", { ascending: false }).limit(500),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);

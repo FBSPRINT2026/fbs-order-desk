@@ -77,7 +77,7 @@ export default function Digitizing() {
 
   async function load() {
     const sb = createClient();
-    const { data, error } = await sb.from("orders").select("id, number, nickname, status, due_date, groups, customers(company, name)").not("status", "in", "(completed,request)").order("number", { ascending: false }).limit(400);
+    const { data, error } = await sb.from("orders").select("id, number, nickname, status, due_date, groups, customers(company, name)").is("discarded_at", null).not("status", "in", "(completed,request)").order("number", { ascending: false }).limit(400);
     if (error) { setErr(error.message); return; }
     const os = ((data || []) as unknown as O[]).filter((o) => (o.groups || []).some((g) => (g.imprints || []).some((im) => im.method === "embroidery")));
     const ids = [...new Set(os.flatMap((o) => (o.groups || []).flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => im.design_id!))))];
