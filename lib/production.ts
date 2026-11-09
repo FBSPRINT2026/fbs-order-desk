@@ -199,7 +199,7 @@ export const DEFAULT_PRODUCTION: ProductionSettings = {
     m("e1", "Embroidery · Single Head", "embroidery", 15, 1, "Single Head"),
     m("hp", "Heat Press", "heat", 0, 1, ""),
   ],
-  screen: { setupPerScreen: 6, teardownPerScreen: 3, baseRate: 400, perExtraColor: 0.04, underbaseOnDark: true, darkFactor: 0.75, puffFactor: 0.7, puffSetupFactor: 1.5, heavyFactor: 0.55, bagFactor: 0.6, smallLocFactor: 0.6, minMinutes: 15 },
+  screen: { setupPerScreen: 6, teardownPerScreen: 3, baseRate: 600, perExtraColor: 0.04, underbaseOnDark: true, darkFactor: 0.75, puffFactor: 0.7, puffSetupFactor: 1.5, heavyFactor: 0.67, bagFactor: 0.6, smallLocFactor: 0.6, minMinutes: 15 },
   embroidery: {
     spmFlat: 700, spmCap: 600, hoopSecs: 30, trimSecs: 8, trimsPerDesign: 8, breakMinPer10k: 2, setupMin: 15, extraLocationSetupMin: 5,
     stitches: { "Left Chest": 8000, "Right Chest": 8000, "Cap Front": 8000, "Hat Front": 8000, "Full Front": 15000, "Full Back": 30000, "Sleeve": 5000, "Left Sleeve": 5000, "Right Sleeve": 5000, "Back Neck": 4000, "Nape": 4000, "Pocket": 6000, "default": 8000 },
@@ -253,22 +253,31 @@ export function stitchesFor(s: ProductionSettings, location: string, given?: num
 export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "lines" | "number" | "nickname">, groupsIn?: Group[]): Need[] {
   const groups = groupsIn || ((o.groups || []) as Group[]);
   const steps: Step[] = [];
+  const pcs = (l: Group["lines"][number]) => Object.values(l.sizes || {}).reduce((b, n) => b + (+(n as number) || 0), 0);
   for (const g of groups) {
-    const qty = g.lines.reduce((a, l) => a + Object.values(l.sizes || {}).reduce((b, n) => b + (+(n as number) || 0), 0), 0);
-    if (!qty) continue;
-    // mixed colors in one group: count it dark if most pieces are dark
-    const darkQty = g.lines.reduce((a, l) => a + (LIGHT.test(l.color || "") ? 0 : Object.values(l.sizes || {}).reduce((b, n) => b + (+(n as number) || 0), 0)), 0);
-    const garment = garmentKind(g.lines.map((l) => `${l.garment} ${l.style}`).join(" "));
-    for (const i of g.imprints || []) {
-      const method = methodType(i.method);
-      const colors = Math.max(1, Math.min(15, +i.colors || 1));
-      const dark = darkQty > qty / 2;
-      const screens = method === "screen" ? colors + (dark && s.screen.underbaseOnDark && colors < 11 ? 1 : 0) : 0;
-      // puff ink: ticked on the print (Oct 30), or written in its inks or notes
-      const puff = method === "screen" && (!!(i as unknown as { puff?: boolean }).puff || /puff/i.test(`${i.inks || ""} ${i.notes || ""} ${(i as unknown as { size?: string }).size || ""}`));
-      const only = method === "screen" && i.pressOnly?.id ? { id: i.pressOnly.id, name: i.pressOnly.name } : undefined;
-      const rounds = method === "screen" && (i.rounds || 1) > 1 ? Math.min(3, i.rounds!) : 0;
-      steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}) });
+    // each kind of garment in the group runs at its own speed (Nov 9, Nick: #40360 had tees and sweatshirts in one group,
+    // and every piece was timed as a sweatshirt): tees, heavy (sweats, hoodies), bags and caps are their own runs
+    const byKind = new Map<Step["garment"], Group["lines"]>();
+    for (const l of g.lines) { const k = garmentKind(`${l.garment} ${l.style}`); if (pcs(l)) byKind.set(k, [...(byKind.get(k) || []), l]); }
+    for (const [garment, ls] of byKind) {
+      const qty = ls.reduce((a, l) => a + pcs(l), 0);
+      // mixed colors of one kind: count it dark if most pieces are dark
+      const darkQty = ls.reduce((a, l) => a + (LIGHT.test(l.color || "") ? 0 : pcs(l)), 0);
+      for (const i of g.imprints || []) {
+        const method = methodType(i.method);
+        const colors = Math.max(1, Math.min(15, +i.colors || 1));
+        // a dark garment slows the run only when the print needs an underbase: not a print that's only white (the white
+        // is its own base), and not when the print says no underbase
+        const said = (i as unknown as { underbase?: boolean }).underbase;
+        const onlyWhite = colors === 1 && /^\s*(white|wht|opaque white|bright white)\b[^,/&+]*$/i.test(i.inks || "");
+        const dark = darkQty > qty / 2 && (said === true || (said !== false && !onlyWhite));
+        const screens = method === "screen" ? colors + (dark && s.screen.underbaseOnDark && colors < 11 ? 1 : 0) : 0;
+        // puff ink: ticked on the print (Oct 30), or written in its inks or notes
+        const puff = method === "screen" && (!!(i as unknown as { puff?: boolean }).puff || /puff/i.test(`${i.inks || ""} ${i.notes || ""} ${(i as unknown as { size?: string }).size || ""}`));
+        const only = method === "screen" && i.pressOnly?.id ? { id: i.pressOnly.id, name: i.pressOnly.name } : undefined;
+        const rounds = method === "screen" && (i.rounds || 1) > 1 ? Math.min(3, i.rounds!) : 0;
+        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}) });
+      }
     }
   }
   return groupNeeds(steps);
@@ -313,8 +322,10 @@ export function needsForPrintavo(s: ProductionSettings, row: { qty: number | nul
   const groups = row.data?.groups || [];
   for (const g of groups) {
     const lines = (g.lines || []).filter((l) => !/^\s*extras?\s*$/i.test(l.description || "") || (l.items || 0) > 0);
-    const byMethod = new Map<MachineType, PvLine[]>();
-    for (const l of lines) { const mt = lineMethod(l.category || "", fallback); byMethod.set(mt, [...(byMethod.get(mt) || []), l]); }
+    // screen lines split by kind of garment too, so tees and sweatshirts in one group each run at their own speed (Nov 9)
+    const byRun = new Map<string, { method: MachineType; ls: PvLine[] }>();
+    for (const l of lines) { const mt = lineMethod(l.category || "", fallback), key = mt === "screen" ? `${mt}|${garmentKind(l.description || "")}` : mt; const cur = byRun.get(key) || { method: mt, ls: [] }; cur.ls.push(l); byRun.set(key, cur); }
+    const byMethod = [...byRun.values()].map((x) => [x.method, x.ls] as const);
     const imps = (g.imprints || []).filter((i) => i && (i.column || i.details || i.typeOfWork));
     for (const [method, ls] of byMethod) {
       const qty = ls.reduce((a, l) => a + (+(l.items || 0) || 0), 0);
@@ -401,7 +412,7 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
   let setup = 0, run = 0, teardown = 0;
   const parts: Estimate["parts"] = [];
   if (need.type === "screen") {
-    const S = s.screen;
+    const S = s.screen, setUp = new Set<string>();
     for (const st of need.steps) {
       let rate = S.baseRate * Math.max(0.5, 1 - S.perExtraColor * Math.max(0, st.colors - 4));
       if (st.dark) rate *= S.darkFactor;
@@ -423,11 +434,13 @@ export function estimate(s: ProductionSettings, need: Need, mach: Machine): Esti
       if (st.puff) suF /= S.puffSetupFactor ?? 1.5;
       // more screens + flashes than the press has heads: two rounds, every piece goes around twice
       const rounds = Math.min(Math.max(2, st.rounds || 1), roundsOn(st, mach));
-      const su = (st.screens * S.setupPerScreen) / suF, td = (st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60 * rounds;
+      // the same print on two kinds of garment (tees and sweatshirts) is one set of screens: set up and torn down once
+      const again = setUp.has(locKey(st)); setUp.add(locKey(st));
+      const su = again ? 0 : (st.screens * S.setupPerScreen) / suF, td = again ? 0 : (st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60 * rounds;
       const tot = Math.max(S.minMinutes, su + r + td);
       setup += su; run += tot - su - td; teardown += td;
       const fl = flashesFor(st);
-      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}: ${st.screens} screens${fl ? ` + ${fl} flash${fl === 1 ? "" : "es"}` : ""}, ${st.qty} pcs @ ${Math.round(rate)}/hr${rounds > 1 ? ` · 2 rounds (${st.screens + fl} heads needed, ${mach.colors} on this press)` : ""}`, minutes: tot * f });
+      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}${need.steps.some((o) => o !== st && locKey(o) === locKey(st)) ? ` · ${st.garment === "heavy" ? "sweats / hoodies" : st.garment === "tee" ? "tees" : st.garment === "bag" ? "bags" : "caps"}` : ""}: ${again ? "same screens" : `${st.screens} screens`}${fl ? ` + ${fl} flash${fl === 1 ? "" : "es"}` : ""}, ${st.qty} pcs @ ${Math.round(rate)}/hr${rounds > 1 ? ` · 2 rounds (${st.screens + fl} heads needed, ${mach.colors} on this press)` : ""}`, minutes: tot * f });
     }
   } else if (need.type === "embroidery") {
     const E = s.embroidery;
