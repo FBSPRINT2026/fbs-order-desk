@@ -130,7 +130,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   }
   // a visual mockup or their separations: a picture only, so every print needs its details and a Confirm
   const needOk = (d: Imprint) => !!g.visualMockup || !!d.custSeps;
-  const filled = (d: Imprint) => !!(d.inks || "").trim() && !!(d.size || "").trim() && !!(d.location || "").trim();
+  const filled = (d: Imprint) => !!(d.inks || "").trim() && (!!d.custSeps || !!(d.size || "").trim()) && !!(d.location || "").trim();
   const needDetails = g.imprints.some((d) => needOk(d) && !d.ok);
   // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
   const locs = locationsFor(g.lines);
@@ -1373,8 +1373,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                       </div>
                       {inkMismatch(d) && <div className="ink-warn">{inkMismatch(d)}</div>}
                   </div>
-                  <div className="f-size"><span className="imp-l">Print size</span><div className={d.confirm?.size ? "unconf" : undefined} title={d.confirm?.size ? "Reorder Details Needed: our best guess at the size, production confirms it" : undefined}><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></div>
-                      {d.size.trim() && <button type="button" className={"cs-tag" + (d.sizeFrom === "customer" ? " on" : "")} title={d.sizeFrom === "customer" ? "The customer asked for this size: the Mockup Creator asks before changing it. Click to unmark." : "Did the customer ask for this exact size? Mark it so it isn't changed by accident."} onClick={() => update((x) => { x.imprints[di].sizeFrom = x.imprints[di].sizeFrom === "customer" ? undefined : "customer"; })}>{d.sizeFrom === "customer" ? "🔒 Customer's size" : "Customer's size?"}</button>}</div>
+                  {/* their films: no size to set (Nov 9) */}{!d.custSeps && <div className="f-size"><span className="imp-l">Print size</span><div className={d.confirm?.size ? "unconf" : undefined} title={d.confirm?.size ? "Reorder Details Needed: our best guess at the size, production confirms it" : undefined}><SizeField value={d.size} onChange={(v) => update((x) => { x.imprints[di].size = v; })} /></div>
+                      {d.size.trim() && <button type="button" className={"cs-tag" + (d.sizeFrom === "customer" ? " on" : "")} title={d.sizeFrom === "customer" ? "The customer asked for this size: the Mockup Creator asks before changing it. Click to unmark." : "Did the customer ask for this exact size? Mark it so it isn't changed by accident."} onClick={() => update((x) => { x.imprints[di].sizeFrom = x.imprints[di].sizeFrom === "customer" ? undefined : "customer"; })}>{d.sizeFrom === "customer" ? "🔒 Customer's size" : "Customer's size?"}</button>}</div>}
                   <div className="f-drop"><span className="imp-l">Drop</span><label className="sz-dim">
                         <InchInput label="Drop in inches (blank = standard)" placeholder="Standard" num={d.drop || ""} onNum={(v) => update((x) => { x.imprints[di].drop = v; })} />
                       </label></div>
@@ -2025,7 +2025,9 @@ function PrintRow({ youth, shown, d, n, hex, mainBg, mainAt = 0, designs, urls, 
           </div>
         </div>
       )}
-      {(() => {
+      {/* printed from their films: no logo box and no size (Nov 9, Nick: "we don't need the size… or the little logo… when
+          we're using the customer separations") */}
+      {!d.custSeps && (() => {
         const main = (
           <button type="button" className="pr-logo" style={{ background: hex }} onClick={() => (pic ? setZoom(true) : onMockup())} title={pic ? "See it bigger" : "Pick the logo in the Mockup Creator"}>
             {pic ? <img src={pic} alt="" /> : <span>No logo</span>}
@@ -2060,7 +2062,8 @@ function PrintRow({ youth, shown, d, n, hex, mainBg, mainAt = 0, designs, urls, 
         <div className={"pr-specs" + (d.visualOnly && !d.confirmed ? " pr-grey" : "")}>
           {colors && <span>{d.visualOnly && !d.confirmed ? `${colors} (the old job)` : colors}</span>}
           {youth && <span className="pr-ynote">{youth.note}</span>}
-          {!youth && size && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
+          {d.custSeps && <span className="pr-csf">Customer supplied film</span>}
+          {!youth && size && !d.custSeps && !(d.visualOnly && !d.confirmed && d.sizeFrom !== "customer") && <span>{size}{d.sizeFrom === "customer" ? " 🔒" : ""}</span>}
           {!youth && !(d.visualOnly && !d.confirmed) && <span>{d.drop ? `${d.drop}" drop` : "Standard drop"}</span>}
           {d.method === "screen" && d.puff && <span className="pr-puff">Puff print</span>}
           {d.method === "embroidery" && d.stitches ? <span>{d.stitches.toLocaleString()} stitches{d.emb?.file ? <i className="pr-fromfile">from the file</i> : null}</span> : null}

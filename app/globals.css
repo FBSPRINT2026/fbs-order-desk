@@ -21404,3 +21404,4 @@ fieldset.cx-dr-b{border:0;margin:0;min-width:0}
 .imp-card.imp-need{border-color:var(--danger);box-shadow:0 0 0 1px var(--danger)}
 .mk-need-d{display:inline-block;margin-top:4px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger)}
 label.mk-tile{cursor:pointer}
+.pr-csf{display:inline-block;font-size:12px;padding:1px 8px;border-radius:6px;background:color-mix(in srgb,var(--fbs-violet) 12%,var(--surface));color:var(--fbs-violet);white-space:nowrap}
