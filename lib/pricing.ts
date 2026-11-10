@@ -1377,10 +1377,14 @@ export function calcOrder(
   const seen: SeenScreens = new Set<string>();
   // color changes across variations (Imprint.changeOf): both prints of a pair share one key
   const gs0 = orderGroups(o), ids = new Set(gs0.flatMap((g) => (g.imprints || []).map((d) => d.id)));
+  // every print changed from the same screens shares ONE key, the print they all come from (Nov 10, #40382: five teams'
+  // backs from one set of screens; a key per pair left the 3rd, 4th and 5th team paying for new screens)
+  const byId = new Map(gs0.flatMap((g) => (g.imprints || []).map((d) => [d.id, d] as const)));
+  const rootOf = (id: string) => { let cur = id; const been = new Set<string>(); while (!been.has(cur)) { been.add(cur); const nx = byId.get(cur)?.changeOf?.imprint; if (!nx || !ids.has(nx) || nx === cur) break; cur = nx; } return cur; };
   for (const g of gs0) for (const d of g.imprints || []) if (d.changeOf?.imprint && ids.has(d.changeOf.imprint) && d.changeOf.imprint !== d.id) {
-    const key = [d.id, d.changeOf.imprint].sort().join("~");
+    const key = `link:${rootOf(d.id)}`;
     (seen.links ||= new Map()).set(d.id, key);
-    if (!seen.links.has(d.changeOf.imprint)) seen.links.set(d.changeOf.imprint, key);
+    seen.links.set(d.changeOf.imprint, key);
   }
   // the same print in several groups (Nov 9, Nick, #40496: "as long as you have the same artwork across a job… if
   // there's a different color, I just do a color change"): the same logo at the same spot and size prints from the
