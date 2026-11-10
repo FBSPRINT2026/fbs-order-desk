@@ -23,22 +23,32 @@ export async function recordLumpPayment(customerId: string, p: { amount: number;
   try {
     const { email } = await staff();
     const admin = createAdminClient();
-    let open = await openInvoices(admin, [customerId]);
+    // every open invoice: ours and the old Printavo ones (Nov 10, Nick: Creative Apparel's open invoices were all old
+    // ones, "pv:" ids from the payments list); the ones checked, if any
+    const ours = (await openInvoices(admin, [customerId])).map((o) => ({ id: o.id, number: o.number, balance: o.balance, created_at: o.created_at, old: false }));
+    const { data: arch } = await admin.from("archived_orders").select("id, visual_id, balance, order_date, imported_at").eq("customer_id", customerId).eq("kind", "invoice").is("removed_at", null).gt("balance", 0.004).order("id").limit(1000);
+    const olds = ((arch || []) as { id: string; visual_id: string; balance: number; order_date: string | null; imported_at: string | null }[])
+      .map((a) => ({ id: `pv:${a.id}`, number: +a.visual_id || 0, balance: Math.round(+a.balance * 100) / 100, created_at: a.order_date || a.imported_at || "", old: true }));
+    let open = [...olds, ...ours];
     if (p.orderIds?.length) open = open.filter((o) => p.orderIds!.includes(o.id));
     const owed = Math.round(open.reduce((a, o) => a + o.balance, 0) * 100) / 100;
     const amt = Math.round(+p.amount * 100) / 100;
     if (!(amt > 0)) return { ok: false, error: "Enter the amount received." };
-    if (amt > owed + 0.004) return { ok: false, error: `That's more than the open invoices total (${money(owed)}). Record the extra separately.` };
+    if (amt > owed + 0.004) return { ok: false, error: `That's more than ${p.orderIds?.length ? "the invoices checked" : "the open invoices"} total (${money(owed)}). Record the extra separately.` };
     const parts = allocateOldest(open, amt);
     const applied = parts.map((x) => ({ number: x.item.number, amount: x.amount, full: x.amount >= x.item.balance - 0.004 }));
     if (p.preview) return { ok: true, applied, total: amt };
     const day = /^\d{4}-\d{2}-\d{2}$/.test(p.paid_on) ? p.paid_on : new Date().toISOString().slice(0, 10);
     const method = (p.method || "Check").slice(0, 40);
     const note = `${p.note ? p.note.slice(0, 160) + " · " : ""}${money(amt)} ${method} applied to ${parts.length} invoice${parts.length === 1 ? "" : "s"}`;
-    const { error } = await admin.from("payments").insert(parts.map((x) => ({ order_id: x.item.id, amount: x.amount, method, paid_on: day, note })));
+    // one id for the whole check: QuickBooks gets it as ONE payment applied to each invoice it paid, so it matches the
+    // deposit (lib/qbo/push.ts chargePayment), and the payment history shows it as one line
+    const rec = `rec:${crypto.randomUUID()}`;
+    const { error } = await admin.from("payments").insert(parts.map((x) => ({ ...(x.item.old ? { order_id: null, archived_order_id: x.item.id.slice(3) } : { order_id: x.item.id }), amount: x.amount, method, paid_on: day, note, processor_id: rec })));
     if (error) return { ok: false, error: error.message };
-    await admin.from("order_events").insert(parts.map((x) => ({ order_id: x.item.id, kind: "payment", detail: `${money(x.amount)} ${method} (part of ${money(amt)})`, actor: email })));
-    for (const x of parts) await (await import("@/lib/autoSeps")).autoSeparations(admin, x.item.id, "paid");
+    const newParts = parts.filter((x) => !x.item.old);
+    if (newParts.length) await admin.from("order_events").insert(newParts.map((x) => ({ order_id: x.item.id, kind: "payment", detail: `${money(x.amount)} ${method} (part of ${money(amt)})`, actor: email })));
+    for (const x of newParts) await (await import("@/lib/autoSeps")).autoSeparations(admin, x.item.id, "paid");
     return { ok: true, applied, total: amt };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

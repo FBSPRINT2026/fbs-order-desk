@@ -101,7 +101,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   /** staff: email the customer their statement link */
   onEmailStatement?: () => Promise<{ ok: boolean; error?: string; emailed?: boolean }>;
   /** staff: one check / ACH across many invoices, oldest first */
-  onRecordPayment?: (p: { amount: number; method: string; paid_on: string; note: string; preview?: boolean }) => Promise<{ ok: boolean; error?: string; applied?: { number: number; amount: number; full: boolean }[]; total?: number }>;
+  onRecordPayment?: (p: { amount: number; method: string; paid_on: string; note: string; orderIds?: string[]; preview?: boolean }) => Promise<{ ok: boolean; error?: string; applied?: { number: number; amount: number; full: boolean }[]; total?: number }>;
   /** portal: reads "pay all of August"-style requests (AI); without it the built-in phrase reader is used */
   onPaySelect?: (text: string) => Promise<{ ok: boolean; error?: string; filter?: PayFilter; explain?: string; off?: boolean }>;
   /** portal: the whole dashboard (components/PortalDash.tsx), built on the server */
@@ -705,7 +705,10 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     const item = (o: AOrder): PayItem => ({ id: o.id, cardFeeIn: o.cardFeeIn, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
     // only what's open for paying (Oct 24, Nick): a deposit-only order pays its deposit; one that isn't ready can't be picked
     // an old invoice is paid here once the account has moved (Nov 2, Nick); "pv:" tells the server it's an old one
-    const payable = (o: AOrder) => (o.archived ? mode === "portal" && !!o.payHere : mode !== "portal" || o.payCan !== "none");
+    const payable = (o: AOrder) => (o.archived ? mode !== "portal" || !!o.payHere : mode !== "portal" || o.payCan !== "none");
+    // the shop checks invoices to record a check or ACH against them, like the portal's Pay (Nov 10, Nick: "I should be
+    // able to check the first two and it automatically fills the amount above")
+    const ckOn = canPay || (mode === "shop" && !!onRecordPayment);
     const itemOf = (o: AOrder): PayItem => {
       if (o.archived) return { id: `pv:${o.id}`, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, cardFeeIn: o.cardFeeIn };
       const it = item(o); return o.payCan === "deposit" && it.deposit ? { ...it, balance: it.deposit, part: true, notFinal: o.notFinal, notFinalNote: o.payNote } : { ...it, notFinal: o.notFinal, notFinalNote: o.payNote };
@@ -758,7 +761,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
         </div>}
       </div>
       <div className={canPay ? "aa-home aa-paylay" : ""}><div className="aa-home-main stack">
-      {mode === "shop" && onRecordPayment && recOpen && <RecordPayment record={onRecordPayment} onDone={() => { setRecOpen(false); router.refresh(); }} />}
+      {mode === "shop" && onRecordPayment && (recOpen || sel.length > 0) && <RecordPayment record={onRecordPayment} picked={sel.length ? { ids: sel.map((o) => itemOf(o).id), total: Math.round(selSum * 100) / 100, label: sel.map((o) => `#${o.number}`).join(", ") } : null} onDone={() => { setRecOpen(false); setPaySel([]); router.refresh(); }} />}
       {/* their credit: use it or get it back (components/CreditBox.tsx) */}
       {creditBox}
       {/* the numbers in one summary card (Nov 2, Nick: "it looks busy") */}
@@ -781,13 +784,13 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
           {canPay && searchBox}
         </div>
         <table className="aa-tbl pyl-tbl" data-nofit>
-          <thead><tr>{canPay && <th className="pyl-ck"><input type="checkbox" aria-label="Check all" checked={listAll.filter(payable).length > 0 && listAll.filter(payable).every((o) => paySel.includes(o.id))} onChange={(e) => listAll.filter(payable).forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>Inv.</th><th>Order</th><th><button type="button" className="pyl-sort" onClick={() => setDueSort(dueSort === "asc" ? "desc" : "asc")} title={dueSort === "asc" ? "Oldest first: press for newest first" : "Newest first: press for oldest first"}>Due date <span aria-hidden>{dueSort === "asc" ? "▲" : "▼"}</span></button></th><th className="r">Balance</th></tr></thead>
+          <thead><tr>{ckOn && <th className="pyl-ck"><input type="checkbox" aria-label="Check all" checked={listAll.filter(payable).length > 0 && listAll.filter(payable).every((o) => paySel.includes(o.id))} onChange={(e) => listAll.filter(payable).forEach((o) => toggle(o.id, e.target.checked))} /></th>}<th>Inv.</th><th>Order</th><th><button type="button" className="pyl-sort" onClick={() => setDueSort(dueSort === "asc" ? "desc" : "asc")} title={dueSort === "asc" ? "Oldest first: press for newest first" : "Newest first: press for oldest first"}>Due date <span aria-hidden>{dueSort === "asc" ? "▲" : "▼"}</span></button></th><th className="r">Balance</th></tr></thead>
           <tbody>
             {listShown.map((o) => {
-              const can = canPay && payable(o), on = can && paySel.includes(o.id);
+              const can = ckOn && payable(o), on = can && paySel.includes(o.id);
               return (
                 <tr key={o.id} className={(on ? "sel" : "") + (isLater(o) ? " aa-notready" : "")} onClick={() => (can ? toggle(o.id) : router.push(orderHref(o.id)))}>
-                  {canPay && <td className="ck" onClick={(e) => e.stopPropagation()}>{can ? <input type="checkbox" aria-label={`Check #${o.number}`} checked={on} onChange={(e) => toggle(o.id, e.target.checked)} /> : null}</td>}
+                  {ckOn && <td className="ck" onClick={(e) => e.stopPropagation()}>{can ? <input type="checkbox" aria-label={`Check #${o.number}`} checked={on} onChange={(e) => toggle(o.id, e.target.checked)} /> : null}</td>}
                   <td className="num"><Link href={orderHref(o.id)} onClick={(e) => e.stopPropagation()}>{o.number}</Link>{o.archived && <PrintavoMark />}</td>
                   <td className="m"><div className="aa-t">{o.nickname || (o.type === "quote" ? "Quote" : "Order")}</div>{mode === "portal" && o.notFinal ? <div className="aa-s aa-nf">Not final: {o.payNote || "charges may still change"}</div> : null}</td>
                   <td className="pyl-due" data-l="Due">{dueText(o)}</td>

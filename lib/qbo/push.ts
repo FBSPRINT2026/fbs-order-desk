@@ -579,7 +579,7 @@ export class Pusher {
       CustomerRef: { value: custs[0] }, TotalAmt: total, TxnDate: p.paid_on || undefined,
       ...(methodId ? { PaymentMethodRef: { value: methodId } } : {}),
       ...((this.qs as { deposit_account_id?: string }).deposit_account_id ? { DepositToAccountRef: { value: (this.qs as { deposit_account_id?: string }).deposit_account_id } } : {}),
-      PrivateNote: `Paid in the FBS portal (${p.method || "payment"}${pid ? `, ${pid.slice(0, 8)}` : ""}): ${lines.map((l) => "#" + l.inv.DocNumber).join(", ")}`.slice(0, 4000),
+      PrivateNote: (pid.startsWith("rec:") ? `Recorded in the FBS portal (${p.method || "payment"}${(p as { note?: string | null }).note ? `, ${String((p as { note?: string | null }).note).split(" · ")[0]}` : ""}): ${lines.map((l) => "#" + l.inv.DocNumber).join(", ")}` : `Paid in the FBS portal (${p.method || "payment"}${pid ? `, ${pid.slice(0, 8)}` : ""}): ${lines.map((l) => "#" + l.inv.DocNumber).join(", ")}`).slice(0, 4000),
       Line: lines.map((l) => ({ Amount: l.amount, LinkedTxn: [{ TxnId: l.inv.Id, TxnType: "Invoice" }] })),
     };
     const preview = { action: "create", body };
