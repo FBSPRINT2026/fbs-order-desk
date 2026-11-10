@@ -1,5 +1,8 @@
 # FBS Order Desk: house rules for changes
 
+**More than one person works on this site (Nick and Amanda). Read `docs/WORKING-ON-THE-SITE.md` first: start from the
+newest code, ship small and often with `bash scripts/ship.sh "what changed"`, never force-push.**
+
 - **Permanent solutions, never patches (the first rule; Nick, Oct 28 2026: "this is a system we're gonna use for five
   years, maybe more… we want really good permanent solutions that fix the problems, not 'we found a way to do this one
   order right'… when you fix a problem, you've gotta be fixing it so that it figures out 10 other problems").**
