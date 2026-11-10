@@ -264,6 +264,16 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     if (tdef.confirm === false) { delete im.confirm; delete im.visualOnly; }
     else if (!(im.confirm && (im.confirm.size || im.confirm.ink))) im.confirm = { size: true, ink: true, why: tdef.order_type === "new" || !tdef.order_type ? "New order: production confirms the details before printing" : "Reorder: production confirms on the run" };
   }
+  // they send their own separations (the training's default): every screen print is printed from their films, their
+  // picture is the mockup, the inks come off it, and it never goes to separations (the Order helper's "their separations")
+  if (tdef.own_seps) {
+    const films = [...new Set([...groups.flatMap((g) => g.imprints.map((im) => d.art?.[im.id]).filter(Boolean) as string[]),
+      ...d.files.filter((f) => /\.(ai|eps|psd|tiff?)$/i.test(f.name || f.path)).map((f) => f.path)])];
+    for (const g of groups) {
+      const mock = (g.customerMockups || [])[0]?.path;
+      for (const im of g.imprints) if (im.method === "screen" || !im.method) im.custSeps = { films, ...(mock ? { mockup: mock } : {}) };
+    }
+  }
   // a print still asking production: the same logo at the same spot confirmed before takes those details instead (Nov 9:
   // six MEI cart orders asked about the same four logos; lib/designSpecs.ts bySameArt)
   if (custId) tookSpecs = [...tookSpecs, ...(await applyConfirmedSpecs(admin, custId, null, groups).catch(() => [] as string[]))];

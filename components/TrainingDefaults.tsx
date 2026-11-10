@@ -54,6 +54,7 @@ export default function TrainingDefaults({ trainingId }: { trainingId: string })
       <div className="tdf-row">
         {sel("order_type", "Order type", [["new", "New order"], ["reorder", "Reorder"], ["reorder_changes", "Reorder with changes"]])}
         {sel("confirm", "Production confirms", [["false", "No, never"], ["true", "Yes, every print"]], (s) => s === "true")}
+        {sel("own_seps", "Their separations", [["true", "Yes, they send their own"], ["false", "No, we separate"]], (s) => s === "true")}
         {sel("delivery_method", "Delivery", [["ship", "Ship"], ["pickup", "Pickup"], ["deliver", "We deliver"]])}
         <div className="field tdf-f">
           <label htmlFor={`tdf-sm-${trainingId}`}>Ship method</label>

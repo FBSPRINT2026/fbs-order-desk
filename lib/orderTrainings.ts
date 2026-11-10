@@ -18,10 +18,13 @@ export type Training = { id: string; customer_id: string; name: string; when_wor
 export type TrainingDefaults = {
   order_type?: "new" | "reorder" | "reorder_changes"; /** production confirms the prints' details (false: never) */ confirm?: boolean;
   delivery_method?: "pickup" | "ship" | "deliver"; ship_method?: string;
+  /** they send their own separations (Nov 10, Nick on Tiger Blue: "he supplies… the separations… gives us visual
+   *  mock-ups"): every screen print is printed from their films, their picture is the mockup (the proof), the inks are read
+   *  off it, nothing goes to separations: the same as the Order helper's "their separations" files */ own_seps?: boolean;
   /** the fields staff set (learning leaves them alone) */ set?: string[];
   /** the fields learned, and from which orders ("#40311, #40314") */ learned?: Record<string, string>;
 };
-export const DEFAULT_FIELDS = ["order_type", "confirm", "delivery_method", "ship_method"] as const;
+export const DEFAULT_FIELDS = ["order_type", "confirm", "delivery_method", "ship_method", "own_seps"] as const;
 export type DefaultField = typeof DEFAULT_FIELDS[number];
 /** the job names how it goes out (a carrier, a speed, a pickup or delivery): its own words win over a default */
 export const SHIP_SAID = /\b(ups|usps|fed ?ex|dhl|on ?trac|overnight|next[- ]day|2nd[- ]day|second[- ]day|two[- ]day|3[- ]day|express saver|priority (mail|overnight)|ground|freight|ltl|pick ?up|picking (it |them )?up|will call|hand[- ]deliver|deliver (it|them)|drop (it|them) off)\b/i;
@@ -37,6 +40,7 @@ export function defaultsText(d: TrainingDefaults): string {
   return [
     d.order_type ? ({ new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes" } as const)[d.order_type] : "",
     d.confirm === false ? "no production confirmation" : d.confirm ? "production confirms details" : "",
+    d.own_seps ? "their own separations" : "",
     d.delivery_method ? (d.delivery_method === "ship" ? `ship${d.ship_method ? ` ${d.ship_method}` : ""}` : d.delivery_method === "pickup" ? "pickup" : "we deliver") : d.ship_method ? `ship ${d.ship_method}` : "",
   ].filter(Boolean).join(" · ");
 }

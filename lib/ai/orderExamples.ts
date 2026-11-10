@@ -175,6 +175,7 @@ function settingsOf(o: Order): Record<DefaultField, string | boolean | undefined
     confirm: prints.length ? prints.some((im) => !im.confirmed && !!im.confirm && (!!im.confirm.size || !!im.confirm.ink)) : undefined,
     delivery_method: ["pickup", "ship", "deliver"].includes(o.delivery_method) ? o.delivery_method : undefined,
     ship_method: o.delivery_method === "ship" && (o.ship_method || "").trim() ? o.ship_method.trim() : undefined,
+    own_seps: prints.some((im) => im.method === "screen") ? prints.filter((im) => im.method === "screen").every((im) => !!im.custSeps) : undefined,
   };
 }
 /**
