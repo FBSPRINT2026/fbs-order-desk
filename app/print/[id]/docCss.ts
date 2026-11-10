@@ -592,6 +592,14 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .w2-hero.many{grid-template-columns:minmax(0,1fr) 3.3in}
 .pdoc .w2-hero .wo-mks{margin-top:0;min-height:0;flex:none;height:100%}
 .pdoc .w2-prints{display:flex;flex-direction:column;gap:6px;min-width:0;overflow:hidden}
+/* a print card keeps its full height: never squeezed with its last rows hidden (Nov 10, Amanda); when the cards are
+   taller than the column, WoFit tightens the page, then the cards' text (p1, p2) */
+.pdoc .w2-prints>*{flex:none}
+.pdoc .sheet.p1 .w2-prints .wo-pc .kv{font-size:8.5pt;padding:4px 8px;gap:1px 6px}
+.pdoc .sheet.p1 .w2-prints .wo-pc .h{padding:2px 8px}
+.pdoc .sheet.p1 .w2-prints .wo-pc .h b{font-size:11pt}
+.pdoc .sheet.p2 .w2-prints .wo-pc .kv{font-size:7.5pt;line-height:1.15}
+.pdoc .sheet.p2 .w2-prints .wo-pc .kv>i{font-size:6.5pt}
 .pdoc .w2-prints .wo-pc .kv{grid-template-columns:max-content minmax(0,1fr);font-size:9.5pt}
 .pdoc .w2-prints .wo-pc .inks>span,.pdoc .w2-prints .wo-pc .w2-th>span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pdoc .w2-prints .wo-pc .kv>*{min-width:0}
@@ -611,6 +619,9 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .cnt2 td.sz b{display:block;font-size:14pt;line-height:1.1}
 .pdoc .cnt2 td.sz i{display:block;width:.4in;height:.24in;margin:3px auto 0;border:1.3px dashed #9aa3b2;border-radius:4px}
 .pdoc .cnt2 td.sz b.blank{visibility:hidden}
+/* a colorway's heading row in the garments (Nov 10, Amanda): its letter and its thread / ink, then its garments */
+.pdoc .cnt2 tr.w2-cwh td{padding:7px 5px 3px;border-bottom:1.5px solid var(--ink);font-size:9.5pt;font-weight:700;color:var(--ink)}
+.pdoc .cnt2 tr.w2-cwh .w2-cw{margin:0 4px 0 0}
 .pdoc .cnt2 .w2-cw{display:inline-block;min-width:16px;padding:0 4px;margin-left:6px;border-radius:4px;background:var(--ink);color:#fff;font-size:8pt;font-weight:800;line-height:15px;text-align:center;vertical-align:1px}
 .pdoc .cnt2-by{display:flex;gap:28px;font-size:9.5pt;color:var(--ink2);margin-top:6px}
 .pdoc .cnt2-by i{display:inline-block;width:1.4in;border-bottom:1px solid var(--ink2);margin-left:6px;vertical-align:-2px}

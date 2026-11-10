@@ -7,7 +7,10 @@ import { useEffect } from "react";
  *   f1 the count boxes shorter · f2 the mockups smaller · f3 the notes shorter · f4 long notes only on the next page ·
  *   f5 the mockups smaller again (a few short notes that must stay, like the ship-to, Oct 30 #40284).
  */
-const STEPS = ["f1", "f2", "f3", "f4", "f5"];
+const STEPS = ["f1", "f2", "f3", "f4", "f5", "p1", "p2"];
+// it fits when the page holds everything AND every Prints column holds its cards (Nov 10, Amanda: a card was cut off
+// inside its column while the page itself fit, so nothing tightened); p1 / p2 make the print cards' text smaller
+const fits = (sh: HTMLElement) => sh.scrollHeight <= sh.clientHeight + 1 && Array.from(sh.querySelectorAll<HTMLElement>(".w2-prints")).every((c) => c.scrollHeight <= c.clientHeight + 1);
 export default function WoFit() {
   useEffect(() => {
     const fit = () => {
@@ -20,7 +23,7 @@ export default function WoFit() {
       for (const sh of Array.from(document.querySelectorAll<HTMLElement>(".sheet.wo-first"))) {
         STEPS.forEach((c) => sh.classList.remove(c));
         for (const c of STEPS) {
-          if (sh.scrollHeight <= sh.clientHeight + 1) break;
+          if (fits(sh)) break;
           if (c === "f4" && !sh.querySelector(".notes.clip")) continue;
           sh.classList.add(c);
         }

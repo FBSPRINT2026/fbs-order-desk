@@ -19,7 +19,7 @@ import WoFit from "./WoFit";
 import InkFit from "./InkFit";
 import { inkShort, threadShort } from "@/lib/inkShort";
 import { isRelabel, setFor, type NeckLabelSet } from "@/lib/neckLabels";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import DstPicture from "@/components/DstPicture";
 import { PrintThumb } from "@/components/LogoThumb";
 /** what a customer reads for a visual-only print (Oct 20, Nick: "the customer would only see the mockup, a dumb mockup") */
@@ -159,7 +159,9 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
   //   3. each mockup big, with its prints blown up under it (the full notes on the first when they're long)
   //   4. each print's press sheet
   const plans = groups.map((g, gi) => {
-    const lines = g.lines.filter((l) => lineQty(l) > 0 || g.lines.length === 1);
+    // grouped by colorway (Nov 10, Amanda: "group the garments on the work order… group A and then list the garments,
+    // and group B…"): when a print sews or prints differently on some garments, each version's garments together, A first
+    const lines = byVersion(g, g.lines.filter((l) => lineQty(l) > 0 || g.lines.length === 1), p.designs);
     const first = gi === 0;
     const gc = c.groups[gi];
     // the ship-to on one line, and a note that only says the ship method it already says dropped (Oct 31, #40336: "Ship
@@ -248,7 +250,14 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
           <>
             <table className="cnt2">
               <thead><tr><th>Garment</th>{sizes.map((z) => <th key={z} className="sz">{sizeLabel(z)}</th>)}<th className="sz tot">Total</th><th className="sz fin">Final</th></tr></thead>
-              <tbody>{ls.map((l) => <LineRow key={l.id} l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} colorHexes={p.colorHexes} cw={cwLetters(g, l, p.designs)} />)}</tbody>
+              <tbody>{ls.map((l, li) => {
+                // a heading row where a colorway starts (and again at the top of a continued page): its letter and what it sews / prints in
+                const v = versionHead(g, l, p.designs), prev = li ? versionHead(g, ls[li - 1], p.designs) : null;
+                return <Fragment key={l.id}>
+                  {v && (!prev || prev.key !== v.key) && <tr className="w2-cwh"><td colSpan={sizes.length + 3}><span className="w2-cw">{v.key}</span> {v.desc}</td></tr>}
+                  <LineRow l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} colorHexes={p.colorHexes} />
+                </Fragment>;
+              })}</tbody>
             </table>
             <div className="cnt2-by"><span>Counted in by <i /></span><span>Final count by <i /></span></div>
           </>
@@ -294,7 +303,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                   {g.imprints.length === 0 && <div className="wo-none">No prints on this group.</div>}
                   {g.imprints.length > 4
                     ? <div className="wo-plist">{g.imprints.map((d, di) => <span key={d.id}><b>{sideOf(d, g.imprints)}</b> {colorsLabel(d)}{inkNames(d.inks).length ? ` · ${inkNames(d.inks).join(", ")}` : ""} <i>p. {printPg[di]}</i></span>)}</div>
-                    : g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]}
+                    : g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} lines={g.lines}
                         ways={sheets.filter((sh) => sh.di === di && sh.variant?.cw).map((sh) => ({ name: sh.variant!.cw!, on: sh.variant!.color, qty: sh.qty || 0, file: sh.d.emb?.file?.name || "", threads: inkNames(sh.d.inks) }))} />)}
                 </div>
               </div>
@@ -346,7 +355,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                       })}
                     </div>
                   )}
-                  {i === 0 && g.imprints.length > 4 && <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} />)}</div>}
+                  {i === 0 && g.imprints.length > 4 && <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} lines={g.lines} />)}</div>}
                   {i === 0 && longNotes && !notesPage && <><h2>Notes</h2><div className="notes wo-mk-notes">{notesBlock}</div></>}
                   <div className="foot"><span>{footL}</span><span>Page {pgMk + i} of {total}</span></div>
                 </section>
@@ -384,9 +393,12 @@ function sideOf(d: Imprint, all: Imprint[]): string {
 }
 
 /** a print on the work order's first page: the same rows in the same order on every card */
-function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des: Design | null; all: Imprint[]; allLight: boolean; page: number;
+function PrintCard({ d, des, all, allLight, page, ways = [], lines = [] }: { d: Imprint; des: Design | null; all: Imprint[]; allLight: boolean; page: number; /** the group's garments, for the change letters */ lines?: Group["lines"];
   /** a colorway split: each colorway with its sew file, threads and the garments it's on (one press sheet each) */ ways?: { name: string; on: string; qty: number; file: string; threads: string[] }[] }) {
   const sz = printSize(d, des), sc = screensOf(d, allLight), inks = d.visualOnly || ways.length ? [] : inkNames(d.inks);
+  // each change's version letter, the same as on the garment lines and the close-up page
+  const vers = lines.length ? changeVersions(d, lines) : [];
+  const verOf = (k: string) => { const t = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, ""); return vers.length > 1 ? vers.find((v) => v.colors.some((c) => t(c) === t(baseColor(k))))?.letter || "" : ""; };
   const changes = d.visualOnly || ways.length ? [] : Object.entries(d.inkBy || {}).map(([k, m]) => [k, Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())] as const).filter(([, ch]) => ch.length);
   const warns = [
     d.visualOnly ? "VISUAL MOCKUP ONLY: RUN IT LIKE LAST TIME, THEN CONFIRM THE SPECS" : "",
@@ -419,7 +431,7 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
             <span><b>{w.on}</b>{w.threads.length ? null : <> with {andList(w.name.split(/\s*\/\s*/))} {d.method === "embroidery" ? "thread" : "ink"}</>}{w.qty ? <span className="faint"> ({w.qty})</span> : null}</span>
             {w.file ? <span className="w2-file">{w.file}</span> : null}
             <span className="w2-th">{w.threads.map((k) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{threadShort(k)}</span>)}</span></span></span>)}
-        {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> ({changeWord(d.method).toLowerCase()}, not {a}) </span>)}</span></span>)}
+        {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>{verOf(k) ? `${verOf(k)} · ` : ""}On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> ({changeWord(d.method).toLowerCase()}, not {a}) </span>)}</span></span>)}
         <i>Size</i><span>{d.visualOnly ? <b>Set on press (reorder)</b> : <>{sz.label ? <b>{sz.label}</b> : "—"} · {dropLabel(d).toLowerCase()}</>}</span>
         {d.method === "embroidery" ? (d.stitches ? <><i>Stitches</i><span>{d.stitches.toLocaleString()}</span></> : null)
           : sc ? <><i>Screens</i><span>{sc.n ? sc.n : "see separations"} · {d.printStyle === "fashion" ? "no underbase" : sc.under ? "underbase" : "no underbase"}</span></> : null}
@@ -435,7 +447,42 @@ function PrintCard({ d, des, all, allLight, page, ways = [] }: { d: Imprint; des
 const andList = (xs: string[]) => { const a = xs.map((x) => x.trim()).filter(Boolean); return a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`; };
 /** a garment's colorway letters on the work order: each split print's colorway on its color (as the order page tags it) */
 function cwLetters(g: Group, l: Group["lines"][number], designs: Record<string, Design>): string[] {
-  return [...new Set(g.imprints.filter((d) => Object.keys(d.colorwayBy || {}).length && d.design_id && designs[d.design_id]).map((d) => { const des = designs[d.design_id!]; return cwLetter(des, colorwayOnColor(d, des, l.color || "")); }).filter(Boolean))];
+  // a print split into colorways: its colorway's letter; a print with a thread / ink change on some garment colors
+  // (Nov 10, Amanda: "on the garment lines… indicate the colorways"): its version letter (A as printed, B the change…),
+  // the same letters as the close-up pages (changeVersions, lib/inkBy.ts). Prints that disagree say which print.
+  const tags = g.imprints.map((d) => {
+    if (Object.keys(d.colorwayBy || {}).length && d.design_id && designs[d.design_id]) { const des = designs[d.design_id]; return { d, x: cwLetter(des, colorwayOnColor(d, des, l.color || "")) }; }
+    return { d, x: versionOn(d, g.lines, l) };
+  }).filter((t) => t.x);
+  const same = new Set(tags.map((t) => t.x)).size <= 1;
+  return [...new Set(tags.map((t) => (same ? t.x : `${sideOf(t.d, g.imprints)} ${t.x}`)))];
+}
+/** a garment's colorway heading on the work order: its letter(s) and what it sews / prints in, or null when no print changes */
+function versionHead(g: Group, l: Group["lines"][number], designs: Record<string, Design>): { key: string; desc: string } | null {
+  const key = cwLetters(g, l, designs).join(" ");
+  if (!key) return null;
+  const k = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const parts = g.imprints.map((d) => {
+    if (Object.keys(d.colorwayBy || {}).length && d.design_id && designs[d.design_id]) return { d, t: colorwayOnColor(d, designs[d.design_id], l.color || "")?.name || "" };
+    const v = changeVersions(d, g.lines).find((x) => x.colors.some((c) => k(c) === k(baseColor(inkKeyOf(l)))));
+    return { d, t: v ? (v.letter === "A" ? inkNames(d.inks).join(", ") : v.ink) : "" };
+  }).filter((x) => x.t);
+  const same = new Set(parts.map((x) => x.t)).size <= 1;
+  const word = g.imprints.every((d) => d.method === "embroidery") ? "thread" : g.imprints.every((d) => d.method !== "embroidery") ? "ink" : "";
+  return { key, desc: same ? `${parts[0]?.t || ""}${word && parts[0]?.t ? ` ${word}` : ""}` : parts.map((x) => `${sideOf(x.d, g.imprints)}: ${x.t}`).join(" · ") };
+}
+/** the garments in colorway order (A's garments, then B's…), each keeping its order on the order; unchanged when no print changes */
+function byVersion<T extends Group["lines"][number]>(g: Group, ls: T[], designs: Record<string, Design>): T[] {
+  const keys = ls.map((l) => cwLetters(g, l, designs).join(" "));
+  if (!keys.some(Boolean)) return ls;
+  return ls.map((l, i) => ({ l, i, k: keys[i] })).sort((a, b) => a.k.localeCompare(b.k) || a.i - b.i).map((x) => x.l);
+}
+/** a print's version letter on a garment (A as printed, B… a change), or "" when the print has no changes */
+function versionOn(d: Imprint, lines: Group["lines"], l: Group["lines"][number]): string {
+  const vs = changeVersions(d, lines);
+  if (vs.length < 2) return "";
+  const k = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return vs.find((v) => v.colors.some((c) => k(c) === k(baseColor(inkKeyOf(l)))))?.letter || "";
 }
 function LineRow({ l, sizes, hex, single, colorHexes, cw = [] }: { l: Group["lines"][number]; sizes: readonly string[]; hex: string; single: boolean; colorHexes?: Record<string, string>; /** its colorway letters (A, B…), as on the order */ cw?: string[] }) {
   const own = (lineHex(l) || "") || colorHexes?.[ckey(l.color)] || colorHex(l.color) || (l.color ? guessHex(l.color) : "");
