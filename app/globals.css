@@ -21649,7 +21649,8 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td{padding:0!important;min
 html body .pv table.pv-items.tbl-stack > tbody > tr > td[data-label]::before{position:static!important;display:inline!important;width:auto!important;margin-right:4px}
 html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc{flex-basis:100%;width:auto!important;margin-bottom:6px}
 html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:has(.pv-art-none){display:none}
-html body .pv table.pv-items.tbl-stack .pv-arts{display:flex;flex-wrap:wrap;gap:6px}
+html body .pv table.pv-items.tbl-stack .pv-arts{display:flex;flex-direction:row;flex-wrap:wrap;gap:6px}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc::before{display:none!important}
 html body .pv table.pv-items.tbl-stack .pv-thumb.md{width:56px;height:56px}
 html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-cat{flex-basis:100%;font-size:12px;color:var(--ink-3);order:1}
 html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-cat::before,

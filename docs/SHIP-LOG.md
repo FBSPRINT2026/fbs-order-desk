@@ -36,3 +36,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 10:54am · 1.3.237 · Amanda · Work order: print cards never cut off (tighten the page, then smaller card text); garments grouped by colorway under A / B headings with their thread or ink, matching the close-ups and the cards' change rows
 - Nov 10 10:59am · 1.3.238 · Amanda · Work order: the Prints column grows to hold all its cards (warnings like NEEDS DIGITIZING never hidden); the page tightens below to make room
 - Nov 10 11:01am · 1.3.239 · Nick · Old invoices: no empty art boxes; Pay is a normal button in the top bar
+- Nov 10 11:02am · 1.3.240 · Nick · Old invoices on a phone: a line's pictures in a row
