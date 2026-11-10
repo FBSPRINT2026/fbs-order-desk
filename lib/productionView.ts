@@ -2,7 +2,7 @@ import "server-only";
 import { inkKeyOf } from "@/lib/inkBy";
 import { garmentFor } from "@/lib/garmentMatch";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { orderGroups, type Imprint, type Order } from "@/lib/pricing";
+import { orderGroups, printedLines, type Imprint, type Order } from "@/lib/pricing";
 import { oldJobText } from "@/lib/ai/oldJobNotes";
 import { defaultLayout, mergeProduction, validLayout, withIssue, type EquipRow, type Machine } from "@/lib/production";
 import { autoSetup, type SetupPlate } from "@/lib/pressSetup";
@@ -57,7 +57,8 @@ export async function productionView(admin: SupabaseClient, orderId: string): Pr
   const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   if (!o) return null;
   const order = o as Order & { number: number; nickname: string; status: string; due_date: string | null; customer_id: string };
-  const groups = orderGroups(order);
+  // ghost prints aren't printed (GLine.ghost): never in production
+  const groups = orderGroups(order).map((g) => ({ ...g, lines: printedLines(g.lines) }));
   const [{ data: cust }, { data: mks }, { data: seps }, { data: acts }, { data: slots }, { data: times }, { data: inn }, { data: ev }, { data: files }] = await Promise.all([
     admin.from("customers").select("company, name").eq("id", order.customer_id).maybeSingle(),
     admin.from("mockups").select("title, file_path, group_id, created_at").eq("order_id", orderId).is("archived_at", null).order("created_at"),

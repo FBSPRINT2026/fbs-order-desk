@@ -3,7 +3,7 @@
  * and the "where should this go" suggestion. All numbers live in Settings → Production and can be tuned; they start
  * from industry averages (see the notes on each) and get corrected from the shop's own job-time logs.
  */
-import type { Group, Order } from "@/lib/pricing";
+import { printedLines, type Group, type Order } from "@/lib/pricing";
 
 export type MachineType = "screen" | "embroidery" | "heat";
 export type Machine = {
@@ -273,7 +273,7 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
     // each kind of garment in the group runs at its own speed (Nov 9, Nick: #40360 had tees and sweatshirts in one group,
     // and every piece was timed as a sweatshirt): tees, heavy (sweats, hoodies), bags and caps are their own runs
     const byKind = new Map<Step["garment"], Group["lines"]>();
-    for (const l of g.lines) { const k = garmentKind(`${l.garment} ${l.style}`); if (pcs(l)) byKind.set(k, [...(byKind.get(k) || []), l]); }
+    for (const l of printedLines(g.lines)) { const k = garmentKind(`${l.garment} ${l.style}`); if (pcs(l)) byKind.set(k, [...(byKind.get(k) || []), l]); }
     for (const [garment, ls] of byKind) {
       const qty = ls.reduce((a, l) => a + pcs(l), 0);
       // mixed colors of one kind: count it dark if most pieces are dark

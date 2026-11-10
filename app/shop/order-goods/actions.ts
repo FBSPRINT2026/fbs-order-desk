@@ -2,7 +2,7 @@
 import { getViewer } from "@/lib/supabase/server";
 import { sizeRank } from "@/lib/sizeOrder";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { mergeSettings, orderGroups, uid, type Group, type Order } from "@/lib/pricing";
+import { mergeSettings, orderGroups, printedLines, uid, type Group, type Order } from "@/lib/pricing";
 import { SS_REP, ssAllocate, ssConfigured, ssOurCard, ssPlaceOrder, ssSearch, ssSkus, ssStock } from "@/lib/ss";
 import { SANMAR_BUFFER, sanmarConfigured, sanmarInventory, sanmarPOMode, sanmarPOWhse, sanmarPreSubmit, sanmarSkus, sanmarStockKey, sanmarSubmitPO, type SanMarPOLine } from "@/lib/sanmar";
 import { SM_WH, type Src } from "@/lib/goodsPlan";
@@ -103,7 +103,7 @@ export async function goodsStart(p: { email?: string; order?: string }) {
     const admin = createAdminClient();
     const rowsOf = (groups: Group[]) => {
       const rows: GoodsRow[] = [];
-      for (const g of groups) for (const l of g.lines || []) for (const [z, q] of Object.entries(l.sizes || {})) {
+      for (const g of groups) for (const l of printedLines(g.lines)) for (const [z, q] of Object.entries(l.sizes || {})) {
         const qty = +(q || 0); if (!qty) continue;
         const key = `${l.brand}|${l.style}|${l.color}|${z}`.toLowerCase();
         const have = rows.find((r) => r.key === key);

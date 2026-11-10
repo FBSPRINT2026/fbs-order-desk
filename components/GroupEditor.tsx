@@ -1019,6 +1019,19 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
           {/* with a color change, the lines show grouped by version (A's together, then B's), each keeping its own index */}
           {(secOn || spShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => (secOn ? verKey(inkKeyOf(a.l)).localeCompare(verKey(inkKeyOf(b.l))) : 0) || (spShow ? spKey(a.l).localeCompare(spKey(b.l)) : 0) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
             const lc = gc.lines[li];
+            // ghost prints (Nov 9, Nick): a quantity the customer pays the print price for, never printed or ordered; they
+            // count toward the group's price break (GLine.ghost, lib/pricing.ts printedLines)
+            if (l.ghost) return (
+              <div key={l.id} className="glg-row" data-notranslate>
+                <span className="glg-ic" aria-hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 11a7 7 0 0 1 14 0v7l-2.3-1.6L14.3 18 12 16.4 9.7 18l-2.4-1.6L5 18z" /><path d="M10 10h.01M14 10h.01" /></svg></span>
+                <b>Ghost prints</b>
+                <label className="glg-q"><span>Qty</span><input type="number" min={0} inputMode="numeric" aria-label="Ghost prints" value={l.sizes?.OS || ""} disabled={fixed} onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); if (v) x.lines[li].sizes = { OS: v }; else x.lines[li].sizes = {}; })} /></label>
+                <span className="glg-tag">not printed</span>
+                <span className="faint">counts toward the {gc.tierMin ? `${gc.tierMin}+` : ""} price break · print price only</span>
+                {!hidePrices && <span className="glg-amt"><span className="faint">{money(lc?.each)} each</span> <b className="num">{money(lc?.sub)}</b></span>}
+                {!fixed && <button type="button" className="glg-x" aria-label="Remove ghost prints" title="Remove ghost prints" onClick={() => update((x) => { x.lines.splice(li, 1); })}>×</button>}
+              </div>
+            );
             // grouped by color change (Oct 27): a heading where the version changes (A · 1743 Oxford Blue, B · 1801 White)
             const vk = verKey(inkKeyOf(l)), vHead = secOn && (pos === 0 || verKey(inkKeyOf(order[pos - 1].l)) !== vk);
             const sHead = spShow && (pos === 0 || vHead || spKey(order[pos - 1].l) !== spKey(l));
@@ -1190,6 +1203,11 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
               <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { x.lines.push(newGLine()); }); }}>New garment</button>
               <button type="button" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { const last = x.lines[x.lines.length - 1]; x.lines.push({ ...last, extras: undefined, shopUse: undefined, id: uid(), color: "", sizes: {}, priceOverride: null }); }); }}>Same style, new color</button>
               <button type="button" disabled={!!yth?.busy || !!cmp?.busy} title="The youth, women's, long sleeve… styles that go with this garment, in the same color" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; void openCompanions(); }}>{cmp?.busy ? "Finding companion styles…" : "Companion style (youth, women's…)"}</button>
+            
+              {/* not printed for them (Nov 9, Nick: "a manual way to add extras and add ghost prints… part of the add garments drop down") */}
+              <span className="glg-mh">Not printed for them</span>
+              <button type="button" disabled={!g.lines.some((y) => !y.ghost && (y.style || y.color))} title="Their extras of the last garment: its own line, printed free (switch on the stamp)" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { const last = [...x.lines].reverse().find((y) => !y.ghost && (y.style || y.color)); if (!last) return; const at = x.lines.indexOf(last); x.lines.splice(at + 1, 0, { ...last, id: uid(), sizes: {}, extras: true, extrasPrint: true, extrasFree: true, priceOverride: 0, shopUse: undefined, note: undefined }); }); }}>Extras</button>
+              <button type="button" disabled={g.lines.some((y) => y.ghost)} title="Pieces they pay the print price for, never printed: to reach the next price break" onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement).open = false; update((x) => { x.lines.push({ ...newGLine(), garment: "Ghost prints (not printed)", oneSize: true, ghost: true }); }); }}>Ghost prints</button>
             </div>
           </details>}
           {/* a garment color in a second colorway (Nov 9, Nick: "Mauve in B and C"): a line of it of its own, with its own

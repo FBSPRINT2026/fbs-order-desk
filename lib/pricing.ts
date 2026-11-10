@@ -326,6 +326,11 @@ export type GLine = {
   shopUse?: boolean;
   /** One-size item (hat, koozie, bag): a single quantity instead of a size run. */
   oneSize?: boolean;
+  /** ghost prints (Nov 9, Nick: "they pay for it without printing it… a customer had 20 shirts and needed 4 more to get to
+   *  the price break for 24"): pieces the customer pays the print price for, never printed or ordered. They count toward
+   *  the group's price break and show on the invoice as "Ghost prints (not printed)"; the work order, the press
+   *  schedule, goods and the Mockup Creator leave them out (`printedLines`). The quantity is in sizes.OS */
+  ghost?: boolean;
   /** Sizes this garment comes in, copied from the catalog when the style is picked. */
   sizeRun?: string[];
   /** 2XL+ material charge per piece from the supplier's size pricing (S&S). Overrides the settings upcharges on retail. */
@@ -885,6 +890,8 @@ export function lineQty(l: { sizes?: Partial<Record<Size, number>> }) {
   return SIZES.reduce((a, sz) => a + num(l.sizes?.[sz]), 0);
 }
 /** the pieces the customer is billed for: the shop's own pieces (shopUse) count for nothing */
+/** the lines that are really printed and ordered: everything but ghost prints (GLine.ghost) */
+export const printedLines = <T extends { ghost?: boolean }>(ls: T[] | null | undefined): T[] => (ls || []).filter((l) => !l.ghost);
 export const billQty = (l: { sizes?: Partial<Record<Size, number>>; shopUse?: boolean }) => (l.shopUse ? 0 : lineQty(l));
 /**
  * THE order as the customer sees it: the shop's own pieces (Line.shopUse) taken out. Every page, document, sync and
@@ -1251,11 +1258,13 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const lines: LineCalc[] = (g.lines || []).map((l, li) => {
     const lq = lineQty(l);
     const adj = Object.entries(pl.colorAdjust || {}).find(([c]) => normColor(c) === normColor(l.color))?.[1] || 0;
-    const garmentRaw = garmentPrice(l.cost, pl, ti, adj);
+    // ghost prints: the print price only, on the group's first garment color (no garment, no finishing, no upcharges)
+    const pc = l.ghost ? (g.lines.find((x) => !x.ghost && (x.color || "").trim())?.color || "") : l.color;
+    const garmentRaw = l.ghost ? 0 : garmentPrice(l.cost, pl, ti, adj);
     const garmentEach = r2(garmentRaw);
-    const { light, print: basePrint } = printLine(l.color, anySplit ? (kidAt[li] ? "y" : "a") : undefined);
-    const linePrint = r2(basePrint + locExtra + inkExtra + puffExtra + embSpecial(l));
-    const calcEach = r2(garmentRaw + linePrint + finishEach);
+    const { light, print: basePrint } = printLine(pc, anySplit ? (kidAt[li] ? "y" : "a") : undefined);
+    const linePrint = r2(basePrint + locExtra + inkExtra + puffExtra + (l.ghost ? 0 : embSpecial(l)));
+    const calcEach = r2(garmentRaw + linePrint + (l.ghost ? 0 : finishEach));
     const hasOv = !!l.shopUse || (l.priceOverride !== null && l.priceOverride !== undefined && (l.priceOverride as unknown) !== "" && !isNaN(+l.priceOverride));
     // a sample: its flat price each (plus extras when the rule charges them), not the price list
     const smpEach = smp ? r2(num(smp.each) + (smp.extras === "charge" ? locExtra + puffExtra : 0)) : null;
@@ -1265,7 +1274,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       const q = num(l.sizes?.[sz]);
       const up = l.sizeUpSet?.[sz] != null && (l.sizeUpSet[sz] as unknown) !== "" ? num(l.sizeUpSet[sz]) : pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
       sub += q * each; // 2XL+ Materials Charge are billed as their own line
-      if (!l.shopUse && !smp) upTotal += q * up;
+      if (!l.shopUse && !smp && !l.ghost) upTotal += q * up;
     });
     return { id: l.id, qty: lq, garmentEach, printEach: r2(linePrint), light, calcEach, each, hasOv, sub: r2(sub), upTotal: r2(upTotal) };
   });
@@ -1333,7 +1342,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, /** each print's color changes as charged (its own plus the inks it changes from the same print in an earlier group) */ imprintInkChanges: (g.imprints || []).map((d) => num(d.inkChanges)), /** the same print in an earlier group in other inks: which group and the inks it swaps */ imprintAutoChange: (g.imprints || []).map((d) => seen?.autoChange?.get(d.id) || null), /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, /** each print's color changes as charged (its own plus the inks it changes from the same print in an earlier group) */ imprintInkChanges: (g.imprints || []).map((d) => num(d.inkChanges)), /** the same print in an earlier group in other inks: which group and the inks it swaps */ imprintAutoChange: (g.imprints || []).map((d) => seen?.autoChange?.get(d.id) || null), /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: printedLines(g.lines).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
