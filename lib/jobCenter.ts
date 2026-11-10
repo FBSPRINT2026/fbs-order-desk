@@ -87,12 +87,15 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   const orders = (os || []) as unknown as O[];
   const ids = orders.map((o) => o.id);
   tm("main");
-  const [mks, pfs, sws, evs, ogs] = await Promise.all([
+  const [mks, pfs, sws, evs, ogs, bos] = await Promise.all([
     inChunks<{ id: string; order_id: string; group_id: string | null }>(ids, (p) => admin.from("mockups").select("id, order_id, group_id").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; version: number; status: string; mockup_id: string | null; sent_at: string | null; decided_at: string | null; customer_comment: string; archived_at: string | null }>(ids, (p) => admin.from("proofs").select("order_id, version, status, mockup_id, sent_at, decided_at, customer_comment, archived_at").in("order_id", p).not("version", "is", null)),
     inChunks<{ id: string; order_id: string; imprint_id: string; status: string; sent_at: string | null; customer_comment: string; created_at: string }>(ids, (p) => admin.from("sewouts").select("id, order_id, imprint_id, status, sent_at, customer_comment, created_at").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; kind: string; detail: string; created_at: string }>(ids, (p) => admin.from("order_events").select("order_id, kind, detail, created_at").in("order_id", p).in("kind", ["quote_declined", "quote_changes", "sent", "approved", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at", { ascending: false })),
     inChunks<{ order_id: string; status: string; supplier: string | null; supplier_po: string | null }>(ids, (p) => admin.from("order_goods").select("order_id, status, supplier, supplier_po").in("order_id", p)),
+    // the garments we buy: every order placed for the job, by the Order goods tool or added by hand on the Goods tab
+    // (Nov 10, Nick, #40460: ordered and added on the Goods tab, but still under Goods to order)
+    inChunks<{ order_id: string; received_at: string | null }>(ids, (p) => admin.from("blank_orders").select("order_id, received_at").in("order_id", p).neq("status", "cancelled")),
   ]);
   // the logos on embroidered prints: where each is in digitizing comes from them (lib/digitizeStatus.ts)
   const embDesignIds = [...new Set(orders.flatMap((o) => orderGroups(o).flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id)))))];
@@ -224,7 +227,9 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     // then Approved until it's completed
     if (!quoting && allDone) {
       const og = ogs.find((x) => x.order_id === o.id), here = og && (og.status === "arrived" || og.status === "received");
-      const ordered = !!og && (!!og.supplier_po || !!og.supplier || og.status !== "waiting");
+      // ordered: the customer's goods are on the way (order_goods), or we've placed an order for the garments (blank_orders)
+      const buys = bos.filter((b) => b.order_id === o.id);
+      const ordered = buys.length > 0 || (!!og && (!!og.supplier_po || !!og.supplier || og.status !== "waiting"));
       // wholesale, or the customer supplies the garments (the Customer goods flag): theirs to send, nothing for us to order
       const theirs = o.price_type === "wholesale" || ((o as { flags?: { key?: string }[] | null }).flags || []).some((f) => f?.key === "customer_goods");
       // the Job Center is the sales side: once the goods are ordered (or the customer sends theirs) it's Receiving's, and the
