@@ -29,3 +29,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 9:55am · 1.3.230 · Nick · Customer Payments (shop): check invoices to record a check or ACH, amount fills in; old Printavo invoices included; goes to QuickBooks as one payment
 - Nov 10 10:05am · 1.3.231 · Nick · Printavo payments on old invoices show here within minutes: customers who owe on old invoices get their Printavo order list checked about every 15 minutes (read-only)
 - Nov 10 10:23am · 1.3.232 · Amanda · Embroidery Thread change suggests Madeira and Isacord threads, not inks (shared threadChoices list)
+- Nov 10 10:29am · 1.3.233 · Nick · Job photos on the phone: crop, rotate and pinch-zoom before saving (camera and photos picked from the library)

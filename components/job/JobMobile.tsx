@@ -1,4 +1,5 @@
 "use client";
+import PhotoEdit, { type PhotoEditApi } from "@/components/job/PhotoEdit";
 import { useEffect, useRef, useState } from "react";
 import type { JobCard } from "@/lib/jobCard";
 import type { JobActor } from "@/lib/jobAccess";
@@ -198,19 +199,22 @@ function Notes({ card, job }: { card: JobCard; job: { kind: "o" | "a"; id: strin
   );
 }
 
-function PhotoSave({ job, file, onDone }: { job: { kind: "o" | "a"; id: string }; file: File; onDone: () => void }) {
+function PhotoSave({ job, file, onDone, tag0 = "Approved print", left = 0 }: { job: { kind: "o" | "a"; id: string }; file: File; onDone: () => void;
+  /** the tag it starts on (photos picked from the library: "Sample") */ tag0?: string; /** more picked photos waiting after this one */ left?: number }) {
   const { t } = useT();
-  const [url] = useState(() => URL.createObjectURL(file));
-  const [cap, setCap] = useState(""), [tag, setTag] = useState("Approved print"), [busy, setBusy] = useState(false), [msg, setMsg] = useState("");
+  const [cap, setCap] = useState(""), [tag, setTag] = useState(tag0), [busy, setBusy] = useState(false), [msg, setMsg] = useState("");
+  // crop, rotate and zoom before it's saved (Nov 10, Nick)
+  const ed = useRef<PhotoEditApi | null>(null);
+  const tags = [...new Set([tag0, "Approved print", "Press setup", "Print issue", "General"])];
   return (
     <div className="jm-card jm-shot">
-      <img src={url} alt={t("New photo")} />
-      <div className="jm-chips">{["Approved print", "Press setup", "Print issue", "General"].map((k) => <button key={k} type="button" className={"jm-chip" + (tag === k ? " on" : "")} onClick={() => setTag(k)}>{t(k)}</button>)}</div>
+      <PhotoEdit key={file.name + file.size + file.lastModified} file={file} apiRef={ed} labels={{ rotate: t("Rotate"), reset: t("Undo all"), hint: t("Pinch to zoom, drag to move, drag the corners to crop") }} />
+      <div className="jm-chips">{tags.map((k) => <button key={k} type="button" className={"jm-chip" + (tag === k ? " on" : "")} onClick={() => setTag(k)}>{t(k)}</button>)}</div>
       <input type="text" value={cap} onChange={(e) => setCap(e.target.value)} placeholder={t("Caption (optional)")} />
       {msg && <div className="jm-err">{t(msg)}</div>}
       <div className="jm-row">
-        <button type="button" className="jm-ghost" disabled={busy} onClick={onDone}>{t("Cancel")}</button>
-        <button type="button" className="jm-go" disabled={busy} onClick={async () => { setBusy(true); setMsg(""); const r = await addPhoto(job, file, cap, tag === "General" ? "" : tag); setBusy(false); if (r.ok) onDone(); else setMsg(r.error); }}>{busy ? t("Saving…") : t("Save to job")}</button>
+        <button type="button" className="jm-ghost" disabled={busy} onClick={onDone}>{left ? t("Skip") : t("Cancel")}</button>
+        <button type="button" className="jm-go" disabled={busy} onClick={async () => { setBusy(true); setMsg(""); const f = ed.current ? await ed.current.edited() : file; const r = await addPhoto(job, f, cap, tag === "General" ? "" : tag); setBusy(false); if (r.ok) { setCap(""); onDone(); } else setMsg(r.error || "Couldn't save the photo."); }}>{busy ? t("Saving…") : left ? t("Save photo ({0} more)", left) : t("Save photo")}</button>
       </div>
     </div>
   );
@@ -290,7 +294,7 @@ function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
   const { t, locale } = useT();
   const { items, load } = useJobFiles(job);
   const cam = useRef<HTMLInputElement>(null);
-  const [shot, setShot] = useState<File | null>(null), [big, setBig] = useState<JobFile | null>(null);
+  const [shot, setShot] = useState<File | null>(null), [big, setBig] = useState<JobFile | null>(null), [queue, setQueue] = useState<File[]>([]);
   // pictures already on the phone (Oct 21, Nick: "upload photos directly from his iPhone without… email the photos")
   const lib = useRef<HTMLInputElement>(null);
   const [upl, setUpl] = useState(""), [err, setErr] = useState("");
@@ -302,12 +306,12 @@ function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
       {msgs && <FromTexts job={job} onAdded={load} onClose={() => setMsgs(null)} />}
       <button type="button" className="jm-cam jm-lib" disabled={!!upl} onClick={() => lib.current?.click()}><Icon d={I.photo} />{upl || t("Add from my photos")}</button>
       <button type="button" className="jm-cam jm-lib" onClick={() => cam.current?.click()}><Icon d={I.photo} />{t("Take a photo")}</button>
-      <input ref={lib} type="file" accept="image/*" multiple hidden onChange={async (e) => {
+      {/* picked from the library: each opens in the editor in turn (crop, rotate, zoom) before it's saved (Nov 10, Nick) */}
+      <input ref={lib} type="file" accept="image/*" multiple hidden onChange={(e) => {
         const fs = [...(e.target.files || [])]; e.target.value = ""; if (!fs.length) return;
-        setErr("");
-        for (let i = 0; i < fs.length; i++) { setUpl(t("Saving {0} of {1}…", i + 1, fs.length)); const r = await addPhoto(job, fs[i], "", "Sample"); if (!r.ok) { setErr(r.error); break; } }
-        setUpl(""); load();
+        setErr(""); setQueue(fs);
       }} />
+      {queue.length > 0 && <PhotoSave job={job} file={queue[0]} tag0="Sample" left={queue.length - 1} onDone={() => { setQueue((q) => q.slice(1)); load(); }} />}
       {err && <p className="jm-err">{err}</p>}
       <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setShot(f); }} />
       {shot && <PhotoSave job={job} file={shot} onDone={() => { setShot(null); load(); }} />}

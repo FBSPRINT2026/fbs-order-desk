@@ -74,7 +74,20 @@
 .jm-sizes td small{display:block;color:var(--ink-3)}
 .jm-sizes td.r{text-align:right}
 /* photos */
-.jm-shot img{width:100%;max-height:52vh;object-fit:contain;border-radius:10px;background:#000}
+.jm-shot > img{width:100%;max-height:52vh;object-fit:contain;border-radius:10px;background:#000}
+/* crop, rotate and zoom a photo before saving (components/job/PhotoEdit.tsx, Nov 10) */
+.pe{display:grid;gap:8px}
+.pe-stage{position:relative;height:56vh;max-height:520px;border-radius:10px;background:#000;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+.pe-stage > img{position:absolute;left:50%;top:50%;max-width:none;max-height:none;transform-origin:center;pointer-events:none}
+.pe-box{position:absolute;border:2px solid #fff;box-shadow:0 0 0 9999px rgba(0,0,0,.5);pointer-events:none}
+.pe-c{position:absolute;width:30px;height:30px;pointer-events:auto;touch-action:none}
+.pe-c::after{content:"";position:absolute;width:16px;height:16px;border:0 solid #fff}
+.pe-c00{left:-8px;top:-8px}.pe-c00::after{left:6px;top:6px;border-left-width:4px;border-top-width:4px}
+.pe-c10{right:-8px;top:-8px}.pe-c10::after{right:6px;top:6px;border-right-width:4px;border-top-width:4px}
+.pe-c01{left:-8px;bottom:-8px}.pe-c01::after{left:6px;bottom:6px;border-left-width:4px;border-bottom-width:4px}
+.pe-c11{right:-8px;bottom:-8px}.pe-c11::after{right:6px;bottom:6px;border-right-width:4px;border-bottom-width:4px}
+.pe-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pe-hint{font-size:12px;color:#8a8f98;text-align:center}
 .jm-gallery{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .jm-gallery button{border:0;padding:0;background:var(--surface);border-radius:12px;overflow:hidden;cursor:pointer;text-align:left;color:var(--ink)}
 .jm-gallery img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
