@@ -75,6 +75,7 @@ export default function MyDay({ name, replies, replyCount, urgentCount, side, ch
           <h1>{hello}{name ? `, ${name}` : ""}</h1>
           <p className="md-line">{line.length ? line.join(" · ") : "Nothing waiting on you. Enjoy it."}</p>
         </div>
+        <button type="button" className="md-cheer" style={{ fontFamily: "inherit" }}>Nick&apos;s test button</button>
         <CheerSwitch />
       </header>
       {side ? (
