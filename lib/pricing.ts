@@ -90,11 +90,13 @@ export const LOCATIONS = ["Left Chest", "Right Chest", "Full Front", "Medium Fro
 /**
  * Headwear prints in its own spots (Oct 26, Nick: "when you pull in a hat, the locations for the hat will actually change…
  * full front, back, and side… hats, truckers, snapbacks, those are all hats. Beanies and visors are different. Beanies…
- * just that cuff spot. The visor… just the front"). A group whose garments are all one kind of headwear gets that list.
+ * just that cuff spot. The visor… just the front"; Nov 10: beanies sew on the Front, not the cuff; caps on the Full Front at
+ * 4.21"). A group whose garments are all one kind of headwear gets that list.
  */
 export const HAT_LOCATIONS = ["Full Front", "Left Side", "Right Side", "Back"];
 export const VISOR_LOCATIONS = ["Front"];
-export const BEANIE_LOCATIONS = ["Cuff"];
+// beanies sew on the Front (Nov 10, Nick: "beanies should all be front.. cuff was a mistake")
+export const BEANIE_LOCATIONS = ["Front"];
 export type Headwear = "hat" | "visor" | "beanie";
 export function headwearOf(x: { style?: string; brand?: string; garment?: string; description?: string } | null | undefined): Headwear | null {
   const t = `${x?.garment || ""} ${x?.description || ""} ${x?.style || ""}`.toLowerCase();
@@ -124,7 +126,7 @@ export function fitLocation(loc: string, lines: { style?: string; brand?: string
     return loc;
   }
   if (list === VISOR_LOCATIONS) return "Front";
-  if (list === BEANIE_LOCATIONS) return "Cuff";
+  if (list === BEANIE_LOCATIONS) return "Front";
   const k = (loc || "").toLowerCase();
   if (/back|yoke|nape|shoulder/.test(k)) return "Back";
   if (/left/.test(k) && !/chest/.test(k)) return "Left Side";

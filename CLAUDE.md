@@ -126,6 +126,8 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   color change set by hand, `Imprint.changeOf`, wins). Another size is its own print. Picking a logo already on the order
   in the Mockup Creator brings it in the way it's used there (`swapLogo`), and the print says "Same print as …" or warns
   about the size.
+- **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
+  logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.
