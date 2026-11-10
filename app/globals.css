@@ -21693,3 +21693,27 @@ html body .pv table.pv-items.tbl-stack > tfoot > tr > td:empty{display:none}
 /* an old invoice's Pay in its top bar: a normal button, not a full-width bar (Nov 10) */
 .pv-note .pb-go,.pv-note-ph .pb-go{width:auto}
 html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:none}
+
+/* ── Production schedule, calmer (Nov 10, Nick: "too hard to read with all the stripes… the continue… the lunch…
+   overtime" → option A): no stripes anywhere. Warm-up and lunch are a thin line with a word; time off the clock is a
+   flat light wash; overtime is one soft amber area under an amber line; an overtime job is plain soft amber; a job
+   carrying over says so in one small line, no dashed edges; a lunch inside a job is a thin line with "Lunch" */
+.ms-warm,.ms-lunch{background:transparent!important;border:0!important;border-top:1px solid color-mix(in srgb,var(--ink) 22%,transparent)!important}
+.ms-warm span,.ms-lunch span{color:var(--ink-3)!important;font-weight:600!important;text-transform:none!important;letter-spacing:0!important;font-size:10px!important}
+.ms-warm.h,.ms-lunch.h{border-top:0!important;border-left:1px solid color-mix(in srgb,var(--ink) 22%,transparent)!important;background:transparent!important}
+.ms-off,.ms-lc.off{background:color-mix(in srgb,var(--ink) 2.5%,transparent)!important}
+.ms-ot{background:color-mix(in srgb,var(--warn) 7%,transparent)!important;border-top:2px solid color-mix(in srgb,var(--warn) 70%,transparent)!important}
+.ms-blk.ot,.ms-chip.ot{background:color-mix(in srgb,var(--warn) 10%,var(--surface))!important}
+.ms-blk.hold,.ms-chip.hold{background:var(--surface)!important}
+.ms-chip.pv,.ms-blk.bar.pv{background-image:none!important}
+.ms-blk.card.mscv-out::after,.ms-blk.card.mscv-in::before{display:none!important}
+.ms-blk.card.mscv-out{border-bottom-left-radius:6px;border-bottom-right-radius:6px;padding-bottom:15px}
+.ms-blk.card.mscv-in{border-top-left-radius:6px;border-top-right-radius:6px;padding-top:2px}
+.mscv-to{font-weight:600;background:transparent}
+.mscv-from{font-weight:600}
+.ms-thru-l{background:transparent!important;border-bottom:0!important;border-top:1px solid color-mix(in srgb,var(--ink) 25%,transparent)!important;align-items:flex-start;justify-content:center;padding:0}
+.ms-thru-l em{background:var(--surface)!important;font-size:10px;font-weight:600;margin-top:-7px;line-height:13px}
+.ms-slow{background:color-mix(in srgb,var(--fbs-orange) 8%,transparent)!important}
+.ms-down.h.slow{background:color-mix(in srgb,var(--fbs-orange) 18%,transparent)!important}
+.ms-key .k.off{background:color-mix(in srgb,var(--ink) 5%,transparent)!important}
+.ms-key .k.pv{background:color-mix(in srgb,var(--fbs-blue) 55%,var(--surface))!important}
