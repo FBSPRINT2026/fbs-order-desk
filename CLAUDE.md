@@ -118,6 +118,14 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   back, like the same PMS… you only have one PMS matching fee"). The same PMS (matched by its number: "PMS 230 C" = "230C")
   on several prints or groups of one order is charged once, on its first print. `calcGroup` / `calcOrder` in
   `lib/pricing.ts` do this through the shared `seen` set; any new pricing path must go through them.
+- **The same print across groups** (Nick, Nov 9 2026, #40496: "as long as you have the same artwork across a job… quantity
+  discounts can apply across different groups… if there's a different color, I just do a color change"). The same logo at
+  the same spot and size (`printSizeKey`) in several groups of one order is one print: one set of screens (a group that
+  needs more, an underbase on a dark shirt, pays only for those), its pieces counted together for the price break, and
+  each ink printed differently charged as a color change without anyone ticking it (`calcOrder` in `lib/pricing.ts`; a
+  color change set by hand, `Imprint.changeOf`, wins). Another size is its own print. Picking a logo already on the order
+  in the Mockup Creator brings it in the way it's used there (`swapLogo`), and the print says "Same print as …" or warns
+  about the size.
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…
