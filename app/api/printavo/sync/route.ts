@@ -115,6 +115,29 @@ async function apiJob(admin: SupabaseClient, sync: Sync, deadline: number) {
     const { data: deep } = await admin.from("printavo_index").select("printavo_id").eq("status", "done").gte("created_at", since).or(`deep_at.is.null,deep_at.lt.${stale}`).order("created_at", { ascending: false }).limit(1);
     if (deep?.[0]) { if (Date.now() > deadline - 17000) break; await importOne(admin, deep[0].printavo_id, 0, did, true); continue; }
 
+    // 3a. a payment made in Printavo shows here within minutes (Nov 10, Nick: Tiger Blue paid 8 old invoices by eCheck in
+    // Printavo and the portal still showed them owed; the once-a-day re-read below was up to a day behind): one customer
+    // who still owes on an old invoice per turn, the one checked longest ago (each about every 15 minutes): their order
+    // list from Printavo (one or two light requests) is compared, and only what changed (a balance, a status) is read again
+    {
+      const due = new Date(Date.now() - 15 * 60000).toISOString();
+      const { data: oc } = await admin.from("printavo_owing_customers").select("customer_pid, checked_at").or(`checked_at.is.null,checked_at.lt.${due}`).order("checked_at", { ascending: true, nullsFirst: true }).limit(1);
+      const pid = (oc?.[0] as { customer_pid?: string } | undefined)?.customer_pid;
+      if (pid && Date.now() < deadline - 8000) {
+        await admin.from("printavo_owe_check").upsert({ customer_pid: pid, checked_at: new Date().toISOString() });
+        let after: string | null = null;
+        for (let pg = 0; pg < 10 && Date.now() < deadline - 4000; pg++) {
+          const r = await listCustomerOrders(pid, after);
+          if (!r) break;
+          // every 2026 order of theirs counts here, not only the last 30 days (older history is locked)
+          await comparePage(admin, r.orders, did, null, 0, FREEZE);
+          if (!r.next || (r.orders.length && r.orders.every((o) => o.createdAt && o.createdAt < FREEZE))) break;
+          after = r.next;
+        }
+        continue;
+      }
+    }
+
     // 3b. Printavo invoices we still show as owing, however old: read again once a day, so a payment made in Printavo
     // clears the balance in the portal and on statements (Oct 24, Nick: Peticolas showed $307 over 90 days)
     const { data: owe } = await admin.from("printavo_open_invoices").select("printavo_id").or(`deep_at.is.null,deep_at.lt.${stale}`).order("deep_at", { ascending: true, nullsFirst: true }).limit(1);
