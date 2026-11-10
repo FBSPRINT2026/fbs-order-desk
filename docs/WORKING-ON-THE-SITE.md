@@ -10,9 +10,16 @@ Read this with CLAUDE.md (the house rules) at the start of every session. More t
   team `team_PNjZDIvDiaLZesJ2hB8OcBoJ` (check a deploy with the Vercel connector's list_deployments, target production).
 
 ## Two people at once: the rules
-1. **Start every session with the newest code**: `git pull --rebase origin main` before changing anything.
+1. **Start every session with the newest code and the news**: `git pull --rebase origin main`, then read
+   `tail -30 docs/SHIP-LOG.md` (every change that went live and who shipped it) so you know what the other person did.
+   Nick and Amanda can't see each other's chats; the code, this handbook, the ship log and the project notes are what
+   both Claudes share. Tell your person in a line if the other one recently changed what they're asking about.
+   **Decisions are saved automatically, without being asked**: when Nick or Amanda settles how something should work
+   (a rule, a preference, "always do it this way"), write it into CLAUDE.md (a house rule) or this handbook in the same
+   ship, with their name and the date, so the other person's Claude follows it too.
 2. **Small changes, shipped often.** One fix or feature per ship. Long-running unshipped work is what collides.
-3. **Ship only with `bash scripts/ship.sh "what changed"`.** It brings in the other person's latest work first, numbers
+3. **Ship only with `SHIP_BY=<Nick or Amanda> bash scripts/ship.sh "what changed"`** (SHIP_BY = whose change it is;
+   it goes in the ship log). It brings in the other person's latest work first, numbers
    the version after the newest one, and pushes. If both of you changed the same lines it stops and lists the files:
    merge them (keep both people's intent), then ship again. Never force-push. Never reset or rewrite `main`.
 4. **Say what you're working on.** If Nick is on the schedule page, Amanda's Claude works elsewhere, or after his ship.

@@ -1,7 +1,7 @@
 # FBS Order Desk: house rules for changes
 
 **More than one person works on this site (Nick and Amanda). Read `docs/WORKING-ON-THE-SITE.md` first: start from the
-newest code, ship small and often with `bash scripts/ship.sh "what changed"`, never force-push.**
+newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/ship.sh "what changed"`, read `tail -30 docs/SHIP-LOG.md` to see what the other person changed, never force-push.**
 
 - **Permanent solutions, never patches (the first rule; Nick, Oct 28 2026: "this is a system we're gonna use for five
   years, maybe more… we want really good permanent solutions that fix the problems, not 'we found a way to do this one
