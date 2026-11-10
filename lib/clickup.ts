@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
+import { guessProdKind } from "@/lib/productionFileKinds";
 import { filesFromLink, linkKind } from "@/lib/linkArt";
 
 /**
@@ -264,14 +265,24 @@ async function saveFiles(admin: SupabaseClient, taskId: string, files: CuFile[],
  * A ClickUp job's files on the order made from it (Nov 2, Nick: "bring them in automatically… so we can just process
  * orders automatically"): every stored file not already on the order's "What you sent us" is added (kind from its name:
  * a PO, art, or other), so files that arrive after the order was made (a Dropbox link added later) show up there too.
- * Only an order still waiting on us (a request) is touched; once it's priced, new files are for staff to look at.
+ * A request gets them on "What you sent us"; once it's an order (a quote still being worked), they go on the order's own
+ * files for staff to look at (the Art & production tab), never into its prices.
  */
 export async function filesOntoOrder(admin: SupabaseClient, orderId: string, files: CuFile[]) {
   const stored = files.filter((f) => f.path && !(f.link && /clickup(-attachments)?\.com/i.test(f.link)));
   if (!stored.length) return 0;
   const { data: o } = await admin.from("orders").select("id, status, simple_order").eq("id", orderId).maybeSingle();
   const so = (o?.simple_order || null) as { files?: { kind: string; name: string; path: string }[] } | null;
-  if (!o || !so || o.status !== "request") return 0;
+  if (!o) return 0;
+  // already made into an order: files that come in later (a Dropbox folder read after Create order, Nov 10: Tiger Blue's
+  // separations never reached #40382 / #40384) go on the order's own files, where the Art & production tab shows them
+  if (o.status !== "request" || !so) {
+    const { data: had } = await admin.from("art_files").select("file_path").eq("order_id", orderId);
+    const got = new Set(((had || []) as { file_path: string }[]).map((f) => f.file_path));
+    const add = stored.filter((f) => !got.has(f.path!)).map((f) => ({ order_id: orderId, name: f.name, file_path: f.path!, file_type: f.type || "", category: guessProdKind(f.name) || (/\.(ai|eps|psd)$/i.test(f.name) ? "print_art" : null) }));
+    if (add.length) await admin.from("art_files").insert(add);
+    return add.length;
+  }
   const have = new Set((so.files || []).map((f) => f.path));
   const add = stored.filter((f) => !have.has(f.path!)).map((f) => ({ kind: fileKind(f.name), name: f.name, path: f.path! }));
   if (!add.length) return 0;
@@ -297,7 +308,7 @@ export async function catchUpClickUpFiles(admin: SupabaseClient, bytes: number, 
   const reqs = new Set<string>();
   const oids = rows.map((r) => r.order_id).filter(Boolean) as string[];
   for (let i = 0; i < oids.length; i += 200) {
-    const { data: os } = await admin.from("orders").select("id").in("id", oids.slice(i, i + 200)).eq("status", "request").is("discarded_at", null);
+    const { data: os } = await admin.from("orders").select("id").in("id", oids.slice(i, i + 200)).in("status", ["request", "quote", "quote_sent", "revision"]).is("discarded_at", null);
     for (const o of (os || []) as { id: string }[]) reqs.add(o.id);
   }
   let left = bytes, orders = 0, reread = 0;

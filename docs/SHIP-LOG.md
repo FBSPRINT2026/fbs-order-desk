@@ -62,3 +62,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 4:50pm · 1.3.263 · Nick · Order reader: when the customer's own order sheet is in the files, a supplier confirmation only gives who/when/order number, never sizes or garments (one confirmation can cover several of their orders)
 - Nov 10 5:23pm · 1.3.265 · Nick · Color changes: every print changed from the same screens shares those screens, not just the first pair (3+ groups from one set of screens no longer pay new screens)
 - Nov 10 5:32pm · 1.3.266 · Nick · Pricing: prints set as a color change of one another count their pieces together for the price break; a program's screen price is for every screen, new or remake (the screens line shows it too)
+- Nov 10 5:39pm · 1.3.268 · Nick · ClickUp files that arrive after an order is made (a Dropbox folder read later) go on the order's own files (Art & production), not only the request's
