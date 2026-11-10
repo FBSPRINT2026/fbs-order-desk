@@ -18,3 +18,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 9 11:02pm · 1.3.219 · Nick · A mockup edited after it was sent but before the customer opened it updates that same proof (same version), instead of waiting as an unsent v2 (#40496)
 - Nov 9 11:19pm · 1.3.220 · Nick · Ghost prints and Extras in the + Add garment menu: ghost prints count toward the price break at the print price only, on the invoice, never printed or ordered
 - Nov 9 11:24pm · 1.3.221 · Nick · Puff ink: Add underbase / No underbase on the print's puff line (no underbase stays the default)
+- Nov 9 11:28pm · 1.3.222 · Nick · Ghost prints line lines up with the garment columns (qty, each, total); puff ink's underbase and Not puff behind a pencil like the screens

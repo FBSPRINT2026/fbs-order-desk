@@ -792,13 +792,12 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
     const di = g.imprints.indexOf(d);
     const rate = puffEach(gc.wholesale ? settings.wholesale : prices);
+    // puff prints without an underbase by default; some get one after all (Nov 9, Nick): the pencil, like the screens'
     if (d.puff) return (
-      <div className="pr-scr pr-cc-line pr-puff-line"><span className="pr-scr-l">Puff ink</span>
-        <span className="pr-scr-v">{d.underbase ? "Underbase" : "No underbase"}{!hidePrices && <> · <b className="num">{money(rate)}</b> each</>}</span>
-        {/* puff prints without an underbase by default; some get one after all (Nov 9, Nick): one click either way */}
-        {!fixed && <button type="button" className="linkbtn" title={d.underbase ? "Print it without an underbase (the puff default)" : "This one gets an underbase: adds the underbase screen"} onClick={() => update((x) => { if (x.imprints[di].underbase) delete x.imprints[di].underbase; else x.imprints[di].underbase = true; })}>{d.underbase ? "No underbase" : "Add underbase"}</button>}
+      <ScreensLine label="Puff ink" cls="pr-cc-line pr-puff-line" summary={<>{d.underbase ? "Underbase" : "No underbase"}{!hidePrices && <> · <b className="num">{money(rate)}</b> each</>}</>}>
         {!fixed && <button type="button" className="linkbtn" onClick={() => update((x) => { delete x.imprints[di].puff; })}>Not puff</button>}
-      </div>
+        {!fixed && <label className="check" title="This puff print gets an underbase (adds the underbase screen)"><input type="checkbox" checked={!!d.underbase} onChange={(e) => update((x) => { if (e.target.checked) x.imprints[di].underbase = true; else delete x.imprints[di].underbase; })} />Underbase</label>}
+      </ScreensLine>
     );
     if (fixed || !/\bpuff/i.test(`${d.notes || ""} ${d.inks || ""}`)) return null;
     return (
@@ -1024,14 +1023,18 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             // ghost prints (Nov 9, Nick): a quantity the customer pays the print price for, never printed or ordered; they
             // count toward the group's price break (GLine.ghost, lib/pricing.ts printedLines)
             if (l.ghost) return (
-              <div key={l.id} className="glg-row" data-notranslate>
-                <span className="glg-ic" aria-hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 11a7 7 0 0 1 14 0v7l-2.3-1.6L14.3 18 12 16.4 9.7 18l-2.4-1.6L5 18z" /><path d="M10 10h.01M14 10h.01" /></svg></span>
-                <b>Ghost prints</b>
-                <label className="glg-q"><span>Qty</span><input type="number" min={0} inputMode="numeric" aria-label="Ghost prints" value={l.sizes?.OS || ""} disabled={fixed} onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); if (v) x.lines[li].sizes = { OS: v }; else x.lines[li].sizes = {}; })} /></label>
-                <span className="glg-tag">not printed</span>
-                <span className="faint">counts toward the {gc.tierMin ? `${gc.tierMin}+` : ""} price break · print price only</span>
-                {!hidePrices && <span className="glg-amt"><span className="faint">{money(lc?.each)} each</span> <b className="num">{money(lc?.sub)}</b></span>}
-                {!fixed && <button type="button" className="glg-x" aria-label="Remove ghost prints" title="Remove ghost prints" onClick={() => update((x) => { x.lines.splice(li, 1); })}>×</button>}
+              <div key={l.id} className="gl glg" data-notranslate>
+                <div className="gl-row gl-r2">
+                  <div className="a-co glg-n"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 11a7 7 0 0 1 14 0v7l-2.3-1.6L14.3 18 12 16.4 9.7 18l-2.4-1.6L5 18z" /><path d="M10 10h.01M14 10h.01" /></svg><b>Ghost prints</b></div>
+                  <div className="a-sz glg-d"><span className="glg-tag">not printed</span> counts toward the {gc.tierMin ? `${gc.tierMin}+ ` : ""}price break · print price only</div>
+                  {!gc.wholesale && !hidePrices && <div className="a-cs" />}
+                  <div className="a-qt c"><input type="number" min="0" step="1" inputMode="numeric" className="pre qty" aria-label="Ghost prints" placeholder="0" value={l.sizes?.OS || ""} disabled={fixed} onChange={(e) => update((x) => { const v = Math.max(0, Math.floor(+e.target.value || 0)); x.lines[li].sizes = v ? { OS: v } : {}; })} /></div>
+                  {hidePrices ? <div className="a-ea r" /> : <>
+                    <div className="a-ea r num glg-ea">{money(lc?.each)}</div>
+                    <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
+                  </>}
+                  <div className="a-x">{!fixed && <button type="button" className="glg-x" aria-label="Remove ghost prints" title="Remove ghost prints" onClick={() => update((x) => { x.lines.splice(li, 1); })}>×</button>}</div>
+                </div>
               </div>
             );
             // grouped by color change (Oct 27): a heading where the version changes (A · 1743 Oxford Blue, B · 1801 White)
@@ -1952,11 +1955,11 @@ function YouthSpec({ y, note = false }: { y: YouthInfo; note?: boolean }) {
   );
 }
 
-function ScreensLine({ summary, children }: { summary: React.ReactNode; children: React.ReactNode }) {
+function ScreensLine({ summary, children, label = "Screens", cls = "" }: { summary: React.ReactNode; children: React.ReactNode; /** the row's label (the puff line uses it too) */ label?: string; cls?: string }) {
   const [edit, setEdit] = useState(false);
   return (
-    <div className="pr-scr">
-      <span className="pr-scr-l">Screens</span>
+    <div className={"pr-scr" + (cls ? " " + cls : "")}>
+      <span className="pr-scr-l">{label}</span>
       <span className="pr-scr-v">{summary}</span>
       <button type="button" className={"pr-scr-ed" + (edit ? " on" : "")} aria-label={edit ? "Done changing the screens" : "Change the screens (underbase, remake)"} title={edit ? "Done" : "Underbase or remake"} onClick={() => setEdit(!edit)}>
         {edit ? "Done" : <svg viewBox="0 0 24 24" aria-hidden><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" /></svg>}
