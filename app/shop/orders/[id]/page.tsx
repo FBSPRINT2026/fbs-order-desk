@@ -58,7 +58,7 @@ import { labelFileName } from "@/lib/printavoNames";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
 import SendProofTool from "@/components/tools/SendProofTool";
-import { acceptRequest, requestProofApproval, sendToCustomer, staffMessage } from "../../actions";
+import { acceptRequest, requestProofApproval, staffMessage } from "../../actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
 import MenuItem from "@/components/MenuItem";
 import SimpleLines from "@/components/SimpleLines";
@@ -1153,20 +1153,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     loadSide();
   }
 
-  async function send() {
-    if (!o) return;
-    if (o.draft && !(await commitDraft())) return;
-    const bad = (o.groups || []).flatMap((g) => g.imprints).find((d) => (d.method === "embroidery" || (d.method === "screen" && d.colors < 11)) && d.inks.trim() && d.inks.split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length !== d.colors);
-    if (bad) return say(`${bad.location || "An imprint"}: the inks listed don't match its number of colors. Fix that before sending.`);
-    const note = (document.getElementById("send-note") as HTMLTextAreaElement | null)?.value || "";
-    await save();
-    const r = await sendToCustomer(o.id, note);
-    if (!r.ok) return say(r.error || "Couldn't send");
-    if (o.status === "quote" || o.status === "request") setO((p) => (p ? { ...p, status: "quote_sent", sent_at: new Date().toISOString() } : p));
-    say(r.emailed ? "Emailed the customer a link to their portal." : "Published to their portal. Email is off, so copy the link below and send it.");
-    loadSide();
-  }
-
   // Reorder (Nov 2, Nick: "instead of duplicate, it should just say reorder… the same thing… with the reorder helper"):
   // the Create reorder pop-up (components/tools/ReorderPick.tsx) on this order; it was "Duplicate" (Oct 20)
   const [ownReorder, setOwnReorder] = useState(false);
@@ -1749,7 +1735,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <button type="button" className="btn primary" onClick={() => { setAcceptMode("as_is"); setAccepting("Thanks for the order! We've got it and we're good to go. We'll keep you posted here as it moves along."); }}>Accept as is</button>
                 <button type="button" className="btn" onClick={() => { setAcceptMode("changes"); setAccepting("Thanks for the order! We're making a small change to the art and will send you a proof to approve."); }}>Accept with changes</button>
               </>}
-              <button type="button" className={"btn" + (o.submitted_at && o.price_type === "wholesale" ? "" : " primary")} onClick={send} disabled={!o.submitted_at}>Finalize &amp; send for approval</button>
+              {/* the one Send (proof + quote + sew-outs together), not a quote-only send (Nov 10, Nick: #40470 / #40473's quotes went
+                  out without their mockups, so the Job Center had them under Ready and Sent at once) */}
+              <SendProofTool target={{ kind: "order", orderId: o.id }} label="Finalize & send for approval" primary={!(o.submitted_at && o.price_type === "wholesale")} disabled={!o.submitted_at} before={beforeSend} onDone={afterSend} />
               <button type="button" className="btn ghost" onClick={() => setTab("msg")}>Their questions</button>
             </div>
           )}

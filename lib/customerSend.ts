@@ -355,6 +355,8 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
     if (patch.status) await admin.from("order_events").insert({ order_id: orderId, kind: "status", detail: "quote_sent", actor: me.email });
     await admin.from("order_events").insert({ order_id: orderId, kind: "sent", detail: email ? to : "link copied", actor: me.email });
     done.push("the quote");
+    // sent to the customer: the order teaches Create order (lib/ai/orderExamples.ts), as the old quote-only send did
+    { const { saveExample } = await import("@/lib/ai/orderExamples"); await saveExample(admin, orderId, me.email).catch((e) => console.warn("saveExample", e)); }
   }
   // sent to the customer: its goods may already be here or on the way (lib/goodsSoon.ts)
   matchGoodsSoon();
