@@ -1,4 +1,5 @@
 "use client";
+import { refreshUnseenProofs } from "@/app/shop/proof-actions";
 import { againAfter } from "@/lib/productionDetails";
 import { garmentFor as catalogGarment } from "@/lib/garmentMatch";
 import { sameColorAs } from "@/lib/colorMatch";
@@ -3630,6 +3631,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         const at = new Date().toISOString();
         // the group's earlier saves step aside; a proof already sent stays with the customer until the next version is sent
         await sb.from("mockups").update({ archived_at: at }).in("id", before.map((x) => x.id));
+        // sent but not opened yet: the proof shows the new pictures, same version (Nov 9, #40496)
+        if (orderId && newMockups.length) await refreshUnseenProofs(orderId, before.map((x) => x.id), newMockups).catch(() => null);
       }
       await syncOrder(true, thumbs);
       // each version keeps the group as it was saved (garments and prints), so the shop can go back to it later

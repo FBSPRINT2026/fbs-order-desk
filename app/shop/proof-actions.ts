@@ -129,3 +129,38 @@ export async function remindProof(orderId: string) { return run(async () => remi
 /** The customer approved another way: overrides every other approval. */
 export async function approveArtAnotherWay(orderId: string, note: string) { return run(async () => approveAnotherWay(createAdminClient(), orderId, await me(), note)); }
 export async function unapproveArt(orderId: string) { return run(async () => unapproveArtLib(createAdminClient(), orderId, await me())); }
+
+/**
+ * A mockup edited after it was sent, before the customer opened it (Nov 9, Nick, #40496: "all I did was change version 1
+ * to be 12 inches on the front… they haven't viewed it yet, then it should just open that proof"): the proof out with
+ * the customer shows the new pictures, as the same version, instead of the edit waiting as an unsent v2. Once the
+ * customer has opened it (viewed_at), or answered, the edit stays a new version to send, so nobody's picture changes
+ * after they looked at it. `before`: the group's mockups the save replaced; `after`: the new ones, in the same order.
+ */
+export async function refreshUnseenProofs(orderId: string, before: string[], after: string[]): Promise<{ ok: true; updated: number } | { ok: false; error: string }> {
+  try {
+    const { user, isStaff, email } = await getViewer();
+    if (!user || !isStaff) return { ok: false, error: "Only shop staff can do that." };
+    if (!before.length || !after.length) return { ok: true, updated: 0 };
+    const admin = createAdminClient();
+    const { data: pfs } = await admin.from("proofs").select("id, mockup_id, title").eq("order_id", orderId).in("mockup_id", before).eq("status", "pending").is("viewed_at", null).is("archived_at", null);
+    if (!pfs?.length) return { ok: true, updated: 0 };
+    const { data: nm } = await admin.from("mockups").select("id, title, file_path").in("id", after);
+    const news = after.map((id) => (nm || []).find((m) => m.id === id)).filter(Boolean) as { id: string; title: string; file_path: string }[];
+    const used = new Set<string>();
+    let n = 0;
+    for (const p of pfs) {
+      // the new picture of the same garment (same title), else the one in the same place
+      const i = before.indexOf(p.mockup_id as string);
+      const m = news.find((x) => !used.has(x.id) && x.title === p.title) || news.filter((x) => !used.has(x.id))[Math.min(i, news.length - 1)] || news.find((x) => !used.has(x.id));
+      if (!m) continue;
+      used.add(m.id);
+      const { error } = await admin.from("proofs").update({ mockup_id: m.id, file_path: m.file_path, title: m.title }).eq("id", p.id).is("viewed_at", null);
+      if (error) return { ok: false, error: error.message };
+      await admin.from("mockups").update({ proof_id: p.id }).eq("id", m.id);
+      n++;
+    }
+    if (n) await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: `Updated the mockup the customer hasn't opened yet (${n} picture${n === 1 ? "" : "s"}), same version`, actor: email });
+    return { ok: true, updated: n };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
