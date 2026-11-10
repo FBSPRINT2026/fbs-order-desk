@@ -24,7 +24,8 @@ import PuffPicker from "@/components/PuffPicker";
 type Row = { hexes: string[]; cur?: { name: string; hex: string } };
 let prodCache: ProductionSettings | null = null;
 
-export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, shirtLight, onPick, onHover, setIm, designId, portal, fabric }: {
+export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, shirtLight, onPick, onHover, onSplit, setIm, designId, portal, fabric }: {
+  /** colors joined into one thread go back to their own rows (the screen print's ↺) */ onSplit?: () => void;
   /** the garment's own color, behind the drawn stitches */ fabric?: string;
   im: Imprint; rows: Row[];
   /** the logo as painted (for how much of it is stitched) */ artUrl: string;
@@ -88,7 +89,7 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
 
   return (
     <div className="emb">
-      <ThreadColors rows={rows} line={line} stock={stock} onPick={onPick} onHover={onHover} />
+      <ThreadColors rows={rows} line={line} stock={stock} onPick={onPick} onHover={onHover} onSplit={onSplit} />
       <div className="emb-facts">
         <div className="emb-row">
           <label className="emb-l" htmlFor={`st-${im.id}`}>Stitches</label>
@@ -117,7 +118,7 @@ export default function EmbroideryPanel({ im, rows, artUrl, wIn, hIn, garment, s
 }
 
 /** each color in the logo → its Madeira thread: the closest ones to pick from, or find any by number, name or PMS */
-function ThreadColors({ rows, line, stock, onPick, onHover }: { rows: Row[]; line: Thread["line"]; stock: Set<string>; onPick: (hexes: string[], v: { name: string; hex: string } | null) => void; onHover: (hexes: string[], v: { name: string; hex: string } | null) => void }) {
+function ThreadColors({ rows, line, stock, onPick, onHover, onSplit }: { onSplit?: () => void; rows: Row[]; line: Thread["line"]; stock: Set<string>; onPick: (hexes: string[], v: { name: string; hex: string } | null) => void; onHover: (hexes: string[], v: { name: string; hex: string } | null) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const pickT = (r: Row, t: Thread | null) => { onHover(r.hexes, null); onPick(r.hexes, t ? { name: threadLabel(t), hex: t.hex } : { name: "none", hex: r.hexes[0] }); setOpen(null); setQ(""); };
@@ -140,6 +141,10 @@ function ThreadColors({ rows, line, stock, onPick, onHover }: { rows: Row[]; lin
               </>}
               <span className="mk-bs-a" aria-hidden>{open === k ? "▾" : "▸"}</span>
             </button>
+            {/* ↺ like the screen print's: the thread comes off, and colors joined into it split back to their own rows to
+                join again (Nov 10, Nick: "I'm not able to split the colors back up once I've joined them") */}
+            {cur && <button type="button" className="emb-tr-x" title={r.hexes.length > 1 ? `Split back into its ${r.hexes.length} colors` : "Back to the color as uploaded"} aria-label={r.hexes.length > 1 ? "Split the colors" : "Reset the thread"}
+              onClick={() => { onHover(r.hexes, null); onPick(r.hexes, null); setOpen(null); }}>↺</button>}
             {open === k && (
               <div className="emb-tr-pop">
                 <div className="emb-tr-h">Closest {lineName(line)} threads <span className="faint">· standard colors are on the wall; the rest are special order</span></div>

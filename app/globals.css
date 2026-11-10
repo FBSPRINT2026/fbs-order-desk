@@ -12961,7 +12961,10 @@ body:has(.dla-bg.dock.wide) :is(.mkz,.pr-zoom,.dla-bg:not(.dock),.mk-modal-back,
 /* ── Embroidery (Oct 23): the Mockup Creator's embroidery print, the Thread Room, Digitizing ─────────────────────── */
 .emb{display:flex;flex-direction:column;gap:6px}
 .emb-threads .lbl{display:flex;justify-content:space-between;gap:8px;font-size:11px;font-weight:700;color:var(--ink-3)}
-.emb-tr{border-radius:6px;background:var(--surface)}
+.emb-tr{border-radius:6px;background:var(--surface);display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch}
+.emb-tr>.emb-tr-pop{grid-column:1/-1}
+.emb-tr-x{margin-left:4px;min-width:32px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-3);font-size:14px;cursor:pointer}
+.emb-tr-x:hover{color:var(--accent);border-color:var(--accent)}
 .emb-tr-b{display:flex;align-items:center;gap:6px;width:100%;min-height:36px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:13px;color:var(--ink);cursor:pointer;text-align:left}
 .emb-tr-b:hover{border-color:var(--accent)}
 .emb-tr.on .emb-tr-b{border-color:var(--accent);border-bottom-left-radius:0;border-bottom-right-radius:0}

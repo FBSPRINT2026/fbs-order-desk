@@ -44,3 +44,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 1:31pm · 1.3.245 · Nick · Hats and bags from S&S whose sizes are Adjustable / M/L / OSFM come in as one size (one Qty box, not XS–5XL); thread search in the Mockup Creator and every thread box finds Isacord as well as Madeira (type a number, a name, or 'isacord …')
 - Nov 10 1:33pm · 1.3.246 · Nick · Order page: the Printavo panel is gone (no more syncing back to Printavo)
 - Nov 10 1:36pm · 1.3.247 · Nick · Embroidery: a Charge sew-out box per print for a customer's own DST ($15 from the price list, its own line on the invoice and in QuickBooks); the Digitizing area tidied: Digitizing then Embroidery extras, every row name, price, tick
+- Nov 10 1:37pm · 1.3.248 · Nick · Mockup Creator, embroidery: a ↺ beside each thread, like screen printing's, takes the thread off and splits joined colors back into their own rows
