@@ -7,7 +7,7 @@ import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
 import { kidLine, screenFeeOf } from "@/lib/pricing";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled, specialInks, specialInkEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
@@ -791,6 +791,21 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const tick = (id: string, on: boolean) => update((x) => { const set = new Set(x.finishing || []); if (on) set.add(id); else set.delete(id); x.finishing = [...set]; });
   // puff ink (Oct 30, Nick: "like you have PMS match fee, you would have puff ink $1… it has to be indicated somewhere
   // that it's a puff print"): its charge per piece on its own line, and a print whose notes say puff offered as one
+  // specialty ink (Nov 10, Nick: #40380's Gold Shimmer): read from the inks, charged per piece on its own line; staff can
+  // turn it off (or on, for an ink whose name doesn't say it)
+  const specialCtl = (d: Group["imprints"][number]) => {
+    if (d.method !== "screen" || g.specialtyInk) return null;
+    const di = g.imprints.indexOf(d), names = specialInks(d), on = d.specialInk ?? names.length > 0;
+    const rate = specialInkEach(gc.wholesale ? settings.wholesale : prices, gc.ti);
+    if (on) return (
+      <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Specialty ink</span>
+        <span className="pr-scr-v">{names.join(", ") || "Set by hand"}{!hidePrices && <> · <b className="num">{money(rate)}</b> each</>}</span>
+        {!fixed && <button type="button" className="linkbtn" onClick={() => update((x) => { if (names.length) x.imprints[di].specialInk = false; else delete x.imprints[di].specialInk; })}>Not specialty</button>}
+      </div>);
+    if (fixed || !names.length) return null;
+    return <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Specialty ink?</span><span className="pr-scr-v">{names.join(", ")}</span>
+      <button type="button" className="btn sm" onClick={() => update((x) => { delete x.imprints[di].specialInk; })}>Charge it{!hidePrices && ` (+${money(rate)} each)`}</button></div>;
+  };
   const puffCtl = (d: Group["imprints"][number]) => {
     if (d.method !== "screen" || d.colors >= FULL_COLOR) return null;
     const di = g.imprints.indexOf(d);
@@ -1418,7 +1433,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 }); }} />}
 
             {g.imprints.map((d, di) => frozen || d.ok ? (
-              <div key={d.id} className="imp-okw">{!frozen && d.ok && <div className="imp-ok-h"><span className="imp-ok-by">✓ Confirmed{d.ok.by ? ` by ${d.ok.by}` : ""}</span><button type="button" className="btn sm" onClick={() => update((x) => { delete x.imprints[di].ok; })}>Edit</button></div>}<PrintRow shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setDgzAsk(d.id) : undefined} /></div>
+              <div key={d.id} className="imp-okw">{!frozen && d.ok && <div className="imp-ok-h"><span className="imp-ok-by">✓ Confirmed{d.ok.by ? ` by ${d.ok.by}` : ""}</span><button type="button" className="btn sm" onClick={() => update((x) => { delete x.imprints[di].ok; })}>Edit</button></div>}<PrintRow shown={d.shownArt ? thumbUrls?.[d.shownArt] : undefined} d={d} color={ccShow && versionsOf(d).length ? cwMain(d).label : firstColor} mainAt={ccShow && versionsOf(d).length ? cwMain(d).at : 0} changes={ccShow && versionsOf(d).length ? cwMain(d).order(groupTiles(d)) : changesOf(d)} sym={ccShow} inksLine={inkCtl(d)} youth={youthInfo(d)} extra={<>{supRow(d, di)}{cwRow(d, di)}{rosterRow(d)}{screenCtl(d)}{puffCtl(d)}{specialCtl(d)}{ccRow(d, di)}{lcRow(d, di)}</>} listed={gc.lines.length > 0 && gc.lines.every((lc) => lc.hasOv)} hex={ccShow && versionsOf(d).length ? bgOf(ASIS_BG) || shirtHex : shirtHex} mainBg={ccShow && versionsOf(d).length ? tileBg(ASIS_BG, shirtHex) : undefined} n={g.imprints.length > 1 ? di + 1 : 0} designs={designs || []} urls={designUrls || {}} each={hidePrices ? null : money(gc.imprints[di]?.each)} detailsHref={detailsHref} onMockup={startMockup} orderId={orderId} sewout={orderId ? (sewouts || []).find((x) => x.imprint_id === d.id && !x.archived_at) : undefined} onFind={orderId && !fixed ? () => setDgzAsk(d.id) : undefined} /></div>
             ) : (
               <div key={d.id} className={"imp-card" + (needOk(d) && !d.ok ? " imp-need" : "")}>
                 <div className="imp-card-h">

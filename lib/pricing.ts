@@ -232,6 +232,9 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** puff ink (Oct 30, Nick: "add a puff print option to the screen print imprint… It's $1 typically"; "puff screen
    *  print is different than puff 3D embroidery"): a raised screen print, charged per piece (PriceList.puffPrice) and
    *  printed slower with a flash (lib/production.ts). Screen prints only; embroidery's 3D puff is emb.puff */ puff?: boolean;
+  /** a specialty ink on this screen print (metallic, shimmer, glitter, glow…): true / false set by hand; not set = read
+   *  from its inks (specialInkOf). Charged per piece like the contract list's specialty ink (Nov 10, Nick: #40380's Gold
+   *  Shimmer, $0.50 a location) */ specialInk?: boolean;
   /** oversized (Nov 9, Nick: "for the bar, we actually print 15 inches wide… we still want to set our normal max imprint
    *  size to like 13"): the Mockup Creator lets this print go past the normal max, up to OVERSIZE_IN; it says so on the work
    *  order and runs slower on the schedule */ oversize?: boolean;
@@ -534,6 +537,14 @@ export const patchApply = (pl: Pick<PriceList, "patchApply">) => (pl.patchApply 
 export const patchEach = (d: Pick<Imprint, "patch">, pl: Pick<PriceList, "patchApply">) => (d.patch?.price != null && !isNaN(+d.patch.price) ? +d.patch.price : patchApply(pl));
 /** puff ink on a screen print, each piece per puffed location (Imprint.puff) */
 export const PUFF_PRICE = 1;
+/** inks that are specialty inks by their name (Nov 10, Nick: "the speciality ink charge… for the gold metallic") */
+export const SPECIAL_INK = /\b(metallic|shimmer|glitter|glow|reflective|foil|high[- ]?density|pearl(escent)?|sparkle|chrome)\b/i;
+/** the specialty inks a screen print uses, by name ("Gold Shimmer") */
+export const specialInks = (d: Pick<Imprint, "inks">) => inkNames(d.inks).filter((n) => SPECIAL_INK.test(n));
+/** does this screen print carry the specialty ink charge: set by hand, else read from its inks */
+export const specialInkOf = (d: Pick<Imprint, "method" | "inks" | "specialInk">) => d.method === "screen" && (d.specialInk ?? specialInks(d).length > 0);
+/** the specialty ink charge per location per piece at a quantity break: the list's (contract: $0.50, $0.35 at 500+), else $0.50 */
+export const specialInkEach = (pl: Pick<PriceList, "specialtyInk">, ti: number) => (pl.specialtyInk?.length ? num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0.5);
 export const puffEach = (pl: Pick<PriceList, "puffPrice">) => (pl.puffPrice == null || isNaN(+pl.puffPrice) ? PUFF_PRICE : +pl.puffPrice);
 /**
  * Names & numbers (Imprint.roster), charged by what each shirt gets (Oct 31, Nick: "the standard price $2 for the name
@@ -1247,7 +1258,9 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const locExtra = specialLocEach(g, pl);
   // puff ink (Oct 30): each puffed screen print, per piece
   const puffExtra = imps.filter((d) => d.method === "screen" && d.puff).length * puffEach(pl);
-  const inkExtra = g.specialtyInk && pl.specialtyInk?.length ? imps.filter((d) => d.method === "screen").length * num(pl.specialtyInk[Math.min(ti, pl.specialtyInk.length - 1)]) : 0;
+  // specialty ink: every screen print on a poly / nylon / dyed garment (g.specialtyInk), else each print with a specialty
+  // ink (metallic, shimmer, glitter…: Imprint.specialInk / its inks), per location per piece
+  const inkExtra = imps.filter((d) => d.method === "screen" && (g.specialtyInk ? !!pl.specialtyInk?.length : specialInkOf(d))).length * specialInkEach(pl, ti);
   // embroidery on a specialty item (fleece, hats, bags…): an add-on per embroidered location
   const embSpecial = (l: GLine) => (pl.embSpecialty?.length && isSpecialtyItem(l) ? imps.filter((d) => d.method === "embroidery").length * num(pl.embSpecialty[Math.min(eti, pl.embSpecialty.length - 1)]) : 0);
   const persRate = (g.lines || []).some((l) => l.pers || l.persList?.length) ? persEach(s, o.price_type || "retail") : 0;
@@ -1474,6 +1487,7 @@ export function imprintLabel(d: Imprint) {
   if (d.method === "screen" && d.printStyle === "fashion") parts.push(d.softHand ? "fashion print (soft, no underbase)" : "fashion print (no underbase)");
   else if (d.method === "screen" && d.softHand) parts.push("soft hand");
   if (d.method === "screen" && d.puff) parts.push("puff ink");
+  if (specialInkOf(d)) parts.push(`specialty ink${specialInks(d).length ? ` (${specialInks(d).join(", ")})` : ""}`);
   if (d.method === "dtf" && d.patch) parts.push("patch application");
   if (d.inks && !d.patch) parts.push(d.inks);
   if (d.size) parts.push(d.size);
