@@ -1079,10 +1079,15 @@ export type GroupCalc = ReturnType<typeof calcGroup>;
  * two garment groups, the same art): a print with the same art at the same spot and the same screens as one in an
  * earlier group of the order prints from the same screens, so its setup is charged once.
  */
-const screenKey = (d: Imprint, n: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}|${n}` : "");
+/** the same art at the same spot prints from the same screens, whatever its inks or garment colors (Nov 9, Nick, #40496:
+ *  one front logo on an Ivory group and a Cantaloupe + Navy group charged its screen twice because the Navy shirt's
+ *  underbase made it 2 screens instead of 1). The count isn't part of the key: a print needing more screens than the
+ *  ones already made (an underbase, an extra color) pays only for those extra screens. */
+const screenKey = (d: Imprint, _n?: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}` : "");
 /** the order's screens charged so far, plus the color-change pairs across variations (Imprint.changeOf): print id → pair
  *  key, and the screens the pair's first print paid for */
 export type SeenScreens = Set<string> & { links?: Map<string, string>; linkScreens?: Map<string, number>;
+  /** screens already charged for each art at each spot (screenKey → how many) */ paidN?: Map<string, number>;
   /** which group paid for each screen set ("Group 2"), and the group being priced now: a print sharing screens says whose */
   owner?: Map<string, string>; cur?: string;
   /** pieces carrying each logo across the order ("<method>:<design id>" → pieces): the same logo in several groups is
@@ -1246,14 +1251,20 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     const lk = im && im.method === "screen" ? seen?.links?.get(im.id) : undefined;
     if (lk && seen) {
       const n = num((d as { screens?: number }).screens), had = seen.linkScreens?.get(lk);
-      if (had == null) { (seen.linkScreens ||= new Map()).set(lk, n); if (k) seen.add(k); return d; }
-      if (k) seen.add(k);
+      if (had == null) { (seen.linkScreens ||= new Map()).set(lk, n); if (k) { seen.add(k); (seen.paidN ||= new Map()).set(k, Math.max(n, seen.paidN?.get(k) || 0)); } return d; }
+      if (k) { seen.add(k); (seen.paidN ||= new Map()).set(k, Math.max(n, seen.paidN?.get(k) || 0)); }
       const extra = Math.max(0, n - had), per = n ? d.setup / Math.min(n, 15) : 0;
       return { ...d, setup: r2(extra * per), shared: true };
     }
     if (!k || !seen) return d;
-    if (seen.has(k)) return { ...d, setup: 0, shared: true, sharedWith: seen.owner?.get(k) || "" };
-    seen.add(k); (seen.owner ||= new Map()).set(k, seen.cur || ""); return d;
+    const n = num((d as { screens?: number }).screens);
+    if (seen.has(k)) {
+      // the screens are made: pay only for screens this print needs beyond them (an underbase on a dark shirt)
+      const had = seen.paidN?.get(k) ?? n, extra = Math.max(0, n - had), per = n ? d.setup / Math.min(n, 15) : 0;
+      if (extra) (seen.paidN ||= new Map()).set(k, n);
+      return { ...d, setup: r2(extra * per), shared: true, sharedWith: seen.owner?.get(k) || "" };
+    }
+    seen.add(k); (seen.owner ||= new Map()).set(k, seen.cur || ""); (seen.paidN ||= new Map()).set(k, n); return d;
   });
   // a print's own youth screens: a second setup (the same logo at the same spot and size on another order shares it)
   const youthSetups = (g.imprints || []).map((im, i) => {

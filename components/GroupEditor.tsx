@@ -832,8 +832,11 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     // (Nov 1, Nick on #40351: "$30 set up on group two and $15 on group three, but it shouldn't show… some sort of
     // indicator that it's $0")
     const sharedFrom = (gc as { imprintShared?: string[] }).imprintShared?.[di] || "";
+    // a shared set that needs more screens here (an underbase on a dark shirt) pays for just those (Nov 9, #40496)
+    const sharedCost = sharedFrom ? +((gc as { imprintSetups?: number[] }).imprintSetups?.[di] || 0) : 0;
+    const sharedNew = sharedCost > 0 && +fee > 0 ? Math.round(sharedCost / +fee) : 0;
     return (<>
-      <ScreensLine key={d.id} summary={<>{sharedFrom && !yi?.split ? <span className="pr-shared">{sharedFrom === g.name || sharedFrom === `Group ${gi + 1}` ? "Same screens as another print here" : `${sharedFrom}'s screen${sc.n === 1 ? "" : "s"}`}{!hidePrices && <> · <b className="num">{money(0)}</b></>}<NoCharge title={`No setup: printed from ${sharedFrom}'s screens. The pieces count together for the price break.`} /></span>
+      <ScreensLine key={d.id} summary={<>{sharedFrom && !yi?.split ? <span className="pr-shared">{sharedFrom === g.name || sharedFrom === `Group ${gi + 1}` ? "Same screens as another print here" : `${sharedFrom}'s screen${sc.n - sharedNew === 1 ? "" : "s"}`}{sharedNew > 0 ? ` + ${sharedNew} new${sc.under ? " (underbase)" : ""}` : ""}{!hidePrices && <> · <b className="num">{money(sharedCost)}</b></>}{sharedNew > 0 ? null : <NoCharge title={`No setup: printed from ${sharedFrom}'s screens. The pieces count together for the price break.`} />}</span>
         : <>{yi?.split ? `${sc.n} adult + ${yi.yn} youth` : `${sc.n} screen${sc.n === 1 ? "" : "s"}`}{!hidePrices && <> · <b className="num">{money(sc.n * (+fee || 0) + (yi?.split ? yi.ySetup || 0 : 0))}</b></>}</>}
         {sc.under && !allLight ? <span className="pr-scr-tag">underbase</span> : null}{d.printStyle === "fashion" ? <span className="pr-scr-tag fashion">fashion hit</span> : null}{d.softHand ? <span className="pr-scr-tag">soft hand</span> : null}{rm ? <span className="pr-scr-tag">remake</span> : null}</>}>
         {/* a fashion hit: no underbase, each color printed, flashed and printed again (Oct 16, Nick); priced the same */}
