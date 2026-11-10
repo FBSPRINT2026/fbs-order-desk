@@ -46,12 +46,15 @@ export default function SendProofTool({ target, label = "Send to customer", mode
     if (!r.ok) { setErr(r.error); return; }
     setOpts(r);
     // what's ready, and what this button is for
-    const proof0 = !!r.proof && (target.kind === "art" ? true : target.kind === "order" ? r.proof.unsent : false) && (r.proof.unsent || target.kind === "art");
+    // both go by default, the proof and the quote, untick one to send the other alone (Nov 10, Nick: "by default… it should
+    // send proof and quote… you wouldn't want to just have one or the other just to start"); art the customer already
+    // already has (sent, nothing changed) isn't ticked: there's nothing new to send
+    const proof0 = !!r.proof && target.kind !== "sewout" && (r.proof.unsent || target.kind === "art");
     const sew0 = target.kind === "sewout" && target.sewoutId ? [target.sewoutId] : target.kind === "order" ? r.sewouts.filter((s) => !s.sent).map((s) => s.id) : [];
     // the price goes with whatever's sent, like a mockup's quote: a sew-out takes the final invoice (Oct 29, Nick: "check
     // sew-out and then also estimate, just like you do with a normal mock-up"). Nothing new to send (the quote went out
     // already, no new proof): the quote is ticked to send again, so the dialog never opens empty (Nov 4, Nick)
-    const quote0 = !!r.quote && !r.quote.sent && r.quote.status !== "quote_sent" && (r.quote.kind !== "invoice" || target.kind === "sewout");
+    const quote0 = !!r.quote && (r.quote.kind !== "invoice" ? target.kind !== "sewout" || (!r.quote.sent && r.quote.status !== "quote_sent") : target.kind === "sewout");
     setPick({
       proof: proof0,
       quote: quote0 || (!!r.quote && target.kind === "order" && !proof0 && !sew0.length),
