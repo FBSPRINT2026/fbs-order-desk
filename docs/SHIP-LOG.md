@@ -59,3 +59,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 4:13pm · 1.3.260 · Nick · Portal simple orders: the PO's Ship To wins over the form's default Pickup (the address goes on the order); RUSH in a job's name ticks Rush
 - Nov 10 4:21pm · 1.3.261 · Nick · Beanies sew on the Front, not the cuff (the beanie spot list, the order reader, Nine18's training); caps stay on the Full Front
 - Nov 10 4:41pm · 1.3.262 · Nick · Create order training default 'Their separations': every screen print is printed from the customer's own films and their picture is the mockup (set on the training, or learned from orders marked right)
+- Nov 10 4:50pm · 1.3.263 · Nick · Order reader: when the customer's own order sheet is in the files, a supplier confirmation only gives who/when/order number, never sizes or garments (one confirmation can cover several of their orders)

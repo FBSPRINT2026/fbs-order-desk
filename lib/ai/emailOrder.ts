@@ -270,15 +270,26 @@ export const CAMERA_NAME = /^(img|dsc|dscn|pxl|photo|image|screenshot|screen sho
 const PAPERWORK = new Set(["po", "wo", "invoice", "quote", "packing"]);
 export const isPaperwork = (name: string) => PAPERWORK.has(kindByName(name)?.kind || "");
 
+/** a supplier's own confirmation or order detail, by its name (SanMar, S&S, alphabroder) */
+const isConfirmName = (n: string) => /confirmation|orderdetail\.so-|order ?detail|packing ?slip|invoice ?#?\s*so-/i.test(n);
+/** the customer's own order sheet is among the files: a PO / work order by name, or their order form ("…_Order.pdf") */
+export function hasOwnSheet(atts: { name: string }[]): boolean {
+  return atts.some((a) => !isConfirmName(a.name) && /\.(pdf|xlsx?|csv|docx?)$/i.test(a.name) && (isPaperwork(a.name) || /(^|[^a-z])(order|po|purchase|work ?order)([^a-z]|$)/i.test(a.name.replace(/[_-]+/g, " "))));
+}
+
 export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<string> = new Set()) {
   const images: { media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"; data: string; label: string }[] = [];
   const documents: { data: string; label: string }[] = [];
-  const listing: string[] = [], confirms: string[] = [];
+  const listing: string[] = [], confirms: string[] = [], confirmsMeta: string[] = [];
   /** each file's words, read by code (the paperwork the order is checked against item by item: lib/sourceCheck.ts) */
   const words: string[] = [];
   // a customer's pre-production sheet full of photos runs big (Oct 27: Cedar's SSG SO73417 PDF is 18.6 MB): up to 22 MB
   // is read (the API takes 32 MB with the base64); one too big still has its words read
   let budget = 22 * 1024 * 1024;
+  // their own order sheet came with it (a PO, their order form): a supplier's confirmation then only says who sends the
+  // blanks, when and its order number; one confirmation can cover several of their orders, so its sizes are never taken
+  // (Nov 6, Nick; Nov 10: Tiger Blue #40381's 48-piece order read as 494 from a SanMar confirmation for many jobs)
+  const ownSheet = hasOwnSheet(atts);
   for (const [i, a] of atts.slice(0, 12).entries()) {
     const fromLink = (a as { from_link?: string; source?: string }).from_link, prev = (a as { source?: string }).source === "canva-preview";
     const byName = kindByName(a.name);
@@ -312,7 +323,10 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
       const tx = await pdfTextServer(buf);
       if (tx) words.push(tx);
       const cf = tx ? supplierConfirms([tx]) : null;
-      if (cf?.rows) {
+      if (cf?.rows && ownSheet) {
+        confirmsMeta.push(tx);
+        listing.push(`${tag} (PDF, shown above): a supplier order confirmation. Who sends the blanks, when and its order number only: it can cover several of their orders, so NEVER take sizes or garments from it; the sizes are on their own order sheet.`);
+      } else if (cf?.rows) {
         confirms.push(tx);
         listing.push(`${tag} (PDF, shown above). Read by code, exactly: a supplier order confirmation, ${cf.pieces} pieces: ${cf.lines.map((l) => `${l.product.split(" - ").pop()} ${l.color} ${Object.entries(l.sizes).map(([z, q]) => `${z} ${q}`).join(", ")}`).join("; ")}. Use these quantities as they are.`);
       } else listing.push(`${tag} (PDF, shown above)`);
@@ -322,7 +336,7 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
       listing.push(t ? `${tag} contents:\n"""\n${t}\n"""` : `${tag} (couldn't be read${/\.(xls|doc)$/i.test(a.name) ? "; old Excel/Word format" : ""})`);
     }
   }
-  return { images, documents, listing, confirms, words };
+  return { images, documents, listing, confirms, confirmsMeta, words };
 }
 
 // ---------- the AI ----------
@@ -448,7 +462,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-10a";
+export const READER_REV = "2026-11-10b";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -547,7 +561,7 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
     lookedUp ? `Looked up online for that note: ${lookedUp.text}` : "",
   ].filter(Boolean).join("\n");
   const sigs = await signaturePaths(admin, { id: a.id as string, from_email: (a.from_email as string) || null }, atts, convo.map((e) => e.id as string)).catch(() => new Set<string>());
-  const { images, documents, listing, confirms, words: fileWords } = await readFiles(admin, atts, sigs);
+  const { images, documents, listing, confirms, confirmsMeta, words: fileWords } = await readFiles(admin, atts, sigs);
   // the brands' logos on file as small pictures, to match a logo in their photos by how it looks
   for (const pic of onFile?.pictures || []) {
     if (images.length >= 8) break;
@@ -639,8 +653,8 @@ ${staffSays}` : ""}`;
   const p: AiOrder = unwrap(r.data as AiOrder & { order?: AiOrder });
   // the goods from the supplier confirmations themselves (read by code): who sends the most pieces, and every
   // supplier's order number and pieces in the note, so staff can track each box
-  if (confirms.length) {
-    const metas = confirms.map(confirmMeta).filter((m) => m.pieces);
+  if (confirms.length || confirmsMeta.length) {
+    const metas = [...confirms, ...confirmsMeta].map(confirmMeta).filter((m) => m.pieces);
     if (metas.length) {
       const top = [...metas].sort((x, y) => y.pieces - x.pieces)[0];
       const names: Record<string, string> = { sanmar: "SanMar", ss: "S&S Activewear", alpha: "alphabroder" };
