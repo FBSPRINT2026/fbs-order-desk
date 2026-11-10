@@ -51,8 +51,10 @@ export async function oldOrderRows(admin: Admin, archived: OldRow[], o: { href: 
     Promise.all(chunks(archived.map((a) => a.id), 300).map((ids) => admin.from("payments").select("id, archived_order_id, amount, method, paid_on, created_at, processor_id, note, fee").in("archived_order_id", ids))),
   ]);
   for (const { data: pu } of pus as { data: { id: string; balance: number; pay: string | null; fees: null; groups: null }[] | null }[])
-    (pu || []).forEach((r) => { if (r.pay && /^https:\/\//.test(r.pay)) payUrls[r.id] = r.pay; const n = cardFeeInOld(r, +r.balance || 0); if (n) feeIns[r.id] = n; });
-  const orders: AOrder[] = archived.map((a) => ({ ...archiveAsOrder(a, o.href(a.id)), payUrl: payUrls[a.id], cardFeeIn: feeIns[a.id] || 0, payHere: o.movedIds.has((a as { customer_id?: string }).customer_id || "") }));
+    // old invoices are paid here, never on Printavo's page any more (Nov 10, Nick: "a button on the old invoices that says
+    // pay… still taking them to the old Printavo page… now we don't [want that]"): no Printavo pay links
+    (pu || []).forEach((r) => { const n = cardFeeInOld(r, +r.balance || 0); if (n) feeIns[r.id] = n; });
+  const orders: AOrder[] = archived.map((a) => ({ ...archiveAsOrder(a, o.href(a.id)), payUrl: payUrls[a.id], cardFeeIn: feeIns[a.id] || 0, payHere: true }));
   const ours: APayment[] = [];
   for (const { data: op } of ops as { data: { id: string; archived_order_id: string; amount: number; method: string; paid_on: string | null; created_at: string; processor_id: string | null; note: string | null; fee: number | null }[] | null }[])
     for (const x of op || []) {

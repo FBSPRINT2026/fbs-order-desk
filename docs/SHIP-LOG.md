@@ -25,3 +25,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 12:03am · 1.3.226 · Nick · Sending a proof over an approved one: the send screen warns, the old approval comes off on the record, and a replaced version reads 'Replaced (was approved another way)' (#40444)
 - Nov 10 12:07am · 1.3.227 · Nick · Every price box shows two decimals (2.40, not 2.4) when you're not typing in it (MoneyField)
 - Nov 10 12:07am · 1.3.228 · Nick · House rule: price boxes are MoneyField
+- Nov 10 9:48am · 1.3.229 · Nick · Old invoices are paid in the portal: the Pay button no longer opens Printavo's page, for every customer
