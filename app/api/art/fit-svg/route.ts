@@ -8,7 +8,7 @@ export const maxDuration = 300;
 /**
  * Once (Nov 9, #40407's E78 cut off at the bottom right): every logo saved as an SVG that holds a picture Illustrator
  * scaled a little too big (lib/svgFit.ts) is saved again with the picture fitting its box, so every mockup, close-up and
- * proof drawn from it shows the whole art. The logo's file and its picture, nothing else. ?dry=1 only lists them.
+ * proof drawn from it shows the whole art. The logo's file and its picture, nothing else; each original is kept first in backups/logo-originals/2026-11-09/. ?dry=1 only lists them.
  */
 export async function GET(req: Request) {
   const admin = createAdminClient();
@@ -27,6 +27,9 @@ export async function GET(req: Request) {
       const r = fitRoundedImages(await blob.text());
       if (!r.changed) continue;
       if (!dry) {
+        // the original first, untouched, in the private backups bucket (put back from there if ever needed)
+        const keep = await admin.storage.from("backups").upload(`logo-originals/2026-11-09/${p}`, blob, { upsert: true, contentType: "image/svg+xml" });
+        if (keep.error) { failed.push(`D-${d.number} ${p}: couldn't keep the original (${keep.error.message}), left as is`); continue; }
         const up = await admin.storage.from("proofs").upload(p, new Blob([r.svg], { type: "image/svg+xml" }), { upsert: true, contentType: "image/svg+xml" });
         if (up.error) { failed.push(`D-${d.number} ${p}: ${up.error.message}`); continue; }
       }
