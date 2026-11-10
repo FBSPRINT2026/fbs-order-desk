@@ -230,7 +230,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             </tr></thead>
             <tbody>{g.lines.map((l) => (
               <tr key={l.id}>
-                {arts && <td className="pv-artc">{l.mockups.length ? <span className="pv-arts">{l.mockups.map((m) => thumb(m, "pv-thumb md"))}</span> : <span className="pv-art-none" aria-hidden />}</td>}
+                {arts && <td className="pv-artc">{l.mockups.length ? <span className="pv-arts">{l.mockups.map((m) => thumb(m, "pv-thumb md"))}</span> : null}</td>}
                 {show.category && <td className="pv-c-cat">{l.category}</td>}{show.itemNumber && <td className="nowrap pv-c-no">{l.itemNumber}</td>}{show.color && <td className="pv-c-color">{l.color}</td>}
                 <td className="desc">
                   <div className="pv-desc"><div>{l.brand && !l.description.toLowerCase().includes(l.brand.toLowerCase()) && <span className="faint">{l.brand} </span>}<span className="pv-pre">{plain(l.description)}</span>

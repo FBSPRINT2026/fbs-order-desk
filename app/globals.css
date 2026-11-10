@@ -21684,3 +21684,6 @@ html body .pv table.pv-items.tbl-stack > tfoot > tr > td:empty{display:none}
   .pv .pv-head-r .pv-status{grid-column:1/-1;max-width:100%;overflow:hidden;text-overflow:ellipsis}
   .pv .pv-head-r .pv-bal:last-of-type{text-align:right}
 }
+/* an old invoice's Pay in its top bar: a normal button, not a full-width bar (Nov 10) */
+.pv-note .pb-go,.pv-note-ph .pb-go{width:auto}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:none}
