@@ -40,3 +40,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 11:38am · 1.3.241 · Amanda · Proof print pages: the art and its measurements always show whole; sized for the panel it's in and scaled to fit when the page squeezes it (thread / ink change versions)
 - Nov 10 1:04pm · 1.3.242 · Nick · Printed work orders, quotes, invoices, proofs and job tickets: no browser date, title or link at the top and bottom (page margin 0, each sheet keeps its own border)
 - Nov 10 1:13pm · 1.3.243 · Nick · Job Center: a job leaves Goods to order once the garments are ordered, whether through Order goods or added by hand on the order's Goods tab (#40460)
+- Nov 10 1:20pm · 1.3.244 · Nick · Order page: Edit mockup shows on every group again (it was hidden on groups with no screen prints, like all-embroidery hats); hidden only when every print is from the customer's own separations (#40466)

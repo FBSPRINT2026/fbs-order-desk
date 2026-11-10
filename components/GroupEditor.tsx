@@ -1327,7 +1327,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
             return <MockupBg value={g.mockupBg} auto={auto} colors={cs} onPick={(hex) => { update((x) => { if (hex) x.mockupBg = hex; else delete x.mockupBg; }); redrawSoon(); }} />;
           })()}
           {/* the customer's own mockup isn't shown here: it's a reference in Production notes & files, stamped */}
-          {onMockup && !(g.imprints.length && g.imprints.every((x) => x.custSeps || x.method !== "screen")) && <button className={"btn sm mk-edit" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>
+          {/* no Mockup Creator only when every print is printed from the customer's own separations (their mockup is the
+              mockup); embroidery, DTF and the rest are always mocked up (Nov 10, Nick, #40466: an all-embroidery hat group had no
+              Edit mockup) */}
+          {onMockup && !(g.imprints.length && g.imprints.every((x) => x.custSeps)) && <button className={"btn sm mk-edit" + (locked || !g.mockupAt ? " primary" : "")} type="button" onClick={startMockup} title={mockupBlock || undefined}>
             {/* the shirt icon shows on a phone, where the three buttons are matching tiles (Oct 29, Nick) */}
             <svg className="mk-ic" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 3.5L4 5.8 2.5 10.2l3.2 1.3.9-2.2V20.5h10.8V9.3l.9 2.2 3.2-1.3L20 5.8 15 3.5c-.4 1.6-1.6 2.6-3 2.6s-2.6-1-3-2.6z" /></svg>
             <span>{g.mockupAt ? "Edit mockup" : "Create mockup"}</span></button>}
