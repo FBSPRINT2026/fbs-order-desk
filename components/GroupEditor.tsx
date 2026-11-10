@@ -794,7 +794,9 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const rate = puffEach(gc.wholesale ? settings.wholesale : prices);
     if (d.puff) return (
       <div className="pr-scr pr-cc-line pr-puff-line"><span className="pr-scr-l">Puff ink</span>
-        <span className="pr-scr-v">No underbase{!hidePrices && <> · <b className="num">{money(rate)}</b> each</>}</span>
+        <span className="pr-scr-v">{d.underbase ? "Underbase" : "No underbase"}{!hidePrices && <> · <b className="num">{money(rate)}</b> each</>}</span>
+        {/* puff prints without an underbase by default; some get one after all (Nov 9, Nick): one click either way */}
+        {!fixed && <button type="button" className="linkbtn" title={d.underbase ? "Print it without an underbase (the puff default)" : "This one gets an underbase: adds the underbase screen"} onClick={() => update((x) => { if (x.imprints[di].underbase) delete x.imprints[di].underbase; else x.imprints[di].underbase = true; })}>{d.underbase ? "No underbase" : "Add underbase"}</button>}
         {!fixed && <button type="button" className="linkbtn" onClick={() => update((x) => { delete x.imprints[di].puff; })}>Not puff</button>}
       </div>
     );
