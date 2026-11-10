@@ -75,7 +75,7 @@ export default function MyDay({ name, replies, replyCount, urgentCount, side, ch
           <h1>{hello}{name ? `, ${name}` : ""}</h1>
           <p className="md-line">{line.length ? line.join(" · ") : "Nothing waiting on you. Enjoy it."}</p>
         </div>
-        <span className="md-acts"><CheerSwitch /><TestButton /><AmandaButton /></span>
+        <span className="md-acts"><CheerSwitch /></span>
       </header>
       {side ? (
         <div className="md2">
@@ -360,18 +360,6 @@ export function PhoneLink({ onClose }: { onClose: () => void }) {
 export function CrewTodos() {
   const { d, setD, load } = useMyDay();
   return <section className="db-card db-blue md-crew"><Todos d={d} setD={setD} load={load} compact /></section>;
-}
-
-/** a test button beside Cheer mode (Nov 9, Nick: "add a button next to cheer mode that says test button") */
-function TestButton() {
-  const [hit, setHit] = useState(false);
-  return <button type="button" className="btn sm" onClick={() => { setHit(true); setTimeout(() => setHit(false), 2000); }}>{hit ? "It works" : "Test button"}</button>;
-}
-
-/** Amanda's button beside the test button (Nov 9, Amanda: "add a button next to that called amandas button") */
-function AmandaButton() {
-  const [hit, setHit] = useState(false);
-  return <button type="button" className="btn sm" onClick={() => { setHit(true); setTimeout(() => setHit(false), 2000); }}>{hit ? "It works" : "Amanda's button"}</button>;
 }
 
 /** Cheer mode's switch on My Day: fireworks and a kind note when you finish something */
