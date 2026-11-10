@@ -21611,3 +21611,4 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .edg-where{font-size:12px}
 .edg-now{grid-column:2/-1}
 @media (max-width:760px){.edg-v{grid-template-columns:26px minmax(0,1fr)}.edg-vin,.edg-v>.btn{grid-column:2}}
+.md-acts{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
