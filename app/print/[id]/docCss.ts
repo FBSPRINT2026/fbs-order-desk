@@ -433,16 +433,19 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wo-first.f3 .notes.clip{max-height:.5in}
 .pdoc .wo-first.f4 .notes.clip{display:none}
 .pdoc .wo-first.f4 h2:has(+ .notes.clip){display:none}
-@page{size:letter;margin:.4in .45in}
+/* no page margin of the browser's own (Nov 10, Nick: "the print out on the work order also has the URL at the top and
+   bottom"): Chrome prints its date, title and link in the page margin when "Headers and footers" is ticked, so the margin
+   is 0 and each sheet holds its own white border instead; nothing of the browser's fits on the paper */
+@page{size:letter;margin:0}
 @media print{
-  html,body{background:#fff!important}
+  html,body{background:#fff!important;margin:0!important}
   .pdoc{background:#fff;padding:0;min-height:0;overflow:visible}
   .pdoc .print-bar{display:none}
-  .pdoc .sheet{width:auto;min-height:10.1in;margin:0;padding:0;box-shadow:none;break-after:page;zoom:1!important}
-  .pdoc .sheet.cu-pair{height:10.1in}
+  .pdoc .sheet{box-sizing:border-box;width:8.5in;min-height:10.9in;margin:0;padding:.4in .45in;box-shadow:none;break-after:page;zoom:1!important}
+  .pdoc .sheet.cu-pair{height:10.9in}
   .pdoc .sheet:last-child{break-after:auto}
-  .pdoc .sheet.pf{height:10.1in;min-height:0}
-  .pdoc .sheet.wo1{height:10.1in;min-height:0;padding-bottom:.15in}
+  .pdoc .sheet.pf{height:10.9in;min-height:0}
+  .pdoc .sheet.wo1{height:10.9in;min-height:0;padding-bottom:.55in}
 }
 
 /* ── The quote / invoice, Oct 30 (Nick approved the layout): a two-line top, a row per garment with its thumbnail, sizes and

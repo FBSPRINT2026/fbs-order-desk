@@ -25,7 +25,7 @@ export default async function JobTicket({ params }: { params: Promise<{ code: st
   const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }) : "—");
   return (
     <div style={{ background: "#fff", minHeight: "100%", color: "#141D2B", fontFamily: "Helvetica, Arial, sans-serif" }}>
-      <style>{`@page { size: 8.5in 11in; margin: 0.4in; } @media print { .print-bar { display: none } }`}</style>
+      <style>{`@page { size: 8.5in 11in; margin: 0; } @media print { .print-bar { display: none } body { padding: 0.4in !important; } }`}</style>
       <div className="print-bar"><PrintButton /></div>
       <div style={{ maxWidth: "7.6in", margin: "0 auto", border: "3px solid #141D2B", borderRadius: 10, padding: "0.3in", display: "grid", gridTemplateColumns: "1fr 2.4in", gap: "0.3in", alignItems: "center" }}>
         <div>
