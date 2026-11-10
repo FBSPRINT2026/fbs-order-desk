@@ -22,3 +22,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 9 11:32pm · 1.3.223 · Nick · Garment rows: wider Each and Total columns so prices never get cut; ghost prints on one line
 - Nov 9 11:38pm · 1.3.224 · Nick · Order garments: price and total columns get room to spare; ghost prints name on the left, note in the middle, one line
 - Nov 9 11:44pm · 1.3.225 · Nick · Ghost prints note sits on the same line as the rest
+- Nov 10 12:03am · 1.3.226 · Nick · Sending a proof over an approved one: the send screen warns, the old approval comes off on the record, and a replaced version reads 'Replaced (was approved another way)' (#40444)

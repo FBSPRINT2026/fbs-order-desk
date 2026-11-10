@@ -17,7 +17,7 @@ import { bundleCopy, bundlePreview, bundleSend, orderLinkAction, sendFromChoices
  * mode "copy": just the two copy buttons, for the order's page as it is (nothing new sent).
  */
 type Target = { kind: "art" | "sewout" | "order"; orderId: string; sewoutId?: string; note?: string; live?: boolean };
-type Opts = { to: string; name: string; proof: { version: number; mockups: number; unsent: boolean; waiting: boolean } | null; quote: { kind?: "quote" | "invoice"; total: number; status: string; sent?: boolean; deposit: number; /** what's due when they approve, by their terms */ due?: string } | null; sewouts: { id: string; label: string; sent: boolean }[];
+type Opts = { to: string; name: string; proof: { version: number; mockups: number; unsent: boolean; waiting: boolean; approved?: { version: number | null; by: string; at: string; another: boolean } | null } | null; quote: { kind?: "quote" | "invoice"; total: number; status: string; sent?: boolean; deposit: number; /** what's due when they approve, by their terms */ due?: string } | null; sewouts: { id: string; label: string; sent: boolean }[];
   /** the account's people, ticked when their email settings send them approvals */ people?: { email: string; name: string; on: boolean }[] };
 /** what's ticked, who it goes to this time, and whether it goes from the person's own mailbox as a reply (lib/customerSend.ts) */
 type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note?: string; to?: string[]; fromMe?: boolean; reply?: { messageId: string } | null; after?: string };
@@ -151,6 +151,8 @@ export default function SendProofTool({ target, label = "Send to customer", mode
                 {!opts.proof && !opts.quote && !opts.sewouts.length && <span className="faint">Nothing to send yet: make a mockup, or the quote, first.</span>}
               </div>}
             </div>
+            {/* the art is already approved: sending a proof asks them again and takes that approval off (Nov 10, Nick, #40444) */}
+            {opts?.proof?.approved && pick.proof && opts.proof.unsent && <div className="spt-apw" role="note"><b>Already approved</b> Version {opts.proof.approved.version} was {opts.proof.approved.another ? "approved another way" : "approved"}{opts.proof.approved.by ? ` (${opts.proof.approved.by}${opts.proof.approved.at ? `, ${new Date(opts.proof.approved.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""})` : ""}. Sending version {opts.proof.version} takes that approval off, and they approve again.</div>}
             {!opts && <div className="faint">{busy === "load" ? "Loading…" : ""}</div>}
             {opts && <div className="spt-cols">
             <div className="spt-left">

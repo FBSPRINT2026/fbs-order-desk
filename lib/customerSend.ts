@@ -182,10 +182,10 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
   const { o, customer, settings, pays } = await load(admin, orderId);
   const [{ data: mk }, { data: ps }, { data: sw }] = await Promise.all([
     admin.from("mockups").select("id").eq("order_id", orderId).is("archived_at", null),
-    admin.from("proofs").select("id, version, status, mockup_id, archived_at").eq("order_id", orderId).not("version", "is", null),
+    admin.from("proofs").select("id, version, status, mockup_id, archived_at, approved_via, decided_name, decided_at").eq("order_id", orderId).not("version", "is", null),
     admin.from("sewouts").select("id, order_id, imprint_id, version, status, sent_at, sent_to, archived_at, photo_path, created_at").eq("order_id", orderId).is("archived_at", null),
   ]);
-  const mocks = (mk || []) as { id: string }[], proofs = (ps || []) as Pick<Proof, "id" | "version" | "status" | "mockup_id" | "archived_at">[];
+  const mocks = (mk || []) as { id: string }[], proofs = (ps || []) as (Pick<Proof, "id" | "version" | "status" | "mockup_id" | "archived_at"> & { approved_via?: string | null; decided_name?: string | null; decided_at?: string | null })[];
   const live = proofs.filter((p) => !p.archived_at);
   const unsent = mocks.length > 0 && mocks.some((m) => !live.some((p) => p.mockup_id === m.id));
   const nextV = (proofs.length ? Math.max(...proofs.map((p) => p.version || 0)) : 0) + 1;
@@ -201,7 +201,9 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
   return {
     to: await approvalsTo(admin, o, customer), name: customer?.company || customer?.name || "",
     people: rc.people.map((x) => ({ ...x, on: rc.list.includes(x.email) })),
-    proof: mocks.length ? { version: unsent ? nextV : live[0]?.version || nextV, mockups: mocks.length, unsent, waiting: !unsent && live.some((p) => p.status === "pending") } : null,
+    proof: mocks.length ? { version: unsent ? nextV : live[0]?.version || nextV, mockups: mocks.length, unsent, waiting: !unsent && live.some((p) => p.status === "pending"),
+      /** the art out there is already approved (Nov 10, Nick, #40444): who and how, so sending a new proof is never a surprise */
+      approved: live.length > 0 && live.every((p) => p.status === "approved") ? { version: live[0].version, by: live[0].decided_name || "", at: live[0].decided_at || "", another: live.some((p) => p.approved_via === "staff") } : null } : null,
     // what's due when they approve, by their terms (lib/payTerms.ts)
     quote: quoteOpen ? { kind: "quote" as const, total: c.total, status: o.status, sent: o.status === "quote_sent", deposit: upFront(customer?.payment_terms, c.total, settings.depositPct).amount, due: upFront(customer?.payment_terms, c.total, settings.depositPct).line }
       : invoiceOpen ? { kind: "invoice" as const, total: c.total, status: o.status, sent: !!(invSent || []).length, deposit: 0, due: invoiceTerms(customer?.payment_terms, c, settings.depositPct) } : null,

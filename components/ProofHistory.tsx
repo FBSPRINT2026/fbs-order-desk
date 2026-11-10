@@ -26,8 +26,10 @@ export function versionState(ps: ProofRow[]) {
   const ch = ps.find((p) => p.status === "changes"), ap = ps.length > 0 && ps.every((p) => p.status === "approved");
   const dec = ch || (ap ? ps.slice().sort((a, b) => (b.decided_at || "").localeCompare(a.decided_at || ""))[0] : null);
   const staff = ap && ps.some((p) => p.approved_via === "staff");
-  const text = ch ? "Changes asked" : ap ? (staff ? "Approved another way" : ps.some((p) => p.customer_comment) ? "Approved with changes" : "Approved") : old ? "Replaced before a decision" : "Waiting on the customer";
-  const tone = ch ? "bad" : ap ? "ok" : old ? "off" : "wait";
+  // a version replaced by a newer one isn't the approval any more, even if it was approved (Nov 10, Nick, #40444: "my team
+  // can't see waiting on customer and approved another way"): it says it was replaced, and what it had been
+  const text = old && (ap || ch) ? `Replaced by a newer version (was ${ch ? "changes asked" : staff ? "approved another way" : "approved"})` : ch ? "Changes asked" : ap ? (staff ? "Approved another way" : ps.some((p) => p.customer_comment) ? "Approved with changes" : "Approved") : old ? "Replaced before a decision" : "Waiting on the customer";
+  const tone = old ? "off" : ch ? "bad" : ap ? "ok" : "wait";
   const viewed = ps.map((p) => p.viewed_at).filter(Boolean).sort()[0] || null;
   const last = ps.map((p) => p.last_viewed_at).filter(Boolean).sort().pop() || null;
   const views = Math.max(0, ...ps.map((p) => p.view_count || 0));

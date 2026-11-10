@@ -104,10 +104,15 @@ export async function sendProofs(admin: SupabaseClient, orderId: string, me: Sta
     const v = live[0].version;
     return { ok: true as const, version: v, emailed: false, link: proofUrl(await proofLinkFor(admin, { kind: "art", orderId, version: v, by: me.email })) };
   }
+  // the version out there was approved (another way, or by them): a new version asks them again, so that approval comes
+  // off, said in the history (Nov 10, Nick, #40444: "if you send a proof for something that's already been approved, you
+  // have to unmark it"); the send screen warns first (SendProofTool)
+  const wasApproved = live.length > 0 && live.every((p) => p.status === "approved") ? live[0].version : null;
   const at = new Date().toISOString();
   const to = email ? customer!.email : customer?.email || "";
   const sentTo = email ? to : opts.sentTo || "link copied";
   const version = await makeVersion(admin, orderId, mocks, { sent_at: at, sent_to: sentTo });
+  if (wasApproved != null) await admin.from("order_events").insert({ order_id: orderId, kind: "art_unapproved", detail: `Version ${wasApproved}'s approval taken off: version ${version} sent for them to approve`, actor: me.email });
   await admin.from("order_events").insert({ order_id: orderId, kind: "proofs_requested", detail: `Version ${version} ${sentTo === "link copied" ? "(link copied to send yourself)" : `to ${sentTo}`}${note.trim() ? `: ${note.trim().slice(0, 200)}` : ""}`, actor: me.email });
   // what we changed goes with the proof: in their Messages on the order, and in the email
   if (note.trim()) await admin.from("messages").insert({ order_id: orderId, author_type: "staff", author_email: me.email, author_name: settings.shop.name, body: `Proof version ${version}: ${note.trim().slice(0, 2000)}` });
