@@ -839,7 +839,7 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
 
 // ───────────────────────────── invoice / quote ─────────────────────────────
 const SETUP_LABEL = (k: string, q: number, thread = false) => ({
-  screens: `Setup: ${q} screen${q === 1 ? "" : "s"}`, remake: `Screen remake: ${q} screen${q === 1 ? "" : "s"}`, digitize: "Digitizing",
+  screens: `Setup: ${q} screen${q === 1 ? "" : "s"}`, remake: `Screen remake: ${q} screen${q === 1 ? "" : "s"}`, digitize: "Digitizing", sewout: "Sew-out (customer's stitch file)",
   pms: `PMS color match${q > 1 ? ` × ${q}` : ""}`, inkchange: `${thread ? "Thread changes" : "Ink changes"}${q > 1 ? ` × ${q}` : ""}`, min: "Minimum order charge",
 } as Record<string, string>)[k] || "Setup";
 

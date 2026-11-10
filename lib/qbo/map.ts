@@ -44,6 +44,7 @@ export const ITEM_KEYS: { k: string; label: string }[] = [
   { k: "setup_screens", label: "Screen setup (new screens)" },
   { k: "setup_remake", label: "Screen setup (repeat screens)" },
   { k: "digitize", label: "Digitizing" },
+  { k: "sewout", label: "Sew-out (customer's stitch file)" },
   { k: "pms", label: "PMS color match" },
   { k: "inkchange", label: "Ink change" },
   { k: "min", label: "Minimum order charge" },
@@ -58,7 +59,7 @@ export const ITEM_KEYS: { k: string; label: string }[] = [
 ];
 /** item keys tried in order for each kind of line; "default" is always tried last */
 const ITEM_FALLBACK: Record<string, string[]> = {
-  setup_screens: ["setup_screens", "screen"], setup_remake: ["setup_remake", "setup_screens", "screen"], digitize: ["digitize", "embroidery"],
+  setup_screens: ["setup_screens", "screen"], setup_remake: ["setup_remake", "setup_screens", "screen"], digitize: ["digitize", "embroidery"], sewout: ["sewout", "digitize", "embroidery"],
   pms: ["pms", "setup_screens"], inkchange: ["inkchange", "setup_screens"], min: ["min", "fee"], materials: ["materials", "garments"],
   shipping: ["shipping", "fee"], surcharge: ["surcharge", "fee"], rush: ["rush", "fee"], garments: ["garments", "screen"],
 };
@@ -253,8 +254,8 @@ export type InvoiceBuild = {
 };
 const METHOD_ITEM: Record<string, string> = { screen: "screen", embroidery: "embroidery", dtf: "dtf" };
 const FEE_ITEM = (label: string) => (/ship|freight|postage|deliver|courier/i.test(label) ? "shipping" : /surcharge|card fee|processing/i.test(label) ? "surcharge" : /rush/i.test(label) ? "rush" : "fee");
-const SETUP_LABEL = { screens: "Screen setup (new screens)", remake: "Screen setup (repeat screens)", digitize: "Digitizing", pms: "PMS color match", inkchange: "Ink change", min: "Minimum order charge" } as const;
-const SETUP_ITEM = { screens: "setup_screens", remake: "setup_remake", digitize: "digitize", pms: "pms", inkchange: "inkchange", min: "min" } as const;
+const SETUP_LABEL = { screens: "Screen setup (new screens)", remake: "Screen setup (repeat screens)", digitize: "Digitizing", sewout: "Sew-out (customer's stitch file)", pms: "PMS color match", inkchange: "Ink change", min: "Minimum order charge" } as const;
+const SETUP_ITEM = { screens: "setup_screens", remake: "setup_remake", digitize: "digitize", sewout: "sewout", pms: "pms", inkchange: "inkchange", min: "min" } as const;
 
 /** Is this order an invoice (past the quote stage)? Quotes are never sent to QuickBooks. */
 export const isInvoiceStatus = (status: string) => ["approved", "art", "blanks", "production", "ready", "completed"].includes(status);

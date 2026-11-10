@@ -187,7 +187,7 @@ async function payloadFor(o: Order, settings: ReturnType<typeof mergeSettings>) 
   // setup as Printavo's own fee names (their reports and syncs go by them): New / Repeat Screen Fee per screen,
   // Digitize File, PMS MATCH, Color Change; 2XL+ as Sizes Above XL; the order's own fees (no card surcharge: added in Printavo when they pay by card)
   type PvFee = { description: string; amount?: number; quantity?: number; unitPrice?: number; unitPriceAsPercentage?: boolean; taxable: boolean };
-  const FEE_NAME = { screens: "New Screen Fee ", remake: "Repeat Screen Fee ", digitize: "Digitize File", pms: "PMS MATCH", inkchange: "Color Change", min: "Minimum Order Charge" } as const;
+  const FEE_NAME = { screens: "New Screen Fee ", remake: "Repeat Screen Fee ", digitize: "Digitize File", sewout: "Sew Out", pms: "PMS MATCH", inkchange: "Color Change", min: "Minimum Order Charge" } as const;
   // Printavo reads a fee's `amount` as the price of ONE and multiplies it by the quantity itself (Oct 20, #40090: 7 repeat
   // screens sent as quantity 7, amount $105 came out 7 × $105 = $735 instead of 7 × $15): amount = the unit price
   const sum = new Map<string, PvFee>();

@@ -7,7 +7,7 @@ import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
 import { kidLine } from "@/lib/pricing";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, puffEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
@@ -1630,6 +1630,16 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                       {/* the logo's DST is on file from before (Oct 27, Nick: "like repeat screens… already digitized… that overrides it") */}
                       <label className="check sbx-end" title="The logo was digitized before (its DST is on file): no digitizing charge and no Needs digitizing stamp"><input type="checkbox" checked={!!d.digitized} onChange={(e) => { const di = g.imprints.indexOf(d); if (e.target.checked && !hasSewFile(d)) { setDgzAsk(d.id); return; } update((x) => { x.imprints[di].digitized = e.target.checked || undefined; }); }} />Already digitized</label></div>
                   ))}
+                  {/* their own stitch file: the sew-out fee, one per print (Nov 10, Nick: "when a customer supplies a DST, we have to
+                      charge them a Sew Out Fee… $15… we would check it") */}
+                  {embImps.map((d) => (
+                    <div key={d.id + "-sew"} className="sbx-r"><span className="sbx-loc">Sew-out</span><span className="faint">{embImps.length > 1 ? `${d.location || "Embroidery"} · ` : ""}they sent their own DST</span>
+                      {!hidePrices && <b className={"num" + (d.sewoutCharge ? "" : " sbx-off")}>{money(d.sewoutCharge ? sewoutFee(d, wpl) : 0)}</b>}
+                      <label className="check sbx-end" title={`They supplied the stitch file: we sew it out and check it (${money(wpl.sewoutFee ?? 15)})`}><input type="checkbox" checked={!!d.sewoutCharge} onChange={(e) => { const di = g.imprints.indexOf(d); update((x) => { x.imprints[di].sewoutCharge = e.target.checked || undefined; }); }} />Charge sew-out</label></div>
+                  ))}
+                </div>}
+                {embImps.length > 0 && <div className="sbx-sec">
+                  <div className="sbx-h gsec"><span>Embroidery extras</span></div>
                   {(wpl.embSpecialty?.length || 0) > 0 && g.lines.some((l) => (l.style || "").trim()) && (() => {
                     const on = g.lines.some((l) => isSpecialtyItem(l)), rate = wpl.embSpecialty![Math.min(gc.eti, wpl.embSpecialty!.length - 1)] || 0;
                     return (
@@ -1641,10 +1651,15 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                           if (!e.target.checked) { for (const l of x.lines) l.specialty = false; return; }
                           const auto = x.lines.some((l) => isSpecialtyItem({ ...l, specialty: null }));
                           for (const l of x.lines) { if (auto) delete l.specialty; else l.specialty = true; }
-                        })} />Specialty{on && g.lines.some((l) => !isSpecialtyItem(l)) ? <span className="faint"> ({g.lines.filter((l) => isSpecialtyItem(l)).length} of {g.lines.length} lines)</span> : null}</label></div>
+                        })} />Add{on && g.lines.some((l) => !isSpecialtyItem(l)) ? <span className="faint"> ({g.lines.filter((l) => isSpecialtyItem(l)).length} of {g.lines.length} lines)</span> : null}</label></div>
                     );
                   })()}
-                  {embList.length > 0 && <div className="sbx-r">{embList.map((f) => <label key={f.id} className="check"><input type="checkbox" checked={(g.finishing || []).includes(f.id)} onChange={(e) => tick(f.id, e.target.checked)} />{f.name}{!hidePrices && <span className="faint"> {money(f.price)}/pc</span>}</label>)}</div>}
+                  {/* each extra on its own row like the ones above: name, price, tick (Nov 10, Nick: "this area has gotten pretty messy") */}
+                  {embList.map((f) => { const on = (g.finishing || []).includes(f.id); return (
+                    <div key={f.id} className="sbx-r"><span className="sbx-loc">{f.name.replace(/\s*\(embroidery\)\s*$/i, "")}</span>
+                      {!hidePrices && <b className={"num" + (on ? "" : " sbx-off")}>{money(on ? f.price : 0)}/pc</b>}
+                      <label className="check sbx-end"><input type="checkbox" checked={on} onChange={(e) => tick(f.id, e.target.checked)} />Add</label></div>
+                  ); })}
                 </div>}
                 {hasEmb && <PersonalizationPicker lines={g.lines} price={persPrice ?? persEach(settings, gc.wholesale ? "wholesale" : "retail")} hidePrices={hidePrices} disabled={fixed} onAdd={addPers} orderId={orderId} onAddMany={addPersMany} />}
               </div>

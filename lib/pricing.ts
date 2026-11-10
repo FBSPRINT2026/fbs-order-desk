@@ -186,6 +186,8 @@ export type Imprint = { /** the art exactly as the Mockup Creator shows it on th
   /** embroidery: a digitizing fee set by hand for a complex logo (overrides the base + stitches fee; digitizingFee) */ digitizeFee?: number;
   /** embroidery: the logo was digitized before (its DST is on file): no digitizing charge, no Needs digitizing stamp
    *  (Oct 27, Nick: "like repeat screens… already digitized or existing logo, and that overrides it") */ digitized?: boolean;
+  /** embroidery: the customer supplied the stitch file (DST), so we charge a sew-out fee (the price list's sewoutFee, $15)
+   *  to sew it out and check it (Nov 10, Nick) */ sewoutCharge?: boolean;
   /** the art's height ÷ width as it prints (colors taken off and empty edges don't count), saved by the Mockup Creator:
    *  the other side of the size comes from it (#40189: a logo on a black box read 6" × 4.41" for 6" × 1.12") */ artRatio?: number;
   /** inks matched to a PMS (non-standard ink): a matching fee each. Only used when the inks aren't named; named inks
@@ -598,6 +600,8 @@ export type PriceList = {
   /** digitizing (Oct 28, Nick: "the digitizing fee is $40… then $1 for every 1,000 stitches after 6,000… unless we
    *  override it… super complex"): the stitches the base fee covers, and each extra 1,000 (started) after them */
   digStitches?: number; digPer1k?: number;
+  /** the sew-out fee for a customer's own stitch file (Imprint.sewoutCharge; Nov 10, Nick: "Sew-outs $15") */
+  sewoutFee?: number;
   /** embroidery extras per piece (specialty thread, 3D puff, personalization…), ticked on a group with embroidery */
   embExtras?: Finishing[];
   /** puff ink on a screen print (Imprint.puff), per puffed location per piece; not set = $1 (Oct 30, Nick) */
@@ -740,6 +744,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dtf: [7, 6, 5, 4.5, 4, 3.5, 3],
   screenFee: 25,
   digitizing: 45,
+  sewoutFee: 15,
   inkChangeFee: 15,
   wholesale: {
     tiers: [12, 24, 48, 72, 144, 288, 500],
@@ -756,6 +761,7 @@ export const DEFAULT_SETTINGS: Settings = {
     dtf: [5.5, 4.75, 4, 3.5, 3.25, 3, 2.75],
     screenFee: 20,
     digitizing: 40,
+    sewoutFee: 15,
     inkChangeFee: 15,
     upcharges: { "2XL": 0.5, "3XL": 0.75, "4XL": 1, "5XL": 1 },
   },
@@ -1058,7 +1064,9 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     const eti = x.eti ?? ti;
     const extra = s.embPer1k && num(d.stitches) > num(s.embStitches) ? Math.ceil((num(d.stitches) - num(s.embStitches)) / 1000) * num(s.embPer1k) : 0;
     // the logo digitized before (its DST on file): no digitizing charge (Imprint.digitized, like repeat screens)
-    return { each: r2(num(s.embroidery[eti]) + extra), setup: digitizingFee(d, s), inkFee };
+    // a customer's own stitch file: the sew-out fee on top (Imprint.sewoutCharge)
+    const sew = sewoutFee(d, s);
+    return { each: r2(num(s.embroidery[eti]) + extra), setup: r2(digitizingFee(d, s) + sew), sewout: sew, inkFee };
   }
   // their own transfers: we press them, per location (Oct 31, Nick: "$2 for everybody… $1.50 for him")
   if (d.method === "dtf" && d.patch) return { each: patchEach(d, s), setup: 0, inkFee: 0 };
@@ -1320,7 +1328,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const minCharge = !g.allIn && !smp && pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
   const setup = r2(screens + inkFees + minCharge);
   // the setup charge itemized (as Printavo lists it: new / repeat screens, digitizing, PMS match, ink changes, minimum)
-  const setupItems: { kind: "screens" | "remake" | "digitize" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number; /** an embroidery thread change */ thread?: boolean; /** a print's own youth screens / file */ youth?: boolean }[] = [];
+  const setupItems: { kind: "screens" | "remake" | "digitize" | "sewout" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number; /** an embroidery thread change */ thread?: boolean; /** a print's own youth screens / file */ youth?: boolean }[] = [];
   if (!noSetup) setups.forEach((d, i) => {
     const im = (g.imprints || [])[i];
     if (!im) return;
@@ -1330,7 +1338,12 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
       if (im.method === "screen") {
         const n = Math.min(num(sc), 15) || 1;
         setupItems.push({ kind: (im.remake ?? ix.remake) && pl.remakeFee != null ? "remake" : "screens", qty: n, unit: r2(amt / n), amount: r2(amt), ...y });
-      } else setupItems.push({ kind: "digitize", qty: 1, unit: r2(amt), amount: r2(amt), ...y });
+      } else {
+        // the sew-out fee is its own line, after the digitizing (if any)
+        const sew = youth ? 0 : num((d as { sewout?: number }).sewout), dig = r2(amt - sew);
+        if (dig > 0) setupItems.push({ kind: "digitize", qty: 1, unit: dig, amount: dig, ...y });
+        if (sew > 0) setupItems.push({ kind: "sewout", qty: 1, unit: r2(sew), amount: r2(sew) });
+      }
     };
     one(d.setup, (d as { screens?: number }).screens);
     const ys = youthSetups[i]; if (ys) one(ys.setup, ys.screens, true);
@@ -1531,6 +1544,12 @@ export const shopNotes = (s: string | null | undefined) => String(s || "").repla
 /** THE digitizing fee for an embroidered print, everywhere it's charged or shown (Oct 28, Nick): nothing when the logo
  *  was digitized before; the price set by hand for a complex logo; else the list's base ($40) plus $1 for each started
  *  1,000 stitches past 6,000 (23,847 stitches: $40 + 18 = $58) */
+/** THE sew-out fee for an embroidered print sewn from the customer's own stitch file (Nov 10, Nick: "when a customer
+ *  supplies a DST, we have to charge them a Sew Out Fee… $15"): ticked on the print (Imprint.sewoutCharge) */
+export function sewoutFee(d: Pick<Imprint, "sewoutCharge">, s: Pick<PriceList, "sewoutFee">): number {
+  return d.sewoutCharge ? r2(+(s.sewoutFee ?? 15) || 0) : 0;
+}
+
 export function digitizingFee(d: Pick<Imprint, "digitized" | "digitizeFee" | "stitches">, s: Pick<PriceList, "digitizing" | "digStitches" | "digPer1k">): number {
   if (d.digitized) return 0;
   if (d.digitizeFee != null && isFinite(+d.digitizeFee)) return r2(Math.max(0, +d.digitizeFee));
