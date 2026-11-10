@@ -1,4 +1,5 @@
 "use client";
+import MoneyField from "@/components/MoneyField";
 import { dtfGridOn } from "@/lib/dtfGrid";
 import DtfGridTable from "@/components/DtfGridTable";
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
@@ -169,9 +170,9 @@ export default function SettingsMain({ part, sub = "" }: { part: Part; sub?: str
                       {pl.tiers.map((t, i) => (
                         <tr key={tab + shade + i}>
                           <td className="tier"><input type="number" min="1" aria-label={`Tier ${i + 1} minimum`} value={t} onChange={(e) => updPl((d) => { d.tiers[i] = n(e.target.value); })} /></td>
-                          {pl.blankAdd && <td><input type="number" step="0.01" aria-label={`${t}+ blank add`} value={pl.blankAdd[i] ?? 0} onChange={(e) => updPl((d) => { if (d.blankAdd) d.blankAdd[i] = n(e.target.value); })} /></td>}
-                          {Array.from({ length: cols }, (_, j) => <td key={j}><input type="number" step="0.01" aria-label={`${t}+ pieces, ${j + 1} colors`} value={scr[i]?.[j] ?? 0} onChange={(e) => setScr(i, j, n(e.target.value))} /></td>)}
-                          {dtg && <td><input type="number" step="0.01" aria-label={`${t}+ full color`} value={dtg[i] ?? 0} onChange={(e) => setDtg(i, n(e.target.value))} /></td>}
+                          {pl.blankAdd && <td><MoneyField aria-label={`${t}+ blank add`} value={pl.blankAdd[i] ?? 0} onChange={(e) => updPl((d) => { if (d.blankAdd) d.blankAdd[i] = n(e.target.value); })} /></td>}
+                          {Array.from({ length: cols }, (_, j) => <td key={j}><MoneyField aria-label={`${t}+ pieces, ${j + 1} colors`} value={scr[i]?.[j] ?? 0} onChange={(e) => setScr(i, j, n(e.target.value))} /></td>)}
+                          {dtg && <td><MoneyField aria-label={`${t}+ full color`} value={dtg[i] ?? 0} onChange={(e) => setDtg(i, n(e.target.value))} /></td>}
                           {pl.specialtyInk && <td><input type="number" step="0.05" aria-label={`${t}+ specialty ink per location`} value={pl.specialtyInk[i] ?? 0} onChange={(e) => updPl((d) => { if (d.specialtyInk) d.specialtyInk[i] = n(e.target.value); })} /></td>}
                           {!pl.embTiers && <td><input type="number" step="0.05" aria-label={`${t}+ embroidery`} value={pl.embroidery[i] ?? 0} onChange={(e) => updPl((d) => { d.embroidery[i] = n(e.target.value); })} /></td>}
                         </tr>

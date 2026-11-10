@@ -1,4 +1,5 @@
 "use client";
+import MoneyField from "@/components/MoneyField";
 import DraftArtKeep from "@/components/DraftArtKeep";
 import { accountOfMethod, carrierOf, isThirdParty, notOurShipping, onAccountMethod, type ThirdParty } from "@/lib/thirdParty";
 import { allRows } from "@/lib/readAll";
@@ -1994,7 +1995,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   return (
                     <div key={i} className="fee-row">
                       <input type="text" aria-label="Fee description" placeholder="Rush fee, art time, shipping…" value={f.label} onChange={(e) => edit((x) => { x.label = e.target.value; })} />
-                      <input type="number" step="0.01" aria-label="Fee amount" placeholder="0.00" value={f.amount} onChange={(e) => edit((x) => { x.amount = numOr(e.target.value); })} />
+                      <MoneyField aria-label="Fee amount" placeholder="0.00" value={f.amount} onChange={(e) => edit((x) => { x.amount = numOr(e.target.value); })} />
                       {o.fees[i] ? <button className="btn icon ghost" type="button" tabIndex={-1} aria-label="Remove fee" onClick={() => patch((d) => { d.fees.splice(i, 1); })}>✕</button> : <span />}
                     </div>
                   );
@@ -2079,7 +2080,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </span>
                 {/* the amount is the place to click: it turns into the box while you type (Oct 29, Nick: "click to the right… it
                     shouldn't be highlighted by default… when you click on it, you should just be able to fill it in") */}
-                {discEdit ? <input type="number" step="0.01" min="0" className="tt-in" autoFocus aria-label={o.discount_type === "amt" ? "Discount in dollars" : "Discount percent"} placeholder={o.discount_type === "amt" ? "0.00" : "0"}
+                {discEdit ? <MoneyField min="0" className="tt-in" autoFocus aria-label={o.discount_type === "amt" ? "Discount in dollars" : "Discount percent"} placeholder={o.discount_type === "amt" ? "0.00" : "0"}
                     value={(o.discount_type === "amt" ? o.discount_amt : o.discount_pct) || ""} onBlur={() => setDiscEdit(false)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setDiscEdit(false); }}
                     onChange={(e) => patch((d) => { const v = Math.max(0, +e.target.value || 0); if (d.discount_type === "amt") d.discount_amt = v; else d.discount_pct = Math.min(100, v); })} />
                   : <button type="button" className="tt-val" title="Click to add a discount" onClick={() => setDiscEdit(true)}>{calc.discount ? <>{o.discount_type !== "amt" && o.discount_pct ? <small className="faint">{o.discount_pct}% · </small> : null}−{money(calc.discount)}</> : money(0)}</button>}</div>
@@ -2323,7 +2324,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                   <span className="row"><b className="num">{money(p.amount)}</b>{canPay && <button className={"btn icon ghost sm" + (armed === "pay" + p.id ? " danger armed" : "")} type="button" aria-label="Remove payment" onClick={() => delPayment(p.id)}>✕</button>}</span></div>
               ))}</div> : <div className="faint" style={{ fontSize: 13 }}>No payments recorded.</div>}
               {canPay && <div className="pay-add">
-                <input type="number" step="0.01" placeholder="Amount" aria-label="Payment amount" value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
+                <MoneyField placeholder="Amount" aria-label="Payment amount" value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
                 <select aria-label="Payment method" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>{PAY_METHODS.map((m) => <option key={m}>{m}</option>)}</select>
                 <input type="date" aria-label="Payment date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
                 <button className="btn" type="button" onClick={addPayment}>Record</button>
@@ -2351,14 +2352,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 {calc.fees - calc.shipping - adjFee ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping - adjFee)}</span></div> : null}
                 {calc.hasShipping ? <div className="tr"><span>Shipping</span><span>{calc.freeShipping ? "Free" : money(calc.shipping)}</span></div> : null}
                 <div className="tr"><span className="row" style={{ gap: 6 }}>Discount
-                  <input type="number" step="0.01" min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"
+                  <MoneyField min="0" aria-label="Discount" style={{ width: 66, padding: "3px 6px" }} placeholder="0"
                     value={(o.discount_type === "amt" ? o.discount_amt : o.discount_pct) || ""}
                     onChange={(e) => patch((d) => { const v = Math.max(0, +e.target.value || 0); if (d.discount_type === "amt") d.discount_amt = v; else d.discount_pct = Math.min(100, v); })} />
                   <select aria-label="Discount type" style={{ width: 52, padding: "3px 4px" }} value={o.discount_type === "amt" ? "amt" : "pct"}
                     onChange={(e) => patch((d) => { const v = d.discount_type === "amt" ? d.discount_amt || 0 : d.discount_pct || 0; d.discount_type = e.target.value === "amt" ? "amt" : "pct"; if (d.discount_type === "amt") { d.discount_amt = v; d.discount_pct = 0; } else { d.discount_pct = Math.min(100, v); d.discount_amt = 0; } })}>
                     <option value="pct">%</option><option value="amt">$</option>
                   </select></span><span>{calc.discount ? `−${money(calc.discount)}` : money(0)}</span></div>
-                <div className="tr"><span className="row" style={{ gap: 6 }}>Tax <input type="number" step="0.01" aria-label="Tax rate percent" style={{ width: 66, padding: "3px 6px" }} placeholder={String(settings.taxRate)} value={o.tax_rate ?? ""} onChange={(e) => patch((d) => { d.tax_rate = e.target.value === "" ? null : +e.target.value; })} />%</span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
+                <div className="tr"><span className="row" style={{ gap: 6 }}>Tax <MoneyField aria-label="Tax rate percent" style={{ width: 66, padding: "3px 6px" }} placeholder={String(settings.taxRate)} value={o.tax_rate ?? ""} onChange={(e) => patch((d) => { d.tax_rate = e.target.value === "" ? null : +e.target.value; })} />%</span><span>{o.tax_exempt ? "Exempt" : money(calc.tax)}</span></div>
                 <label className="check" style={{ fontSize: 12, color: "var(--ink-2)" }}><input type="checkbox" checked={o.tax_exempt} onChange={(e) => patch((d) => { d.tax_exempt = e.target.checked; })} /> Tax exempt</label>
                 <div className="tr big"><span>Total{calc.shippingTbd ? <small className="faint" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>+ shipping TBD</small> : null}</span><span>{money(calc.total)}</span></div>
                 <div className="tr"><span>Paid</span><span>{money(calc.paid)}</span></div>

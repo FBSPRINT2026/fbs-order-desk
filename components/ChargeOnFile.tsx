@@ -1,4 +1,5 @@
 "use client";
+import MoneyField from "@/components/MoneyField";
 import { useEffect, useState } from "react";
 import { money } from "@/lib/format";
 import { chargeableMethods, chargeSavedMethod, type ChargeableMethod } from "@/app/shop/charge-actions";
@@ -25,7 +26,7 @@ export default function ChargeOnFile({ orderId, customerId, balance, feePct, onD
       <div className="cof-h"><b>Charge their card on file</b><span className="faint">They allowed us to charge it when they ask{cur.staff_charge_at ? ` (since ${new Date(cur.staff_charge_at).toLocaleDateString()})` : ""}.</span></div>
       <div className="cof-row">
         <select aria-label="Saved payment method" value={cur.id} onChange={(e) => { setPick(e.target.value); setArmed(false); }}>{list.map((x) => <option key={x.id} value={x.id}>{label(x)}</option>)}</select>
-        <input type="number" step="0.01" min="1" aria-label="Amount to charge" value={amt} onChange={(e) => { setAmt(e.target.value); setArmed(false); }} />
+        <MoneyField min="1" aria-label="Amount to charge" value={amt} onChange={(e) => { setAmt(e.target.value); setArmed(false); }} />
         <button type="button" className={"btn" + (armed ? " primary armed" : "")} disabled={busy || sum < 1 || sum > balance + 0.004} onClick={async () => {
           if (!armed) { setArmed(true); setTimeout(() => setArmed(false), 5000); return; }
           setArmed(false); setBusy(true); setMsg(null);

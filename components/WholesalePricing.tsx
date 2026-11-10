@@ -1,4 +1,5 @@
 "use client";
+import MoneyField from "@/components/MoneyField";
 import { dtfGridOn } from "@/lib/dtfGrid";
 import DtfGridTable from "@/components/DtfGridTable";
 import { PUFF_PRICE, SUPPLIED_PRESS, PATCH_APPLY, uid, type Finishing, type PriceList } from "@/lib/pricing";
@@ -51,7 +52,7 @@ export default function WholesalePricing({ pl, upd }: { pl: PriceList; upd: (fn:
           <tbody>{pl.tiers.map((t, i) => (
             <tr key={"s" + i}>
               <td className="tier"><input type="number" min="1" aria-label={`Break ${i + 1}: from`} value={t} onChange={(e) => upd((d) => { d.tiers[i] = n(e.target.value); })} /></td>
-              {Array.from({ length: cols }, (_, j) => <td key={j}><input type="number" step="0.01" aria-label={`${t}+ pieces, ${j + 1} colors`} value={pl.screen[i]?.[j] ?? 0} onChange={(e) => upd((d) => { (d.screen[i] ||= [])[j] = n(e.target.value); })} /></td>)}
+              {Array.from({ length: cols }, (_, j) => <td key={j}><MoneyField aria-label={`${t}+ pieces, ${j + 1} colors`} value={pl.screen[i]?.[j] ?? 0} onChange={(e) => upd((d) => { (d.screen[i] ||= [])[j] = n(e.target.value); })} /></td>)}
             </tr>
           ))}</tbody>
         </table></div>

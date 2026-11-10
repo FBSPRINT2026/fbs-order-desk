@@ -1,4 +1,5 @@
 "use client";
+import MoneyField from "@/components/MoneyField";
 import { garmentFor } from "@/lib/garmentMatch";
 import NoCharge from "@/components/NoCharge";
 import { useRole } from "@/components/RoleContext";
@@ -1103,7 +1104,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                         onUp={(s, v) => update((x) => { const ln = x.lines[li]; const m = { ...(ln.sizeUpSet || {}) }; if (v == null) delete m[s as Size]; else m[s as Size] = v; ln.sizeUpSet = Object.keys(m).length ? m : undefined; })} />
                     )}
                   </div>
-                  {!gc.wholesale && !hidePrices && <div className="a-cs"><input type="number" step="0.01" min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
+                  {!gc.wholesale && !hidePrices && <div className="a-cs"><MoneyField min="0" tabIndex={-1} className="pre" title="Click to change" aria-label="Blank cost" placeholder="0.00" value={l.cost} onChange={(e) => update((x) => { x.lines[li].cost = numOr(e.target.value); })} /></div>}
                   <div className="a-qt c">
                     {/* Qty is the sum of the sizes. With no sizes entered, typing here makes it a one-size item (hats, koozies). */}
                     <input type="number" min="0" step="1" inputMode="numeric" tabIndex={l.oneSize ? 0 : -1} className={"pre qty" + (sized ? " locked" : "")} readOnly={sized}
@@ -1116,7 +1117,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   {/* no price for them yet: one short line on the row, the reason on hover (Nov 2, Nick: "the pricing looks weird") */}
                   {hidePrices && <div className="a-ea r a-quote" title="FBS prices your order and sends you a quote to approve"><span className="aq-in"><span className="aq-ph">Price TBD</span></span></div>}
                   {!hidePrices && <>
-                  <div className="a-ea r"><input type="number" step="0.01" min="0" tabIndex={-1} title={l.prog ? `${l.prog.note}. Type a price to override it.` : "Click to override"} aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "") + (l.prog ? " prg" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })}
+                  <div className="a-ea r"><MoneyField min="0" tabIndex={-1} title={l.prog ? `${l.prog.note}. Type a price to override it.` : "Click to override"} aria-label="Price each" className={"pre" + (lc?.hasOv ? " ov" : "") + (l.prog ? " prg" : "")} placeholder={lc ? lc.calcEach.toFixed(2) : ""} value={l.priceOverride ?? ""} onChange={(e) => update((x) => { x.lines[li].priceOverride = e.target.value === "" ? null : +e.target.value; })}
                     onBlur={(e) => { const v = e.target.value === "" ? null : +e.target.value; if (v != null && !isNaN(v) && g.lines.length > 1 && g.lines.some((y, yi) => yi !== li && y.priceOverride !== v)) setAskAll({ li, v }); }}
                     onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></div>
                   <div className="a-to r num"><b>{money(lc?.sub)}</b></div>

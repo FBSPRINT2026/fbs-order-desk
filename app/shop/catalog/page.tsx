@@ -1,4 +1,5 @@
 "use client";
+import MoneyField from "@/components/MoneyField";
 import { bySupplierStyle, garmentSupName, inCatalogHit, lookupQuery } from "@/lib/garmentSup";
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { useEffect, useMemo, useState } from "react";
@@ -174,7 +175,7 @@ export default function CatalogPage() {
               <td><input type="text" placeholder="Heavy Cotton Tee" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} aria-label="New description" /></td>
               <td><input type="text" placeholder="Black | White | Navy" value={draft.colors} onChange={(e) => setDraft({ ...draft, colors: e.target.value })} aria-label="New colors" /></td>
               <td><input type="text" placeholder="S-5XL or OS" value={draft.sizes} onChange={(e) => setDraft({ ...draft, sizes: e.target.value })} style={{ width: 110 }} aria-label="New sizes" /></td>
-              <td className="r"><input type="number" step="0.01" placeholder="0.00" value={draft.cost} onChange={(e) => setDraft({ ...draft, cost: e.target.value })} style={{ width: 90 }} aria-label="New cost" /></td>
+              <td className="r"><MoneyField placeholder="0.00" value={draft.cost} onChange={(e) => setDraft({ ...draft, cost: e.target.value })} style={{ width: 90 }} aria-label="New cost" /></td>
               <td><button className="btn primary sm" type="button" onClick={add}>Add</button></td>
             </tr>
             {list.map((g) => editing === g.id ? (
@@ -184,7 +185,7 @@ export default function CatalogPage() {
                 <td><input type="text" value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} aria-label="Description" /></td>
                 <td><input type="text" value={edit.colors} onChange={(e) => setEdit({ ...edit, colors: e.target.value })} aria-label="Colors" /></td>
                 <td><input type="text" value={edit.sizes} onChange={(e) => setEdit({ ...edit, sizes: e.target.value })} style={{ width: 110 }} aria-label="Sizes" /></td>
-                <td className="r"><input type="number" step="0.01" value={edit.cost} onChange={(e) => setEdit({ ...edit, cost: e.target.value })} style={{ width: 90 }} aria-label="Cost" /></td>
+                <td className="r"><MoneyField value={edit.cost} onChange={(e) => setEdit({ ...edit, cost: e.target.value })} style={{ width: 90 }} aria-label="Cost" /></td>
                 <td className="row" style={{ flexWrap: "nowrap" }}><button className="btn primary sm" type="button" onClick={() => saveEdit(g.id)}>Save</button><button className="btn ghost sm" type="button" onClick={() => setEditing(null)}>Cancel</button></td>
               </tr>
             ) : (

@@ -1,4 +1,5 @@
 "use client";
+import MoneyField from "@/components/MoneyField";
 import { useEffect, useRef, useState } from "react";
 import { money } from "@/lib/format";
 import { estimateBoxes, type Rate } from "@/lib/shipping";
@@ -119,7 +120,7 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
           <div className="sqp-what">
             {nBoxes} {box.name.toLowerCase()} box{nBoxes === 1 ? "" : "es"} · <b>{perBox} lb</b>{nBoxes > 1 ? " each" : ""} · to {zip}
             {!editW ? <button type="button" className="linkbtn" onClick={() => setEditW(true)} title={`${pieces} pieces × ${per} lb${known && !each ? " (S&S weights)" : " (estimate)"} + 1 lb a box`}>{known && !each ? "S&S weight" : "est. weight"}</button>
-              : <span className="sqp-w"><input type="number" step="0.01" min="0.05" aria-label="Pounds per piece" placeholder={String(per)} value={each} autoFocus onChange={(e) => setEach(e.target.value)} onBlur={() => setEditW(false)} /> lb a piece</span>}
+              : <span className="sqp-w"><MoneyField min="0.05" aria-label="Pounds per piece" placeholder={String(per)} value={each} autoFocus onChange={(e) => setEach(e.target.value)} onBlur={() => setEditW(false)} /> lb a piece</span>}
           </div>
           {(need || ship0) && <div className="sqp-when">Ships {dd(ships)}{need ? <> · in hands <b>{dd(need)}</b></> : null}</div>}
           {err && <div className="pv-err">{err}</div>}
@@ -151,7 +152,7 @@ export default function ShipQuote({ pieces, garments, shipTo, settings, shipMeth
           {current && !tbd && (
             <label className={"sqp-inv" + (opts.some((o) => onInvoice(o.r)) ? "" : " custom")}>
               <span>On the invoice{opts.some((o) => onInvoice(o.r)) ? "" : <small> (your price)</small>}</span>
-              <span className="sqp-amt">$<input type="number" step="0.01" min="0" aria-label="Shipping charge on the invoice" key={current.amount} defaultValue={current.amount.toFixed(2)}
+              <span className="sqp-amt">$<MoneyField min="0" aria-label="Shipping charge on the invoice" key={current.amount} defaultValue={current.amount.toFixed(2)}
                 onBlur={(e) => { const v = Math.max(0, Math.round((+e.target.value || 0) * 100) / 100); if (Math.abs(v - current.amount) >= 0.005) onSet(v); }}
                 onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} /></span>
             </label>

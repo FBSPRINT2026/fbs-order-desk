@@ -1,4 +1,5 @@
 "use client";
+import MoneyField from "@/components/MoneyField";
 import { useEffect, useRef, useState } from "react";
 import { money } from "@/lib/format";
 import { uid, type Finishing } from "@/lib/pricing";
@@ -80,7 +81,7 @@ export default function FinishingPicker({ list, custom, isOn, onToggle, onAddCus
             <div className="fin-h">Custom for this order</div>
             <div className="fin-new">
               <input type="text" placeholder="Label, e.g. Suffocation bags" aria-label="Finishing label" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void add(); }} />
-              <span className="fin-price">$<input type="number" step="0.01" min="0" placeholder="0.05" aria-label="Price per piece" value={price} onChange={(e) => setPrice(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void add(); }} /><small>/pc</small></span>
+              <span className="fin-price">$<MoneyField min="0" placeholder="0.05" aria-label="Price per piece" value={price} onChange={(e) => setPrice(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void add(); }} /><small>/pc</small></span>
             </div>
             {onSave && <label className="check" style={{ fontSize: 12.5 }}><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Save to my sometimes-used list</label>}
             <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
