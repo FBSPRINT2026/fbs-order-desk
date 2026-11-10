@@ -272,6 +272,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
     nickname: (flag + (d.nickname || "").replace(/^🚩\s*/u, "")).slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
     ...(d.firm && d.due_date ? { firm: true } : {}),
+    // RUSH in their job name or subject ticks Rush, so it isn't lost when the name is tidied (Nov 10: "RUSH AMS 43244
+    // HOUSTON" became "AMS Houston")
+    ...(/\brush\b/i.test(`${d.nickname || ""} ${a?.subject || ""}`) ? { rush: true } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
     delivery_method: tDelivery || (["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup"), ship_to: addressBlock(d.ship_to || "").slice(0, 500),
     // a customer who ships on their own carrier account (customers.ship_on): the order ships on it, $0 shipping, the same

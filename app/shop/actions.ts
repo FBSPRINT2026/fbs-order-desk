@@ -247,7 +247,11 @@ export async function simpleOrderActivity(orderId: string): Promise<{ ok: true; 
       o.po_number ? `Their PO #: ${o.po_number}` : "",
       s.qty ? `How many pieces: ${s.qty}` : "",
       s.garments ? `The garments (what they know): ${s.garments}` : "",
-      `How they'll get it: ${o.delivery_method === "ship" ? `ship to ${o.ship_to}` : o.delivery_method === "deliver" ? `local delivery to ${o.ship_to}` : "they'll pick it up"}`,
+      // the form's Pickup is its default, so it never hides the address on their paperwork (Nov 10, Nick: 18 All My Sons
+      // orders came in as "Pickup" and were made with no ship-to, though every PO had one): the PO's Ship To wins
+      o.delivery_method === "ship" && (o.ship_to || "").trim() ? `How they'll get it: ship to ${o.ship_to}`
+        : o.delivery_method === "deliver" && (o.ship_to || "").trim() ? `How they'll get it: local delivery to ${o.ship_to}`
+        : `How they'll get it: the form says pickup (its default). If their PO or another file has a Ship To address, it ships there: put that address in ship_to, the whole block (name, ATTN, street, city). A Ship To that says pick up / P/U means pickup.`,
       atts.length ? `Their files: ${atts.map((f) => `${f.name} (${kindOf.get(f.path)})`).join("; ")}` : "",
       sizeSet.has("message") ? `The sizes and quantities are in their message above${sizeSet.size > 1 ? " (with the files marked HAS THE SIZES)" : ", not in a file"}.` : "",
       s.helper_note ? `Staff say: ${s.helper_note}` : "",
