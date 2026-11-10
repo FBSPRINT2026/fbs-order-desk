@@ -58,7 +58,16 @@ export default function HoldSpotTool({ order, customer }: { order: { id: string;
 
   return (
     <>
-      {held ? <span className="hst-held" title="This quote holds time on the production schedule">📅 Held: {machines[held.machine] || "Press"} {held.day ? day(held.day) : ""}{held.details_due ? ` · details due ${day(held.details_due)}` : ""} · <Link href="/shop/board">Change</Link> · <button type="button" className="linkbtn" onClick={() => void letGo()}>Let it go</button></span>
+      {/* one small button in the order's header; the press, the details date, Change and Let it go open under it (Nov 10, Nick:
+          "the held function messes up the top": the long line squeezed the title and pushed the buttons onto two rows) */}
+      {held ? <details className="hst-held" onBlur={(e) => { const d = e.currentTarget; setTimeout(() => { if (!d.contains(document.activeElement)) d.open = false; }, 0); }}>
+          <summary className="btn" title="This quote holds time on the production schedule">📅 Held{held.day ? ` · ${day(held.day)}` : ""}</summary>
+          <div className="hst-menu">
+            <div><b>{machines[held.machine] || "Press"}</b>{held.day ? ` · ${day(held.day)}` : ""}</div>
+            {held.details_due ? <div className="faint">Details due {day(held.details_due)}</div> : null}
+            <div className="hst-acts"><Link className="btn sm" href="/shop/board">Change</Link><button type="button" className="btn sm" onClick={() => void letGo()}>Let it go</button></div>
+          </div>
+        </details>
         : <button type="button" className="btn hst-btn" onClick={() => { setOpen(true); setErr(""); setMsg(""); }} title="Save time on the production schedule before the details are firm">📅 Hold the spot</button>}
       {msg && !open && <span className="hst-msg faint">{msg}</span>}
       {open && (

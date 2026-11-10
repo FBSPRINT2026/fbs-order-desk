@@ -51,3 +51,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 2:01pm · 1.3.252 · Nick · Job Center: customers' own mockups with no order are off the board (they show once the customer sends an order); the 'Art only, no order' filter is gone
 - Nov 10 2:07pm · 1.3.253 · Nick · Customer requests: Finalize & send for approval opens the one Send (proof + quote together), so a request's mockup goes with its quote and the job moves to Sent in one place
 - Nov 10 2:08pm · 1.3.254 · Nick · Job Center: coming back shows the board at once from a 30-second server copy instead of recounting; refreshes itself once a minute; changes made on the board still refresh right away
+- Nov 10 2:10pm · 1.3.255 · Nick · Order header: a held spot is one small '📅 Held · Tue 11/10' button; the press, details date, Change and Let it go open under it, so the title and buttons keep their room
