@@ -19,7 +19,6 @@ import JobFiles from "@/components/job/JobFiles";
 import JobTalk, { OriginalJobTalk } from "@/components/JobTalk";
 import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
-import { PrintavoChanges, PrintavoLink } from "@/components/SendToPrintavo";
 import HoldSpotTool from "@/components/tools/HoldSpotTool";
 import { SITE_URL } from "@/lib/config";
 import { type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -2195,14 +2194,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               right under Totals; then Customer supplied goods, then Printavo (Nick, Oct 21) */}
           {/* Goods, right under Totals (Oct 29, Nick): who ordered them, from where, the PO, arrival, tracking */}
           {/* Customer supplied goods: now inside the Goods panel above (Oct 29, Nick: "merge those together") */}
-          {/* Printavo: at the very bottom (Oct 21, Nick: "the Printavo sync will go away shortly… move it to the very bottom") */}
-          {(o as Order & { printavo_id?: string | null }).printavo_id && <section className="panel pv-panel">
-            <div className="panel-h"><h2>Printavo</h2></div>
-            <div className="panel-b">
-      {(() => { const x = o as Order & { printavo_id?: string | null; printavo_visual_id?: string | null; printavo_state?: { url?: string; publicUrl?: string; status?: string } | null }; return x.printavo_id ? <PrintavoLink visualId={x.printavo_visual_id || ""} url={x.printavo_state?.url} publicUrl={x.printavo_state?.publicUrl} status={x.printavo_state?.status} number={o.number} orderId={o.id} onRenumbered={(v) => setO((y) => (y ? ({ ...y, printavo_visual_id: v } as Order) : y))} /> : null; })()}
-      {(o as Order & { printavo_id?: string | null }).printavo_id && o.number >= 40000 && o.number < 50000 && calc && <PrintavoChanges o={o} calc={calc} patch={patch} prodNote={prodNotes} onProdNote={onProdNotes} />}
-            </div>
-          </section>}
+          {/* Printavo panel removed (Nov 10, Nick: "remove the printavo tab on the invoices… we're not syncing back with Printavo") */}
           {/* Order check (ChecksPanel in OrderAssist): off for now; it joins Shop steps later (Oct 21, Nick). checks/status are still worked out for it */}
           </aside>
         </div>

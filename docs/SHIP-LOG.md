@@ -42,3 +42,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 1:13pm · 1.3.243 · Nick · Job Center: a job leaves Goods to order once the garments are ordered, whether through Order goods or added by hand on the order's Goods tab (#40460)
 - Nov 10 1:20pm · 1.3.244 · Nick · Order page: Edit mockup shows on every group again (it was hidden on groups with no screen prints, like all-embroidery hats); hidden only when every print is from the customer's own separations (#40466)
 - Nov 10 1:31pm · 1.3.245 · Nick · Hats and bags from S&S whose sizes are Adjustable / M/L / OSFM come in as one size (one Qty box, not XS–5XL); thread search in the Mockup Creator and every thread box finds Isacord as well as Madeira (type a number, a name, or 'isacord …')
+- Nov 10 1:33pm · 1.3.246 · Nick · Order page: the Printavo panel is gone (no more syncing back to Printavo)
