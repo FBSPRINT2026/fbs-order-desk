@@ -4037,6 +4037,10 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const inksOnOrder = useMemo(() => orderInks(order?.groups || [], imprints.map((im) => { const pt = paints[im.id]; return { where: im.location || "Print", method: pt?.method === "embroidery" ? "embroidery" : im.method, inks: pt && pt.design === im.design_id ? Object.values(pt.map) : [] }; }), groupId), [order, imprints, paints, groupId]);
   return (
     <BrandCtx.Provider value={brand}><OrderInkCtx.Provider value={inksOnOrder}>
+      {/* the suggestion lists the color and thread change boxes type from: always on the page (Nov 10, Amanda: they lived
+          inside the Helper panel, so with Helper hidden the boxes had no list and the browser offered old typed inks) */}
+      <datalist id="mk-ink-names">{inkChoices({ pms: true }).map((n) => <option key={n} value={n} />)}</datalist>
+      <datalist id="mk-thread-names">{threadChoices().map((n) => <option key={n} value={n} />)}</datalist>
       {pasteAsk && (() => { const groups = (["front", "back", "sleeve"] as Side[]).map((sd) => ({ sd, locs: locsFor(sd) })).filter((g) => g.locs.length); return (
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="pa-t" onClick={() => setPasteAsk(null)} onKeyDown={(e) => { if (e.key === "Escape") setPasteAsk(null); }}>
           <div className="mk-modal mkpa" onClick={(e) => e.stopPropagation()}>
@@ -5012,7 +5016,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                                 {names.map((nm) => (
                                   <div key={nm} className="mk-cchg-r">
                                     <i style={{ background: colorHex(nm) || "#ccc" }} /><span>{nm}</span><span aria-hidden>→</span>
-                                    <input type="text" list={im.method === "embroidery" ? "mk-thread-names" : "mk-ink-names"} aria-label={`${nm} on the ${line.color}`} placeholder={im.method === "embroidery" ? "the thread on this color" : "the ink on this color"} value={cur[nm] || ""} onChange={(e) => put({ ...cur, [nm]: e.target.value })} />
+                                    <input type="text" autoComplete="off" list={im.method === "embroidery" ? "mk-thread-names" : "mk-ink-names"} aria-label={`${nm} on the ${line.color}`} placeholder={im.method === "embroidery" ? "the thread on this color" : "the ink on this color"} value={cur[nm] || ""} onChange={(e) => put({ ...cur, [nm]: e.target.value })} />
                                     {cur[nm] && colorHex(cur[nm]) ? <i style={{ background: colorHex(cur[nm])! }} /> : null}
                                   </div>
                                 ))}
@@ -5070,7 +5074,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                                 {baseInks.map((nm) => (
                                   <div key={nm} className="mk-cchg-r">
                                     <i style={{ background: colorHex(nm) || "#ccc" }} /><span>{nm}</span><span aria-hidden>→</span>
-                                    <input type="text" list="mk-ink-names" aria-label={`${nm} here`} placeholder="not printed here" value={cur.inks[nm] ?? ""} onChange={(e) => put({ ...cur, inks: { ...cur.inks, [nm]: e.target.value } })} />
+                                    <input type="text" autoComplete="off" list="mk-ink-names" aria-label={`${nm} here`} placeholder="not printed here" value={cur.inks[nm] ?? ""} onChange={(e) => put({ ...cur, inks: { ...cur.inks, [nm]: e.target.value } })} />
                                     {cur.inks[nm] && colorHex(cur.inks[nm]) ? <i style={{ background: colorHex(cur.inks[nm])! }} /> : null}
                                   </div>
                                 ))}
@@ -5193,9 +5197,6 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <button type="button" className="btn sm" title="Copy the art in Illustrator first (with Copy As: SVG Code on), or press Ctrl+V on this page" onClick={() => void pasteBtn()}>Paste from Illustrator</button>
                   <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drag a PDF, AI or picture here (from your email, ClickUp or anywhere), or copy art in Illustrator and paste it"}</span>
                 </>}
-                <datalist id="mk-ink-names">{inkChoices({ pms: true }).map((n) => <option key={n} value={n} />)}</datalist>
-                {/* an embroidery print's thread change suggests threads, never inks (Nov 10, Amanda) */}
-                <datalist id="mk-thread-names">{threadChoices().map((n) => <option key={n} value={n} />)}</datalist>
                 <input ref={helpIn} type="file" accept={portal ? ".pdf,.ai,application/pdf,application/postscript,application/illustrator" : ".pdf,.ai,.jpg,.jpeg,.png,.webp,application/pdf,application/postscript,application/illustrator,image/jpeg,image/png,image/webp"} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
                 {helper && <>
                   <div className="mk-help-f"><b>{helper.name}</b>{!helper.busy && <button type="button" className="lc-link" onClick={() => { helper.rows.forEach((r) => URL.revokeObjectURL(r.url)); setHelper(null); }}>Start over</button>}</div>

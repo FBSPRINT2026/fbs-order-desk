@@ -30,3 +30,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 10:05am · 1.3.231 · Nick · Printavo payments on old invoices show here within minutes: customers who owe on old invoices get their Printavo order list checked about every 15 minutes (read-only)
 - Nov 10 10:23am · 1.3.232 · Amanda · Embroidery Thread change suggests Madeira and Isacord threads, not inks (shared threadChoices list)
 - Nov 10 10:29am · 1.3.233 · Nick · Job photos on the phone: crop, rotate and pinch-zoom before saving (camera and photos picked from the library)
+- Nov 10 10:33am · 1.3.234 · Amanda · Mockup Creator: thread and ink suggestion lists always on the page (they only existed while the Helper panel was open), browser memory off on those boxes
