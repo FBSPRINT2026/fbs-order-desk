@@ -11839,7 +11839,7 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
 /* in the fitted order layout: "Ghost prints" where the style sits, the note in the sizes' middle, all on one line */
 html body .ord .line-b .gl-list .gl.glg{align-items:center}
 html body .ord .line-b .gl-list .gl.glg > .gl-row.gl-r2 > .glg-n{grid-column:st-start / co-end;grid-row:1;align-self:center}
-html body .ord .line-b .gl-list .gl.glg > .gl-row.gl-r2 > .glg-d{grid-area:sz;grid-row:1;align-self:center;justify-content:center}
+html body .ord .line-b .gl-list .gl.glg > .gl-row.gl-r2 > .glg-d{grid-area:sz;grid-row:1;align-self:center!important;margin:0!important;justify-content:center}
 html body .ord .line-b .gl-list .gl.glg > .gl-row.gl-r2 > :is(.a-qt,.a-ea,.a-to,.a-x){grid-row:1;align-self:center}
 .glg-x{border:0;background:none;color:var(--ink-3);font-size:18px;cursor:pointer;padding:0 4px}
 html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){white-space:nowrap}
