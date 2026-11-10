@@ -297,6 +297,8 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .pf-mk.sumd img{flex:1 1 0;min-height:0;max-height:none;width:100%;object-fit:contain}
 .pdoc .pf-art{height:7in;margin-top:12px}
 .pdoc .pf-art.pf-art-cc{height:5.9in}
+/* the art's drawing on a proof page: the whole panel, scaled from the top center by ArtFit when the panel is squeezed */
+.pdoc .pf-art .pf-art-in{position:absolute;inset:0;transform-origin:50% 0}
 .pdoc .pf-cc{margin-top:12px}
 .pdoc .pf-cc-row{display:flex;flex-wrap:wrap;gap:12px 36px;margin-top:6px}
 .pdoc .pf-cc-v{display:flex;gap:12px;align-items:flex-start;min-width:0}

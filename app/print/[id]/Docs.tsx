@@ -16,6 +16,7 @@ import { printSize } from "@/lib/groupLook";
 import { fmtPhone } from "@/lib/phone";
 import PaintedArt from "./PaintedArt";
 import WoFit from "./WoFit";
+import ArtFit from "./ArtFit";
 import InkFit from "./InkFit";
 import { inkShort, threadShort } from "@/lib/inkShort";
 import { isRelabel, setFor, type NeckLabelSet } from "@/lib/neckLabels";
@@ -669,6 +670,7 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
   const approved = o.approved_at ? `${o.approved_name || "Approved"}, ${new Date(o.approved_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" })}` : "";
   return (
     <>
+      <ArtFit />
       {groups.map((g, gi) => {
         const { mk, extra, idx } = plan[gi];
         const hex = p.hexes[gi] || "#9aa1ab";
@@ -762,12 +764,16 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   const hex = variant ? colorBg(o.groups[gi]?.lines || [], variant.color, p.colorHexes) || p.hexes[gi] || "#9aa1ab" : p.hexes[gi] || "#9aa1ab";
   // the art as big as the panel takes, with room left for its measurements drawn beside and under it (Oct 23, Nick: "the
   // measurements are spilling out over the red box")
-  const PW = 5.9, PH = 5.4;
-  const s = sz.w && sz.h ? Math.min(PW / sz.w, PH / sz.h) : sz.w ? PW / sz.w : 0;
-  const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH, top = 0.45;
   const inks = d.visualOnly ? [] : inkNames(d.inks).map((k) => swapInk(k, variant?.swap));
   // the color change's versions (A as printed, then each change) with the garments each goes on (lib/inkBy.ts)
   const ccVers = variant ? [] : changeVersions(d, o.groups[gi]?.lines || []).sort((a, b) => (a.colorway && b.colorway && des ? cwLetter(des, { name: a.colorway }).localeCompare(cwLetter(des, { name: b.colorway })) : 0)).map((v) => ({ ...v, hex: v.letter === "A" ? p.hexes[gi] || "#9aa1ab" : colorBg(o.groups[gi]?.lines || [], v.colors[0], p.colorHexes) || "#9aa1ab" }));
+  // the art fits the panel it's drawn in (Nov 10, Amanda, #40407: with a thread change the panel is shorter, 5.9" instead of
+  // 7", for the A / B versions under it, but the art was still sized for 7" and a tall logo ran off the bottom): its
+  // height leaves the top gap and the width measurement under it
+  const PANEL = ccVers.length > 1 ? 5.9 : 7, top = 0.45;
+  const PW = 5.9, PH = Math.min(5.4, PANEL - top - 0.45);
+  const s = sz.w && sz.h ? Math.min(PW / sz.w, PH / sz.h) : sz.w ? PW / sz.w : 0;
+  const aw = s ? sz.w * s : PW, ah = s && sz.h ? sz.h * s : PH;
   // the tile: the art fit in a 1" square
   const tileW = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.w) / sz.h) : 0.82, tileH = sz.w && sz.h ? Math.min(0.82, (0.82 * sz.h) / sz.w) : 0.82;
   // a visual-only mockup (a reorder production confirms on the print run): the picture, none of our guessed details
@@ -778,11 +784,14 @@ function ProofPrint({ d, di, n, p, gi, gname, foot, variant }: { d: Imprint; di:
   return (
     <section className="sheet pf">
       <div className="p2h"><div className="t disp">{(d.location || "Print")}</div><div className="r">{variant ? <><b className="doc-cctag">{changeWord(d.method).toUpperCase()} · {variant.color.toUpperCase()}</b> · </> : null}Print {di + 1} of {n}{gname ? ` · ${gname}` : ""} · #{o.number}</div></div>
-      <div className={"art pf-art" + (isDark(hex) ? " dark" : "") + (ccVers.length > 1 ? " pf-art-cc" : "")} style={{ background: hex }}>
+      <div className={"art pf-art" + (isDark(hex) ? " dark" : "") + (ccVers.length > 1 ? " pf-art-cc" : "")} style={{ background: hex }} data-need={(top + ah + 0.6).toFixed(2)}>
+        {/* the drawing, scaled down by ArtFit when the panel is squeezed shorter than it */}
+        <div className="pf-art-in">
         {max && s > 0 && max.w * s < 7.4 && <div className="area" style={{ top: `${top}in`, width: `${max.w * s}in`, height: `${max.h * s}in` }}><span>largest print area {max.w}&quot; × {max.h}&quot;</span></div>}
         {pic ? <ArtPic d={d} des={des} pic={pic} hires={des ? p.designFiles?.[des.id] : undefined} swap={variant?.swap} style={{ top: `${top}in`, width: `${aw}in`, height: `${ah}in` }} /> : <div className="none">Art coming</div>}
         {pic && sz.w > 0 && <div className="dimw" style={{ top: `${top + ah + 0.06}in`, width: `${aw}in` }}>{sz.w.toFixed(2)}&quot;</div>}
         {pic && sz.h > 0 && <div className="dimh" style={{ top: `${top}in`, height: `${ah}in`, left: `calc(50% + ${aw / 2 + 0.14}in)` }}>{sz.h.toFixed(2)}&quot;</div>}
+        </div>
       </div>
       <div className="specs pf-specs">{specs.map(([k, v]) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v">{v}</div></div>)}</div>
       {inks.length > 0 && (
