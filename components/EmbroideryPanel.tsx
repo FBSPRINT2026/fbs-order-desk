@@ -127,7 +127,9 @@ function ThreadColors({ rows, line, stock, onPick, onHover }: { rows: Row[]; lin
       {rows.map((r) => {
         const k = r.hexes.join(), cur = r.cur, t = cur && cur.name !== "none" ? threadByName(cur.name) : null;
         const near = closestThreads(r.hexes[0], { line, n: 5, stock });
-        const found = open === k && q.trim() ? findThreads(q, line, 20) : [];
+        // a search looks through every thread we sew with (Madeira and Isacord), not only this print's usual line
+        // (Nov 10, Nick: "i cant select isacord thread from the mockup creator"); the closest matches stay in its line
+        const found = open === k && q.trim() ? findThreads(q, undefined, 24) : [];
         return (
           <div key={k} className={"emb-tr" + (open === k ? " on" : "")}>
             <button type="button" className="emb-tr-b" onClick={() => { setOpen(open === k ? null : k); setQ(""); }} aria-expanded={open === k}>
@@ -148,11 +150,11 @@ function ThreadColors({ rows, line, stock, onPick, onHover }: { rows: Row[]; lin
                 ))}
                 <input className="emb-q" placeholder="Find a thread: number, name or PMS" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a thread" autoFocus />
                 {found.map((x) => (
-                  <button key={x.code} type="button" className="emb-opt" onMouseEnter={() => onHover(r.hexes, { name: threadLabel(x), hex: x.hex })} onMouseLeave={() => onHover(r.hexes, null)} onClick={() => pickT(r, x)}>
-                    <span className="sw" style={{ background: x.hex }} /><span className="emb-opt-t"><b>{x.code}</b> {x.name}{x.pms.length ? <span className="faint"> · PMS {x.pms[0].replace(/^PMS\s*/i, "")}</span> : null}</span>{stock.has(stockKey(x.line, x.code)) && <span className="emb-stk">standard</span>}
+                  <button key={x.line + x.code} type="button" className="emb-opt" onMouseEnter={() => onHover(r.hexes, { name: threadLabel(x), hex: x.hex })} onMouseLeave={() => onHover(r.hexes, null)} onClick={() => pickT(r, x)}>
+                    <span className="sw" style={{ background: x.hex }} /><span className="emb-opt-t">{x.line !== line ? <span className="faint">{x.line === "Isacord 40" ? "Isacord" : "Madeira Rayon"} </span> : null}<b>{x.code}</b> {x.name}{x.pms.length ? <span className="faint"> · PMS {x.pms[0].replace(/^PMS\s*/i, "")}</span> : null}</span>{stock.has(stockKey(x.line, x.code)) && <span className="emb-stk">standard</span>}
                   </button>
                 ))}
-                {q.trim() && !found.length && <p className="faint emb-none">No {lineName(line)} thread matches “{q}”.</p>}
+                {q.trim() && !found.length && <p className="faint emb-none">No thread matches “{q}”.</p>}
                 <button type="button" className="emb-opt emb-skip" onClick={() => pickT(r, null)}>Not sewn: the shirt shows through</button>
               </div>
             )}

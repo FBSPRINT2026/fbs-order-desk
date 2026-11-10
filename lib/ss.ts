@@ -1,5 +1,5 @@
 import "server-only";
-import { SIZES, waistOf } from "@/lib/pricing";
+import { SIZES, ONE_SIZE, waistOf } from "@/lib/pricing";
 import { fabricLines } from "@/lib/fabric";
 import { parseInches, type GarmentSpecs } from "@/lib/garmentBody";
 
@@ -26,10 +26,14 @@ type SSProduct = { colorName: string; sizeName: string; sizeOrder: string; custo
 // S&S size names -> our size codes
 const SIZE_MAP: Record<string, string> = {
   XS: "XS", S: "S", M: "M", L: "L", XL: "XL", "2XL": "2XL", XXL: "2XL", "3XL": "3XL", XXXL: "3XL", "4XL": "4XL", "5XL": "5XL",
-  YXS: "YXS", YS: "YS", YM: "YM", YL: "YL", YXL: "YXL", "OSFA": "OS", "OS": "OS", "ONE SIZE": "OS", "ADJ": "OS",
+  YXS: "YXS", YS: "YS", YM: "YM", YL: "YL", YXL: "YXL", "OSFA": "OS", "OS": "OS", "ONE SIZE": "OS", "ADJ": "OS", "ADJUSTABLE": "OS", "OSFM": "OS", "ONE SIZE FITS MOST": "OS", "ONE SIZE FITS ALL": "OS",
   NB: "NB", "0-3M": "NB", "3-6M": "6M", "6M": "6M", "06M": "6M", "6-12M": "12M", "12M": "12M", "12-18M": "18M", "18M": "18M", "18-24M": "24M", "24M": "24M",
   "2T": "2T", "3T": "3T", "4T": "4T", "5T": "5T", "5/6": "5T", "5/6T": "5T",
 };
+
+/** headwear, bags and other accessories: not sized like clothes, so sizes we don't know ("Adjustable", "M/L") mean one size
+ *  (clothes with sizes we don't know, an infant run, stay as they are and get flagged rather than lumped into one Qty) */
+const notSized = (st: { title?: string; baseCategory?: string; styleName?: string }) => /head ?wear|\bcaps?\b|\bhats?\b|beanie|visor|snapback|trucker|\bbags?\b|tote|backpack|accessor|towel|blanket|apron|koozie/i.test(`${st.baseCategory || ""} ${st.title || ""}`);
 
 /** S&S's size name as ours: letters by the map, a waist (30, 32x30) as its waist (lib/pricing.ts waistOf) */
 const ssSize = (raw: string | null | undefined): string | undefined => { const k = (raw || "").toUpperCase().trim(); return SIZE_MAP[k] || waistOf(k) || undefined; };
@@ -154,9 +158,12 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
   // youth styles label sizes XS-XL; ours are YXS-YXL
   const youth = /youth|toddler|kids|infant/i.test(`${st.title} ${st.baseCategory}`);
   const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
+  // a style none of whose sizes are garment sizes we use (hats: "Adjustable", "M/L", "S/M"; bags) is one size: its
+  // pieces are counted in one Qty box (Nov 10, Nick, #40466: a Richardson 112PL and a Flexfit 110M showed XS–5XL boxes)
+  const oneSize = prods.length > 0 && notSized(st) && prods.every((p) => !ssSize(p.sizeName));
+  const sizeOf = (p: SSProduct) => { if (oneSize) return ONE_SIZE; const raw = ssSize(p.sizeName); return youth && raw && YOUTH[raw] ? YOUTH[raw] : raw; };
   for (const p of prods) {
-    const raw = ssSize(p.sizeName);
-    const z = youth && raw && YOUTH[raw] ? YOUTH[raw] : raw;
+    const z = sizeOf(p);
     if (!z) continue;
     const price = +(p.customerPrice || p.piecePrice || 0);
     const e = bySize.get(z) || { order: p.sizeOrder, prices: [], lbs: [] };
@@ -167,8 +174,7 @@ export async function ssLookup(q: string, styleID?: number): Promise<SSGarment |
   // each color's own price by size (colors can cost more than the style's usual price)
   const color_size_costs: Record<string, Record<string, number>> = {};
   for (const p of prods) {
-    const raw = ssSize(p.sizeName);
-    const z = youth && raw && YOUTH[raw] ? YOUTH[raw] : raw;
+    const z = sizeOf(p);
     const v = +(p.customerPrice || p.piecePrice || 0);
     if (!z || !p.colorName || !(v > 0)) continue;
     (color_size_costs[p.colorName] ||= {})[z] = Math.round(v * 100) / 100;
@@ -217,10 +223,12 @@ export async function ssSkus(styleIdOrQuery: number | string): Promise<{ styleID
   const prods = await ssGet<(SSProduct & { sku: string; skuID_Master: number; warehouses?: { warehouseAbbr: string; qty: number }[] })[]>(`/products/?styleid=${st.styleID}&fields=sku,skuID_Master,colorName,sizeName,customerPrice,piecePrice,qty,warehouses`);
   const youth = /youth|toddler|kids|infant/i.test(`${st.title} ${st.baseCategory}`);
   const YOUTH: Record<string, string> = { XS: "YXS", S: "YS", M: "YM", L: "YL", XL: "YXL" };
+  // one size when none of its sizes are ours ("Adjustable", "M/L"), as in the style's sizes above
+  const oneSize = Array.isArray(prods) && prods.length > 0 && notSized(st) && prods.every((p) => !ssSize(p.sizeName));
   return {
     styleID: st.styleID, brand: st.brandName, style: st.styleName,
     skus: (Array.isArray(prods) ? prods : []).map((p) => {
-      const raw = ssSize(p.sizeName) || p.sizeName;
+      const raw = oneSize ? ONE_SIZE : ssSize(p.sizeName) || p.sizeName;
       return { sku: p.sku, skuID_Master: p.skuID_Master, colorName: p.colorName, sizeName: p.sizeName, size: youth && YOUTH[raw] ? YOUTH[raw] : raw, price: +(p.customerPrice || p.piecePrice || 0), qty: p.qty || 0, warehouses: (p.warehouses || []).map((w) => ({ warehouseAbbr: w.warehouseAbbr, qty: w.qty || 0 })) };
     }),
   };

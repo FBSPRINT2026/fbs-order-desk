@@ -192,8 +192,9 @@ export function ThreadSelect({ value, onChange, line = "Polyneon 40", suggest = 
   const groups = useMemo(() => {
     const out: { label: string; opts: { name: string; hex: string; sub?: string }[] }[] = [];
     const seen = new Set<string>();
-    const add = (label: string, list: Thread[]) => { const o = list.filter((t) => !seen.has(t.code)).map((t) => { seen.add(t.code); return { name: threadLabel(t), hex: t.hex, sub: t.pms.length ? `PMS ${t.pms[0].replace(/^PMS\s*/i, "")}` : undefined }; }); if (o.length) out.push({ label, opts: o }); };
-    if (q) add("", findThreads(q, line || undefined, 40));
+    const add = (label: string, list: Thread[]) => { const o = list.filter((t) => !seen.has(t.line + t.code)).map((t) => { seen.add(t.line + t.code); return { name: threadLabel(t), hex: t.hex, sub: t.pms.length ? `PMS ${t.pms[0].replace(/^PMS\s*/i, "")}` : undefined }; }); if (o.length) out.push({ label, opts: o }); };
+    // typing searches every thread we sew with, Madeira and Isacord (Nov 10, Nick: Isacord couldn't be picked)
+    if (q) add("", findThreads(q, undefined, 40));
     else {
       add("Their brand", suggest.map((n) => threadByName(n)).filter(Boolean) as Thread[]);
       add("White and black", [threadByName(`${line === "Isacord 40" ? "Isacord 0015" : "Madeira 1801"}`), threadByName(`${line === "Isacord 40" ? "Isacord 0020" : "Madeira 1800"}`)].filter(Boolean) as Thread[]);

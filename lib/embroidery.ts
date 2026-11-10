@@ -100,8 +100,11 @@ export function closestThread(hex: string, o: { line?: Thread["line"]; stock?: S
 
 /** a thread found by what's typed: its number, name or PMS ("1843", "purple", "2745") */
 export function findThreads(q: string, line?: Thread["line"], n = 30): Thread[] {
-  const t = q.trim().toLowerCase().replace(/^(pms|pantone)\s*/, "");
-  if (!t) return [];
+  let t = q.trim().toLowerCase().replace(/^(pms|pantone)\s*/, "");
+  // the maker typed first ("isacord 0015", "madeira white", just "isacord") narrows to that maker's threads
+  const mk = /^(isacord|madeira(?:\s+rayon)?)\b\s*/.exec(t);
+  if (mk && !line) { line = /isacord/.test(mk[1]) ? "Isacord 40" : /rayon/.test(mk[1]) ? "Classic Rayon 40" : undefined; t = t.slice(mk[0].length); if (!line && /^madeira$/.test(mk[1])) return threads().filter((x) => x.line !== "Isacord 40" && (!t || x.code.startsWith(t) || x.name.toLowerCase().includes(t))).slice(0, n); }
+  if (!t) return line ? threads().filter((x) => x.line === line).slice(0, n) : [];
   return threads().filter((x) => (!line || x.line === line) && (x.code.startsWith(t) || x.name.toLowerCase().includes(t) || x.pms.some((p) => p.toLowerCase().replace(/\s+/g, " ").includes(t)))).slice(0, n);
 }
 
