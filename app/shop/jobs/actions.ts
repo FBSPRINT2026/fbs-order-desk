@@ -22,12 +22,24 @@ async function me() {
 }
 const fail = (e: unknown) => ({ ok: false as const, error: e instanceof Error ? e.message : "Something went wrong." });
 
-export async function loadJobs() {
+// the board as last worked out, kept 30 seconds on this server so coming back to the Job Center (or a second person
+// opening it) doesn't redo the 3-second count (Nov 10, Nick: "it doesn't need to pull it every second"); a change made
+// on the board itself asks for a fresh one
+let boardMemo: { at: number; items: Awaited<ReturnType<typeof loadJobCenter>>; job?: Promise<Awaited<ReturnType<typeof loadJobCenter>>> } | null = null;
+const BOARD_TTL = 30_000;
+
+export async function loadJobs(fresh = false) {
   try {
     const t0 = Date.now();
     const { admin, who } = await me();
     const t1 = Date.now();
-    const items = await loadJobCenter(admin);
+    let items: Awaited<ReturnType<typeof loadJobCenter>>;
+    if (!fresh && boardMemo && Date.now() - boardMemo.at < BOARD_TTL) items = boardMemo.items;
+    else {
+      const job = loadJobCenter(admin);
+      items = await job;
+      boardMemo = { at: Date.now(), items };
+    }
     console.log(`[jc-time] me ${t1 - t0}ms, board ${Date.now() - t1}ms, ${items.length} items`);
     return { ok: true as const, items, me: who, hasAccounts: !!who && items.some((x) => x.owner === who) };
   } catch (e) { return fail(e); }

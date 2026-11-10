@@ -140,11 +140,17 @@ export default function JobCenter() {
     get(); const t = setInterval(get, 30_000);
     return () => { live = false; clearInterval(t); };
   }, [cn]);
+  // coming back shows the last board at once and refreshes it behind; a change made here (n > 0) asks for a fresh count;
+  // while it's open it refreshes once a minute (Nov 10, Nick: "it could pull it every minute… leave what was there painted")
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => { if (document.visibilityState === "visible") setTick((x) => x + 1); }, 60_000); return () => clearInterval(t); }, []);
+  const lastN = useRef(0);
   useEffect(() => {
     let live = true;
-    void loadJobs().then((r) => { if (!live) return; if (!r.ok) { setErr(r.error); return; } setItems(r.items.filter((x) => x.type !== "lead")); setMe(r.me); setHasAcc(r.hasAccounts); jcKeep({ me: r.me, hasAcc: r.hasAccounts }); });
+    const fresh = n !== lastN.current; lastN.current = n;
+    void loadJobs(fresh).then((r) => { if (!live) return; if (!r.ok) { setErr(r.error); return; } setItems(r.items.filter((x) => x.type !== "lead")); setMe(r.me); setHasAcc(r.hasAccounts); jcKeep({ me: r.me, hasAcc: r.hasAccounts }); });
     return () => { live = false; };
-  }, [n]);
+  }, [n, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // a link to one request opens the list it's in (a website inquiry is under Website leads)
   useEffect(() => { if (!reqPick || !items) return; const it = items.find((x) => x.orderId === reqPick); const st = it?.steps.find(isReq); if (st && st !== step) setStep(st); }, [reqPick, items]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -368,7 +374,7 @@ export default function JobCenter() {
               <div className="jmb-focus" style={{ ["--mc" as string]: focusJob ? colorOfChat(curChat) : "var(--ink-3)" }}>
                 <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} onArchived={() => { setChat(null); setCn((x) => x + 1); }} />
               </div>
-              {isRq && focusJob?.orderId ? <RequestsDesk q="" only={focusJob.orderId} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} />
+              {isRq && focusJob?.orderId ? <RequestsDesk q="" only={focusJob.orderId} onChanged={() => void loadJobs(true).then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} />
                 : focusJob ? <div className="tbl-wrap"><table className="tbl jc" data-nofit>
                   <thead><tr><th>Job</th><th>Dept</th><th>{fst === "approved" ? "Where it is" : "Needs"}</th><th>Also</th><th>Due</th></tr></thead>
                   <tbody><Row it={focusJob} step={fst || step} msgs={unreadOf(focusJob.orderId)} on={pick === focusJob.key} onPick={() => setPick(pick === focusJob.key ? null : focusJob.key)} after={after} onLead={() => setLead(focusJob)} /></tbody>
