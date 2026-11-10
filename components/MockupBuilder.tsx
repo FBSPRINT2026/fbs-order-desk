@@ -63,7 +63,7 @@ import { maskBehindHood, snapToEdge } from "@/lib/hoodSnap";
 import { FULL_WHY, isFullColorWhy } from "@/lib/fullColor";
 import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorChangeWant, colorHex, deltaE, detectColors, paintPrint, recolorTrim, suggestInk, inkChoices } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
-import { closestThread, isThreadName, threadByName, threadLabel } from "@/lib/embroidery";
+import { closestThread, isThreadName, threadByName, threadChoices, threadLabel } from "@/lib/embroidery";
 import { needleThreads } from "@/lib/needleThreads";
 import { loadThreadStock } from "@/lib/threadStock";
 import { stitchLook } from "@/lib/stitchLook";
@@ -5012,7 +5012,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                                 {names.map((nm) => (
                                   <div key={nm} className="mk-cchg-r">
                                     <i style={{ background: colorHex(nm) || "#ccc" }} /><span>{nm}</span><span aria-hidden>→</span>
-                                    <input type="text" list="mk-ink-names" aria-label={`${nm} on the ${line.color}`} placeholder={im.method === "embroidery" ? "the thread on this color" : "the ink on this color"} value={cur[nm] || ""} onChange={(e) => put({ ...cur, [nm]: e.target.value })} />
+                                    <input type="text" list={im.method === "embroidery" ? "mk-thread-names" : "mk-ink-names"} aria-label={`${nm} on the ${line.color}`} placeholder={im.method === "embroidery" ? "the thread on this color" : "the ink on this color"} value={cur[nm] || ""} onChange={(e) => put({ ...cur, [nm]: e.target.value })} />
                                     {cur[nm] && colorHex(cur[nm]) ? <i style={{ background: colorHex(cur[nm])! }} /> : null}
                                   </div>
                                 ))}
@@ -5194,6 +5194,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                   <span className="faint mk-help-d">{portal ? "or drop the PDF / AI file here" : "or drag a PDF, AI or picture here (from your email, ClickUp or anywhere), or copy art in Illustrator and paste it"}</span>
                 </>}
                 <datalist id="mk-ink-names">{inkChoices({ pms: true }).map((n) => <option key={n} value={n} />)}</datalist>
+                {/* an embroidery print's thread change suggests threads, never inks (Nov 10, Amanda) */}
+                <datalist id="mk-thread-names">{threadChoices().map((n) => <option key={n} value={n} />)}</datalist>
                 <input ref={helpIn} type="file" accept={portal ? ".pdf,.ai,application/pdf,application/postscript,application/illustrator" : ".pdf,.ai,.jpg,.jpeg,.png,.webp,application/pdf,application/postscript,application/illustrator,image/jpeg,image/png,image/webp"} hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void helperRead(f); }} />
                 {helper && <>
                   <div className="mk-help-f"><b>{helper.name}</b>{!helper.busy && <button type="button" className="lc-link" onClick={() => { helper.rows.forEach((r) => URL.revokeObjectURL(r.url)); setHelper(null); }}>Start over</button>}</div>

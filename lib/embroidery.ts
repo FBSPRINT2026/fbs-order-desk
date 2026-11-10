@@ -56,6 +56,13 @@ export function pmsOf(t: Pick<Thread, "line" | "code" | "hex" | "pms">): ThreadP
 /** what a thread is called on the order, the work order and the thread room: "Madeira 1843 Purple" */
 export const threadLabel = (t: Pick<Thread, "line" | "code" | "name">) => `${t.line === "Isacord 40" ? "Isacord " : t.line === "Classic Rayon 40" ? "Madeira Rayon " : "Madeira "}${t.code}${t.name ? " " + t.name : ""}`;
 /** a name on an order that is one of our threads (an ink name never starts with Madeira or Isacord) */
+/**
+ * Every thread we sew with, by its full name ("Madeira 1801 Super White"), Polyneon first then Isacord: the one list a
+ * typed thread box suggests from (Nov 10, Amanda: an embroidery print's Thread change offered ink colors). Any box where
+ * someone types an embroidery color uses this; a screen print's box uses inkChoices.
+ */
+let threadChoicesCache: string[] | null = null;
+export const threadChoices = () => (threadChoicesCache ||= THREAD_LINES.flatMap((l) => threads().filter((t) => t.line === l)).map(threadLabel));
 export const isThreadName = (s: string) => /^(madeira|isacord)\b/i.test((s || "").trim());
 /** a stocked thread's key: Polyneon codes as-is, "R1147" Rayon, "I0015" Isacord (lib/threadStock.ts) */
 export const threadKey = (line: string, code: string) => (/isacord/i.test(line) ? "I" : /rayon/i.test(line) ? "R" : "") + code;
