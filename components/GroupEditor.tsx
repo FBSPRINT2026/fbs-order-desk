@@ -652,12 +652,14 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 90) : 0;
       const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
       // no prices shown (retail builder): no room kept for them, so the qty sits at the right end (Oct 24, Nick)
-      const ea = hidePrices ? 150 : widest(".gl .a-ea input", 28, 54, 120);
+      const ea = hidePrices ? 150 : Math.max(widest(".gl .a-ea input", 28, 60, 130), widest(".gl .a-ea.glg-ea", 16, 60, 130));
       // the price box itself: its number, its own padding and border, whatever layout its cell is in when this runs (the
       // cell's "×" can come and go with the layout, Nov 2: a suggested price showed "9....")
       let eaIn = 0;
       el.querySelectorAll<HTMLInputElement>(".gl .a-ea input").forEach((node) => { const cs = getComputedStyle(node), px = (v: string) => parseFloat(v || "0") || 0; eaIn = Math.max(eaIn, textW(node, node.value || node.placeholder || "") + Math.max(12, px(cs.paddingLeft) + px(cs.paddingRight)) + 2 + 8); });
-      const to = hidePrices ? 0 : Math.max(widest(".gl .a-to b", 4, 52, 150), widest(".grp-total > .a-to", 4, 52, 150));
+      // room to spare on the money columns (Nov 9, Nick: "you make this area so compact… the pricing itself just doesn't
+      // even continue over"): a total never sits flush against the next column
+      const to = hidePrices ? 0 : Math.max(widest(".gl .a-to b", 18, 64, 170), widest(".grp-total > .a-to", 18, 64, 170));
       // a size box is never narrower than its number (+6 for the border and room to spare; +8 for a phone's tap button,
       // which has 2px of padding), its size name, or its 2XL+ charge underneath (which may use the gap)
       const num = Math.max(widest(".gl .a-sz input.sz", 6, 0, 80), widest(".gl .a-sz .sz-tap", 8, 0, 80));
