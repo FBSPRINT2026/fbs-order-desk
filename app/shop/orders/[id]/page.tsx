@@ -1747,7 +1747,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       {(reprintAsk || isReorder(o) || o.groups.some((g) => g.fromGroup)) && o.price_type === "wholesale" && ["request", "quote", "quote_sent"].includes(o.status) && (() => {
         // a duplicate / reorder of a wholesale order still at new screens: offer the reprint fee (kept on its reorders);
         // asked until it's answered (Oct 20, Nick: "you didn't ask me to change the screen price to $15")
-        const ims = o.groups.filter((g) => !g.reprintAsked).flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !(im.remake ?? g.remake)));
+        // a group on a program screen price pays it new or remake: nothing to ask
+        const ims = o.groups.filter((g) => !g.reprintAsked && g.screenFee == null).flatMap((g) => g.imprints.filter((im) => im.method === "screen" && !(im.remake ?? g.remake)));
         const wl = settings.wholesale;
         if (!ims.length || wl.remakeFee == null || wl.remakeFee >= wl.screenFee) return null;
         const n = [...new Map(ims.map((im) => [`${im.design_id || ""}|${im.location}|${im.colors}`, im])).values()].reduce((a, im) => a + Math.max(1, +im.colors || 1), 0);

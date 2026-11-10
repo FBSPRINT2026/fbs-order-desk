@@ -6,7 +6,7 @@ import { useRole } from "@/components/RoleContext";
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
-import { kidLine } from "@/lib/pricing";
+import { kidLine, screenFeeOf } from "@/lib/pricing";
 import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
@@ -833,7 +833,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     if (embImps.includes(d)) { const tc = +(d.inkChanges || 0); return tc > 0 ? <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Thread change</span><span className="pr-scr-v">{tc}{!hidePrices && <> · <b className="num">{money(tc * (+(wpl.inkChangeFee || 0)))}</b></>}</span></div> : null; }
     if (!scrImps.includes(d)) return null;
     const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake), yi = youthInfo(d);
-    const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
+    const fee = screenFeeOf(wpl, rm, g.screenFee);
     // color changes as charged: the print's own plus, for the same print as an earlier group's in other inks, each ink it
     // swaps (lib/pricing.ts calcOrder, Nov 9: no tick needed)
     const cc = (gc as { imprintInkChanges?: number[] }).imprintInkChanges?.[g.imprints.indexOf(d)] ?? +(d.inkChanges || 0);
@@ -856,7 +856,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
           <label className="check" title={d.underbase == null ? (sc.under ? "Automatic: a light ink needs one. Click to override." : "Automatic: dark inks print without one. Click to override.") : "Set by hand"}><input type="checkbox" checked={sc.under} onChange={(e) => update((x) => { x.imprints[di].underbase = e.target.checked; x.imprints[di].screens = undefined; })} />Underbase</label>
           {d.underbase != null && <span className="sbx-ovr">override <button type="button" aria-label="Back to automatic" title="Back to automatic" onClick={() => update((x) => { x.imprints[di].underbase = undefined; })}>×</button></span>}
         </span>}
-        {wpl.remakeFee != null && <label className="check" title="The screens are on file from an earlier order"><input type="checkbox" checked={rm} onChange={(e) => update((x) => { x.imprints[di].remake = e.target.checked; })} />Remake {money(wpl.remakeFee)}</label>}
+        {wpl.remakeFee != null && <label className="check" title="The screens are on file from an earlier order"><input type="checkbox" checked={rm} onChange={(e) => update((x) => { x.imprints[di].remake = e.target.checked; })} />Remake {money(screenFeeOf(wpl, true, g.screenFee))}</label>}
       </ScreensLine>
       {/* the color change's charge on its own line under the screens, so underbase, remake and the edit stay with the
           screens (Oct 26, Nick: "making the color change a new line right below screens") */}

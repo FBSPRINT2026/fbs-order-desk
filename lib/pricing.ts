@@ -1051,6 +1051,10 @@ export function screensFor(d: Imprint, s: Pick<PriceList, "darkAddsColor">, ligh
   return { n: d.screens != null && d.screens > 0 ? d.screens : auto, under, auto, hit2 };
 }
 
+/** one screen's price: a program's screen price is for every screen, new or remake (Nov 10, Nick: Tiger Blue "always
+ *  pays $15 per screen new or remake"); else the list's remake fee for a remake, else its screen fee */
+export const screenFeeOf = (s: Pick<PriceList, "screenFee" | "remakeFee">, remake: boolean, program?: number | null) =>
+  program != null && !isNaN(+program) ? +program : remake && s.remakeFee != null ? s.remakeFee : s.screenFee;
 function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLight = light, x: { eti?: number; remake?: boolean; screenFee?: number; /** pieces this print is priced at */ q?: number } = {}) {
   const inkFee = num(d.inkChanges) * num(s.inkChangeFee) + (d.method === "screen" ? pmsCount(d) : num(d.pms)) * num(s.pmsFee);
   if (d.method === "screen") {
@@ -1067,7 +1071,7 @@ function imprintPrice(d: Imprint, ti: number, s: PriceList, light = false, dtgLi
     const row = (light && s.screenLight ? s.screenLight : s.screen)[ti] || [];
     const n = Math.min(row.length || 6, k);
     const dtg = s.dtg ? num((dtgLight && s.dtgLight ? s.dtgLight : s.dtg)[ti]) : 0;
-    const fee = (d.remake ?? x.remake) && s.remakeFee != null ? s.remakeFee : x.screenFee != null ? x.screenFee : s.screenFee;
+    const fee = screenFeeOf(s, !!(d.remake ?? x.remake), x.screenFee);
     return { each: num(row[n - 1]), setup: Math.min(sc.n, 15) * num(fee), inkFee, dtg, full: false, under, screens: sc.n, custom: k > (row.length || 99) };
   }
   if (d.method === "embroidery") {
@@ -1167,7 +1171,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const eti = pl.embTiers?.length ? tierIndex(qty, { tiers: pl.embTiers }) : ti;
   const ix = { eti, remake: !!g.remake, screenFee: g.screenFee != null && !isNaN(+g.screenFee) ? +g.screenFee : undefined };
   // each print's price break: the pieces carrying its logo across the whole order (never fewer than this group's)
-  const dq = (d: Imprint) => { const n = d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}:${printSizeKey(d)}`) || 0 : 0; return n > qty ? n : qty; };
+  const dq = (d: Imprint) => { const lk = d.method === "screen" ? seen?.links?.get(d.id) : undefined; const n = lk ? seen?.designQty?.get(lk) || 0 : d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}:${printSizeKey(d)}`) || 0 : 0; return n > qty ? n : qty; };
   // youth screens (Oct 30, Nick: "two fronts, which both get setups… the quantity discount on the front for one, and…
   // for the other. Then they both get the same sleeve. They get the full discount on the sleeve. And only one setup"):
   // a print with its own youth screen is priced at the youth pieces' break on youth shirts and the adult pieces' on
@@ -1404,6 +1408,9 @@ export function calcOrder(
   for (const g of gs0) {
     const q = (g.lines || []).reduce((a, l) => a + billQty(l), 0);
     for (const k of new Set((g.imprints || []).filter((d) => d.design_id).map((d) => `${d.method}:${d.design_id}:${printSizeKey(d)}`))) dqm.set(k, (dqm.get(k) || 0) + q);
+    // prints set as a color change of one another (Imprint.changeOf) print from one set of screens: one print, its
+    // pieces counted together for the price break too (Nov 10, Tiger Blue #2845: five teams' backs priced at 193 pieces)
+    for (const k of new Set((g.imprints || []).map((d) => seen.links?.get(d.id)).filter((k): k is string => !!k))) dqm.set(k, (dqm.get(k) || 0) + q);
   }
   seen.designQty = dqm;
   const groups = gs0.map((g, gi) => { seen.cur = g.name || `Group ${gi + 1}`; return calcGroup(g, o, s, seen); });
