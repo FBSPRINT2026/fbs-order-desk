@@ -17,7 +17,7 @@ import { needsDetails } from "@/lib/productionDetails";
 import PortalArtView from "@/components/PortalArtView";
 import OrderRail from "@/components/OrderRail";
 import { jobFor } from "@/lib/portalJobs";
-import { calcOrder, FULL_COLOR, inkNames, methodLabel, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
+import { calcOrder, FULL_COLOR, inkNames, methodLabel, methodShort, ONE_SIZE, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, money } from "@/lib/format";
 import { pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
@@ -261,7 +261,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
               const cg = c.groups[gi];
               const pics = (g.mockupThumbs && g.mockupThumbs.length ? g.mockupThumbs : (g.customerMockups || []).map((x) => x.path)).filter((x) => mkUrls[x]);
               const used = SIZES.filter((s) => g.lines.some((l) => +(l.sizes?.[s] || 0) > 0));
-              const grid = used.length > 0 && used.length <= 7;
+              // a one-size item has no size columns: its Qty is the whole story (Nov 10: hats showed "Qty  Qty")
+              const osOnly = used.length === 1 && used[0] === ONE_SIZE;
+              const grid = used.length > 0 && used.length <= 7 && !osOnly;
               const gq = g.lines.reduce((a, _l, li) => a + (cg?.lines[li]?.qty || 0), 0);
               return (
                 <section key={g.id} className="panel pod-grp">
@@ -278,8 +280,9 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                             const inks = inkNames(d.inks || "");
                             return (
                               <tr key={d.id || k}>
-                                <td><b>{d.location || "Print"}</b></td>
-                                <td>{methodLabel(d)}{(d.method === "screen" || d.method === "embroidery") && d.colors ? <div className="sub">{d.method === "screen" && d.colors >= FULL_COLOR ? "Full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`}</div> : null}</td>
+                                <td className="pod-nw"><b>{d.location || "Print"}</b></td>
+                                {/* never broken onto two lines (Nov 10, Nick: "Embroid / ery"): the full name, or EMB / SP / HP when the column is narrow */}
+                                <td className="pod-nw"><span className="pod-m-l">{methodLabel(d)}</span><abbr className="pod-m-s" title={methodLabel(d)}>{methodShort(d)}</abbr>{(d.method === "screen" || d.method === "embroidery") && d.colors ? <div className="sub">{d.method === "screen" && d.colors >= FULL_COLOR ? "Full color" : `${d.colors} color${d.colors > 1 ? "s" : ""}`}</div> : null}</td>
                                 <td className="pod-nw">{d.size || "—"}</td>
                                 <td>{reorder ? <span className="faint">Matches your previous order</span> : inks.length ? <span className="pod-inks">{inks.map((n) => { const hx = colorHex(n); return <span key={n} className="pod-ink"><i style={{ background: hx || "var(--surface-2)" }} aria-hidden />{n}</span>; })}</span> : "—"}</td>
                               </tr>
@@ -302,13 +305,13 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                   </div>
                   <div className="tbl-wrap pod-lines">
                     <table className="tbl" data-nofit>
-                      <thead><tr><th>Garment</th>{grid ? used.map((s) => <th key={s} className="r">{sizeLabel(s)}</th>) : <th>Sizes</th>}<th className="r">Qty</th>{!isReq && <th className="r">Each</th>}{!isReq && <th className="r">Total</th>}</tr></thead>
+                      <thead><tr><th>Garment</th>{grid ? used.map((s) => <th key={s} className="r">{s === ONE_SIZE ? "One size" : sizeLabel(s)}</th>) : osOnly ? null : <th>Sizes</th>}<th className="r">Qty</th>{!isReq && <th className="r">Each</th>}{!isReq && <th className="r">Total</th>}</tr></thead>
                       <tbody>{g.lines.map((l, li) => {
                         const lc = cg?.lines[li];
                         return (
                           <tr key={l.id}>
                             <td><b>{l.style || "Garment"}</b> {garmentName(l.garment, l.style)}{l.color ? <div className="sub">{l.color}</div> : null}</td>
-                            {grid ? used.map((s) => <td key={s} className="r num">{+(l.sizes?.[s] || 0) || ""}</td>) : <td><div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{sizeLabel(s)} {l.sizes[s]}</span>)}</div></td>}
+                            {grid ? used.map((s) => <td key={s} className="r num">{+(l.sizes?.[s] || 0) || ""}</td>) : osOnly ? null : <td><div className="sizechips">{SIZES.filter((s) => l.sizes?.[s]).map((s) => <span key={s}>{sizeLabel(s)} {l.sizes[s]}</span>)}</div></td>}
                             <td className="r num b">{lc?.qty}</td>
                             {!isReq && <td className="r num">{money(lc?.each)}</td>}
                             {!isReq && <td className="r num b">{money(lc?.sub)}</td>}
