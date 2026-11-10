@@ -21637,3 +21637,6 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 /* the send screen: the art is already approved, sending asks again (Nov 10) */
 .spt-apw{margin:0 0 10px;padding:8px 12px;border-radius:var(--r);background:color-mix(in srgb,var(--warn) 14%,var(--surface));font-size:13px;color:var(--ink)}
 .spt-apw b{margin-right:6px}
+
+/* paying one invoice: the way to all of them (Nov 10) */
+.pp-all{font-size:12.5px;text-align:center;margin-top:8px}

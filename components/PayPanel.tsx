@@ -22,7 +22,8 @@ const STAX_SRC = "https://staxjs.staxpayments.com/staxjs-captcha.js";
  * Pay one order or several together: credit card (with the card fee), ACH bank transfer, Zelle or Venmo.
  * Card and bank numbers go into Stax's own secure fields; we only get back a one-time token to charge.
  */
-export default function PayPanel({ items, pay, staxToken, canAct = true, onClose, amount, modal = false, receiptEmail = "" }: {
+export default function PayPanel({ items, pay, staxToken, canAct = true, onClose, amount, modal = false, receiptEmail = "", allHref }: {
+  /** paying one invoice from its page: a link to all their invoices (the portal's Payments screen) to pay several at once (Nov 10, Nick) */ allHref?: string;
   items: PayItem[];
   /** open as its own window over the page (payments screen) instead of inline */
   modal?: boolean;
@@ -356,6 +357,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
         </button>
       )}
       {!canAct && <div className="faint" style={{ fontSize: 12 }}>Payments are turned off in the preview.</div>}
+      {allHref && !done && <div className="faint pp-all">To pay multiple invoices together, <a href={allHref}>click here</a>.</div>}
     </div>
   );
 }

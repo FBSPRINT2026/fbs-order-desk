@@ -44,7 +44,7 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
   const oldLines = ((olds || []) as { id: string; visual_id: string; nickname: string | null; order_date: string | null; balance: number; customer_id: string; kind: string; fees: null; groups: null }[]).map((a) => {
     const c = mine.find((x) => x.id === a.customer_id);
     if (!c) throw new Error("We couldn't find one of those orders.");
-    if (!c.moved_at) throw new Error(`#${a.visual_id} is from our old system: pay it on its own invoice for now.`);
+    // every old invoice is paid here now, moved account or not (Nov 10, Nick: no more paying on Printavo's page)
     if (a.kind !== "invoice" || !(+a.balance > 0.004)) throw new Error(`#${a.visual_id} is already paid.`);
     return { o: { id: a.id, number: +a.visual_id || 0, nickname: a.nickname || "", created_at: a.order_date || "", type: "invoice", total: +a.balance, customer_id: a.customer_id } as unknown as Order, amount: r2(+a.balance), old: true, feeIn: cardFeeInOld(a as never, r2(+a.balance)), full: true };
   });
