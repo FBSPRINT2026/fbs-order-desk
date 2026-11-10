@@ -12,3 +12,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 9 9:28pm · 1.3.213 · Nick · Backup reads every table in key order through the database (tables with multi-column keys were read over and over)
 - Nov 9 9:37pm · 1.3.214 · Nick · Logo SVG fit: keep each original before saving the fixed file
 - Nov 9 10:13pm · 1.3.215 · Nick · Shared screens: the same art at the same spot in another group pays only for screens beyond the ones made (an underbase on a dark shirt), not a whole new set (#40496)
+- Nov 9 10:25pm · 1.3.216 · Nick · Same print across groups by default: same logo + spot + size shares screens and the price break, other inks are color changes on their own; picking a logo already on the order brings it in as used; color-change lines list every ink (#40496)

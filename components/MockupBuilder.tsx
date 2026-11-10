@@ -11,7 +11,7 @@ import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
 import { changeVersions, inkChanges, inkKeyOf, inksOnColor } from "@/lib/inkBy";
-import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2, OVERSIZE_IN, NORMAL_MAX_IN } from "@/lib/pricing";
+import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2, OVERSIZE_IN, NORMAL_MAX_IN, printSizeKey, inkSwaps } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -2107,7 +2107,29 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     });
     return out.sort((a, b) => Number(!!b.same) - Number(!!a.same));
   };
-  const swapLogo = (x: Imprint, d: Design): Imprint => (x.design_id === d.id ? x : { ...x, design_id: d.id, inks: d.inks && !/^simulated/i.test(d.inks) ? d.inks : "", colors: Math.max(1, Math.round(+(d.colors || 0)) || 1), inkMap: undefined, center: undefined });
+  const swapLogo0 = (x: Imprint, d: Design): Imprint => (x.design_id === d.id ? x : { ...x, design_id: d.id, inks: d.inks && !/^simulated/i.test(d.inks) ? d.inks : "", colors: Math.max(1, Math.round(+(d.colors || 0)) || 1), inkMap: undefined, center: undefined });
+  /** the order's other groups' prints of this logo (the same method), the one at this print's spot first */
+  const orderUses = (x: Imprint, designId?: string) => {
+    if (!order || !curGroup || !designId) return [] as { g: ReturnType<typeof orderGroups>[number]; gi: number; p: Imprint }[];
+    const out: { g: ReturnType<typeof orderGroups>[number]; gi: number; p: Imprint }[] = [];
+    orderGroups(order).forEach((g, gi) => { if (g.id !== curGroup.id) for (const p of g.imprints || []) if (p.design_id === designId && (p.method || "screen") === (x.method || "screen")) out.push({ g, gi, p }); });
+    const at = (p: Imprint) => ((p.location || "").toLowerCase() === (x.location || "").toLowerCase() ? 0 : 1);
+    return out.sort((a, b) => at(a.p) - at(b.p));
+  };
+  /** another logo on a print. A logo already printed elsewhere on the order comes in the way it's used there (Nov 9,
+   *  Nick, #40496: "if I select the art already on this order, you should by default bring it in how I've already used
+   *  it, at 3.5 by 2.73… then I have the same art across multiple groups: quantity discount; a different color is just
+   *  a color change"): its size, inks, drop and centering at the same spot, and its spot too on a print that had no logo
+   *  yet. The same logo, spot and size prints from the same screens and counts together for the price break
+   *  (lib/pricing.ts calcOrder); inks changed after are charged as color changes */
+  const swapLogo = (x: Imprint, d: Design): Imprint => {
+    const y = swapLogo0(x, d);
+    if (y === x) return x;
+    const use = orderUses(x, d.id).find((u) => (u.p.location || "").toLowerCase() === (x.location || "").toLowerCase()) || (!x.design_id ? orderUses(x, d.id)[0] : undefined);
+    if (!use) return y;
+    const p = use.p;
+    return { ...y, location: p.location, size: p.size, drop: p.drop, inks: p.inks, colors: p.colors, inkMap: p.inkMap, center: p.center, ...(p.artRatio ? { artRatio: p.artRatio } : {}), ...(p.keepLocation != null ? { keepLocation: p.keepLocation } : {}) };
+  };
   /** how far off its box's middle a print is centered (shares of its width / height): a round badge with a tail is
    *  centered on the circle (Oct 22, Nick: "the circle's in the center, the tail is off to the right") */
   const centerShift = (im: Imprint) => (im.center?.on && im.center.d === im.design_id ? { x: 0.5 - im.center.x, y: 0.5 - im.center.y } : { x: 0, y: 0 });
@@ -5001,6 +5023,17 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
                           Neon Blue long sleeve are two groups, and neither showed the button): the same art at the same spot
                           in another group of the order. Ticked, the two print from one set of screens (setup once) and each
                           changed ink is an ink change (calcOrder, Imprint.changeOf) */}
+                      {/* the same logo elsewhere on the order (Nov 9, Nick, #40496): the same spot and size is the same print
+                          (one set of screens, one price break, other inks charged as color changes, lib/pricing.ts
+                          calcOrder); another size is its own print, said here so it's never a surprise */}
+                      {designOf(im) && !im.changeOf && (() => {
+                        const use = orderUses(im, im.design_id).find((u) => (u.p.location || "").toLowerCase() === (im.location || "").toLowerCase());
+                        if (!use) return null;
+                        const gn = use.g.name || `Group ${use.gi + 1}`, sameSize = printSizeKey(use.p) === printSizeKey(im);
+                        const sw = im.method === "screen" ? inkSwaps(use.p.inks, im.inks) : [];
+                        if (sameSize) return <div className="mk-samep"><b>Same print as {gn}</b> <span>{im.method === "screen" ? "One set of screens and" : "Counted"} together for the quantity discount{sw.length ? `. ${sw.length} color change${sw.length === 1 ? "" : "s"}: ${sw.map((x) => `${x.to} instead of ${x.from}`).join(", ")}` : ""}.</span></div>;
+                        return <div className="mk-samep warn"><b>{gn} prints this logo at {use.p.size || "another size"}</b> <span>At {im.size || "this size"} it&apos;s its own print: {im.method === "screen" ? "its own screens and " : ""}its own price break.</span> <button type="button" className="btn sm" onClick={() => setImprints((xs) => xs.map((x) => (x.id === im.id ? { ...x, size: use.p.size, artRatio: use.p.artRatio ?? x.artRatio } : x)))}>Match {String(use.p.size || "").replace(/\s*wide$/i, "")}</button></div>;
+                      })()}
                       {designOf(im) && im.method === "screen" && order && curGroup && (() => {
                         const nameOf = (id?: string) => (designs.find((d) => d.id === id)?.name || "").trim().toLowerCase();
                         const mine = nameOf(im.design_id), loc = (im.location || "").toLowerCase();

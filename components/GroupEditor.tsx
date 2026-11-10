@@ -337,7 +337,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const cwOn = (x: Imprint, color: string) => colorwayOnColor(x, designOf(x), color);
   const inkOfVer = (x: Imprint, color: string) => {
     if (isCw(x)) { const cw = cwOn(x, color), f = cw ? colorwaySew(designOf(x)!, cw) : null; return cw ? `${cw.name}${f ? ` · sews ${f.name || f.code}` : ""}` : "as printed"; }
-    const v = versionOfColor(x, color); return v ? versionsOf(x)[v - 1].to : (x.inks || "").split(/\s*,\s*/)[0] || "as printed";
+    // every ink the print prints on this color, in order, the changed ones in place (Nov 9, Nick: a 3-color back read
+    // "Full Back: PMS 652 C" on A and "Full Back: 6113" on B: only the first ink)
+    const all = inksOnColor(x, color).map((i) => i.name);
+    return all.length ? all.join(", ") : "as printed";
   };
   const verLabel = (color: string) => ccImps.map((x) => `${ccImps.length > 1 ? `${x.location}: ` : ""}${inkOfVer(x, color)}`).join("  /  ");
   // the sections only show when a version has more than one line (Oct 27: a Dear Heart order with one line per color
@@ -827,7 +830,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     if (!scrImps.includes(d)) return null;
     const di = g.imprints.indexOf(d), sc = screensFor(d, wpl, allLight), rm = !!(d.remake ?? g.remake), yi = youthInfo(d);
     const fee = rm && wpl.remakeFee != null ? wpl.remakeFee : wpl.screenFee;
-    const cc = +(d.inkChanges || 0);
+    // color changes as charged: the print's own plus, for the same print as an earlier group's in other inks, each ink it
+    // swaps (lib/pricing.ts calcOrder, Nov 9: no tick needed)
+    const cc = (gc as { imprintInkChanges?: number[] }).imprintInkChanges?.[g.imprints.indexOf(d)] ?? +(d.inkChanges || 0);
+    const auto = (gc as { imprintAutoChange?: ({ swaps: { from: string; to: string }[]; group: string } | null)[] }).imprintAutoChange?.[g.imprints.indexOf(d)] || null;
     // printed from another print's screens (the same logo at the same spot in another group): says whose, at no charge
     // (Nov 1, Nick on #40351: "$30 set up on group two and $15 on group three, but it shouldn't show… some sort of
     // indicator that it's $0")
@@ -850,7 +856,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       </ScreensLine>
       {/* the color change's charge on its own line under the screens, so underbase, remake and the edit stay with the
           screens (Oct 26, Nick: "making the color change a new line right below screens") */}
-      {cc > 0 && <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Color change</span><span className="pr-scr-v">{cc}{!hidePrices && <> · <b className="num">{money(cc * (+(wpl.inkChangeFee || 0)))}</b></>}</span></div>}
+      {cc > 0 && <div className="pr-scr pr-cc-line"><span className="pr-scr-l">Color change</span><span className="pr-scr-v">{cc}{auto ? <span className="faint" title={`The same print as ${auto.group}, from its screens: ${auto.swaps.map((x) => `${x.to} instead of ${x.from}`).join(", ")}`}> · from {auto.group}: {auto.swaps.map((x) => x.to).join(", ")}</span> : null}{!hidePrices && <> · <b className="num">{money(cc * (+(wpl.inkChangeFee || 0)))}</b></>}</span></div>}
     </>);
   };
   // a print's inks as chips, with its PMS matches and their charge on the same line (Oct 21, Nick: "the colors just seem

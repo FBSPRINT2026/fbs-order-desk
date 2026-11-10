@@ -23,6 +23,16 @@ const swatch = (name: string) => threadByName(name)?.hex || colorHex(name) || (/
  * the versions on a print now: A as it is, then each different change its inkBy has. A colorway change (Imprint.colorwayBy)
  * is a version per colorway, named by it ("Maroon / Off White"), however many of its inks change.
  */
+/** every ink a garment color changes, in the print's ink order, as one version: from "652, 1645, Bora Bora Sand" to
+ *  "6113, 7512, 5777" (Nov 9, Nick: a 3-color back's version only named its first ink, so B read "Full Back: 6113") */
+function changeOn(im: Imprint, m: Record<string, string> | undefined) {
+  const ent = Object.entries(m || {}).filter(([a, b]) => b && ck(a) !== ck(b));
+  if (!ent.length) return null;
+  const order = (im.inks || "").split(/\s*,\s*/).filter(Boolean).map(ck);
+  const at = (a: string) => { const i = order.indexOf(ck(a)); return i < 0 ? 99 : i; };
+  ent.sort((x, y) => at(x[0]) - at(y[0]));
+  return { from: ent.map(([a]) => a).join(", "), to: ent.map(([, b]) => b.trim()).join(", ") };
+}
 export function versionsOf(im: Imprint): Ver[] {
   const out: Ver[] = [];
   if (im.colorwayBy && Object.keys(im.colorwayBy).length) {
@@ -30,9 +40,8 @@ export function versionsOf(im: Imprint): Ver[] {
     return out;
   }
   for (const m of Object.values(im.inkBy || {})) {
-    const ent = Object.entries(m || {}).filter(([a, b]) => b && ck(a) !== ck(b));
-    if (!ent.length) continue;
-    const v = { from: ent[0][0], to: ent[0][1] };
+    const v = changeOn(im, m);
+    if (!v) continue;
     if (!out.some((x) => ck(x.from) === ck(v.from) && ck(x.to) === ck(v.to))) out.push(v);
   }
   return out;
@@ -45,9 +54,9 @@ export function versionOfColor(im: Imprint, color: string, vers = versionsOf(im)
   }
   const m =Object.entries(im.inkBy || {}).find(([k]) => ck(k) === ck(color))?.[1];
   if (!m) return 0;
-  const ent = Object.entries(m).filter(([a, b]) => b && ck(a) !== ck(b));
-  if (!ent.length) return 0;
-  const i = vers.findIndex((v) => ck(v.from) === ck(ent[0][0]) && ck(v.to) === ck(ent[0][1]));
+  const c = changeOn(im, m);
+  if (!c) return 0;
+  const i = vers.findIndex((v) => ck(v.from) === ck(c.from) && ck(v.to) === ck(c.to));
   return i < 0 ? 0 : i + 1;
 }
 

@@ -1083,11 +1083,26 @@ export type GroupCalc = ReturnType<typeof calcGroup>;
  *  one front logo on an Ivory group and a Cantaloupe + Navy group charged its screen twice because the Navy shirt's
  *  underbase made it 2 screens instead of 1). The count isn't part of the key: a print needing more screens than the
  *  ones already made (an underbase, an extra color) pays only for those extra screens. */
-const screenKey = (d: Imprint, _n?: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}` : "");
+const screenKey = (d: Imprint, _n?: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}|${printSizeKey(d)}` : "");
+/** a print's size as one key: the number and which way it's measured ('3.5" wide' → "3.5w"); "" when not set. The same
+ *  art at another size is other screens and another price break (Nov 9, Nick: "it's got to be the same size") */
+export const printSizeKey = (d: Pick<Imprint, "size">) => { const m = (d.size || "").match(/(\d+(?:\.\d+)?)/); return m ? `${+m[1]}${/tall|high/i.test(d.size || "") ? "t" : "w"}` : ""; };
+/** an ink as one key: "PMS 652 C" = "652C" = "pms 652" (as the PMS fee matches them) */
+const inkKey = (v: string) => v.trim().toLowerCase().replace(/^pms\s*/, "").replace(/\s+/g, "").replace(/c$/, "");
+/** the inks one print changes from another printed from the same screens: screen by screen, in order (the first ink on
+ *  the first screen…); a screen this one doesn't have or adds is setup, not a change */
+export function inkSwaps(from: string, to: string) {
+  const a = (from || "").split(",").map((v) => v.trim()).filter(Boolean), b = (to || "").split(",").map((v) => v.trim()).filter(Boolean);
+  const out: { from: string; to: string }[] = [];
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (inkKey(a[i]) !== inkKey(b[i])) out.push({ from: a[i], to: b[i] });
+  return out;
+}
 /** the order's screens charged so far, plus the color-change pairs across variations (Imprint.changeOf): print id → pair
  *  key, and the screens the pair's first print paid for */
 export type SeenScreens = Set<string> & { links?: Map<string, string>; linkScreens?: Map<string, number>;
   /** screens already charged for each art at each spot (screenKey → how many) */ paidN?: Map<string, number>;
+  /** the same print in an earlier group in other inks (no color change set by hand): print id → the inks it swaps and whose screens */
+  autoChange?: Map<string, { swaps: { from: string; to: string }[]; group: string }>;
   /** which group paid for each screen set ("Group 2"), and the group being priced now: a print sharing screens says whose */
   owner?: Map<string, string>; cur?: string;
   /** pieces carrying each logo across the order ("<method>:<design id>" → pieces): the same logo in several groups is
@@ -1107,6 +1122,9 @@ export const SAMPLE_DEFAULT: SampleRule = { each: 40, screens: "free", pms: "cha
 
 export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType; order_type?: Order["order_type"]; sample?: SampleRule | null }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: SeenScreens) {
   const pl = priceList(s, o.price_type || "retail");
+  // the same print as an earlier group's in other inks: its color changes counted with any set on the print
+  if (seen?.autoChange?.size && (g.imprints || []).some((d) => seen.autoChange!.has(d.id)))
+    g = { ...g, imprints: g.imprints.map((d) => { const a = seen.autoChange!.get(d.id); return a ? { ...d, inkChanges: num(d.inkChanges) + a.swaps.length } : d; }) };
   const smp = (o as { order_type?: string | null; sample?: SampleRule | null }).order_type === "sample" ? (o as { sample?: SampleRule | null }).sample || SAMPLE_DEFAULT : null;
   const qty = (g.lines || []).reduce((a, l) => a + billQty(l), 0);
   const ti = tierIndex(qty, pl);
@@ -1114,7 +1132,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const eti = pl.embTiers?.length ? tierIndex(qty, { tiers: pl.embTiers }) : ti;
   const ix = { eti, remake: !!g.remake, screenFee: g.screenFee != null && !isNaN(+g.screenFee) ? +g.screenFee : undefined };
   // each print's price break: the pieces carrying its logo across the whole order (never fewer than this group's)
-  const dq = (d: Imprint) => { const n = d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}`) || 0 : 0; return n > qty ? n : qty; };
+  const dq = (d: Imprint) => { const n = d.design_id ? seen?.designQty?.get(`${d.method}:${d.design_id}:${printSizeKey(d)}`) || 0 : 0; return n > qty ? n : qty; };
   // youth screens (Oct 30, Nick: "two fronts, which both get setups… the quantity discount on the front for one, and…
   // for the other. Then they both get the same sleeve. They get the full discount on the sleeve. And only one setup"):
   // a print with its own youth screen is priced at the youth pieces' break on youth shirts and the adult pieces' on
@@ -1305,7 +1323,7 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, /** each print's color changes as charged (its own plus the inks it changes from the same print in an earlier group) */ imprintInkChanges: (g.imprints || []).map((d) => num(d.inkChanges)), /** the same print in an earlier group in other inks: which group and the inks it swaps */ imprintAutoChange: (g.imprints || []).map((d) => seen?.autoChange?.get(d.id) || null), /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: (g.lines || []).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
@@ -1322,11 +1340,24 @@ export function calcOrder(
     (seen.links ||= new Map()).set(d.id, key);
     if (!seen.links.has(d.changeOf.imprint)) seen.links.set(d.changeOf.imprint, key);
   }
-  // the same logo in several groups: its pieces counted together for the price break
+  // the same print in several groups (Nov 9, Nick, #40496: "as long as you have the same artwork across a job… if
+  // there's a different color, I just do a color change"): the same logo at the same spot and size prints from the
+  // first one's screens (calcGroup), and each ink it prints differently is a color change, charged without anyone
+  // ticking it. A color change set by hand (Imprint.changeOf) wins
+  const firstAt = new Map<string, { d: Imprint; group: string }>();
+  gs0.forEach((g, gi) => { for (const d of g.imprints || []) {
+    const k = screenKey(d); if (!k) continue;
+    const f = firstAt.get(k);
+    if (!f) { firstAt.set(k, { d, group: g.name || `Group ${gi + 1}` }); continue; }
+    if (d.changeOf || seen.links?.has(d.id)) continue;
+    const swaps = inkSwaps(f.d.inks, d.inks);
+    if (swaps.length) (seen.autoChange ||= new Map()).set(d.id, { swaps, group: f.group });
+  } });
+  // the same logo at the same size in several groups: its pieces counted together for the price break
   const dqm = new Map<string, number>();
   for (const g of gs0) {
     const q = (g.lines || []).reduce((a, l) => a + billQty(l), 0);
-    for (const k of new Set((g.imprints || []).filter((d) => d.design_id).map((d) => `${d.method}:${d.design_id}`))) dqm.set(k, (dqm.get(k) || 0) + q);
+    for (const k of new Set((g.imprints || []).filter((d) => d.design_id).map((d) => `${d.method}:${d.design_id}:${printSizeKey(d)}`))) dqm.set(k, (dqm.get(k) || 0) + q);
   }
   seen.designQty = dqm;
   const groups = gs0.map((g, gi) => { seen.cur = g.name || `Group ${gi + 1}`; return calcGroup(g, o, s, seen); });

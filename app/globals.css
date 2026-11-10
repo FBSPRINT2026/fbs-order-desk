@@ -14339,6 +14339,10 @@ html body .ord .line-b .gl-list .gl.ver{padding-left:16px}
 /* Mockup Creator: a color change on one garment color (Oct 24) */
 .mk-cchg{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:var(--r);background:color-mix(in srgb,var(--warn) 10%,var(--surface));font-size:13px;flex-basis:100%}
 .mk-cchg-n{font-size:12.5px;color:var(--ink-2,var(--ink))}
+/* the same logo elsewhere on the order: same print (shared screens and price break) or another size (Nov 9) */
+.mk-samep{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:8px 10px;border-radius:var(--r);background:color-mix(in srgb,var(--ok) 10%,var(--surface));font-size:12.5px;color:var(--ink-2,var(--ink));flex-basis:100%}
+.mk-samep b{color:var(--ink)}
+.mk-samep.warn{background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
 .mk-cchg-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mk-cchg-r i{width:14px;height:14px;border-radius:3px;border:1px solid var(--line);flex-shrink:0}
 .mk-cchg-r input{height:32px;width:170px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:13px}
