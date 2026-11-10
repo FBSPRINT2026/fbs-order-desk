@@ -1004,6 +1004,7 @@ export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string;
  * change… It should operate exactly the same as color change") */
 export const changeWord = (method?: string | null) => (method === "embroidery" ? "Thread change" : "Color change");
 const changed = (m: Record<string, string> | undefined) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).length;
+const inkColorKey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9~]/g, "");
 export const colorChanges = (d: Pick<Imprint, "inkBy"> & { changeOf?: Imprint["changeOf"] }) => Object.values(d.inkBy || {}).reduce((n, m) => n + changed(m), 0) + changed(d.changeOf?.inks);
 export const pmsKey = (n: string) => { const m = n.match(/(\d{3,4})/); return m ? m[1] : n.trim().toLowerCase().replace(/\s+/g, " "); };
 export function pmsCount(d: Pick<Imprint, "inks" | "pmsCharge" | "pms">): number {
@@ -1122,9 +1123,18 @@ export const SAMPLE_DEFAULT: SampleRule = { each: 40, screens: "free", pms: "cha
 
 export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type?: PriceType; order_type?: Order["order_type"]; sample?: SampleRule | null }, s: Settings, /** the order's screens charged in earlier groups (calcOrder) */ seen?: SeenScreens) {
   const pl = priceList(s, o.price_type || "retail");
-  // the same print as an earlier group's in other inks: its color changes counted with any set on the print
-  if (seen?.autoChange?.size && (g.imprints || []).some((d) => seen.autoChange!.has(d.id)))
-    g = { ...g, imprints: g.imprints.map((d) => { const a = seen.autoChange!.get(d.id); return a ? { ...d, inkChanges: num(d.inkChanges) + a.swaps.length } : d; }) };
+  // a screen print's color changes, worked out from the print itself every time, never a count saved earlier (Nov 9,
+  // Nick, #40496: a group's front charged 2 color changes for 1; its saved count was left from a garment color that had
+  // moved to another group): the inks it changes on this group's own garment colors (Imprint.inkBy; a change saved for
+  // a color no longer in the group doesn't count), a color change set by hand from another group (changeOf), and the
+  // inks it prints differently from the same print in an earlier group (calcOrder). Embroidery keeps its thread changes
+  const here = new Set((g.lines || []).filter((l) => billQty(l) > 0 || lineQty(l) > 0).map((l) => inkColorKey(l.cw ? `${l.color || ""} ~${l.cw}` : l.color || "")));
+  g = { ...g, imprints: (g.imprints || []).map((d) => {
+    if (d.method !== "screen") return d;
+    const inkBy = Object.fromEntries(Object.entries(d.inkBy || {}).filter(([c]) => here.has(inkColorKey(c))));
+    const n = colorChanges({ inkBy, changeOf: d.changeOf }) + (seen?.autoChange?.get(d.id)?.swaps.length || 0);
+    return n === num(d.inkChanges) ? d : { ...d, inkChanges: n };
+  }) };
   const smp = (o as { order_type?: string | null; sample?: SampleRule | null }).order_type === "sample" ? (o as { sample?: SampleRule | null }).sample || SAMPLE_DEFAULT : null;
   const qty = (g.lines || []).reduce((a, l) => a + billQty(l), 0);
   const ti = tierIndex(qty, pl);

@@ -14,3 +14,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 9 10:13pm · 1.3.215 · Nick · Shared screens: the same art at the same spot in another group pays only for screens beyond the ones made (an underbase on a dark shirt), not a whole new set (#40496)
 - Nov 9 10:25pm · 1.3.216 · Nick · Same print across groups by default: same logo + spot + size shares screens and the price break, other inks are color changes on their own; picking a logo already on the order brings it in as used; color-change lines list every ink (#40496)
 - Nov 9 10:31pm · 1.3.217 · Nick · House rule: the same print across groups (shared screens, price break, color changes)
+- Nov 9 10:49pm · 1.3.218 · Nick · Color changes on screen prints are worked out from the print every time (only this group's garment colors), never a stale saved count (#40496 group 2 charged 2 for 1)
