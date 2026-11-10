@@ -10,6 +10,16 @@ import { useEffect } from "react";
 const STEPS = ["f1", "f2", "f3", "f4", "f5", "p1", "p2"];
 // it fits when the page holds everything AND every Prints column holds its cards (Nov 10, Amanda: a card was cut off
 // inside its column while the page itself fit, so nothing tightened); p1 / p2 make the print cards' text smaller
+// the Prints column grows to hold its cards (Nov 10, Amanda: the Sleeve card's "NEEDS DIGITIZING" was hidden at the
+// bottom of a column of fixed height even with the smaller text): the row with the mockup and the prints is made at
+// least as tall as its cards, and the steps above make the room for it lower on the page
+const grow = (sh: HTMLElement) => {
+  for (const hero of Array.from(sh.querySelectorAll<HTMLElement>(".w2-hero"))) {
+    hero.style.minHeight = "";
+    const pr = hero.querySelector<HTMLElement>(".w2-prints");
+    if (pr && pr.scrollHeight > pr.clientHeight + 1) hero.style.minHeight = `${Math.ceil(hero.offsetHeight + pr.scrollHeight - pr.clientHeight)}px`;
+  }
+};
 const fits = (sh: HTMLElement) => sh.scrollHeight <= sh.clientHeight + 1 && Array.from(sh.querySelectorAll<HTMLElement>(".w2-prints")).every((c) => c.scrollHeight <= c.clientHeight + 1);
 export default function WoFit() {
   useEffect(() => {
@@ -22,10 +32,12 @@ export default function WoFit() {
       }
       for (const sh of Array.from(document.querySelectorAll<HTMLElement>(".sheet.wo-first"))) {
         STEPS.forEach((c) => sh.classList.remove(c));
+        grow(sh);
         for (const c of STEPS) {
           if (fits(sh)) break;
           if (c === "f4" && !sh.querySelector(".notes.clip")) continue;
           sh.classList.add(c);
+          grow(sh);
         }
       }
     };
