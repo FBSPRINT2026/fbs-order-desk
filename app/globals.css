@@ -397,8 +397,8 @@ table.pv-grid{border-collapse:separate;border-spacing:0;width:100%}
 /* Garment rows: info on top, a wrapping size strip beneath, so the editor never scrolls sideways */
 .line{container-type:inline-size}
 .gl-list{display:flex;flex-direction:column}
-.gl-row{display:grid;gap:6px;align-items:start;grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 72px 58px 88px 92px 30px;grid-template-areas:"st br co de cs qt ea to x"}
-.gl-list.ws .gl-row{grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 58px 88px 92px 30px;grid-template-areas:"st br co de qt ea to x"}
+.gl-row{display:grid;gap:6px;align-items:start;grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 72px 58px 100px 112px 30px;grid-template-areas:"st br co de cs qt ea to x"}
+.gl-list.ws .gl-row{grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 58px 100px 112px 30px;grid-template-areas:"st br co de qt ea to x"}
 .a-st{grid-area:st;min-width:0}.a-br{grid-area:br;min-width:0}.a-co{grid-area:co;min-width:0}.a-de{grid-area:de;min-width:0}.a-cs{grid-area:cs;min-width:0}.a-qt{grid-area:qt}.a-ea{grid-area:ea;min-width:0}.a-to{grid-area:to}.a-x{grid-area:x}
 .gl-head{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding-bottom:2px}
 .gl-head .c,.gl-row .c{text-align:center}
@@ -457,7 +457,7 @@ table.imp-table{table-layout:fixed}
 .line-h input.grp-name:hover{border-color:var(--line);background:var(--surface)}
 .line-h input.grp-name:focus{border-color:var(--accent);background:var(--surface)}
 .gl-row.grp-total{border-top:2px solid var(--line);padding-top:8px;align-items:baseline;font-size:13px}
-.gl-row.grp-total.ws{grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 58px 88px 92px 30px;grid-template-areas:"st br co de qt ea to x"}
+.gl-row.grp-total.ws{grid-template-columns:minmax(0,.75fr) minmax(0,.8fr) minmax(0,1fr) minmax(0,1.3fr) 58px 100px 112px 30px;grid-template-areas:"st br co de qt ea to x"}
 .grp-total .lbl2{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
 .grp-total b{font-size:15px}
 .gl-row.grp-total > .a-de{grid-area:1 / 1 / 2 / 5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -11064,9 +11064,9 @@ button.mk-big{padding:0;cursor:zoom-in;width:100%;font:inherit}
 .gl-sty .a-de input{color:var(--ink-2)}
 .gl.same{padding-top:2px}
 .gl + .gl.same{border-top:1px dashed var(--line-2)}
-.gl-list .gl-row.gl-r2{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 72px 58px 88px 92px 30px;grid-template-areas:"co sz cs qt ea to x"}
-.gl-list.ws .gl-row.gl-r2,.gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 58px 88px 92px 30px;grid-template-areas:"co sz qt ea to x"}
-.gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 72px 58px 88px 92px 30px;grid-template-areas:"co sz cs qt ea to x"}
+.gl-list .gl-row.gl-r2{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 72px 58px 100px 112px 30px;grid-template-areas:"co sz cs qt ea to x"}
+.gl-list.ws .gl-row.gl-r2,.gl-row.grp-total.gl-r2.ws{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 58px 100px 112px 30px;grid-template-areas:"co sz qt ea to x"}
+.gl-row.grp-total.gl-r2{grid-template-columns:minmax(120px,1fr) minmax(0,3.4fr) 72px 58px 100px 112px 30px;grid-template-areas:"co sz cs qt ea to x"}
 .gl-row.grp-total.gl-r2 > .a-de{grid-area:1 / 1 / 2 / 3}
 .a-sz{grid-area:sz;min-width:0}
 .gl-head .a-sz{padding-left:2px}
@@ -11829,10 +11829,13 @@ html body main.main .ord .ed-head .ed-title h1{width:fit-content;max-width:100%}
 .glg-mh{display:block;padding:8px 12px 2px;border-top:1px solid var(--line);margin-top:4px;font-size:12px;color:var(--ink-3)}
 .glg-tag{font-size:12px;padding:2px 8px;border-radius:6px;background:color-mix(in srgb,var(--ink-3) 14%,var(--surface));color:var(--ink-2,var(--ink));white-space:nowrap}
 .gl.glg{border-top:1px dashed var(--line)}
-.glg-n{display:flex;align-items:center;gap:6px;color:var(--ink);padding-top:14px}
+.glg-n{display:flex;align-items:center;gap:6px;color:var(--ink);white-space:nowrap}
 .glg-n svg{color:var(--ink-3);flex-shrink:0}
-.glg-d{padding-top:14px;font-size:12.5px;color:var(--ink-3);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.glg-ea{padding-top:22px;color:var(--ink-3)}
+.glg-d{font-size:12.5px;color:var(--ink-3);display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.glg-ea{color:var(--ink-3)}
+/* the ghost prints line: one line, every cell on the same middle as the garment row's qty, each and total (Nov 9) */
+.gl-list .gl.glg .gl-row.gl-r2{align-items:center}
+.gl-list .gl.glg .gl-row.gl-r2 > *{padding-top:0 !important}
 .glg-x{border:0;background:none;color:var(--ink-3);font-size:18px;cursor:pointer;padding:0 4px}
 html body .ord .line-b .gl-list .gl-row.gl-r2:not(.gl-head) > :is(.a-cs,.a-qt){white-space:nowrap}
 html body .ord .line-b .gl-row.grp-total .lbl2{white-space:nowrap}

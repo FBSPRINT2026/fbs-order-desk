@@ -19,3 +19,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 9 11:19pm · 1.3.220 · Nick · Ghost prints and Extras in the + Add garment menu: ghost prints count toward the price break at the print price only, on the invoice, never printed or ordered
 - Nov 9 11:24pm · 1.3.221 · Nick · Puff ink: Add underbase / No underbase on the print's puff line (no underbase stays the default)
 - Nov 9 11:28pm · 1.3.222 · Nick · Ghost prints line lines up with the garment columns (qty, each, total); puff ink's underbase and Not puff behind a pencil like the screens
+- Nov 9 11:32pm · 1.3.223 · Nick · Garment rows: wider Each and Total columns so prices never get cut; ghost prints on one line
