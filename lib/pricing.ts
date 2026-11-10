@@ -69,6 +69,12 @@ export const ST: Record<string, (typeof STATUSES)[number]> = { ...Object.fromEnt
 export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "Heat press (DTF)" };
 /** what a print's way of decorating is called: a patch pressed on is "Heat press patch" (Oct 31, Nick: "instead of
  *  calling it heat press DTF, call it heat press patch"), else the method's name. Everywhere a print is named. */
+/** a print's details are all there, to Confirm it (a visual mockup or their own separations): its spot, its size (their
+ *  separations set it) and its inks or threads, which a heat press transfer doesn't have: it prints in full color, theirs
+ *  or ours (Nov 10, Nick: Confirm did nothing on a customer-supplied DTF print with no inks) */
+export const printFilled = (d: Pick<Imprint, "method" | "inks" | "size" | "location" | "custSeps" | "colors">) =>
+  !!(d.location || "").trim() && (!!d.custSeps || !!(d.size || "").trim()) && (d.method === "dtf" || (d.method === "screen" && +(d.colors || 0) >= FULL_COLOR) || !!(d.inks || "").trim());
+
 /** the method in 2–3 letters, for a narrow column (Nov 10, Nick: "EMB / SP / HP… if need be") */
 export const methodShort = (d: { method: string; patch?: unknown }) => (d.method === "embroidery" ? "EMB" : d.method === "screen" ? "SP" : d.method === "dtf" ? "HP" : methodLabel(d));
 export const methodLabel = (d: { method: string; patch?: unknown }) => (d.method === "dtf" && d.patch ? "Heat press patch" : METHODS[d.method] || d.method);

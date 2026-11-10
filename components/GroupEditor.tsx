@@ -7,7 +7,7 @@ import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "
 import { PrintThumb } from "@/components/LogoThumb";
 import { threadByName } from "@/lib/embroidery";
 import { kidLine } from "@/lib/pricing";
-import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach } from "@/lib/pricing";
+import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled } from "@/lib/pricing";
 import { money } from "@/lib/format";
 import { guessHex, garmentHex, lineHex, mainLine, registerAreas, smallerSpot } from "@/lib/mockup";
 import ColorwaySwap from "@/components/ColorwaySwap";
@@ -132,7 +132,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   }
   // a visual mockup or their separations: a picture only, so every print needs its details and a Confirm
   const needOk = (d: Imprint) => !!g.visualMockup || !!d.custSeps;
-  const filled = (d: Imprint) => !!(d.inks || "").trim() && (!!d.custSeps || !!(d.size || "").trim()) && !!(d.location || "").trim();
+  const filled = (d: Imprint) => printFilled(d);
   const needDetails = g.imprints.some((d) => needOk(d) && !d.ok);
   // a group of hats prints on the hat spots (Full Front, sides, Back); visors on the front; beanies on the cuff (Oct 26, Nick)
   const locs = locationsFor(g.lines);
@@ -1425,7 +1425,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   <b>{g.imprints.length > 1 ? `Print ${di + 1}` : "Print"}</b><span>{[d.location, methodLabel(d)].filter(Boolean).join(" · ")}</span>{d.supplied && <span className="imp-sup-tag">Customer supplied transfers</span>}{d.custSeps && <span className="imp-cseps" title="Printed from the customer's own films: their mockup is the proof, the inks come off it, nothing to separate. Send the films to the film printer from Art & production → Their separations.">Customer separations</span>}
                   <span className="spacer" />
                   {!hidePrices && <span className="imp-each"><b className="num">{money(gc.imprints[di]?.each)}</b> each</span>}
-                  {!frozen && <button className="btn sm primary imp-confirm" type="button" disabled={needOk(d) && !filled(d)} title={needOk(d) && !filled(d) ? "Fill in its location, size and every ink or thread first" : "Its details are set: fold it down like the invoice"} onClick={() => update((x) => { x.imprints[di].ok = { by: (meName || "").split(/[ @]/)[0], at: new Date().toISOString() }; })}>Confirm</button>}
+                  {!frozen && <button className="btn sm primary imp-confirm" type="button" disabled={needOk(d) && !filled(d)} title={needOk(d) && !filled(d) ? (d.method === "dtf" ? "Fill in its location and size first" : "Fill in its location, size and every ink or thread first") : "Its details are set: fold it down like the invoice"} onClick={() => update((x) => { x.imprints[di].ok = { by: (meName || "").split(/[ @]/)[0], at: new Date().toISOString() }; })}>Confirm</button>}
                   {!frozen && <button className="btn icon ghost" type="button" aria-label="Remove imprint" onClick={() => update((x) => { x.imprints.splice(di, 1); })}>✕</button>}
                 </div>
                 <div className={"imp-body" + (!!onMockup && !skipped && !d.supplied && !d.custSeps ? " has-logo" : "")}>
