@@ -155,6 +155,8 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
     plain text; never swap the box for a chip, a badge or a different font. Chips that sit in a field row (a garment's
     colors) match the fields: 36px tall, 6px corners. Fields in one row line up at the top and share the same height.
     Pick a customer with `components/CustomerPick.tsx` (type to find), never a `<select>` of customers.
+    A price box is `components/MoneyField.tsx` (two decimals, 2.40 not 2.4, when not being typed in; Nick, Nov 10 2026),
+    never a bare `<input type="number" step="0.01">`.
   - No new colors, radii, font sizes or shadows: use the CSS variables (`--ink*`, `--line*`, `--surface*`, `--accent*`,
     `--fbs-*`, `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
