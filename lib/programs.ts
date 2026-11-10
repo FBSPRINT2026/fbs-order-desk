@@ -88,6 +88,9 @@ export type RateCard = {
   /** rules that apply to every job on Program, whatever the print */
   /** price per screen instead of the price list's (Tiger Blue: $15, they supply print-ready separations) */
   screenFee?: number | null;
+  /** a print with its own youth screens: the youth screens are charged, but every piece is priced at the whole group's
+   *  break (Nov 10, Nick: Tiger Blue "gets the qty discount… but pays for the screens") */
+  youthTogether?: boolean;
   /** no setup (screens, digitizing, PMS…) on any job (Furry Feline: they supply everything and pay a flat price) */
   noSetupEver?: boolean;
   /** finishing that's part of the price (Oct 17, Nick: Peticolas's price includes roll & rubber band and printing the
@@ -114,7 +117,7 @@ export function styleAdd(card: Pick<RateCard, "styleAdds">, style: string | unde
   if (!k) return null;
   return (card.styleAdds || []).find((x) => { const s = styleKey(x.style); return !!s && (k === s || k.endsWith(s) || s.endsWith(k)); }) || null;
 }
-export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.noSetupEver || !!c.extras?.length || !!Object.keys(c.extraPrices || {}).length || !!c.included?.length || !!c.freeDelivery || !!c.designsAllIn);
+export const cardSetsAnything = (c: RateCard | null | undefined) => !!c && (Object.values(c.prices || {}).some((x) => +x > 0) || c.screenFee != null || !!c.youthTogether || !!c.noSetupEver || !!c.extras?.length || !!Object.keys(c.extraPrices || {}).length || !!c.included?.length || !!c.freeDelivery || !!c.designsAllIn);
 export const cardHasPrices = (c: RateCard | null | undefined) => !!c && c.gridOn !== false && Object.values(c.prices || {}).some((x) => +x > 0);
 export const BIG_SIZES = ["2XL", "3XL", "4XL", "5XL"] as const;
 export const newRateCard = (): RateCard => ({ base: { brand: "Next Level", style: "6210" }, markup: 1.2, minQty: 50, waiveSetup: true, garmentIncluded: true, sizeUp: { "2XL": 2.5, "3XL": 2.5, "4XL": 2.5, "5XL": 2.5 }, prices: {} });

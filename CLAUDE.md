@@ -130,6 +130,8 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   groups use them, and their pieces counted together for the price break.
 - **A program's screen price is for every screen** (Nick, Nov 10 2026: Tiger Blue "always pays $15 per screen new or
   remake"): `screenFeeOf` in `lib/pricing.ts`; a remake fee never overrides it.
+  A program can also charge a print's youth screens but price youth and adult pieces together at the group's break
+  (`RateCard.youthTogether`, Tiger Blue; Nick, Nov 10 2026: "he gets the qty discount… but pays for the screens").
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`

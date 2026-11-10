@@ -383,7 +383,7 @@ export function persEach(s: Settings, type: PriceType = "retail"): number {
   return f && !isNaN(+f.price) ? +f.price : 5;
 }
 /** Garments that share the same imprints. Quantity breaks use the group total. */
-export type Group = { id: string; name?: string; /** priced by a program design's flat price, which is everything in: no setup (screens, digitizing, PMS, minimum) on this group (Oct 30, Nick: "the program pricing overrides the setup… zero setups") */ allIn?: boolean;
+export type Group = { id: string; name?: string; /** youth screens charged, every piece priced at the whole group's break (set from the program, RateCard.youthTogether) */ youthTogether?: boolean; /** priced by a program design's flat price, which is everything in: no setup (screens, digitizing, PMS, minimum) on this group (Oct 30, Nick: "the program pricing overrides the setup… zero setups") */ allIn?: boolean;
   /** a longer description of everything in the group (Oct 22, Nick: "a more detailed description for a group… that's
    *  not just the group name"): under the name on the order, the quote, the invoice and the work order */
   description?: string;
@@ -1181,10 +1181,11 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const split = (d: Imprint) => youthSplit(g, d);
   type Side = "a" | "y" | undefined;
   const sideQty = (side: Side) => (side === "y" ? yQty : aQty);
-  const tiOf = (d: Imprint, side?: Side) => (side && split(d) ? tierIndex(sideQty(side), pl) : dq(d) === qty ? ti : tierIndex(dq(d), pl));
-  const ixOf0 = (d: Imprint, side?: Side) => (side && split(d) ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQty(side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
+  // a program can price both sides at the whole group's break and only charge the youth screens (Group.youthTogether)
+  const tiOf = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? tierIndex(sideQty(side), pl) : dq(d) === qty ? ti : tierIndex(dq(d), pl));
+  const ixOf0 = (d: Imprint, side?: Side) => (side && split(d) && !g.youthTogether ? { ...ix, eti: pl.embTiers?.length ? tierIndex(sideQty(side), { tiers: pl.embTiers }) : tiOf(d, side) } : dq(d) === qty ? ix : { ...ix, eti: pl.embTiers?.length ? tierIndex(dq(d), { tiers: pl.embTiers }) : tiOf(d) });
   // the pieces a print is priced at (DTF transfers are priced by size and these pieces, lib/dtfGrid.ts)
-  const ixOf = (d: Imprint, side?: Side) => ({ ...ixOf0(d, side), q: side && split(d) ? sideQty(side) : dq(d) });
+  const ixOf = (d: Imprint, side?: Side) => ({ ...ixOf0(d, side), q: side && split(d) && !g.youthTogether ? sideQty(side) : dq(d) });
   const anySplit = (g.imprints || []).some(split);
   // the youth screens' own underbase: none when every youth shirt is light (a Natural), the same rule as the adult's
   const kidLight = !!pl.darkAddsColor && !(g.lines || []).some((l, i) => kidAt[i] && billQty(l) > 0 && !isLightColor(l.color, pl));

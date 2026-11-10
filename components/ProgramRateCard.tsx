@@ -27,6 +27,7 @@ export default function ProgramRateCard({ card }: { card: RateCard }) {
   if (!card.garmentIncluded) know.push("Print only: you supply the shirts");
   if (card.garmentIncluded && shirt) know.push("Other shirts: priced up or down by the shirt's cost");
   if (card.screenFee != null) know.push(`Screens: ${money(+card.screenFee)} each`);
+  if (card.youthTogether) know.push("Youth screens charged; youth and adult priced together");
   for (const x of card.extras || []) if (x.trim()) know.push(x.trim());
   const terms = [...incl, ...know];
   if (!fronts.length && terms.length <= 1) return null;

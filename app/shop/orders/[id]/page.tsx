@@ -657,6 +657,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.groups.forEach((g) => {
         const want = on && prog!.card?.screenFee != null && g.imprints.some((x) => x.method === "screen") ? +prog!.card.screenFee : undefined;
         if (want == null) { if (g.screenFee != null) delete g.screenFee; } else if (g.screenFee !== want) g.screenFee = want;
+        const yt = !!(on && prog!.card?.youthTogether);
+        if (!yt) { if (g.youthTogether) delete g.youthTogether; } else if (!g.youthTogether) g.youthTogether = true;
       });
       // the card's "no setup": while Program is on, setup is waived when every group is on program prices (never when
       // the card prices the screens)

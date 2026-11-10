@@ -284,6 +284,7 @@ function RateCardEditor({ card, onSave }: { card: RateCard | null; onSave: (c: R
       <div className="pga-row">
         <label className="check"><input type="checkbox" checked={!!c.noSetupEver} onChange={(e) => set({ noSetupEver: e.target.checked })} /> No setup on any job</label>
         <label>Screens, each<div className="qp-amt-in"><span>$</span><input type="text" inputMode="decimal" defaultValue={c.screenFee != null ? String(c.screenFee) : ""} onBlur={(e) => { const v = e.target.value.trim(); set({ screenFee: v === "" ? null : money2(v) }); }} placeholder="normal" /></div></label>
+        <label className="check" title="A print with its own youth screens: the youth screens are charged, but youth and adult pieces are priced together at the whole group's quantity break"><input type="checkbox" checked={!!c.youthTogether} onChange={(e) => set({ youthTogether: e.target.checked })} /> Youth screens: charge the screens, price all pieces together</label>
       </div>
       <div className="pga-row rc-inc">
         <span>Their price for extras</span>
