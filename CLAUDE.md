@@ -126,6 +126,9 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   color change set by hand, `Imprint.changeOf`, wins). Another size is its own print. Picking a logo already on the order
   in the Mockup Creator brings it in the way it's used there (`swapLogo`), and the print says "Same print as …" or warns
   about the size.
+- **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
+  with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
+  a quote-only or proof-only send path.
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…
