@@ -229,9 +229,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // clicking on a customer's order request. Would you like to open this in the job center?… filter by that customer… that one
   // selected so that you can hit process"); every link to it lands here, so the question is asked here, once per visit
   const [rqAsk, setRqAsk] = useState(false);
+  // once you're working in a request (opened with ?stay=1), coming back to it from its own tools in this tab (saving a
+  // mockup, the Mockup Creator's Back, any tool that returns to the order) doesn't ask again (Nov 10, Amanda: saving a
+  // mockup on #50009 asked to open it in the Job Center)
   useEffect(() => {
     if (!o || o.status !== "request" || !(o as Order & { submitted_at?: string | null }).submitted_at) return;
-    try { if (new URL(window.location.href).searchParams.get("stay") === "1") return; } catch { /* */ }
+    const key = `fbs:rq-stay:${o.id}`;
+    try {
+      if (new URL(window.location.href).searchParams.get("stay") === "1") { sessionStorage.setItem(key, "1"); return; }
+      if (sessionStorage.getItem(key) === "1") return;
+    } catch { /* */ }
     setRqAsk(true);
   }, [o?.id, o?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const setTab = (t: Tab) => { setTabS(t); try { const u = new URL(window.location.href); if (t === "order") u.searchParams.delete("tab"); else u.searchParams.set("tab", t); window.history.replaceState(window.history.state, "", u.toString()); } catch { /* */ } };

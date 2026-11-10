@@ -3478,7 +3478,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const [backIn, setBackIn] = useState<number | null>(null);
   useEffect(() => {
     if (backIn == null || !orderId) return;
-    if (backIn <= 0) { location.assign(`/shop/orders/${orderId}`); return; }
+    if (backIn <= 0) { location.assign(`/shop/orders/${orderId}?stay=1`); return; }
     const t = setTimeout(() => setBackIn((x) => (x == null ? null : x - 1)), 1000);
     return () => clearTimeout(t);
   }, [backIn, orderId]);
@@ -4017,7 +4017,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const gs = orderGroups(o), at = gs.findIndex((x) => x.id === groupId);
       const next = gs.slice(at + 1).find((x) => x.imprints.some((d) => d.design_id) && !x.mockupAt);
       setMsg(next ? "Saved. On to the next group…" : "Saved. Opening the order…");
-      setTimeout(() => location.assign(next ? `/shop/artwork/mockup?order=${o.id}&group=${next.id}&auto=1${fromEmail ? `&email=${fromEmail}` : ""}` : `/shop/orders/${o.id}${fromEmail ? `?email=${fromEmail}` : ""}`), 900);
+      // back to the order you're working on: ?stay=1 so a customer's order request doesn't ask to open it in the Job Center
+      // again (Nov 10, Amanda, #50009); orders that aren't requests ignore it
+      setTimeout(() => location.assign(next ? `/shop/artwork/mockup?order=${o.id}&group=${next.id}&auto=1${fromEmail ? `&email=${fromEmail}` : ""}` : `/shop/orders/${o.id}?stay=1${fromEmail ? `&email=${fromEmail}` : ""}`), 900);
     }, 1800);
   }, [auto, order, ready, saving, garDrawing, drawPending, imprints, paints, designs, urls]); // eslint-disable-line react-hooks/exhaustive-deps
   const notReady = !customerId ? "Pick a customer first — their designs and mockups live on their account." : logoOnly ? "Type the colors it goes on (Black, Forest Green…)." : "Pick at least one garment to put the art on."
@@ -4154,7 +4156,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         );
       })()}
       {/* back to the order: a full load, so mockups saved here show (a client-side link showed the order as it was) */}
-      {!portal && orderId ? <BackLink href={`/shop/orders/${orderId}`} label={`Order #${order?.number || ""}`} hard trail={false} />
+      {!portal && orderId ? <BackLink href={`/shop/orders/${orderId}?stay=1`} label={`Order #${order?.number || ""}`} hard trail={false} />
         : <BackLink href={portal ? (requestId ? `/portal/request/${requestId}` : backHref || "/portal") : "/shop/artwork"} label={portal ? (requestId ? "the order" : "Dashboard") : "Artwork"} trail={!portal} />}
       {lock && <div className="mk-lockbar" role="note">
         <span className="mk-lockbar-l">{!lock.customer && <span className="mk-lockbar-fbs" aria-hidden>fbs</span>}<b>{lock.customer ? "Customer's mockup" : lock.fbs ? "FBS made mockup" : "Ordered mockup"}</b></span>
