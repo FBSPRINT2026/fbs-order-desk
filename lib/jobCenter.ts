@@ -74,12 +74,11 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   const t00 = Date.now(), tms: Record<string, number> = {}; let tl = t00; const tm = (k: string) => { const t = Date.now(); tms[k] = t - tl; tl = t; };
   const now = Date.now();
   const since = new Date(now - TWO_WEEKS).toISOString();
-  const [{ data: os }, { data: dec }, { data: s }, { data: leads }, { data: am }] = await Promise.all([
+  const [{ data: os }, { data: dec }, { data: s }, { data: leads }] = await Promise.all([
     admin.from("orders").select("id, number, nickname, status, type, source, due_date, flags, groups, lines, fees, discount_pct, discount_amt, discount_type, tax_exempt, tax_rate, waive_setup, price_type, total, qty, customer_id, approved_at, approved_name, submitted_at, created_at, updated_at, declined_at, declined_reason, customers(company, name), order_type, sample").in("status", OPEN).is("declined_at", null).eq("draft", false).is("discarded_at", null).order("number", { ascending: false }).limit(800),
     admin.from("orders").select("id, number, nickname, status, due_date, groups, customer_id, declined_at, declined_reason, customers(company, name)").gte("declined_at", since).is("discarded_at", null).limit(200),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
     admin.from("ai_suggestions").select("id, title, body, customer_id, activity_id, created_at, customers(company, name)").eq("kind", "draft_order").eq("status", "open").gte("created_at", new Date(now - 30 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
-    admin.from("mockups").select("id, customer_id, title, created_at, design_ids, created_by, customers(company, name)").is("order_id", null).is("archived_at", null).is("shelved_at", null).gte("created_at", new Date(now - 45 * 864e5).toISOString()).order("created_at", { ascending: false }).limit(300),
   ]);
   tm("first");
   const settings = mergeSettings(s?.data);
@@ -129,28 +128,8 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
       title: a?.subject || said || l.title, sub: `${a?.kind === "clickup" ? "ClickUp" : "Email"}${said && a?.subject ? ` · ${said}` : ""}`, depts: [], tracks: (l.body || "").includes("Still need:") ? [{ k: "numbers", state: "needed", label: "Has questions to answer" }] : [],
       activityId: l.activity_id, leadText: `${a?.subject || ""} ${said}`.slice(0, 600), suggestionId: l.id });
   }
-  // In the works · art with no order yet (made for a customer before the details). Not art whose logo went on to an order
-  // made after it, kept or cleared (Nov 9: ABC Test Company's mockups stayed after its orders were deleted): that job was
-  // taken care of, and the mockup just never got linked to its order (an order of theirs from up to two weeks before counts
-  // too: Fossil sent their own mockup on Nov 5 for #40460, made Nov 4)
-  type AM = { id: string; customer_id: string | null; title: string; created_at: string; design_ids: string[] | null; customers?: { company?: string; name?: string } | null };
-  // only art the customer sent us themselves (their own mockup or picture, from their portal): mockups the shop saves to a
-  // customer are just saved; one that's a real job is made a job (Start a job: a quote waiting on sizes, under Numbers)
-  // (Nov 9, Nick: "we're just going to have a ton of stuff show up on here that's not real orders")
-  const { data: staffRows } = await admin.from("staff").select("email");
-  const staffEmails = new Set(((staffRows || []) as { email: string }[]).map((x) => String(x.email || "").toLowerCase()));
-  const ams = ((am || []) as unknown as (AM & { created_by?: string | null })[]).filter((m) => m.customer_id && !staffEmails.has(String(m.created_by || "").toLowerCase()) && !/@fbsprint\.com$/i.test(String(m.created_by || "")));
-  const amCust = [...new Set(ams.map((m) => m.customer_id!))], amFrom = ams.reduce((t, m) => (m.created_at < t ? m.created_at : t), new Date().toISOString());
-  const later = await inChunks<{ customer_id: string; created_at: string; groups: unknown }>(amCust, (p) => admin.from("orders").select("customer_id, created_at, groups").in("customer_id", p).gte("created_at", new Date(Date.parse(amFrom) - 14 * 864e5).toISOString()).is("declined_at", null).order("id").limit(1000), 50);
-  const usedLater = (m: AM) => !!m.design_ids?.length && later.some((o) => o.customer_id === m.customer_id && o.created_at >= new Date(Date.parse(m.created_at) - 14 * 864e5).toISOString() && ((o.groups || []) as { imprints?: { design_id?: string }[] }[]).some((g) => (g.imprints || []).some((im) => !!im.design_id && m.design_ids!.includes(im.design_id))));
-  const amByCust = new Map<string, { ids: string[]; at: string; title: string; c: string }>();
-  for (const m of ams) {
-    if (usedLater(m)) continue;
-    const key = `${m.customer_id}|${(m.title || "").split(" — ")[0]}`;
-    const g = amByCust.get(key);
-    if (g) g.ids.push(m.id); else amByCust.set(key, { ids: [m.id], at: m.created_at, title: (m.title || "Mockup").split(" — ")[0], c: cust(m.customers) });
-  }
-  for (const [key, g] of amByCust) out.push({ key: `art:${key}`, type: "artonly", steps: ["mockups"], at: g.at, due: null, customer: g.c, customerId: key.split("|")[0], title: g.title, depts: [], tracks: [{ k: "art", state: "made", label: "Mockup made" }, { k: "numbers", state: "needed", label: "No order yet" }], mockupIds: g.ids });
+  // customers' own mockups with no order aren't jobs (Nov 10, Nick: "we're waiting on the customer to do something… a lot
+  // of people are just playing with it"): they show once the customer sends an order; they stay on the customer's page
 
   for (const o of orders) {
     const gs = orderGroups(o);

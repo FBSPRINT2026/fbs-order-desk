@@ -105,7 +105,6 @@ export default function JobCenter() {
   const [dept, setDept] = useSticky<Dept | "all">("jobs.dept", "all");
   const [mineOn, setMine] = useSticky<boolean>("jobs.mine", true);
   const cameBack = false; // the "Came back with changes" filter is gone (Nov 2, Nick)
-  const [artOnly, setArtOnly] = useSticky<boolean>("jobs.artOnly", false);
   const [q, setQ] = useUrlSearch("q");
   const [pick, setPick] = useState<string | null>(null); // the job open in the right panel
   // View all (Oct 29, Nick: "when you first go onto the job center, you got to see everything… everything but leads,
@@ -153,7 +152,7 @@ export default function JobCenter() {
   const whose = (it: JobItem) => !mine || it.owner === me;
   const inDept = (it: JobItem) => dept === "all" || it.depts.includes(dept) || (it.type !== "order" && it.type !== "request");
   const match = (it: JobItem) => { const t = q.trim().toLowerCase(); return !t || `${it.number || ""} ${it.title} ${it.customer} ${it.sub || ""}`.toLowerCase().includes(t); };
-  const flags = (it: JobItem) => (!cameBack || !!it.revised) && (!artOnly || step !== "mockups" || it.type === "artonly");
+  const flags = (it: JobItem) => (!cameBack || !!it.revised);
   // the Digitizing Center is the whole shop's: Sew-outs shows everyone's, whatever My accounts says (Oct 29, Nick: "I don't
   // see… any of the digitizing center files under sew-outs")
   const SHOP_WIDE: Step[] = ["sewouts"];
@@ -163,7 +162,7 @@ export default function JobCenter() {
   const count = (s: Step) => pool(s).filter((it) => it.steps.includes(s) && inDept(it)).length;
   const shown = useMemo(() => pool(step).filter((it) => it.steps.includes(step) && inDept(it) && match(it))
     .sort((a, b) => (step === "approved" || step === "declined" || step === "leads" || isReq(step) ? (b.at || "").localeCompare(a.at || "") : (a.due || "9999").localeCompare(b.due || "9999") || (a.at || "").localeCompare(b.at || ""))), // eslint-disable-line react-hooks/exhaustive-deps
-  [items, step, dept, q, mine, me, cameBack, artOnly]);
+  [items, step, dept, q, mine, me, cameBack]);
   const deptCount = (d: Dept | "all") => pool(step).filter((it) => it.steps.includes(step) && (d === "all" || it.depts.includes(d))).length;
   const after = (m: string) => { setMsg(m); setTimeout(() => setMsg(""), 6000); setN((x) => x + 1); };
   const picked = (items || []).find((it) => it.key === pick && it.type !== "request") || null;
@@ -253,7 +252,7 @@ export default function JobCenter() {
     const tb = document.querySelector(".jct-body .jc-list .toolbar"); if (tb) ro.observe(tb);
     addEventListener("resize", later);
     return () => { ro.disconnect(); removeEventListener("resize", later); if (raf) cancelAnimationFrame(raf); };
-  }, [items, step, dept, q, chat, mine, cameBack, artOnly, pick]);
+  }, [items, step, dept, q, chat, mine, cameBack, pick]);
 
   return (
     <>
@@ -386,7 +385,6 @@ export default function JobCenter() {
                   the way to the left… add one button for all") */}
               {(all || step !== "leads") && <div className="jc-dpt jc-dseg" role="radiogroup" aria-label="Department">{DEPTS.map(([k, l]) => { const nn = items ? (k === "all" ? null : deptCount(k)) : null; const on = dept === k; return (
                 <button key={k} type="button" role="radio" aria-checked={on} className={"prf-dept " + k + (on ? " on" : "") + (nn === 0 ? " z" : "")} title={k === "all" ? "Every department" : `${l}: ${nn ?? 0} job${nn === 1 ? "" : "s"}`} onClick={() => setDept(k)}>{k === "all" ? "All" : DEPT_TAG[k as Dept]}</button>); })}</div>}
-              {step === "mockups" && !all && <div className="chips"><button type="button" className={"chip" + (artOnly ? " on" : "")} aria-pressed={artOnly} title="Mockups made for a customer with no order yet" onClick={() => setArtOnly(!artOnly)}>Art only, no order</button></div>}
               <span className="jc-search"><SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} /></span>
             </div>
             <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{curG?.t}</b><span>›</span><b>{(curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && !isReq(step) ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}</div>
