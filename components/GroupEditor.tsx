@@ -1481,6 +1481,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {!d.supplied && screenCtl(d) && <div className="imp-scr">{screenCtl(d)}</div>}
                 {youthInfo(d) && <div className="imp-scr"><YouthSpec y={youthInfo(d)!} note /></div>}
                 {!d.supplied && puffCtl(d) && <div className="imp-scr">{puffCtl(d)}</div>}
+                {!d.supplied && specialCtl(d) && <div className="imp-scr">{specialCtl(d)}</div>}
                 {!d.supplied && inkCtl(d, false) && <div className="imp-scr">{inkCtl(d, false)}</div>}
                 {/* retail prints have no screens line: the fashion hit / soft hand choice on its own (Oct 16, Nick) */}
                 {d.method === "screen" && d.colors < FULL_COLOR && !scrImps.includes(d) && (
