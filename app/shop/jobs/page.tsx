@@ -38,11 +38,9 @@ const GROUPS: G[] = [
     ["website", "Website Submissions", ic(<><circle cx="12" cy="12" r="9" /><path d="M3.6 9h16.8M3.6 15h16.8" /><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>)]] },
   { t: "Inc. Orders", line: "Incoming orders: sent in by customers", c: "var(--fbs-violet)", steps: [
     ["requests", "Customer Requests", ic(<><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M4 13h3l3 3h4l3-3h3" /></>)]] },
-  { t: "In The Works", line: "Mockups and numbers", c: "var(--warn)", steps: [
-    ["mockups", "Mockups", ic(<><path d="M15 4l6 2v5h-3v8a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-8H3V6l6-2a3 3 0 0 0 6 0" /></>)],
-    ["numbers", "Numbers", ic(<><path d="M5 9h14M5 15h14M11 4 7 20M17 4l-4 16" /></>)]] },
-  { t: "Quotes", line: "Ready or sent", c: "var(--fbs-blue)", steps: [
-    ["ready", "Ready", ic(<><path d="M10 14 21 3" /><path d="m21 3-6.5 18a.55.55 0 0 1-1 0L10 14l-7-3.5a.55.55 0 0 1 0-1z" /></>)],
+  // Processing: ours (being built, or made and not sent); Sent: with the customer (Nov 10, Nick: "quotes, processing and sent")
+  { t: "Quotes", line: "Processing or sent", c: "var(--fbs-blue)", steps: [
+    ["ready", "Processing", ic(<><path d="M10 14 21 3" /><path d="m21 3-6.5 18a.55.55 0 0 1-1 0L10 14l-7-3.5a.55.55 0 0 1 0-1z" /></>)],
     ["sent", "Sent", ic(<><path d="M6.5 7h11M6.5 17h11" /><path d="M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z" /><path d="M6 4v2a6 6 0 1 0 12 0V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z" /></>)]] },
   { t: "Revisions", line: "On hold", c: "var(--danger)", steps: [
     ["changes", "Make Changes", ic(<><path d="M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></>)]] },
@@ -61,15 +59,15 @@ const ALL_STEPS = GROUPS.flatMap((g) => g.steps.map((s) => s[0]));
 const colorOf = (s: Step) => (s === "declined" ? "var(--ink-3)" : GROUPS.find((g) => g.steps.some((x) => x[0] === s))!.c);
 const DEPTS: [Dept | "all", string][] = [["all", "All"], ["screen", "Screen printing"], ["embroidery", "Embroidery"], ["heat", "Heat press"]];
 const EMPTY: Record<Step, string> = {
-  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", website: "No new inquiries from the website.", mockups: "No mockups waiting on numbers.", numbers: "No numbers waiting on mockups.",
-  ready: "Nothing made and waiting to be sent.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", goods_order: "Nothing approved and waiting for its goods to be ordered.", approved: "Nothing approved in the last three days.", declined: "Nothing declined in the last two weeks.",
+  leads: "No new orders found in email or ClickUp.", requests: "No requests from the portal.", website: "No new inquiries from the website.",
+  ready: "Nothing being worked on.", sent: "Nothing out with a customer.", changes: "No changes asked.", sewouts: "No sew-outs to take or get approved.", goods_order: "Nothing approved and waiting for its goods to be ordered.", approved: "Nothing approved in the last three days.", declined: "Nothing declined in the last two weeks.",
 };
 /** the tracks a step is about */
 // Mockups lists mockups still missing their numbers (the numbers are what it needs); Numbers the other way round
 const forStep = (s: Step, t: Track) => (s === "mockups" ? (t.k === "numbers" && t.state === "needed") : s === "numbers" ? (t.k === "art" && t.state === "needed")
   : s === "sewouts" ? (t.k === "sewout" && t.state !== "done")
   : s === "goods_order" ? (t.k === "goods" && t.state === "needed")
-  : s === "ready" ? (t.k !== "sewout" && t.state === "made") : s === "sent" ? (t.k !== "sewout" && t.state === "sent") : s === "changes" ? (t.k !== "sewout" && t.state === "changes") : s === "approved" ? t.state === "done" : false);
+  : s === "ready" ? (t.k !== "sewout" && (t.state === "made" || t.state === "needed")) : s === "sent" ? (t.k !== "sewout" && t.state === "sent") : s === "changes" ? (t.k !== "sewout" && t.state === "changes") : s === "approved" ? t.state === "done" : false);
 /** the same tag many times once, with how many on its label */
 const tagsOnce = (ts: Track[]) => { const by = new Map<string, Track[]>(); for (const t of ts) by.set(t.label + "|" + t.state, [...(by.get(t.label + "|" + t.state) || []), t]); return [...by.values()].map((g) => (g.length > 1 ? { ...g[0], label: `${g[0].label} ×${g.length}` } : g[0])); };
 /** the same note many times once, with how many ("Needs digitizing · Left Chest ×3") */
@@ -99,9 +97,10 @@ export default function JobCenter() {
   // what we had last time, right away (sessionStorage is read after the page is up, so the server render matches)
   useEffect(() => { const c = jcRead(); if (c.items) setItems0((cur) => cur || c.items!); if (c.me) setMe(c.me); if (c.hasAcc != null) setHasAcc(c.hasAcc); if (c.chats) setChats((cur) => (cur.length ? cur : c.chats!)); }, []);
   const [err, setErr] = useState(""), [msg, setMsg] = useState("");
-  const [step, setStep] = useSticky<Step>("jobs.step", "mockups");
+  const [step, setStep] = useSticky<Step>("jobs.step", "ready");
   // Leads are hidden for now: a page left on them opens on what customers sent
-  useEffect(() => { if (step === "leads") setStep("requests"); }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a step that's gone (Leads; In the Works' Mockups / Numbers, Nov 10) opens what replaced it
+  useEffect(() => { if (step === "leads") setStep("requests"); else if (!ALL_STEPS.includes(step)) setStep("ready"); }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
   const [dept, setDept] = useSticky<Dept | "all">("jobs.dept", "all");
   const [mineOn, setMine] = useSticky<boolean>("jobs.mine", true);
   const cameBack = false; // the "Came back with changes" filter is gone (Nov 2, Nick)

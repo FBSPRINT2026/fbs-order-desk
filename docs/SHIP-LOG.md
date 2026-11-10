@@ -54,3 +54,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 2:10pm · 1.3.255 · Nick · Order header: a held spot is one small '📅 Held · Tue 11/10' button; the press, details date, Change and Let it go open under it, so the title and buttons keep their room
 - Nov 10 2:11pm · 1.3.256 · Nick · Send to customer: the proof and the quote are both ticked by default, from any Send button (untick one to send the other alone)
 - Nov 10 2:11pm · 1.3.257 · Nick · House rules: sending to a customer is one Send, proof and quote ticked by default
+- Nov 10 2:25pm · 1.3.258 · Nick · Job Center: In the Works is gone; Quotes is Processing (ours: being built, or made and not sent) and Sent (with the customer), each job in one of them

@@ -26,7 +26,7 @@ import { allRows } from "@/lib/readAll";
  * Read from the records every page already uses: orders, mockups, proofs, sewouts, the order's history, and the AI's
  * draft orders.
  */
-export type Step = "leads" | "requests" | "website" | "mockups" | "numbers" | "ready" | "sent" | "changes" | "sewouts" | "goods_order" | "approved" | "declined";
+export type Step = "leads" | "requests" | "website" | "ready" | "sent" | "changes" | "sewouts" | "goods_order" | "approved" | "declined";
 export type TrackState = "needed" | "made" | "sent" | "changes" | "done";
 export type Track = { k: "art" | "sewout" | "numbers" | "goods"; state: TrackState; label: string; note?: string };
 export type Dept = "screen" | "embroidery" | "heat";
@@ -185,18 +185,16 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     else tracks.push({ k: "numbers", state: "done", label: "Order approved" });
 
     const steps: Step[] = [];
-    // In the works: mockups without numbers, numbers without mockups; a job missing both is at both
-    const artNeed = tracks.some((t) => t.k === "art" && t.state === "needed"), numNeed = tracks.some((t) => t.k === "numbers" && t.state === "needed");
-    if (numNeed) steps.push("mockups");
-    if (artNeed) steps.push("numbers");
-    // the mockup and the quote go through Ready, Sent and Make changes; a sew-out is its own step (Sew-outs)
+    // Quotes is two steps, Processing and Sent, and a job is in one of them (Nov 10, Nick: "how do you know if it's ready
+    // versus started?… just put quotes, processing and sent"): ours while anything made hasn't gone out or nothing has gone
+    // out yet; theirs once something is out and nothing made is waiting here (a piece still missing shows as a tag)
     const mq = tracks.filter((t) => t.k !== "sewout");
-    // one place: the customer asked for changes on the mockup or the quote, so it's ours to fix (Make Changes) and not
-    // also out with them under Sent (Nov 9, Nick: #40493 showed in Sent and Revisions)
+    // the customer asked for changes on the mockup or the quote: ours to fix (Make Changes), not also under Sent (Nov 9)
     if (mq.some((t) => t.state === "changes")) steps.push("changes");
     else {
-      if (mq.some((t) => t.state === "made")) steps.push("ready");
-      if (mq.some((t) => t.state === "sent")) steps.push("sent");
+      const made = mq.some((t) => t.state === "made"), out = mq.some((t) => t.state === "sent"), open = made || mq.some((t) => t.state === "needed");
+      if (made || (open && !out)) steps.push("ready");
+      else if (out) steps.push("sent");
     }
     if (tracks.some((t) => t.k === "sewout" && t.state !== "done")) steps.push("sewouts");
     const allDone = tracks.every((t) => t.state === "done");
