@@ -26,7 +26,7 @@ type TableInfo = { name: string; pk: string | null; avg_bytes: number; est_rows:
 type FileRec = { path: string; name: string; bytes: number; rows: number; sha256: string; table: string };
 export type Manifest = {
   kind: "full"; made?: string; folder: string; label?: string; done: string[]; files: FileRec[]; rows: Record<string, number>;
-  skipped: string[]; tables?: string[]; cur?: { table: string; last: string | number | null; part: number; total: number; from?: number } | null;
+  skipped: string[]; tables?: string[]; cur?: { table: string; after?: Record<string, unknown> | null; part: number; total: number; from?: number } | null;
 };
 type Row = { id: string; folder: string; status: string; manifest: Manifest; dropbox?: { copied?: string[]; done?: boolean; error?: string; root?: string } };
 
@@ -71,11 +71,13 @@ export async function backupRound(admin: SupabaseClient, id: string, who: string
       if (m.done.includes(table)) continue;
       if (Date.now() - t0 > BUDGET_MS) break;
       const t = info.get(table)!;
-      // read in key order, in parts of 4,000 rows. A one-column key pages by the key (fast at any depth); others page
-      // by position. A table that runs past this round's time picks up where it stopped (m.cur) on the next round
-      const keys = t.pk ? t.pk.split(",") : [], keyset = keys.length === 1, page = pageFor(t);
+      // read in primary-key order after the last row read (backup_page: keys of any number of columns, fast at any
+      // depth; a table without a key pages by position), in parts of 4,000 rows. A table that runs past this round's
+      // time picks up where it stopped (m.cur) on the next round
+      const keys = t.pk ? t.pk.split(",") : [], page = pageFor(t);
       const cur = m.cur?.table === table ? m.cur : null;
-      let from = cur?.from || 0, part = cur?.part || 1, buf: unknown[] = [], total = cur?.total || 0, last: string | number | null = cur?.last ?? null;
+      let from = cur?.from || 0, part = cur?.part || 1, buf: unknown[] = [], total = cur?.total || 0;
+      let after: Record<string, unknown> | null = (cur?.after as Record<string, unknown> | undefined) ?? null;
       const files: FileRec[] = [];
       const flush = async (final: boolean) => {
         if (!buf.length && (part > 1 || !final)) return;
@@ -89,14 +91,11 @@ export async function backupRound(admin: SupabaseClient, id: string, who: string
       };
       let finished = false;
       for (;;) {
-        let q = admin.from(table).select("*");
-        for (const k of keys) q = q.order(k, { ascending: true });
-        if (keyset && last != null) q = q.gt(keys[0], last);
-        const { data, error } = keyset ? await q.limit(page) : await q.range(from, from + page - 1);
+        const { data, error } = await admin.rpc("backup_page", { tbl: table, after, n: page, skip: from });
         if (error) throw new Error(`${table}: ${error.message}`);
-        const rows = (data || []) as Record<string, unknown>[];
+        const rows = (Array.isArray(data) ? data : []) as Record<string, unknown>[];
         buf.push(...rows); total += rows.length; from += rows.length;
-        if (rows.length && keyset) last = rows[rows.length - 1][keys[0]] as string | number;
+        if (rows.length && keys.length) { const l = rows[rows.length - 1]; after = Object.fromEntries(keys.map((k) => [k, l[k]])); }
         if (buf.length >= PART_ROWS) await flush(false);
         if (rows.length < page) { finished = true; break; }
         if (Date.now() - t0 > BUDGET_MS) break;
@@ -104,7 +103,7 @@ export async function backupRound(admin: SupabaseClient, id: string, who: string
       if (!finished) {
         await flush(false);
         m.files = [...m.files, ...files];
-        m.cur = { table, last, part, total, from };
+        m.cur = { table, after, part, total, from };
         await admin.from("data_backups").update({ manifest: m, error: null }).eq("id", id);
         break;
       }

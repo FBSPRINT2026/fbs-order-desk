@@ -23,9 +23,9 @@ export async function GET(req: Request) {
   const who = "weekly backup";
   const { data: last } = await admin.from("data_backups").select("id, status, created_at, dropbox").eq("kind", "full").order("created_at", { ascending: false }).limit(1).maybeSingle();
   try {
-    if (last && last.status !== "done" && Date.now() - +new Date(last.created_at) < 3 * 86400_000) return NextResponse.json({ step: "tables", ...(await backupRound(admin, last.id, who)) });
+    if (last && last.status === "building" && Date.now() - +new Date(last.created_at) < 3 * 86400_000) return NextResponse.json({ step: "tables", ...(await backupRound(admin, last.id, who)) });
     if (last && last.status === "done" && !(last.dropbox as { done?: boolean } | null)?.done && Date.now() - +new Date(last.created_at) < 3 * 86400_000) return NextResponse.json({ step: "dropbox", ...(await dropboxRound(admin, last.id)) });
-    if (!last || Date.now() - +new Date(last.created_at) > 6 * 86400_000) {
+    if (!last || !["building", "done"].includes(last.status) || Date.now() - +new Date(last.created_at) > 6 * 86400_000) {
       const id = await startBackup(admin, who, "Weekly");
       return NextResponse.json({ step: "started", ...(await backupRound(admin, id, who)) });
     }
