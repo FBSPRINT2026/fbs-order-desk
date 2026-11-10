@@ -49,7 +49,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
     const nm = nameOf(f);
     return (
       <button key={f.id + f.full} type="button" className={cls} onClick={() => open(f)} title={nm || "Open"}>
-        {src ? <img src={src} alt={nm || "Mockup"} loading="lazy" /> : <span className="pv-doc">{nm.split("?")[0].split(".").pop()?.slice(0, 4).toUpperCase() || "FILE"}</span>}
+        <PvThumbFace src={src} nm={nm} />
       </button>
     );
   };
@@ -231,15 +231,15 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
             <tbody>{g.lines.map((l) => (
               <tr key={l.id}>
                 {arts && <td className="pv-artc">{l.mockups.length ? <span className="pv-arts">{l.mockups.map((m) => thumb(m, "pv-thumb md"))}</span> : <span className="pv-art-none" aria-hidden />}</td>}
-                {show.category && <td>{l.category}</td>}{show.itemNumber && <td className="nowrap">{l.itemNumber}</td>}{show.color && <td>{l.color}</td>}
+                {show.category && <td className="pv-c-cat">{l.category}</td>}{show.itemNumber && <td className="nowrap pv-c-no">{l.itemNumber}</td>}{show.color && <td className="pv-c-color">{l.color}</td>}
                 <td className="desc">
                   <div className="pv-desc"><div>{l.brand && !l.description.toLowerCase().includes(l.brand.toLowerCase()) && <span className="faint">{l.brand} </span>}<span className="pv-pre">{plain(l.description)}</span>
                     {l.status && <div><span className="pv-chip">{TASK_STATUS[l.status] || l.status}</span></div>}
                     {l.personalizations.length > 0 && <div className="pv-pers">{l.personalizations.map((p, i) => <span key={i}>{[p.name, p.value].filter(Boolean).join(": ")}</span>)}</div>}</div></div>
                 </td>
-                {sizes.map((s) => <td key={s} className="c num">{l.sizes[s] || ""}</td>)}
-                <td className="c num b">{l.items}</td>{cash && <>{show.markup && <td className="r num">{l.markup != null ? `${l.markup}%` : ""}</td>}
-                <td className="r num">{money(l.price)}</td><td className="c">{l.taxed ? "✓" : ""}</td><td className="r num b">{money(l.items * l.price)}</td></>}
+                {sizes.map((s) => <td key={s} className="c num pv-c-sz">{l.sizes[s] || ""}</td>)}
+                <td className="c num b pv-c-items">{l.items}</td>{cash && <>{show.markup && <td className="r num pv-c-mk">{l.markup != null ? `${l.markup}%` : ""}</td>}
+                <td className="r num pv-c-price">{money(l.price)}</td><td className="c pv-c-tax">{l.taxed ? "✓" : ""}</td><td className="r num b pv-c-total">{money(l.items * l.price)}</td></>}
               </tr>
             ))}</tbody>
             {g.lines.length > 1 && <tfoot><tr><td colSpan={(arts ? 1 : 0) + (show.category ? 1 : 0) + (show.itemNumber ? 1 : 0) + (show.color ? 1 : 0) + 1 + sizes.length} className="r faint">Group total</td><td className="c num b">{qty}</td>{cash && <>{show.markup && <td />}<td /><td /><td className="r num b">{money(tot)}</td></>}</tr></tfoot>}
@@ -338,4 +338,13 @@ export function History({ o, fileUrl, dl, paths, audience }: { o: PvOrder; fileU
       <div className="panel-b">{evs.length ? <div className="pvh">{evs.map((e) => <div key={e.key} className={"pvh-ev pvh-" + e.kind}>{e.node}</div>)}</div> : <div className="faint" style={{ fontSize: 13 }}>No messages or approvals on this order in Printavo.</div>}</div>
     </section>
   );
+}
+
+/** a file's small picture; a file with no picture (or one that won't load) shows its type, ".AI" (Nov 10, Nick: "lots of
+ *  blank boxes… if it's a file you can't preview with a thumbnail… just put the file type in text") */
+function PvThumbFace({ src, nm }: { src: string; nm: string }) {
+  const [bad, setBad] = useState(false);
+  const ext = (nm.split("?")[0].split(".").pop() || "").slice(0, 4).toUpperCase();
+  if (src && !bad) return <img src={src} alt={nm || "Mockup"} loading="lazy" onError={() => setBad(true)} />;
+  return <span className="pv-doc">{ext && ext.length <= 4 && ext !== nm.toUpperCase() ? `.${ext}` : "FILE"}</span>;
 }

@@ -21640,3 +21640,47 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 
 /* paying one invoice: the way to all of them (Nov 10) */
 .pp-all{font-size:12.5px;text-align:center;margin-top:8px}
+
+/* an old invoice's lines on a phone (Nov 10, Nick: "the mobile view on the old Printavo invoices is bad"): when TableFit
+   stacks the table, each line is one card: its pictures in a row, "5000 · Black", the description, the sizes as chips,
+   then "48 × $2.70" and the total on one line; no empty art box, no labels in a column */
+html body .pv table.pv-items.tbl-stack > tbody > tr{display:flex!important;flex-wrap:wrap;align-items:baseline;gap:4px 6px;padding:12px 14px!important}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td{padding:0!important;min-height:0!important;flex:none}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td[data-label]::before{position:static!important;display:inline!important;width:auto!important;margin-right:4px}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc{flex-basis:100%;width:auto!important;margin-bottom:6px}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:has(.pv-art-none){display:none}
+html body .pv table.pv-items.tbl-stack .pv-arts{display:flex;flex-wrap:wrap;gap:6px}
+html body .pv table.pv-items.tbl-stack .pv-thumb.md{width:56px;height:56px}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-cat{flex-basis:100%;font-size:12px;color:var(--ink-3);order:1}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-cat::before,
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-no::before,
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.desc::before,
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-items::before,
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-total::before{display:none!important}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-no{font-weight:700;order:2}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-color{font-weight:700;order:3}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-color::before{content:"· "!important;font-size:inherit!important;letter-spacing:0!important;text-transform:none!important;color:var(--ink-3)!important}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.desc{flex-basis:100%;order:4;color:var(--ink-2,var(--ink));font-size:13px;margin-bottom:4px}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-sz{order:5;padding:2px 7px!important;border-radius:6px;background:var(--surface-2,var(--line-2));font-size:12.5px}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-sz:empty{display:none}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-sz::before{color:var(--ink-3)}
+html body .pv table.pv-items.tbl-stack > tbody > tr::after{content:"";flex-basis:100%;height:0;order:6}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-items{order:7;margin-top:6px;font-weight:400!important;color:var(--ink-3)}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-items::after{content:" ×"}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-price{order:8;margin-top:6px;color:var(--ink-3)}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-price::before,html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-mk{display:none!important}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-tax{display:none!important}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-total{order:9;margin-left:auto;margin-top:6px;font-weight:700}
+html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-c-items::before{content:none}
+html body .pv table.pv-items.tbl-stack > tfoot{display:block}
+html body .pv table.pv-items.tbl-stack > tfoot > tr{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px 12px;padding:10px 14px}
+html body .pv table.pv-items.tbl-stack > tfoot > tr > td{padding:0!important;border:0!important;white-space:nowrap}
+html body .pv table.pv-items.tbl-stack > tfoot > tr > td:empty{display:none}
+/* the totals and the header never break money in two */
+.pv-totals > div{display:flex;justify-content:space-between;gap:12px}
+.pv-totals > div > b{white-space:nowrap}
+@media (max-width:640px){
+  .pv .pv-head-r{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}
+  .pv .pv-head-r .pv-status{grid-column:1/-1;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .pv .pv-head-r .pv-bal:last-of-type{text-align:right}
+}

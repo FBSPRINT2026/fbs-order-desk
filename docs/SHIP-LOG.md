@@ -32,3 +32,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 10:29am · 1.3.233 · Nick · Job photos on the phone: crop, rotate and pinch-zoom before saving (camera and photos picked from the library)
 - Nov 10 10:33am · 1.3.234 · Amanda · Mockup Creator: thread and ink suggestion lists always on the page (they only existed while the Helper panel was open), browser memory off on those boxes
 - Nov 10 10:43am · 1.3.235 · Nick · Portal: Pay on any invoice page (new and old Printavo ones) opens the pay window there, with a link to pay several together; every old invoice can be paid in the portal
+- Nov 10 10:54am · 1.3.236 · Nick · Old invoices on a phone: each line one card (pictures, item · color, description, size chips, qty × price and total); files with no picture show their type (.AI); status and money never overlap or break
