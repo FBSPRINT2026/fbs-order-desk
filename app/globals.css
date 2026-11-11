@@ -21917,3 +21917,11 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msf-up-r.sub{padding:2px 0 2px 10px;border-bottom:0}.msf-up-r.sub .t{display:none}.msf-up-r.sub{grid-template-columns:minmax(0,1fr) auto}
 .msf-up-grp{border-bottom:1px solid var(--line-2,#f1f3f6);padding:3px 0}
 .msf-up-gh{display:grid;grid-template-columns:44px auto minmax(0,1fr);gap:6px;align-items:baseline;font-size:12.5px;white-space:nowrap}.msf-up-gh .t{color:var(--ink-3);font-size:11.5px}.msf-up-gh .faint{font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
+/* the section arrow: a plain small chevron at the end of Sales / Production's heading (turns up when open) */
+.nav-fold{all:unset;cursor:pointer;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--side-ink);opacity:.8}
+.nav-fold:hover{opacity:1;color:var(--side-ink-strong)}
+.nav-fold svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.nav-fold.open svg{transform:rotate(180deg)}
+.nav-h-production .prod-side+.nav-fold{margin-left:6px}
+/* the shop floor block sits in line with the menu: same edges and spacing as the rows above, only a gray tint */
+.nav-floor{margin:0;padding:0;border-radius:6px;gap:2px;display:flex;flex-direction:column;background:rgba(255,255,255,.055)}

@@ -144,6 +144,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   // my Admin Tools share the Shop Tools spot (Oct 24, Nick: "where it says shop tools… put ADM and then SHOP, and then
   // it'll toggle between all my admin tools and then my shop tools"); remembered like the other switches
   const [toolSide, setToolSide] = useSticky<"shop" | "adm">("nav.tools", "shop");
+  // each section folds to its everyday pages; the arrow on its heading drops the rest down (Nov 11 2026, Nick)
+  const [salesAll, setSalesAll] = useSticky<boolean>("nav.salesAll", false);
+  const [prodAll, setProdAll] = useSticky<boolean>("nav.prodAll", false);
   // a tool panel open on the right (Create order): the menu folds to icons for the room, and comes back as it was when
   // the panel closes (Oct 23, Nick: "automatically minimize the toolbar on the left until we close the reorder")
   const [docked, setDocked] = useState(false);
@@ -303,6 +306,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
 
   // a tool someone doesn't have isn't in their menu at all (Oct 22, Nick: Claudia "is not going to see… the time clock
   // tool… employees… separations")
+  // pages used now and then: tucked under each section's arrow (Nov 11 2026, Nick: "the ink room, the employees, the
+  // artwork, they're not going to use that very often… merch stores or projects")
+  const OCCASIONAL = ["/shop/stores", "/shop/projects", "/shop/artwork", "/shop/employees", "/shop/inks"];
   const FLOOR: [string, string, string][] = [["/shop/receiving", "goods", "Receiving"], ["/shop/fulfillment", "fulfill", "Fulfillment"], ["/shop/outbound", "outbound", "Outbound"]];
   const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? null : (
     <NavLink key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={href === "/shop/time" && timeCount > 0 ? `${label}: ${timeCount} to fix` : label} aria-label={label}
@@ -399,6 +405,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {(crew ? [GROUPS[1], GROUPS[0], GROUPS[2]] : GROUPS).filter((g) => [...g.items, ...(g.title === "Production" ? FLOOR : [])].some(([href]) => canOpen(href, perms))).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "") + (g.title === "Production" ? ` side-${side}` : "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title === "Shop Tools" && role === "owner" && toolSide === "adm" ? "Admin Tools" : g.title}
+              {(g.title === "Sales" || g.title === "Production") && <button type="button" className={"nav-fold" + ((g.title === "Sales" ? salesAll : prodAll) ? " open" : "")} aria-expanded={g.title === "Sales" ? salesAll : prodAll} title={(g.title === "Sales" ? salesAll : prodAll) ? "Show only the everyday pages" : "Show every page"} onClick={() => (g.title === "Sales" ? setSalesAll(!salesAll) : setProdAll(!prodAll))}><svg viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" /></svg></button>}
               {/* screen printing, embroidery or heat press: SP / EMB / HP on the right of the heading. The picked one shows in
                   its side's color (blue / salmon / orange), and so does the menu's picked item. */}
               {g.title === "Production" && !sideLocked && canOpen("/shop/threads", perms) && canOpen("/shop/inks", perms) && (
@@ -420,6 +427,8 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
               ? <div className="nav-tools">{role === "owner" && toolSide === "adm" ? adminTools : g.items.map(link)}</div>
               : g.items.filter(([href]) => href !== "/shop/details" || details > 0 || path.startsWith("/shop/details"))
                   // each side's own tools: separations and inks for screen printing, digitizing and threads for embroidery, neither for heat press
+                  // folded: only the everyday pages (and whichever page you're on)
+                  .filter(([href]) => mini || !(((g.title === "Sales" && !salesAll) || (g.title === "Production" && !prodAll)) && OCCASIONAL.includes(href) && !path.startsWith(href)))
                   .filter(([href]) => g.title !== "Production" || !(side === "embroidery" ? ["/shop/separations", "/shop/inks", "/shop/gang-sheet"] : side === "heat" ? ["/shop/separations", "/shop/inks", "/shop/digitizing", "/shop/threads"] : ["/shop/digitizing", "/shop/threads", "/shop/gang-sheet"]).includes(href))
                   .map(link)}
             {/* the shop floor (Nov 11 2026, Nick): Receiving, Fulfillment and Outbound are the same whatever SP / EMB / HP is
