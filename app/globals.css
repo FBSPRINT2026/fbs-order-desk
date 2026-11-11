@@ -21925,3 +21925,4 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .nav-h-production .prod-side+.nav-fold{margin-left:6px}
 /* the shop floor block sits in line with the menu: same edges and spacing as the rows above, only a gray tint */
 .nav-floor{margin:0;padding:0;border-radius:6px;gap:2px;display:flex;flex-direction:column;background:rgba(255,255,255,.055)}
+.nav-h .nav-fold{order:9}.nav-h-production .nav-fold{margin-left:6px}
