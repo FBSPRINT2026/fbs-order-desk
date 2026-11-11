@@ -244,7 +244,7 @@ export type Step = { method: MachineType; location: string; colors: number; scre
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
 const LIGHT = /\b(white|natural|ash|cream|ivory|light|silver|heather\s*grey|sport\s*grey|pink|yellow|lime|sand|oatmeal|bone|vanilla|butter|mint|sky|baby)\b/i;
-const garmentKind = (text: string): Step["garment"] => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hoodie|sweat|crew\s*neck|fleece|jacket|pullover|quarter|zip)\b/i.test(text) ? "heavy" : "tee");
+export const garmentKind = (text: string): Step["garment"] => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hoodie|sweat|crew\s*neck|fleece|jacket|pullover|quarter|zip)\b/i.test(text) ? "heavy" : "tee");
 const smallLoc = (loc: string) => /\b(pocket|sleeve|neck|nape|leg|hip|cuff|hood)\b/i.test(loc);
 const methodType = (m: string): MachineType => (m === "embroidery" ? "embroidery" : m === "dtf" || m === "dtg" || m === "heat" ? "heat" : "screen");
 
@@ -502,7 +502,7 @@ export function estimateRaw(s: ProductionSettings, need: Need, mach: Machine): E
 }
 
 /** A job described in a few fields (the "When can we print it?" form) as what it needs from a machine. */
-export type QuickJob = { method: MachineType; qty: number; garment: "tee" | "heavy" | "bag" | "cap"; dark: boolean; locations: { name: string; colors: number; stitches: number; puff?: boolean }[]; /** 100 = normal; 70 = a hard print that runs at 70% */ speed?: number; /** job conditions picked under the speed slider (they set the slider); see PRINT_CONDS */ conds?: string[] };
+export type QuickJob = { method: MachineType; qty: number; garment: "tee" | "heavy" | "bag" | "cap"; dark: boolean; /** the garments when they differ (Production holder, Nov 10: 305 sweatshirts + 305 tees run at different speeds): each its own pieces, kind and darkness; qty / garment / dark then only say the total and the main one */ parts?: { qty: number; garment: "tee" | "heavy" | "bag" | "cap"; dark: boolean }[]; locations: { name: string; colors: number; stitches: number; puff?: boolean }[]; /** 100 = normal; 70 = a hard print that runs at 70% */ speed?: number; /** job conditions picked under the speed slider (they set the slider); see PRINT_CONDS */ conds?: string[] };
 /**
  * Things that make a screen print run slower or faster ("When can we print it?" / Planner). Picking them sets the print
  * speed slider to 100% × their factors (you can still fine-tune it). Puff also adds its flash and longer setup (its
@@ -533,16 +533,19 @@ export const condSpeed = (conds: string[]) => Math.max(50, Math.min(150, Math.ro
 export function quickNeed(s: ProductionSettings, j: QuickJob): Need {
   const locs = j.locations.filter((l) => (j.method === "embroidery" ? l.stitches > 0 : l.colors > 0));
   const cond = (k: string) => j.method === "screen" && (j.conds || []).includes(k);
-  const steps: Step[] = locs.map((l) => {
+  // each garment its own run of each print (a sweatshirt prints slower than a tee; a dark one takes an underbase)
+  const parts = (j.parts || []).filter((p) => p.qty > 0);
+  const runs = parts.length ? parts : [{ qty: j.qty, garment: j.garment, dark: j.dark }];
+  const steps: Step[] = locs.flatMap((l) => runs.map((r) => {
     const colors = j.method === "screen" ? l.colors : 0;
-    const under = j.dark && s.screen.underbaseOnDark && colors < 11 && !cond("nounder");
+    const under = r.dark && s.screen.underbaseOnDark && colors < 11 && !cond("nounder");
     const screens = j.method === "screen" ? colors + (under ? 1 : 0) : 0;
     // puff picked as a condition: its slowdown is already in the slider, so only its flash and setup count here
     const puffC = cond("puff");
-    return { method: j.method, location: l.name, colors, screens, qty: j.qty, dark: j.dark, garment: j.method === "embroidery" && j.garment === "cap" ? "cap" : j.garment, stitches: j.method === "embroidery" ? l.stitches : 0, note: "", puff: j.method === "screen" && (!!l.puff || puffC), ...(puffC && !l.puff ? { puffInSpeed: true } : {}) };
-  });
+    return { method: j.method, location: l.name, colors, screens, qty: r.qty, dark: r.dark, garment: j.method === "embroidery" && r.garment === "cap" ? "cap" : r.garment, stitches: j.method === "embroidery" ? l.stitches : 0, note: "", puff: j.method === "screen" && (!!l.puff || puffC), ...(puffC && !l.puff ? { puffInSpeed: true } : {}) } as Step;
+  }));
   const label = steps.map((x) => (j.method === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}${x.puff ? " puff" : ""}` : j.method === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k` : x.location)).join(" + ");
-  return { type: j.method, steps, needColors: Math.max(0, ...steps.map((x) => x.screens)), qty: j.qty, label, speed: (j.speed ?? 100) / 100 };
+  return { type: j.method, steps, needColors: Math.max(0, ...steps.map((x) => x.screens)), qty: parts.length ? parts.reduce((a, p) => a + p.qty, 0) : j.qty, label: collapse(label.split(" + ")), speed: (j.speed ?? 100) / 100 };
 }
 
 /** flash units on a press (2 unless Settings says otherwise) */

@@ -160,6 +160,11 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   wouldn't really lock"). Changing a group's mockup while its version is out and unanswered updates that same version
   (`refreshUnseenProofs` in `app/shop/proof-actions.ts`), opened or not; a new version only starts once they've approved
   or asked for changes. Anything that swaps a group's mockup pictures calls it.
+- **Production holder** (Nick, Nov 10 2026; replaced Hold the spot): saving press time for a quote before its art is in
+  is `components/tools/ProductionHolder.tsx`, opened from the order's Production ▾ menu; a held spot shows as a small
+  dashed "Held · <day>" tag in the order's header (no big button). It reads the order (each garment's pieces, kind and
+  darkness: `QuickJob.parts`) and guesses the spots and colors (the order's prints, else its art files' names, else the
+  customer's recent orders); staff only fix what's off. Orders from the same email can be held together.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.

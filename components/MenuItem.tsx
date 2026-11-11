@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
  * little thumbnails next to them… just look more dynamic" → option A). Goes inside an `.ot-menu` <a> or <button>:
  *   <button onClick=…><MenuItem icon="chat" tone="blue" title="AI order helper" sub="Check the order, say what to change" /></button>
  */
-export type MenuIcon = "chat" | "bolt" | "shirt" | "needle" | "grid" | "invoice" | "proof" | "clipboard" | "press" | "label" | "phone" | "copy" | "trash" | "refresh";
+export type MenuIcon = "chat" | "bolt" | "shirt" | "needle" | "grid" | "invoice" | "proof" | "clipboard" | "press" | "label" | "phone" | "calendar" | "copy" | "trash" | "refresh";
 export type MenuTone = "blue" | "salmon" | "orange" | "violet" | "green" | "gray" | "danger";
 
 const P: Record<MenuIcon, string> = {
@@ -19,6 +19,7 @@ const P: Record<MenuIcon, string> = {
   clipboard: "M9 3.5h6v3H9zM7 5H5v16h14V5h-2M8.5 11.5h7M8.5 15.5h5",
   press: "M3 20V10l5 3v-3l5 3V5h8v15zM7 17h2M12 17h2M17 17h1",
   label: "M3.5 12.5V4h8.5l9 9-8.5 8.5zM8 8h.01",
+  calendar: "M4 6h16v14H4zM4 10h16M8 3.5v4M16 3.5v4",
   phone: "M7.5 3h9a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM11 18h2",
   copy: "M9 9h11v11H9zM5 15H4V4h11v1",
   trash: "M4 7h16M9.5 7V4h5v3M6 7l1 13h10l1-13M10 11v5M14 11v5",
