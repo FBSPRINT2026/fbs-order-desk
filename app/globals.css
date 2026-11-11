@@ -22243,3 +22243,6 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rvd-days button.on{background:var(--accent-soft,#eaf5fc);color:var(--accent);box-shadow:inset 0 -3px var(--accent)}
 .rvd-days button.ok{color:var(--ok)}
 @media (max-width:700px){.rvd-days{grid-template-columns:repeat(3,minmax(0,1fr))}.rvd-days button:nth-child(n+4){border-top:1px solid var(--line)}.rvd-days button:nth-child(4){border-left:0}}
+.rvd-th{cursor:pointer;user-select:none;white-space:nowrap}
+.rvd-th.on{color:var(--accent)}
+.rvd-ar{margin-left:4px;color:var(--accent);font-size:10px}

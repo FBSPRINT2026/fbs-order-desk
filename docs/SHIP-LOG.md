@@ -159,3 +159,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 4:26pm · 1.3.363 · Nick · Schedule: Live clock switch (off by default): off, the schedule is a plan made by hand; nothing moves on its own until someone updates it
 - Nov 11 4:41pm · 1.3.364 · Nick · Goods & Receiving: Dashboard button beside the Shipments tabs, Counting and Receiving blocks, Schedule | Due date days, SP/EMB/HP with search, ✓ Counted in the day row, Settings in the header
 - Nov 11 4:46pm · 1.3.365 · Nick · Goods & Receiving dashboard opens on Schedule · All · Today; its switches keep your picks only while you're there (5 minutes away and they reset)
+- Nov 11 4:47pm · 1.3.366 · Nick · Goods & Receiving count-in list: Order # · Customer (job name under) · Due date · Supplier · Pieces · Status, click any header to sort; one date only

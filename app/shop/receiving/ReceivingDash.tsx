@@ -42,6 +42,8 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   const [by, setBy] = useSticky<"schedule" | "due">("receiving.dashBy", "schedule", AWAY);
   const [truckDay, setTruckDay] = useSticky<"today" | "tomorrow">("receiving.truckDay", "today", AWAY);
   const [q, setQ] = useState("");
+  // click a column to sort by it, again to reverse (Nov 11, Nick)
+  const [sortBy, setSortBy] = useState<{ k: "number" | "customer" | "due" | "supplier" | "pcs" | "status"; dir: 1 | -1 } | null>(null);
   const [count, setCount] = useState<CheckJob | null>(null);
   const [msg, setMsg] = useState("");
   const today = ymd(new Date()), d1 = nextWork(today), d2 = nextWork(d1);
@@ -76,7 +78,17 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   const open = useMemo(() => live.filter((j) => j.state !== "checked"), [live]);
   const counted = useMemo(() => live.filter((j) => j.state === "checked"), [live]);
   const n = (d: Day) => (d === "counted" ? counted.length : open.filter((j) => dayOf(j) === d).length);
-  const sort = (a: CheckJob, b: CheckJob) => RANK[a.state] - RANK[b.state] || (a.day || "").localeCompare(b.day || "") || a.number - b.number;
+  const pcsOf = (j: CheckJob) => j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
+  const supOf = (j: CheckJob) => (j.suppliers.length ? j.suppliers.join(" / ") : "");
+  const sort = (a: CheckJob, b: CheckJob) => {
+    if (sortBy) {
+      const k = sortBy.k, d = sortBy.dir;
+      const c = k === "number" ? a.number - b.number : k === "customer" ? a.customer.localeCompare(b.customer, undefined, { sensitivity: "base" }) : k === "due" ? (a.due || "9999").localeCompare(b.due || "9999")
+        : k === "supplier" ? (supOf(a) || "~").localeCompare(supOf(b) || "~") : k === "pcs" ? pcsOf(a) - pcsOf(b) : RANK[a.state] - RANK[b.state];
+      if (c) return c * d;
+    }
+    return RANK[a.state] - RANK[b.state] || (a.due || "9999").localeCompare(b.due || "9999") || a.number - b.number;
+  };
   // the day's jobs to count, then that day's counted ones grayed (waiting for the press); Counted: every counted job
   const { shown, grayed } = useMemo(() => {
     const s = q.trim().toLowerCase().replace(/^#/, "");
@@ -84,7 +96,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
     if (s) return { shown: open.filter(hit).sort(sort), grayed: counted.filter(hit).sort(sort) };
     if (day === "counted") return { shown: [] as CheckJob[], grayed: counted.slice().sort((a, b) => (a.day || "").localeCompare(b.day || "") || a.number - b.number) };
     return { shown: open.filter((j) => dayOf(j) === day).sort(sort), grayed: counted.filter((j) => dayOf(j) === day).sort(sort) };
-  }, [open, counted, q, day, by]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, counted, q, day, by, sortBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tDay = truckDay === "today" ? today : d1;
   const truckOf = (sup: string) => trucks.filter((r) => r.supplier === sup && localDay(r.at) === tDay && (truckDay === "tomorrow" || r.state !== "arrived" || localDay(r.at) === today));
@@ -121,24 +133,30 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
           {msg && <div className="banner" style={{ margin: "8px 12px 0" }}>{msg}</div>}
           {err ? <div className="empty">{err}</div> : !jobs ? <div className="empty">Loading…</div> : !shown.length && !grayed.length ? <div className="empty">{q.trim() ? "No order matches." : day === "counted" ? "Nothing counted is waiting for the press." : day === "today" ? "Nothing to count in today." : "Nothing to count in that day."}</div> : (
             <div className="tbl-wrap"><table className="tbl">
-              <thead><tr><th>Order</th><th>From</th><th>Pieces</th><th>Status</th><th /></tr></thead>
+              <thead><tr>{([["number", "Order #"], ["customer", "Customer"], ["due", "Due date"], ["supplier", "Supplier"], ["pcs", "Pieces"], ["status", "Status"]] as const).map(([k, l]) => (
+                <th key={k} className={"rvd-th" + (sortBy?.k === k ? " on" : "")} onClick={() => setSortBy((x) => (x?.k === k ? (x.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }))} title="Sort by this">{l}<span className="rvd-ar" aria-hidden>{sortBy?.k === k ? (sortBy.dir === 1 ? "▲" : "▼") : "↕"}</span></th>
+              ))}<th /></tr></thead>
               <tbody>{shown.map((j) => {
                 const st = STATE[j.state], pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
                 return (
                   <tr key={j.ref} className={day === "today" && !q.trim() && j.state !== "way" && j.state !== "none" ? "rvd-urg" : ""}>
-                    <td><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link> <b data-notranslate>{j.customer}</b><div className="sub" data-notranslate>{[j.nickname, j.start ? `prints ${short(j.start)}` : "not on the schedule", j.due ? `due ${short(j.due)}` : ""].filter(Boolean).join(" · ")}</div></td>
-                    <td><span className="rvd-from">{j.suppliers.length ? j.suppliers.join(" / ") : "Customer / other"}</span><div className="sub">{j.lines ? `${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}` : "no manifest"}</div></td>
+                    <td className="nw"><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
+                    <td><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
+                    <td className="rvd-from">{j.due ? short(j.due) : "—"}</td>
+                    <td><span className="rvd-from">{supOf(j) || "No manifest"}</span>{j.lines ? <div className="sub">{`${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}`}</div> : null}</td>
                     <td className="rvd-pcs">{j.shipped && j.lines ? <span className="rvd-bar2"><i style={{ width: `${Math.min(100, Math.round((j.arrived / Math.max(1, j.shipped)) * 100))}%` }} /></span> : null}<b>{pcs}</b> <span className="sub">pcs</span></td>
                     <td><span className={"rvd-pill " + st.tone}>{st.label}</span></td>
                     <td className="rvd-act"><button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
                   </tr>
                 );
               })}
-              {grayed.length > 0 && day !== "counted" && <tr className="rvd-sub"><td colSpan={5}>Counted · waiting for the press to start <span className="rvd-n">{grayed.length}</span></td></tr>}
+              {grayed.length > 0 && day !== "counted" && <tr className="rvd-sub"><td colSpan={7}>Counted · waiting for the press to start <span className="rvd-n">{grayed.length}</span></td></tr>}
               {grayed.map((j) => { const pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0), last = j.checkins[0]; return (
                 <tr key={j.ref} className="rvd-done">
-                  <td><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link> <b data-notranslate>{j.customer}</b><div className="sub" data-notranslate>{[j.nickname, j.start ? `prints ${short(j.start)}` : ""].filter(Boolean).join(" · ")}</div></td>
-                  <td><span className="rvd-from">{j.suppliers.length ? j.suppliers.join(" / ") : "Customer / other"}</span></td>
+                  <td className="nw"><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
+                  <td><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
+                  <td className="rvd-from">{j.due ? short(j.due) : "—"}</td>
+                  <td><span className="rvd-from">{supOf(j) || "No manifest"}</span></td>
                   <td className="rvd-pcs"><b>{pcs}</b> <span className="sub">pcs</span></td>
                   <td><span className="rvd-pill ok">✓ Counted{last ? ` · ${new Date(last.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</span></td>
                   <td className="rvd-act"><button type="button" className="btn sm ghost" onClick={() => setCount(j)}>Recount</button></td>
