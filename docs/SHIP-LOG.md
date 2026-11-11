@@ -119,3 +119,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 11:35am · 1.3.322 · Nick · Row links: a click opens that row's own page in every browser (Safari let each row's stretched link cover the whole table, so every invoice in Jorge's portal opened #33614)
 - Nov 11 11:42am · 1.3.323 · Nick · Phone menu: Shop Tools are small icons in a row again
 - Nov 11 11:43am · 1.3.324 · Nick · Suggestions inbox: other Claudes put rule and handbook ideas in docs/SUGGESTIONS.md for Nick to decide; only Nick changes the rules
+- Nov 11 12:44pm · 1.3.325 · Nick · Schedule drag: no more twitching (a card redrawn under the pointer no longer clears the preview; the dotted box holds still while the pointer is on or near it)

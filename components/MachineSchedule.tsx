@@ -1730,6 +1730,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   // dotted box it stays put; on open time, by the clock
                   const el = (e.target as HTMLElement).closest("[data-k],[data-slot]") as HTMLElement | null;
                   if (el?.dataset.slot && pv?.mid === m.id) return;
+                  // near the dotted box (a few pixels around it too) it stays put: moving it moves the jobs under the pointer,
+                  // which would move it back, and the board twitched (Nov 11, Nick's video)
+                  if (pv?.mid === m.id) { const sl = e.currentTarget.querySelector("[data-slot]")?.getBoundingClientRect(); if (sl && e.clientY >= sl.top - 10 && e.clientY <= sl.bottom + 10) return; }
                   const r = e.currentTarget.getBoundingClientRect(), y = e.clientY - r.top, p = flowAt(y);
                   let d0 = p.d, b = dropBefore(m, p.d, p.min);
                   if (el?.dataset.k) {
@@ -1743,7 +1746,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   }
                   if (!pv || pv.mid !== m.id || pv.d !== d0 || pv.before !== b) setPv({ mid: m.id, d: d0, before: b, y });
                 }}
-                onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setOver(""); setPv(null); }}
+                // only a real leave clears the preview: the pointer outside the column. A card redrawn under the pointer fires a
+                // leave with no next element, which used to clear the preview and redraw it again, over and over (Nov 11)
+                onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; const r = e.currentTarget.getBoundingClientRect(); if (e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom) return; setOver(""); setPv(null); }}
                 onDrop={(e) => {
                   e.preventDefault();
                   // it lands exactly where the dotted box was
