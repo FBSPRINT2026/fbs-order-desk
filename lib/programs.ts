@@ -349,5 +349,7 @@ export function cardForOrder<T extends { id: string; name?: string; match?: stri
   if (picked) return picked;
   const hay = ` ${[o.nickname, o.po_number, o.ship_to].filter(Boolean).join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
   const hit = cards.find((c) => [c.name || "", ...(c.match || [])].map((w) => w.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()).filter((w) => w.length >= 2).some((w) => hay.includes(` ${w} `)));
-  return hit || cards[0];
+  // nothing named matches: a card with words that pick it is for those jobs only (Nov 10: Nine18's "All My Sons" card priced
+  // a New City Moving job); the first card without such words is the customer's general card, else none (priced as usual)
+  return hit || cards.find((c) => !(c.match || []).some((w) => w.trim())) || null;
 }
