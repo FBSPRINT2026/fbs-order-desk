@@ -161,3 +161,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 4:46pm · 1.3.365 · Nick · Goods & Receiving dashboard opens on Schedule · All · Today; its switches keep your picks only while you're there (5 minutes away and they reset)
 - Nov 11 4:47pm · 1.3.366 · Nick · Goods & Receiving count-in list: Order # · Customer (job name under) · Due date · Supplier · Pieces · Status, click any header to sort; one date only
 - Nov 11 4:51pm · 1.3.367 · Nick · Goods & Receiving: Schedule days go by the real schedule (nothing booked = Later); smaller day buttons left, ✓ Counted on its own right; deleted and test-customer orders never listed to count in (Check-In too)
+- Nov 11 4:57pm · 1.3.368 · Nick · Schedule: Ready To Schedule cards show the same goods dot as the calendar (green counted, amber here not counted, red problem)
