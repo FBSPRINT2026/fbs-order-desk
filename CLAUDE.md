@@ -210,7 +210,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
     `--fbs-*`, `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
 - **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card, one color
-  all round (no colored edge; Nick, Nov 11: "let the dots and stuff do the talking"); only late (red number, "Late" tag) and holds (dashed, "Hold" tag) look different. Overtime
+  all round (no colored edge; Nick, Nov 11: "let the dots and stuff do the talking"); only late (bold red number, no tag; Nick, Nov 11) and holds (dashed, "Hold" tag) look different. Overtime
   is a soft amber band behind the hours, warm-up and lunch plain gray, the past a light gray; the key sits at the top
   (`.ms-calm` / `.ms-key2` in `app/globals.css`). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its

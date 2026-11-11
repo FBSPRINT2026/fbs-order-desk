@@ -22015,3 +22015,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ms-calm .msf-card.ms-blk:not(.bar),.ms-calm .msf-card.ms-blk.late:not(.bar),.ms-calm .msf-card.ms-blk.msh-late:not(.bar),.ms-calm .msf-card.ms-blk.embroidery:not(.bar),.ms-calm .msf-card.ms-blk.heat:not(.bar),.msf-run{border-left:1px solid var(--line)!important}
 .ms-calm .msf-card.ms-blk.hold:not(.bar){border-left:1.5px dashed color-mix(in srgb,var(--ink) 35%,transparent)!important}
 .ms-key-late{color:var(--danger);font-weight:700;margin-right:4px}
+/* a group: the customer and what the jobs share on top, the numbers on their own line under it (Nov 11, Nick) */
+.msf-run-h{flex-direction:column;align-items:flex-start;gap:0;line-height:16px;padding:1px 0 2px}
+.msf-run-h b{font-size:13px;max-width:100%}.msf-run-h span{display:block}
+.ms-calm .msf-n.late,.ms-calm .msf-run-r.late b{color:var(--danger)!important;font-weight:800}

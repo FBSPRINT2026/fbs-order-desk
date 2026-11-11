@@ -123,3 +123,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 12:45pm · 1.3.326 · Nick · Schedule top (option G): tools with icons and names on the left (2/3), one short AI tip at a time on the right (1/3) that takes turns every 8s with arrows and a button to act
 - Nov 11 12:46pm · 1.3.327 · Nick · Schedule: jobs group only when they print the same art and are due the same day (never just same customer), in Next 12 hours and Coming up; cards are one color, no colored left edge
 - Nov 11 12:47pm · 1.3.328 · Nick · Schedule key: no colored-edge swatches (cards are one color); late is the red number
+- Nov 11 12:55pm · 1.3.329 · Nick · Schedule: late is a bold red job number (no Late box); a group's top line is the customer and what its jobs share (Nine18 · AMS) with the numbers under it; Re-plan keeps same-art jobs due the same day together on one press, back to back, unless that makes one late
