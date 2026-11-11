@@ -11,15 +11,33 @@ import type { Design, GLine, Group, Imprint } from "@/lib/pricing";
  */
 export type LogosOnFile = { designs: (Design & { brand_id?: string | null })[]; brands: Brand[]; text: string; pictures: { path: string; label: string }[] };
 
-export async function logosOnFile(admin: SupabaseClient, customerId: string): Promise<LogosOnFile | null> {
+/** does this job name the brand: its name, or its initials ("All My Sons" = AMS, "New City Moving" = NCM) */
+export function namesBrand(b: Pick<Brand, "name">, jobText: string): boolean {
+  const t = ` ${(jobText || "").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+  const n = (b.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (!n) return false;
+  const ws = n.split(" ").filter((w) => !/^(the|of|and|inc|llc|co)$/.test(w));
+  const ini = ws.map((w) => w[0]).join("");
+  // the whole name, its initials (3+ letters), or its one distinctive word ("Armstrong" for "Armstrong Relocation")
+  return t.includes(` ${n} `) || (ini.length >= 3 && t.includes(` ${ini} `)) || (ws[0]?.length >= 5 && t.includes(` ${ws[0]} `));
+}
+
+/**
+ * jobText: the job (its name, PO, files): a reseller orders for many end clients, each a brand; a job for one of them is
+ * shown only that brand's logos and standards (plus logos with no brand), and a job for none of them only the logos
+ * with no brand (Nov 10, Nick: "anytime I use the order helper and it detects Nine18, it thinks everything is All My Sons")
+ */
+export async function logosOnFile(admin: SupabaseClient, customerId: string, jobText?: string): Promise<LogosOnFile | null> {
   const [{ data: bs }, { data: ds }] = await Promise.all([
     admin.from("brands").select("*").eq("customer_id", customerId).is("archived_at", null).order("sort"),
     admin.from("designs").select("*").eq("customer_id", customerId).is("archived_at", null).eq("draft", false)
       .order("starred", { ascending: false }).order("number", { ascending: false }).limit(60),
   ]);
-  const brands = (bs || []) as Brand[];
+  const all = (bs || []) as Brand[];
+  const brands = jobText == null || all.length < 2 ? all : all.filter((b) => namesBrand(b, jobText)); // one brand: it's just theirs
+  const keep = new Set(brands.map((b) => b.id));
   // the brands' logos first, then their others (starred, newest)
-  const designs = ((ds || []) as (Design & { brand_id?: string | null })[]).sort((a, b) => Number(!!b.brand_id) - Number(!!a.brand_id)).slice(0, 40);
+  const designs = ((ds || []) as (Design & { brand_id?: string | null })[]).filter((d) => jobText == null || !d.brand_id || keep.has(d.brand_id)).sort((a, b) => Number(!!b.brand_id) - Number(!!a.brand_id)).slice(0, 40);
   if (!designs.length) return null;
   const bName = (id?: string | null) => brands.find((b) => b.id === id)?.name || "";
   const lines = designs.map((d) => {

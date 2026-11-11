@@ -21,6 +21,13 @@ export default function DstPicture({ path, colors, art, style, className, fallba
       try {
         const r = await fetch(`/api/files/open?${new URLSearchParams({ p: path })}`);
         if (!r.ok) return;
+        // a sew file that's only the EMB (lib/embFile.ts): Wilcom's TrueView picture of it sewn
+        if (/\.emb$/i.test(path)) {
+          const { readEmb } = await import("@/lib/embFile");
+          const e = await readEmb(await r.arrayBuffer());
+          if (e.preview && live) setSrc(URL.createObjectURL(new Blob([e.preview as BlobPart], { type: "image/jpeg" })));
+          return;
+        }
         const info = readDst(await r.arrayBuffer());
         let use = colors;
         if (art && colors.length !== info.blocks.length) {

@@ -25,7 +25,7 @@ const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /** the reply's files that belong to this logo (all of them when only one DST came) */
 function filesFor(files: RFile[], d: { number: number | null; name: string }, location: string, others: number): RFile[] {
-  const dsts = files.filter((f) => /\.dst$/i.test(f.name));
+  const dsts0 = files.filter((f) => /\.dst$/i.test(f.name)), dsts = dsts0.length ? dsts0 : files.filter((f) => /\.emb$/i.test(f.name));
   if (dsts.length <= 1 && others <= 1) return files;
   const num = d.number ? String(d.number) : "", loc = words(location), nm = words(d.name || "");
   const score = (f: RFile) => { const w = words(f.name); return (num && w.includes(num) ? 4 : 0) + (loc && w.includes(loc) ? 2 : 0) + (nm && nm.length > 3 && w.includes(nm) ? 1 : 0); };
@@ -50,11 +50,16 @@ export async function addReplyFiles(admin: SupabaseClient, designId: string, opt
     const s2 = (fresh?.specs || {}) as Record<string, unknown>, e2 = (s2.embroidery || {}) as Record<string, unknown>;
     await admin.from("designs").update({ specs: { ...s2, embroidery: { ...e2, ...extra, reply: { ...((e2.reply || {}) as object), ...(extra.reply as object || {}) } } } }).eq("id", designId);
   };
-  if (!dst) { await mark({ reply: { add_error: "No DST for this logo in their reply: add it by hand" } }); return { ok: false, note: "no DST" }; }
   const dl = async (p: string) => { const { data } = await admin.storage.from("proofs").download(p); return data ? new Uint8Array(await data.arrayBuffer()) : null; };
-  const buf = await dl(dst.path);
-  if (!buf) return { ok: false, note: "couldn't open the DST" };
-  const info = readDst(buf.slice().buffer);
+  // no DST: the EMB alone makes the sew file (lib/embFile.ts: its size, stitches, threads and TrueView picture)
+  const embOnly = !dst ? mine.find((f) => /\.emb$/i.test(f.name)) : undefined;
+  if (!dst && !embOnly) { await mark({ reply: { add_error: "No DST or EMB for this logo in their reply: add it by hand" } }); return { ok: false, note: "no DST" }; }
+  const main = (dst || embOnly)!;
+  const buf = await dl(main.path);
+  if (!buf) return { ok: false, note: "couldn't open the sew file" };
+  const embRead = await (async () => { const f = dst ? mine.find((x) => /\.emb$/i.test(x.name)) : embOnly; if (!f) return null; const b2 = f === main ? buf : await dl(f.path); if (!b2) return null; const { readEmb } = await import("@/lib/embFile"); return readEmb(b2.slice().buffer).catch(() => null); })();
+  if (!dst && !embRead) { await mark({ reply: { add_error: "Their EMB couldn't be read: add its DST by hand" } }); return { ok: false, note: "unreadable EMB" }; }
+  const info = dst ? readDst(buf.slice().buffer) : { stitches: embRead!.stitches, colors: embRead!.colors, wIn: embRead!.wIn, hIn: embRead!.hIn };
   const stamp = Date.now(), dir = `embroidery/${designId}/${stamp}`;
   const copy = async (f: RFile | undefined) => {
     if (!f) return undefined;
@@ -62,15 +67,17 @@ export async function addReplyFiles(admin: SupabaseClient, designId: string, opt
     const r = await admin.storage.from("proofs").copy(f.path, to);
     return r.error ? undefined : { path: to, name: f.name };
   };
-  const b = base(dst.name);
+  const b = base(main.name);
   const embF = mine.find((f) => /\.emb$/i.test(f.name) && base(f.name) === b) || mine.find((f) => /\.emb$/i.test(f.name));
   const sheetF = mine.find((f) => /\.pdf$/i.test(f.name) && base(f.name) === b) || mine.find((f) => /\.pdf$/i.test(f.name));
-  const [dp, ep, shp] = await Promise.all([copy(dst), copy(embF), copy(sheetF)]);
-  if (!dp) return { ok: false, note: "couldn't save the DST" };
+  const [dp, ep, shp] = await Promise.all([copy(dst || embOnly), copy(embF), copy(sheetF)]);
+  if (!dp) return { ok: false, note: "couldn't save the sew file" };
   let ws = null;
   if (sheetF) { const sb = await dl(sheetF.path); if (sb) ws = parseWorksheet(await pdfTextServer(sb).catch(() => "")); }
+  if (!ws && embRead?.ws.sequence.length) ws = embRead.ws;
+  const pic = !dst && embRead?.preview ? await (async () => { const path = `${dir}-trueview.jpg`; const r = await admin.storage.from("proofs").upload(path, embRead.preview!, { contentType: "image/jpeg" }); return r.error ? undefined : { path }; })() : undefined;
   const files = emb.files || [];
-  const set: SewFile = { path: dp.path, name: dst.name, stitches: info.stitches, colors: ws?.threads.length || info.colors, wIn: info.wIn, hIn: info.hIn, at: new Date().toISOString(),
+  const set: SewFile = { path: dp.path, name: main.name, ...(pic ? { pic } : {}), ...(!dst ? { embOnly: true } : {}), stitches: info.stitches, colors: ws?.threads.length || info.colors, wIn: info.wIn, hIn: info.hIn, at: new Date().toISOString(),
     ...(ep ? { emb: ep } : {}), ...(shp ? { sheet: shp } : {}), ...(ws ? { ws } : {}), code: nextSewCode(files), kind: "flat", ...(im?.location ? { placement: im.location } : {}) };
   await mark({ files: [...files, set], reply: { added_at: new Date().toISOString(), add_error: undefined } });
   // the order's print takes the file's stitch count (its price follows), like a file dropped on Digitizing
@@ -78,7 +85,7 @@ export async function addReplyFiles(admin: SupabaseClient, designId: string, opt
     const groups = ((o.groups || []) as Group[]).map((g) => ({ ...g, imprints: (g.imprints || []).map((x) => (x.id === im.id ? { ...x, stitches: info.stitches, emb: { ...(x.emb || {}), stitchesFrom: "file" as const, file: set } } : x)) }));
     await admin.from("orders").update({ groups }).eq("id", o.id);
   }
-  return { ok: true, note: `${dst.name}: ${info.wIn}" × ${info.hIn}", ${info.stitches.toLocaleString()} stitches` };
+  return { ok: true, note: `${main.name}: ${info.wIn}" × ${info.hIn}", ${info.stitches.toLocaleString()} stitches` };
 }
 
 /** replies that came in but were never added (before this existed, or a hiccup): added now. Run by the mail check. */

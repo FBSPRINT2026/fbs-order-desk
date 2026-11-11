@@ -84,6 +84,7 @@ export function factsOf(sb: SB, path: string): Promise<Facts | null> {
     const { data } = await sb.storage.from("proofs").download(path);
     if (!data) return null;
     const buf = await data.arrayBuffer();
+    if (extOf(path) === "emb") { const { readEmb } = await import("@/lib/embFile"); const i = await readEmb(buf); return { stitches: i.stitches, wIn: i.wIn, hIn: i.hIn, colors: i.colors }; }
     if (extOf(path) === "dst") { const { readDst } = await import("@/lib/dst"); const i = readDst(buf); return { stitches: i.stitches, wIn: i.wIn, hIn: i.hIn, colors: i.colors }; }
     const [{ pdfText }, { parseWorksheet }] = await Promise.all([import("@/lib/printavoArt"), import("@/lib/worksheet")]);
     const t = await pdfText(buf, 3), w = parseWorksheet(t);

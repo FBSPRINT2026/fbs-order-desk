@@ -107,6 +107,8 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
     a thread or a PMS: the order's thread nearest that color goes on it);
   - where an embroidered print is in digitizing: `digitizeState` / `digitizeStamp` in `lib/digitizeStatus.ts` (the
     Digitizing page's tabs and the order's print stamps).
+    An EMB alone is a digitized logo (`lib/embFile.ts` reads its size, stitches, stops, threads and TrueView picture;
+    Nick, Nov 10 2026): the print says "DST needed" until embroidery adds the DST on the logo, which confirms that file.
   When you tell Nick it's fixed, say where else it was fixed.
 - **Lists over 1,000 rows are read in pages** (Oct 31: the database answers at most 1,000 rows per request whatever
   `.limit()` says, so the Time page's pay period, a mail folder, the dashboard's Printavo jobs and SanMar's styles were
@@ -135,6 +137,11 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   remake"): `screenFeeOf` in `lib/pricing.ts`; a remake fee never overrides it.
   A program can also charge a print's youth screens but price youth and adult pieces together at the group's break
   (`RateCard.youthTogether`, Tiger Blue; Nick, Nov 10 2026: "he gets the qty discount… but pays for the screens").
+- **A reseller's end clients are separate customers to the order reader** (Nick, Nov 10 2026: "anytime I use the order
+  helper and it detects Nine18, it thinks everything is All My Sons"). Nine18 orders for All My Sons, Armstrong, New City
+  Moving…: a job only gets the rules, worked examples, brand logos and program rate card of the end client it names
+  (`trainingsForText`, `loadExamples`' same-client check, `logosOnFile(…, jobText)` / `namesBrand`, `cardForOrder`'s match
+  words). A job for an end client with nothing on file is read from scratch, never as the customer's biggest client.
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`

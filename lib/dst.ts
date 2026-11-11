@@ -36,7 +36,9 @@ export function readDst(buf: ArrayBuffer): DstInfo {
   const head = new TextDecoder("latin1").decode(u.slice(0, 512));
   const header: Record<string, string> = {};
   for (const m of head.matchAll(/(LA|ST|CO|\+X|-X|\+Y|-Y|AX|AY|MX|MY|PD):([^\r\n\x1a]*)/g)) header[m[1]] = m[2].trim();
-  let x = 0, y = 0, minX = 0, maxX = 0, minY = 0, maxY = 0;
+  // the size is the stitches' own extent, not from where the file starts (Nov 10: New City Moving's DSTs start away from
+  // the design, and counting that start point made a 3.27" logo read 6.23")
+  let x = 0, y = 0, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   let stitches = 0, jumps = 0, changes = 0, trims = 0, run = 0;
   const blocks: DstInfo["blocks"] = [[]];
   for (let i = 512; i + 2 < u.length; i += 3) {
@@ -60,7 +62,7 @@ export function readDst(buf: ArrayBuffer): DstInfo {
   const st = parseInt(header.ST || "", 10);
   return {
     name: header.LA || "", stitches: st >= stitches && st < stitches * 1.5 ? st : stitches, sewn: stitches, changes, colors: Math.max(1, kept.length), jumps, trims,
-    wIn: Math.round(((maxX - minX) / 254) * 100) / 100, hIn: Math.round(((maxY - minY) / 254) * 100) / 100,
+    wIn: stitches ? Math.round(((maxX - minX) / 254) * 100) / 100 : 0, hIn: stitches ? Math.round(((maxY - minY) / 254) * 100) / 100 : 0,
     header, blocks: kept,
   };
 }
