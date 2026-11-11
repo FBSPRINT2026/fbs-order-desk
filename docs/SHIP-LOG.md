@@ -104,3 +104,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 10:43am · 1.3.307 · Nick · Left menu: Sales and Production show their everyday pages, a small arrow on the heading drops the rest down (Merch Stores, Projects; Artwork, Employees, Ink Room), remembered per section, and the page you're on always shows; Receiving / Fulfillment / Outbound's gray block lines up with the rows above (no extra space)
 - Nov 11 10:47am · 1.3.308 · Nick · Left menu: Production's arrow sits after SP · EMB · HP, at the end of the heading like Sales'
 - Nov 11 10:48am · 1.3.309 · Nick · Schedule: a short job collapses to one line (#, customer · colors · pieces) instead of a cut-off second line; two lines only when both fit
+- Nov 11 10:49am · 1.3.310 · Nick · Left menu a little wider (238px) so SP · EMB · HP and the section arrows sit comfortably at the right of their headings
