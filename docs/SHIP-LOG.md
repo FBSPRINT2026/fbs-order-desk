@@ -115,3 +115,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 11:11am · 1.3.318 · Nick · Page titles everywhere (portal order pages included): a long title stays on one line across the top and the page's buttons drop below it, instead of the title squeezing beside them
 - Nov 11 11:22am · 1.3.319 · Nick · Schedule drag: the job under the pointer decides the spot by where it really sits (the preview had pushed some jobs to another day, so the box landed lower than the pointer); the drag label is drawn on-screen so every Chromium browser (Edge too) can pick it up
 - Nov 11 11:25am · 1.3.320 · Nick · Schedule: dragging works in Edge (cards are drag handles that can't select text; the drag state is set after the drag starts; a click right after a drag or a text selection no longer opens Add Downtime)
+- Nov 11 11:30am · 1.3.321 · Nick · Customer page and portal: no count bubbles on the account toolbar at any size
