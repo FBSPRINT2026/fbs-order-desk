@@ -193,6 +193,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   includes fulfillment (`IN_WORK_STATUSES`).
   Canceled (an invoice called off) is stored like a Closed Quote: status `completed` with `declined_at`, type invoice
   (`isCanceled` / `statusKey` → "canceled"), so every finished-job filter skips it; it never goes to QuickBooks live.
+- **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
+  to count in, by the day each runs on the press (Today / next days / Later, the Check-In's own day; a goods problem stays
+  on Today), Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
+  the press starts it, then it drops off. Issues to work under the list; S&S and SanMar trucks (today / next day) on the right.
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

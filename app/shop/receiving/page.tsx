@@ -16,6 +16,7 @@ import SearchInput from "@/components/SearchInput";
 import { SS_SHIP, FREE_CODE, paidShipLines } from "@/lib/goodsShip";
 import { PaidShipAsk } from "@/components/PaidShipAsk";
 import { useSticky } from "@/lib/useSticky";
+import ReceivingDash from "./ReceivingDash";
 import ReceivingSettings from "@/components/ReceivingSettings";
 import { allRows } from "@/lib/readAll";
 import { useUrlSearch } from "@/lib/useUrlSearch";
@@ -24,7 +25,7 @@ import GoodsIssues from "@/components/GoodsIssues";
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
 type BS = { id: string; order_id: string; blank_order_id: string | null; carrier: string; tracking: string; boxes: number | null; pcs: number | null; note: string; eta: string | null; track_status: string; track_detail: string; est_delivery: string | null; delivered_at: string | null };
-type View = "today" | "fbs" | "customer" | "resolve" | "ignored" | "settings";
+type View = "dash" | "today" | "fbs" | "customer" | "resolve" | "ignored" | "settings";
 type Arrive = "past" | "today" | "tomorrow" | "later" | "nodate";
 const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
   { k: "past", label: "Should be here: not marked received" }, { k: "today", label: "Arriving today" }, { k: "tomorrow", label: "Tomorrow" }, { k: "later", label: "Later" }, { k: "nodate", label: "On the way, no date yet" },
@@ -154,7 +155,7 @@ export default function GoodsReceiving() {
   }
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
-  const [view, setViewState] = useState<View>("today");
+  const [view, setViewState] = useState<View>("dash");
   const [pending, setPending] = useState<PendingShipment[] | null>(null);
   const [pvGoods, setPvGoods] = useState<PrintavoGoods[]>([]);
   const [upBusy, setUpBusy] = useState(false), [refreshKey, setRefreshKey] = useState(0);
@@ -188,8 +189,8 @@ export default function GoodsReceiving() {
   // Check-In: this week's jobs ready to count, and open check-in problems (badges on the Check-In button)
   const [ck, setCk] = useState<{ ready: number; issue: number } | null>(null);
   useEffect(() => { fetch("/api/goods/checkin", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.jobs) setCk({ ready: (j.jobs as { state: string; day: string }[]).filter((x) => x.state === "ready" && x.day <= j.today).length, issue: (j.problems || []).length }); }).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "fbs" || v === "customer" || v === "resolve" || v === "ignored" || v === "settings") setViewState(v); }, []);
-  const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "today") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "today" || v === "fbs" || v === "customer" || v === "resolve" || v === "ignored" || v === "settings") setViewState(v); }, []);
+  const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "dash") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
   const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
   /** One or more manifests at once (S&S and SanMar mixed is fine): read one after another, then one summary. */
@@ -498,18 +499,19 @@ export default function GoodsReceiving() {
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       {/* goods issues across every customer: check-in problems and tracking gone wrong (Nov 2, components/GoodsIssues.tsx) */}
-      <GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} />
+      {view !== "dash" && <GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} />}
       <div className="rv-tabrow">
       <div className="aa-sub rv-views" role="tablist">
-        <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Today &amp; Overview</button>
+        <button type="button" className={view === "dash" ? "on" : ""} onClick={() => setView("dash")}>Dashboard</button>
+        <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Arriving &amp; Tracking</button>
         <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS Orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
         <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer Supplied Goods<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
-        <button type="button" className={"rv-ign-tab" + (view === "ignored" ? " on" : "")} onClick={() => setView(view === "ignored" ? "today" : "ignored")} title="Shipments ignored by hand">Show Ignored<span className="aa-n">{ignoredRows.length}</span></button>
+        <button type="button" className={"rv-ign-tab" + (view === "ignored" ? " on" : "")} onClick={() => setView(view === "ignored" ? "dash" : "ignored")} title="Shipments ignored by hand">Show Ignored<span className="aa-n">{ignoredRows.length}</span></button>
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
       </div>
         <div className="rv-search-row">
-          <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>
-          <button type="button" className={"btn sm rv-set-btn" + (view === "settings" ? " on" : "")} onClick={() => setView(view === "settings" ? "today" : "settings")} title="Goods & Receiving settings: the manifest mailbox, and importing a manifest file by hand"><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg><span>Settings</span></button>
+          {view !== "dash" && <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>}
+          <button type="button" className={"btn sm rv-set-btn" + (view === "settings" ? " on" : "")} onClick={() => setView(view === "settings" ? "dash" : "settings")} title="Goods & Receiving settings: the manifest mailbox, and importing a manifest file by hand"><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg><span>Settings</span></button>
         </div>
       </div>
 
@@ -528,6 +530,7 @@ export default function GoodsReceiving() {
           {!pending ? <div className="empty">Loading…</div> : <ResolveList list={pending} onDone={() => { loadPending(); load(); setRefreshKey((k) => k + 1); }} />}
         </>
       )}
+      {view === "dash" && <ReceivingDash trucks={searched.map((x) => ({ key: x.key, number: x.number, href: x.href, who: x.who, boxes: x.boxes, supplier: x.supplier, at: x.at, state: x.state }))} localDay={localDay} onTruck={() => setTruck(true)} />}
       {view === "settings" && <ReceivingSettings upBusy={upBusy} onUpload={upload} />}
       {view === "ignored" && (
         <section className="rv-day">
