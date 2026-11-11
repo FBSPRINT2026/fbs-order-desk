@@ -87,7 +87,7 @@ const CLOSED = /job\s*completed|quote|cancel|closed/i;
  * The jobs scheduled from `from` to `to` (inclusive), with their goods: what's expected, what the manifests say shipped
  * and arrived, and any check-ins. Also every job with an open check-in problem, whatever its date.
  */
-export async function checkinJobs(admin: SupabaseClient, from: string, to: string, only?: { kind: "o" | "a"; id: string }): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
+export async function checkinJobs(admin: SupabaseClient, from: string, to: string, only?: { kind: "o" | "a"; id: string } | null, /** every open order, whatever its week (the Goods & Receiving dashboard) */ allOpen = false): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
   const lo = addDays(from, -21), hi = addDays(to, 30);
   // a fresh query each time it's used (a query is changed by each filter put on it: one can't be read page after page)
   const pvQ0 = () => admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)").is("removed_at", null);
@@ -112,7 +112,7 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     return !!only || (openPv.has(a.id)) || (!CLOSED.test(a.status_name || "") && inWeek(day));
   });
   // a deleted order or a test customer's never needs counting in (Nov 11, Nick: ABC Test Company's #40428, #99005)
-  const oJobs = ((os || []) as unknown as ORow[]).filter((o) => !(o.customers as { is_test?: boolean } | null)?.is_test).filter((o) => !!only || openO.has(o.id) || inWeek(ymd(o.production_date) || ymd(o.due_date)));
+  const oJobs = ((os || []) as unknown as ORow[]).filter((o) => !(o.customers as { is_test?: boolean } | null)?.is_test).filter((o) => !!only || allOpen || openO.has(o.id) || inWeek(ymd(o.production_date) || ymd(o.due_date)));
 
   const pvIds = pvJobs.map((a) => a.id), oIds = oJobs.map((o) => o.id);
   const [{ data: ml }, { data: ck }] = await Promise.all([

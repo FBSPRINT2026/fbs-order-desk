@@ -163,3 +163,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 4:51pm · 1.3.367 · Nick · Goods & Receiving: Schedule days go by the real schedule (nothing booked = Later); smaller day buttons left, ✓ Counted on its own right; deleted and test-customer orders never listed to count in (Check-In too)
 - Nov 11 4:57pm · 1.3.368 · Nick · Schedule: Ready To Schedule cards show the same goods dot as the calendar (green counted, amber here not counted, red problem)
 - Nov 11 4:58pm · 1.3.369 · Nick · Fix: schedule page crash (Invalid time value) with Live clock off
+- Nov 11 5:02pm · 1.3.370 · Nick · Goods & Receiving dashboard lists every open order (not just this week's), so every counted job shows under ✓ Counted

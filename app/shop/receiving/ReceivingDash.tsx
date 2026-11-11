@@ -55,7 +55,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   const load = useCallback(async () => {
     setErr("");
     const nextWeek = ymd(new Date(Date.now() + 7 * 86400000));
-    const rs = await Promise.all([fetch("/api/goods/checkin", { cache: "no-store" }), fetch(`/api/goods/checkin?week=${nextWeek}`, { cache: "no-store" })].map((p) => p.then((r) => r.json()).catch(() => ({ error: "Couldn't reach the server." }))));
+    const rs = await Promise.all([fetch("/api/goods/checkin?open=1", { cache: "no-store" }), fetch(`/api/goods/checkin?week=${nextWeek}`, { cache: "no-store" })].map((p) => p.then((r) => r.json()).catch(() => ({ error: "Couldn't reach the server." }))));
     if (rs[0].error) { setErr(rs[0].error); return; }
     const m = new Map<string, CheckJob>();
     for (const r of rs) for (const j of [...((r.jobs || []) as CheckJob[]), ...((r.problems || []) as CheckJob[])]) if (!m.has(j.ref)) m.set(j.ref, j);

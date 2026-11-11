@@ -29,7 +29,7 @@ export async function GET(req: Request) {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const from = weekOf(sp.get("week") || today);
   const to = new Date(new Date(from + "T12:00").getTime() + 6 * 86400000).toISOString().slice(0, 10);
-  try { return NextResponse.json({ from, to, today, ...(await checkinJobs(createAdminClient(), from, to)) }); }
+  try { return NextResponse.json({ from, to, today, ...(await checkinJobs(createAdminClient(), from, to, null, sp.get("open") === "1")) }); }
   catch (e) { return fail(e); }
 }
 
