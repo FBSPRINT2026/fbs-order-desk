@@ -118,3 +118,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 11:30am · 1.3.321 · Nick · Customer page and portal: no count bubbles on the account toolbar at any size
 - Nov 11 11:35am · 1.3.322 · Nick · Row links: a click opens that row's own page in every browser (Safari let each row's stretched link cover the whole table, so every invoice in Jorge's portal opened #33614)
 - Nov 11 11:42am · 1.3.323 · Nick · Phone menu: Shop Tools are small icons in a row again
+- Nov 11 11:43am · 1.3.324 · Nick · Suggestions inbox: other Claudes put rule and handbook ideas in docs/SUGGESTIONS.md for Nick to decide; only Nick changes the rules

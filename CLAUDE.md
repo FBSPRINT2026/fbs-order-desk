@@ -2,6 +2,8 @@
 
 **More than one person works on this site (Nick and Amanda). Read `docs/WORKING-ON-THE-SITE.md` first: start from the
 newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/ship.sh "what changed"`, read `tail -30 docs/SHIP-LOG.md` to see what the other person changed, never force-push.**
+**Only Nick changes these rules and the handbook. Anyone else's idea for a rule goes in `docs/SUGGESTIONS.md` for him to
+decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 
 - **Permanent solutions, never patches (the first rule; Nick, Oct 28 2026: "this is a system we're gonna use for five
   years, maybe more… we want really good permanent solutions that fix the problems, not 'we found a way to do this one
