@@ -139,7 +139,10 @@ export const stateOf = (last: Punch | null | undefined): Card["state"] => (!last
  * `now` closes a shift that's still open (so today's hours show as they accrue).
  */
 export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[], offs: TimeOff[], start: string, end: string, now = new Date().toISOString()): Card {
-  const punches = withLunch(punchesIn.filter((p) => !p.voided && p.employee_id === employeeId)).map((p) => ({ ...p, at: round(p.at, s.rounding) })).sort((a, b) => a.at.localeCompare(b.at));
+  // the same punch twice (the clock sends a double, or a fix adds one that's already there: Sonia's Nov 9 had three
+  // 6:12 PM outs, so "out with no in" never went away however it was fixed; Nov 11, Jose): one punch
+  const punches = withLunch(punchesIn.filter((p) => !p.voided && p.employee_id === employeeId)).map((p) => ({ ...p, at: round(p.at, s.rounding) })).sort((a, b) => a.at.localeCompare(b.at))
+    .filter((p, i, xs) => { const q = xs[i - 1]; return !(q && q.kind === p.kind && Date.parse(p.at) - Date.parse(q.at) < 3 * 60000); });
   const days: Record<string, DayHours> = {};
   const dayRec = (d: string) => (days[d] ||= { day: d, worked: 0, breaks: 0, first: null, last: null, issues: [] });
   const issues: Issue[] = [];
