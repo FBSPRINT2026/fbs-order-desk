@@ -592,6 +592,12 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   useEffect(() => { load(); }, [load]);
 
   const byKey = useMemo(() => new Map((jobs || []).map((j) => [j.key, j])), [jobs]);
+  // a drag that ends anywhere (dropped, Esc, or its card redrawn mid-drag) always clears the live preview
+  useEffect(() => {
+    const end = () => { setPv(null); setOver(""); setDrag(null); };
+    window.addEventListener("dragend", end); window.addEventListener("drop", end);
+    return () => { window.removeEventListener("dragend", end); window.removeEventListener("drop", end); };
+  }, []);
   useEffect(() => {
     const ids = (jobs || []).filter((j) => j.kind === "o").map((j) => j.id);
     if (!ids.length) return;
@@ -1657,10 +1663,17 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const h = Math.max(16, y2 - y1 - 2), gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, lines = h >= 54 ? 3 : h >= 37 ? 2 : 1, mv = pvMove(g.c);
     const name = g.c.job.name || g.c.need.label;
     // while dragging, where it would land is an empty dotted box the jobs around it make room for (Nov 11, Nick)
-    if (pvLay && g.c.key === pvKey && !extraCls) return <div key={key} className="msf-slot" style={{ top: y1 + 1, height: h }} aria-hidden><span>#{g.c.job.number} · {fmtMin(g.c.minutes)}</span></div>;
+    if (pvLay && g.c.key === pvKey && !extraCls) { const n0 = [...(pvLay.ofCard.get(pvKey) || [])].sort((a, b) => a.day.localeCompare(b.day) || a.start - b.start)[0]; return <div key={key} className="msf-slot" data-slot="1" style={{ top: y1 + 1, height: h }} aria-hidden><span>#{g.c.job.number} moves here</span><small>{shortName(g.c.machine)}{n0 ? ` · ${n0.day !== today ? wkd(n0.day) + " " : ""}${clock(n0.start)}` : ""} · {fmtMin(g.c.minutes)}</small></div>; }
+    // dragged to another press: where it was stays as a dotted box saying so, until it's dropped (Nov 11, Nick)
+    const from = !!(pvLay && pv && drag?.card && g.c.key === drag.card.key && pv.mid !== g.c.machine.id);
+    if (from) { const tm = machines.find((x) => x.id === pv!.mid); return (
+      <button key={key} type="button" draggable className="msf-from" style={{ top: y1 + 1, height: h }} onDragEnd={() => { setDrag(null); setOver(""); }}>
+        <span>#{g.c.job.number} was here</span><small>moving to {tm ? shortName(tm) : "another press"}</small>
+      </button>
+    ); }
     const num = <b className="msf-n">{whyEl(g.c)}{dotEl(g.c, g)}#{g.c.job.number}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
     return (
-      <button key={key} type="button" draggable className={cls(g) + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
+      <button key={key} type="button" draggable data-k={g.c.key} data-d={g.day} className={cls(g) + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
         onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}
         onContextMenu={(e) => { e.preventDefault(); setLockMenu({ c: g.c, g, x: e.clientX, y: e.clientY }); }}>
         <span className="msf-1">{num}{tagOf(g)}{flags(g.c.job)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()}</span> : null}</span>
@@ -1698,15 +1711,38 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               });
               return items;
             };
-            const items = itemsOf(pvLay?.by);
+            // the press it's dragged from keeps its jobs where they are (the job shows as "was here") while it's over another
+            // press; the press it's over makes room
+            const srcOther = !!(pvLay && pv && drag?.card && drag.card.machine.id === m.id && pv.mid !== m.id);
+            const items = itemsOf(pvLay && !srcOther ? pvLay.by : undefined);
             // the dragged card stays where it was (faded) while its preview shows where it would go: the browser drops a
             // drag whose card leaves the page
-            const ghost = pvLay && drag?.card && drag.card.machine.id === m.id ? itemsOf().filter((x) => x.g.c.key === drag.card!.key) : [];
+            const ghost = pvLay && !srcOther && drag?.card && drag.card.machine.id === m.id ? itemsOf().filter((x) => x.g.c.key === drag.card!.key) : [];
             return (
               <div key={m.id} className={"msf-col" + (over === "f:" + m.id ? (canDrop(m) ? " over" : " no") : "")} style={{ height: flowH, backgroundSize: `100% ${FLOW_PX}px`, gridColumn: mi + 2 }}
-                onDragOver={(e) => { e.preventDefault(); if (over !== "f:" + m.id) setOver("f:" + m.id); if (!drag || drag.group) return; const r = e.currentTarget.getBoundingClientRect(), y = e.clientY - r.top, p = flowAt(y), b = dropBefore(m, p.d, p.min); if (!pv || pv.mid !== m.id || pv.d !== p.d || pv.before !== b || Math.abs(pv.y - y) > 40) setPv({ mid: m.id, d: p.d, before: b, y }); }}
+                onDragOver={(e) => {
+                  e.preventDefault(); if (over !== "f:" + m.id) setOver("f:" + m.id);
+                  if (!drag || drag.group) return;
+                  // where the pointer is: over a job's top half it goes before that job, its bottom half after it; over the
+                  // dotted box it stays put; on open time, by the clock
+                  const el = (e.target as HTMLElement).closest("[data-k],[data-slot]") as HTMLElement | null;
+                  if (el?.dataset.slot && pv?.mid === m.id) return;
+                  const r = e.currentTarget.getBoundingClientRect(), y = e.clientY - r.top, p = flowAt(y);
+                  let d0 = p.d, b = dropBefore(m, p.d, p.min);
+                  if (el?.dataset.k && el.dataset.d) {
+                    const cell = at(m, el.dataset.d).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag.card?.key && g.c.slot.status !== "done").sort((x, z) => x.start - z.start);
+                    const i = cell.findIndex((g) => g.c.key === el.dataset.k), r2 = el.getBoundingClientRect();
+                    if (i >= 0) { d0 = el.dataset.d; b = e.clientY < r2.top + r2.height / 2 ? cell[i].c.key : cell[i + 1]?.c.key || ""; }
+                  }
+                  if (!pv || pv.mid !== m.id || pv.d !== d0 || pv.before !== b) setPv({ mid: m.id, d: d0, before: b, y });
+                }}
                 onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setOver(""); setPv(null); }}
-                onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); drop(m, p.d, p.min); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  // it lands exactly where the dotted box was
+                  if (drag && !drag.group && pv && pv.mid === m.id) { const c = drag.card ? { card: drag.card } : { job: drag.job, need: drag.need }; setPv(null); place(c, m, pv.d, pv.before || undefined); return; }
+                  const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); drop(m, p.d, p.min);
+                }}
                 onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button")) return; const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); setDownEdit({ machine: m.id, day: p.d, start: Math.floor(p.min / 30) * 30 }); }}
                 title="Click an open time to add downtime here">
                 {flowBlocks.map((bk, bi) => {
@@ -1730,7 +1766,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   const runs: (typeof items)[] = [];
                   for (const x of [...items].sort((a, b) => a.y1 - b.y1)) {
                     const last = runs[runs.length - 1], lx = last?.[last.length - 1];
-                    if (lx && !pvLay && x.g.c.job.kind !== "h" && lx.g.c.job.kind !== "h" && x.g.c.job.customer && lx.g.c.job.customer === x.g.c.job.customer && x.y1 - lx.y2 < 6) last.push(x); else runs.push([x]);
+                    if (lx && x.g.c.key !== pvKey && lx.g.c.key !== pvKey && !(drag?.card && (x.g.c.key === drag.card.key || lx.g.c.key === drag.card.key)) && x.g.c.job.kind !== "h" && lx.g.c.job.kind !== "h" && x.g.c.job.customer && lx.g.c.job.customer === x.g.c.job.customer && x.y1 - lx.y2 < 6) last.push(x); else runs.push([x]);
                   }
                   return runs.map((r) => {
                     if (r.length === 1) { const x = r[0]; return flowCard(x.g, x.y1, x.y2, (x.g.c.key === pvKey && pvLay ? "pv:" : "") + x.g.c.key + x.g.part); }
@@ -1741,7 +1777,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       <div key={id} className={"msf-run " + r[0].g.c.need.type + (open ? " open" : "")} style={{ top: top + 1, ...(open ? { minHeight: H } : { height: H }) }}>
                         <div className="msf-run-h"><b>{abbrCo(r[0].g.c.job.customer)}</b><span>{r.length} jobs · {pcs.toLocaleString()} pcs · {fmtMin(mins)}</span></div>
                         {show.map((x) => { const gl = glance(x.g.c.need, x.g.c.minutes); return (
-                          <button key={x.g.c.key + x.g.part} type="button" draggable className={"msf-run-r" + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
+                          <button key={x.g.c.key + x.g.part} type="button" draggable data-k={x.g.c.key} data-d={x.g.day} className={"msf-run-r" + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
                             onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)}
                             onContextMenu={(e) => { e.preventDefault(); setLockMenu({ c: x.g.c, g: x.g, x: e.clientX, y: e.clientY }); }}>
                             {whyEl(x.g.c)}{dotEl(x.g.c, x.g)}<b>#{x.g.c.job.number}</b><span className="nm">{x.g.c.job.name || x.g.c.need.label}</span><small>{gl.colors} · {gl.units.toLocaleString()}</small>
