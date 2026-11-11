@@ -6,6 +6,7 @@ import { cfgOf, type MailAccount, type MailCfg } from "./config";
 import { handleIncoming, handleSent, saveAttachments, saveBody, type MailMsg, type Outcome } from "./process";
 import { accountById } from "./config";
 import { addInboxEws, mirrorInbox, mirrorInboxEws } from "./mirror";
+import { isZip, openZips } from "@/lib/mail/zipAttachments";
 
 /**
  * A connection to the mailbox. Its errors (a socket timeout, the server dropping it) are caught here: an "error" event
@@ -139,7 +140,11 @@ const mailboxDown = new Map<string, number>();
 export async function refetchAttachments(admin: SupabaseClient, activityId: string) {
   const { data: a } = await admin.from("activities").select("id, customer_id, external_id, meta").eq("id", activityId).maybeSingle();
   const meta = ((a?.meta || {}) as { account_id?: string; mailbox?: string; attachments?: { name: string; path: string; type: string; size: number }[]; att_checked?: boolean });
-  const have = meta.attachments || [];
+  const have0 = meta.attachments || [];
+  // zipped files opened once (lib/mail/zipAttachments.ts), for emails that came in before zips were
+  const oz = a && have0.some(isZip) ? await openZips(admin, have0).catch(() => ({ atts: have0, changed: false })) : { atts: have0, changed: false };
+  const have = oz.atts;
+  if (a && oz.changed) { meta.attachments = have; await admin.from("activities").update({ meta: { ...meta } }).eq("id", a.id); }
   if (!a || meta.att_checked || !a.external_id || !meta.account_id) return have;
   // Oct 26, Nick: "Bring in the sizes only… it's taking forever": Nick's mailbox had been refusing connections, and
   // every read sat ~50s on the socket timeout before going on with the files already on file. Now it's a few seconds at

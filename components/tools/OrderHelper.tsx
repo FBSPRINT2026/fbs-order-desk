@@ -39,7 +39,7 @@ const guess = (f: HF): Kind => {
 /** sizes written in their message: "S 12, M 24…", "2XL - 6" */
 const SZ = /\b(?:y?xs|y?s|y?m|y?l|y?xl|[2-6]x(?:l)?|xxl|xxxl|small|medium|large|x-large)\b\s*[-:=x×]?\s*\(?\d{1,4}\)?/gi;
 
-export default function OrderHelper({ activityId, orderType, onMake, auto = false }: { activityId: string; /** the panel's Order type */ orderType: "new" | "reorder" | "reorder_changes";
+export default function OrderHelper({ activityId, orderType, onMake, auto = false, scratch = false }: { activityId: string; /** read from scratch ("No, use the card"): no guesses learned from this customer */ scratch?: boolean; /** the panel's Order type */ orderType: "new" | "reorder" | "reorder_changes";
   /** make it straight away with what was learned (Create order's "Make it the way I learned") */ auto?: boolean;
   /** straight to making it, in the same Create order tool */ onMake: (begin: OrderStart) => void }) {
   const sb = useMemo(() => createClient(), []);
@@ -63,7 +63,7 @@ export default function OrderHelper({ activityId, orderType, onMake, auto = fals
   const [learnt, setLearnt] = useState<{ customer: string; n: number; used: number } | null>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    void Promise.all([activityFiles(activityId), helperLearned(activityId).catch(() => null)]).then(([r, L]) => {
+    void Promise.all([activityFiles(activityId), scratch ? Promise.resolve(null) : helperLearned(activityId).catch(() => null)]).then(([r, L]) => {
       if (!r.ok) { setErr(r.error); setSrc({ files: [], about: "", orderId: null }); return; }
       setSrc(r); setFiles(r.files);
       const lg = L && L.ok ? L : null;

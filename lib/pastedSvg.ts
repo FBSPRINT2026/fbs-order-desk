@@ -42,3 +42,27 @@ export function pastedWidths(wPts: number[]): number[] {
   const k = real ? 1 / 72 : wPts.length > 1 ? 11 / big : 0;
   return wPts.map((w) => (k ? Math.max(1, Math.round(w * k * 4) / 4) : 10));
 }
+
+/**
+ * An SVG cut down to a part of itself (fractions of its box, 0–1): its viewBox and its width and height moved in, the art
+ * unchanged. Used to take the empty or hidden edge off art (Nov 10, Nick: a camo back pasted from Illustrator came in
+ * 12" wide with its box well past the letters: Illustrator's box counts the whole camo picture the letters clip, so the
+ * art was sized by what can't be seen). Null when the SVG has no size to move.
+ */
+export function cropSvgBox(svg: string, f: { x: number; y: number; w: number; h: number }): string | null {
+  const end = svg.indexOf(">"), open = svg.slice(0, end + 1);
+  if (end < 0 || !(f.w > 0 && f.h > 0)) return null;
+  const attr = (k: string) => new RegExp(`\\s${k}\\s*=\\s*["']\\s*([\\d.]+)\\s*([a-z%]*)\\s*["']`, "i").exec(open);
+  const W = attr("width"), H = attr("height");
+  const vb = /\sviewBox\s*=\s*["']\s*([-\d.eE]+)[\s,]+([-\d.eE]+)[\s,]+([-\d.eE]+)[\s,]+([-\d.eE]+)\s*["']/i.exec(open);
+  const v = vb ? [+vb[1], +vb[2], +vb[3], +vb[4]] : W && H && W[2] !== "%" && H[2] !== "%" ? [0, 0, +W[1], +H[1]] : null;
+  if (!v || !(v[2] > 0 && v[3] > 0)) return null;
+  const r = (n: number) => Math.round(n * 1000) / 1000;
+  const nvb = `${r(v[0] + f.x * v[2])} ${r(v[1] + f.y * v[3])} ${r(f.w * v[2])} ${r(f.h * v[3])}`;
+  let o = open.replace(/\sviewBox\s*=\s*["'][^"']*["']/i, "");
+  o = o.replace(/\s(width|height)\s*=\s*["'][^"']*["']/gi, "");
+  const size = (m: RegExpExecArray | null, k: number) => (m && m[2] !== "%" ? `${r(+m[1] * k)}${m[2]}` : "");
+  const w = size(W, f.w), h = size(H, f.h);
+  o = o.replace(/^<svg/i, `<svg viewBox="${nvb}"${w ? ` width="${w}"` : ""}${h ? ` height="${h}"` : ""}`);
+  return o + svg.slice(end + 1);
+}

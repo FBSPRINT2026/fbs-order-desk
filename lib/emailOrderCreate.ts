@@ -6,7 +6,7 @@ import { applyConfirmedSpecs } from "@/lib/designSpecs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { proposalToGroups } from "@/lib/ai/normalize";
 import { METHODS, methodLabel, SIZES, STATUSES, sizeLabel, type Group } from "@/lib/pricing";
-import { carryOf, isPicture, oldNoteText, type EODraft } from "@/lib/emailOrderShared";
+import { carryOf, isPicture, isScratch, oldNoteText, type EODraft } from "@/lib/emailOrderShared";
 import { trimPng } from "@/lib/pngTrim";
 import { SITE_URL } from "@/lib/config";
 import { namesForPaths } from "@/lib/printavoFileMeta";
@@ -235,7 +235,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const shopNote = [d.notes, goodsMore ? `${goodsMore}.` : "", reorderOf && fromLabel ? `Reorder of ${fromLabel}.` : ""].filter(Boolean).join(" ").slice(0, 2000);
   // a program customer (Oct 14: Furry Feline's Mewjira reprint from Cheri's email): the order starts on Program, so the
   // order page prices it from their design prices / rate card, or recommends a price for a new quantity
-  const useProgram = await customerUsesProgram(admin, custId);
+  // read from scratch ("No, use the card"): nothing learned about the customer goes on it either (lib/emailOrderShared.ts)
+  const scratch = isScratch(d.told);
+  const useProgram = scratch ? false : await customerUsesProgram(admin, custId);
   // a ClickUp job the customer flagged Urgent or High: 🚩 at the front of the job name (Oct 22, Nick: "put a little
   // priority flag emoji in the job name when we're converting it over")
   const cuSrc = ((a?.meta || {}) as { source?: string; clickup?: { id?: string } });
@@ -248,7 +250,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const intoId = String(input.intoOrder || ((a?.meta || {}) as { into_order?: string }).into_order || "");
   // the brand's standard mockups (its "Standard mockups", Oct 30, Nick: "save the mockup number and reuse those… you don't
   // need to make it each time"): a group with exactly those logos gets that mockup, copied, nothing drawn
-  const std = await standardMockups(admin, custId, groups).catch((e) => { console.warn("standard mockups", e); return new Map<string, StdMockup>(); });
+  const std = scratch ? new Map<string, StdMockup>() : await standardMockups(admin, custId, groups).catch((e) => { console.warn("standard mockups", e); return new Map<string, StdMockup>(); });
   // the training's order defaults (lib/orderTrainings.ts TrainingDefaults; Oct 31, Nick on MEI: "FedEx Ground, unless he
   // says something different… reorder by default with no production confirmation"): shipping only when the job doesn't
   // name a carrier or pickup itself
@@ -256,8 +258,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   // reorder shipped FedEx on Nine18's account, but they were marked right before the defaults could learn, so #40337
   // came in as a new order): the defaults learn on every Create order, not only when the next order is marked right
   const jobText = `${a?.subject || ""} ${d.nickname || ""} ${d.po_number || ""}`;
-  if (custId) await learnDefaults(admin, custId, jobText).catch((e) => console.warn("learnDefaults", e));
-  const tdef = custId ? defaultsOf(trainingsForText(await customerTrainings(admin, custId).catch(() => []), jobText)) : {};
+  if (custId && !scratch) await learnDefaults(admin, custId, jobText).catch((e) => console.warn("learnDefaults", e));
+  const tdef = custId && !scratch ? defaultsOf(trainingsForText(await customerTrainings(admin, custId).catch(() => []), jobText)) : {};
   const shipSaid = SHIP_SAID.test(`${a?.subject || ""}\n${(a as { body?: string | null } | null)?.body || ""}\n${notes || ""}`);
   if (tdef.confirm !== undefined) for (const g of groups) for (const im of g.imprints) {
     if (im.confirmed) continue;
@@ -276,7 +278,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   }
   // a print still asking production: the same logo at the same spot confirmed before takes those details instead (Nov 9:
   // six MEI cart orders asked about the same four logos; lib/designSpecs.ts bySameArt)
-  if (custId) tookSpecs = [...tookSpecs, ...(await applyConfirmedSpecs(admin, custId, null, groups).catch(() => [] as string[]))];
+  if (custId && !scratch) tookSpecs = [...tookSpecs, ...(await applyConfirmedSpecs(admin, custId, null, groups).catch(() => [] as string[]))];
   const tDelivery = !shipSaid && tdef.delivery_method ? tdef.delivery_method : "";
   const orderRow = {
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
@@ -286,7 +288,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     // HOUSTON" became "AMS Houston")
     ...(/\brush\b/i.test(`${d.nickname || ""} ${a?.subject || ""}`) ? { rush: true } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
-    delivery_method: tDelivery || (["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup"), ship_to: addressBlock(d.ship_to || "").slice(0, 500),
+    delivery_method: tDelivery || (["pickup", "ship", "deliver", "tbd"].includes(d.delivery) ? d.delivery : "tbd"), ship_to: addressBlock(d.ship_to || "").slice(0, 500),
     // a customer who ships on their own carrier account (customers.ship_on): the order ships on it, $0 shipping, the same
     // as picking it on the order page (Oct 30, #40284: Nine18 on "Nine18 FEDEX")
     ...((tDelivery || d.delivery) === "ship" && cust?.ship_on ? { ship_method: await ownAccountMethod(String(cust.ship_on)) } : (tDelivery || d.delivery) === "ship" && !shipSaid && tdef.ship_method ? { ship_method: tdef.ship_method.slice(0, 60) } : {}),

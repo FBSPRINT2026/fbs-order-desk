@@ -12,10 +12,25 @@ export const canDrop = (dt: DataTransfer) => { const t = dt.types; return t.incl
 const isMsg = (f: File) => /\.msg$/i.test(f.name) || /ms-outlook/i.test(f.type);
 const sigPic = (name: string, n: number) => n < 15_000 && /image0\d+|outlook|logo/i.test(name);
 
+/** a zip's files beside it, each named after the zip ("DH-WS-Forged-Tee-Char-410pcs › S&S…pdf"), the same as an email's
+ *  zipped attachments on the server (lib/mail/zipAttachments.ts; Nov 10, Dear Heart's sizes came zipped) */
+export async function withZipsOpened(files: File[]): Promise<File[]> {
+  const out: File[] = [];
+  for (const f of files) {
+    out.push(f);
+    if (!(/\.zip$/i.test(f.name) || /zip/i.test(f.type))) continue;
+    const { unzip } = await import("@/lib/unzip");
+    const inner = await unzip(f).catch(() => [] as File[]);
+    const label = f.name.replace(/\.zip$/i, "");
+    for (const x of inner.slice(0, 20)) if (x.size && !/^\./.test(x.name)) out.push(new File([x], `${label} › ${x.name.replace(/\.pdf\.pdf$/i, ".pdf")}`, { type: x.type || (/\.pdf$/i.test(x.name) ? "application/pdf" : "") }));
+  }
+  return out;
+}
+
 /** an Outlook email's attachments, as files */
 export async function msgFiles(f: File): Promise<File[]> {
   const { readMsg } = await import("@/lib/outlookMsg");
-  return readMsg(await f.arrayBuffer()).attachments.filter((a) => !sigPic(a.name, a.data.length)).map((a) => new File([a.data as BlobPart], a.name, { type: a.type || "" }));
+  return withZipsOpened(readMsg(await f.arrayBuffer()).attachments.filter((a) => !sigPic(a.name, a.data.length)).map((a) => new File([a.data as BlobPart], a.name, { type: a.type || "" })));
 }
 
 /** an Outlook email as everything in it that can be read (Nov 3, Nick: Fossil's reorder email had the counts in its
@@ -28,7 +43,7 @@ export async function msgAsFiles(f: File): Promise<File[]> {
   const words = [`From: ${m.from}${m.fromEmail ? ` <${m.fromEmail}>` : ""}`, `Subject: ${m.subject}`, "", m.body].join("\n").trim();
   if (m.body.trim()) out.push(new File([words], `${(m.subject || "Email").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80)} (email).txt`, { type: "text/plain" }));
   for (const a of m.attachments) if (!sigPic(a.name, a.data.length)) out.push(new File([a.data as BlobPart], a.name, { type: a.type || "" }));
-  return out;
+  return withZipsOpened(out);
 }
 export const isTextFile = (f: File) => /^text\/plain/i.test(f.type) || /\.txt$/i.test(f.name);
 
@@ -57,5 +72,5 @@ export async function filesFromDrop(dt: DataTransfer, o: { openEmails?: boolean 
     if (o.openEmails && isMsg(f)) { try { out.push(...(await msgFiles(f))); } catch { /* not an email after all */ } }
     else out.push(f);
   }
-  return out.length ? { files: out } : { files: [], error: "That email has no attachments." };
+  return out.length ? { files: await withZipsOpened(out) } : { files: [], error: "That email has no attachments." };
 }

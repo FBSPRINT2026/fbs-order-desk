@@ -142,8 +142,29 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   Moving…: a job only gets the rules, worked examples, brand logos and program rate card of the end client it names
   (`trainingsForText`, `loadExamples`' same-client check, `logosOnFile(…, jobText)` / `namesBrand`, `cardForOrder`'s match
   words). A job for an end client with nothing on file is read from scratch, never as the customer's biggest client.
+  **"No" to the rules question means from scratch** (Nick, Nov 10 2026: "it doesn't know who it is, it doesn't know
+  what it is"): on the Create order card, while "This looks like a … order" is asked and after "No, use the card",
+  everything the card makes is read as a new customer's job (`SCRATCH` / `isScratch` in `lib/emailOrderShared.ts`): no
+  trainings, examples, memories, logos, past-job matching, learned styles or file guesses, standard or master mockups,
+  training defaults, program pricing or confirmed specs. Only rules or a past job staff pick by hand still count. New
+  customer knowledge in the reader or Create order goes behind `knowId` / `scratch` too.
+- **Names on pieces are the line's personalization** (Nick, Nov 10 2026: the order helper "is not using the add
+  personalization tool"). Anything that makes or changes an order puts names on `GLine.persList` (what "Add
+  personalization" makes, charged per name) through `persFromNames` in `lib/persNames.ts`: the order reader and the AI
+  order helper's line field `personalization`. Never in a print's notes or a line note. The helper's free edits are
+  checked against `lib/orderShape.ts` (every key the order's types have, kept in step by the compiler): a made-up field
+  is refused, never saved where nothing reads it. Add a new order field to the type and the compiler sends you there.
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
+- **A sent version isn't locked until the customer answers** (Nick, Nov 10 2026: "until it's approved or declined, it
+  wouldn't really lock"). Changing a group's mockup while its version is out and unanswered updates that same version
+  (`refreshUnseenProofs` in `app/shop/proof-actions.ts`), opened or not; a new version only starts once they've approved
+  or asked for changes. Anything that swaps a group's mockup pictures calls it.
+- **Production holder** (Nick, Nov 10 2026; replaced Hold the spot): saving press time for a quote before its art is in
+  is `components/tools/ProductionHolder.tsx`, opened from the order's Production ▾ menu; a held spot shows as a small
+  dashed "Held · <day>" tag in the order's header (no big button). It reads the order (each garment's pieces, kind and
+  darkness: `QuickJob.parts`) and guesses the spots and colors (the order's prints, else its art files' names, else the
+  customer's recent orders); staff only fix what's off. Orders from the same email can be held together.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.

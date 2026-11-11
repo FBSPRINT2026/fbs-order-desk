@@ -1,4 +1,5 @@
 "use client";
+import { refreshUnseenProofs } from "@/app/shop/proof-actions";
 import LogoThumb from "@/components/LogoThumb";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -234,8 +235,13 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
       if (!remake) {
         // the same pictures on this order: the mockup rows copied (the files are shared), the group's old ones archived
         const { data: u } = await sb.auth.getUser();
+        const { data: was } = await sb.from("mockups").select("id").eq("order_id", orderId).eq("group_id", group.id).is("archived_at", null);
         await sb.from("mockups").update({ archived_at: new Date().toISOString() }).eq("order_id", orderId).eq("group_id", group.id).is("archived_at", null);
-        for (const r of [...s.rows].reverse()) await sb.from("mockups").insert({ customer_id: r.customer_id, order_id: orderId, group_id: group.id, proof_id: null, title: r.title, file_path: r.file_path, design_ids: r.design_ids || [], created_by: u.user?.email || "", snapshot: { ...(r.snapshot || {}), imprints: imps } });
+        const made: string[] = [];
+        for (const r of [...s.rows].reverse()) { const { data: nm } = await sb.from("mockups").insert({ customer_id: r.customer_id, order_id: orderId, group_id: group.id, proof_id: null, title: r.title, file_path: r.file_path, design_ids: r.design_ids || [], created_by: u.user?.email || "", snapshot: { ...(r.snapshot || {}), imprints: imps } }).select("id").single(); if (nm?.id) made.push(nm.id); }
+        // a version out with the customer and not yet answered shows these pictures, same version (as a Mockup Creator save)
+        const beforeIds = ((was || []) as { id: string }[]).map((x) => x.id);
+        if (beforeIds.length && made.length) await refreshUnseenProofs(orderId, beforeIds, made).catch(() => null);
         thumbs = (s.snap.mockupThumbs || []).length ? s.snap.mockupThumbs! : s.rows.map((r) => thumbOf(r.file_path));
       }
       await onPick({ imprints: imps, offsets, thumbs, remake, label: s.num ? `M-${s.num}` : s.order ? `#${s.order.number}${s.order.nickname ? ` ${s.order.nickname}` : ""}` : s.rows[0].title, mockup: { id: s.rows[0].id, number: s.num } });

@@ -5,6 +5,7 @@ import { aiState } from "@/lib/ai/claude";
 import { triageEmail } from "@/lib/ai/tasks";
 import { processEmailActivity } from "@/lib/ai/email";
 import { DIGITIZER } from "@/lib/digitizer";
+import { isZip, saveZipped } from "@/lib/mail/zipAttachments";
 
 /**
  * What happens to each email read from the shop mailbox:
@@ -99,6 +100,8 @@ export async function saveAttachments(admin: SupabaseClient, m: MailMsg, folder:
     const path = `emails/${folder}/${Date.now().toString(36)}-${name}`;
     const { error } = await admin.storage.from("proofs").upload(path, a.content, { contentType: a.contentType || "application/octet-stream", upsert: false });
     if (!error) out.push({ name: a.filename, path, type: a.contentType, size: a.size });
+    // a zip's files are the email's files too (lib/mail/zipAttachments.ts)
+    if (!error && isZip({ name: a.filename, type: a.contentType })) out.push(...await saveZipped(admin, a.filename, a.content, `emails/${folder}`).catch(() => []));
   }
   return out;
 }

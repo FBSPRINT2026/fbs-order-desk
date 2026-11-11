@@ -5,7 +5,7 @@ import { garmentFor as catalogGarment } from "@/lib/garmentMatch";
 import { sameColorAs } from "@/lib/colorMatch";
 import { canDrop, filesFromDrop } from "@/lib/dropFiles";
 import { askPage } from "@/lib/artboards";
-import { pastedSvg, type PastedSvg } from "@/lib/pastedSvg";
+import { cropSvgBox, pastedSvg, type PastedSvg } from "@/lib/pastedSvg";
 import BackLink from "@/components/BackLink";
 import { allRows } from "@/lib/readAll";
 import { bySupplierStyle } from "@/lib/garmentSup";
@@ -26,7 +26,7 @@ import type { WebBack } from "@/lib/backFinder";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, fitLocation, METHODS, methodLabel, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
-import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
+import { cropPreviews, DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
 import NameNumberBuilder from "@/components/NameNumberBuilder";
 import type { RosterSpec } from "@/lib/rosterArt";
 import { applyColorway, sewKindOf, withMethod, colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
@@ -36,7 +36,7 @@ import PopularGarments from "@/components/PopularGarments";
 import { attachMockupToRequest, mockupLineCheck, mockupLock, mockupUploadUrls, myLogos, portalCatalog, requestGroupSetup, retireMyMockups, saveMyMockup } from "@/app/portal/request-actions";
 import type { LineCheck } from "@/app/portal/request-actions";
 import { uploadMyLogo } from "@/lib/customerUpload";
-import { isVector, knockOut, trimClear, trimSolid, type CleanArt } from "@/lib/artPrep";
+import { isVector, knockOut, svgSeenBox, trimClear, trimSolid, type CleanArt } from "@/lib/artPrep";
 import { proofForChange, starMyDesign, submitOwnChange } from "@/app/portal/actions";
 import { mockupSpec } from "@/app/shop/ai/actions";
 import SalesSheet from "@/components/SalesSheet";
@@ -726,6 +726,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         setUrls((x) => ({ ...x, ...u }));
       })();
     }
+  }, [designs, imprints]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a logo on this mockup whose picture is still the whole page around the art (made before its picture was cropped):
+  // cropped once here, so it's sized on the shirt by the art itself (the same as the customer page does, lib/designs.ts)
+  const cropTried = useRef(new Set<string>());
+  useEffect(() => {
+    if (portal) return;
+    const todo = designs.filter((d) => d.preview_path && !d.specs?.cropped && !cropTried.current.has(d.id) && imprints.some((im) => im.design_id === d.id));
+    if (!todo.length) return;
+    todo.forEach((d) => cropTried.current.add(d.id));
+    void cropPreviews(sb, todo).then(async (fixed) => {
+      if (!fixed.length) return;
+      const byId = new Map(fixed.map((x) => [x.id, x]));
+      for (const x of fixed) resetLogo(x);
+      setDesigns((xs) => xs.map((x) => byId.get(x.id) || x));
+      const u = await previewUrls(sb, fixed);
+      setUrls((x) => ({ ...x, ...u }));
+    }).catch(() => null);
   }, [designs, imprints]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the customer's designs; again when the order check (on the right) changes a logo's art, so the shirt shows it
@@ -2470,7 +2487,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    *  file… I copy it in one side and then copy another one"): each paste is a print on the Helper, still vector (an SVG),
    *  its inks read off its colors. The first is the front, the next the back (both can be changed); sizes are read
    *  against each other (lib/pastedSvg.ts) */
-  async function helperPaste(p: PastedSvg) {
+  async function helperPaste(p0: PastedSvg) {
+    // sized by the art that shows, not Illustrator's box (a picture clipped by the letters, a hidden layer, an empty
+    // edge): the box moved in, and its size in points with it, so a real-size copy still prints at its real size
+    const seen = await svgSeenBox(p0.svg).catch(() => null), cut = seen ? cropSvgBox(p0.svg, seen) : null;
+    const p: PastedSvg = cut && seen ? { svg: cut, wPt: p0.wPt * seen.w, hPt: p0.hPt * seen.h } : p0;
     // where it goes is asked in a small pop-up in the middle (Nov 1, Nick: "where do you want to put this? …full front,
     // back. It doesn't have to stay in that little helper")
     const file = new File([p.svg], `Pasted art.svg`, { type: "image/svg+xml" });

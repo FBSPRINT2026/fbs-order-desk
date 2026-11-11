@@ -8,6 +8,8 @@
  * - effectiveDpi: how sharp a raster logo will print at a given width.
  */
 
+import { cropSvgBox } from "@/lib/pastedSvg";
+
 export const isVector = (type: string, name = "") => /svg/i.test(type) || /\.(svg|ai|eps|pdf)$/i.test(name);
 
 function canvasOf(img: CanvasImageSource, w: number, h: number) {
@@ -30,6 +32,25 @@ function artBox(d: Uint8ClampedArray, w: number, h: number, minAlpha = 12) {
   }
   return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
+/**
+ * Where the art you can SEE sits in an SVG, as fractions of its box (null when it fills it). Drawn, then measured by its
+ * pixels, so a clipped picture, a hidden layer or an empty edge that Illustrator counts in the art's box isn't counted
+ * (Nov 10, Nick: "it's having this bounding box… this shows 12, but it's not really that way").
+ */
+export async function svgSeenBox(svg: string): Promise<{ x: number; y: number; w: number; h: number } | null> {
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const W0 = img.naturalWidth || 1200, H0 = img.naturalHeight || 1200, k = Math.min(1, 1600 / Math.max(W0, H0));
+    const W = Math.max(1, Math.round(W0 * k)), H = Math.max(1, Math.round(H0 * k));
+    const { x } = canvasOf(img, W, H);
+    let data: ImageData; try { data = x.getImageData(0, 0, W, H); } catch { return null; }
+    const b = artBox(data.data, W, H);
+    if (!b || (b.w >= W * 0.98 && b.h >= H * 0.98)) return null;
+    return { x: b.x / W, y: b.y / H, w: b.w / W, h: b.h / H };
+  } catch { return null; } finally { URL.revokeObjectURL(url); }
+}
+
 /** crop a worked canvas to the art (plus a 2px edge), scaled back to the original file's pixels for `box` */
 function cropToArt(c: HTMLCanvasElement, data: ImageData, k: number, W: number, H: number, bg: string): CleanArt | null {
   const b = artBox(data.data, c.width, c.height);
@@ -199,6 +220,13 @@ export function knockOut(img: HTMLImageElement, opts: { keepInside?: boolean; ma
  * to gain (no see-through margins, under 3% on every side) or the picture can't be read.
  */
 export async function cropFileToArt(file: File): Promise<File | null> {
+  // an SVG keeps being vector: its box is moved in to the art that shows (lib/pastedSvg.ts cropSvgBox)
+  if (/svg/i.test(file.type) || /\.svg$/i.test(file.name)) {
+    const text = await file.text().catch(() => "");
+    const f = text ? await svgSeenBox(text) : null;
+    const out = f ? cropSvgBox(text, f) : null;
+    return out ? new File([out], file.name, { type: "image/svg+xml" }) : null;
+  }
   if (!/^image\/(png|webp|gif)$/i.test(file.type)) return null;
   const url = URL.createObjectURL(file);
   try {

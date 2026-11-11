@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import type { EODraft, EOPart, PastJob } from "@/lib/emailOrderShared";
+import { SCRATCH, type EODraft, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 import { PARTIAL, type PartKind } from "@/components/tools/PartialOrder";
 import OrderHelper from "@/components/tools/OrderHelper";
 import { helperLearned } from "@/app/shop/order-helper-actions";
@@ -62,7 +62,17 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   const [rule, setRule] = useState(""), [rules, setRules] = useState<{ id: string; customer: string; name: string }[] | null>(null);
   const ruleOf = rules?.find((r) => r.id === rule);
   const ruleName = (r: { customer: string; name: string }) => (r.name && r.name !== r.customer ? `${r.customer} · ${r.name}` : r.customer || r.name);
-  const onPick = (st0: OrderStart) => {
+  // "No, use the card" (Nov 10, Nick: "if you say no, it should just start from scratch like it's nothing else… it doesn't
+  // know who it is"): everything made from this card is read as if from a new customer (lib/emailOrderShared.ts SCRATCH),
+  // unless staff pick rules or a past job themselves
+  // While the rules question is open, the card under it is that "no" already (Nick: "what's underneath it… it should be
+  // a completely start from scratch"): nothing it shows or makes knows the customer
+  const [scratch, setScratch] = useState(false);
+  // a customer with Create order training, and this job is theirs (the question at the top; set below)
+  const [trained, setTrained] = useState<{ customer: string; name: string } | null>(null);
+  const blind = scratch || !!trained;
+  const onPick = (st0: OrderStart, withRules = false) => {
+    if (blind && !withRules && !ruleOf && !st0.reorderOf && !st0.job && !(st0.jobs || []).length) st0 = { ...st0, told: [SCRATCH, st0.told].filter(Boolean).join(" ") };
     const ruleTold = ruleOf ? `[training:${ruleOf.id}] Make this order EXACTLY by the shop's training "${ruleName(ruleOf)}" (HOW TO MAKE ${ruleName(ruleOf).toUpperCase()} ORDERS): it wins over everything else. Don't ask about anything the training settles.` : "";
     const st = { ...st0, ...(ruleTold && !st0.reorderOf ? { told: [ruleTold, st0.told].filter(Boolean).join(" ") } : {}), ...(mOn.size ? { include: [...mOn] } : {}), ...(mOff.size ? { exclude: [...mOff] } : {}) };
     onPick0(st);
@@ -206,7 +216,6 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   };
   // a customer with Create order training, and this job is theirs (Oct 30, Nick: "I detected this is a 918 All My Sons
   // order. Would you like me to enter this with the rules?… it's going to trump everything in the create orders")
-  const [trained, setTrained] = useState<{ customer: string; name: string } | null>(null);
   const [trainChecked, setTrainChecked] = useState(false);
   useEffect(() => {
     let live = true;
@@ -219,7 +228,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   const makeSolo = () => {
     const c = cardOf(SOLO, null);
     // nothing changed and it was already read in the background: use that reading
-    if (ready && !over[SOLO]) return onPick({ orderType: c.type });
+    if (ready && !over[SOLO] && !blind) return onPick({ orderType: c.type });
     onPick({ told: [toldOf(c), aiNote.trim()].filter(Boolean).join(" "), job: c.type === "new" ? undefined : c.job || undefined, orderType: c.type });
   };
   const pickJob = (p: PastJob) => {
@@ -358,7 +367,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
               <div className="osp-trained" role="note">
                 <b>This looks like a{/^[aeiou]/i.test(trained.customer) ? "n" : ""} {trained.customer}{trained.name && trained.name !== trained.customer ? ` · ${trained.name}` : ""} order.</b>
                 <span>Make it with the {trained.name || trained.customer} rules? They win over everything on this card.</span>
-                <div className="osp-card-go"><button type="button" className="btn primary" onClick={() => onPick({ told: [RULES(trained.name || trained.customer), aiNote.trim()].filter(Boolean).join(" ") })}>Make it with the rules</button><button type="button" className="btn" onClick={() => setTrained(null)}>No, use the card</button></div>
+                <div className="osp-card-go"><button type="button" className="btn primary" onClick={() => onPick({ told: [RULES(trained.name || trained.customer), aiNote.trim()].filter(Boolean).join(" ") }, true)}>Make it with the rules</button><button type="button" className="btn" onClick={() => { setTrained(null); setScratch(true); setLearned(null); if (way === "auto") setWay(""); }}>No, use the card</button></div>
               </div>
             )}
             {trainChecked && !trained && !!rules?.length && (
@@ -377,7 +386,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
               <b>New order, printed like their order {like}</b><span>The art and garments from these files; the inks, size and placement from that past job, where the prints match</span>
             </button>}
             <div className="osp-card open">
-              <div className="osp-card-t"><b>{ready?.draft.nickname || "This order"}</b>{ready && <span className="faint">already read: ready to make</span>}</div>
+              <div className="osp-card-t"><b>{(!blind && ready?.draft.nickname) || "This order"}</b>{ready && !blind && <span className="faint">already read: ready to make</span>}</div>
               {look === "wait" ? <div className="faint osp-card-n">Comparing the picture in the email with their past jobs&apos; mockups…</div> : lookHit && cardOf(SOLO, null).job === lookHit.ref ? <div className="faint osp-card-n">{lookHit.why}{lookHit.sure === "low" ? " (not sure: check it)" : ""}</div> : null}
               {cardBody(SOLO, null)}
               {jobFor === SOLO && <div className="osp-card-jobs">{jobList}</div>}
@@ -387,7 +396,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
                   : <span className="faint">Pick the past job above to reorder it.</span>}
               </div> : <>
               {/* a new order: three ways to make it (Nov 6, Nick: "Make the order… Order helper… Other options"), each in this one tool */}
-              {learned && way !== "auto" && <div className="osp-learned" role="note">
+              {learned && !blind && way !== "auto" && <div className="osp-learned" role="note">
                 <b>I&apos;ve learned how {learned.customer || "their"} orders go.</b>
                 <span>I&apos;d have gotten their last {learned.streak} right by myself: where the sizes are and what every file is. Make this one the same way?</span>
                 <div className="osp-card-go"><button type="button" className="btn primary" onClick={() => { setWay("auto"); setOtherFor(null); }}>Make it the way I learned</button><button type="button" className="btn" onClick={() => { setWay("helper"); setOtherFor(null); }}>Check it with me</button></div>
@@ -398,7 +407,7 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
                 <button type="button" className="osp-way" onClick={makeSolo}><b>Make the order</b><span>The AI reads everything and makes the whole order. You check it after.</span></button>
                 <button type="button" className={"osp-way" + (otherFor === SOLO ? " on" : "")} aria-expanded={otherFor === SOLO} onClick={() => { setOtherFor(otherFor === SOLO ? null : SOLO); setWay(""); }}><b>Other options <span aria-hidden>▾</span></b><span>Only part of it: the sizes, the art, the mockup, or their files on a blank order.</span></button>
               </div>
-              {(way === "helper" || way === "auto") && <OrderHelper key={way} auto={way === "auto"} activityId={activityId} orderType={cardOf(SOLO, null).type} onMake={(st) => { const c = cardOf(SOLO, null); onPick({ ...st, told: [toldOf(c), st.told].filter(Boolean).join(" "), job: c.type === "new" ? undefined : c.job || undefined }); }} />}
+              {(way === "helper" || way === "auto") && <OrderHelper key={way} scratch={blind} auto={way === "auto"} activityId={activityId} orderType={cardOf(SOLO, null).type} onMake={(st) => { const c = cardOf(SOLO, null); onPick({ ...st, told: [toldOf(c), st.told].filter(Boolean).join(" "), job: c.type === "new" ? undefined : c.job || undefined }); }} />}
               {otherFor === SOLO && otherMenu((k) => { const c = cardOf(SOLO, null); onPick({ told: toldOf(c), job: c.type === "new" ? undefined : c.job || undefined, orderType: c.type, partial: k, ...(aiNote.trim() ? { note: aiNote.trim() } : {}) }); })}
               </>}
             </div>

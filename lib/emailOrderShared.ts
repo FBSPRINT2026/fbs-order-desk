@@ -109,3 +109,13 @@ export const ROLE_LABEL: Record<EOFile["role"], string> = { art: "Art", mockup: 
 export const GENERIC_PIC = /^(image|img|logo|signature|sig|outlook[-\w]*|~wrl\d*)[-_ ]?\d*\.(png|jpe?g|gif|bmp)$/i;
 export const looksLikeSignature = (f: Pick<EOFile, "type" | "name" | "size">) => isPicture(f) && GENERIC_PIC.test(f.name.trim()) && f.size < 120 * 1024;
 export const isPicture = (f: Pick<EOFile, "type" | "name">) => /^image\/(png|jpe?g|gif|webp)$/i.test(f.type) || /\.(png|jpe?g|gif|webp)$/i.test(f.name);
+
+/**
+ * "No, use the card" (Nov 10, Nick: "if you say no, it should just start from scratch like it's nothing else… it doesn't
+ * know who it is, it doesn't know what it is"): the job is read as if from a new customer. Nothing learned about the
+ * customer is used: no trainings, worked examples, memories, logos or brands on file, past-job matching, learned styles,
+ * standard or master mockups, training defaults, program pricing or confirmed specs. Only the email, its files and the
+ * shop's own general rules. Carried in what staff told the AI, so it reaches every way an order is made from the card.
+ */
+export const SCRATCH = "[from scratch] Read this order from scratch: staff said none of this customer's rules, past orders or anything on file applies. Use only this email, its files and the shop's general rules.";
+export const isScratch = (told?: string | null) => /\[from scratch\]/i.test(String(told || ""));

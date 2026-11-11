@@ -19,7 +19,7 @@ import JobFiles from "@/components/job/JobFiles";
 import JobTalk, { OriginalJobTalk } from "@/components/JobTalk";
 import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
-import HoldSpotTool from "@/components/tools/HoldSpotTool";
+import ProductionHolder from "@/components/tools/ProductionHolder";
 import { SITE_URL } from "@/lib/config";
 import { type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
@@ -1585,8 +1585,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               next steps are full-width buttons and the menus sit two by two under them */}
           <span className="ed-main">
           {/* no Send to Printavo any more (Nov 9, Nick: "we're not using Printavo anymore… we don't wanna send things that way") */}
-          {/* Hold the spot: save press time for a quote before its details are firm (components/tools/HoldSpotTool.tsx) */}
-          {!o.draft && ["quote", "quote_sent", "art"].includes(o.status) && o.type === "quote" && <HoldSpotTool order={{ id: o.id, number: o.number, nickname: o.nickname || null, due_date: o.due_date || null, groups: o.groups }} customer={cust ? custLabel(cust) : ""} />}
+          {/* a held press spot shows as a small tag; it's made in Production ▾ → Production holder (components/tools/ProductionHolder.tsx) */}
+          {!o.draft && ["quote", "quote_sent", "art"].includes(o.status) && o.type === "quote" && <ProductionHolder chip order={{ id: o.id, number: o.number, nickname: o.nickname || null, due_date: o.due_date || null, groups: o.groups, customer_id: o.customer_id }} customer={cust ? custLabel(cust) : ""} />}
           {/* Send to customer: the proof, the quote, the sew-outs, one email (components/tools/SendProofTool.tsx) */}
           {quoteLock.closed && !lockOverride ? <button type="button" className="btn" onClick={() => setClosedAsk(true)}>Open anyway</button>
             : o.status === "quote_sent" && quoteLock.locked ? <button type="button" className="btn primary" onClick={() => void makeChanges()}>Make changes</button>
@@ -1608,6 +1608,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer"><MenuItem icon="clipboard" tone="orange" title="Work order" sub="What the press crew runs from" /></a>
               <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer"><MenuItem icon="label" tone="green" title="Box labels" sub="Print the labels for the boxes" /></a>
               <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)"><MenuItem icon="phone" tone="blue" title="Phone menu" sub="What scanning the QR code opens" /></a>
+              {/* save press time for a quote before its art is in (Nov 10, Nick: "under production… say production holder") */}
+              {!o.draft && ["quote", "quote_sent", "art"].includes(o.status) && o.type === "quote" && <ProductionHolder order={{ id: o.id, number: o.number, nickname: o.nickname || null, due_date: o.due_date || null, groups: o.groups, customer_id: o.customer_id }} customer={cust ? custLabel(cust) : ""} />}
             </div>
           </details>
           <OrderHelper orderId={o.id} snapshot={helperSnapshot} apply={applyHelper} undo={undoHelper} onChat={async () => { await save(); openOrderCheck(o.id); }}
