@@ -2249,17 +2249,25 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           <div className="msk">
             <div className="msk-tools">
               <div className="msk-h">Scheduling tools</div>
+              {/* grouped again, compact: a small colored name in front of each group (Nov 11, Nick: "indicate… sales tools,
+                  press tools, planning") */}
               <div className="msk-row">
-                <button type="button" className="btn primary msk-b" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}><SkIco d="replan" />Re-plan</button>
-                <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Update progress</button>
-                <button type="button" className={"btn msk-b" + (tight.length ? " bad" : "")} title="Jobs that won't make their in-hands date" onClick={() => setTightOpen(!tightOpen)}><SkIco d="late" />Late jobs<span className="msk-n">{tight.length}</span></button>
-                <button type="button" className="btn msk-b" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}><SkIco d="ot" />Overtime</button>
-                <button type="button" className="btn msk-b" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}><SkIco d="norm" />Renormalize</button>
-                <button type="button" className="btn msk-b" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}><SkIco d="shift" />Shift</button>
-                <button type="button" className="btn msk-b" title="Maintenance, repairs, an employee out" onClick={() => setDownEdit({})}><SkIco d="down" />Downtime</button>
-                <button type="button" className={"btn msk-b" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" disabled={!canEquip} onClick={() => setEqOpen(true)}><SkIco d="eq" />Equipment{eqIssues.length ? <span className="msk-n">{eqIssues.length}</span> : null}</button>
-                <button type="button" className="btn msk-b" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}><SkIco d="when" />When can we {VERB[typeF || "screen"].v.toLowerCase()} it?</button>
-                <button type="button" className="btn msk-b" title="Hold time for jobs you know are coming" onClick={() => setPlanOpen(true)}><SkIco d="plan" />Planner</button>
+                <span className="msk-g plan"><span className="msk-gl">Planning</span>
+                  <button type="button" className="btn primary msk-b" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}><SkIco d="replan" />Re-plan</button>
+                  <button type="button" className={"btn msk-b" + (tight.length ? " bad" : "")} title="Jobs that won't make their in-hands date" onClick={() => setTightOpen(!tightOpen)}><SkIco d="late" />Late jobs<span className="msk-n">{tight.length}</span></button>
+                  <button type="button" className="btn msk-b" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}><SkIco d="norm" />Renormalize</button>
+                </span>
+                <span className="msk-g press"><span className="msk-gl">Press &amp; crew</span>
+                  <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Progress</button>
+                  <button type="button" className="btn msk-b" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}><SkIco d="ot" />Overtime</button>
+                  <button type="button" className="btn msk-b" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}><SkIco d="shift" />Shift</button>
+                  <button type="button" className="btn msk-b" title="Maintenance, repairs, an employee out" onClick={() => setDownEdit({})}><SkIco d="down" />Downtime</button>
+                  <button type="button" className={"btn msk-b" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" disabled={!canEquip} onClick={() => setEqOpen(true)}><SkIco d="eq" />Equipment{eqIssues.length ? <span className="msk-n">{eqIssues.length}</span> : null}</button>
+                </span>
+                <span className="msk-g sales"><span className="msk-gl">Sales</span>
+                  <button type="button" className="btn msk-b" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}><SkIco d="when" />When can we {VERB[typeF || "screen"].v.toLowerCase()} it?</button>
+                  <button type="button" className="btn msk-b" title="Hold time for jobs you know are coming" onClick={() => setPlanOpen(true)}><SkIco d="plan" />Planner</button>
+                </span>
               </div>
               {tightOpen && tight.length > 0 && <ul className="ms-alert-l msk-late">{tight.map((t) => <li key={t.job.key}><Link href={t.job.href}>#{t.job.number}</Link><span>{who(t.job)}</span><small>{t.why}</small></li>)}</ul>}
             </div>
@@ -2296,7 +2304,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
               <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{tray.length ? (Object.keys(picks).length ? `${tray.filter((t) => t.picked).length} picked by you · ` : "") + "by due date · click a spot to change it, then Make The Schedule" : "nothing waiting"}</span>
               <span className="spacer" />
-              {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked).length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={() => { setRestart(false); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked)); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
+              {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked).length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={async () => { setRestart(false); /* the early finishes a plan made for overtime go too; real downtime (a press down, someone out) stays (Nov 11, Nick) */ await createClient().from("production_days_off").delete().eq("note", "Leaving early (no overtime)").gte("day", today); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked)); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
               {trayOpen && tray.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make The Schedule</button>}
             </div>
             {trayOpen && tray.length > 0 && (() => {
