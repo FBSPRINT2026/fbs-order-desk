@@ -47,7 +47,7 @@ export default function ScheduleStartPoint({ by, presses, onClose, onSaved }: { 
       const { data: open } = await sb.from("production_slots").select("order_id").not("order_id", "is", null).neq("status", "done").limit(1000);
       const ids = new Set(((open || []) as { order_id: string }[]).map((x) => x.order_id));
       // every open job, booked or not (after a Start over most are back in Ready To Schedule): approved, in production, ready
-      const { data: prod } = await sb.from("orders").select("id").in("status", ["approved", "production", "fulfillment", "ready"]).eq("type", "invoice").is("discarded_at", null).limit(1000);
+      const { data: prod } = await sb.from("orders").select("id").in("status", ["approved", "art", "blanks", "production", "fulfillment", "ready"]).eq("type", "invoice").is("discarded_at", null).limit(1000);
       for (const o of (prod || []) as { id: string }[]) ids.add(o.id);
       const list = [...ids];
       type O = { id: string; number: number; nickname: string | null; customer_id: string | null; due_date: string | null; qty: number | null; status: string; groups: Group[] | null; stage_checks: Record<string, Check> | null };

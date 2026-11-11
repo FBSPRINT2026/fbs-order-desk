@@ -151,3 +151,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 2:40pm · 1.3.355 · Nick · Schedule: lunch and warm-up as a thin line with a label (no bubbles); Shift + drag pins a job to the exact quarter hour, everything else grayed while dragging
 - Nov 11 2:40pm · 1.3.356 · Nick · Where Things Stand: the Screen printing / Embroidery tabs no longer get squeezed off by a long list
 - Nov 11 2:42pm · 1.3.357 · Nick · Order statuses: Fulfillment after In Production; Ready says Ready for Pickup / to Ship / to Deliver from the order's delivery method; every open-work list includes Fulfillment; Where Things Stand sets it
+- Nov 11 2:59pm · 1.3.358 · Nick · Where Things Stand also lists approved orders still at the old Blanks or Art status
