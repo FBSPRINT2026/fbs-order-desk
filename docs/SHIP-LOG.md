@@ -135,3 +135,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 1:35pm · 1.3.338 · Nick · Schedule: Start over also clears the overtime early-finish blocks (real downtime stays); tools grouped again with a small colored name: Planning, Press & crew, Sales
 - Nov 11 1:40pm · 1.3.339 · Nick · Schedule: a job that won't finish today doesn't start with under an hour left (it starts next morning); holds run no earlier than 3 working days before their in-hands date (Re-plan, Ready To Schedule)
 - Nov 11 1:42pm · 1.3.340 · Nick · Schedule right-click: Run next, and lock to spot / person / press / day; Re-plan moves press-, person- and day-locked jobs only within their lock (spot stays fixed)
+- Nov 11 1:45pm · 1.3.341 · Nick · Schedule search: a small box above Coming up; a customer, job # or name makes matching jobs glow amber and the rest fade, with a count, arrows to jump between them, Esc / ✕ to clear

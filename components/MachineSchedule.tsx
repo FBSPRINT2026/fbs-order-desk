@@ -422,6 +422,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   // want it to go… make it Kelsy on Tuesday… then make the schedule"); a plan in progress, so not kept after a refresh
   const [picks, setPicks] = useState<Record<string, { m: string; d: string }>>({});
   const [pickOpen, setPickOpen] = useState("");
+  // the schedule's search (Nov 11, Nick): a customer, job # or name; matches glow, the rest fade, ↑ ↓ jump between them
+  const [findQ, setFindQ] = useState(""), [findI, setFindI] = useState(0);
   const [downEdit, setDownEdit] = useState<{ machine?: string; day?: string; start?: number; end?: number; allDay?: boolean; replace?: DayOff } | null>(null);
   // right-click on a downtime block: remove it or change its times (Nov 11, Nick: "right click on those blocks… remove")
   const [downMenu, setDownMenu] = useState<{ x: number; y: number; row: DayOff | null; machine: string; day: string; a: number; b: number; why: string } | null>(null);
@@ -1288,10 +1290,12 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   }
   /** this piece finishes after the job's in-hands time */
   const segLate = (g: Seg) => ord(g.day) * 1440 + g.end > dueAbs(g.c.job);
+  const findWords = findQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const isHit = (j: Job) => findWords.length > 0 && findWords.every((w) => `#${j.number} ${j.number} ${j.customer} ${j.name}`.toLowerCase().includes(w.replace(/^#/, "")));
   const cls = (g: Seg) => {
     const c = g.c, late = segLate(g);
     const hs = holdState(c.job);
-    return (hs ? " msh-" + hs : "") + (c.job.kind === "h" && !showHolds ? " msh-dim" : "") + " ms-blk " + c.need.type + (c.job.kind === "h" ? " hold" : "") + (inOT(g) ? " ot" : "") + (c.job.firm ? " is-firm" : "") + (c.job.rush ? " is-rush" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (g.part > 1 ? " cont-l" : "") + (g.part < g.parts ? " cont-r" : "");
+    return (isHit(c.job) ? " ms-hit" : "") + (hs ? " msh-" + hs : "") + (c.job.kind === "h" && !showHolds ? " msh-dim" : "") + " ms-blk " + c.need.type + (c.job.kind === "h" ? " hold" : "") + (inOT(g) ? " ot" : "") + (c.job.firm ? " is-firm" : "") + (c.job.rush ? " is-rush" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (g.part > 1 ? " cont-l" : "") + (g.part < g.parts ? " cont-r" : "");
   };
   /** "Late" / "Hold" tag after a card's number (Nov 11, Nick: the late ones' number in red) */
   const tagOf = (g: Seg) => (g.c.job.kind === "h" ? <i className="ms-tag2 hold">Hold</i> : null); // late shows as the bold red number only, no tag (Nov 11, Nick: "remove the late box")
@@ -1770,7 +1774,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   /** the downtime entry a block on the board comes from (its press's or its crew's) */
   const offRow = (m: Machine, d: string, a: number) => offs.find((x) => x.day === d && (x.machine === m.id || (!!m.crew && x.crew_id === m.crew)) && (x.start_min ?? -1) === a) || offs.find((x) => x.day === d && (x.machine === m.id || (!!m.crew && x.crew_id === m.crew)) && x.start_min == null && a <= 0) || null;
   const flowView = () => (
-    <div className="msf">
+    <div className={"msf" + (findWords.length ? " ms-finding" : "")}>
       <div className="msf-main">
         <div className="msf-grid" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
           <div className="msf-corner" />
@@ -1871,7 +1875,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       <div key={id} className={"msf-run " + r[0].g.c.need.type + (open ? " open" : "")} style={{ top: top + 1, ...(open ? { minHeight: H } : { height: H }) }}>
                         <div className="msf-run-h"><b>{runTitle(r.map((x) => x.g.c.job))}</b><span>{r.length} jobs · same art · {pcs.toLocaleString()} pcs · {fmtMin(mins)}</span></div>
                         {show.map((x) => { const gl = glance(x.g.c.need, x.g.c.minutes); return (
-                          <div key={x.g.c.key + x.g.part} role="button" tabIndex={0} draggable data-k={x.g.c.key} data-d={x.g.day} className={"msf-run-r" + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
+                          <div key={x.g.c.key + x.g.part} role="button" tabIndex={0} draggable data-k={x.g.c.key} data-d={x.g.day} className={"msf-run-r" + (isHit(x.g.c.job) ? " ms-hit" : "") + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
                             onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(x.g.c); } }}
                             onContextMenu={(e) => { e.preventDefault(); setLockMenu({ c: x.g.c, g: x.g, x: e.clientX, y: e.clientY }); }}>
                             {whyEl(x.g.c)}{dotEl(x.g.c, x.g)}<b>#{x.g.c.job.number}</b><span className="nm">{x.g.c.job.name || x.g.c.need.label}</span><small>{gl.colors} · {gl.units.toLocaleString()}</small>
@@ -1896,7 +1900,23 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           {flowBlocks.slice(1).map((bk, i) => <div key={"br" + bk.d} className="msf-break" style={{ marginTop: flowTop[i + 1] - 1.5 }} aria-hidden />)}
         </div>
       </div>
-      {comingUp()}
+      <div className="msf-side">
+        <div className="msq" role="search">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input type="search" value={findQ} placeholder="Search the schedule" aria-label="Search the schedule" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { setFindQ(""); return; }
+              if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
+              e.preventDefault();
+              const hits = [...document.querySelectorAll<HTMLElement>(".msf .ms-hit")].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+              if (!hits.length) return;
+              const i = (findI + (e.key === "ArrowUp" ? -1 : 1) + hits.length) % hits.length; setFindI(i);
+              hits[i].scrollIntoView({ block: "center", behavior: "smooth" }); hits.forEach((h, k) => h.classList.toggle("ms-hit-on", k === i));
+            }} />
+          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size; return <><span className={"msq-n" + (n ? "" : " none")}>{n ? `${n} found` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
+        </div>
+        {comingUp()}
+      </div>
       {downMenu && <>
         <div className="msf-menu-bg" onClick={() => setDownMenu(null)} onContextMenu={(e) => { e.preventDefault(); setDownMenu(null); }} />
         <div className="msf-menu" style={{ left: Math.min(downMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 280), top: downMenu.y }}>

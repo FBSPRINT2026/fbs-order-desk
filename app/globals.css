@@ -22069,3 +22069,15 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msk-gl{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;margin-right:2px}
 .msk-g .msk-b{height:32px;padding:0 10px;font-size:12.5px}
 .msf-rn{width:16px;text-align:center}
+/* the schedule's search: a small box above Coming up; matches glow amber, the rest fade (Nov 11, Nick) */
+.msf-side{display:flex;flex-direction:column;gap:8px;min-width:0}
+.msq{display:flex;align-items:center;gap:6px;height:36px;padding:0 8px 0 10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--ink-3)}
+.msq:focus-within{border-color:var(--accent)}
+.msq input{all:unset;flex:1;min-width:0;font:14px var(--body);color:var(--ink)}
+.msq-n{font-size:11.5px;font-weight:700;color:#8a5a0d;background:color-mix(in srgb,var(--warn) 16%,var(--surface));border-radius:99px;padding:1px 8px;white-space:nowrap}.msq-n.none{color:var(--ink-3);background:var(--surface-2)}
+.msq-x{all:unset;cursor:pointer;padding:2px 4px;color:var(--ink-3)}
+.ms-finding .ms-blk:not(.ms-hit):not(.bar),.ms-finding .msf-run-r:not(.ms-hit){opacity:.28}
+.ms-finding .msf-run:not(:has(.ms-hit)){opacity:.28}.ms-finding .msf-run:has(.ms-hit) .msf-run-h{opacity:.6}
+.ms-calm .ms-blk.ms-hit:not(.bar){border:2px solid var(--warn)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 25%,transparent)!important;z-index:4}
+.msf-run-r.ms-hit{background:color-mix(in srgb,var(--warn) 14%,var(--surface));box-shadow:inset 3px 0 0 var(--warn)}
+.ms-hit-on{outline:3px solid var(--accent)!important;outline-offset:1px}
