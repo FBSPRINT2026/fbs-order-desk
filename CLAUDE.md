@@ -165,6 +165,11 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   dashed "Held · <day>" tag in the order's header (no big button). It reads the order (each garment's pieces, kind and
   darkness: `QuickJob.parts`) and guesses the spots and colors (the order's prints, else its art files' names, else the
   customer's recent orders); staff only fix what's off. Orders from the same email can be held together.
+- **Money in is one tool: Receive a Payment** (Nick, Nov 11 2026; it was Take a Payment): `components/tools/ReceivePaymentTool.tsx`
+  at `/shop/receive-payment` (the old `/shop/take-payment` address opens it). One search (customer, invoice # or PO),
+  the customer's invoices grouped by how late when there are many, quick picks and "Pay an amount" (oldest first),
+  then Card (cards they OK'd, a new card, fee, PIN) or Check / ACH / Cash recorded straight on (`recordLumpPayment`);
+  old Printavo invoices can be paid by check here. Every "take / record a payment" button opens it.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.

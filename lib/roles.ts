@@ -22,7 +22,7 @@ export const PERMS = [
   { k: "money", group: "Money", label: "Can see prices, totals, payments, balances and sales numbers" },
   { k: "payments", group: "Money", label: "Can record and remove payments" },
   /* running a customer's card (Nov 3, Nick: "only available to Amanda and I. No one else should see it") */
-  { k: "takePayments", group: "Money", label: "Can run a customer's card or bank account (Take a Payment)" },
+  { k: "takePayments", group: "Money", label: "Can run a customer's card and record checks (Receive a Payment)" },
   { k: "quotes", group: "Sales", label: "Can create new quotes" },
   { k: "customers", group: "Sales", label: "Can open Customers" },
   /* seeing a customer isn't changing one (Nov 3, Nick: "Jose… sees add customer. He shouldn't see add customer or add
@@ -83,7 +83,7 @@ export const PAGE_PERMS: [string, PermKey][] = [
   ["/shop/customers", "customers"], ["/shop/inbox", "customers"], ["/shop/conversations", "customers"], ["/shop/incoming", "incoming"], ["/shop/printavo-sync", "quotes"], ["/shop/projects", "projects"], ["/shop/proofs", "projects"], ["/shop/jobs", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
   ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/details", "artwork"], ["/shop/separations", "separations"], ["/shop/inks", "inkRoom"], ["/shop/threads", "threadRoom"], ["/shop/digitizing", "digitizing"],
   ["/shop/board", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"],
-  ["/shop/receiving", "receiving"], ["/shop/take-payment", "takePayments"], ["/shop/order-goods", "receiving"], ["/shop/time", "timeclock"], ["/shop/payroll", "timeclock"], ["/shop/ai", "workbench"],
+  ["/shop/receiving", "receiving"], ["/shop/receive-payment", "takePayments"], ["/shop/take-payment", "takePayments"], ["/shop/order-goods", "receiving"], ["/shop/time", "timeclock"], ["/shop/payroll", "timeclock"], ["/shop/ai", "workbench"],
 ];
 export const permForPath = (path: string): PermKey | null => PAGE_PERMS.find(([p]) => path === p || path.startsWith(p + "/"))?.[1] ?? null;
 export const canOpen = (path: string, perms: Perms) => { const k = permForPath(path); return !k || perms[k]; };

@@ -21744,3 +21744,52 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .phd-tag>summary::-webkit-details-marker{display:none}
 .phd-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:30;min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:10px 12px;display:flex;flex-direction:column;gap:4px;font-size:13px;white-space:nowrap}
 .phd-acts{display:flex;gap:6px;margin-top:6px}
+
+/* Receive a Payment (rcv-, Nov 11): one search, the customer's invoices grouped by how late, how they paid, today's list */
+.rcv{max-width:760px;width:100%;margin:0 auto}
+.rcv-b{display:flex;flex-direction:column;gap:12px}
+.rcv-search{position:relative}
+.rcv-search input{width:100%;height:42px;font-size:15px;border:1.5px solid var(--accent);border-radius:8px;padding:0 12px;background:var(--surface);color:var(--ink)}
+.rcv-hits{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
+.rcv-hits button{all:unset;box-sizing:border-box;display:flex;justify-content:space-between;gap:12px;width:100%;padding:9px 12px;border-top:1px solid var(--line);cursor:pointer;font-size:14px}
+.rcv-hits button:first-child{border-top:0}
+.rcv-hits button.on{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.rcv-hits .faint{font-size:12.5px}
+.rcv-none{padding:9px 12px;font-size:13px}
+.rcv-done{font-size:13.5px;color:var(--ok);font-weight:600}
+.rcv-done .faint{font-weight:400}
+.rcv-who{display:flex;flex-direction:column;gap:8px}
+.rcv-who>b{font-size:16px}
+.rcv-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.rcv-find{flex:1 1 200px;max-width:280px;height:36px}
+.rcv-amt{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.rcv-amt label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);width:180px}
+.rcv-amt .faint{font-size:12.5px;padding-bottom:9px}
+.rcv-list{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.rcv-gh{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface-2);border-top:1px solid var(--line);font-size:13.5px}
+.rcv-grp:first-child .rcv-gh{border-top:0}
+.rcv-gh .faint{font-size:12.5px}
+.rcv-gsum{margin-left:auto}
+.rcv-inv{display:grid;grid-template-columns:18px minmax(56px,auto) minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 12px;border-top:1px solid var(--line);font-size:13.5px;cursor:pointer}
+.rcv-list>.rcv-inv:first-child{border-top:0}
+.rcv-grp .rcv-inv{padding-left:24px}
+.rcv-inv.on{background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.rcv-inv input,.rcv-gh input{width:16px;height:16px;margin:0}
+.rcv-inv-n .faint{font-size:12.5px}
+.rcv-more{all:unset;display:block;padding:6px 12px 6px 52px;border-top:1px solid var(--line);font-size:12.5px;color:var(--accent);cursor:pointer}
+.rcv-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.rcv-seg button{height:36px;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:inherit;font-size:13.5px;cursor:pointer}
+.rcv-seg button:first-child{border-left:0}
+.rcv-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.rcv-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.rcv-fields label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.rcv-fields input{height:36px}
+.rcv-go{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.rcv-go .faint{font-size:13px}
+.rcv-cardopts{display:flex;flex-wrap:wrap;gap:6px 18px}
+.err-inline{color:var(--danger)}
+.rcv-today{border-top:1px solid var(--line);padding:10px 16px 14px;background:var(--surface-2)}
+.rcv-today-h{display:flex;justify-content:space-between;font-size:11.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.rcv-today-r{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0}
+.rcv-today-r .faint{font-size:12.5px}
+.rcv-ok{color:var(--ok);font-weight:700}

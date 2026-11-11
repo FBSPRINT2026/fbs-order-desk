@@ -253,7 +253,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
         <div className="row">
           <button className="btn" type="button" onClick={() => setDetailsOpen(true)}>Details</button>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">Their portal</a>
-          {canTake && <a className="btn" href={`/shop/take-payment?customer=${id}`} title="Run their card for open invoices (Nick and Amanda)">Take a payment</a>}
+          {canTake && <a className="btn" href={`/shop/receive-payment?customer=${id}`} title="Run their card, or record a check, ACH or cash, on their open invoices">Receive a payment</a>}
           {/* after a call: their portal's tutorial shows again next time anyone there signs in (Nov 3, Nick) */}
           <button className="btn" type="button" disabled={tourMsg === "…"} title="Show their portal's tutorial again the next time anyone there signs in" onClick={async () => { setTourMsg("…"); const r = await resetTour(id); setTourMsg(r.ok ? "Tutorial reset" : r.error || "Couldn't reset"); setTimeout(() => setTourMsg(""), 4000); }}>{tourMsg && tourMsg !== "…" ? tourMsg : "Reset tutorial"}</button>
           {canQuote && <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>}
