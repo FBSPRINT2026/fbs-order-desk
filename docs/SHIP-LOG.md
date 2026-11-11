@@ -130,3 +130,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 1:08pm · 1.3.333 · Nick · House rule: a customer's own separations (Tiger Blue): their mockup is the visual, their .ai goes in Customer separations, PSDs are reference; never build a logo from their files
 - Nov 11 1:18pm · 1.3.334 · Nick · Schedule downtime: right-click a downtime block to remove it or change its times/day/press; Re-plan replaces its own 'leaving early (no overtime)' blocks instead of piling more on
 - Nov 11 1:24pm · 1.3.335 · Nick · Ready To Schedule: small cards sorted by due date; each shows our suggested person and day, click it to pick another (Kelsy · Tue); Make The Schedule books your picks and the suggestions for the rest
+- Nov 11 1:28pm · 1.3.336 · Nick · Schedule: a crew sent home at 40 hours always works the morning (earliest cut is lunch); downtime is a solid gray block, no stripes; lunch and warm-up named on a small tag above the cards

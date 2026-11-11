@@ -22038,3 +22038,8 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msr-seg{display:grid;gap:4px}.msr-seg button{all:unset;cursor:pointer;text-align:center;padding:5px 0;border:1px solid var(--line);border-radius:5px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .msr-seg button.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface));color:var(--accent)}
 .msr-act{display:flex;gap:6px;flex-wrap:wrap}
+/* lunch / warm-up named on a small tag at the column's right edge, above the cards (Nov 11, Nick: "we're not seeing lunches") */
+.msf-brk-t{position:absolute;right:6px;z-index:6;height:16px;line-height:16px;padding:0 6px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-3);font-size:10.5px;font-weight:600;pointer-events:none;white-space:nowrap}
+/* downtime: no stripes (Nick, Nov 11). A solid soft gray block with a dark left edge and its reason on top */
+.ms-calm .ms-down,.ms-down{background:color-mix(in srgb,var(--ink) 9%,var(--surface))!important;border:1px solid color-mix(in srgb,var(--ink) 22%,transparent)!important;border-left:4px solid var(--ink-2)!important;color:var(--ink-2)!important;font-size:11px!important;padding:3px 7px!important;white-space:normal!important}
+.ms-calm .ms-down b,.ms-down b{color:var(--ink)!important}

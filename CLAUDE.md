@@ -226,3 +226,6 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Nick, Nov 11: same customer alone is never a group).
   An order's production date is the day it runs (Nine18's weekly AMS run; Nick, Nov 11): Re-plan and Ready To Schedule
   put it on that day or later, never earlier (`Job.prod`).
+  Sending a crew home at 40 hours (Re-plan, Cut unused overtime) never makes their day shorter than the morning: the
+  earliest they go home is lunch (Nick, Nov 11). Downtime is a solid gray block (no stripes); lunch and warm-up are named on
+  a small tag over the cards.

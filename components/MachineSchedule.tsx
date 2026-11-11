@@ -999,7 +999,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         const oa = otOn(m, d), sh = shiftOn(m, d); if (oa == null || !sh) continue;
         // work that stays put that day (running, done, firm, a Planner hold) keeps its time
         const stuck = cards.filter((c) => c.machine.id === m.id && (c.slot?.status === "running" || c.slot?.status === "done" || !!c.job.firm || !!c.slot?.locked)).flatMap((c) => segs.ofCard.get(c.key) || []).filter((g) => g.day === d).reduce((t, g) => Math.max(t, g.end), 0);
-        const start = Math.ceil(Math.max(oa, stuck, d === today ? nowAbs - ord(d) * 1440 : 0) / 15) * 15;
+        // never a crew in for less than the morning: the earliest they go home is lunch (Nov 11, Nick: "we might cut them at
+        // lunch, but… they're not going to come in for an hour and run and go home"); no lunch that day, halfway through
+        const lu = breaksOn(m, d, sh, segs.lunch.get(m.id + "|" + d)).find((x) => x[2] !== "Warm-up"), noon = lu ? lu[0] : Math.round((sh[0] + sh[1]) / 2);
+        const start = Math.ceil(Math.max(oa, stuck, noon, d === today ? nowAbs - ord(d) * 1440 : 0) / 15) * 15;
         if (start < sh[1] - 5) cuts.set(m.id, [...(cuts.get(m.id) || []), { m, day: d, start, end: sh[1] }]);
       }
     }
@@ -1823,7 +1826,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     <Fragment key={bk.d}>
                       {off.map(([x, y]) => <div key={"of" + x} className="ms-off" style={{ top: flowY(bi, x), height: flowY(bi, y) - flowY(bi, x) }} />)}
                       {sh && oa != null && oa < sh[1] && <div className="ms-ot" style={{ top: flowY(bi, oa), height: flowY(bi, sh[1]) - flowY(bi, oa) }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`} />}
-                      {sh && breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d)).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <div key={"bk" + a0} className={why === "Warm-up" ? "ms-warm" : "ms-lunch"} style={{ top: flowY(bi, a0), height: flowY(bi, b0) - flowY(bi, a0) }} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} /> : null)}
+                      {sh && breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d)).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <Fragment key={"bk" + a0}><div className={why === "Warm-up" ? "ms-warm" : "ms-lunch"} style={{ top: flowY(bi, a0), height: flowY(bi, b0) - flowY(bi, a0) }} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} />{/* its name on a small tag above the cards, so a job running through it still shows lunch (Nov 11, Nick) */}<span className="msf-brk-t" style={{ top: flowY(bi, a0) + Math.max(0, (flowY(bi, b0) - flowY(bi, a0) - 16) / 2) }}>{why === "Warm-up" ? "Warm-up" : "Lunch"}</span></Fragment> : null)}
                       {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, bk.d, a0), machine: m.id, day: bk.d, a: a0, b: b0, why }); }} style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
                       {bk.d === today && now.min > bk.a && <div className="ms-pastv" style={{ top: flowTop[bi], height: flowY(bi, now.min) - flowTop[bi] }} />}
                       {bk.d === today && now.min >= bk.a && now.min <= bk.b && <div className="ms-now" style={{ top: flowY(bi, now.min) }} />}
@@ -2007,7 +2010,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       if (x.otFrom == null || d < today) continue;
       const sh = shiftOn(r.m, d); if (!sh) continue;
       const last = at(r.m, d).reduce((t, g) => Math.max(t, g.end), 0);
-      const from = Math.ceil(Math.max(x.otFrom, last, d === today ? now.min : 0) / 15) * 15;
+      const lu = breaksOn(r.m, d, sh, segs.lunch.get(r.m.id + "|" + d)).find((y) => y[2] !== "Warm-up"), noon = lu ? lu[0] : Math.round((sh[0] + sh[1]) / 2); // never less than the morning
+      const from = Math.ceil(Math.max(x.otFrom, last, noon, d === today ? now.min : 0) / 15) * 15;
       if (from < sh[1]) ins.push({ machine: r.m.id, crew_id: null, day: d, start_min: from, end_min: sh[1], capacity: 0, employee: "", note: "Leaving early (no overtime)", created_by: me.email });
     }
     if (!ins.length) { setMsg("No unused overtime to cut: the overtime hours all have jobs booked."); return; }
