@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, inkBased, neverBaseInk, pressHex, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, repaintLogo, suggestInk, inkChoices } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { garmentHex, guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
@@ -177,9 +177,10 @@ function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver:
   gshares.forEach((g, j) => { if (g) { const top = new Float32Array(m + 1); for (const st of g) for (let c = 0; c <= m; c++) top[c] = Math.max(top[c], st.s[c]); shares[j] = top; } });
   const paths = v.shapes.map((sh) => new Path2D(vpathD(sh.ops)));
   // black inks, and the shapes that print (mostly) black
-  const blackInk = inks.map((k) => neverBase(k.hex));
+  // (by the ink that prints, not the art's swatch: black art printed in orange is orange)
+  const blackInk = inks.map((k) => neverBaseInk(k));
   const isBlack = shares.map((sh, j) => { if (gshares[j]) return false; let b = 0; for (let c = 0; c < m; c++) if (blackInk[c]) b += sh[c]; return b > 0.9; });
-  const whiteInk = inks.map((k) => { const [r, g, b] = rgb(k.hex); return r > 235 && g > 235 && b > 235; });
+  const whiteInk = inks.map((k) => { const [r, g, b] = rgb(pressHex(k)); return r > 235 && g > 235 && b > 235; });
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const x = c.getContext("2d", { willReadFrequently: true })!;
   const k = w / v.w;
@@ -610,7 +611,10 @@ export default function SeparationStudio({ id }: { id: string }) {
     print_width_in: st.widthIn,
     settings: { colors: st.maxColors, underbase: st.underbase, highlight: st.highlight, chokePt: st.chokePt ?? CHOKE_PT, trapPt: st.trapPt ?? TRAP_PT, finePt: st.finePt ?? FINE_PT, fineChokePt: st.fineChokePt ?? FINE_CHOKE_PT, bumpPt: st.bumpPt ?? BUMP_PT, blackOver: st.blackOver ?? true, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", pressGain: st.pressGain ?? PRESS_GAIN, dpi: st.dpi },
     inks: inks.map((k) => ({ name: k.name, art_color: k.hex, ...(k.also?.length ? { combined_with: k.also } : {}), ...(k.fadeTo?.length ? { fades_to: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}) })),
-    plates: plates.map((p, i) => ({ order: i + 1, name: p.name, kind: p.kind, coverage: `${(p.coverage * 100).toFixed(1)}%`, mesh: p.mesh, halftone: st.method === "sim" || !!p.tonal })),
+    plates: plates.map((p, i) => ({ order: i + 1, name: p.name, kind: p.kind, coverage: `${(p.coverage * 100).toFixed(1)}%`, mesh: p.mesh, halftone: st.method === "sim" || !!p.tonal,
+      // whether white base really prints under it (the coach used to read underbase "on" as done while no base printed)
+      ...(p.kind === "color" && res?.underbase ? { on_underbase: neverBaseInk({ hex: "#" + p.key.slice(1), name: p.name }) ? "never (black)" : inkBased({ hex: "#" + p.key.slice(1), name: p.name }, st.baseFor) ? "yes" : "no (straight on the shirt)" } : {}) })),
+    underbase_prints: !!plates.some((p) => p.kind === "underbase"),
     fades: fadeRows.map((f) => ({ from: f.a.name, to: f.b.name, middle: f.midWord, muddy_middle_risk: !!f.risky })),
     shading_between_colors: hint ? `${Math.round(hint * 100)}%` : undefined,
   });
@@ -774,7 +778,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const base = res.plates.find((p) => p.kind === "underbase");
       if (base && out[base.key]) {
         // the base prints under the colors' dots too: as fine as the finest based color
-        const based = res.plates.filter((p) => p.kind === "color" && !neverBase("#" + p.key.slice(1)) && (st.baseFor?.[p.key] ?? baseByDefault("#" + p.key.slice(1))) && out[p.key]);
+        const based = res.plates.filter((p) => p.kind === "color" && inkBased({ hex: "#" + p.key.slice(1), name: p.name }, st.baseFor) && out[p.key]);
         const finest = based.reduce((a, p) => (out[p.key].mesh > a.mesh ? { mesh: out[p.key].mesh, name: p.name } : a), { mesh: out[base.key].mesh, name: "" });
         if (finest.name && finest.mesh > out[base.key].mesh) out[base.key] = { mesh: finest.mesh, why: `${finest.name} needs ${finest.mesh} for its small detail, and the base prints under it, so the base is ${finest.mesh} too.` };
       }
@@ -1336,7 +1340,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <div className="sep-basefor">
                 <div className="sep-f-h">Underbase under each color</div>
                 {plates.filter((p) => p.kind === "color").map((p) => {
-                  const art = "#" + p.key.slice(1), never = neverBase(art), on = !never && (st.baseFor?.[p.key] ?? baseByDefault(art));
+                  const ink = { hex: "#" + p.key.slice(1), name: p.name }, never = neverBaseInk(ink), on = inkBased(ink, st.baseFor);
                   return <label key={p.key} className={"sep-chk" + (never ? " faint" : "")} title={never ? "Black never gets underbase: black ink on white bubbles" : on ? "Uncheck to print this color straight on the shirt (no white under it)" : "Check to put white underbase under this color"}>
                     <input type="checkbox" checked={on} disabled={never} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [p.key]: e.target.checked } })} />
                     <span className="sep-sw" style={{ background: p.hex }} /> <span data-notranslate>{p.name}</span>{never ? " (black: never)" : !on ? " (straight on the shirt)" : ""}</label>;
@@ -1433,7 +1437,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                   // this color IS the shirt: knocked out (the shirt shows there); unchecking one that matches the shirt prints it anyway
                   const on = !!res?.dropped.includes(k.hex);
                   // UB: white underbase under this color (dark shirts); black never, and not on a color left to the shirt
-                  const key = "c" + k.hex.slice(1), never = neverBase(k.hex), ub = !on && !never && (st.baseFor?.[key] ?? baseByDefault(k.hex));
+                  const key = "c" + k.hex.slice(1), never = neverBaseInk(k), ub = !on && inkBased(k, st.baseFor);
                   return <div className="sep-chip-ft">
                     <label className={"sep-chip-shirt" + (on ? " on" : "") + (multiShirt ? " off" : "")} title={multiShirt ? `This print goes on ${groupShirts.map((x) => x.name).join(" and ")} shirts: one set of screens prints them all, so every color prints` : on ? "Knocked out: the shirt shows here. Uncheck to print this color." : "Check if this color is the shirt color: it's knocked out and the shirt shows there."}>
                       <input type="checkbox" checked={on} disabled={multiShirt} onChange={(e) => shirtInk(i, e.target.checked)} /> Shirt
