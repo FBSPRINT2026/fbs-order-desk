@@ -1,4 +1,5 @@
 import "server-only";
+import { simpleOrderSource } from "@/lib/simpleOrderSource";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { pdfTextServer } from "@/lib/pdfTextServer";
 import { officeText } from "@/lib/officeText";
@@ -137,7 +138,14 @@ export async function sourceActivity(admin: SupabaseClient, orderId: string): Pr
   const { data: s } = await admin.from("ai_suggestions").select("activity_id, payload").in("kind", ["draft_order", "draft_order_part"]).eq("order_id", orderId).order("updated_at", { ascending: false }).limit(1).maybeSingle();
   if (s?.activity_id) return { activity: s.activity_id as string, reading: ((s.payload as { draft?: { groups?: Group[] } } | null)?.draft) || null };
   const { data: e } = await admin.from("activities").select("id").eq("order_id", orderId).eq("kind", "email").eq("direction", "in").order("occurred_at", { ascending: true }).limit(1).maybeSingle();
-  return { activity: (e?.id as string) || null, reading: null };
+  if (e?.id) return { activity: e.id as string, reading: null };
+  // a simple order (portal answers, a ClickUp job) built by hand, never read by Create order (Nov 10, Tiger Blue #40382 /
+  // #40384): its answers and files as the incoming message, the same one Create order would have read
+  const { data: so } = await admin.from("activities").select("id").eq("external_id", `portal-simple:${orderId}`).maybeSingle();
+  if (so?.id) return { activity: so.id as string, reading: null };
+  const { data: o } = await admin.from("orders").select("simple_order").eq("id", orderId).maybeSingle();
+  if (o?.simple_order) { const r = await simpleOrderSource(admin, orderId, "staff"); if (r.ok) return { activity: r.activityId, reading: null }; }
+  return { activity: null, reading: null };
 }
 
 /** save (or refresh) an order as a worked example: what came in, the reading, the order staff finished */

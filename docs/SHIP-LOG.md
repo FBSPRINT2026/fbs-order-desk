@@ -66,3 +66,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 5:42pm · 1.3.269 · Nick · Programs: 'Youth screens: charge the screens, price all pieces together' (Tiger Blue): youth screens charged, youth and adult priced at the group's break
 - Nov 10 5:48pm · 1.3.270 · Nick · Specialty ink (metallic, shimmer, glitter, glow…): read from a screen print's inks and charged per location per piece ($0.50, the contract list's specialty ink), with its own line on the print to turn it off
 - Nov 10 5:52pm · 1.3.271 · Nick · Specialty ink line shows on the print's edit view too
+- Nov 10 6:11pm · 1.3.272 · Nick · Order helper examples: an order built by hand from a simple order (portal / ClickUp request) can be marked right; its answers and files are the source, the same as Create order reads
