@@ -379,6 +379,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const s = useMemo(() => {
     if (!sBase) return sBase;
+    // Live clock off: a plan made by hand; nobody's punches move it
+    if (!sBase.liveClock) return sBase;
     const withTc = tc.ok ? withClock(sBase, tc.punches, today, now.min, 5, new Set(tc.tracked), tc.names) : sBase;
     return Object.keys(tc.worked).length ? withCrewHours(withTc, tc.worked, tc.names, today, now.min) : withTc;
   }, [sBase, tc, today, clockBucket]);
@@ -505,7 +507,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       if (offIds.size) sl = sl.filter((x) => !(x.order_id && offIds.has(x.order_id) && x.status !== "done"));
     }
     // not marked done by the end of its day → it moves forward to today (first in line), remembering where it started
-    const stale = sl.filter((x) => (x.order_id || x.hold_id) && x.day < today && x.status !== "done");
+    // (Live clock off: they stay on their own day, like Printavo, until someone updates them)
+    const liveClk = !!mergeProduction((st?.data as { production?: unknown } | null)?.production).liveClock;
+    const stale = liveClk ? sl.filter((x) => (x.order_id || x.hold_id) && x.day < today && x.status !== "done") : [];
     // (the hidden "when can we print it?" mode only looks: it lays stale jobs on today without saving anything)
     if (stale.length && when) sl = sl.map((x) => (stale.includes(x) ? { ...x, day: today, start_min: null, position: -1, rolled_from: x.rolled_from || x.day } : x));
     else if (stale.length) {
@@ -516,7 +520,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     }
     // jobs the floor started in the employee app (punched onto the order) count as started here
     const oids = [...new Set(sl.filter((x) => x.day === today && x.order_id && x.status !== "done").map((x) => x.order_id!))];
-    if (oids.length && !when) {
+    if (oids.length && !when && liveClk) {
       const { data: jt } = await sb.from("job_time").select("order_id, started_at, ended_at, pieces").in("order_id", oids).eq("voided", false).gte("started_at", new Date(Date.now() - 18 * 3600000).toISOString());
       const by = new Map<string, { first: string; open: boolean; pieces: number }>();
       for (const r of (jt || []) as { order_id: string; started_at: string; ended_at: string | null; pieces: number | null }[]) {
@@ -688,7 +692,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   }, [s, jobs, slots, pvLane, byKey]);
 
   // every machine's work laid out on its hours, split into per-day pieces
-  const segs = useMemo(() => (s ? layoutAll(cards, ord(now.day) * 1440 + now.min) : { by: new Map<string, Seg[]>(), ofCard: new Map<string, Seg[]>(), lunch: new Map<string, number>() }), [cards, s, now]);
+  // Live clock off: jobs keep their planned times; nothing not started is pushed up to "now"
+  const liveNow = s?.liveClock ? ord(now.day) * 1440 + now.min : -Infinity;
+  const segs = useMemo(() => (s ? layoutAll(cards, liveNow) : { by: new Map<string, Seg[]>(), ofCard: new Map<string, Seg[]>(), lunch: new Map<string, number>() }), [cards, s, liveNow]);
   const at = (m: Machine, d: string) => segs.by.get(m.id + "|" + d) || [];
   /** a day's pieces with a job that runs through lunch (or a warm-up) drawn as one card over it (Nov 9, Nick: "when
    *  lunch falls within a job it shouldn't split it up… if lunch falls between jobs it should split between the job") */
@@ -1696,7 +1702,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const moved: Card = { ...(drag.card || ({ key: "pv:" + job.key + need.type, job, need, fromPv: false } as Card)), machine: mach, day: pv.d, minutes, startMin: null, slot: { ...base, machine: mach.id, day: pv.d, position: idx, start_min: null, minutes } };
       const hypo = cards.filter((c) => c.key !== drag.card?.key).map((c) => (pos.has(c.key) && c.slot ? { ...c, startMin: null, slot: { ...c.slot, position: pos.get(c.key)!, start_min: null } } : c));
       hypo.push(moved);
-      v = layoutAll(hypo, ord(now.day) * 1440 + now.min);
+      v = layoutAll(hypo, liveNow);
     }
     pvCache.current = { k, v };
     return v;
@@ -1752,6 +1758,16 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       : await sb.from("production_slots").insert({ ...ownerCols(job), machine: mach.id, day: d, minutes: dr.card?.minutes || estimate(s, need, mach).minutes, start_min: when, position: pos, kind: need.type, label: need.label, source: "manual", locked: "spot", locations: locsFor(job, need) });
     if (r.error) { setMsg(r.error.message); return; }
     setMsg(`#${job.number} pinned to ${shortName(mach)} ${dayLbl(d)} ${clockLong(when)}. Re-plan works around it; right-click → Unlock to let it move.`);
+    load();
+  }
+  /** turn Live clock on or off for the whole shop (production settings) */
+  async function setLiveClock(on: boolean) {
+    const sb = createClient();
+    const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
+    const d = (data?.data || {}) as { production?: Record<string, unknown> };
+    const r = await sb.from("settings").upsert({ id: 1, data: { ...d, production: { ...(d.production || {}), liveClock: on } }, updated_at: new Date().toISOString() });
+    if (r.error) { setMsg(r.error.message); return; }
+    setMsg(on ? "Live clock is on: the schedule follows the time clock and press timers." : "Live clock is off: the schedule stays as planned until someone updates it.");
     load();
   }
   async function lockAs(c: Card, g: Seg, kind: "spot" | "press" | "day" | "person" | null) {
@@ -2340,6 +2356,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   <button type="button" className="btn msk-b" title="Set what's really done: counted, printed, ready, completed" onClick={() => setStandOpen(true)}><SkIco d="prog" />Where things stand</button>
                 </span>
                 <span className="msk-g press"><span className="msk-gl">Press &amp; crew</span>
+                  <button type="button" className={"btn msk-b msk-live" + (s.liveClock ? " on" : "")} disabled={!canEquip} onClick={() => void setLiveClock(!s.liveClock)} title={s.liveClock ? "Live clock is on: the schedule follows the time clock and press timers (not started moves up to now, unfinished days roll to today). Click to plan by hand." : "Live clock is off: the schedule is a plan made by hand, like Printavo; nothing moves on its own. Click to follow the time clock."}><span className="msk-sw" aria-hidden><i /></span>Live clock {s.liveClock ? "on" : "off"}</button>
                   <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Progress</button>
                   <button type="button" className="btn msk-b" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}><SkIco d="ot" />Overtime</button>
                   <button type="button" className="btn msk-b" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}><SkIco d="shift" />Shift</button>

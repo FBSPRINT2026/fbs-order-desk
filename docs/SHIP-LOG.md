@@ -156,3 +156,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 4:04pm · 1.3.360 · Nick · Goods & Receiving: a deleted order's goods issues no longer show (test order #99005)
 - Nov 11 4:15pm · 1.3.361 · Nick · Goods & Receiving dashboard: jobs to count in by the day they run on the press, counted ones grayed then under ✓ Counted until the press starts, issues, S&S and SanMar trucks on the right
 - Nov 11 4:21pm · 1.3.362 · Nick · Goods & Receiving dashboard: All / Screen print / Embroidery / Heat press switch; days are Today / Tomorrow / Next day / Later (not scheduled = Later)
+- Nov 11 4:26pm · 1.3.363 · Nick · Schedule: Live clock switch (off by default): off, the schedule is a plan made by hand; nothing moves on its own until someone updates it

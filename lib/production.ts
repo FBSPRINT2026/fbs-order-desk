@@ -131,6 +131,10 @@ export type Labor = { crewSize: number; wage: number; otMultiplier: number };
 export const DEFAULT_LABOR: Labor = { crewSize: 3, wage: 17, otMultiplier: 1.5 };
 export const DEFAULT_BREAKS: Breaks = { warmupMin: 30, lunchMin: 30, lunchAfterHours: 8, lunchAt: 720, rewarmMin: 10 };
 export type ProductionSettings = {
+  /** Live clock (Nov 11 2026, Nick): on, the schedule follows the time clock and the press timers (not clocked in yet is
+   *  time lost, a job not started moves up to now, an unfinished day rolls to today, punching onto a job starts it); off
+   *  (the default while the floor learns to clock in), it's a plan made by hand, like Printavo's: nothing moves on its own. */
+  liveClock?: boolean;
   machines: Machine[];
   crews: Crew[];
   screen: {

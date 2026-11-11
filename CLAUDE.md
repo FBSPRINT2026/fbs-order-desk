@@ -249,3 +249,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). Downtime is a solid gray block (no stripes); lunch and warm-up are a thin line with a small label (solid for lunch,
   dotted for warm-up; no bubbles). Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
   everything else grays out while it's dragged.
+  **Live clock** (Nick, Nov 11 2026; `ProductionSettings.liveClock`, the switch in the schedule's Press & crew tools): off
+  (the default while the floor learns to clock in), the schedule is a plan made by hand like Printavo's: no time lost to
+  someone not clocked in, nothing not started is pushed up to now, unfinished days don't roll to today, punching onto a
+  job doesn't start it. On, all of that follows the time clock and press timers. Anything new that reacts to punches
+  goes behind it.

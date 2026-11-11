@@ -22206,3 +22206,9 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rvd-kind button:first-child{border-left:0}
 .rvd-kind button.on{background:var(--accent);color:#fff}
 .rvd-kind button.on .rvd-n{background:color-mix(in srgb,#fff 25%,transparent);color:#fff}
+/* Live clock switch on the schedule's tools (Nov 11, Nick) */
+.msk-live{gap:6px}
+.msk-sw{display:inline-block;width:26px;height:14px;border-radius:99px;background:var(--line);position:relative;transition:background .15s}
+.msk-sw i{position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:#fff;transition:left .15s}
+.msk-live.on .msk-sw{background:var(--ok)}
+.msk-live.on .msk-sw i{left:14px}
