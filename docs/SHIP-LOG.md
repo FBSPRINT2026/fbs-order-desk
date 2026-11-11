@@ -149,3 +149,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 2:31pm · 1.3.353 · Nick · Where Things Stand: screen printing / embroidery tabs, 9 statuses (not counted → completed), Printing today with press and finish time (the schedule runs it until then), digitized mark on embroidery jobs
 - Nov 11 2:36pm · 1.3.354 · Nick · Where Things Stand lists every open job (approved, in production, ready), booked or not
 - Nov 11 2:40pm · 1.3.355 · Nick · Schedule: lunch and warm-up as a thin line with a label (no bubbles); Shift + drag pins a job to the exact quarter hour, everything else grayed while dragging
+- Nov 11 2:40pm · 1.3.356 · Nick · Where Things Stand: the Screen printing / Embroidery tabs no longer get squeezed off by a long list
