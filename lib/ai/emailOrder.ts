@@ -9,6 +9,7 @@ import { newPart } from "@/lib/linkArt";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState, askClaude, imageTypeOf, type LookedUp } from "@/lib/ai/claude";
 import { SHOP_CONTEXT } from "@/lib/ai/tasks";
+import { persFromNames, splitNames } from "@/lib/persNames";
 import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { applySheetSizes, sheetBreakdown } from "@/lib/sheetSizes";
 import { confirmMeta, supplierConfirms } from "@/lib/supplierConfirm";
@@ -462,7 +463,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-10f";
+export const READER_REV = "2026-11-10g";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -1065,25 +1066,26 @@ ${staffSays}` : ""}`;
   const persAsk: string[] = [];
   {
     const persIds = new Set(finAll.filter((f) => /personali[sz]/i.test(`${f.id} ${f.name}`)).map((f) => f.id));
+    // names the reading left in a print's notes ("Personalization: FRANKIE - STORAGE DIRECTOR", Nov 10, NCM #40504) are
+    // the same names: they go on the group's garment when it has one line (more lines: asked which line they're on)
+    const notePers = /(^|\n|;\s*)\s*personali[sz]ation\s*:\s*([^\n]+)/i;
     for (const g of groups) {
-      if (!(g.finishing || []).some((id) => persIds.has(id)) && !(g.lines || []).some((l) => /^personali[sz]ation:/i.test(l.note || ""))) continue;
+      const fromPrint = (g.imprints || []).map((d) => (d.notes || "").match(notePers)?.[2]?.trim() || "").find(Boolean) || "";
+      if (!(g.finishing || []).some((id) => persIds.has(id)) && !(g.lines || []).some((l) => /^personali[sz]ation:/i.test(l.note || "")) && !fromPrint) continue;
+      const named = g.lines.filter((l) => splitNames(l.note || "").length);
       for (const l of g.lines) {
-        const raw = (l.note || "").replace(/^personali[sz]ation:\s*/i, "").split(/\s*[;\n]\s*/).map((n) => n.trim()).filter(Boolean);
+        const raw = l.note ? splitNames(l.note) : !named.length && g.lines.length === 1 ? splitNames(fromPrint) : [];
         if (!raw.length) continue;
-        const left = Object.entries(l.sizes || {}).flatMap(([z, q]) => Array.from({ length: +(q || 0) }, () => z));
-        const list = raw.map((n) => {
-          const m = n.match(/\s*\(([^)]{1,16})\)\s*$/);
-          const z = m ? normSize(m[1]) : null;
-          const text = (m && z ? n.slice(0, m.index) : n).trim();
-          const size = (z && left.includes(z) ? z : left[0] || z || "") as PersEntry["size"];
-          const at = left.indexOf(size as string); if (at >= 0) left.splice(at, 1);
-          return { id: uid(), text, size, qty: 1 };
-        }).filter((e) => e.text);
+        const { list, left } = persFromNames(l, raw);
         if (!list.length) continue;
         l.persList = list;
         delete l.pers;
         delete l.note;
         if (left.length) persAsk.push(`${[l.style, l.color].filter(Boolean).join(" ")}: ${left.length} personalized piece${left.length === 1 ? "" : "s"} (${left.join(", ")}) ${left.length === 1 ? "has" : "have"} no name on the paperwork I could read. Which name goes on ${left.length === 1 ? "it" : "them"}?`);
+      }
+      if (fromPrint) {
+        if (g.lines.some((l) => l.persList?.length)) for (const d of g.imprints || []) d.notes = (d.notes || "").replace(notePers, "$1").replace(/^[\s;]+|[\s;]+$/g, "");
+        else persAsk.push(`${g.name || "A group"}: the paperwork names ${fromPrint}. Which garment line is that on?`);
       }
       // charged per name on each line (persList), so not again as the group's finishing; and the name needs no print of
       // its own (Nick: "we don't need a proof or anything. Our team will know what to do")

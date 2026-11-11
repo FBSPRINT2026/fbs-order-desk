@@ -142,6 +142,12 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   Moving…: a job only gets the rules, worked examples, brand logos and program rate card of the end client it names
   (`trainingsForText`, `loadExamples`' same-client check, `logosOnFile(…, jobText)` / `namesBrand`, `cardForOrder`'s match
   words). A job for an end client with nothing on file is read from scratch, never as the customer's biggest client.
+- **Names on pieces are the line's personalization** (Nick, Nov 10 2026: the order helper "is not using the add
+  personalization tool"). Anything that makes or changes an order puts names on `GLine.persList` (what "Add
+  personalization" makes, charged per name) through `persFromNames` in `lib/persNames.ts`: the order reader and the AI
+  order helper's line field `personalization`. Never in a print's notes or a line note. The helper's free edits are
+  checked against `lib/orderShape.ts` (every key the order's types have, kept in step by the compiler): a made-up field
+  is refused, never saved where nothing reads it. Add a new order field to the type and the compiler sends you there.
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
