@@ -86,3 +86,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 8:24pm · 1.3.289 · Nick · Contact Blue shows as #00AEEF (Nick)
 - Nov 10 8:53pm · 1.3.290 · Nick · Art pasted from Illustrator (and any SVG uploaded) is sized by the art you can see: its box moves in past a clipped picture, hidden layer or empty edge that Illustrator counts, and the print's size shrinks with it; stays vector
 - Nov 10 9:17pm · 1.3.291 · Nick · Proof versions: a version sent to the customer stays the same version until they approve or ask for changes; editing the mockup before then updates it (opened or not), from the Mockup Creator or a saved mockup brought in
+- Nov 10 9:18pm · 1.3.292 · Nick · Opened counts are the customer's only: a proof or sew-out link opened by staff (signed in, e.g. from Sent) or by a mail system's link checker / page preview isn't counted as seen

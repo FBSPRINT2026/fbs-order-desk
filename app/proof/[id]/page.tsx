@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { linkPage, linkViewed } from "@/lib/proofLinks";
+import { customerView } from "@/lib/customerView";
 import { inkNames, lineQty, orderGroups, printHow, sizeLabel } from "@/lib/pricing";
 import { fmtPhone } from "@/lib/phone";
 import ProofAnswer from "./ProofAnswer";
@@ -22,14 +23,16 @@ export default async function ProofPage({ params, searchParams }: { params: Prom
   // (as=…): everything shows, nothing is answered, and it isn't marked as seen by the customer
   const { from, as } = await searchParams;
   const preview = !!as && /^[\w-]{8,64}$/.test(as);
+  // only the customer's own openings count as seen (lib/customerView.ts: not the shop, not a mail system's link check)
+  const counts = !preview && await customerView();
   const admin = createAdminClient();
   // an order's page: every step waiting on the customer (lib/customerSend.ts)
   const os = await orderSteps(admin, id);
   if (os) {
     const sh0 = os.settings.shop;
     const art = os.steps.find((x) => x.kind === "art" && x.state === "todo");
-    if (art && !preview) { const lp = await linkPage(admin, id, { kind: "art" }); if (lp) await linkViewed(admin, lp).catch(() => null); }
-    if (!preview) for (const s0 of os.steps.filter((x) => x.kind === "sewout" && x.state === "todo")) { const lp = await linkPage(admin, id, { kind: "sewout", id: s0.sewoutId! }); if (lp) await linkViewed(admin, lp).catch(() => null); }
+    if (art && counts) { const lp = await linkPage(admin, id, { kind: "art" }); if (lp) await linkViewed(admin, lp).catch(() => null); }
+    if (counts) for (const s0 of os.steps.filter((x) => x.kind === "sewout" && x.state === "todo")) { const lp = await linkPage(admin, id, { kind: "sewout", id: s0.sewoutId! }); if (lp) await linkViewed(admin, lp).catch(() => null); }
     const backHref = from === "portal" ? `/portal/orders/${os.o.id}?view=1${preview ? `&as=${as}` : ""}` : "";
     return (
       <div className="pfl">
@@ -50,7 +53,7 @@ export default async function ProofPage({ params, searchParams }: { params: Prom
   }
   const p = await linkPage(admin, id);
   if (!p) return <main className="pfl-gone"><h1>This proof link doesn&apos;t work</h1><p>Ask us for a new one and we&apos;ll send it right over.</p></main>;
-  if (p.status === "pending") await linkViewed(admin, p).catch(() => null);
+  if (p.status === "pending" && counts) await linkViewed(admin, p).catch(() => null);
   const { o, settings, link, sewout } = p;
   const sh = settings.shop;
   const groups = orderGroups(o);
