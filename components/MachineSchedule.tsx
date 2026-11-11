@@ -693,7 +693,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
   // every machine's work laid out on its hours, split into per-day pieces
   // Live clock off: jobs keep their planned times; nothing not started is pushed up to "now"
-  const liveNow = s?.liveClock ? ord(now.day) * 1440 + now.min : -Infinity;
+  const liveNow = s?.liveClock ? ord(now.day) * 1440 + now.min : (ord(now.day) - 60) * 1440; // off: a finite floor far back (a date math on -Infinity crashed the page)
   const segs = useMemo(() => (s ? layoutAll(cards, liveNow) : { by: new Map<string, Seg[]>(), ofCard: new Map<string, Seg[]>(), lunch: new Map<string, number>() }), [cards, s, liveNow]);
   const at = (m: Machine, d: string) => segs.by.get(m.id + "|" + d) || [];
   /** a day's pieces with a job that runs through lunch (or a warm-up) drawn as one card over it (Nov 9, Nick: "when
