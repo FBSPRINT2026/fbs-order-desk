@@ -390,6 +390,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [pay, setPay] = useState<{ rates: Record<string, number>; names: Record<string, string> } | null>(null);
   const [owners, setOwners] = useState<AccountOwner[]>([]);
   const [trayAll, setTrayAll] = useState(false);
+  // Ready To Schedule's tabs (Nov 11, Nick: "late jobs, holders, and… jobs that are on time")
+  const [trayTab, setTrayTab] = useSticky<"all" | "late" | "hold" | "ok">("cal.trayTab", "all");
   const [trayOpen, setTrayOpen] = useSticky("cal.trayOpen", true);
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
@@ -691,7 +693,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     for (const c of cards) { const k = c.job.key + ":" + c.need.type, cur = onCal.get(k); if (cur === "all") continue; const l = c.slot?.locations; onCal.set(k, !l || !l.length ? "all" : [...(cur || []), ...l]); }
     // approved orders wait here (Nov 9, Nick: "a job that's marked invoiced… and approved should just go on to the production
     // scheduler"); booking one makes it In Production (a database trigger, migration 302)
-    const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "approved" || j.status === "production" : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
+    // a hold (a quote's press time, Production holder) waits here too when it isn't on a press (Nov 11, Nick: "it should
+    // just treat it like any other schedule job… in the queue above")
+    const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "approved" || j.status === "production" : j.kind === "h" ? true : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
     const ld = JSON.parse(JSON.stringify(loadMap)) as Record<string, Record<string, number>>;
     const out: { job: Job; need: Need; sug: Suggestion | null }[] = [];
     // where each art already runs (booked, not done), and later where it's suggested: same art goes together (Nov 9)
@@ -733,6 +737,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     return out;
   }, [tray, cards, segs, today, typeF]);
 
+  /** whose booking a slot is: an order, an old Printavo job, or a hold (a quote's held press time, Production holder) */
+  const ownerCols = (job: Job): Record<string, string | null> => ({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, ...(job.kind === "h" ? { hold_id: job.id } : {}) });
   async function book(job: Job, need: Need, machine: Machine, d: string, source = "manual", slot?: Slot | null, startMin: number | null = null) {
     if (!s) return;
     if (!fits(need, machine)) { setMsg(`#${job.number} ${whyUnfit(need, machine)}.`); return; }
@@ -741,7 +747,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const pos = cards.filter((c) => c.machine.id === machine.id && c.day === d).length;
     const r = slot
       ? await sb.from("production_slots").update({ machine: machine.id, day: d, minutes, start_min: startMin, position: pos, updated_at: new Date().toISOString() }).eq("id", slot.id)
-      : await sb.from("production_slots").insert({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, machine: machine.id, day: d, minutes, start_min: startMin, position: pos, kind: need.type, label: need.label, source, locations: locsFor(job, need) });
+      : await sb.from("production_slots").insert({ ...ownerCols(job), machine: machine.id, day: d, minutes, start_min: startMin, position: pos, kind: need.type, label: need.label, source, locations: locsFor(job, need) });
     if (r.error) { setMsg(r.error.message); return; }
     setMsg(`#${job.number} → ${machine.name}, ${dayLbl(d)}${startMin != null ? ` at ${clockLong(startMin)}` : ""} (${fmtMin(minutes)})`);
     load();
@@ -755,7 +761,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const rows = list.map((t) => {
       const k = t.sug!.machine.id + t.sug!.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === t.sug!.machine.id && c.day === t.sug!.day).length;
       const position = late(t) ? -1000 + (early[k] = (early[k] ?? 0) + 1) : pos[k]++;
-      return { order_id: t.job.kind === "o" ? t.job.id : null, archived_order_id: t.job.kind === "a" ? t.job.id : null, machine: t.sug!.machine.id, day: t.sug!.day, minutes: t.sug!.minutes, position, kind: t.need.type, label: t.need.label, source: "suggested", locations: locsFor(t.job, t.need) };
+      return { ...ownerCols(t.job), machine: t.sug!.machine.id, day: t.sug!.day, minutes: t.sug!.minutes, position, kind: t.need.type, label: t.need.label, source: "suggested", locations: locsFor(t.job, t.need) };
     });
     if (!rows.length) return;
     const r = await createClient().from("production_slots").insert(rows);
@@ -917,7 +923,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       for (let i = 0, d = today; i < 14; i++, d = addDay(d, 1)) {
         const oa = otOn(m, d), sh = shiftOn(m, d); if (oa == null || !sh) continue;
         // work that stays put that day (running, done, firm, a Planner hold) keeps its time
-        const stuck = cards.filter((c) => c.machine.id === m.id && (c.slot?.status === "running" || c.slot?.status === "done" || !!c.job.firm || c.job.kind === "h")).flatMap((c) => segs.ofCard.get(c.key) || []).filter((g) => g.day === d).reduce((t, g) => Math.max(t, g.end), 0);
+        const stuck = cards.filter((c) => c.machine.id === m.id && (c.slot?.status === "running" || c.slot?.status === "done" || !!c.job.firm)).flatMap((c) => segs.ofCard.get(c.key) || []).filter((g) => g.day === d).reduce((t, g) => Math.max(t, g.end), 0);
         const start = Math.ceil(Math.max(oa, stuck, d === today ? nowAbs - ord(d) * 1440 : 0) / 15) * 15;
         if (start < sh[1] - 5) cuts.set(m.id, [...(cuts.get(m.id) || []), { m, day: d, start, end: sh[1] }]);
       }
@@ -961,7 +967,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     // not started yet (or paused partway): free to move. Running and done work stays where it is.
     // a firm job (⛰️) that's on course for its date and time stays exactly where it is (unless its press can't print it now)
     const firmHolds = (c: Card) => !!c.job.firm && fits(c.need, c.machine) && (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0) <= dueAbs(c.job);
-    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c) && c.job.kind !== "h");
+    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c));
     // work that stays where it is (running, done, a firm job on course, other machine types) is an obstacle on its
     // machine, not a wall: open time before and between it is still used (a firm job on Thursday doesn't empty Wednesday)
     let fixed = new Map<string, [number, number][]>(), fixedAbs = new Map<string, [number, number][]>(), jobBusy = new Map<string, [number, number][]>();
@@ -1099,7 +1105,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const o = row.o!;
       const lbl = o.parts > 1 ? subNeed(o.it.need, o.locs).label : o.it.need.label;
       if (o.it.slot && o.part === 1) ups.push(Promise.resolve(sb.from("production_slots").update({ machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: null, position, rolled_from: null, label: lbl, locations: o.locs, updated_at: new Date().toISOString() }).eq("id", o.it.slot.id)));
-      else ins.push({ order_id: o.it.job.kind === "o" ? o.it.job.id : null, archived_order_id: o.it.job.kind === "a" ? o.it.job.id : null, machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: null, position, kind: o.it.need.type, label: lbl, source: "replan", status: "scheduled", locations: o.locs });
+      else ins.push({ ...ownerCols(o.it.job), machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: null, position, kind: o.it.need.type, label: lbl, source: "replan", status: "scheduled", locations: o.locs });
     }
     await Promise.all(ups);
     if (ins.length) await sb.from("production_slots").insert(ins);
@@ -1160,11 +1166,15 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     setMsg(`Moved the run (${group.map((c) => "#" + c.job.number).join(", ")}) to ${mach.name}, ${dayLbl(d)}.`);
     load();
   }
+  /** this piece finishes after the job's in-hands time */
+  const segLate = (g: Seg) => ord(g.day) * 1440 + g.end > dueAbs(g.c.job);
   const cls = (g: Seg) => {
-    const c = g.c, late = ord(g.day) * 1440 + g.end > dueAbs(c.job);
+    const c = g.c, late = segLate(g);
     const hs = holdState(c.job);
     return (hs ? " msh-" + hs : "") + (c.job.kind === "h" && !showHolds ? " msh-dim" : "") + " ms-blk " + c.need.type + (c.job.kind === "h" ? " hold" : "") + (inOT(g) ? " ot" : "") + (c.job.firm ? " is-firm" : "") + (c.job.rush ? " is-rush" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (g.part > 1 ? " cont-l" : "") + (g.part < g.parts ? " cont-r" : "");
   };
+  /** "Late" / "Hold" tag after a card's number (Nov 11, Nick: the late ones' number in red) */
+  const tagOf = (g: Seg) => (g.c.job.kind === "h" ? <i className="ms-tag2 hold">Hold</i> : segLate(g) ? <i className="ms-tag2 late">Late</i> : null);
   const tip = (g: Seg) => `#${g.c.job.number} ${g.c.job.customer}${g.c.job.owner ? ` (${g.c.job.owner})` : ""}\n${g.c.job.name}\n${dayLbl(g.day)} ${clockLong(g.start)} – ${clockLong(g.end)}${g.parts > 1 ? ` (part ${g.part} of ${g.parts}; ${fmtMin(g.c.minutes)} in all)` : ` (${fmtMin(g.c.minutes)})`}\n${g.c.need.label}${g.c.job.due ? `\nIn-hands ${dayLbl(g.c.job.due)}` : ""}${g.c.slot?.status === "done" ? "\nDone" : g.c.slot?.status === "running" ? "\nRunning" : ""}${g.c.fromPv ? "\nFrom its Printavo status" : ""}${g.c.carried ? `\nRolled forward from ${dayLbl(g.c.carried)}` : ""}${g.pushed ? "\nStarts later than asked (the job before runs long)" : ""}`;
   const offShade = (mach: Machine, d: string) => {
     const [a, b] = shiftOn(mach, d) || typicalShift(mach), works = !!shiftOn(mach, d) || at(mach, d).length > 0;
@@ -1205,7 +1215,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, d, vStart + ((e.clientX - r.left) / r.width) * range); }}>
                     {offShade(m, d).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}
                     {(() => { const sh = shiftOn(m, d); return sh ? breaksOn(m, d, sh, segs.lunch.get(m.id + "|" + d)).map(([a0, b0, why]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return b > a ? <div key={"bk" + a0} className={(why === "Warm-up" ? "ms-warm" : "ms-lunch") + " h"} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} /> : null; }) : null; })()}
-                    {(m.down?.[d] || []).map(([a0, b0, why, rate]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return <div key={"dn" + a} className={"ms-down h" + (rate ? " slow" : "")} title={rate ? `${why}: ${Math.round(rate * 100)}%` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />; })}
+                    {(m.down?.[d] || []).filter((x) => !x[4]).map(([a0, b0, why, rate]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return <div key={"dn" + a} className={"ms-down h" + (rate ? " slow" : "")} title={rate ? `${why}: ${Math.round(rate * 100)}%` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />; })}
                     {d === today && now.min > vStart && <div className="ms-past" style={{ width: pct(Math.min(now.min, vEnd)) }} />}
                     {d === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now v" style={{ left: pct(now.min) }} />}
                     {gs.map((g, i) => {
@@ -1267,7 +1277,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             {(() => { const sh = shiftOn(m, day); return sh ? breaksOn(m, day, sh, segs.lunch.get(m.id + "|" + day)).map(([a0, b0, why]) => { const a = Math.max(a0, vS), b = Math.min(b0, vE); if (b <= a) return null; const warm = why === "Warm-up"; return (
               <div key={"bk" + a0} className={warm ? "ms-warm" : "ms-lunch"} style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} title={`${warm ? "Press warm-up" : `${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "Crew"} lunch`} ${clockLong(a0)} – ${clockLong(b0)}`}>{((b - a) / 60) * HOUR_PX >= 13 && <span>{warm ? "Warm-up" : "Lunch"}</span>}</div>
             ); }) : null; })()}
-            {(m.down?.[day] || []).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
+            {(m.down?.[day] || []).filter((x) => !x[4]).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
               ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
               : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
             {(day < today || (day === today && now.min > vS)) && <div className="ms-pastv" style={{ height: ((Math.min(day < today ? vE : now.min, vE) - vS) / 60) * HOUR_PX }} />}
@@ -1308,7 +1318,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "") + (gaps.length ? " ms-thru" : "") + (nxt ? " mscv-out" : "") + (prv ? " mscv-in" : "")} style={{ top: ((gs0 - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
                 {prv ? <span className="mscv-from">continued from {dayLbl(prv.day).split(",")[0]} · {g.part} of {g.parts}</span> : null}
-                <span className="ms-l1"><b>{g.c.job.hold ? "HOLD #" : "#"}{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b>{flags(g.c.job)}<span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span><span className="l1x">{gl.colors} · {gl.units.toLocaleString()} P</span></span>
+                <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b>{tagOf(g)}{flags(g.c.job)}<span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span><span className="l1x">{gl.colors} · {gl.units.toLocaleString()} P</span></span>
                 <span className="ms-l2">{holdTag(g.c.job)}{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.name || g.c.need.label}</span>
                 <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 && !whole ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()} P</i></span>
               {nxt ? <span className="mscv-to" aria-hidden>↓ continues {dayLbl(nxt.day).split(",")[0]} {clock(nxt.start)}</span> : null}{gaps.map(([a0, b0]) => <span key={"gp" + a0} className="ms-thru-l" aria-hidden style={{ top: ((a0 - gs0) / 60) * HOUR_PX, height: ((b0 - a0) / 60) * HOUR_PX }}>{((b0 - a0) / 60) * HOUR_PX >= 13 ? <em>Lunch</em> : null}</span>)}
@@ -1339,7 +1349,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               <ul className="ms-pl">{gs.map((g) => { const gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, past = d === today && g.end <= now.min && st !== "running"; return (
                 <li key={g.c.key + g.part}><button type="button" className={"ms-pj " + g.c.need.type + (st === "done" ? " done" : st === "running" ? " run" : "") + (past ? " past" : "") + (mine && !isMe(g.c.job.owner, owners, me) ? " other" : "") + (ord(g.day) * 1440 + g.end > dueAbs(g.c.job) ? " late" : "")} onClick={() => setOpen(g.c)}>
                   <span className="ms-pj-t">{clock(g.start)}<small>{clock(g.end)}</small></span>
-                  <span className="ms-pj-b"><span className="ms-pj-1"><b>{g.c.job.hold ? "HOLD #" : "#"}{g.c.job.number}</b>{flags(g.c.job)}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null} {abbrCo(g.c.job.customer || "")}</span><span className="ms-pj-2">{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.name || g.c.need.label}</span><span className="ms-pj-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span></span>
+                  <span className="ms-pj-b"><span className="ms-pj-1"><b>#{g.c.job.number}</b>{tagOf(g)}{flags(g.c.job)}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null} {abbrCo(g.c.job.customer || "")}</span><span className="ms-pj-2">{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.name || g.c.need.label}</span><span className="ms-pj-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span></span>
                 </button></li>
               ); })}</ul>
             </div>
@@ -1371,7 +1381,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const r = await sb.from("production_slots").update({ machine: mach.id, day: d, minutes, start_min: null, position: idx, updated_at: new Date().toISOString() }).eq("id", id);
       if (r.error) { setMsg(r.error.message); return; }
     } else {
-      const r = await sb.from("production_slots").insert({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, machine: mach.id, day: d, minutes, start_min: null, position: idx, kind: need.type, label: need.label, source: "manual", locations: locsFor(job, need) }).select("id").single();
+      const r = await sb.from("production_slots").insert({ ...ownerCols(job), machine: mach.id, day: d, minutes, start_min: null, position: idx, kind: need.type, label: need.label, source: "manual", locations: locsFor(job, need) }).select("id").single();
       if (r.error) { setMsg(r.error.message); return; }
       id = (r.data as { id: string }).id;
     }
@@ -1434,7 +1444,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   <div key={m.id + d} className={"ms-lc" + (isToday ? " today" : d < today ? " past" : "") + (!works || isOffDay(m, d) ? " off" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")}
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver((o) => (o === m.id + d ? "" : o))} onDrop={(e) => { e.preventDefault(); if (drag) place(drag, m, d); }}>
                     {works && <div className={"ms-lc-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /><span>{u ? `${(u / 60).toFixed(u % 60 ? 1 : 0)}/${Math.round(cap / 60)}h` : ""}</span></div>}
-                    {(m.down?.[d] || []).map(([a, b, why, rate]) => <button type="button" key={"dn" + a} className={"ms-lc-dn" + (rate ? " slow" : "")} title={rate ? `${why}: runs at ${Math.round(rate * 100)}%${a > 0 || b < 1440 ? ` ${clockLong(a)} – ${clockLong(b)}` : ""}` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: d, start: rate ? undefined : a })}>{rate ? `${why} · ${Math.round(rate * 100)}%` : `Down ${clock(a)}–${clock(b)}`}</button>)}
+                    {(m.down?.[d] || []).filter((x) => !x[4]).map(([a, b, why, rate]) => <button type="button" key={"dn" + a} className={"ms-lc-dn" + (rate ? " slow" : "")} title={rate ? `${why}: runs at ${Math.round(rate * 100)}%${a > 0 || b < 1440 ? ` ${clockLong(a)} – ${clockLong(b)}` : ""}` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: d, start: rate ? undefined : a })}>{rate ? `${why} · ${Math.round(rate * 100)}%` : `Down ${clock(a)}–${clock(b)}`}</button>)}
                     {gs.map((g) => chip(g, d, o.compact))}
                     {isOffDay(m, d) ? <button type="button" className="ms-lc-off x" onClick={() => setDownEdit({ machine: m.id, day: d, allDay: true })} title="Tap to change">Off · {m.off![d]}</button> : !works && !gs.length ? <span className="ms-lc-off">off</span> : null}
                     {works && d >= today && <button type="button" className="ms-lc-mk" onClick={() => setDownEdit({ machine: m.id, day: d, allDay: true })} title={`Mark ${m.name}${crewOf(m) ? ` / ${crewOf(m)!.leader}'s crew` : ""} off this day`}>off?</button>}
@@ -1764,7 +1774,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   if (typeof window !== "undefined" && (window as unknown as { __MS_DEBUG?: boolean }).__MS_DEBUG) Object.assign(window, { __ms: { s, cards, segs, machines, today, now, tight, tray, slots, holds, planIt, applyPlan, whatIfs, whenCan, holdSpot, otReport, otOn, acceptAll, book, unbook, saveProgress, logAction, splitByLocation, saveHold, removeHold, cutOvertime, load } });
 
   return (
-    <div className="ms">
+    <div className="ms ms-calm">
       {/* the calendar's own controls on one line: what's shown on the left, how it's shown on the right */}
       {/* one line that never wraps: when it gets tight each control turns into a compact dropdown of the same choices */}
       <div className="ms-head-w">
@@ -1906,13 +1916,20 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
               <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{tray.length ? "drag onto a press and day, or take the suggested spot" : "nothing waiting"}</span>
               <span className="spacer" />
-              {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind !== "h").length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={() => { setRestart(false); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind !== "h")); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
+              {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today).length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={() => { setRestart(false); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today)); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
               {trayOpen && tray.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
             </div>
-            {trayOpen && tray.length > 0 && (
+            {trayOpen && tray.length > 0 && (() => {
+              const isLate = (t: (typeof tray)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
+              const kinds = { late: tray.filter(isLate), hold: tray.filter((t) => t.job.kind === "h"), ok: tray.filter((t) => t.job.kind !== "h" && !isLate(t)) };
+              const list = trayTab === "all" ? tray : kinds[trayTab];
+              return (
               <>
-                <ul className="ms-rc-l">{(trayAll ? tray : tray.slice(0, 12)).map((t) => (
-                  <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-rc " + t.need.type + (t.sug?.late ? " late" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
+                <div className="toolbar ms-rtabs"><div className="chips">
+                  {([["all", "All", tray.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ["ok", "On time", kinds.ok.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
+                </div></div>
+                <ul className="ms-rc-l">{(trayAll ? list : list.slice(0, 12)).map((t) => (
+                  <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-rc " + t.need.type + (t.job.kind === "h" ? " hold" : isLate(t) ? " late" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
                     <div className="ms-rc-1"><Link className="ms-r-n" href={t.job.href}>#{t.job.number}</Link><b>{t.job.customer || t.job.name}</b>{t.job.owner ? <span className="ms-own" title={t.job.owner}>{initials(t.job.owner)}</span> : null}</div>
                     {t.job.customer && t.job.name && <div className="ms-rc-nm" title={t.job.name}>{t.job.name}</div>}
                     <div className="ms-rc-2">{t.need.label}</div>
@@ -1924,17 +1941,20 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     </div>
                   </li>
                 ))}</ul>
-                {tray.length > 12 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
+                {!list.length && <div className="faint ms-rnone">Nothing here.</div>}
+                {list.length > 12 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${list.length}`}</button>}
               </>
-            )}
+              );
+            })()}
           </div>
         </>}
       </section>
 
       <div className="ms-main">
+        {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
+        <div className="ms-key2"><span><i className="k job" />Job</span><span><i className="k late" />Late (past its in-hands date)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span><span><i className="k past" />Already past</span></div>
         {view === "split" ? split() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
-        <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
       {planOpen && <PlannerPanel method={typeF || "screen"} s={s} today={today} holds={holds} admin={isAdmin} spotOf={(id) => { const c = cards.find((x) => x.job.key === "h:" + id); const g = c ? (segs.ofCard.get(c.key) || [])[0] : undefined; return c && g ? `${shortName(c.machine)} · ${dayLbl(g.day)} · ${fmtMin(c.minutes)}` : ""; }} onSave={saveHold} onRemove={removeHold} onClose={() => setPlanOpen(false)} />}

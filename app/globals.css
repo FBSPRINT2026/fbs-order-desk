@@ -21793,3 +21793,39 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rcv-today-r{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0}
 .rcv-today-r .faint{font-size:12.5px}
 .rcv-ok{color:var(--ok);font-weight:700}
+
+/* ── Schedule, calm look (Nov 11 2026, Nick: "too busy… boxes, bars… a key at the top"). Scoped to .ms-calm so it wins
+   over the older layered rules above. Every job is a white card with its department's edge; only late (red edge + red
+   number) and holds (dashed) differ. Overtime is a soft band behind the hours, breaks plain gray, the past a light gray. */
+.ms-calm .ms-blk:not(.bar),.ms-calm .ms-blk.ot:not(.bar),.ms-calm .ms-blk.hold:not(.bar){background:var(--surface)!important;border:1px solid var(--line)!important;border-left:4px solid var(--fbs-blue)!important;box-shadow:0 1px 2px rgba(0,0,0,.05)!important;outline:0!important}
+.ms-calm .ms-blk.embroidery:not(.bar){border-left-color:#7C5CD6!important}
+.ms-calm .ms-blk.heat:not(.bar){border-left-color:var(--fbs-orange)!important}
+.ms-calm .ms-blk.late:not(.bar),.ms-calm .ms-blk.msh-late:not(.bar){border-left-color:var(--danger)!important;box-shadow:0 1px 2px rgba(0,0,0,.05)!important}
+.ms-calm .ms-blk.late .ms-l1>b,.ms-calm .ms-blk.late .ms-pj-1>b{color:var(--danger)!important}
+.ms-calm .ms-blk.hold:not(.bar){background:var(--surface-2)!important;border:1.5px dashed color-mix(in srgb,var(--ink) 35%,transparent)!important;border-left:4px dashed var(--fbs-blue)!important}
+.ms-calm .ms-blk.bar.late{box-shadow:none;background:color-mix(in srgb,var(--danger) 55%,var(--surface))}
+.ms-calm .ms-blk.bar.ot{background-image:none!important}
+.ms-calm .ms-blk.run:not(.bar){box-shadow:inset 0 0 0 2px var(--ok)!important}
+.ms-tag2{font-style:normal;display:inline-block;margin-left:5px;padding:0 5px;border-radius:4px;font-size:10.5px;font-weight:700;line-height:15px;white-space:nowrap;vertical-align:1px}
+.ms-tag2.late{background:var(--danger-soft);color:var(--danger)}
+.ms-tag2.hold{background:color-mix(in srgb,var(--ink) 8%,var(--surface));color:var(--ink-2)}
+.ms-calm .ms-ot{background:color-mix(in srgb,var(--warn) 9%,transparent)!important;border-top:0!important}
+.ms-calm .ms-ot span{color:color-mix(in srgb,var(--warn) 80%,var(--ink))}
+.ms-calm .ms-warm,.ms-calm .ms-lunch{background:color-mix(in srgb,var(--ink) 5%,var(--surface))!important;border:0!important}
+.ms-calm .ms-warm.h,.ms-calm .ms-lunch.h{background:color-mix(in srgb,var(--ink) 6%,transparent)!important;border:0!important}
+.ms-calm .ms-off{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.ms-calm .ms-pastv{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.ms-key2{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;font-size:12px;color:var(--ink-3);padding:2px 2px 8px}
+.ms-key2 span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.ms-key2 .k{width:18px;height:12px;border-radius:3px;display:inline-block;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--fbs-blue)}
+.ms-key2 .k.late{border-left-color:var(--danger)}
+.ms-key2 .k.hold{background:var(--surface-2);border:1.5px dashed color-mix(in srgb,var(--ink) 35%,transparent);border-left:4px dashed var(--fbs-blue)}
+.ms-key2 .k.ot{border:0;background:color-mix(in srgb,var(--warn) 18%,var(--surface))}
+.ms-key2 .k.brk{border:0;background:color-mix(in srgb,var(--ink) 8%,var(--surface))}
+.ms-key2 .k.past{border:0;background:color-mix(in srgb,var(--ink) 12%,var(--surface))}
+.ms-rc.hold{background:var(--surface-2);border-style:dashed}
+.ms-rc.late{border-left-color:var(--danger)}
+.ms-rtabs{margin:4px 0 8px}
+.ms-rnone{padding:6px 2px}
+.ms-calm .ms-blk.msh-dim:not(.bar){background:repeating-linear-gradient(135deg,var(--surface-2) 0 6px,transparent 6px 12px)!important;border:1px dashed var(--line)!important;box-shadow:none!important}
+.ms-calm .ms-blk.done:not(.bar){opacity:.5}
