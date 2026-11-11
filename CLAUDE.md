@@ -156,6 +156,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   order helper's line field `personalization`. Never in a print's notes or a line note. The helper's free edits are
   checked against `lib/orderShape.ts` (every key the order's types have, kept in step by the compiler): a made-up field
   is refused, never saved where nothing reads it. Add a new order field to the type and the compiler sends you there.
+- **A customer's own separations** (Tiger Blue sends seps with every order; Nick, Nov 11 2026: "this is how we're going
+  to put these orders in moving forward"). When a customer sends their own separations, the order is made the way the
+  Create order card picks it: their mockup picture is the visual mockup (`customerMockups`, "Visual mockup · theirs,
+  printed from their films"), their separation file (the .ai) goes on each print as Customer separations
+  (`custSeps.films`), and the color count and inks come off their order form and mockup. A PSD or other extra file they
+  send is reference only. Never build a Mockup Creator logo from their files or swap the card's pick for their art file
+  (that read #50030's front as 1 white color and put the PSD on the back).
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **A sent version isn't locked until the customer answers** (Nick, Nov 10 2026: "until it's approved or declined, it
