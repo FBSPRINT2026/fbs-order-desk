@@ -2270,7 +2270,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
       <div className="ms-main">
         {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
-        <div className="ms-key2"><span><i className="k job" />Job</span><span><i className="k late" />Late (past its in-hands date)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span><span><i className="k past" />Already past</span></div>
+        <div className="ms-key2"><span><b className="ms-key-late">#</b>Late (red number)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span><span><i className="k past" />Already past</span></div>
         {view === "flow" ? flowView() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
       </div>

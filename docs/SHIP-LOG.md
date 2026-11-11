@@ -122,3 +122,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 12:44pm · 1.3.325 · Nick · Schedule drag: no more twitching (a card redrawn under the pointer no longer clears the preview; the dotted box holds still while the pointer is on or near it)
 - Nov 11 12:45pm · 1.3.326 · Nick · Schedule top (option G): tools with icons and names on the left (2/3), one short AI tip at a time on the right (1/3) that takes turns every 8s with arrows and a button to act
 - Nov 11 12:46pm · 1.3.327 · Nick · Schedule: jobs group only when they print the same art and are due the same day (never just same customer), in Next 12 hours and Coming up; cards are one color, no colored left edge
+- Nov 11 12:47pm · 1.3.328 · Nick · Schedule key: no colored-edge swatches (cards are one color); late is the red number
