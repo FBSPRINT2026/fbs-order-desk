@@ -462,7 +462,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-10e";
+export const READER_REV = "2026-11-10f";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -521,7 +521,7 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   ]);
   // a job staff picked or named goes first, so it's J1 (and jobs named in what staff taught about this customer)
   // their logos on file and brand standards (rule 4g)
-  const onFile = a.customer_id ? await logosOnFile(admin, a.customer_id as string).catch(() => null) : null;
+  const onFile = a.customer_id ? await logosOnFile(admin, a.customer_id as string, `${told} ${String(a.subject || "")} ${String(a.body || "").slice(0, 6000)} ${atts.map((f) => f.name).join(" ")}`).catch(() => null) : null;
   const memText = [memoryText(mems, String(cust?.company || cust?.name || "this customer")), shopRulesText(await loadShopRules(admin).catch(() => []))].filter(Boolean).join("\n\n");
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
   const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.filter((f) => !CAMERA_NAME.test(f.name)).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
