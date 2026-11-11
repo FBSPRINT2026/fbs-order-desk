@@ -93,3 +93,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 10:09pm · 1.3.296 · Nick · Production holder lists the spots front first (Full Front, Full Back, chest, sleeves…)
 - Nov 11 8:54am · 1.3.297 · Nick · Left menu: Production → Schedule; the page is that department's schedule (Screen Print / Embroidery / Heat Press Schedule, from the SP · EMB · HP switch)
 - Nov 11 8:58am · 1.3.298 · Nick · Receive a Payment replaces Take a Payment: one search (customer, invoice # or PO, with balances), invoices grouped by how late with quick picks and Pay an amount (oldest first), Card / Check / ACH / Cash on one screen (checks recorded straight onto the invoices, old Printavo ones included), Received today underneath; menu, customer and order buttons and the refund email open it
+- Nov 11 9:01am · 1.3.299 · Nick · Receive a Payment opens with nothing ticked (only the invoice it was opened on or searched for); no sample number in the Check # box

@@ -76,10 +76,8 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
       if (!r.ok) return setErr(r.error);
       setCtx(r); void shopCredit(id).then((c) => { if (c.ok) setCr(c); });
       setSplit(r.customer.charge_split); setFee(!r.customer.no_card_fee);
-      // the invoice it was opened on or searched for, else everything past due, else everything
-      const late = r.invoices.filter((o) => lateBy(o) > 0);
-      const first = focus && r.invoices.some((o) => o.id === focus) ? [focus] : (late.length ? late : r.invoices).map((o) => o.id);
-      setPick(new Set(first));
+      // nothing ticked (Nov 11, Nick: "by default… none should be checked"), except the invoice it was opened on or searched for
+      setPick(new Set(focus && r.invoices.some((o) => o.id === focus) ? [focus] : []));
       const ok = r.methods.find((m) => m.ok);
       setPm(ok ? ok.id : "new");
     });
@@ -329,7 +327,7 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
               {how !== "card" ? <>
                 <div className="rcv-fields">
                   <label>Amount<MoneyField value={amount} onChange={(e) => { setAmount(e.target.value); }} placeholder="0.00" /></label>
-                  {how !== "cash" && <label>{how === "check" ? "Check #" : "Reference"}<input value={ref} onChange={(e) => setRef(e.target.value.slice(0, 40))} placeholder={how === "check" ? "10422" : "Optional"} /></label>}
+                  {how !== "cash" && <label>{how === "check" ? "Check #" : "Reference"}<input value={ref} onChange={(e) => setRef(e.target.value.slice(0, 40))} placeholder={how === "check" ? "" : "Optional"} /></label>}
                   <label>Received<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
                 </div>
                 <div className="rcv-go">
