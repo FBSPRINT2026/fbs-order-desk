@@ -202,6 +202,9 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
       let dd = Math.floor(t / 1440), m = t - dd * 1440, w = wins(fromOrd(dd)).find(([, y]) => m < y);
       // don't start a longer job in the last few minutes of a window: start it in the next one
       if (g === 0 && w && w[1] - m < 10 && left / w[2] > w[1] - m) { t = norm(dd * 1440 + w[1]); dd = Math.floor(t / 1440); m = t - dd * 1440; w = wins(fromOrd(dd)).find(([, y]) => m < y); }
+      // nor a sliver at the end of the day: a job that won't finish today and would get under an hour in starts the next
+      // morning; the crew goes home a little early instead of warming up the press for it (Nov 11, Nick)
+      if (g === 0) { const dl = wins(fromOrd(dd)).reduce((x, [a0, b0, r0]) => x + Math.max(0, b0 - Math.max(a0, m)) * r0, 0); if (dl < left - 0.5 && dl < DAY_TAIL) { t = norm((dd + 1) * 1440); dd = Math.floor(t / 1440); m = t - dd * 1440; w = wins(fromOrd(dd)).find(([, y]) => m < y); } }
       // a slow stretch (operator out, 50%) takes twice the clock time for the same work
       const rate = w ? w[2] : 1;
       // never past the end of the window it's in (that would run into lunch, warm-up or downtime)
@@ -278,6 +281,8 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
 }
 
 /** Every machine's work laid out on its hours, split into per-day pieces (the calendar, and a re-plan checked before it's applied). */
+/** the least of a day worth starting a job that won't finish that day in (minutes): less, and it starts the next morning */
+const DAY_TAIL = 60;
 function layoutAll(cards: Card[], nowAbs: number) {
   const by = new Map<string, Seg[]>(), ofCard = new Map<string, Seg[]>(), lunch = new Map<string, number>();
   const per = new Map<string, Card[]>();
@@ -591,7 +596,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null; production_date?: string | null; run_times?: Record<string, { min: number; by: string }> | null }[]).map((x) => ({ prod: x.production_date || null, rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: withRunTimes(needsForOrder(ps, x as never), x.run_times), href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" })),
       ...pv.map((x) => ({ key: "a:" + x.id, kind: "a" as const, id: x.id, number: x.visual_id, customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status_name, needs: needsForPrintavo(ps, { qty: x.qty, status_name: x.status_name, nickname: x.nickname, data: { groups: x.pvgroups as never } }), href: `/shop/archive/${x.id}`, owner: "" })),
       // Planner holds: jobs we know are coming, holding time before there's an order
-      ...holdRows.map((h) => ({ key: "h:" + h.id, kind: "h" as const, id: h.id, number: h.order_id ? String(holdOrd.get(h.order_id)?.number ?? "HOLD") : "PLAN", customer: h.customer || "Planned", name: h.name || "Planned job", due: h.due_date, dueTime: h.due_time, firm: h.due_time != null, qty: +(h.spec as QuickJob)?.qty || 0, status: "planned", needs: [quickNeed(ps, h.spec as QuickJob)], href: h.order_id ? `/shop/orders/${h.order_id}` : "", owner: "", ...(h.order_id ? { hold: { orderId: h.order_id, detailsDue: h.details_due || null, by: h.created_by, art: h.art || "" } } : {}) })),
+      // a hold saves press time near its date, it doesn't jump the line: it runs no earlier than 3 working days before
+      // in-hands (Nov 11, Nick: #50016 due the 23rd was put on the 13th). Once its order is booked it's a job like any other
+      ...holdRows.map((h) => ({ prod: h.due_date ? minusWorkdays(h.due_date, 3) : null, key: "h:" + h.id, kind: "h" as const, id: h.id, number: h.order_id ? String(holdOrd.get(h.order_id)?.number ?? "HOLD") : "PLAN", customer: h.customer || "Planned", name: h.name || "Planned job", due: h.due_date, dueTime: h.due_time, firm: h.due_time != null, qty: +(h.spec as QuickJob)?.qty || 0, status: "planned", needs: [quickNeed(ps, h.spec as QuickJob)], href: h.order_id ? `/shop/orders/${h.order_id}` : "", owner: "", ...(h.order_id ? { hold: { orderId: h.order_id, detailsDue: h.details_due || null, by: h.created_by, art: h.art || "" } } : {}) })),
     ];
     setHolds((ho0 || []) as Hold[]);
     setJobs(js);
@@ -1027,6 +1034,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       let t = norm(m, t0); let left = minutes, ot = 0;
       // like the calendar: a longer job doesn't start in the last few minutes of a stretch, it starts in the next one
       { const dd = Math.floor(t / 1440), mm = t - dd * 1440, w = winsOf(m, fromOrd(dd)).find(([, y]) => mm < y); if (w && w[1] - mm < 10 && left / w[2] > w[1] - mm) t = norm(m, dd * 1440 + w[1]); }
+      { const dd = Math.floor(t / 1440), mm = t - dd * 1440, dl = winsOf(m, fromOrd(dd)).reduce((x, [a0, b0, r0]) => x + Math.max(0, b0 - Math.max(a0, mm)) * r0, 0); if (dl < left - 0.5 && dl < DAY_TAIL) t = norm(m, (dd + 1) * 1440); }
       const start = t;
       for (let g = 0; g < 400 && left > 0.01; g++) { const dd = Math.floor(t / 1440), mm = t - dd * 1440, w = winsOf(m, fromOrd(dd)).find(([, y]) => mm < y)!; if (!w) { t = norm(m, t); continue; } const end = Math.min(mm + left / w[2], w[1]); const oa = otAt(m, fromOrd(dd)); if (oa != null) ot += Math.max(0, end - Math.max(mm, oa)); left -= (end - mm) * w[2]; t = left > 0.01 ? norm(m, dd * 1440 + end) : dd * 1440 + end; }
       return { start, end: t, ot };
