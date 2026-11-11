@@ -139,3 +139,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 1:53pm · 1.3.342 · Nick · Separations: underbase and print order go by the ink's real color (PMS 151 C drawn black now gets underbase); one-color art prints as the one ink its print names, whatever color it's drawn in; the whole underbase chip adds it and clears old per-ink offs; Mark Printed for films printed another way
 - Nov 11 1:54pm · 1.3.343 · Nick · Time clock: the same punch twice (a double from the clock, or a fix adding one already there) counts once, so fixed issues fall off
 - Nov 11 1:56pm · 1.3.344 · Nick · Machines, crews & times: a crew's lunch can be set to No lunch; the schedule then has no lunch or after-lunch warm-up for them and counts the time as paid
+- Nov 11 1:57pm · 1.3.345 · Nick · Separation Studio: a spinning wheel over the picture while it separates, finds inks or loads the art; the ink row waits meanwhile so a second click can't undo the first

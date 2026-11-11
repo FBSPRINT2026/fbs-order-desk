@@ -1410,7 +1410,7 @@ export default function SeparationStudio({ id }: { id: string }) {
         {/* preview */}
         <section className="sep-main">
           {/* the inks, big, like Separo: art color → ink, click the name to change it */}
-          <div className="sep-inkbar">
+          <div className={"sep-inkbar" + (busy ? " busy" : "")} aria-busy={!!busy}>
             {/* the underbase is a screen like the colors: always shown, first (head 1) */}
             {(() => {
               const ub = plates.find((p) => p.kind === "underbase");
@@ -1493,8 +1493,8 @@ export default function SeparationStudio({ id }: { id: string }) {
               <canvas ref={cvOrig} className={"sep-orig" + (view === "proof" || view === "films" || solo ? " gone" : "")} style={view === "compare" && !solo ? { clipPath: `inset(0 ${100 - split}% 0 0)` } : undefined} onClick={onPick} />
               {view === "compare" && !solo && <input className="sep-split" type="range" min={0} max={100} value={split} onChange={(e) => setSplit(+e.target.value)} aria-label="Original | proof" style={artBox ? { left: artBox.l, width: artBox.w, right: "auto" } : undefined} />}
             </div>
-            {busy && <div className="sep-busy">{busy}</div>}
-            {!img && !err && <div className="sep-busy">Loading the art…</div>}
+            {/* working: a spinner over the picture so it's clear it's thinking (Nov 11, Nick) */}
+            {(busy || (!img && !err)) && <div className="sep-think" role="status" aria-live="polite"><span className="sep-spin" aria-hidden /><b>{busy || "Loading the art…"}</b></div>}
           </div>
           {solo && (
             <div className="sep-loupe">
