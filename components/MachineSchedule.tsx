@@ -764,13 +764,20 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const arts = new Set(j.needs.flatMap((n) => [...artsOf(n)]));
       if (arts.size) for (const k of byDue) if (!taken.has(k.key) && k.needs.some((n) => [...artsOf(n)].some((a) => arts.has(a)))) { taken.add(k.key); order.push(k); }
     }
+    const mates = new Map<string, { m: Machine; d: string }>();
     for (const j of order) for (const n0 of j.needs) {
       // Screen Print / Embroidery / Heat Press picked: the tools only deal with that kind of work
       if (typeF && n0.type !== typeF) continue;
       const bk = onCal.get(j.key + ":" + n0.type), n = bk ? restNeed(n0, bk) : n0;
       if (!n) continue;
       const near = [...artsOf(n)].flatMap((a) => artAt.get(a) || []);
-      const sug = suggest(s, n, j.due, today, ld, 30, near);
+      let sug = suggest(s, n, j.due, today, ld, 30, near);
+      // the same art for the same in-hands date goes on the same press and day as the job before it, back to back,
+      // when that press can print it and the day is before in-hands (Nov 11, Nick: Nine18's AMS jobs were spread over
+      // three presses after "book all")
+      const mate = j.due && j.kind !== "h" ? [...artsOf(n)].map((a) => mates.get(a + "|" + j.due)).find(Boolean) : undefined;
+      if (sug && mate && (mate.m.id !== sug.machine.id || mate.d !== sug.day) && fits(n, mate.m) && (!j.due || mate.d <= j.due)) sug = { ...sug, machine: mate.m, day: mate.d, minutes: estimate(s, n, mate.m).minutes };
+      if (sug && j.due) for (const a of artsOf(n)) if (!mates.has(a + "|" + j.due)) mates.set(a + "|" + j.due, { m: sug.machine, d: sug.day });
       if (sug) { (ld[sug.machine.id] ||= {})[sug.day] = (ld[sug.machine.id]?.[sug.day] || 0) + sug.minutes; putArt(n, sug.machine.id, sug.day, j.number); } // later jobs see this one's room taken
       out.push({ job: j, need: n, sug });
     }
@@ -811,7 +818,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     // first in the list"): a late or past-due job goes ahead of the day's jobs that haven't started, most overdue first
     const pos: Record<string, number> = {}, early: Record<string, number> = {};
     const late = (t: (typeof tray)[number]) => !!t.sug?.late || (!!t.job.due && t.job.due < today);
-    const list = tray.filter((t) => t.sug).sort((x, y) => Number(late(y)) - Number(late(x)) || (x.job.due || "9").localeCompare(y.job.due || "9"));
+    // same-art jobs for the same date stay in one line, one after another (their order in the tray already keeps them together)
+    const list = tray.filter((t) => t.sug).map((t, i) => ({ t, i })).sort((x, y) => Number(late(y.t)) - Number(late(x.t)) || (x.t.job.due || "9").localeCompare(y.t.job.due || "9") || x.i - y.i).map((x) => x.t);
     const rows = list.map((t) => {
       const k = t.sug!.machine.id + t.sug!.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === t.sug!.machine.id && c.day === t.sug!.day).length;
       const position = late(t) ? -1000 + (early[k] = (early[k] ?? 0) + 1) : pos[k]++;
