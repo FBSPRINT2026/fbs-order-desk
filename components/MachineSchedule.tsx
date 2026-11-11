@@ -24,7 +24,7 @@ import { allRows } from "@/lib/readAll";
  * machine, day or time (a job only drops on a machine that can run it), or tap it to move it. Only our own orders are
  * planned here; Printavo jobs are left off (the Printavo-lane code stays, fed nothing, in case it's wanted again).
  */
-type Job = { key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null;
+type Job = { key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; /** the order's production date: it runs that day, never earlier (Nine18's weekly run; Nov 11) */ prod?: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null;
   /** a hold from a quote (Hold the spot): its order, when its details are due, who held it */ hold?: { orderId: string | null; detailsDue: string | null; by: string; art: string } };
 /** when a job has to be done (absolute minutes): end of its in-hands day, or the set time on a firm date */
 const dueAbs = (j: Job) => (j.due ? ord(j.due) * 1440 + (j.dueTime != null ? j.dueTime : 1440) : Infinity);
@@ -459,7 +459,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }, { data: ho0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       // not a job on hold for payment: production gets it once it's paid (lib/holds.ts)
-      sb.from("orders").select("id, number, nickname, due_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
+      sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
       sb.from("production_slots").select("*").or("order_id.not.is.null,hold_id.not.is.null").gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
@@ -582,7 +582,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       }
     }
     const js: Job[] = [
-      ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null; run_times?: Record<string, { min: number; by: string }> | null }[]).map((x) => ({ rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: withRunTimes(needsForOrder(ps, x as never), x.run_times), href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" })),
+      ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null; production_date?: string | null; run_times?: Record<string, { min: number; by: string }> | null }[]).map((x) => ({ prod: x.production_date || null, rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, key: "o:" + x.id, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status, needs: withRunTimes(needsForOrder(ps, x as never), x.run_times), href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" })),
       ...pv.map((x) => ({ key: "a:" + x.id, kind: "a" as const, id: x.id, number: x.visual_id, customer: cn.get(x.customer_id || "") || "", name: x.nickname || "", due: x.due_date, qty: x.qty || 0, status: x.status_name, needs: needsForPrintavo(ps, { qty: x.qty, status_name: x.status_name, nickname: x.nickname, data: { groups: x.pvgroups as never } }), href: `/shop/archive/${x.id}`, owner: "" })),
       // Planner holds: jobs we know are coming, holding time before there's an order
       ...holdRows.map((h) => ({ key: "h:" + h.id, kind: "h" as const, id: h.id, number: h.order_id ? String(holdOrd.get(h.order_id)?.number ?? "HOLD") : "PLAN", customer: h.customer || "Planned", name: h.name || "Planned job", due: h.due_date, dueTime: h.due_time, firm: h.due_time != null, qty: +(h.spec as QuickJob)?.qty || 0, status: "planned", needs: [quickNeed(ps, h.spec as QuickJob)], href: h.order_id ? `/shop/orders/${h.order_id}` : "", owner: "", ...(h.order_id ? { hold: { orderId: h.order_id, detailsDue: h.details_due || null, by: h.created_by, art: h.art || "" } } : {}) })),
@@ -694,7 +694,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
    * same time"). Same customer alone is not a group (Dear Heart's Take Heart and Count Joy are separate jobs).
    */
   const oneRun = (a: Card, b: Card) => {
-    if (a.job.kind === "h" || b.job.kind === "h" || !a.job.due || a.job.due !== b.job.due) return false;
+    if (a.job.kind === "h" || b.job.kind === "h" || !a.job.due || a.job.due !== b.job.due || (a.job.prod || "") !== (b.job.prod || "")) return false;
     const aa = artsOf(a.need); return [...artsOf(b.need)].some((x) => aa.has(x));
   };
   const artOffers = useMemo(() => {
@@ -771,13 +771,14 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const bk = onCal.get(j.key + ":" + n0.type), n = bk ? restNeed(n0, bk) : n0;
       if (!n) continue;
       const near = [...artsOf(n)].flatMap((a) => artAt.get(a) || []);
-      let sug = suggest(s, n, j.due, today, ld, 30, near);
+      // a production date is the day it runs: suggested from that day on, never before
+      let sug = suggest(s, n, j.due, j.prod && j.prod > today ? j.prod : today, ld, 30, near);
       // the same art for the same in-hands date goes on the same press and day as the job before it, back to back,
       // when that press can print it and the day is before in-hands (Nov 11, Nick: Nine18's AMS jobs were spread over
       // three presses after "book all")
-      const mate = j.due && j.kind !== "h" ? [...artsOf(n)].map((a) => mates.get(a + "|" + j.due)).find(Boolean) : undefined;
+      const mate = j.due && j.kind !== "h" ? [...artsOf(n)].map((a) => mates.get(a + "|" + j.due + "|" + (j.prod || ""))).find(Boolean) : undefined;
       if (sug && mate && (mate.m.id !== sug.machine.id || mate.d !== sug.day) && fits(n, mate.m) && (!j.due || mate.d <= j.due)) sug = { ...sug, machine: mate.m, day: mate.d, minutes: estimate(s, n, mate.m).minutes };
-      if (sug && j.due) for (const a of artsOf(n)) if (!mates.has(a + "|" + j.due)) mates.set(a + "|" + j.due, { m: sug.machine, d: sug.day });
+      if (sug && j.due) for (const a of artsOf(n)) if (!mates.has(a + "|" + j.due + "|" + (j.prod || ""))) mates.set(a + "|" + j.due + "|" + (j.prod || ""), { m: sug.machine, d: sug.day });
       if (sug) { (ld[sug.machine.id] ||= {})[sug.day] = (ld[sug.machine.id]?.[sug.day] || 0) + sug.minutes; putArt(n, sug.machine.id, sug.day, j.number); } // later jobs see this one's room taken
       out.push({ job: j, need: n, sug });
     }
@@ -1084,11 +1085,14 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     // across every press with room.
     const artAt = new Map<string, { m: string; end: number }>();
     for (const it of order) {
-      let best = bestFor(it.need, it.left, nowAbs, it.cur, dueAbs(it.job), it.job.key);
-      const mate = it.job.due && it.job.kind !== "h" ? [...artsOf(it.need)].map((a) => artAt.get(a + "|" + it.job.due)).find(Boolean) : undefined;
+      // a production date is the day it runs (Nine18's weekly run, Nov 11, Nick: "everything that shows a production date
+      // of next Tuesday should be on next Tuesday"): it starts that day, never before
+      const from0 = it.job.prod ? Math.max(nowAbs, ord(it.job.prod) * 1440) : nowAbs;
+      let best = bestFor(it.need, it.left, from0, it.cur, dueAbs(it.job), it.job.key);
+      const mate = it.job.due && it.job.kind !== "h" ? [...artsOf(it.need)].map((a) => artAt.get(a + "|" + it.job.due + "|" + (it.job.prod || ""))).find(Boolean) : undefined;
       if (mate && best && best.m.id !== mate.m) {
         const mm = ms.find((x) => x.id === mate.m);
-        if (mm && fits(it.need, mm)) { const minutes = Math.max(15, estimate(s, it.need, mm).minutes * it.left), r = sim(mm, mate.end, minutes, it.job.key); if (r.end <= dueAbs(it.job)) best = { m: mm, start: r.start, end: r.end, minutes, ot: r.ot }; }
+        if (mm && fits(it.need, mm)) { const minutes = Math.max(15, estimate(s, it.need, mm).minutes * it.left), r = sim(mm, Math.max(mate.end, from0), minutes, it.job.key); if (r.end <= dueAbs(it.job)) best = { m: mm, start: r.start, end: r.end, minutes, ot: r.ot }; }
       }
       if (!best) { skipped.push(it); continue; }
       const locs = locsOf(it.need);
@@ -1115,7 +1119,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         undo.forEach((f) => f());
       }
       occupy(best.m.id, best.start, best.end); push(jobBusy, it.job.key, [best.start, best.end]);
-      if (it.job.due) for (const a of artsOf(it.need)) artAt.set(a + "|" + it.job.due, { m: best.m.id, end: best.end });
+      if (it.job.due) for (const a of artsOf(it.need)) artAt.set(a + "|" + it.job.due + "|" + (it.job.prod || ""), { m: best.m.id, end: best.end });
       out.push({ it, mach: best.m, day: fromOrd(Math.floor(best.start / 1440)), startAbs: best.start, endAbs: best.end, end: endDayOf(best.end), minutes: best.minutes, late: best.end > dueAbs(it.job), locs: it.slot?.locations?.length ? it.slot.locations : locsFor(it.job, it.need), part: 1, parts: 1 });
     }
     // each press/day numbered in start-time order, with the work that stays put and hasn't started (a firm job on

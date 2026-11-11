@@ -217,3 +217,5 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
   Jobs back to back show as one group only when they're one run: the same artwork and the same in-hands date (`oneRun`;
   Nick, Nov 11: same customer alone is never a group).
+  An order's production date is the day it runs (Nine18's weekly AMS run; Nick, Nov 11): Re-plan and Ready To Schedule
+  put it on that day or later, never earlier (`Job.prod`).
