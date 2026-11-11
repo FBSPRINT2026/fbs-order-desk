@@ -17,6 +17,7 @@ import SameArtPrompt from "@/components/SameArtPrompt";
 import ArtboardPrompt from "@/components/ArtboardPrompt";
 import StockInkSeed from "@/components/StockInkSeed";
 import ChatPing from "@/components/ChatPing";
+import ScreenPin from "@/components/ScreenPin";
 import MockupFreshener from "@/components/MockupFreshener";
 import DockSizer from "@/components/DockSizer";
 
@@ -62,6 +63,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       <StockInkSeed rows={(stockInks || []) as { name: string; hex: string; line: string }[]} />
       <div className="app">
         <ChatPing />
+        <ScreenPin />
         <ShopNav email={email} firstName={firstName} fullName={full} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
         <main className="main">{showSpanish && <div className="top-r"><Translate /></div>}<CrewGuard /><PullRefresh>{children}</PullRefresh></main>
         <Cheer on={!viewAs && !!me?.cheer} name={firstName} />

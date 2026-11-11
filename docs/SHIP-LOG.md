@@ -144,3 +144,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 2:04pm · 1.3.347 · Nick · Time clock: punches read the way they went: doubles within 15 min count once, an 'out' pressed to come back from lunch is the return, a fix's extra break-end or early out doesn't count, so fixed days drop off
 - Nov 11 2:06pm · 1.3.349 · Nick · Schedule right-click menus: each item is an icon, a bold name and a short line under it, kept inside the menu and on screen
 - Nov 11 2:07pm · 1.3.350 · Nick · Customer message pop-ups only for the people who answer customers (new User Access permission, on for owner and admins, off for the crew)
+- Nov 11 2:10pm · 1.3.351 · Nick · Pay screens (Time Clock, Employees, Payroll) ask for a PIN for crew who run the time clock; first visit makes it, 10 minutes idle or leaving locks it
