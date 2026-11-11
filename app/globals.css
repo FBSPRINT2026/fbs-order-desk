@@ -22201,3 +22201,8 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rvd-sub td{background:var(--surface-2);color:var(--ink-3);font-size:12.5px;font-weight:700}
 .rvd-done td{opacity:.55}
 .rvd-done td.rvd-act{opacity:1}
+.rvd-kind{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:12px 12px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rvd-kind button{all:unset;cursor:pointer;text-align:center;padding:9px 6px;font-weight:700;font-size:13.5px;color:var(--ink-2);border-left:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvd-kind button:first-child{border-left:0}
+.rvd-kind button.on{background:var(--accent);color:#fff}
+.rvd-kind button.on .rvd-n{background:color-mix(in srgb,#fff 25%,transparent);color:#fff}

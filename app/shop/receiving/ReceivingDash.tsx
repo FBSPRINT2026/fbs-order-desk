@@ -5,7 +5,7 @@ import CheckinModal from "@/components/CheckinModal";
 import GoodsIssues from "@/components/GoodsIssues";
 import { useSticky } from "@/lib/useSticky";
 import { createClient } from "@/lib/supabase/client";
-import type { CheckJob, JobState } from "@/lib/checkinShared";
+import type { CheckJob, JobKind, JobState } from "@/lib/checkinShared";
 
 /**
  * Goods & Receiving's dashboard (Nov 11 2026, Nick, option E: "the first thing you should see… is what needs to be
@@ -34,6 +34,8 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   const [started, setStarted] = useState<Set<string>>(new Set());
   const [err, setErr] = useState("");
   const [day, setDay] = useSticky<Day>("receiving.dashDay", "today");
+  // screen print / embroidery / heat press (Nov 11, Nick, option 1: a full-width switch over the list)
+  const [kind, setKind] = useSticky<"all" | JobKind>("receiving.dashKind", "all");
   const [truckDay, setTruckDay] = useSticky<"today" | "tomorrow">("receiving.truckDay", "today");
   const [q, setQ] = useState("");
   const [count, setCount] = useState<CheckJob | null>(null);
@@ -59,8 +61,11 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   useEffect(() => { load(); }, [load]);
 
   // each job sits on the day it runs on the press (the Check-In's own day); a goods problem stays on Today
-  const dayOf = (j: CheckJob): Day => (!j.day || j.day <= today || j.state === "issue" ? "today" : j.day === d1 ? "tomorrow" : j.day === d2 ? "next" : "later");
-  const live = useMemo(() => (jobs || []).filter((j) => !started.has(j.ref)), [jobs, started]);
+  // not on the schedule yet: Later (Nov 11, Nick)
+  const dayOf = (j: CheckJob): Day => (j.state === "issue" || (j.start && j.start <= today) ? "today" : !j.start ? "later" : j.start === d1 ? "tomorrow" : j.start === d2 ? "next" : "later");
+  const all = useMemo(() => (jobs || []).filter((j) => !started.has(j.ref)), [jobs, started]);
+  const kindN = (k: "all" | JobKind) => all.filter((j) => j.state !== "checked" && (k === "all" || j.kind === k)).length;
+  const live = useMemo(() => all.filter((j) => kind === "all" || j.kind === kind), [all, kind]);
   const open = useMemo(() => live.filter((j) => j.state !== "checked"), [live]);
   const counted = useMemo(() => live.filter((j) => j.state === "checked"), [live]);
   const n = (d: Day) => (d === "counted" ? counted.length : open.filter((j) => dayOf(j) === d).length);
@@ -88,13 +93,13 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
     );
   };
 
-  const tmr = ymd(new Date(new Date(today + "T12:00:00").getTime() + 86400000));
-  const d1Label = d1 === tmr ? "Tomorrow" : wkd(d1);
-  const DAYS: [Day, string][] = [["today", "Today"], ["tomorrow", d1Label], ["next", wkd(d2)], ["later", "Later"]];
+  const DAYS: [Day, string][] = [["today", "Today"], ["tomorrow", "Tomorrow"], ["next", "Next day"], ["later", "Later"]];
+  const KINDS: ["all" | JobKind, string][] = [["all", "All"], ["sp", "Screen print"], ["emb", "Embroidery"], ["hp", "Heat press"]];
   return (
     <div className="rvd">
       <div className="rvd-main">
         <section className="panel">
+          <div className="rvd-kind" role="tablist">{KINDS.map(([k, l]) => <button key={k} type="button" className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{l}<span className="rvd-n">{jobs ? kindN(k) : "…"}</span></button>)}</div>
           <div className="rvd-bar" data-toolbar>
             <div className="chips">{DAYS.map(([k, l]) => <button key={k} type="button" className={"chip" + (!q.trim() && day === k ? " on" : "")} onClick={() => { setDay(k); setQ(""); }}>{l}<span className="rvd-n">{jobs ? n(k) : "…"}</span></button>)}</div>
             <div className="rvd-bar-r"><button type="button" className={"chip" + (!q.trim() && day === "counted" ? " on" : "")} onClick={() => { setDay("counted"); setQ(""); }}>✓ Counted<span className="rvd-n">{jobs ? n("counted") : "…"}</span></button>
@@ -133,7 +138,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
       </div>
       <aside className="rvd-side">
         <section className="panel rvd-trk">
-          <div className="panel-h"><h2>Trucks</h2><div className="chips">{(["today", "tomorrow"] as const).map((k) => <button key={k} type="button" className={"chip" + (truckDay === k ? " on" : "")} onClick={() => setTruckDay(k)}>{k === "today" ? "Today" : d1Label}</button>)}</div></div>
+          <div className="panel-h"><h2>Trucks</h2><div className="chips">{(["today", "tomorrow"] as const).map((k) => <button key={k} type="button" className={"chip" + (truckDay === k ? " on" : "")} onClick={() => setTruckDay(k)}>{k === "today" ? "Today" : "Tomorrow"}</button>)}</div></div>
         </section>
         {truck("ss", "S&S", "ss")}
         {truck("sanmar", "SanMar", "sm")}
