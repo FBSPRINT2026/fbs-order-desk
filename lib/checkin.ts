@@ -162,6 +162,13 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
       if (g === "received") j.state = "checked"; else if (g === "partial" && j.state !== "issue") j.state = "partial";
     }
   }
+  // the order's goods marked counted here (order_goods "received": a count in, Where things stand, the order's Goods tab)
+  // count as counted, the same as a check-in (Nov 11, Nick: "I still only see 6 jobs marked as counted")
+  if (oIds.length) {
+    const { data: og } = await admin.from("order_goods").select("order_id, status").in("order_id", oIds);
+    const gs = new Map(((og || []) as { order_id: string; status: string }[]).map((x) => [x.order_id, x.status]));
+    for (const j of jobs) { const st = gs.get(j.ref); if (st === "received" && j.state !== "issue") j.state = "checked"; }
+  }
   // mixed boxes: a box that also holds goods for another job
   const mix = await mixedBoxes(admin, lines.map((l) => l.tracking)).catch(() => new Map<string, MixedBox>());
   if (mix.size) for (const j of jobs) {
