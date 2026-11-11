@@ -21879,3 +21879,4 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msf-tip{position:absolute;left:calc(100% - 8px);z-index:20;display:flex;flex-direction:column;gap:1px;background:var(--ink);color:#fff;border-radius:7px;padding:6px 9px;font-size:11.5px;line-height:1.35;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.2);pointer-events:none}
 .msf-tip .bad{color:#ff9d9d}
 .ms-calm .msf-card{transition:top .12s ease,height .12s ease}
+.ms-calm .msf-card.msf-ghost{opacity:.35;border-style:dashed!important;box-shadow:none!important;pointer-events:none}

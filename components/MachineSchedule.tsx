@@ -1592,7 +1592,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const name = g.c.job.name || g.c.need.label;
     const num = <b className="msf-n">#{g.c.job.number}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
     return (
-      <button key={key} type="button" draggable className={cls(g) + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
+      <button key={key} type="button" draggable className={cls(g) + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
         onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
         <span className="msf-1">{num}{tagOf(g)}{flags(g.c.job)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()}</span> : null}</span>
         {lines === 2 ? <span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : ""}<span className="msf-x">{g.c.job.customer ? " · " : ""}{gl.colors} · {gl.units.toLocaleString()} · {gl.run}</span></span> : null}
@@ -1617,15 +1617,22 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           </div>
           {machines.map((m, mi) => {
             // this press's jobs across the days shown, a job that carries over the day break joined into one card
-            const items: { g: Seg; y1: number; y2: number }[] = [];
-            flowBlocks.forEach((bk, bi) => {
-              for (const x of joined(m, bk.d, pvLay?.by)) {
-                if (x.end <= bk.a || x.start >= bk.b) continue;
-                const y1 = flowY(bi, x.start), y2 = flowY(bi, x.end), last = items[items.length - 1];
-                if (last && last.g.c.key === x.g.c.key && bi > 0 && Math.abs(last.y2 - flowTop[bi]) < 3 * FLOW_PX) last.y2 = y2;
-                else items.push({ g: x.g, y1, y2 });
-              }
-            });
+            const itemsOf = (by?: Map<string, Seg[]>) => {
+              const items: { g: Seg; y1: number; y2: number }[] = [];
+              flowBlocks.forEach((bk, bi) => {
+                for (const x of joined(m, bk.d, by)) {
+                  if (x.end <= bk.a || x.start >= bk.b) continue;
+                  const y1 = flowY(bi, x.start), y2 = flowY(bi, x.end), last = items[items.length - 1];
+                  if (last && last.g.c.key === x.g.c.key && bi > 0 && Math.abs(last.y2 - flowTop[bi]) < 3 * FLOW_PX) last.y2 = y2;
+                  else items.push({ g: x.g, y1, y2 });
+                }
+              });
+              return items;
+            };
+            const items = itemsOf(pvLay?.by);
+            // the dragged card stays where it was (faded) while its preview shows where it would go: the browser drops a
+            // drag whose card leaves the page
+            const ghost = pvLay && drag?.card && drag.card.machine.id === m.id ? itemsOf().filter((x) => x.g.c.key === drag.card!.key) : [];
             return (
               <div key={m.id} className={"msf-col" + (over === "f:" + m.id ? (canDrop(m) ? " over" : " no") : "")} style={{ height: flowH, backgroundSize: `100% ${FLOW_PX}px`, gridColumn: mi + 2 }}
                 onDragOver={(e) => { e.preventDefault(); if (over !== "f:" + m.id) setOver("f:" + m.id); if (!drag || drag.group) return; const r = e.currentTarget.getBoundingClientRect(), y = e.clientY - r.top, p = flowAt(y), b = dropBefore(m, p.d, p.min); if (!pv || pv.mid !== m.id || pv.d !== p.d || pv.before !== b || Math.abs(pv.y - y) > 40) setPv({ mid: m.id, d: p.d, before: b, y }); }}
@@ -1647,7 +1654,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     </Fragment>
                   );
                 })}
-                {items.map((x) => flowCard(x.g, x.y1, x.y2, x.g.c.key + x.g.part))}
+                {ghost.map((x) => flowCard(x.g, x.y1, x.y2, x.g.c.key + x.g.part, " msf-ghost"))}
+                {items.map((x) => flowCard(x.g, x.y1, x.y2, (x.g.c.key === pvKey && pvLay ? "pv:" : "") + x.g.c.key + x.g.part))}
                 {pvLay && pv?.mid === m.id && (() => {
                   // the drop, said in one line: where it lands, what it pushes, who'd miss in-hands
                   const me2 = items.find((x) => x.g.c.key === pvKey); if (!me2) return null;
