@@ -428,6 +428,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   // the "schedule too tight" prompt shows once a day (again if more jobs go late)
   const [toolsOpen, setToolsOpen] = useSticky("cal.toolsOpen", true);
   const [tightOpen, setTightOpen] = useSticky("cal.tightOpen", false);
+  // the assistant's tips take turns every 8 seconds, held while the pointer is on them
+  const [tipI, setTipI] = useState(0), [tipHold, setTipHold] = useState(false);
+  useEffect(() => { if (tipHold) return; const t = setInterval(() => setTipI((i) => i + 1), 8000); return () => clearInterval(t); }, [tipHold]);
   const [listOpen, setListOpen] = useState(""); // a same-art list opened to show all its jobs
   const [grpEdit, setGrpEdit] = useState<Card[] | null>(null); // a same-art run's time being edited
   const [restart, setRestart] = useState(false); // asking: take every not-started job off the calendar?
@@ -2171,105 +2174,49 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         {toolsOpen && <>
           {/* one slim row of tools: production (the production manager's day), shifts & equipment, sales; each its own color */}
           {/* left: the tools; right: Shop AI Assistant, how the shop is doing and what needs attention */}
-          <div className="ms-tools-2">
-            <div className="ms-tpanel">
-              <div className="ms-pulse-h">Tools</div>
-          <div className="ms-tbar">
-            <div className="ms-tb-g ms-tb-prod">
-              <span className="ms-tb-l">Production</span>
-              <button type="button" className="ms-tb" title="What's started, done or paused today" onClick={() => setCheckin(true)}>Update Progress</button>
-              <button type="button" className="ms-tb" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}>Re-plan</button>
-              <button type="button" className="ms-tb" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}>Overtime</button>
-              <button type="button" className="ms-tb" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}>Renormalize</button>
+          {/* option G (Nov 11, Nick): the tools on the left (2/3), one short AI tip at a time on the right (1/3) */}
+          <div className="msk">
+            <div className="msk-tools">
+              <div className="msk-h">Scheduling tools</div>
+              <div className="msk-row">
+                <button type="button" className="btn primary msk-b" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}><SkIco d="replan" />Re-plan</button>
+                <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Update progress</button>
+                <button type="button" className={"btn msk-b" + (tight.length ? " bad" : "")} title="Jobs that won't make their in-hands date" onClick={() => setTightOpen(!tightOpen)}><SkIco d="late" />Late jobs<span className="msk-n">{tight.length}</span></button>
+                <button type="button" className="btn msk-b" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}><SkIco d="ot" />Overtime</button>
+                <button type="button" className="btn msk-b" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}><SkIco d="norm" />Renormalize</button>
+                <button type="button" className="btn msk-b" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}><SkIco d="shift" />Shift</button>
+                <button type="button" className="btn msk-b" title="Maintenance, repairs, an employee out" onClick={() => setDownEdit({})}><SkIco d="down" />Downtime</button>
+                <button type="button" className={"btn msk-b" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" disabled={!canEquip} onClick={() => setEqOpen(true)}><SkIco d="eq" />Equipment{eqIssues.length ? <span className="msk-n">{eqIssues.length}</span> : null}</button>
+                <button type="button" className="btn msk-b" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}><SkIco d="when" />When can we {VERB[typeF || "screen"].v.toLowerCase()} it?</button>
+                <button type="button" className="btn msk-b" title="Hold time for jobs you know are coming" onClick={() => setPlanOpen(true)}><SkIco d="plan" />Planner</button>
+              </div>
+              {tightOpen && tight.length > 0 && <ul className="ms-alert-l msk-late">{tight.map((t) => <li key={t.job.key}><Link href={t.job.href}>#{t.job.number}</Link><span>{who(t.job)}</span><small>{t.why}</small></li>)}</ul>}
             </div>
-            <div className="ms-tb-g ms-tb-eq">
-              <span className="ms-tb-l">Shifts &amp; equipment</span>
-              <button type="button" className="ms-tb" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}>+ Shift</button>
-              <button type="button" className="ms-tb" title="Maintenance, repairs, an employee out" onClick={() => setDownEdit({})}>+ Downtime</button>
-              <button type="button" className={"ms-tb" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" disabled={!canEquip} onClick={() => setEqOpen(true)}>Equipment{eqIssues.length ? <span className="ms-tb-n">{eqIssues.length}</span> : null}</button>
-            </div>
-            <div className="ms-tb-g ms-tb-sales">
-              <span className="ms-tb-l">Sales</span>
-              <button type="button" className="ms-tb" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}>When Can We {VERB[typeF || "screen"].v} It?</button>
-              <button type="button" className="ms-tb" title="Hold time for jobs you know are coming" onClick={() => setPlanOpen(true)}>Planner</button>
-            </div>
-          </div>
-
-            </div>
-            <div className="ms-pulse" aria-label="Shop AI Assistant">
-              <div className="ms-pulse-h"><span aria-hidden>✦</span> Shop AI Assistant</div>
             {(() => {
-              // the assistant's read on the shop: a status ring (share of jobs on time) and a plain sentence or two
-              const keys = new Set<string>();
-              for (const c of cards) if (c.slot && c.slot.status !== "done" && c.job.kind !== "h" && (!typeF || c.need.type === typeF)) keys.add(c.job.key);
-              for (const t of tray) keys.add(t.job.key);
-              const total = keys.size, late = tight.length, onTime = Math.max(0, total - late), pct = total ? onTime / total : 1;
-              const rows = otReport(payWeekStart(today)), otNeed = rows.reduce((t, r) => t + r.used, 0);
-              const otWho = rows.filter((r) => r.used > 0).map((r) => crewOf(r.m)?.leader || shortName(r.m));
-              const wkd = (d: string) => [0, 6].includes(new Date(d + "T12:00:00Z").getUTCDay());
-              const wk = extras.filter((x) => x.day >= today && wkd(x.day) && machines.some((m) => m.id === x.machine)).sort((x, y) => x.day.localeCompare(y.day));
-              const lvl = late ? "bad" : otNeed > 0 || eqIssues.length || wk.length ? "warn" : "ok";
+              // the assistant's tips, most pressing first; one shows at a time and they take turns
+              type Tip = { lvl: "bad" | "warn" | "ok"; t: string; s: string; act?: [string, () => void] };
+              const tips: Tip[] = [];
               const and = (xs: string[]) => xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
-              const lines: string[] = [];
-              if (late) lines.push(wk.length ? `Even with the weekend shift ${dayLbl(wk[0].day)}, you're short — check Recommendations, or split jobs across presses.` : `You're trending toward a weekend shift — check Recommendations, or split jobs across presses.`);
-              if (otNeed > 0) lines.push(`Trending toward overtime: ${and(otWho)} ${otWho.length === 1 ? "needs" : "need"} about ${fmtMin(otNeed)} past 40 hours this pay week.`);
-              if (wk.length && !late) lines.push(`A weekend shift is booked ${dayLbl(wk[0].day)}.`);
-              if (eqIssues.length) lines.push(`${and(eqIssues.map((m) => shortName(m)))} ${eqIssues.length === 1 ? "has" : "have"} an equipment issue.`);
-              const title = lvl === "bad" ? `${late} job${late === 1 ? "" : "s"} won't make ${late === 1 ? "its" : "their"} in-hands date.` : lvl === "warn" ? "Jobs are on time, with a heads up." : "You're good.";
-              if (lvl === "ok" && !lines.length) lines.push("Every job makes its in-hands date and nobody needs overtime this week.");
-              const R = 20, C = 2 * Math.PI * R;
+              const nums = (xs: { job: { number: string | number } }[]) => xs.slice(0, 3).map((x) => "#" + x.job.number).join(", ") + (xs.length > 3 ? ` +${xs.length - 3}` : "");
+              if (tight.length) tips.push({ lvl: "bad", t: `${tight.length} job${tight.length === 1 ? " won't make its" : "s won't make their"} in-hands date`, s: `${nums(tight)}. See what would fix it.`, act: ["Recommendations", () => setAdvise({ opts: whatIfs(), late: tight.map((t) => ({ job: "#" + t.job.number, customer: t.job.customer || t.job.name, inHands: t.job.due ? dayLbl(t.job.due) : "none", why: t.why })), lateBefore: tight.length })] });
+              const rows = otReport(payWeekStart(today)), ot = rows.reduce((t, r) => t + r.w.ot, 0), unused = rows.reduce((t, r) => t + r.unused, 0);
+              if (ot > 0) { const w = rows.filter((r) => r.w.ot).sort((a, b) => b.w.ot - a.w.ot); tips.push({ lvl: "warn", t: `${fmtMin(ot)} of overtime this pay week`, s: `${and(w.map((r) => `${crewOf(r.m)?.leader || shortName(r.m)} ${fmtMin(r.w.ot)}`))}${unused > 30 ? ` · ${fmtMin(unused)} of it has no jobs` : ""}.`, act: ["Details", () => setOtOpen(true)] }); }
+              const d1 = Array.from({ length: 7 }, (_, i) => addDay(today, i + 1)).find((d) => machines.some((m) => shiftOn(m, d)));
+              if (d1) { const idle = machines.filter((m) => shiftOn(m, d1)).map((m) => ({ m, free: capacityMin(s, m, d1) - used(m, d1) })).filter((x) => x.free >= 120 && cards.some((c) => c.day > d1 && c.slot && c.slot.status === "scheduled" && !c.job.firm && c.job.kind !== "h" && fits(c.need, x.m)));
+                if (idle.length) tips.push({ lvl: "warn", t: idle.length === 1 ? `${shortName(idle[0].m)} has ${fmtMin(idle[0].free)} open ${d1 === addDay(today, 1) ? "tomorrow" : dayLbl(d1)}` : `${idle.length} presses have open time ${d1 === addDay(today, 1) ? "tomorrow" : dayLbl(d1)}`, s: "Later jobs could move up into it.", act: ["Re-plan", () => setReplan({ why: "Pull later jobs forward into the open time?" })] }); }
+              for (const o of artOffers) tips.push({ lvl: "warn", t: `${o.cards.length} jobs print the same art`, s: `Run them together on ${shortName(o.machine)} ${dayLbl(o.day)}${o.saves ? `, about ${fmtMin(o.saves)} less setup` : ""}.`, act: ["Run together", () => runTogether(o)] });
+              if (eqIssues.length) tips.push({ lvl: "warn", t: `${and(eqIssues.map((m) => shortName(m)))} ${eqIssues.length === 1 ? "has" : "have"} an equipment issue`, s: "Jobs there are planned around it.", act: canEquip ? ["Details", () => setEqOpen(true)] : undefined });
+              if (tray.length) tips.push({ lvl: "warn", t: `${tray.length} job${tray.length === 1 ? "" : "s"} ready to schedule`, s: "Drag onto a press, or Re-plan books them.", act: ["Re-plan", () => { setReplanTray(true); setReplan({ why: "" }); }] });
+              if (!tips.length) tips.push({ lvl: "ok", t: "You're good", s: "Every job makes its in-hands date and nobody needs overtime this week." });
+              const i = tipI % tips.length, tp = tips[i];
               return (
-                <div className={"ms-as " + lvl}>
-                  <div className="ms-as-ring" title={`${onTime} of ${total} jobs on time`}>
-                    <svg viewBox="0 0 52 52" width="52" height="52" aria-hidden><circle cx="26" cy="26" r={R} className="trk" /><circle cx="26" cy="26" r={R} className="val" strokeDasharray={`${C * pct} ${C}`} transform="rotate(-90 26 26)" /></svg>
-                    <span className="ms-as-ic" aria-hidden>{lvl === "ok" ? "✓" : "!"}</span>
-                  </div>
-                  <div className="ms-as-b">
-                    <div className="ms-as-t">{title}</div>
-                    {lines.map((l, i) => <div key={i} className="ms-as-s">{l}</div>)}
-                    <div className="ms-as-chips">
-                      <span className={late ? "bad" : "ok"}><i />On time {onTime}/{total}</span>
-                      <span className={otNeed > 0 ? "warn" : "ok"}><i />{otNeed > 0 ? `Overtime ${fmtMin(otNeed)}` : "No overtime needed"}</span>
-                      <span className={wk.length ? "warn" : late ? "warn" : "ok"}><i />{wk.length ? `Weekend ${dayLbl(wk[0].day).replace(",", "")}` : late ? "Weekend may be needed" : "No weekend"}</span>
-                      <span className={eqIssues.length ? "warn" : "ok"}><i />{eqIssues.length ? `Equipment: ${eqIssues.length} issue${eqIssues.length === 1 ? "" : "s"}` : "Equipment OK"}</span>
-                    </div>
-                  </div>
+                <div className={"msai " + tp.lvl} aria-label="Shop AI Assistant" onMouseEnter={() => setTipHold(true)} onMouseLeave={() => setTipHold(false)}>
+                  <div className="msai-h"><span aria-hidden>✦</span> Shop assistant<span className="spacer" />{tips.length > 1 && <><span className="msai-dots">{tips.map((_, k) => <i key={k} className={k === i ? "on" : ""} />)}</span><button type="button" className="msai-nav" aria-label="Previous tip" onClick={() => setTipI((i - 1 + tips.length) % tips.length)}>‹</button><button type="button" className="msai-nav" aria-label="Next tip" onClick={() => setTipI((i + 1) % tips.length)}>›</button></>}</div>
+                  <div className="msai-b"><div className="msai-t">{tp.t}</div><div className="msai-s">{tp.s}</div></div>
+                  {tp.act && <button type="button" className="btn primary sm msai-go" onClick={tp.act[1]}>{tp.act[0]}</button>}
                 </div>
               );
             })()}
-          {(() => { const rows = otReport(payWeekStart(today)), ot = rows.reduce((t, r) => t + r.w.ot, 0); if (!rows.length) return null; const pay = rows.reduce((t, r) => t + (r.pay || 0), 0), unused = rows.reduce((t, r) => t + r.unused, 0), known = rows.every((r) => r.pay != null); return (
-            <div className={"ms-otline" + (ot ? " on" : "")}>
-              <span className="ms-ot-i" aria-hidden>⏱</span>
-              <span><b>{ot ? `${fmtMin(ot)} of overtime this pay week` : "No overtime this pay week"}</b>{ot ? <> · {rows.filter((r) => r.w.ot).map((r) => `${crewOf(r.m)?.leader || shortName(r.m)} ${fmtMin(r.w.ot)}`).join(", ")}{canPay && pay && known ? ` · ~$${Math.round(pay).toLocaleString()} overtime pay` : ""}{unused > 30 ? ` · ${fmtMin(unused)} of it has no jobs booked` : ""}</> : null}<small> · pay week {dayLbl(payWeekStart(today))} – {dayLbl(addDay(payWeekStart(today), 6))}</small></span>
-              <span className="spacer" />
-              <button type="button" className="linkbtn" onClick={() => setOtOpen(true)}>Details</button>
-            </div>
-          ); })()}
-          {(() => {
-            // a press with hours open on the next working day while unstarted work waits on later days: Re-plan fills it
-            const d1 = Array.from({ length: 7 }, (_, i) => addDay(today, i + 1)).find((d) => machines.some((m) => shiftOn(m, d))); if (!d1) return null;
-            const idle = machines.filter((m) => shiftOn(m, d1)).map((m) => ({ m, free: capacityMin(s, m, d1) - used(m, d1) })).filter((x) => x.free >= 120 && cards.some((c) => c.day > d1 && c.slot && c.slot.status === "scheduled" && !c.job.firm && c.job.kind !== "h" && fits(c.need, x.m)));
-            if (!idle.length) return null;
-            return <div className="ms-otline ms-idle" title={idle.map((x) => `${shortName(x.m)}${crewOf(x.m) ? ` (${crewOf(x.m)!.leader})` : ""}: ${fmtMin(x.free)} open`).join("\n")}><span className="ms-ot-i" aria-hidden>↺</span><span className="ms-idle-t"><b>{idle.length === 1 ? `${shortName(idle[0].m)} has ${fmtMin(idle[0].free)} open` : `${idle.length} machines have open time`} {dayLbl(d1).split(",")[0] === dayLbl(addDay(today, 1)).split(",")[0] ? "tomorrow" : dayLbl(d1)}</b> while later jobs wait{idle.length > 1 ? <span className="faint"> · {idle.map((x) => `${shortName(x.m)} ${fmtMin(x.free)}`).join(", ")}</span> : null}</span><span className="spacer" /><button type="button" className="btn sm ghost" onClick={() => setReplan({ why: "Pull later jobs forward into the open time?" })}>Re-plan</button></div>;
-          })()}
-          {tight.length > 0 ? (
-            <div className="ms-alert">
-              <div className="ms-alert-h">
-                <span className="ms-alert-i" aria-hidden>!</span>
-                <div className="ms-alert-t"><b>Late jobs ({tight.length})</b><span>on the regular schedule</span></div>
-                <span className="spacer" />
-                <button type="button" className="linkbtn" onClick={() => setTightOpen(!tightOpen)}>{tightOpen ? "Hide jobs" : "Which jobs?"}</button>
-                <button type="button" className="btn sm ms-ai-b" onClick={() => setAdvise({ opts: whatIfs(), late: tight.map((t) => ({ job: "#" + t.job.number, customer: t.job.customer || t.job.name, inHands: t.job.due ? dayLbl(t.job.due) : "none", why: t.why })), lateBefore: tight.length })}>✦ Recommendations</button>
-                <button type="button" className="btn sm ghost" onClick={() => setReplan({ why: "OK to split jobs (fronts and backs as separate runs) where that makes an in-hands date?", split: true })}>Split Jobs</button>
-                <button type="button" className="btn sm ghost" onClick={() => setShiftEdit(true)}>Add Weekend Shift</button>
-              </div>
-              {tightOpen && <ul className="ms-alert-l">{tight.map((t) => <li key={t.job.key}><Link href={t.job.href}>#{t.job.number}</Link><span>{who(t.job)}</span><small>{t.why}</small></li>)}</ul>}
-            </div>
-          ) : null}
-
-            {artOffers.map((o) => <div key={o.key} className="ms-otline msar-offer"><span className="ms-ot-i" aria-hidden>🔗</span><span className="ms-idle-t"><b>{o.cards.length} jobs print the same art</b> but are booked apart<span className="faint"> · {o.cards.map((c) => `#${c.job.number}`).join(", ")} · run them together on {shortName(o.machine)} {dayLbl(o.day)}{o.saves ? `, about ${fmtMin(o.saves)} less setup` : ""}</span></span><span className="spacer" /><button type="button" className="btn sm" onClick={() => runTogether(o)}>Run together</button></div>)}
-            {eqIssues.length > 0 && <div className="ms-otline"><span className="ms-ot-i" aria-hidden>⚙</span><span className="ms-idle-t"><b>{eqIssues.map((m) => shortName(m)).join(", ")}</b> {eqIssues.length === 1 ? "has" : "have"} an equipment issue<span className="faint"> · {eqIssues.map((m) => m.issue!.down ? `${shortName(m)} down` : [m.issue!.colors != null ? `${shortName(m)} ${m.issue!.colors}/${m.issue!.full} ${m.type === "screen" ? "colors" : "heads"}` : "", m.issue!.flashes != null ? `${m.issue!.flashes}/${m.issue!.fullFlashes} flashes` : "", m.issue!.speed != null ? `${m.issue!.speed}% speed` : ""].filter(Boolean).join(" ")).join(" · ")}</span></span><span className="spacer" /><button type="button" className="btn sm ghost" onClick={() => canEquip && setEqOpen(true)}>Details</button></div>}
-            </div>
           </div>
           <div className={"ms-ready" + (drag?.card?.slot ? " drop-back" : "") + (over === "tray" ? " over" : "")}
             onDragOver={(e) => { if (drag?.card?.slot) { e.preventDefault(); setOver("tray"); } }} onDragLeave={() => setOver((o) => (o === "tray" ? "" : o))}
@@ -3279,4 +3226,15 @@ function CheckIn({ s, cards, segsOf, machines, crews, today, nowMin, onClose, on
       </div>
     </div>
   );
+}
+
+/** the scheduling tools' small line icons */
+const SK: Record<string, string> = {
+  replan: "M3 12a9 9 0 1 0 3-6.7M3 4v4h4", prog: "M4 19h16M6 15l4-4 3 3 5-6", late: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
+  ot: "M12 5a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 9v4l2 1M9 2h6", norm: "M4 6h16M4 12h10M4 18h6", shift: "M9 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM3 20c0-3 3-5 6-5s6 2 6 5M18 8v6m-3-3h6",
+  down: "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z", eq: "M3 7h18v10H3zM7 7V4h10v3M7 17v3h10v-3",
+  when: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4M12 14v3", plan: "M4 4h16v16H4zM4 9h16M9 9v11",
+};
+function SkIco({ d }: { d: string }) {
+  return <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={SK[d]} /></svg>;
 }

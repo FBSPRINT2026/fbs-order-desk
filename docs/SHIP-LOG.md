@@ -120,3 +120,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 11:42am · 1.3.323 · Nick · Phone menu: Shop Tools are small icons in a row again
 - Nov 11 11:43am · 1.3.324 · Nick · Suggestions inbox: other Claudes put rule and handbook ideas in docs/SUGGESTIONS.md for Nick to decide; only Nick changes the rules
 - Nov 11 12:44pm · 1.3.325 · Nick · Schedule drag: no more twitching (a card redrawn under the pointer no longer clears the preview; the dotted box holds still while the pointer is on or near it)
+- Nov 11 12:45pm · 1.3.326 · Nick · Schedule top (option G): tools with icons and names on the left (2/3), one short AI tip at a time on the right (1/3) that takes turns every 8s with arrows and a button to act

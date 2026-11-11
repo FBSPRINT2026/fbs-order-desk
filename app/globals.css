@@ -21991,3 +21991,22 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
   .side .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:22px!important;height:22px!important}
   .side .nav-tools .badge{position:absolute;top:2px;right:2px;margin:0}
 }
+/* the schedule's top (option G, Nov 11, Nick): tools 2/3, one AI tip at a time 1/3 */
+.msk{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;align-items:stretch}
+@media (max-width:900px){.msk{grid-template-columns:minmax(0,1fr)}}
+.msk-tools{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.msk-h{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+.msk-row{display:flex;flex-wrap:wrap;gap:8px}
+.msk-b{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.msk-b.bad{border-color:color-mix(in srgb,var(--danger) 45%,var(--line));color:var(--danger)}
+.msk-b.warn{border-color:color-mix(in srgb,var(--warn) 55%,var(--line))}
+.msk-n{background:var(--surface-2);color:var(--ink-2);border-radius:99px;padding:0 7px;font-size:11.5px;font-weight:700}
+.msk-b.bad .msk-n{background:var(--danger);color:#fff}
+.msk-late{margin-top:10px}
+.msai{position:relative;display:flex;flex-direction:column;gap:6px;background:linear-gradient(110deg,color-mix(in srgb,var(--accent) 7%,var(--surface)),var(--surface) 75%);border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px 12px;min-width:0}
+.msai.bad{border-left-color:var(--danger)}.msai.warn{border-left-color:var(--warn)}.msai.ok{border-left-color:var(--ok)}
+.msai-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+.msai-dots{display:flex;gap:4px;margin-right:4px}.msai-dots i{width:6px;height:6px;border-radius:50%;background:var(--line)}.msai-dots i.on{width:14px;border-radius:3px;background:var(--accent)}
+.msai-nav{all:unset;cursor:pointer;width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink-3);font-size:13px}
+.msai-b{min-width:0}.msai-t{font-size:15px;font-weight:700;color:var(--ink)}.msai-s{font-size:13px;color:var(--ink-2);margin-top:2px}
+.msai-go{align-self:flex-start}
