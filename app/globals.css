@@ -22146,3 +22146,18 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .wts-hint b{color:var(--ok)}
 .wts-ft{display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
 .wts-err{color:var(--danger);font-weight:700;font-size:13px}
+
+/* lunch and warm-up on the schedule: a thin line with a small label, no bubbles (Nov 11, Nick) */
+.msf-brk-l{position:absolute;left:0;right:0;height:0;z-index:6;border-top:2px solid color-mix(in srgb,var(--ink) 25%,transparent);pointer-events:none}
+.msf-brk-l.warm{border-top-style:dotted}
+.msf-brk-l span{position:absolute;left:6px;top:-8px;background:var(--surface);padding:0 5px;font-size:10.5px;font-weight:700;line-height:14px;color:var(--ink-3);white-space:nowrap;border-radius:3px}
+.msf-col .ms-warm,.msf-col .ms-lunch{background:transparent!important;border:0!important}
+
+/* Shift + drag: pin a job to an exact time (components/MachineSchedule.tsx; Nov 11, Nick) */
+.msf-pinning .msf-card,.msf-pinning .msf-run{opacity:.28;filter:grayscale(1)}
+.msf-pinline{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--accent);z-index:8;pointer-events:none}
+.msf-pintip{position:absolute;left:8px;z-index:9;background:var(--ink);color:#fff;border-radius:7px;padding:5px 9px;font-size:12.5px;line-height:1.3;pointer-events:none;white-space:nowrap;box-shadow:0 8px 20px rgba(20,30,50,.25)}
+.msf-pintip b{display:block;font-size:13px}
+.msf-pintip small{color:color-mix(in srgb,#fff 75%,transparent);font-size:11.5px}
+.msf-pinbar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:950;background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13.5px;box-shadow:0 10px 30px rgba(20,30,50,.3);pointer-events:none;white-space:nowrap}
+.msf-pinbar kbd{background:#fff;color:var(--ink);border-radius:4px;padding:1px 6px;font-weight:700;font-family:inherit}

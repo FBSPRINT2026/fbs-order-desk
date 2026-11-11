@@ -83,7 +83,7 @@ function glance(need: Need, minutes: number) {
 /** one day's piece of a job: clock start/end, and the work minutes it covers (less than the clock time when the press runs slow) */
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean; work: number; slow?: number };
 type View = "flow" | "split" | "timeline" | "day";
-type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number; /** a same-art run dragged by its header: every job in it moves */ group?: Card[] };
+type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number; /** a same-art run dragged by its header: every job in it moves */ group?: Card[]; /** Shift held: pin it to the exact time it's dropped at (Nov 11, Nick) */ pin?: boolean };
 type WhatIf = { id: string; kind: "split" | "ot" | "sat" | "combo"; title: string; detail: string; split: boolean; shifts: { machine: string; crew_id: string | null; day: string; start_min: number; end_min: number }[]; splits: number; lateAfter: number; stillLate: string[]; addedHours: number; cost: number };
 type WhenOpt = { m: Machine; start: number; end: number; minutes: number; ot: number; extra?: number; cost?: number; bumped?: { job: Job; late: boolean }[] };
 type WhenResult = { need: Need; minutes: number; soonest: WhenOpt | null; aggressive: WhenOpt | null; open: WhenOpt | null; slow: WhenOpt | null; noMachine: boolean };
@@ -392,6 +392,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [pvLane, setPvLane] = useState<{ job: Job; machine: Machine; day: string; startMin: number | null; minutes: number | null; carried?: string }[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [drag, setDrag] = useState<Drag | null>(null);
+  // Shift + drag (Nov 11 2026, Nick: "if I drag a job and I want it to start at a very specific time… gray out everything
+  // else… it would just put it 3 p.m. on Thursday… and lock it into that time"): where it would be pinned, by the quarter hour
+  const [pinAt, setPinAt] = useState<{ mid: string; d: string; min: number; y: number } | null>(null);
   const [over, setOver] = useState("");
   const [open, setOpen] = useState<Card | null>(null);
   const [msg, setMsg] = useState("");
@@ -623,7 +626,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const byKey = useMemo(() => new Map((jobs || []).map((j) => [j.key, j])), [jobs]);
   // a drag that ends anywhere (dropped, Esc, or its card redrawn mid-drag) always clears the live preview
   useEffect(() => {
-    const end = () => { dragAt.current = Date.now(); setPv(null); setOver(""); setDrag(null); };
+    const end = () => { dragAt.current = Date.now(); setPv(null); setPinAt(null); setOver(""); setDrag(null); };
     window.addEventListener("dragend", end); window.addEventListener("drop", end);
     return () => { window.removeEventListener("dragend", end); window.removeEventListener("drop", end); };
   }, []);
@@ -1264,7 +1267,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     } catch { /* setDragImage not supported */ }
     dragAt.current = Date.now();
     window.getSelection()?.removeAllRanges();
-    setTimeout(() => { setPv(null); setDrag(d); }, 0);
+    const pin = !!(e as unknown as MouseEvent).shiftKey && !d.group;
+    setTimeout(() => { setPv(null); setPinAt(null); setDrag(pin ? { ...d, pin } : d); }, 0);
   }
   // dropping a job puts it in the running order where it lands, right up against the job before it (no gaps):
   // it goes before the first job whose middle is below the drop point
@@ -1735,6 +1739,21 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const nextUp = at(m, d).filter((g) => g.part === 1 && g.c.key !== c.key && g.c.slot && g.c.slot.status === "scheduled").sort((a, b) => a.start - b.start)[0];
     place({ card: c }, m, d, nextUp?.c.key);
   }
+  /** Shift + drag: book it at exactly that press, day and time, locked there ("spot"); Re-plan works around it */
+  async function pinTo(dr: Drag, mach: Machine, d: string, min: number) {
+    setPinAt(null); setPv(null); setOver(""); setDrag(null);
+    const need = dr.card?.need || dr.need, job = dr.card?.job || dr.job;
+    if (!need || !job || !s) return;
+    if (!fits(need, mach)) { setMsg(`#${job.number} can't run on ${shortName(mach)}.`); return; }
+    const sb = createClient(), when = Math.round(min / 15) * 15;
+    const pos = at(mach, d).filter((x) => x.part === 1 && x.start < when && x.c.key !== dr.card?.key).length;
+    const r = dr.card?.slot
+      ? await sb.from("production_slots").update({ machine: mach.id, day: d, start_min: when, position: pos, locked: "spot", updated_at: new Date().toISOString() }).eq("id", dr.card.slot.id)
+      : await sb.from("production_slots").insert({ ...ownerCols(job), machine: mach.id, day: d, minutes: dr.card?.minutes || estimate(s, need, mach).minutes, start_min: when, position: pos, kind: need.type, label: need.label, source: "manual", locked: "spot", locations: locsFor(job, need) });
+    if (r.error) { setMsg(r.error.message); return; }
+    setMsg(`#${job.number} pinned to ${shortName(mach)} ${dayLbl(d)} ${clockLong(when)}. Re-plan works around it; right-click → Unlock to let it move.`);
+    load();
+  }
   async function lockAs(c: Card, g: Seg, kind: "spot" | "press" | "day" | "person" | null) {
     setLockMenu(null);
     const sb = createClient();
@@ -1813,7 +1832,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             // pointer slide down by the dragged job's height, and the dotted box sits in the gap. Where it goes is worked
             // out on the board as it was before the drag, so the slide can't change the answer.
             const real = itemsOf(), dragKey = drag?.card?.key;
-            const live = !!(pv && drag && !drag.group && pv.mid === m.id);
+            const live = !!(pv && drag && !drag.group && !drag.pin && pv.mid === m.id);
             const dragH = live ? Math.min(3 * FLOW_PX, Math.max(22, ((drag!.card?.minutes || (drag!.need ? estimate(s, drag!.need, m).minutes : 60)) / 60) * FLOW_PX)) : 0;
             const cand = real.filter((x) => x.g.c.key !== dragKey && x.g.part === 1 && x.g.c.slot && x.g.c.slot.status !== "done" && x.g.c.job.kind !== "h").sort((a, b) => a.y1 - b.y1);
             const insY = !live ? null : (() => { const b = pv!.before ? cand.find((x) => x.g.c.key === pv!.before) : null; if (b) return b.y1; const ls = cand.filter((x) => x.g.day === pv!.d).slice(-1)[0]; return ls ? ls.y2 : pv!.y; })();
@@ -1821,10 +1840,19 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             // the dragged card stays where it was (hidden) on its own press: the browser drops a drag whose card leaves the page
             const ghost = live && drag?.card && drag.card.machine.id === m.id ? real.filter((x) => x.g.c.key === dragKey) : [];
             return (
-              <div key={m.id} className={"msf-col" + (over === "f:" + m.id ? (canDrop(m) ? " over" : " no") : "")} style={{ height: flowH, backgroundSize: `100% ${FLOW_PX}px`, gridColumn: mi + 2 }}
+              <div key={m.id} className={"msf-col" + (drag?.pin ? " msf-pinning" : "") + (over === "f:" + m.id ? (canDrop(m) ? " over" : " no") : "")} style={{ height: flowH, backgroundSize: `100% ${FLOW_PX}px`, gridColumn: mi + 2 }}
                 onDragOver={(e) => {
                   e.preventDefault(); if (over !== "f:" + m.id) setOver("f:" + m.id);
                   if (!drag || drag.group) return;
+                  // Shift + drag: no making room, just the time it would be pinned at
+                  if (drag.pin || e.shiftKey) {
+                    const r0 = e.currentTarget.getBoundingClientRect(), p0 = flowAt(e.clientY - r0.top), mn = Math.round(p0.min / 15) * 15;
+                    const bi0 = flowBlocks.findIndex((b) => b.d === p0.d && mn >= b.a && mn <= b.b), y0 = bi0 >= 0 ? flowY(bi0, mn) : e.clientY - r0.top;
+                    if (!drag.pin) setDrag({ ...drag, pin: true });
+                    if (pv) setPv(null);
+                    if (!pinAt || pinAt.mid !== m.id || pinAt.d !== p0.d || pinAt.min !== mn) setPinAt({ mid: m.id, d: p0.d, min: mn, y: y0 });
+                    return;
+                  }
                   // where the pointer is: over a job's top half it goes before that job, its bottom half after it; over the
                   // dotted box it stays put; on open time, by the clock
                   const r = e.currentTarget.getBoundingClientRect(), yScr = e.clientY - r.top;
@@ -1838,15 +1866,20 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 }}
                 // only a real leave clears the preview: the pointer outside the column. A card redrawn under the pointer fires a
                 // leave with no next element, which used to clear the preview and redraw it again, over and over (Nov 11)
-                onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; const r = e.currentTarget.getBoundingClientRect(); if (e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom) return; setOver(""); setPv(null); }}
+                onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; const r = e.currentTarget.getBoundingClientRect(); if (e.clientX > r.left && e.clientX < r.right && e.clientY > r.top && e.clientY < r.bottom) return; setOver(""); setPv(null); setPinAt(null); }}
                 onDrop={(e) => {
                   e.preventDefault();
+                  if (drag?.pin && pinAt && pinAt.mid === m.id) { void pinTo(drag, m, pinAt.d, pinAt.min); return; }
                   // it lands exactly where the dotted box was
                   if (drag && !drag.group && pv && pv.mid === m.id) { const c = drag.card ? { card: drag.card } : { job: drag.job, need: drag.need }; setPv(null); place(c, m, pv.d, pv.before || undefined); return; }
                   const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); drop(m, p.d, p.min);
                 }}
                 onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button, .msf-card, .msf-run, .msf-from, .msf-slot, .msf-menu")) return; if (Date.now() - dragAt.current < 600 || (window.getSelection()?.toString() || "").trim()) return; const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); setDownEdit({ machine: m.id, day: p.d, start: Math.floor(p.min / 30) * 30 }); }}
                 title="Click an open time to add downtime here">
+                {pinAt && drag?.pin && pinAt.mid === m.id && (() => { const mins = drag.card?.minutes || (drag.need ? estimate(s, drag.need, m).minutes : 60); return <>
+                  <div className="msf-pinline" style={{ top: pinAt.y }} />
+                  <div className="msf-pintip" style={{ top: Math.max(0, pinAt.y - 46) }}><b>{wkd(pinAt.d)} {clockLong(pinAt.min)}</b><small>{shortName(m)}{crewOf(m)?.leader ? " · " + crewOf(m)!.leader : ""} · ends {clockLong(pinAt.min + mins)}</small></div>
+                </>; })()}
                 {flowBlocks.map((bk, bi) => {
                   const sh = shiftOn(m, bk.d), oa = sh ? otOn(m, bk.d) : null, [sa, sb2] = sh || [bk.b, bk.b];
                   const off = sh ? [[bk.a, sa], [sb2, bk.b]].filter(([x, y]) => y > x) : [[bk.a, bk.b]];
@@ -1854,7 +1887,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     <Fragment key={bk.d}>
                       {off.map(([x, y]) => <div key={"of" + x} className="ms-off" style={{ top: flowY(bi, x), height: flowY(bi, y) - flowY(bi, x) }} />)}
                       {sh && oa != null && oa < sh[1] && <div className="ms-ot" style={{ top: flowY(bi, oa), height: flowY(bi, sh[1]) - flowY(bi, oa) }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`} />}
-                      {sh && breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d)).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <Fragment key={"bk" + a0}><div className={why === "Warm-up" ? "ms-warm" : "ms-lunch"} style={{ top: flowY(bi, a0), height: flowY(bi, b0) - flowY(bi, a0) }} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} />{/* its name on a small tag above the cards, so a job running through it still shows lunch (Nov 11, Nick) */}<span className="msf-brk-t" style={{ top: flowY(bi, a0) + Math.max(0, (flowY(bi, b0) - flowY(bi, a0) - 16) / 2) }}>{why === "Warm-up" ? "Warm-up" : "Lunch"}</span></Fragment> : null)}
+                      {sh && breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d)).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <Fragment key={"bk" + a0}><div className={why === "Warm-up" ? "ms-warm" : "ms-lunch"} style={{ top: flowY(bi, a0), height: flowY(bi, b0) - flowY(bi, a0) }} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} />{/* a thin line where it starts with its name and times on it (Nov 11, Nick: "don't like the bubbles… go back to the
+                          line"): solid for lunch, dotted for warm-up */}<div className={"msf-brk-l" + (why === "Warm-up" ? " warm" : "")} style={{ top: flowY(bi, a0) }}><span>{why === "Warm-up" ? "Warm-up" : "Lunch"} {clock(a0)}–{clock(b0)}</span></div></Fragment> : null)}
                       {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, bk.d, a0), machine: m.id, day: bk.d, a: a0, b: b0, why }); }} style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
                       {bk.d === today && now.min > bk.a && <div className="ms-pastv" style={{ top: flowTop[bi], height: flowY(bi, now.min) - flowTop[bi] }} />}
                       {bk.d === today && now.min >= bk.a && now.min <= bk.b && <div className="ms-now" style={{ top: flowY(bi, now.min) }} />}
@@ -1932,6 +1966,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           </> : <div className="msf-menu-h">This comes from the crew&apos;s hours or a time card, not a downtime entry.</div>}
         </div>
       </>}
+      {drag?.pin && <div className="msf-pinbar" role="status">📌 Pin to a time · drop where it should start · <kbd>Esc</kbd> cancels</div>}
       {lockMenu && <>
         <div className="msf-menu-bg" onClick={() => setLockMenu(null)} onContextMenu={(e) => { e.preventDefault(); setLockMenu(null); }} />
         <div className="msf-menu" style={{ left: Math.max(8, Math.min(lockMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 310)), top: Math.max(8, Math.min(lockMenu.y, (typeof window !== "undefined" ? window.innerHeight : 900) - 340)) }}>
