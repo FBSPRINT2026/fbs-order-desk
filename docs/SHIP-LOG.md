@@ -166,3 +166,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 5:02pm · 1.3.370 · Nick · Goods & Receiving dashboard lists every open order (not just this week's), so every counted job shows under ✓ Counted
 - Nov 11 5:06pm · 1.3.371 · Nick · Goods counted on the order (counted in full) now shows as Counted in Goods & Receiving and Check-In, not only jobs counted with the Check-In counter
 - Nov 11 5:34pm · 1.3.372 · Nick · Run-time estimate: each different design is its own setup, the same design in other inks is a color change (half a setup), the same print on two garments shares screens (#40496 was 2h 8m, now 3h 52m)
+- Nov 11 5:47pm · 1.3.373 · Nick · Goods & Receiving: Work order button beside Count in opens the job's work order in a pop-up with Print at the top

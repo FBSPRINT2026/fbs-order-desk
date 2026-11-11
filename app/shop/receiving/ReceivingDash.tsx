@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CheckinModal from "@/components/CheckinModal";
 import GoodsIssues from "@/components/GoodsIssues";
+import WorkOrderView, { PrinterIcon } from "@/components/WorkOrderView";
 import { useSticky } from "@/lib/useSticky";
 import { createClient } from "@/lib/supabase/client";
 import type { CheckJob, JobKind, JobState } from "@/lib/checkinShared";
@@ -48,7 +49,10 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   // click a column to sort by it, again to reverse (Nov 11, Nick)
   const [sortBy, setSortBy] = useState<{ k: "number" | "customer" | "due" | "supplier" | "pcs" | "status"; dir: 1 | -1 } | null>(null);
   const [count, setCount] = useState<CheckJob | null>(null);
+  const [wo, setWo] = useState<CheckJob | null>(null);
   const [msg, setMsg] = useState("");
+  // old Printavo jobs (pv:) have no work order of ours
+  const woBtn = (j: CheckJob) => j.ref.startsWith("pv:") ? null : <button type="button" className="btn sm rvd-wo" onClick={() => setWo(j)} title="Open this job's work order to print"><PrinterIcon />Work order</button>;
   const today = ymd(new Date()), d1 = nextWork(today), d2 = nextWork(d1);
 
   // this week and next (a Friday's "next day" is Monday)
@@ -161,7 +165,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
                     <td><span className="rvd-from">{supOf(j) || "No manifest"}</span>{j.lines ? <div className="sub">{`${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}`}</div> : null}</td>
                     <td className="rvd-pcs">{j.shipped && j.lines ? <span className="rvd-bar2"><i style={{ width: `${Math.min(100, Math.round((j.arrived / Math.max(1, j.shipped)) * 100))}%` }} /></span> : null}<b>{pcs}</b> <span className="sub">pcs</span></td>
                     <td><span className={"rvd-pill " + st.tone}>{st.label}</span></td>
-                    <td className="rvd-act"><button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
+                    <td className="rvd-act">{woBtn(j)}<button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
                   </tr>
                 );
               })}
@@ -174,7 +178,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
                   <td><span className="rvd-from">{supOf(j) || "No manifest"}</span></td>
                   <td className="rvd-pcs"><b>{pcs}</b> <span className="sub">pcs</span></td>
                   <td><span className="rvd-pill ok">✓ Counted{last ? ` · ${new Date(last.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</span></td>
-                  <td className="rvd-act"><button type="button" className="btn sm ghost" onClick={() => setCount(j)}>Recount</button></td>
+                  <td className="rvd-act">{woBtn(j)}<button type="button" className="btn sm ghost" onClick={() => setCount(j)}>Recount</button></td>
                 </tr>
               ); })}</tbody>
             </table></div>
@@ -193,6 +197,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         {truck("sanmar", "SanMar", "sm")}
         </div>
       </aside>
+      {wo && <WorkOrderView orderId={wo.ref} number={wo.number} title={[wo.customer, wo.nickname].filter(Boolean).join(" · ")} onClose={() => setWo(null)} />}
       {count && <CheckinModal job={count} onClose={() => setCount(null)} onSaved={(c) => { setCount(null); setMsg(c.status === "issue" ? `#${count.number} checked in with ${c.lines.filter((l) => l.issue).length} problem(s): it's under the issues until resolved.` : `#${count.number} checked in: all ${c.received} here.`); load(); }} />}
     </div>
   );
