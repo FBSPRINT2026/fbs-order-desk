@@ -21966,3 +21966,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msf-slot small{font-size:11.5px;color:var(--accent);white-space:nowrap}
 .msf-from{all:unset;box-sizing:border-box;position:absolute;left:4px;right:4px;z-index:2;border:2px dashed var(--ink-3);border-radius:6px;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 4%,transparent) 0 6px,transparent 6px 12px);display:flex;flex-direction:column;gap:1px;padding:4px 8px;overflow:hidden}
 .msf-from span{font-size:12px;font-weight:700;color:var(--ink-2);white-space:nowrap}.msf-from small{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+/* Shop Tools tiles like the approved mockup: one short word, a bigger icon */
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas){min-height:50px;gap:5px;padding:8px 2px 6px}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:23px;height:23px}
+.side:not(.mini) .nav-tools .lbl-k{display:block;-webkit-line-clamp:unset;white-space:nowrap;text-overflow:ellipsis;font-size:11px;line-height:1.2}

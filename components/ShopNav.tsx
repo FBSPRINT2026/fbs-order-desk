@@ -84,7 +84,7 @@ const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good mor
 
 /** shorter names for the tightest menu (two links a row) */
 /** Shop Tools / Admin Tools tiles: a short name under each icon, two lines at most (Nov 11 2026, Nick) */
-const TOOL_LBL: Record<string, string> = { "AI Workbench": "AI workbench", "Order Goods": "Order goods", "Time Clock": "Time clock", "Gang Sheet Builder": "Gang sheet", "Customer Artwork Builder": "Art builder", "Receive a Payment": "Receive payment", "Portal customers": "Portal", "QuickBooks": "QuickBooks", "Printavo Sync": "Printavo sync", "ClickUp Jobs": "ClickUp", "Payroll Center": "Payroll", "Necklines": "Necklines", "Support": "Support" };
+const TOOL_LBL: Record<string, string> = { "AI Workbench": "AI", "Order Goods": "Order", "Time Clock": "Time", "Gang Sheet Builder": "Gang", "Customer Artwork Builder": "Art", "Receive a Payment": "Payment", "Portal customers": "Portal", "QuickBooks": "QBO", "Printavo Sync": "Printavo", "ClickUp Jobs": "ClickUp", "Payroll Center": "Payroll", "Necklines": "Necks", "Support": "Support" };
 const SHORT: Record<string, string> = { "ClickUp Jobs": "ClickUp", "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving", "Order Goods": "Order", "Reorder Details": "Details", "Conversations": "Chats", "AI Workbench": "AI", "Thread Wall": "Threads", "Digitizing": "Digitize" };
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
