@@ -57,8 +57,16 @@ export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quo
  */
 export const CLOSED_QUOTE = { k: "closed" as StatusKey, label: "Closed Quote", portal: "Closed quote", type: "quote" as const, c: "#8A93A3" };
 export const isClosedQuote = (o: { status?: string | null; type?: string | null } | null | undefined) => !!o && o.status === "completed" && o.type === "quote";
+/**
+ * A canceled job (Nov 11, Nick: "we need a status on our end too that says like job canceled"): an invoice the shop
+ * called off. Stored like a closed quote: status `completed` with `declined_at`, type `invoice`, so everything that skips
+ * finished jobs skips it too; shown and picked as "Canceled" (`statusKey(o)` → "canceled"). It never goes to QuickBooks
+ * as a live invoice (lib/qbo/push.ts). Never written to the database as "canceled".
+ */
+export const CANCELED = { k: "canceled" as StatusKey, label: "Canceled", portal: "Canceled", type: "invoice" as const, c: "#8A93A3" };
+export const isCanceled = (o: { status?: string | null; type?: string | null; declined_at?: string | null } | null | undefined) => !!o && o.status === "completed" && o.type !== "quote" && !!o.declined_at;
 /** the status to show for an order: its own, or "closed" for a closed quote (look it up in ST) */
-export const statusKey = (o: { status?: string | null; type?: string | null; revision_at?: string | null }) => (isClosedQuote(o) ? "closed" : o.status === "quote" && o.revision_at ? "revision" : String(o.status || ""));
+export const statusKey = (o: { status?: string | null; type?: string | null; revision_at?: string | null; declined_at?: string | null }) => (isClosedQuote(o) ? "closed" : isCanceled(o) ? "canceled" : o.status === "quote" && o.revision_at ? "revision" : String(o.status || ""));
 /**
  * Revision (Nov 9, Nick: "if a job goes to revision needed… within quotes… a status called revision, after quote sent"):
  * a quote the customer asked changes on, until the new version is sent. Stored as status `quote` with `revision_at`
@@ -67,7 +75,7 @@ export const statusKey = (o: { status?: string | null; type?: string | null; rev
 export const REVISION = { k: "revision" as StatusKey, label: "Revision", portal: "Updating your quote", type: "quote" as const, c: "#D2554B" };
 /** a status no longer used, for an old record that still has it */
 const LEGACY = { k: "blanks" as StatusKey, label: "Approved", portal: "Approved", type: "invoice" as const, c: "#0A8FC0" };
-export const ST: Record<string, (typeof STATUSES)[number]> = { ...Object.fromEntries(STATUSES.map((s) => [s.k, s])), closed: CLOSED_QUOTE, revision: REVISION, blanks: LEGACY };
+export const ST: Record<string, (typeof STATUSES)[number]> = { ...Object.fromEntries(STATUSES.map((s) => [s.k, s])), closed: CLOSED_QUOTE, canceled: CANCELED, revision: REVISION, blanks: LEGACY };
 
 /**
  * Ready, in the words of how the order leaves (Nov 11, Nick: "ready to pick up, ready to deliver, ready to ship… the status

@@ -29,7 +29,7 @@ import RequestAsk from "@/components/RequestAsk";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, statusText, CLOSED_QUOTE, REVISION, type SampleRule, isClosedQuote, statusKey, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, statusText, CLOSED_QUOTE, CANCELED, isCanceled, REVISION, type SampleRule, isClosedQuote, statusKey, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -1032,7 +1032,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
   const numOr = (v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
-  async function setStatus(k: StatusKey | "closed") {
+  async function setStatus(k: StatusKey | "closed" | "canceled") {
     if (!o || statusKey(o) === k) return;
     await save();
     // Closed Quote: the same as the Job Center's Mark declined (stored as completed, its mockups to the Archive)
@@ -1044,6 +1044,21 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       if (latest.current) latest.current = { ...latest.current, status: "completed", type: "quote" };
       setLockOverride("");
       return loadSide();
+    }
+    // Canceled (an invoice called off): declined and finished, so every open list drops it (Nov 11, Nick)
+    if (k === "canceled") {
+      const r = await markDeclined(o.id, "Canceled by the shop");
+      if (!r.ok) return say(("error" in r && r.error) || "Couldn't cancel it.");
+      await createClient().from("orders").update({ status: "completed" }).eq("id", o.id);
+      setO((p) => (p ? ({ ...p, status: "completed", declined_at: new Date().toISOString(), declined_reason: "Canceled by the shop" } as Order) : p));
+      if (latest.current) latest.current = { ...latest.current, status: "completed" };
+      return loadSide();
+    }
+    // out of Canceled: put it back on first
+    if (isCanceled(o as never)) {
+      const r = await undoDeclined(o.id);
+      if (!r.ok) return say(("error" in r && r.error) || "Couldn't reopen it.");
+      setO((p) => (p ? ({ ...p, declined_at: null, declined_reason: "" } as Order) : p));
     }
     // out of a closed quote: put it back on first (clears the decline, brings its mockups back)
     if (isClosedQuote(o)) {
@@ -1313,7 +1328,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (v === "hold") return setHoldAsk(true);
     // another status while it's on hold: off hold, then the status
     if (holdOf((o as { flags?: unknown }).flags)) await offHold();
-    if (v !== statusKey(o)) await setStatus(v as StatusKey | "closed");
+    if (v !== statusKey(o)) await setStatus(v as StatusKey | "closed" | "canceled");
   }
   function sepsIfReady(why: string) {
     if (!o) return;
@@ -1571,7 +1586,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             {/* a hold is for an order (Nov 3, Nick: "once it goes to invoice, it should say on hold"); a quote isn't held */}
             {(o.type === "invoice" || !!holdOf((o as { flags?: unknown }).flags)) && <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>}
             <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote").flatMap((s) => (s.k === "quote_sent" ? [s, REVISION] : [s])), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
-            <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{statusText(s.k, o.delivery_method)}</option>)}</optgroup>
+            <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => <option key={s.k} value={s.k}>{statusText(s.k, o.delivery_method)}</option>)}</optgroup>
           </select>}
           {/* phone only: Documents, Production, Ask AI and More behind one button (the next step stays showing under it) */}
           <button type="button" className="btn ed-acts-tog" aria-expanded={actsOpen} onClick={() => setActsOpen((v) => !v)}>
