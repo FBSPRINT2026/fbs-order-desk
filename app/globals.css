@@ -14316,12 +14316,16 @@ html body .ord .line-b .gl-list .gl.ver{padding-left:16px}
 .cb-pic img{width:68px;height:44px;object-fit:contain;display:block;background:var(--swatch-light);border-radius:6px}
 .cb-sews{display:flex;flex-direction:column;gap:3px;margin-top:4px;font-size:12.5px;color:var(--ink-3)}
 .cb-sew{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.cb-sew select{height:26px;font-size:12px;padding:0 4px}
-.cb-row-acts{white-space:nowrap;text-align:right}
-.cb-row-acts>*{margin-left:6px}
-.cb-row-acts select{height:32px}
-.cb-sewopts,.cb-loose{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
-.cb-sewopts input,.cb-sewopts select,.cb-loose select{height:32px}
+/* every box here sizes to its words, never the row (Nov 10, Nick: "this page looks bad": the kind and brand pickers ran
+   full width and the brand picker hung out past the panel) */
+.cb-sew select{height:26px;font-size:12px;padding:0 22px 0 6px;width:auto;max-width:100%;flex:none}
+.cb-row-acts{text-align:right;width:1%;white-space:nowrap}
+.cb-row-acts>div{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.cb-row-acts select{height:32px;width:auto;max-width:220px}
+.cb-sewopts,.cb-loose{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;margin-top:10px}
+.cb-sewopts input,.cb-sewopts select,.cb-loose select{height:32px;width:auto;flex:none}
+.cb-sewopts input{width:180px}
+.cb-loose select{max-width:320px}
 @media (max-width:900px){ .cb-edit{grid-template-columns:1fr 1fr} }
 .cba-acts{display:flex;justify-content:flex-end;align-items:flex-end;gap:8px;flex-wrap:wrap}
 .cba-acts .field{margin:0;min-width:180px}
@@ -20115,7 +20119,7 @@ html body .ord .line-b .gl-list .gl > .gl-row.gl-r2 > .a-ea.a-quote::before{disp
   .cb-tbl .cb-sew{flex-wrap:nowrap;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-size:12.5px}
   .cb-tbl .cb-sew > a:first-child{margin-right:4px}
   .cb-tbl .cb-sew > :is(select,button,a:not(:first-child)){display:none}
-  .cb-tbl .cb-row-acts > select{display:none}
+  .cb-tbl .cb-row-acts select{display:none}
   .cb-tbl .cb-row-acts .btn.sm{height:30px;font-size:12.5px;padding:0 10px}
   .cb-tbl .cb-pic{width:56px}
 }
