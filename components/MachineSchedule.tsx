@@ -1642,7 +1642,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   /** a job's card, by how much room it has: one line (#, customer, colors, pieces), two (the job's name under the
    *  customer), three (name, then colors · pieces · run time) (Nov 11, Nick: "anytime you have space… the job name") */
   const flowCard = (g: Seg, y1: number, y2: number, key: string, extraCls = "") => {
-    const h = Math.max(16, y2 - y1 - 2), gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, lines = h >= 46 ? 3 : h >= 30 ? 2 : 1, mv = pvMove(g.c);
+    const h = Math.max(16, y2 - y1 - 2), gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, lines = h >= 54 ? 3 : h >= 37 ? 2 : 1, mv = pvMove(g.c);
     const name = g.c.job.name || g.c.need.label;
     const num = <b className="msf-n">{whyEl(g.c)}{dotEl(g.c, g)}#{g.c.job.number}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
     return (
