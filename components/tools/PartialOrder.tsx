@@ -62,7 +62,7 @@ export async function partialStep(ctx: PartialCtx, mode: PartKind, into: { id: s
       step("Opening the request as a blank order…");
       const { data: o } = await sb.from("orders").select("nickname, due_date, po_number, delivery_method, ship_to").eq("id", req).maybeSingle();
       const blank = { v: 2, kind: "new", summary: "", confidence: "high", empty: true, nickname: String(o?.nickname || act?.subject || ""), due_date: (o?.due_date as string | null) || null,
-        delivery: (["pickup", "ship", "deliver"].includes(String(o?.delivery_method)) ? o?.delivery_method : "pickup") as EODraft["delivery"], ship_to: String(o?.ship_to || ""), po_number: String(o?.po_number || ""),
+        delivery: (["pickup", "ship", "deliver", "tbd"].includes(String(o?.delivery_method)) ? o?.delivery_method : "tbd") as EODraft["delivery"], ship_to: String(o?.ship_to || ""), po_number: String(o?.po_number || ""),
         goods: { supplied: false, supplier: "", expected: "", note: "" }, groups: [], art: {}, mockups: {}, reorderOf: null, questions: [], check: [], notes: ctx.note ? `Staff: ${ctx.note}` : "", files: [] } as unknown as EODraft;
       const r = await fetch("/api/inbox/order", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ activity: activityId, draft: blank, status: "quote" }) }).catch(() => null);
       const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };

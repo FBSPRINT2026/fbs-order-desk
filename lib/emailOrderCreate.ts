@@ -288,7 +288,7 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     // HOUSTON" became "AMS Houston")
     ...(/\brush\b/i.test(`${d.nickname || ""} ${a?.subject || ""}`) ? { rush: true } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
-    delivery_method: tDelivery || (["pickup", "ship", "deliver"].includes(d.delivery) ? d.delivery : "pickup"), ship_to: addressBlock(d.ship_to || "").slice(0, 500),
+    delivery_method: tDelivery || (["pickup", "ship", "deliver", "tbd"].includes(d.delivery) ? d.delivery : "tbd"), ship_to: addressBlock(d.ship_to || "").slice(0, 500),
     // a customer who ships on their own carrier account (customers.ship_on): the order ships on it, $0 shipping, the same
     // as picking it on the order page (Oct 30, #40284: Nine18 on "Nine18 FEDEX")
     ...((tDelivery || d.delivery) === "ship" && cust?.ship_on ? { ship_method: await ownAccountMethod(String(cust.ship_on)) } : (tDelivery || d.delivery) === "ship" && !shipSaid && tdef.ship_method ? { ship_method: tdef.ship_method.slice(0, 60) } : {}),

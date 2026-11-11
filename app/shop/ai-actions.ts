@@ -161,7 +161,7 @@ export async function quoteFromSuggestion(suggestionId: string) {
       customer_id: sg.customer_id, status: "quote", type: "quote", source: "email", groups, lines: [], use_program: useProgram,
       nickname: (p.nickname || "").slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(p.due_date || "") ? p.due_date : null,
       notes: (p.notes || "").slice(0, 2000), po_number: (p.po_number || "").slice(0, 60),
-      delivery_method: p.delivery && ["pickup", "ship", "deliver"].includes(p.delivery) ? p.delivery : "pickup", ship_to: (p.ship_to || "").slice(0, 500),
+      delivery_method: p.delivery && ["pickup", "ship", "deliver", "tbd"].includes(p.delivery) ? p.delivery : "tbd", ship_to: (p.ship_to || "").slice(0, 500),
       price_type: cust?.price_type || "retail", tax_exempt: !!cust?.tax_exempt,
     }).select("id").single();
     if (error) return { ok: false as const, error: error.message };
