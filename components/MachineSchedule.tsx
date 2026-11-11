@@ -1749,11 +1749,18 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             };
             // the press it's dragged from keeps its jobs where they are (the job shows as "was here") while it's over another
             // press; the press it's over makes room
-            const srcOther = !!(pvLay && pv && drag?.card && drag.card.machine.id === m.id && pv.mid !== m.id);
-            const items = itemsOf(pvLay && !srcOther ? pvLay.by : undefined);
-            // the dragged card stays where it was (faded) while its preview shows where it would go: the browser drops a
-            // drag whose card leaves the page
-            const ghost = pvLay && !srcOther && drag?.card && drag.card.machine.id === m.id ? itemsOf().filter((x) => x.g.c.key === drag.card!.key) : [];
+            // While dragging, the board doesn't re-plan under the pointer (that moved jobs to other days and back, and it
+            // twitched; Nov 11, Nick). It works like any sortable list: the jobs stay where they are, the jobs below the
+            // pointer slide down by the dragged job's height, and the dotted box sits in the gap. Where it goes is worked
+            // out on the board as it was before the drag, so the slide can't change the answer.
+            const real = itemsOf(), dragKey = drag?.card?.key;
+            const live = !!(pv && drag && !drag.group && pv.mid === m.id);
+            const dragH = live ? Math.min(3 * FLOW_PX, Math.max(22, ((drag!.card?.minutes || (drag!.need ? estimate(s, drag!.need, m).minutes : 60)) / 60) * FLOW_PX)) : 0;
+            const cand = real.filter((x) => x.g.c.key !== dragKey && x.g.part === 1 && x.g.c.slot && x.g.c.slot.status !== "done" && x.g.c.job.kind !== "h").sort((a, b) => a.y1 - b.y1);
+            const insY = !live ? null : (() => { const b = pv!.before ? cand.find((x) => x.g.c.key === pv!.before) : null; if (b) return b.y1; const ls = cand.filter((x) => x.g.day === pv!.d).slice(-1)[0]; return ls ? ls.y2 : pv!.y; })();
+            const items = live ? real.filter((x) => x.g.c.key !== dragKey).map((x) => (insY != null && x.y1 >= insY - 1 ? { ...x, y1: x.y1 + dragH, y2: x.y2 + dragH } : x)) : real;
+            // the dragged card stays where it was (hidden) on its own press: the browser drops a drag whose card leaves the page
+            const ghost = live && drag?.card && drag.card.machine.id === m.id ? real.filter((x) => x.g.c.key === dragKey) : [];
             return (
               <div key={m.id} className={"msf-col" + (over === "f:" + m.id ? (canDrop(m) ? " over" : " no") : "")} style={{ height: flowH, backgroundSize: `100% ${FLOW_PX}px`, gridColumn: mi + 2 }}
                 onDragOver={(e) => {
@@ -1761,22 +1768,13 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   if (!drag || drag.group) return;
                   // where the pointer is: over a job's top half it goes before that job, its bottom half after it; over the
                   // dotted box it stays put; on open time, by the clock
-                  const el = (e.target as HTMLElement).closest("[data-k],[data-slot]") as HTMLElement | null;
-                  if (el?.dataset.slot && pv?.mid === m.id) return;
-                  // near the dotted box (a few pixels around it too) it stays put: moving it moves the jobs under the pointer,
-                  // which would move it back, and the board twitched (Nov 11, Nick's video)
-                  if (pv?.mid === m.id) { const sl = e.currentTarget.querySelector("[data-slot]")?.getBoundingClientRect(); if (sl && e.clientY >= sl.top - 10 && e.clientY <= sl.bottom + 10) return; }
-                  const r = e.currentTarget.getBoundingClientRect(), y = e.clientY - r.top, p = flowAt(y);
-                  let d0 = p.d, b = dropBefore(m, p.d, p.min);
-                  if (el?.dataset.k) {
-                    // the job pointed at, by where it really is now (the preview may have pushed it to another day)
-                    const k = el.dataset.k, first = [...(segs.ofCard.get(k) || [])].sort((x, z) => x.day.localeCompare(z.day) || x.start - z.start)[0];
-                    if (first && first.c.machine.id === m.id) {
-                      const cell = at(m, first.day).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag.card?.key && g.c.slot.status !== "done").sort((x, z) => x.start - z.start);
-                      const i = cell.findIndex((g) => g.c.key === k), r2 = el.getBoundingClientRect();
-                      if (i >= 0) { d0 = first.day; b = e.clientY < r2.top + r2.height / 2 ? cell[i].c.key : cell[i + 1]?.c.key || ""; }
-                    }
-                  }
+                  const r = e.currentTarget.getBoundingClientRect(), yScr = e.clientY - r.top;
+                  // back to the board as it was before the drag: below the dotted box, take its height off
+                  const y = live && insY != null && yScr > insY ? Math.max(insY, yScr - dragH) : yScr;
+                  // it goes before the first job whose middle is below the pointer (the top half of a job: before it; the
+                  // bottom half: after it); past the last job of a day, at the end of that day
+                  const hit = cand.find((x) => (x.y1 + x.y2) / 2 > y), pd = flowAt(y).d;
+                  const d0 = hit && hit.g.day <= pd ? hit.g.day : pd, b = hit && hit.g.day <= pd ? hit.g.c.key : "";
                   if (!pv || pv.mid !== m.id || pv.d !== d0 || pv.before !== b) setPv({ mid: m.id, d: d0, before: b, y });
                 }}
                 // only a real leave clears the preview: the pointer outside the column. A card redrawn under the pointer fires a
@@ -1805,6 +1803,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   );
                 })}
                 {ghost.map((x) => flowCard(x.g, x.y1, x.y2, x.g.c.key + x.g.part, " msf-ghost"))}
+                {live && insY != null && <div className="msf-slot" data-slot="1" style={{ top: insY + 1, height: dragH - 2 }} aria-hidden><span>#{(drag!.card?.job || drag!.job)?.number} moves here</span></div>}
                 {(() => {
                   // one customer's jobs back to back (Nine18's small orders, an All My Sons run): one box, a row per job
                   // (Nov 11, Nick: "a nice little together segment… All My Sons run")
@@ -1835,7 +1834,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 })()}
                 {pvLay && pv?.mid === m.id && (() => {
                   // the drop, said in one line: where it lands, what it pushes, who'd miss in-hands
-                  const me2 = items.find((x) => x.g.c.key === pvKey); if (!me2) return null;
+                  const me2 = insY != null ? { y1: insY } : null; if (!me2) return null;
                   const all = cards.map((c: Card) => ({ c, mv: pvMove(c) })).filter((x) => x.mv);
                   const pushed = all.filter((x) => x.mv!.down && x.c.machine.id === m.id), lateNow = all.filter((x) => x.mv!.late);
                   const n0 = (pvLay.ofCard.get(pvKey) || [])[0], nL = (pvLay.ofCard.get(pvKey) || []).slice(-1)[0];
