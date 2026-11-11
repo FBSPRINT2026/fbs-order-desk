@@ -92,7 +92,7 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
   // a fresh query each time it's used (a query is changed by each filter put on it: one can't be read page after page)
   const pvQ0 = () => admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)").is("removed_at", null);
   const pvQ = pvQ0();
-  const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name), printavo_id, pv:printavo_state->pv, pv_status:printavo_state->>status");
+  const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name, is_test), printavo_id, pv:printavo_state->pv, pv_status:printavo_state->>status").is("discarded_at", null);
   const [{ data: pv, error: e1 }, { data: os, error: e2 }, { data: open, error: e3 }] = await Promise.all([
     only ? (only.kind === "a" ? pvQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : allRows((ra, rb) => pvQ0().gte("due_date", lo).lte("due_date", hi).order("id").range(ra, rb), 3000),
     only ? (only.kind === "o" ? oQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : oQ.not("status", "in", "(completed,quote,quote_sent,request)").limit(800),
@@ -111,7 +111,8 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     const start = localDay(a.data?.startAt), day = start || ymd(a.due_date);
     return !!only || (openPv.has(a.id)) || (!CLOSED.test(a.status_name || "") && inWeek(day));
   });
-  const oJobs = ((os || []) as unknown as ORow[]).filter((o) => !!only || openO.has(o.id) || inWeek(ymd(o.production_date) || ymd(o.due_date)));
+  // a deleted order or a test customer's never needs counting in (Nov 11, Nick: ABC Test Company's #40428, #99005)
+  const oJobs = ((os || []) as unknown as ORow[]).filter((o) => !(o.customers as { is_test?: boolean } | null)?.is_test).filter((o) => !!only || openO.has(o.id) || inWeek(ymd(o.production_date) || ymd(o.due_date)));
 
   const pvIds = pvJobs.map((a) => a.id), oIds = oJobs.map((o) => o.id);
   const [{ data: ml }, { data: ck }] = await Promise.all([

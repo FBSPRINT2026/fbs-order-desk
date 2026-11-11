@@ -22246,3 +22246,8 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rvd-th{cursor:pointer;user-select:none;white-space:nowrap}
 .rvd-th.on{color:var(--accent)}
 .rvd-ar{margin-left:4px;color:var(--accent);font-size:10px}
+.rvd-dayrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 12px 12px}
+.rvd-dayrow .rvd-days{display:inline-grid;grid-template-columns:repeat(4,auto);margin:0}
+.rvd-dayrow .rvd-days button{padding:6px 12px;font-size:12.5px}
+.rvd-cnt{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border:1px solid color-mix(in srgb,var(--ok) 40%,var(--line));border-radius:8px;font-weight:700;font-size:12.5px;color:var(--ok);background:var(--surface)}
+.rvd-cnt.on{background:color-mix(in srgb,var(--ok) 12%,var(--surface));box-shadow:inset 0 -3px var(--ok)}

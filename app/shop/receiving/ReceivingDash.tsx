@@ -32,6 +32,9 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   const [jobs, setJobs] = useState<CheckJob[] | null>(null);
   // jobs the press has started (or finished): their goods are on the press, off this list (Nov 11, Nick)
   const [started, setStarted] = useState<Set<string>>(new Set());
+  // the day each job is really on the schedule (its first booking not done yet): Schedule mode goes by this, never by
+  // a date typed on the order (Nov 11, Nick: "I don't have anything scheduled… everything should show as later")
+  const [onSched, setOnSched] = useState<Map<string, string>>(new Map());
   const [err, setErr] = useState("");
   // Schedule · All · Today unless someone was just here: 5 minutes away and it's back (Nov 11, Nick)
   const AWAY = 5 * 60 * 1000;
@@ -57,19 +60,29 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
     const m = new Map<string, CheckJob>();
     for (const r of rs) for (const j of [...((r.jobs || []) as CheckJob[]), ...((r.problems || []) as CheckJob[])]) if (!m.has(j.ref)) m.set(j.ref, j);
     const list = [...m.values()], ids = list.map((j) => j.ref).filter((x) => !x.startsWith("pv:"));
-    const on = new Set<string>();
+    const pvIds = list.map((j) => j.ref).filter((x) => x.startsWith("pv:")).map((x) => x.slice(3));
+    const on = new Set<string>(), sched = new Map<string, string>();
+    const take = (ref: string, x: { status: string; day: string }) => {
+      if (x.status === "running" || x.status === "done") on.add(ref);
+      if (x.status !== "done" && (!sched.has(ref) || x.day < sched.get(ref)!)) sched.set(ref, x.day);
+    };
+    const sb = createClient();
     for (let i = 0; i < ids.length; i += 200) {
-      const { data } = await createClient().from("production_slots").select("order_id").in("order_id", ids.slice(i, i + 200)).in("status", ["running", "done"]);
-      for (const x of (data || []) as { order_id: string }[]) on.add(x.order_id);
+      const { data } = await sb.from("production_slots").select("order_id, status, day").in("order_id", ids.slice(i, i + 200));
+      for (const x of (data || []) as { order_id: string; status: string; day: string }[]) take(x.order_id, x);
     }
-    setStarted(on); setJobs(list);
+    for (let i = 0; i < pvIds.length; i += 200) {
+      const { data } = await sb.from("production_slots").select("archived_order_id, status, day").in("archived_order_id", pvIds.slice(i, i + 200));
+      for (const x of (data || []) as { archived_order_id: string; status: string; day: string }[]) take("pv:" + x.archived_order_id, x);
+    }
+    setStarted(on); setOnSched(sched); setJobs(list);
   }, []);
   useEffect(() => { load(); }, [load]);
 
   // each job sits on the day it runs on the press (the Check-In's own day); a goods problem stays on Today
   // not on the schedule yet: Later (Nov 11, Nick)
   const dayOf = (j: CheckJob): Day => {
-    const d = by === "due" ? j.due : j.start;
+    const d = by === "due" ? j.due : onSched.get(j.ref) || null;
     return j.state === "issue" || (d && d <= today) ? "today" : !d ? "later" : d === d1 ? "tomorrow" : d === d2 ? "next" : "later";
   };
   const all = useMemo(() => (jobs || []).filter((j) => !started.has(j.ref)), [jobs, started]);
@@ -96,7 +109,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
     if (s) return { shown: open.filter(hit).sort(sort), grayed: counted.filter(hit).sort(sort) };
     if (day === "counted") return { shown: [] as CheckJob[], grayed: counted.slice().sort((a, b) => (a.day || "").localeCompare(b.day || "") || a.number - b.number) };
     return { shown: open.filter((j) => dayOf(j) === day).sort(sort), grayed: counted.filter((j) => dayOf(j) === day).sort(sort) };
-  }, [open, counted, q, day, by, sortBy]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, counted, q, day, by, sortBy, onSched]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tDay = truckDay === "today" ? today : d1;
   const truckOf = (sup: string) => trucks.filter((r) => r.supplier === sup && localDay(r.at) === tDay && (truckDay === "tomorrow" || r.state !== "arrived" || localDay(r.at) === today));
@@ -126,9 +139,11 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
             <div className="rvd-kind" role="tablist">{KINDS.map(([k, l]) => <button key={k} type="button" title={k === "sp" ? "Screen print" : k === "emb" ? "Embroidery" : k === "hp" ? "Heat press" : "Everything"} className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{l}<span className="rvd-n">{jobs ? kindN(k) : "…"}</span></button>)}</div>
             <input className="rvd-q" placeholder="Find an order or filter: All My Sons, 40478…" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          <div className="rvd-days" role="tablist">
-            {DAYS.map(([k, l]) => <button key={k} type="button" className={!q.trim() && day === k ? "on" : ""} onClick={() => { setDay(k); setQ(""); }}>{l}<span className="rvd-n">{jobs ? n(k) : "…"}</span></button>)}
-            <button type="button" className={"ok" + (!q.trim() && day === "counted" ? " on" : "")} onClick={() => { setDay("counted"); setQ(""); }}>✓ Counted<span className="rvd-n">{jobs ? n("counted") : "…"}</span></button>
+          <div className="rvd-dayrow">
+            <div className="rvd-days" role="tablist">
+              {DAYS.map(([k, l]) => <button key={k} type="button" className={!q.trim() && day === k ? "on" : ""} onClick={() => { setDay(k); setQ(""); }}>{l}<span className="rvd-n">{jobs ? n(k) : "…"}</span></button>)}
+            </div>
+            <button type="button" className={"rvd-cnt" + (!q.trim() && day === "counted" ? " on" : "")} onClick={() => { setDay("counted"); setQ(""); }}>✓ Counted<span className="rvd-n">{jobs ? n("counted") : "…"}</span></button>
           </div>
           {msg && <div className="banner" style={{ margin: "8px 12px 0" }}>{msg}</div>}
           {err ? <div className="empty">{err}</div> : !jobs ? <div className="empty">Loading…</div> : !shown.length && !grayed.length ? <div className="empty">{q.trim() ? "No order matches." : day === "counted" ? "Nothing counted is waiting for the press." : day === "today" ? "Nothing to count in today." : "Nothing to count in that day."}</div> : (
