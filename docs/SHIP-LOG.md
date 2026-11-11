@@ -157,3 +157,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 4:15pm · 1.3.361 · Nick · Goods & Receiving dashboard: jobs to count in by the day they run on the press, counted ones grayed then under ✓ Counted until the press starts, issues, S&S and SanMar trucks on the right
 - Nov 11 4:21pm · 1.3.362 · Nick · Goods & Receiving dashboard: All / Screen print / Embroidery / Heat press switch; days are Today / Tomorrow / Next day / Later (not scheduled = Later)
 - Nov 11 4:26pm · 1.3.363 · Nick · Schedule: Live clock switch (off by default): off, the schedule is a plan made by hand; nothing moves on its own until someone updates it
+- Nov 11 4:41pm · 1.3.364 · Nick · Goods & Receiving: Dashboard button beside the Shipments tabs, Counting and Receiving blocks, Schedule | Due date days, SP/EMB/HP with search, ✓ Counted in the day row, Settings in the header

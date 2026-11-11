@@ -22166,7 +22166,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .wts-tabs{min-height:44px;overflow:visible}
 
 /* Goods & Receiving dashboard (app/shop/receiving/ReceivingDash.tsx; Nov 11, Nick, option E) */
-.rvd{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start;margin-top:12px}
+.rvd{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start;margin-top:12px}
 @media (max-width:1000px){.rvd{grid-template-columns:1fr}}
 .rvd-main{min-width:0;display:flex;flex-direction:column;gap:16px}
 .rvd-bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--line)}
@@ -22212,3 +22212,34 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msk-sw i{position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:#fff;transition:left .15s}
 .msk-live.on .msk-sw{background:var(--ok)}
 .msk-live.on .msk-sw i{left:14px}
+/* Goods & Receiving layout v2 (Nov 11, Nick): Dashboard button + Shipments tabs; Counting and Receiving blocks */
+.rvg-nav{display:flex;gap:12px;align-items:stretch;margin:4px 0 14px;flex-wrap:wrap}
+.rvg-dash{all:unset;cursor:pointer;flex:0 0 250px;display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-sizing:border-box}
+.rvg-dash.on{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));box-shadow:inset 0 -3px var(--accent)}
+.rvg-ico{width:42px;height:42px;border-radius:10px;flex:0 0 42px;display:flex;align-items:center;justify-content:center;background:conic-gradient(#2b8fd6,#e8566c,#f3a43b,#2b8fd6)}
+.rvg-t{display:flex;flex-direction:column;min-width:0}
+.rvg-t b{font-family:var(--display);font-size:17px;color:var(--ink)}
+.rvg-t small{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.rvg-ship{flex:1 1 420px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.rvg-ship-h{text-align:center;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#11698f;padding:4px 12px}
+.rvg-tabs{flex:1;margin:0!important;border:0!important;border-radius:0!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))}
+.rvg-tabs button{justify-content:center}
+.rvd-blk{background:var(--surface-2);border-radius:14px;overflow:hidden;min-width:0;align-self:start}
+.rvd-blk > .rvd-main,.rvd-blk > .rvd-side{padding:12px}
+.rvd-bh{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;padding:11px 16px;color:#fff}
+.rvd-bh b{font-family:var(--display);font-size:19px}
+.rvd-bh > span{opacity:.85;font-size:13px}
+.rvd-bh.dark{background:#1d2433}
+.rvd-bh.teal{background:#11698f}
+.rvd-by{margin-left:auto;display:inline-grid;grid-template-columns:auto auto;border:1px solid color-mix(in srgb,#fff 35%,transparent);border-radius:7px;overflow:hidden}
+.rvd-by button{all:unset;cursor:pointer;padding:5px 12px;font-size:12.5px;font-weight:700;color:#fff}
+.rvd-by button.on{background:#fff;color:#1d2433}
+.rvd-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 12px 0}
+.rvd-top .rvd-kind{margin:0;flex:0 1 360px;min-width:260px}
+.rvd-top .rvd-q{flex:1 1 220px;max-width:none}
+.rvd-days{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:10px 12px 12px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rvd-days button{all:unset;cursor:pointer;text-align:center;padding:8px 4px;font-weight:700;font-size:13px;color:var(--ink-2);border-left:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rvd-days button:first-child{border-left:0}
+.rvd-days button.on{background:var(--accent-soft,#eaf5fc);color:var(--accent);box-shadow:inset 0 -3px var(--accent)}
+.rvd-days button.ok{color:var(--ok)}
+@media (max-width:700px){.rvd-days{grid-template-columns:repeat(3,minmax(0,1fr))}.rvd-days button:nth-child(n+4){border-top:1px solid var(--line)}.rvd-days button:nth-child(4){border-left:0}}

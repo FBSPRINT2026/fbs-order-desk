@@ -491,29 +491,36 @@ export default function GoodsReceiving() {
         <div><div className="eyebrow">Receiving</div><h1>Goods &amp; Receiving</h1></div>
 
         <div className="rv-head-r"><div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
-          <Link className="btn primary rv-ck" href="/shop/receiving/checkin" title="Count jobs' goods in, size by size">✓ Check-In{ck && (ck.ready + ck.issue) > 0 && <span className="rv-ck-n">{ck.ready ? <i className="rd" title="Jobs on today's schedule (or earlier) with everything here">{ck.ready} ready today</i> : null}{ck.issue ? <i className="pb">{ck.issue} problem{ck.issue === 1 ? "" : "s"}</i> : null}</span>}</Link>
+          
           <button type="button" className="btn" disabled={aiBusy} onClick={(e) => askAi(e.shiftKey)} title="Runs the hourly pass now: refreshes tracking, links exact matches, and has the AI recommend a job for the rest. (Runs on its own every hour, Mon–Fri 6 a.m.–6 p.m.) Shift-click: the AI looks at every shipment again.">{aiBusy ? "Relinking…" : "↻ Attempt to Relink Orders"}</button>
           <button type="button" className="btn" onClick={() => setTruck(true)}>Receive S&amp;S Truck</button>
+          <button type="button" className={"btn" + (view === "settings" ? " primary" : "")} onClick={() => setView(view === "settings" ? "dash" : "settings")} title="Goods & Receiving settings: the manifest mailbox, and importing a manifest file by hand">⚙ Settings</button>
         </div>
 </div>
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       {/* goods issues across every customer: check-in problems and tracking gone wrong (Nov 2, components/GoodsIssues.tsx) */}
       {view !== "dash" && <GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} />}
-      <div className="rv-tabrow">
-      <div className="aa-sub rv-views" role="tablist">
-        <button type="button" className={view === "dash" ? "on" : ""} onClick={() => setView("dash")}>Dashboard</button>
+      {/* Dashboard on its own, the shipment views under Shipments (Nov 11, Nick) */}
+      <div className="rvg-nav">
+        <button type="button" className={"rvg-dash" + (view === "dash" ? " on" : "")} onClick={() => setView("dash")}>
+          <span className="rvg-ico" aria-hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /><path d="M15.5 15.2l1.4 1.4 2.6-2.8" strokeWidth="1.8" /></svg></span>
+          <span className="rvg-t"><b>Dashboard</b><small>Count in · trucks · issues</small></span>
+        </button>
+        <div className="rvg-ship">
+          <div className="rvg-ship-h">Shipments</div>
+          <div className="aa-sub rv-views rvg-tabs" role="tablist">
         <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Arriving &amp; Tracking</button>
         <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS Orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
-        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer Supplied Goods<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
-        <button type="button" className={"rv-ign-tab" + (view === "ignored" ? " on" : "")} onClick={() => setView(view === "ignored" ? "dash" : "ignored")} title="Shipments ignored by hand">Show Ignored<span className="aa-n">{ignoredRows.length}</span></button>
-        {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
-      </div>
-        <div className="rv-search-row">
-          {view !== "dash" && <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>}
-          <button type="button" className={"btn sm rv-set-btn" + (view === "settings" ? " on" : "")} onClick={() => setView(view === "settings" ? "dash" : "settings")} title="Goods & Receiving settings: the manifest mailbox, and importing a manifest file by hand"><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg><span>Settings</span></button>
+        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer Supplied<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
+        <button type="button" className={"rv-ign-tab" + (view === "ignored" ? " on" : "")} onClick={() => setView(view === "ignored" ? "dash" : "ignored")} title="Shipments ignored by hand">Ignored<span className="aa-n">{ignoredRows.length}</span></button>
+          </div>
         </div>
       </div>
+        {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
+      {view !== "dash" && view !== "settings" && <div className="rv-search-row">
+          <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>
+        </div>}
 
       {SHOW_BOARDS && view === "customer" && <>
         {pvCust.length > 0 && (
