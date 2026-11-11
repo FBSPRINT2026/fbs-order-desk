@@ -46,7 +46,7 @@ function WhyIcon({ w, title }: { w: "lock" | "cap" | "me" | "ai"; title: string 
     : <svg viewBox="0 0 16 16"><rect x="1.5" y="5" width="7" height="6" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" /><rect x="7.5" y="5" width="7" height="6" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" /></svg>}</span>;
 }
 const firmLbl = (j: Job) => (j.due ? `${new Date(j.due + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}${j.dueTime != null ? " " + clock(j.dueTime) : ""}` : "");
-type Slot = { id: string; order_id: string | null; archived_order_id: string | null; /** Jose's lock (Nov 11 2026): spot = press + time, press, day; re-plan never moves it */ locked?: "spot" | "press" | "day" | null; /** a Planner hold (a job we know is coming) */ hold_id?: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "paused" | "done"; source: string; note: string; rolled_from: string | null;
+type Slot = { id: string; order_id: string | null; archived_order_id: string | null; /** Jose's lock (Nov 11 2026): spot = press + time, press, day; re-plan never moves it */ locked?: "spot" | "press" | "day" | "person" | null; /** a Planner hold (a job we know is coming) */ hold_id?: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "paused" | "done"; source: string; note: string; rolled_from: string | null;
   /** job log: when it really started / finished, how far along (0–1) as of progress_at; which print locations this booking covers (null = all) */
   started_at?: string | null; finished_at?: string | null; progress?: number; progress_at?: string | null; locations?: string[] | null };
 /** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
@@ -1053,7 +1053,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     // not started yet (or paused partway): free to move. Running and done work stays where it is.
     // a firm job (⛰️) that's on course for its date and time stays exactly where it is (unless its press can't print it now)
     const firmHolds = (c: Card) => !!c.job.firm && fits(c.need, c.machine) && (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0) <= dueAbs(c.job);
-    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c) && !c.slot?.locked);
+    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c) && c.slot?.locked !== "spot");
     // work that stays where it is (running, done, a firm job on course, other machine types) is an obstacle on its
     // machine, not a wall: open time before and between it is still used (a firm job on Thursday doesn't empty Wednesday)
     let fixed = new Map<string, [number, number][]>(), fixedAbs = new Map<string, [number, number][]>(), jobBusy = new Map<string, [number, number][]>();
@@ -1073,11 +1073,11 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const ab: [number, number] = [a, b]; push(fixedAbs, id, ab);
       return () => { for (const [k, x] of added) fixed.set(k, (fixed.get(k) || []).filter((y) => y !== x)); fixedAbs.set(id, (fixedAbs.get(id) || []).filter((y) => y !== ab)); };
     };
-    type Item = { key: string; job: Job; need: Need; slot: Slot | null; cur: string; curDay: string; left: number };
+    type Item = { key: string; job: Job; need: Need; slot: Slot | null; cur: string; curDay: string; left: number; /** a lock that still lets it move: to a press, a person, a day */ lock?: { kind: string; m: string; crew: string; day: string } };
     // jobs printing the same art for the same in-hands date sort next to each other and go on one press (Nov 11)
     const artK = (n: Need) => [...artsOf(n)].sort().join(",");
     const items: Item[] = [
-      ...movable.map((c) => ({ key: c.key, job: c.job, need: c.need, slot: c.slot, cur: c.machine.id, curDay: c.day, left: 1 - Math.max(0, Math.min(1, +(c.slot?.progress || 0))) })),
+      ...movable.map((c) => ({ key: c.key, job: c.job, need: c.need, slot: c.slot, cur: c.machine.id, curDay: c.day, left: 1 - Math.max(0, Math.min(1, +(c.slot?.progress || 0))), lock: c.slot?.locked ? { kind: c.slot.locked, m: c.machine.id, crew: c.machine.crew || "", day: c.day } : undefined })),
       ...(replanTray ? tray.map((t) => ({ key: "t:" + t.job.key + t.need.type, job: t.job, need: t.need, slot: null, cur: "", curDay: "", left: 1 })) : []),
     ].sort((a, b) => dueAbs(a.job) - dueAbs(b.job) || artK(a.need).localeCompare(artK(b.need)) || +!!b.job.firm - +!!a.job.firm || +!!b.job.rush - +!!a.job.rush || (a.curDay || "9999").localeCompare(b.curDay || "9999"));
     const lateOld = new Set(tight.map((t) => t.job.key));
@@ -1085,10 +1085,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const endDayOf = (t: number) => fromOrd(Math.floor((t - 1) / 1440));
     // the machine that finishes this work earliest, given where each machine's day is up to; among the ones that
     // make the in-hands date, the one that runs the least of it on overtime (a crew past 40 hours this pay week)
-    const bestFor = (need: Need, left: number, from: number, prefer: string, due = Infinity, job?: string) => {
+    const bestFor = (need: Need, left: number, from: number, prefer: string, due = Infinity, job?: string, only?: (m: Machine) => boolean) => {
       let best: { m: Machine; start: number; end: number; minutes: number; ot: number } | null = null;
       const late = (t: number) => t > due;
-      for (const m of s.machines.filter((x) => x.active && fits(need, x))) {
+      for (const m of s.machines.filter((x) => x.active && fits(need, x) && (!only || only(x)))) {
         const mm = ms.find((x) => x.id === m.id) || m; // the calendar's copy carries days off, downtime and extra shifts
         const minutes = Math.max(15, estimate(s, need, mm).minutes * left), r = sim(mm, from, minutes, job);
         const sooner = !best || r.end < best.end - 30 || (Math.abs(r.end - best.end) <= 30 && (mm.id === prefer || (best.m.id !== prefer && (need.type === "screen" ? mm.colors < best.m.colors : false))));
@@ -1111,9 +1111,12 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       // a production date is the day it runs (Nine18's weekly run, Nov 11, Nick: "everything that shows a production date
       // of next Tuesday should be on next Tuesday"): it starts that day, never before
       const from0 = it.job.prod ? Math.max(nowAbs, ord(it.job.prod) * 1440) : nowAbs;
-      let best = bestFor(it.need, it.left, from0, it.cur, dueAbs(it.job), it.job.key);
+      // a lock that lets it move keeps it with its press, its person (any of their presses) or its day
+      const lk = it.lock, only = lk?.kind === "press" ? (x: Machine) => x.id === lk.m : lk?.kind === "person" ? (x: Machine) => (lk.crew ? x.crew === lk.crew : x.id === lk.m) : undefined;
+      const fromL = lk?.kind === "day" ? Math.max(from0, ord(lk.day) * 1440) : from0;
+      let best = bestFor(it.need, it.left, fromL, it.cur, dueAbs(it.job), it.job.key, only);
       const mate = it.job.due && it.job.kind !== "h" ? [...artsOf(it.need)].map((a) => artAt.get(a + "|" + it.job.due + "|" + (it.job.prod || ""))).find(Boolean) : undefined;
-      if (mate && best && best.m.id !== mate.m) {
+      if (mate && best && best.m.id !== mate.m && !lk) {
         const mm = ms.find((x) => x.id === mate.m);
         if (mm && fits(it.need, mm)) { const minutes = Math.max(15, estimate(s, it.need, mm).minutes * it.left), r = sim(mm, Math.max(mate.end, from0), minutes, it.job.key); if (r.end <= dueAbs(it.job)) best = { m: mm, start: r.start, end: r.end, minutes, ot: r.ot }; }
       }
@@ -1714,8 +1717,16 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const onlyFits = (c: Card) => s.machines.filter((m) => m.active && fits(c.need, m)).length === 1;
   const whyOf = (c: Card): "lock" | "cap" | "me" | "ai" => (c.slot?.locked ? "lock" : onlyFits(c) ? "cap" : c.slot?.source === "manual" ? "me" : "ai");
   const WHY_T = { lock: "Locked", cap: "Only fits this press", me: "Shop scheduled", ai: "Placed by the schedule" } as const;
-  const whyEl = (c: Card) => { const w = whyOf(c); return <WhyIcon w={w} title={w === "lock" ? `Locked to ${c.slot?.locked === "spot" ? "this spot" : c.slot?.locked === "press" ? "this press" : "this day"} · right-click to change` : `${WHY_T[w]} · right-click to lock`} />; };
-  async function lockAs(c: Card, g: Seg, kind: "spot" | "press" | "day" | null) {
+  const whyEl = (c: Card) => { const w = whyOf(c); return <WhyIcon w={w} title={w === "lock" ? `Locked to ${c.slot?.locked === "spot" ? "this spot" : c.slot?.locked === "press" ? "this press" : c.slot?.locked === "person" ? "this person" : "this day"} · right-click to change` : `${WHY_T[w]} · right-click to lock`} />; };
+  /** Run next (Nov 11, Nick): first on its press after what's running now, today if the press still has time, else its next day */
+  function runNext(c: Card) {
+    setLockMenu(null);
+    const m = c.machine, sh = shiftOn(m, today);
+    let d = today; if (!sh || now.min >= sh[1] - 30) { d = addDay(today, 1); for (let g = 0; g < 14 && !shiftOn(m, d); g++) d = addDay(d, 1); }
+    const nextUp = at(m, d).filter((g) => g.part === 1 && g.c.key !== c.key && g.c.slot && g.c.slot.status === "scheduled").sort((a, b) => a.start - b.start)[0];
+    place({ card: c }, m, d, nextUp?.c.key);
+  }
+  async function lockAs(c: Card, g: Seg, kind: "spot" | "press" | "day" | "person" | null) {
     setLockMenu(null);
     const sb = createClient();
     if (c.slot) {
@@ -1727,7 +1738,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const r = await sb.from("production_slots").insert({ ...ownerCols(c.job), machine: c.machine.id, day: g.day, minutes: c.minutes, start_min: kind === "spot" ? Math.round(g.start) : null, position: pos, kind: c.need.type, label: c.need.label, source: "manual", locked: kind, locations: locsFor(c.job, c.need) });
       if (r.error) { setMsg(r.error.message); return; }
     }
-    setMsg(kind ? `#${c.job.number} locked to ${kind === "spot" ? `${shortName(c.machine)} ${clock(g.start)}` : kind === "press" ? shortName(c.machine) : dayLbl(g.day)}. Re-plan works around it.` : `#${c.job.number} unlocked.`);
+    setMsg(kind ? `#${c.job.number} locked to ${kind === "spot" ? `${shortName(c.machine)} ${clock(g.start)}` : kind === "press" ? shortName(c.machine) : kind === "person" ? `${crewOf(c.machine)?.leader || shortName(c.machine)} (any of their presses)` : dayLbl(g.day)}. Re-plan keeps it there.` : `#${c.job.number} unlocked.`);
     load();
   }
   /** a job's card, by how much room it has: one line (#, customer, colors, pieces), two (the job's name under the
@@ -1900,7 +1911,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         <div className="msf-menu-bg" onClick={() => setLockMenu(null)} onContextMenu={(e) => { e.preventDefault(); setLockMenu(null); }} />
         <div className="msf-menu" style={{ left: Math.min(lockMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 280), top: lockMenu.y }}>
           <div className="msf-menu-h">#{lockMenu.c.job.number} {abbrCo(lockMenu.c.job.customer)} · {WHY_T[whyOf(lockMenu.c)].toLowerCase()}</div>
-          {([["spot", "Lock to this spot", `${shortName(lockMenu.c.machine)} · ${clock(lockMenu.g.start)}`], ["press", `Lock to ${crewOf(lockMenu.c.machine)?.leader ? crewOf(lockMenu.c.machine)!.leader + "'s press" : shortName(lockMenu.c.machine)}`, "its time can move"], ["day", `Lock to ${new Date(lockMenu.g.day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}`, "any press"]] as const).map(([k, l, sub]) => (
+          {lockMenu.c.slot?.status !== "running" && lockMenu.c.slot?.status !== "done" && <button type="button" onClick={() => runNext(lockMenu.c)}><span className="msf-rn">⚡</span><span>Run next</span><small>first on {crewOf(lockMenu.c.machine)?.leader || shortName(lockMenu.c.machine)}&apos;s press after what&apos;s running</small></button>}
+          <hr />
+          {([["spot", "Lock to this spot", `${shortName(lockMenu.c.machine)} · ${clock(lockMenu.g.start)}`], ...(crewOf(lockMenu.c.machine)?.leader ? [["person", `Lock to ${crewOf(lockMenu.c.machine)!.leader}`, "any press they run, any time"] as const] : []), ["press", `Lock to ${shortName(lockMenu.c.machine)}`, "this press, its time can move"], ["day", `Lock to ${new Date(lockMenu.g.day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}`, "that day, any press"]] as const).map(([k, l, sub]) => (
             <button key={k} type="button" className={lockMenu.c.slot?.locked === k ? "on" : ""} onClick={() => lockAs(lockMenu.c, lockMenu.g, k)}><WhyIcon w="lock" title="" /><span>{l}</span><small>{sub}</small></button>
           ))}
           {lockMenu.c.slot?.locked && <><hr /><button type="button" onClick={() => lockAs(lockMenu.c, lockMenu.g, null)}><WhyIcon w="ai" title="" /><span>Unlock, let re-plan move it</span></button></>}
