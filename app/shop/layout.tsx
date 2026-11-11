@@ -60,8 +60,8 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   return (
     <RoleProvider value={{ role, realRole, viewAs, viewName, perms, email, staffName: (me?.name as string) || "", sanebox: (me as { sanebox?: boolean } | null)?.sanebox !== false }}>
       <StockInkSeed rows={(stockInks || []) as { name: string; hex: string; line: string }[]} />
-      <ChatPing />
       <div className="app">
+        <ChatPing />
         <ShopNav email={email} firstName={firstName} fullName={full} brand={mergeSettings(st?.data).brand} shortcuts={(me?.shortcuts || []) as { label: string; href: string }[]} people={people} />
         <main className="main">{showSpanish && <div className="top-r"><Translate /></div>}<CrewGuard /><PullRefresh>{children}</PullRefresh></main>
         <Cheer on={!viewAs && !!me?.cheer} name={firstName} />

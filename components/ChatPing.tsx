@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { chatPing } from "@/app/shop/chat-ping-actions";
+import { useCan } from "@/components/RoleContext";
 
 type Item = { id: string; key: string; who: string; number: number | null; nickname: string; body: string };
 
@@ -11,9 +12,12 @@ type Item = { id: string; key: string; who: string; number: number | null; nickn
  * Open chat (the Job Center, on that conversation) and Later. Messages from before the page opened never pop.
  */
 export default function ChatPing() {
+  // only the people who answer customers (the "chatPings" permission: owner and admins; Nov 11, Nick)
+  const on = useCan("chatPings");
   const [list, setList] = useState<Item[]>([]);
   const since = useRef(new Date().toISOString());
   useEffect(() => {
+    if (!on) return;
     let live = true;
     const tick = async () => {
       if (document.hidden) return;
@@ -24,8 +28,8 @@ export default function ChatPing() {
     };
     const t = setInterval(() => void tick(), 20_000);
     return () => { live = false; clearInterval(t); };
-  }, []);
-  if (!list.length) return null;
+  }, [on]);
+  if (!on || !list.length) return null;
   const drop = (id: string) => setList((l) => l.filter((x) => x.id !== id));
   return (
     <div className="cpg" role="status" aria-live="polite">
