@@ -1,6 +1,6 @@
 "use client";
 import { useProdSide } from "@/lib/prodSide";
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
 import { createClient } from "@/lib/supabase/client";
@@ -73,7 +73,7 @@ function glance(need: Need, minutes: number) {
 /** one day's piece of a job (a long job is several pieces, one per working day) */
 /** one day's piece of a job: clock start/end, and the work minutes it covers (less than the clock time when the press runs slow) */
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean; work: number; slow?: number };
-type View = "split" | "timeline" | "day";
+type View = "flow" | "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number; /** a same-art run dragged by its header: every job in it moves */ group?: Card[] };
 type WhatIf = { id: string; kind: "split" | "ot" | "sat" | "combo"; title: string; detail: string; split: boolean; shifts: { machine: string; crew_id: string | null; day: string; start_min: number; end_min: number }[]; splits: number; lateAfter: number; stillLate: string[]; addedHours: number; cost: number };
 type WhenOpt = { m: Machine; start: number; end: number; minutes: number; ot: number; extra?: number; cost?: number; bumped?: { job: Job; late: boolean }[] };
@@ -121,7 +121,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
 // the machine kinds (picked from the menu's SP / EMB / HP now; kept for the names)
 export const TYPE_OPTS = [["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const;
-const VIEW_OPTS = [["split", "24 Hours + Next 5"], ["timeline", "Timeline"], ["day", "Day"]] as const;
+const VIEW_OPTS = [["flow", "Next 12 hours"], ["timeline", "Week"], ["day", "Day"]] as const;
 const HOUR_PX0 = 56;
 const LANE = 22;
 
@@ -360,7 +360,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const withTc = tc.ok ? withClock(sBase, tc.punches, today, now.min, 5, new Set(tc.tracked), tc.names) : sBase;
     return Object.keys(tc.worked).length ? withCrewHours(withTc, tc.worked, tc.names, today, now.min) : withTc;
   }, [sBase, tc, today, clockBucket]);
-  const [view, setView] = useSticky<View>("cal.view", "split");
+  const [view0, setView] = useSticky<View>("cal.view", "flow");
+  // the old two-panel view ("24 Hours + Next 5") became Next 12 hours (Nov 11 2026)
+  const view: View = view0 === "split" ? "flow" : view0;
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
   const [day, setDay] = useState(() => shopTime(new Date())!.day);
   const [wknd, setWknd] = useSticky<boolean | null>("cal.weekends", null);
@@ -1515,6 +1517,134 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       </div>
     </div>
   );
+  /* ---------- Next 12 hours (default, Nov 11 2026, Nick): the next 12 press hours as one run down the page, today
+     flowing into tomorrow with only the rainbow bar between them; a job that runs over the day break stays one card.
+     On the right, who's on what tomorrow and the day after. ---------- */
+  const FLOW_HOURS = 12, FLOW_PX = 60;
+  const flowBlocks = (() => {
+    const out: { d: string; a: number; b: number }[] = [];
+    let left = FLOW_HOURS * 60;
+    for (let i = 0, d = today; i < 21 && left > 0; i++, d = addDay(d, 1)) {
+      if (!visible(d)) continue;
+      const sh = machines.map((m) => shiftOn(m, d)).filter(Boolean) as [number, number][];
+      const gs = machines.flatMap((m) => at(m, d));
+      if (!sh.length && !gs.length) continue;
+      const a0 = Math.min(...sh.map((x) => x[0]), ...gs.map((g) => g.start)), b0 = Math.max(...sh.map((x) => x[1]), ...gs.map((g) => g.end));
+      const from = d === today ? Math.max(a0, now.min) : a0;
+      if (b0 - from <= 0) continue;
+      // today starts an hour before now (greyed: what already happened); later days at the first crew in
+      const a = d === today ? Math.max(Math.floor(a0 / 30) * 30, Math.floor((now.min - 60) / 30) * 30) : Math.floor(a0 / 30) * 30;
+      if (b0 - from > left) { out.push({ d, a, b: Math.ceil((from + left) / 30) * 30 }); left = 0; }
+      else { out.push({ d, a, b: Math.ceil(b0 / 30) * 30 }); left -= b0 - from; }
+    }
+    return out.length ? out : [{ d: today, a: Math.floor(now.min / 60) * 60, b: Math.floor(now.min / 60) * 60 + FLOW_HOURS * 60 }];
+  })();
+  const flowTop = flowBlocks.map((_, i) => flowBlocks.slice(0, i).reduce((t, x) => t + ((x.b - x.a) / 60) * FLOW_PX, 0));
+  const flowH = flowBlocks.reduce((t, x) => t + ((x.b - x.a) / 60) * FLOW_PX, 0);
+  const flowY = (bi: number, min: number) => flowTop[bi] + ((Math.min(Math.max(min, flowBlocks[bi].a), flowBlocks[bi].b) - flowBlocks[bi].a) / 60) * FLOW_PX;
+  /** where a point on the column is: which day and minute */
+  const flowAt = (y: number) => { let bi = flowBlocks.length - 1; for (let i = 0; i < flowBlocks.length; i++) if (y < flowTop[i] + ((flowBlocks[i].b - flowBlocks[i].a) / 60) * FLOW_PX) { bi = i; break; } return { d: flowBlocks[bi].d, min: flowBlocks[bi].a + ((y - flowTop[bi]) / FLOW_PX) * 60 }; };
+  const wkd = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" });
+  /** a job's card, by how much room it has: one line (#, customer, colors, pieces), two (the job's name under the
+   *  customer), three (name, then colors · pieces · run time) (Nov 11, Nick: "anytime you have space… the job name") */
+  const flowCard = (g: Seg, y1: number, y2: number, key: string, extraCls = "") => {
+    const h = Math.max(16, y2 - y1 - 2), gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, lines = h >= 46 ? 3 : h >= 30 ? 2 : 1;
+    const name = g.c.job.name || g.c.need.label;
+    const num = <b className="msf-n">#{g.c.job.number}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
+    return (
+      <button key={key} type="button" draggable className={cls(g) + " msf-card l" + lines + extraCls} style={{ top: y1 + 1, height: h }} title={tip(g)}
+        onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
+        <span className="msf-1">{num}{tagOf(g)}{flags(g.c.job)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()}</span> : null}</span>
+        {lines === 2 ? <span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : ""}<span className="msf-x">{g.c.job.customer ? " · " : ""}{gl.colors} · {gl.units.toLocaleString()} · {gl.run}</span></span> : null}
+        {lines === 3 ? <><span className="msf-2">{holdTag(g.c.job)}{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.customer ? name : g.c.need.label}</span><span className="msf-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}</span></> : null}
+      </button>
+    );
+  };
+  const flowView = () => (
+    <div className="msf">
+      <div className="msf-main">
+        <div className="msf-grid" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
+          <div className="msf-corner" />
+          {machines.map((m) => <div key={m.id} className={"msf-mh " + m.type + (isOffDay(m, today) ? " off" : "")}><b title={m.name}>{shortName(m)}<IssueTag m={m} /></b>{crewOf(m) ? <span>{crewOf(m)!.leader}</span> : <span>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} heads` : "heat"}</span>}{flowBlocks[0].d === today && crewOf(m) && <ActualCell m={m} />}</div>)}
+          <div className="msf-gut" style={{ height: flowH }}>
+            {flowBlocks.flatMap((bk, bi) => {
+              const hs: ReactNode[] = [];
+              for (let h = Math.ceil(bk.a / 60) * 60; h < bk.b; h += 60) if (!(bi > 0 && h === bk.a)) hs.push(<span key={bk.d + h} style={{ top: flowY(bi, h) }}>{clock(h)}</span>);
+              if (bi > 0) hs.push(<span key={bk.d + "lbl"} className="msf-dl" style={{ top: flowTop[bi] }}><b>{wkd(bk.d)}</b>{clock(bk.a)}</span>);
+              return hs;
+            })}
+          </div>
+          {machines.map((m) => {
+            // this press's jobs across the days shown, a job that carries over the day break joined into one card
+            const items: { g: Seg; y1: number; y2: number }[] = [];
+            flowBlocks.forEach((bk, bi) => {
+              for (const x of joined(m, bk.d)) {
+                if (x.end <= bk.a || x.start >= bk.b) continue;
+                const y1 = flowY(bi, x.start), y2 = flowY(bi, x.end), last = items[items.length - 1];
+                if (last && last.g.c.key === x.g.c.key && bi > 0 && Math.abs(last.y2 - flowTop[bi]) < 3 * FLOW_PX) last.y2 = y2;
+                else items.push({ g: x.g, y1, y2 });
+              }
+            });
+            return (
+              <div key={m.id} className={"msf-col" + (over === "f:" + m.id ? (canDrop(m) ? " over" : " no") : "")} style={{ height: flowH, backgroundSize: `100% ${FLOW_PX}px` }}
+                onDragOver={(e) => { e.preventDefault(); setOver("f:" + m.id); }} onDragLeave={() => setOver("")}
+                onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); drop(m, p.d, p.min); }}
+                onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button")) return; const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); setDownEdit({ machine: m.id, day: p.d, start: Math.floor(p.min / 30) * 30 }); }}
+                title="Click an open time to add downtime here">
+                {flowBlocks.map((bk, bi) => {
+                  const sh = shiftOn(m, bk.d), oa = sh ? otOn(m, bk.d) : null, [sa, sb2] = sh || [bk.b, bk.b];
+                  const off = sh ? [[bk.a, sa], [sb2, bk.b]].filter(([x, y]) => y > x) : [[bk.a, bk.b]];
+                  return (
+                    <Fragment key={bk.d}>
+                      {off.map(([x, y]) => <div key={"of" + x} className="ms-off" style={{ top: flowY(bi, x), height: flowY(bi, y) - flowY(bi, x) }} />)}
+                      {sh && oa != null && oa < sh[1] && <div className="ms-ot" style={{ top: flowY(bi, oa), height: flowY(bi, sh[1]) - flowY(bi, oa) }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`} />}
+                      {sh && breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d)).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <div key={"bk" + a0} className={why === "Warm-up" ? "ms-warm" : "ms-lunch"} style={{ top: flowY(bi, a0), height: flowY(bi, b0) - flowY(bi, a0) }} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} /> : null)}
+                      {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
+                      {bk.d === today && now.min > bk.a && <div className="ms-pastv" style={{ top: flowTop[bi], height: flowY(bi, now.min) - flowTop[bi] }} />}
+                      {bk.d === today && now.min >= bk.a && now.min <= bk.b && <div className="ms-now" style={{ top: flowY(bi, now.min) }} />}
+                    </Fragment>
+                  );
+                })}
+                {items.map((x) => flowCard(x.g, x.y1, x.y2, x.g.c.key + x.g.part))}
+              </div>
+            );
+          })}
+          {flowBlocks.slice(1).map((bk, i) => <div key={"br" + bk.d} className="msf-break" style={{ marginTop: flowTop[i + 1] - 1.5 }} aria-hidden />)}
+        </div>
+      </div>
+      {comingUp()}
+    </div>
+  );
+  /** the right side: who runs what tomorrow and the day after, press by press, in run order */
+  const comingUp = () => {
+    const ds: string[] = [];
+    for (let i = 1; i < 21 && ds.length < 2; i++) { const d = addDay(today, i); if (visible(d) && machines.some((m) => shiftOn(m, d) || at(m, d).length)) ds.push(d); }
+    return (
+      <aside className="msf-up">
+        <div className="msf-up-h"><b>Coming up</b><span className="faint">who&apos;s on what</span></div>
+        {ds.map((d) => (
+          <section key={d} className="msf-up-d">
+            <div className="msf-up-dh"><b>{dayLbl(d).replace(",", "")}</b>{d === addDay(today, 1) ? <span className="faint"> · tomorrow</span> : null}<span className="spacer" /><small className="faint">{fmtMin(machines.reduce((t, m) => t + used(m, d), 0))}</small></div>
+            {machines.map((m) => {
+              const js = joined(m, d);
+              if (!js.length) return null;
+              return (
+                <div key={m.id} className="msf-up-m">
+                  <div className="msf-up-mh"><b>{crewOf(m)?.leader || shortName(m)}</b><span className="faint">{crewOf(m) ? shortName(m) : ""}</span></div>
+                  {js.map((x) => { const gl = glance(x.g.c.need, x.g.c.minutes), late = ord(d) * 1440 + x.end > dueAbs(x.g.c.job); return (
+                    <button key={x.g.c.key + x.g.part} type="button" className={"msf-up-r" + (late ? " late" : "") + (x.g.c.job.kind === "h" ? " hold" : "")} onClick={() => setOpen(x.g.c)} title={tip(x.g)}>
+                      <span className="t">{clock(x.start)}</span><b>#{x.g.c.job.number}</b><span className="c">{abbrCo(x.g.c.job.customer || x.g.c.job.name)}</span><span className="q">{gl.colors} · {gl.units.toLocaleString()}</span>
+                    </button>
+                  ); })}
+                </div>
+              );
+            })}
+            {!machines.some((m) => joined(m, d).length) && <div className="faint msf-up-none">Nothing booked yet.</div>}
+          </section>
+        ))}
+      </aside>
+    );
+  };
   // what Renormalize Schedule would do: extra shifts from today on, and split jobs whose parts haven't started
   const renormItems = (): RenormItem[] => {
     const out: RenormItem[] = [], sb = createClient();
@@ -1768,7 +1898,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     setReplan({ why: `${w.title}${w.shifts.length ? " added" : ""}. Re-plan now to move the jobs into it?`, split: w.split });
   }
 
-  const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : setDay(nextVis(addDay(view === "split" ? d0 : day, dir), dir)));
+  const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : view === "flow" ? (setDay(nextVis(addDay(today, dir > 0 ? 1 : 0), dir)), setView("day")) : setDay(nextVis(addDay(day, dir), dir)));
   // test hook (off unless window.__MS_DEBUG is set): the scheduler's state and actions, for the automated stress test
   if (when || hold) return null;
   if (typeof window !== "undefined" && (window as unknown as { __MS_DEBUG?: boolean }).__MS_DEBUG) Object.assign(window, { __ms: { s, cards, segs, machines, today, now, tight, tray, slots, holds, planIt, applyPlan, whatIfs, whenCan, holdSpot, otReport, otOn, acceptAll, book, unbook, saveProgress, logAction, splitByLocation, saveHold, removeHold, cutOvertime, load } });
@@ -1786,7 +1916,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         <label className="ms-wknd ms-desk" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> <span className="ms-full">Weekends</span><span className="ms-cmp">Sat/Sun</span></label>
         <label className="ms-wknd ms-desk" title="Quotes holding a spot (Hold the spot): off, they're a plain gray band so the time still looks taken"><input type="checkbox" checked={showHolds} onChange={(e) => setShowHolds(e.target.checked)} /> <span className="ms-full">Show holds</span><span className="ms-cmp">Holds</span></label>
         <div className="rv-seg ms-span ms-full ms-desk">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <select className="ms-cmp ms-sel ms-desk" value={view} aria-label="View" onChange={(e) => setView(e.target.value as View)}>{VIEW_OPTS.map(([k, l]) => <option key={k} value={k}>{k === "split" ? "24 hrs + 5 days" : l}</option>)}</select>
+        <select className="ms-cmp ms-sel ms-desk" value={view} aria-label="View" onChange={(e) => setView(e.target.value as View)}>{VIEW_OPTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
         <div className="ms-nav ms-desk">
           <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
           <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
@@ -1953,7 +2083,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       <div className="ms-main">
         {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
         <div className="ms-key2"><span><i className="k job" />Job</span><span><i className="k late" />Late (past its in-hands date)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span><span><i className="k past" />Already past</span></div>
-        {view === "split" ? split() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
+        {view === "flow" ? flowView() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
       </div>
 

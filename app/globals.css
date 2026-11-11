@@ -21829,3 +21829,45 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ms-rnone{padding:6px 2px}
 .ms-calm .ms-blk.msh-dim:not(.bar){background:repeating-linear-gradient(135deg,var(--surface-2) 0 6px,transparent 6px 12px)!important;border:1px dashed var(--line)!important;box-shadow:none!important}
 .ms-calm .ms-blk.done:not(.bar){opacity:.5}
+
+/* ── Schedule · Next 12 hours (Nov 11 2026, Nick): one run from now through the next 12 press hours, today flowing into
+   tomorrow with only the rainbow bar between them; a job over the day break stays one card; Coming up on the right. */
+.msf{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;align-items:start}
+@container mscal (max-width: 900px){.msf{grid-template-columns:minmax(0,1fr)}}
+@media (max-width: 1000px){.msf{grid-template-columns:minmax(0,1fr)}}
+.msf-main{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.msf-grid{display:grid;position:relative}
+.msf-corner{border-bottom:1px solid var(--line)}
+.msf-mh{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;padding:7px 8px;border-bottom:1px solid var(--line);border-left:1px solid var(--line);font-size:13px;min-width:0}
+.msf-mh>b{white-space:nowrap}.msf-mh>span{font-size:12px;color:var(--ink-3);white-space:nowrap}.msf-mh.off{opacity:.6}
+.msf-mh .ms-act,.msf-mh [class*="ms-sa"]{flex-basis:100%}
+.msf-gut{position:relative;grid-row:2}
+.msf-gut span{position:absolute;right:6px;transform:translateY(-50%);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.msf-gut span:first-child{transform:none}
+.msf-gut .msf-dl{transform:translateY(-100%);display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;padding-bottom:3px}
+.msf-gut .msf-dl b{color:var(--ink);font-size:11.5px}
+.msf-gut .msf-dl{transform:translateY(-50%);padding:0}
+.msf-col{position:relative;grid-row:2;border-left:1px solid var(--line);background-image:linear-gradient(to bottom,var(--line-2,#f1f3f6) 1px,transparent 1px);min-width:0}
+.msf-col.over{background-color:color-mix(in srgb,var(--accent) 5%,transparent)}.msf-col.no{background-color:color-mix(in srgb,var(--danger) 5%,transparent)}
+.msf-break{grid-row:2;grid-column:1/-1;align-self:start;height:3px;background:var(--fbs-fade);position:relative;z-index:5;pointer-events:none;border-radius:2px}
+.ms-calm .msf-card.ms-blk{position:absolute;left:4px;right:4px;display:flex;flex-direction:column;justify-content:flex-start;gap:0;padding:3px 7px;overflow:hidden;text-align:left;z-index:2}
+.ms-calm .msf-card.l1{flex-direction:row;align-items:center;padding:0 6px}
+.msf-1{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;font-size:12.5px;line-height:16px}
+.msf-1 .msf-n{font-size:12.5px;color:var(--ink)}.msf-co{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.msf-x{color:var(--ink-3);font-size:11.5px}
+.msf-1 .msf-x{flex:0 0 auto}
+.msf-2{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:15px}
+.msf-3{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:15px}
+.msf-card.l1 .msf-1{font-size:12px}
+.msf-up{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.msf-up-h{display:flex;align-items:baseline;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line)}.msf-up-h b{font-family:var(--display);font-size:15px}.msf-up-h .faint{font-size:12px}
+.msf-up-d{padding:6px 12px 8px;border-bottom:1px solid var(--line)}.msf-up-d:last-child{border-bottom:0}
+.msf-up-dh{display:flex;align-items:baseline;gap:4px;font-size:13px;margin:2px 0 4px;white-space:nowrap}
+.msf-up-m{margin-top:4px}
+.msf-up-mh{display:flex;justify-content:space-between;gap:6px;font-size:12.5px;margin:4px 0 1px}.msf-up-mh .faint{font-size:11.5px}
+.msf-up-r{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:40px auto minmax(0,1fr) auto;gap:6px;align-items:baseline;width:100%;padding:3px 0;border-bottom:1px solid var(--line-2,#f1f3f6);font-size:12.5px;white-space:nowrap}
+.msf-up-r:hover{background:var(--surface-2)}
+.msf-up-r .t{color:var(--ink-3);font-size:11.5px;font-variant-numeric:tabular-nums}.msf-up-r .c{overflow:hidden;text-overflow:ellipsis}.msf-up-r .q{color:var(--ink-3);font-size:11.5px}
+.msf-up-r.late b{color:var(--danger)}.msf-up-r.hold{color:var(--ink-3)}
+.msf-up-none{font-size:12px;padding:4px 0}
+@media (max-width: 700px){.msf{display:none}}
