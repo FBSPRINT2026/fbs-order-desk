@@ -1183,7 +1183,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
         <nav className="toolbar aa-shopnav" aria-label="Customer sections">
           <div className="chips">
             {AREAS.filter((a) => a.show !== false).map((a) => (
-              <button key={a.id} type="button" className={"chip" + (area === a.id ? " on" : "")} onClick={() => { go(a.id); setQ(""); }}>{a.label}{a.n ? <span className="chip-n">{a.n}</span> : null}</button>
+              <button key={a.id} type="button" className={"chip" + (area === a.id ? " on" : "")} onClick={() => { go(a.id); setQ(""); }}>{a.label}</button>
             ))}
             {(() => {
               const more = [
@@ -1204,7 +1204,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
       <nav className="aa-nav" aria-label="Account areas">
         {AREAS.filter((a) => a.show !== false).map((a) => (
           <button key={a.id} type="button" data-area={a.id} className={"aa-tab" + (area === a.id ? " on" : "") + (a.id === "program" && !hasProgram ? " off" : "")} title={a.id === "program" && !hasProgram ? (mode === "portal" ? "Program pricing: special flat prices on the items you order often. Ask us about it." : "No program set up yet") : a.label} onClick={() => { go(a.id); setQ(""); }}>
-            <Ico d={a.icon} /><span>{a.label}</span>{a.n && (mode !== "portal" || a.id === "messages") ? <span className="aa-n">{a.n}</span> : null}
+            {/* no count bubbles on the account bar, shop or portal, any size (Nov 11, Nick: "just take them all away") */}<Ico d={a.icon} /><span>{a.label}</span>
           </button>
         ))}
         {/* the customer's Settings, last on the bar (Oct 24, Nick: "on the toolbar all the way to the right") */}

@@ -59,6 +59,10 @@ const ICONS: Record<string, React.ReactNode> = {
   cart: <svg viewBox="0 0 24 24"><path d="M3 4h2.5l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.4a1.5 1.5 0 0 0 1.5-1.1L21 8H6.6" /><circle cx="9.5" cy="19.5" r="1.4" /><circle cx="17" cy="19.5" r="1.4" /></svg>,
   goods: <svg viewBox="0 0 24 24"><path d="M9 3.5L4 5.8 2.5 10.2l3.2 1.3.9-2.2V20.5h10.8V9.3l.9 2.2 3.2-1.3L20 5.8 15 3.5c-.4 1.6-1.6 2.6-3 2.6s-2.6-1-3-2.6z" /></svg>,
   shipping: <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z" /><path d="M3 7l9 4 9-4M12 11v10" /></svg>,
+  // a folded shirt going into a bag (fulfillment: folding, bagging, tags)
+  fulfill: <svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6z" /><path d="M9 8V6a3 3 0 016 0v2" /><path d="M9 13h6" /></svg>,
+  // a truck (outbound: ship, deliver, pickup)
+  outbound: <svg viewBox="0 0 24 24"><path d="M2 6h11v10H2zM13 9h4l4 4v3h-8z" /><circle cx="6" cy="18" r="1.8" /><circle cx="17" cy="18" r="1.8" /></svg>,
   artwork: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-8 9" /></svg>,
   spool: <svg viewBox="0 0 24 24"><path d="M6 3h12M6 21h12" /><path d="M8 3v18M16 3v18" /><path d="M8 7l8 2M8 11l8 2M8 15l8 2" /></svg>,
   artbuild: <svg viewBox="0 0 24 24"><rect x="3" y="4" width="13" height="13" rx="2" /><path d="M6 14l3-4 3 3 2-2" /><path d="M19 8v8M15 12h8" /></svg>,
@@ -79,6 +83,8 @@ const ICONS: Record<string, React.ReactNode> = {
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
 /** shorter names for the tightest menu (two links a row) */
+/** Shop Tools / Admin Tools tiles: a short name under each icon, two lines at most (Nov 11 2026, Nick) */
+const TOOL_LBL: Record<string, string> = { "AI Workbench": "AI", "Order Goods": "Order", "Time Clock": "Time", "Gang Sheet Builder": "Gang", "Customer Artwork Builder": "Art", "Receive a Payment": "Payment", "Portal customers": "Portal", "QuickBooks": "QBO", "Printavo Sync": "Printavo", "ClickUp Jobs": "ClickUp", "Payroll Center": "Payroll", "Necklines": "Necks", "Support": "Support" };
 const SHORT: Record<string, string> = { "ClickUp Jobs": "ClickUp", "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving", "Order Goods": "Order", "Reorder Details": "Details", "Conversations": "Chats", "AI Workbench": "AI", "Thread Wall": "Threads", "Digitizing": "Digitize" };
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
@@ -140,6 +146,9 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   // my Admin Tools share the Shop Tools spot (Oct 24, Nick: "where it says shop tools… put ADM and then SHOP, and then
   // it'll toggle between all my admin tools and then my shop tools"); remembered like the other switches
   const [toolSide, setToolSide] = useSticky<"shop" | "adm">("nav.tools", "shop");
+  // each section folds to its everyday pages; the arrow on its heading drops the rest down (Nov 11 2026, Nick)
+  const [salesAll, setSalesAll] = useSticky<boolean>("nav.salesAll", false);
+  const [prodAll, setProdAll] = useSticky<boolean>("nav.prodAll", false);
   // a tool panel open on the right (Create order): the menu folds to icons for the room, and comes back as it was when
   // the panel closes (Oct 23, Nick: "automatically minimize the toolbar on the left until we close the reorder")
   const [docked, setDocked] = useState(false);
@@ -291,18 +300,22 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/jobs", "proof", "Job Center"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
-    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Production"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Wall"], ["/shop/digitizing", "needle", "Digitizing"], ["/shop/gang-sheet", "gang", "Gang Sheets"]] },
-    { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/receiving", "goods", "Goods & Receiving"], ["/shop/shipping", "shipping", "Shipping Center"], ["/shop/time", "clock", "Time Clock"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"], ["/shop/art-builder", "artbuild", "Customer Artwork Builder"], ["/shop/take-payment", "takepay", "Take a Payment"], ["/shop/customers/contacts", "contacts", "Portal customers"]] },
+    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Schedule"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Wall"], ["/shop/digitizing", "needle", "Digitizing"], ["/shop/gang-sheet", "gang", "Gang Sheets"]] },
+    { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/time", "clock", "Time Clock"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"], ["/shop/art-builder", "artbuild", "Customer Artwork Builder"], ["/shop/receive-payment", "takepay", "Receive a Payment"], ["/shop/customers/contacts", "contacts", "Portal customers"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));
 
 
   // a tool someone doesn't have isn't in their menu at all (Oct 22, Nick: Claudia "is not going to see… the time clock
   // tool… employees… separations")
+  // pages used now and then: tucked under each section's arrow (Nov 11 2026, Nick: "the ink room, the employees, the
+  // artwork, they're not going to use that very often… merch stores or projects")
+  const OCCASIONAL = ["/shop/stores", "/shop/projects", "/shop/artwork", "/shop/employees", "/shop/inks"];
+  const FLOOR: [string, string, string][] = [["/shop/receiving", "goods", "Receiving"], ["/shop/fulfillment", "fulfill", "Fulfillment"], ["/shop/outbound", "outbound", "Outbound"]];
   const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? null : (
     <NavLink key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={href === "/shop/time" && timeCount > 0 ? `${label}: ${timeCount} to fix` : label} aria-label={label}
       >
-      {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
+      {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}{TOOL_LBL[label] && <span className="lbl-k" aria-hidden>{TOOL_LBL[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
       {href === "/shop/clickup" && clickup > 0 && <span className="badge" title={`${clickup} new ClickUp job${clickup === 1 ? "" : "s"} to process`}>{clickup}</span>}
       {href === "/shop/time" && timeCount > 0 && <span className="badge" title={`${timeCount} time clock issue${timeCount === 1 ? "" : "s"} to fix`}>{timeCount}</span>}
@@ -391,9 +404,10 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
         {link(["/shop", "home", "My Day"])}
         {link(["/shop/inbox", "inbox", "Email"])}
         {link(["/shop/my-calendar", "cal", "Calendar"])}
-        {(crew ? [GROUPS[1], GROUPS[0], GROUPS[2]] : GROUPS).filter((g) => g.items.some(([href]) => canOpen(href, perms))).map((g) => (
+        {(crew ? [GROUPS[1], GROUPS[0], GROUPS[2]] : GROUPS).filter((g) => [...g.items, ...(g.title === "Production" ? FLOOR : [])].some(([href]) => canOpen(href, perms))).map((g) => (
           <div key={g.title} className={"nav-g nav-g-" + g.title.toLowerCase().replace(/\s+/g, "") + (g.title === "Production" ? ` side-${side}` : "")}>
             <div className={"nav-h nav-h-" + g.title.toLowerCase().replace(/\s+/g, "")}>{g.title === "Shop Tools" && role === "owner" && toolSide === "adm" ? "Admin Tools" : g.title}
+              {(g.title === "Sales" || g.title === "Production") && <button type="button" className={"nav-fold" + ((g.title === "Sales" ? salesAll : prodAll) ? " open" : "")} aria-expanded={g.title === "Sales" ? salesAll : prodAll} title={(g.title === "Sales" ? salesAll : prodAll) ? "Show only the everyday pages" : "Show every page"} onClick={() => (g.title === "Sales" ? setSalesAll(!salesAll) : setProdAll(!prodAll))}><svg viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" /></svg></button>}
               {/* screen printing, embroidery or heat press: SP / EMB / HP on the right of the heading. The picked one shows in
                   its side's color (blue / salmon / orange), and so does the menu's picked item. */}
               {g.title === "Production" && !sideLocked && canOpen("/shop/threads", perms) && canOpen("/shop/inks", perms) && (
@@ -415,8 +429,13 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
               ? <div className="nav-tools">{role === "owner" && toolSide === "adm" ? adminTools : g.items.map(link)}</div>
               : g.items.filter(([href]) => href !== "/shop/details" || details > 0 || path.startsWith("/shop/details"))
                   // each side's own tools: separations and inks for screen printing, digitizing and threads for embroidery, neither for heat press
+                  // folded: only the everyday pages (and whichever page you're on)
+                  .filter(([href]) => mini || !(((g.title === "Sales" && !salesAll) || (g.title === "Production" && !prodAll)) && OCCASIONAL.includes(href) && !path.startsWith(href)))
                   .filter(([href]) => g.title !== "Production" || !(side === "embroidery" ? ["/shop/separations", "/shop/inks", "/shop/gang-sheet"] : side === "heat" ? ["/shop/separations", "/shop/inks", "/shop/digitizing", "/shop/threads"] : ["/shop/digitizing", "/shop/threads", "/shop/gang-sheet"]).includes(href))
                   .map(link)}
+            {/* the shop floor (Nov 11 2026, Nick): Receiving, Fulfillment and Outbound are the same whatever SP / EMB / HP is
+                picked, so they sit together at the bottom of Production on a slightly lighter block */}
+            {g.title === "Production" && FLOOR.some(([href]) => canOpen(href, perms)) && <div className="nav-floor" title="Same for screen print, embroidery and heat press">{FLOOR.map(link)}</div>}
           </div>
         ))}
       </nav>

@@ -1,6 +1,6 @@
 "use client";
 import { useProdSide } from "@/lib/prodSide";
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
 import { createClient } from "@/lib/supabase/client";
@@ -37,8 +37,16 @@ const holdState = (j: Job): "" | "wait" | "due" | "late" => {
 const holdTag = (j: Job) => { const st = holdState(j); if (!st) return null; const d = new Date(j.hold!.detailsDue + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" }); return <b className={"msh-tag " + st}>{st === "late" ? "Late on details" : st === "due" ? "Details due today" : `Details due ${d}`}</b>; };
 /** 🔥 rush, ⛰️ firm date */
 const flags = (j: Job) => (j.rush || j.firm ? <i className="ms-flags" title={[j.rush ? "Rush" : "", j.firm ? `Firm: needed ${firmLbl(j)}` : ""].filter(Boolean).join(" · ")}>{j.rush ? "🔥" : ""}{j.firm ? "⛰️" : ""}</i> : null);
+/** why a job is where it is (Nov 11 2026, Nick): the schedule put it there (sparkle), a person did, it's locked, or
+ *  it only fits that press */
+function WhyIcon({ w, title }: { w: "lock" | "cap" | "me" | "ai"; title: string }) {
+  return <span className={"msf-why " + w} title={title} aria-label={title}>{w === "ai" ? <svg viewBox="0 0 16 16"><path d="M8 1l1.6 4.4L14 7l-4.4 1.6L8 13l-1.6-4.4L2 7l4.4-1.6z" /></svg>
+    : w === "me" ? <svg viewBox="0 0 16 16"><circle cx="8" cy="5" r="3" /><path d="M2.5 15c0-3.2 2.5-5.3 5.5-5.3s5.5 2.1 5.5 5.3z" /></svg>
+    : w === "lock" ? <svg viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="8" rx="1.5" /><path d="M5 7V5a3 3 0 016 0v2" fill="none" stroke="currentColor" strokeWidth="1.8" /></svg>
+    : <svg viewBox="0 0 16 16"><rect x="1.5" y="5" width="7" height="6" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" /><rect x="7.5" y="5" width="7" height="6" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" /></svg>}</span>;
+}
 const firmLbl = (j: Job) => (j.due ? `${new Date(j.due + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}${j.dueTime != null ? " " + clock(j.dueTime) : ""}` : "");
-type Slot = { id: string; order_id: string | null; archived_order_id: string | null; /** a Planner hold (a job we know is coming) */ hold_id?: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "paused" | "done"; source: string; note: string; rolled_from: string | null;
+type Slot = { id: string; order_id: string | null; archived_order_id: string | null; /** Jose's lock (Nov 11 2026): spot = press + time, press, day; re-plan never moves it */ locked?: "spot" | "press" | "day" | null; /** a Planner hold (a job we know is coming) */ hold_id?: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "paused" | "done"; source: string; note: string; rolled_from: string | null;
   /** job log: when it really started / finished, how far along (0–1) as of progress_at; which print locations this booking covers (null = all) */
   started_at?: string | null; finished_at?: string | null; progress?: number; progress_at?: string | null; locations?: string[] | null };
 /** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
@@ -73,7 +81,7 @@ function glance(need: Need, minutes: number) {
 /** one day's piece of a job (a long job is several pieces, one per working day) */
 /** one day's piece of a job: clock start/end, and the work minutes it covers (less than the clock time when the press runs slow) */
 type Seg = { c: Card; day: string; start: number; end: number; part: number; parts: number; pushed: boolean; work: number; slow?: number };
-type View = "split" | "timeline" | "day";
+type View = "flow" | "split" | "timeline" | "day";
 type Drag = { card?: Card; job?: Job; need?: Need; grabMin: number; /** a same-art run dragged by its header: every job in it moves */ group?: Card[] };
 type WhatIf = { id: string; kind: "split" | "ot" | "sat" | "combo"; title: string; detail: string; split: boolean; shifts: { machine: string; crew_id: string | null; day: string; start_min: number; end_min: number }[]; splits: number; lateAfter: number; stillLate: string[]; addedHours: number; cost: number };
 type WhenOpt = { m: Machine; start: number; end: number; minutes: number; ot: number; extra?: number; cost?: number; bumped?: { job: Job; late: boolean }[] };
@@ -121,7 +129,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
 // the machine kinds (picked from the menu's SP / EMB / HP now; kept for the names)
 export const TYPE_OPTS = [["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const;
-const VIEW_OPTS = [["split", "24 Hours + Next 5"], ["timeline", "Timeline"], ["day", "Day"]] as const;
+const VIEW_OPTS = [["flow", "Next 12 hours"], ["timeline", "Week"], ["day", "Day"]] as const;
 const HOUR_PX0 = 56;
 const LANE = 22;
 
@@ -360,7 +368,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const withTc = tc.ok ? withClock(sBase, tc.punches, today, now.min, 5, new Set(tc.tracked), tc.names) : sBase;
     return Object.keys(tc.worked).length ? withCrewHours(withTc, tc.worked, tc.names, today, now.min) : withTc;
   }, [sBase, tc, today, clockBucket]);
-  const [view, setView] = useSticky<View>("cal.view", "split");
+  const [view0, setView] = useSticky<View>("cal.view", "flow");
+  // the old two-panel view ("24 Hours + Next 5") became Next 12 hours (Nov 11 2026)
+  const view: View = view0 === "split" ? "flow" : view0;
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
   const [day, setDay] = useState(() => shopTime(new Date())!.day);
   const [wknd, setWknd] = useSticky<boolean | null>("cal.weekends", null);
@@ -390,6 +400,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [pay, setPay] = useState<{ rates: Record<string, number>; names: Record<string, string> } | null>(null);
   const [owners, setOwners] = useState<AccountOwner[]>([]);
   const [trayAll, setTrayAll] = useState(false);
+  // Ready To Schedule's tabs (Nov 11, Nick: "late jobs, holders, and… jobs that are on time")
+  const [trayTab, setTrayTab] = useSticky<"all" | "late" | "hold" | "ok">("cal.trayTab", "all");
   const [trayOpen, setTrayOpen] = useSticky("cal.trayOpen", true);
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
@@ -419,6 +431,15 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [listOpen, setListOpen] = useState(""); // a same-art list opened to show all its jobs
   const [grpEdit, setGrpEdit] = useState<Card[] | null>(null); // a same-art run's time being edited
   const [restart, setRestart] = useState(false); // asking: take every not-started job off the calendar?
+  // live drag (Nov 11 2026, Nick: "when you drag a card over, you should see how it bumps everything… in real time"):
+  // where the dragged job would land (press, day, before which job) and the schedule laid out that way
+  const dragAt = useRef(0); // when a drag last started or ended: the click that follows it is not "add downtime"
+  const [pv, setPv] = useState<{ mid: string; d: string; before: string; y: number } | null>(null);
+  const pvCache = useRef<{ k: string; v: ReturnType<typeof layoutAll> | null }>({ k: "", v: null });
+  // each order's goods (order_goods.status): the dot by its number (Nov 11 2026, Nick: "a green dot… counted")
+  const [goodsSt, setGoodsSt] = useState<Map<string, string>>(new Map());
+  const [upDay, setUpDay] = useSticky<number>("cal.upDay", 0);
+  const [lockMenu, setLockMenu] = useState<{ c: Card; g: Seg; x: number; y: number } | null>(null);
   // Re-plan results for the calendar as it is (the Re-plan window asks on every redraw): worked out again when anything changes
   const planCache = useRef<{ deps: unknown[]; v: Map<boolean, unknown> }>({ deps: [], v: new Map() });
 
@@ -572,6 +593,21 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   useEffect(() => { load(); }, [load]);
 
   const byKey = useMemo(() => new Map((jobs || []).map((j) => [j.key, j])), [jobs]);
+  // a drag that ends anywhere (dropped, Esc, or its card redrawn mid-drag) always clears the live preview
+  useEffect(() => {
+    const end = () => { dragAt.current = Date.now(); setPv(null); setOver(""); setDrag(null); };
+    window.addEventListener("dragend", end); window.addEventListener("drop", end);
+    return () => { window.removeEventListener("dragend", end); window.removeEventListener("drop", end); };
+  }, []);
+  useEffect(() => {
+    const ids = (jobs || []).filter((j) => j.kind === "o").map((j) => j.id);
+    if (!ids.length) return;
+    (async () => {
+      const sb = createClient(), m = new Map<string, string>();
+      for (let i = 0; i < ids.length; i += 200) { const r = await sb.from("order_goods").select("order_id, status").in("order_id", ids.slice(i, i + 200)); for (const x of (r.data || []) as { order_id: string; status: string }[]) m.set(x.order_id, x.status); }
+      setGoodsSt(m);
+    })();
+  }, [jobs]);
   const slotKey = (x: { order_id: string | null; archived_order_id: string | null; hold_id?: string | null }) => (x.hold_id ? "h:" + x.hold_id : x.order_id ? "o:" + x.order_id : "a:" + x.archived_order_id);
   // everything on the calendar: our bookings, then Printavo machine statuses that aren't booked here
   const cards = useMemo<Card[]>(() => {
@@ -622,9 +658,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const at = (m: Machine, d: string) => segs.by.get(m.id + "|" + d) || [];
   /** a day's pieces with a job that runs through lunch (or a warm-up) drawn as one card over it (Nov 9, Nick: "when
    *  lunch falls within a job it shouldn't split it up… if lunch falls between jobs it should split between the job") */
-  const joined = (m: Machine, d: string) => {
+  const joined = (m: Machine, d: string, by?: Map<string, Seg[]>) => {
     const out: { g: Seg; start: number; end: number; gaps: [number, number][]; n: number }[] = [];
-    for (const g of at(m, d).slice().sort((x, y) => x.start - y.start)) {
+    for (const g of (by ? by.get(m.id + "|" + d) || [] : at(m, d)).slice().sort((x, y) => x.start - y.start)) {
       const last = out[out.length - 1];
       if (last && last.g.c.key === g.c.key && g.start - last.end > 0 && g.start - last.end <= 90) { last.gaps.push([last.end, g.start]); last.end = g.end; last.n++; }
       else out.push({ g, start: g.start, end: g.end, gaps: [], n: 1 });
@@ -691,7 +727,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     for (const c of cards) { const k = c.job.key + ":" + c.need.type, cur = onCal.get(k); if (cur === "all") continue; const l = c.slot?.locations; onCal.set(k, !l || !l.length ? "all" : [...(cur || []), ...l]); }
     // approved orders wait here (Nov 9, Nick: "a job that's marked invoiced… and approved should just go on to the production
     // scheduler"); booking one makes it In Production (a database trigger, migration 302)
-    const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "approved" || j.status === "production" : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
+    // a hold (a quote's press time, Production holder) waits here too when it isn't on a press (Nov 11, Nick: "it should
+    // just treat it like any other schedule job… in the queue above")
+    const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "approved" || j.status === "production" : j.kind === "h" ? true : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
     const ld = JSON.parse(JSON.stringify(loadMap)) as Record<string, Record<string, number>>;
     const out: { job: Job; need: Need; sug: Suggestion | null }[] = [];
     // where each art already runs (booked, not done), and later where it's suggested: same art goes together (Nov 9)
@@ -733,6 +771,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     return out;
   }, [tray, cards, segs, today, typeF]);
 
+  /** whose booking a slot is: an order, an old Printavo job, or a hold (a quote's held press time, Production holder) */
+  const ownerCols = (job: Job): Record<string, string | null> => ({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, ...(job.kind === "h" ? { hold_id: job.id } : {}) });
   async function book(job: Job, need: Need, machine: Machine, d: string, source = "manual", slot?: Slot | null, startMin: number | null = null) {
     if (!s) return;
     if (!fits(need, machine)) { setMsg(`#${job.number} ${whyUnfit(need, machine)}.`); return; }
@@ -741,7 +781,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const pos = cards.filter((c) => c.machine.id === machine.id && c.day === d).length;
     const r = slot
       ? await sb.from("production_slots").update({ machine: machine.id, day: d, minutes, start_min: startMin, position: pos, updated_at: new Date().toISOString() }).eq("id", slot.id)
-      : await sb.from("production_slots").insert({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, machine: machine.id, day: d, minutes, start_min: startMin, position: pos, kind: need.type, label: need.label, source, locations: locsFor(job, need) });
+      : await sb.from("production_slots").insert({ ...ownerCols(job), machine: machine.id, day: d, minutes, start_min: startMin, position: pos, kind: need.type, label: need.label, source, locations: locsFor(job, need) });
     if (r.error) { setMsg(r.error.message); return; }
     setMsg(`#${job.number} → ${machine.name}, ${dayLbl(d)}${startMin != null ? ` at ${clockLong(startMin)}` : ""} (${fmtMin(minutes)})`);
     load();
@@ -755,7 +795,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const rows = list.map((t) => {
       const k = t.sug!.machine.id + t.sug!.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === t.sug!.machine.id && c.day === t.sug!.day).length;
       const position = late(t) ? -1000 + (early[k] = (early[k] ?? 0) + 1) : pos[k]++;
-      return { order_id: t.job.kind === "o" ? t.job.id : null, archived_order_id: t.job.kind === "a" ? t.job.id : null, machine: t.sug!.machine.id, day: t.sug!.day, minutes: t.sug!.minutes, position, kind: t.need.type, label: t.need.label, source: "suggested", locations: locsFor(t.job, t.need) };
+      return { ...ownerCols(t.job), machine: t.sug!.machine.id, day: t.sug!.day, minutes: t.sug!.minutes, position, kind: t.need.type, label: t.need.label, source: "suggested", locations: locsFor(t.job, t.need) };
     });
     if (!rows.length) return;
     const r = await createClient().from("production_slots").insert(rows);
@@ -917,7 +957,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       for (let i = 0, d = today; i < 14; i++, d = addDay(d, 1)) {
         const oa = otOn(m, d), sh = shiftOn(m, d); if (oa == null || !sh) continue;
         // work that stays put that day (running, done, firm, a Planner hold) keeps its time
-        const stuck = cards.filter((c) => c.machine.id === m.id && (c.slot?.status === "running" || c.slot?.status === "done" || !!c.job.firm || c.job.kind === "h")).flatMap((c) => segs.ofCard.get(c.key) || []).filter((g) => g.day === d).reduce((t, g) => Math.max(t, g.end), 0);
+        const stuck = cards.filter((c) => c.machine.id === m.id && (c.slot?.status === "running" || c.slot?.status === "done" || !!c.job.firm || !!c.slot?.locked)).flatMap((c) => segs.ofCard.get(c.key) || []).filter((g) => g.day === d).reduce((t, g) => Math.max(t, g.end), 0);
         const start = Math.ceil(Math.max(oa, stuck, d === today ? nowAbs - ord(d) * 1440 : 0) / 15) * 15;
         if (start < sh[1] - 5) cuts.set(m.id, [...(cuts.get(m.id) || []), { m, day: d, start, end: sh[1] }]);
       }
@@ -961,7 +1001,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     // not started yet (or paused partway): free to move. Running and done work stays where it is.
     // a firm job (⛰️) that's on course for its date and time stays exactly where it is (unless its press can't print it now)
     const firmHolds = (c: Card) => !!c.job.firm && fits(c.need, c.machine) && (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0) <= dueAbs(c.job);
-    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c) && c.job.kind !== "h");
+    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c) && !c.slot?.locked);
     // work that stays where it is (running, done, a firm job on course, other machine types) is an obstacle on its
     // machine, not a wall: open time before and between it is still used (a firm job on Thursday doesn't empty Wednesday)
     let fixed = new Map<string, [number, number][]>(), fixedAbs = new Map<string, [number, number][]>(), jobBusy = new Map<string, [number, number][]>();
@@ -1099,7 +1139,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const o = row.o!;
       const lbl = o.parts > 1 ? subNeed(o.it.need, o.locs).label : o.it.need.label;
       if (o.it.slot && o.part === 1) ups.push(Promise.resolve(sb.from("production_slots").update({ machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: null, position, rolled_from: null, label: lbl, locations: o.locs, updated_at: new Date().toISOString() }).eq("id", o.it.slot.id)));
-      else ins.push({ order_id: o.it.job.kind === "o" ? o.it.job.id : null, archived_order_id: o.it.job.kind === "a" ? o.it.job.id : null, machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: null, position, kind: o.it.need.type, label: lbl, source: "replan", status: "scheduled", locations: o.locs });
+      else ins.push({ ...ownerCols(o.it.job), machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: null, position, kind: o.it.need.type, label: lbl, source: "replan", status: "scheduled", locations: o.locs });
     }
     await Promise.all(ups);
     if (ins.length) await sb.from("production_slots").insert(ins);
@@ -1133,13 +1173,26 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
   const dragNeed = drag?.card?.need || drag?.need;
   const canDrop = (mach: Machine) => !dragNeed || fits(dragNeed, mach);
-  function startDrag(e: DragEvent, d: Drag) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", "job"); } catch { /* old browsers */ } setDrag(d); }
+  function startDrag(e: DragEvent, d: Drag) {
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", "job"); } catch { /* old browsers */ }
+    // the pointer carries a small label, not a see-through copy of the whole card
+    try {
+      const j = d.card?.job || d.job, chip = document.createElement("div");
+      chip.className = "msf-dragchip"; chip.textContent = j ? `#${j.number} ${abbrCo(j.customer || j.name)}` : "Job";
+      document.body.appendChild(chip); e.dataTransfer.setDragImage(chip, 12, 12); setTimeout(() => chip.remove(), 0);
+    } catch { /* setDragImage not supported */ }
+    dragAt.current = Date.now();
+    window.getSelection()?.removeAllRanges();
+    setTimeout(() => { setPv(null); setDrag(d); }, 0);
+  }
   // dropping a job puts it in the running order where it lands, right up against the job before it (no gaps):
   // it goes before the first job whose middle is below the drop point
   function drop(mach: Machine, d: string, minuteAtPointer: number) {
     setOver("");
     if (!drag) return;
     const t = minuteAtPointer - drag.grabMin;
+    setPv(null);
     const inCell = at(mach, d).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag.card?.key && g.c.slot.status !== "done").sort((x, y) => x.start - y.start);
     if (drag.group) { const ids = new Set(drag.group.map((c) => c.key)); placeGroup(drag.group, mach, d, inCell.find((g) => !ids.has(g.c.key) && (g.start + g.end) / 2 > t)?.c.key); return; }
     const before = inCell.find((g) => (g.start + g.end) / 2 > t);
@@ -1160,11 +1213,15 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     setMsg(`Moved the run (${group.map((c) => "#" + c.job.number).join(", ")}) to ${mach.name}, ${dayLbl(d)}.`);
     load();
   }
+  /** this piece finishes after the job's in-hands time */
+  const segLate = (g: Seg) => ord(g.day) * 1440 + g.end > dueAbs(g.c.job);
   const cls = (g: Seg) => {
-    const c = g.c, late = ord(g.day) * 1440 + g.end > dueAbs(c.job);
+    const c = g.c, late = segLate(g);
     const hs = holdState(c.job);
     return (hs ? " msh-" + hs : "") + (c.job.kind === "h" && !showHolds ? " msh-dim" : "") + " ms-blk " + c.need.type + (c.job.kind === "h" ? " hold" : "") + (inOT(g) ? " ot" : "") + (c.job.firm ? " is-firm" : "") + (c.job.rush ? " is-rush" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "") + (c.fromPv ? " pv" : "") + (c.slot?.status === "done" ? " done" : c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (g.part > 1 ? " cont-l" : "") + (g.part < g.parts ? " cont-r" : "");
   };
+  /** "Late" / "Hold" tag after a card's number (Nov 11, Nick: the late ones' number in red) */
+  const tagOf = (g: Seg) => (g.c.job.kind === "h" ? <i className="ms-tag2 hold">Hold</i> : segLate(g) ? <i className="ms-tag2 late">Late</i> : null);
   const tip = (g: Seg) => `#${g.c.job.number} ${g.c.job.customer}${g.c.job.owner ? ` (${g.c.job.owner})` : ""}\n${g.c.job.name}\n${dayLbl(g.day)} ${clockLong(g.start)} – ${clockLong(g.end)}${g.parts > 1 ? ` (part ${g.part} of ${g.parts}; ${fmtMin(g.c.minutes)} in all)` : ` (${fmtMin(g.c.minutes)})`}\n${g.c.need.label}${g.c.job.due ? `\nIn-hands ${dayLbl(g.c.job.due)}` : ""}${g.c.slot?.status === "done" ? "\nDone" : g.c.slot?.status === "running" ? "\nRunning" : ""}${g.c.fromPv ? "\nFrom its Printavo status" : ""}${g.c.carried ? `\nRolled forward from ${dayLbl(g.c.carried)}` : ""}${g.pushed ? "\nStarts later than asked (the job before runs long)" : ""}`;
   const offShade = (mach: Machine, d: string) => {
     const [a, b] = shiftOn(mach, d) || typicalShift(mach), works = !!shiftOn(mach, d) || at(mach, d).length > 0;
@@ -1205,7 +1262,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, d, vStart + ((e.clientX - r.left) / r.width) * range); }}>
                     {offShade(m, d).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}
                     {(() => { const sh = shiftOn(m, d); return sh ? breaksOn(m, d, sh, segs.lunch.get(m.id + "|" + d)).map(([a0, b0, why]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return b > a ? <div key={"bk" + a0} className={(why === "Warm-up" ? "ms-warm" : "ms-lunch") + " h"} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} /> : null; }) : null; })()}
-                    {(m.down?.[d] || []).map(([a0, b0, why, rate]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return <div key={"dn" + a} className={"ms-down h" + (rate ? " slow" : "")} title={rate ? `${why}: ${Math.round(rate * 100)}%` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />; })}
+                    {(m.down?.[d] || []).filter((x) => !x[4]).map(([a0, b0, why, rate]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return <div key={"dn" + a} className={"ms-down h" + (rate ? " slow" : "")} title={rate ? `${why}: ${Math.round(rate * 100)}%` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />; })}
                     {d === today && now.min > vStart && <div className="ms-past" style={{ width: pct(Math.min(now.min, vEnd)) }} />}
                     {d === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now v" style={{ left: pct(now.min) }} />}
                     {gs.map((g, i) => {
@@ -1267,7 +1324,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             {(() => { const sh = shiftOn(m, day); return sh ? breaksOn(m, day, sh, segs.lunch.get(m.id + "|" + day)).map(([a0, b0, why]) => { const a = Math.max(a0, vS), b = Math.min(b0, vE); if (b <= a) return null; const warm = why === "Warm-up"; return (
               <div key={"bk" + a0} className={warm ? "ms-warm" : "ms-lunch"} style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} title={`${warm ? "Press warm-up" : `${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "Crew"} lunch`} ${clockLong(a0)} – ${clockLong(b0)}`}>{((b - a) / 60) * HOUR_PX >= 13 && <span>{warm ? "Warm-up" : "Lunch"}</span>}</div>
             ); }) : null; })()}
-            {(m.down?.[day] || []).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
+            {(m.down?.[day] || []).filter((x) => !x[4]).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
               ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
               : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
             {(day < today || (day === today && now.min > vS)) && <div className="ms-pastv" style={{ height: ((Math.min(day < today ? vE : now.min, vE) - vS) / 60) * HOUR_PX }} />}
@@ -1308,7 +1365,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " card" + (h < 40 ? " tiny" : h < 60 ? " short" : "") + (gaps.length ? " ms-thru" : "") + (nxt ? " mscv-out" : "") + (prv ? " mscv-in" : "")} style={{ top: ((gs0 - vS) / 60) * HOUR_PX + 1, height: h }} title={tip(g)}
                 onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / HOUR_PX) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)}>
                 {prv ? <span className="mscv-from">continued from {dayLbl(prv.day).split(",")[0]} · {g.part} of {g.parts}</span> : null}
-                <span className="ms-l1"><b>{g.c.job.hold ? "HOLD #" : "#"}{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b>{flags(g.c.job)}<span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span><span className="l1x">{gl.colors} · {gl.units.toLocaleString()} P</span></span>
+                <span className="ms-l1"><b>#{g.c.job.number}{g.c.slot?.status === "running" ? <em className="rn"> ●</em> : g.c.slot?.status === "done" ? <em className="ok"> ✓</em> : null}</b>{tagOf(g)}{flags(g.c.job)}<span className="co"><span className="full">{g.c.job.customer}</span><span className="ab">{abbrCo(g.c.job.customer)}</span></span><span className="l1x">{gl.colors} · {gl.units.toLocaleString()} P</span></span>
                 <span className="ms-l2">{holdTag(g.c.job)}{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.name || g.c.need.label}</span>
                 <span className="ms-l3"><i>{gl.colors}</i><i className="q">{gl.units.toLocaleString()} pcs</i><i className="t">{gl.run}{g.parts > 1 && !whole ? ` · ${g.part}/${g.parts}` : ""}</i><i className="qc">{gl.units.toLocaleString()} P</i></span>
               {nxt ? <span className="mscv-to" aria-hidden>↓ continues {dayLbl(nxt.day).split(",")[0]} {clock(nxt.start)}</span> : null}{gaps.map(([a0, b0]) => <span key={"gp" + a0} className="ms-thru-l" aria-hidden style={{ top: ((a0 - gs0) / 60) * HOUR_PX, height: ((b0 - a0) / 60) * HOUR_PX }}>{((b0 - a0) / 60) * HOUR_PX >= 13 ? <em>Lunch</em> : null}</span>)}
@@ -1339,7 +1396,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               <ul className="ms-pl">{gs.map((g) => { const gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, past = d === today && g.end <= now.min && st !== "running"; return (
                 <li key={g.c.key + g.part}><button type="button" className={"ms-pj " + g.c.need.type + (st === "done" ? " done" : st === "running" ? " run" : "") + (past ? " past" : "") + (mine && !isMe(g.c.job.owner, owners, me) ? " other" : "") + (ord(g.day) * 1440 + g.end > dueAbs(g.c.job) ? " late" : "")} onClick={() => setOpen(g.c)}>
                   <span className="ms-pj-t">{clock(g.start)}<small>{clock(g.end)}</small></span>
-                  <span className="ms-pj-b"><span className="ms-pj-1"><b>{g.c.job.hold ? "HOLD #" : "#"}{g.c.job.number}</b>{flags(g.c.job)}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null} {abbrCo(g.c.job.customer || "")}</span><span className="ms-pj-2">{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.name || g.c.need.label}</span><span className="ms-pj-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span></span>
+                  <span className="ms-pj-b"><span className="ms-pj-1"><b>#{g.c.job.number}</b>{tagOf(g)}{flags(g.c.job)}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null} {abbrCo(g.c.job.customer || "")}</span><span className="ms-pj-2">{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.name || g.c.need.label}</span><span className="ms-pj-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}{g.parts > 1 ? ` · ${g.part}/${g.parts}` : ""}</span></span>
                 </button></li>
               ); })}</ul>
             </div>
@@ -1371,7 +1428,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const r = await sb.from("production_slots").update({ machine: mach.id, day: d, minutes, start_min: null, position: idx, updated_at: new Date().toISOString() }).eq("id", id);
       if (r.error) { setMsg(r.error.message); return; }
     } else {
-      const r = await sb.from("production_slots").insert({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, machine: mach.id, day: d, minutes, start_min: null, position: idx, kind: need.type, label: need.label, source: "manual", locations: locsFor(job, need) }).select("id").single();
+      const r = await sb.from("production_slots").insert({ ...ownerCols(job), machine: mach.id, day: d, minutes, start_min: null, position: idx, kind: need.type, label: need.label, source: "manual", locations: locsFor(job, need) }).select("id").single();
       if (r.error) { setMsg(r.error.message); return; }
       id = (r.data as { id: string }).id;
     }
@@ -1434,7 +1491,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   <div key={m.id + d} className={"ms-lc" + (isToday ? " today" : d < today ? " past" : "") + (!works || isOffDay(m, d) ? " off" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")}
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver((o) => (o === m.id + d ? "" : o))} onDrop={(e) => { e.preventDefault(); if (drag) place(drag, m, d); }}>
                     {works && <div className={"ms-lc-cap" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${fmtMin(u)} of ${fmtMin(cap)} booked`}><i style={{ width: `${Math.min(100, (u / cap) * 100)}%` }} /><span>{u ? `${(u / 60).toFixed(u % 60 ? 1 : 0)}/${Math.round(cap / 60)}h` : ""}</span></div>}
-                    {(m.down?.[d] || []).map(([a, b, why, rate]) => <button type="button" key={"dn" + a} className={"ms-lc-dn" + (rate ? " slow" : "")} title={rate ? `${why}: runs at ${Math.round(rate * 100)}%${a > 0 || b < 1440 ? ` ${clockLong(a)} – ${clockLong(b)}` : ""}` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: d, start: rate ? undefined : a })}>{rate ? `${why} · ${Math.round(rate * 100)}%` : `Down ${clock(a)}–${clock(b)}`}</button>)}
+                    {(m.down?.[d] || []).filter((x) => !x[4]).map(([a, b, why, rate]) => <button type="button" key={"dn" + a} className={"ms-lc-dn" + (rate ? " slow" : "")} title={rate ? `${why}: runs at ${Math.round(rate * 100)}%${a > 0 || b < 1440 ? ` ${clockLong(a)} – ${clockLong(b)}` : ""}` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: d, start: rate ? undefined : a })}>{rate ? `${why} · ${Math.round(rate * 100)}%` : `Down ${clock(a)}–${clock(b)}`}</button>)}
                     {gs.map((g) => chip(g, d, o.compact))}
                     {isOffDay(m, d) ? <button type="button" className="ms-lc-off x" onClick={() => setDownEdit({ machine: m.id, day: d, allDay: true })} title="Tap to change">Off · {m.off![d]}</button> : !works && !gs.length ? <span className="ms-lc-off">off</span> : null}
                     {works && d >= today && <button type="button" className="ms-lc-mk" onClick={() => setDownEdit({ machine: m.id, day: d, allDay: true })} title={`Mark ${m.name}${crewOf(m) ? ` / ${crewOf(m)!.leader}'s crew` : ""} off this day`}>off?</button>}
@@ -1505,6 +1562,316 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       </div>
     </div>
   );
+  /* ---------- Next 12 hours (default, Nov 11 2026, Nick): the next 12 press hours as one run down the page, today
+     flowing into tomorrow with only the rainbow bar between them; a job that runs over the day break stays one card.
+     On the right, who's on what tomorrow and the day after. ---------- */
+  const FLOW_HOURS = 12, FLOW_PX = 60;
+  // the rest of today, then the next two full working days (Nov 11, Nick: "you should show the next 2 full days of
+  // production… it's okay to scroll down")
+  const flowBlocks = (() => {
+    const out: { d: string; a: number; b: number }[] = [];
+    let full = 0;
+    for (let i = 0, d = today; i < 21 && full < 2; i++, d = addDay(d, 1)) {
+      if (!visible(d)) continue;
+      const sh = machines.map((m) => shiftOn(m, d)).filter(Boolean) as [number, number][];
+      const gs = machines.flatMap((m) => at(m, d));
+      if (!sh.length && !gs.length) continue;
+      const a0 = Math.min(...sh.map((x) => x[0]), ...gs.map((g) => g.start)), b0 = Math.max(...sh.map((x) => x[1]), ...gs.map((g) => g.end));
+      if (d === today && b0 <= now.min) continue;
+      // today starts an hour before now (greyed: what already happened); later days at the first crew in
+      const a = d === today ? Math.max(Math.floor(a0 / 30) * 30, Math.floor((now.min - 60) / 30) * 30) : Math.floor(a0 / 30) * 30;
+      out.push({ d, a, b: Math.ceil(b0 / 30) * 30 });
+      if (d !== today) full++;
+    }
+    return out.length ? out : [{ d: today, a: Math.floor(now.min / 60) * 60, b: Math.floor(now.min / 60) * 60 + 12 * 60 }];
+  })();
+  const flowTop = flowBlocks.map((_, i) => flowBlocks.slice(0, i).reduce((t, x) => t + ((x.b - x.a) / 60) * FLOW_PX, 0));
+  const flowH = flowBlocks.reduce((t, x) => t + ((x.b - x.a) / 60) * FLOW_PX, 0);
+  const flowY = (bi: number, min: number) => flowTop[bi] + ((Math.min(Math.max(min, flowBlocks[bi].a), flowBlocks[bi].b) - flowBlocks[bi].a) / 60) * FLOW_PX;
+  /** where a point on the column is: which day and minute */
+  const flowAt = (y: number) => { let bi = flowBlocks.length - 1; for (let i = 0; i < flowBlocks.length; i++) if (y < flowTop[i] + ((flowBlocks[i].b - flowBlocks[i].a) / 60) * FLOW_PX) { bi = i; break; } return { d: flowBlocks[bi].d, min: flowBlocks[bi].a + ((y - flowTop[bi]) / FLOW_PX) * 60 }; };
+  const wkd = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" });
+  /** the job a drop at minute t goes in front of (the first whose middle is below it), "" = at the end */
+  const dropBefore = (mach: Machine, d: string, t: number) => at(mach, d).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag?.card?.key && g.c.slot.status !== "done").sort((x, y) => x.start - y.start).find((g) => (g.start + g.end) / 2 > t)?.c.key || "";
+  // the schedule as it would be with the dragged job dropped where the pointer is (laid out by the same rules as the real one)
+  const pvLay = (() => {
+    if (!pv || !drag || drag.group) return null;
+    const job = drag.card?.job || drag.job, need = drag.card?.need || drag.need, mach = machines.find((m) => m.id === pv.mid);
+    const k = `${pv.mid}|${pv.d}|${pv.before}|${drag.card?.key || (job?.key || "") + (need?.type || "")}|${cards.length}`;
+    if (pvCache.current.k === k) return pvCache.current.v;
+    let v: ReturnType<typeof layoutAll> | null = null;
+    if (mach && job && need && fits(need, mach)) {
+      const inCell = at(mach, pv.d).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag.card?.key && g.c.slot.status !== "done").sort((x, y) => x.start - y.start).map((g) => g.c);
+      let idx = pv.before ? inCell.findIndex((c) => c.key === pv.before) : -1;
+      if (idx < 0) idx = inCell.length;
+      const pos = new Map(inCell.map((c, i) => [c.key, i < idx ? i : i + 1]));
+      const minutes = estimate(s, need, mach).minutes;
+      const base = drag.card?.slot || ({ id: "pv", order_id: null, archived_order_id: null, status: "scheduled", position: 0 } as unknown as Slot);
+      const moved: Card = { ...(drag.card || ({ key: "pv:" + job.key + need.type, job, need, fromPv: false } as Card)), machine: mach, day: pv.d, minutes, startMin: null, slot: { ...base, machine: mach.id, day: pv.d, position: idx, start_min: null, minutes } };
+      const hypo = cards.filter((c) => c.key !== drag.card?.key).map((c) => (pos.has(c.key) && c.slot ? { ...c, startMin: null, slot: { ...c.slot, position: pos.get(c.key)!, start_min: null } } : c));
+      hypo.push(moved);
+      v = layoutAll(hypo, ord(now.day) * 1440 + now.min);
+    }
+    pvCache.current = { k, v };
+    return v;
+  })();
+  const pvKey = drag?.card?.key || (drag?.job && drag.need ? "pv:" + drag.job.key + drag.need.type : "");
+  /** how a job moves in the live drag: "↓ 1h 30m", "→ Thu 8:20a", and whether that makes it miss its in-hands */
+  const pvMove = (c: Card) => {
+    if (!pvLay || c.key === pvKey) return null;
+    const byT = (a: Seg, b: Seg) => a.day.localeCompare(b.day) || a.start - b.start;
+    const o = [...(segs.ofCard.get(c.key) || [])].sort(byT), n = [...(pvLay.ofCard.get(c.key) || [])].sort(byT);
+    if (!o.length || !n.length) return null;
+    const oa = ord(o[0].day) * 1440 + o[0].start, na = ord(n[0].day) * 1440 + n[0].start;
+    if (Math.abs(na - oa) < 5) return null;
+    const ol = o[o.length - 1], nl = n[n.length - 1], late = ord(nl.day) * 1440 + nl.end > dueAbs(c.job) && !(ord(ol.day) * 1440 + ol.end > dueAbs(c.job));
+    return { txt: (n[0].day !== o[0].day ? `→ ${wkd(n[0].day)} ${clock(n[0].start)}` : `${na > oa ? "↓" : "↑"} ${fmtMin(Math.abs(na - oa))}`) + (late ? " · past in-hands" : ""), late, down: na > oa };
+  };
+  /** the goods dot: green counted, amber here but not all counted, red not counted and it runs within a day (or a
+   *  problem), open not here yet; old Printavo jobs on the calendar were ready to print */
+  const dotOf = (c: Card, startAbs: number) => {
+    if (c.job.kind === "h") return null;
+    if (c.job.kind === "a") return { k: "g", t: "Ready to print (Printavo)" };
+    const st = goodsSt.get(c.job.id) || "";
+    if (st === "received") return { k: "g", t: "Goods counted" };
+    if (st === "arrived" || st === "partial") return { k: "a", t: st === "partial" ? "Goods partly counted" : "Goods here, not counted yet" };
+    if (st === "issue") return { k: "r", t: "Goods problem (short, wrong or damaged)" };
+    const soon = startAbs - (ord(now.day) * 1440 + now.min) < 24 * 60;
+    return { k: soon ? "r" : "o", t: soon ? "Not counted yet, and it runs within a day" : st === "on_way" ? "Goods on the way" : "Goods not here yet" };
+  };
+  const dotEl = (c: Card, g: Seg) => { const d = dotOf(c, ord(g.day) * 1440 + g.start); return d ? <i className={"msf-dot " + d.k} title={d.t} /> : null; };
+  /** why it's where it is: locked, the only press it fits, a person put it there, or the schedule did */
+  const onlyFits = (c: Card) => s.machines.filter((m) => m.active && fits(c.need, m)).length === 1;
+  const whyOf = (c: Card): "lock" | "cap" | "me" | "ai" => (c.slot?.locked ? "lock" : onlyFits(c) ? "cap" : c.slot?.source === "manual" ? "me" : "ai");
+  const WHY_T = { lock: "Locked", cap: "Only fits this press", me: "Shop scheduled", ai: "Placed by the schedule" } as const;
+  const whyEl = (c: Card) => { const w = whyOf(c); return <WhyIcon w={w} title={w === "lock" ? `Locked to ${c.slot?.locked === "spot" ? "this spot" : c.slot?.locked === "press" ? "this press" : "this day"} · right-click to change` : `${WHY_T[w]} · right-click to lock`} />; };
+  async function lockAs(c: Card, g: Seg, kind: "spot" | "press" | "day" | null) {
+    setLockMenu(null);
+    const sb = createClient();
+    if (c.slot) {
+      const r = await sb.from("production_slots").update({ locked: kind, ...(kind === "spot" ? { start_min: Math.round(g.start), day: g.day } : {}), updated_at: new Date().toISOString() }).eq("id", c.slot.id);
+      if (r.error) { setMsg(r.error.message); return; }
+    } else if (kind) {
+      // a job placed from its Printavo status isn't booked here yet: locking books it where it is
+      const pos = at(c.machine, g.day).filter((x) => x.part === 1 && x.start < g.start).length;
+      const r = await sb.from("production_slots").insert({ ...ownerCols(c.job), machine: c.machine.id, day: g.day, minutes: c.minutes, start_min: kind === "spot" ? Math.round(g.start) : null, position: pos, kind: c.need.type, label: c.need.label, source: "manual", locked: kind, locations: locsFor(c.job, c.need) });
+      if (r.error) { setMsg(r.error.message); return; }
+    }
+    setMsg(kind ? `#${c.job.number} locked to ${kind === "spot" ? `${shortName(c.machine)} ${clock(g.start)}` : kind === "press" ? shortName(c.machine) : dayLbl(g.day)}. Re-plan works around it.` : `#${c.job.number} unlocked.`);
+    load();
+  }
+  /** a job's card, by how much room it has: one line (#, customer, colors, pieces), two (the job's name under the
+   *  customer), three (name, then colors · pieces · run time) (Nov 11, Nick: "anytime you have space… the job name") */
+  const flowCard = (g: Seg, y1: number, y2: number, key: string, extraCls = "") => {
+    const h = Math.max(16, y2 - y1 - 2), gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, lines = h >= 54 ? 3 : h >= 37 ? 2 : 1, mv = pvMove(g.c);
+    const name = g.c.job.name || g.c.need.label;
+    // while dragging, where it would land is an empty dotted box the jobs around it make room for (Nov 11, Nick)
+    if (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid) { const n0 = [...(pvLay.ofCard.get(pvKey) || [])].sort((a, b) => a.day.localeCompare(b.day) || a.start - b.start)[0]; return <div key={key} className="msf-slot" data-slot="1" style={{ top: y1 + 1, height: h }} aria-hidden><span>#{g.c.job.number} moves here</span><small>{shortName(g.c.machine)}{n0 ? ` · ${n0.day !== today ? wkd(n0.day) + " " : ""}${clock(n0.start)}` : ""} · {fmtMin(g.c.minutes)}</small></div>; }
+    // dragged to another press: where it was stays as a dotted box saying so, until it's dropped (Nov 11, Nick)
+    const from = !!(pvLay && pv && drag?.card && g.c.key === drag.card.key && pv.mid !== g.c.machine.id);
+    if (from) { const tm = machines.find((x) => x.id === pv!.mid); return (
+      <div key={key} draggable className="msf-from" style={{ top: y1 + 1, height: h }} onDragEnd={() => { setDrag(null); setOver(""); }}>
+        <span>#{g.c.job.number} was here</span><small>moving to {tm ? shortName(tm) : "another press"}</small>
+      </div>
+    ); }
+    const num = <b className="msf-n">{whyEl(g.c)}{dotEl(g.c, g)}#{g.c.job.number}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
+    return (
+      <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
+        onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(g.c); } }}
+        onContextMenu={(e) => { e.preventDefault(); setLockMenu({ c: g.c, g, x: e.clientX, y: e.clientY }); }}>
+        <span className="msf-1">{num}{tagOf(g)}{flags(g.c.job)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()}</span> : null}</span>
+        {lines === 2 ? <span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : ""}<span className="msf-x">{g.c.job.customer ? " · " : ""}{gl.colors} · {gl.units.toLocaleString()} · {gl.run}</span></span> : null}
+        {mv ? <span className={"msf-bt" + (mv.late ? " bad" : "")}>{mv.txt}</span> : null}
+        {lines === 3 ? <><span className="msf-2">{holdTag(g.c.job)}{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.customer ? name : g.c.need.label}</span><span className="msf-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}</span></> : null}
+      </div>
+    );
+  };
+  const flowView = () => (
+    <div className="msf">
+      <div className="msf-main">
+        <div className="msf-grid" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
+          <div className="msf-corner" />
+          {machines.map((m) => <div key={m.id} className={"msf-mh " + m.type + (isOffDay(m, today) ? " off" : "")}><b title={m.name}>{shortName(m)}<IssueTag m={m} /></b>{crewOf(m) ? <span>{crewOf(m)!.leader}</span> : <span>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} heads` : "heat"}</span>}{flowBlocks[0].d === today && crewOf(m) && <ActualCell m={m} />}</div>)}
+          <div className="msf-gut" style={{ height: flowH, gridColumn: 1 }}>
+            {flowBlocks.flatMap((bk, bi) => {
+              const hs: ReactNode[] = [];
+              for (let h = Math.ceil(bk.a / 60) * 60; h < bk.b; h += 60) if (!(bi > 0 && h === bk.a)) hs.push(<span key={bk.d + h} style={{ top: flowY(bi, h) }}>{clock(h)}</span>);
+              if (bi > 0) hs.push(<span key={bk.d + "lbl"} className="msf-dl" style={{ top: flowTop[bi] }}><b>{wkd(bk.d)}</b>{clock(bk.a)}</span>);
+              return hs;
+            })}
+          </div>
+          {machines.map((m, mi) => {
+            // this press's jobs across the days shown, a job that carries over the day break joined into one card
+            const itemsOf = (by?: Map<string, Seg[]>) => {
+              const items: { g: Seg; y1: number; y2: number }[] = [];
+              flowBlocks.forEach((bk, bi) => {
+                for (const x of joined(m, bk.d, by)) {
+                  if (x.end <= bk.a || x.start >= bk.b) continue;
+                  const y1 = flowY(bi, x.start), y2 = flowY(bi, x.end), last = items[items.length - 1];
+                  if (last && last.g.c.key === x.g.c.key && bi > 0 && Math.abs(last.y2 - flowTop[bi]) < 3 * FLOW_PX) last.y2 = y2;
+                  else items.push({ g: x.g, y1, y2 });
+                }
+              });
+              return items;
+            };
+            // the press it's dragged from keeps its jobs where they are (the job shows as "was here") while it's over another
+            // press; the press it's over makes room
+            const srcOther = !!(pvLay && pv && drag?.card && drag.card.machine.id === m.id && pv.mid !== m.id);
+            const items = itemsOf(pvLay && !srcOther ? pvLay.by : undefined);
+            // the dragged card stays where it was (faded) while its preview shows where it would go: the browser drops a
+            // drag whose card leaves the page
+            const ghost = pvLay && !srcOther && drag?.card && drag.card.machine.id === m.id ? itemsOf().filter((x) => x.g.c.key === drag.card!.key) : [];
+            return (
+              <div key={m.id} className={"msf-col" + (over === "f:" + m.id ? (canDrop(m) ? " over" : " no") : "")} style={{ height: flowH, backgroundSize: `100% ${FLOW_PX}px`, gridColumn: mi + 2 }}
+                onDragOver={(e) => {
+                  e.preventDefault(); if (over !== "f:" + m.id) setOver("f:" + m.id);
+                  if (!drag || drag.group) return;
+                  // where the pointer is: over a job's top half it goes before that job, its bottom half after it; over the
+                  // dotted box it stays put; on open time, by the clock
+                  const el = (e.target as HTMLElement).closest("[data-k],[data-slot]") as HTMLElement | null;
+                  if (el?.dataset.slot && pv?.mid === m.id) return;
+                  const r = e.currentTarget.getBoundingClientRect(), y = e.clientY - r.top, p = flowAt(y);
+                  let d0 = p.d, b = dropBefore(m, p.d, p.min);
+                  if (el?.dataset.k) {
+                    // the job pointed at, by where it really is now (the preview may have pushed it to another day)
+                    const k = el.dataset.k, first = [...(segs.ofCard.get(k) || [])].sort((x, z) => x.day.localeCompare(z.day) || x.start - z.start)[0];
+                    if (first && first.c.machine.id === m.id) {
+                      const cell = at(m, first.day).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag.card?.key && g.c.slot.status !== "done").sort((x, z) => x.start - z.start);
+                      const i = cell.findIndex((g) => g.c.key === k), r2 = el.getBoundingClientRect();
+                      if (i >= 0) { d0 = first.day; b = e.clientY < r2.top + r2.height / 2 ? cell[i].c.key : cell[i + 1]?.c.key || ""; }
+                    }
+                  }
+                  if (!pv || pv.mid !== m.id || pv.d !== d0 || pv.before !== b) setPv({ mid: m.id, d: d0, before: b, y });
+                }}
+                onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget as Node)) return; setOver(""); setPv(null); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  // it lands exactly where the dotted box was
+                  if (drag && !drag.group && pv && pv.mid === m.id) { const c = drag.card ? { card: drag.card } : { job: drag.job, need: drag.need }; setPv(null); place(c, m, pv.d, pv.before || undefined); return; }
+                  const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); drop(m, p.d, p.min);
+                }}
+                onClick={(e) => { if ((e.target as HTMLElement).closest(".ms-blk, .ms-down, .ms-slow button, .msf-card, .msf-run, .msf-from, .msf-slot, .msf-menu")) return; if (Date.now() - dragAt.current < 600 || (window.getSelection()?.toString() || "").trim()) return; const r = e.currentTarget.getBoundingClientRect(), p = flowAt(e.clientY - r.top); setDownEdit({ machine: m.id, day: p.d, start: Math.floor(p.min / 30) * 30 }); }}
+                title="Click an open time to add downtime here">
+                {flowBlocks.map((bk, bi) => {
+                  const sh = shiftOn(m, bk.d), oa = sh ? otOn(m, bk.d) : null, [sa, sb2] = sh || [bk.b, bk.b];
+                  const off = sh ? [[bk.a, sa], [sb2, bk.b]].filter(([x, y]) => y > x) : [[bk.a, bk.b]];
+                  return (
+                    <Fragment key={bk.d}>
+                      {off.map(([x, y]) => <div key={"of" + x} className="ms-off" style={{ top: flowY(bi, x), height: flowY(bi, y) - flowY(bi, x) }} />)}
+                      {sh && oa != null && oa < sh[1] && <div className="ms-ot" style={{ top: flowY(bi, oa), height: flowY(bi, sh[1]) - flowY(bi, oa) }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`} />}
+                      {sh && breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d)).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <div key={"bk" + a0} className={why === "Warm-up" ? "ms-warm" : "ms-lunch"} style={{ top: flowY(bi, a0), height: flowY(bi, b0) - flowY(bi, a0) }} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} /> : null)}
+                      {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
+                      {bk.d === today && now.min > bk.a && <div className="ms-pastv" style={{ top: flowTop[bi], height: flowY(bi, now.min) - flowTop[bi] }} />}
+                      {bk.d === today && now.min >= bk.a && now.min <= bk.b && <div className="ms-now" style={{ top: flowY(bi, now.min) }} />}
+                    </Fragment>
+                  );
+                })}
+                {ghost.map((x) => flowCard(x.g, x.y1, x.y2, x.g.c.key + x.g.part, " msf-ghost"))}
+                {(() => {
+                  // one customer's jobs back to back (Nine18's small orders, an All My Sons run): one box, a row per job
+                  // (Nov 11, Nick: "a nice little together segment… All My Sons run")
+                  const runs: (typeof items)[] = [];
+                  for (const x of [...items].sort((a, b) => a.y1 - b.y1)) {
+                    const last = runs[runs.length - 1], lx = last?.[last.length - 1];
+                    if (lx && x.g.c.key !== pvKey && lx.g.c.key !== pvKey && !(drag?.card && (x.g.c.key === drag.card.key || lx.g.c.key === drag.card.key)) && x.g.c.job.kind !== "h" && lx.g.c.job.kind !== "h" && x.g.c.job.customer && lx.g.c.job.customer === x.g.c.job.customer && x.y1 - lx.y2 < 6) last.push(x); else runs.push([x]);
+                  }
+                  return runs.map((r) => {
+                    if (r.length === 1) { const x = r[0]; return flowCard(x.g, x.y1, x.y2, (x.g.c.key === pvKey && pvLay ? "pv:" : "") + x.g.c.key + x.g.part); }
+                    const top = r[0].y1, H = Math.max(40, r[r.length - 1].y2 - top - 2), id = "run:" + m.id + r[0].g.c.key, open = listOpen === id;
+                    const fit = Math.max(1, Math.floor((H - 22) / 19)), show = open || r.length <= fit ? r : r.slice(0, Math.max(1, fit - 1));
+                    const pcs = r.reduce((t, x) => t + x.g.c.need.qty, 0), mins = r.reduce((t, x) => t + x.g.c.minutes, 0);
+                    return (
+                      <div key={id} className={"msf-run " + r[0].g.c.need.type + (open ? " open" : "")} style={{ top: top + 1, ...(open ? { minHeight: H } : { height: H }) }}>
+                        <div className="msf-run-h"><b>{abbrCo(r[0].g.c.job.customer)}</b><span>{r.length} jobs · {pcs.toLocaleString()} pcs · {fmtMin(mins)}</span></div>
+                        {show.map((x) => { const gl = glance(x.g.c.need, x.g.c.minutes); return (
+                          <div key={x.g.c.key + x.g.part} role="button" tabIndex={0} draggable data-k={x.g.c.key} data-d={x.g.day} className={"msf-run-r" + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
+                            onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(x.g.c); } }}
+                            onContextMenu={(e) => { e.preventDefault(); setLockMenu({ c: x.g.c, g: x.g, x: e.clientX, y: e.clientY }); }}>
+                            {whyEl(x.g.c)}{dotEl(x.g.c, x.g)}<b>#{x.g.c.job.number}</b><span className="nm">{x.g.c.job.name || x.g.c.need.label}</span><small>{gl.colors} · {gl.units.toLocaleString()}</small>
+                          </div>
+                        ); })}
+                        {show.length < r.length ? <button type="button" className="msf-run-more" onClick={() => setListOpen(id)}>+{r.length - show.length} more</button> : open ? <button type="button" className="msf-run-more" onClick={() => setListOpen("")}>Show less</button> : null}
+                      </div>
+                    );
+                  });
+                })()}
+                {pvLay && pv?.mid === m.id && (() => {
+                  // the drop, said in one line: where it lands, what it pushes, who'd miss in-hands
+                  const me2 = items.find((x) => x.g.c.key === pvKey); if (!me2) return null;
+                  const all = cards.map((c: Card) => ({ c, mv: pvMove(c) })).filter((x) => x.mv);
+                  const pushed = all.filter((x) => x.mv!.down && x.c.machine.id === m.id), lateNow = all.filter((x) => x.mv!.late);
+                  const n0 = (pvLay.ofCard.get(pvKey) || [])[0], nL = (pvLay.ofCard.get(pvKey) || []).slice(-1)[0];
+                  return <div className="msf-tip" style={{ top: me2.y1 }}><b>{shortName(m)} · {n0 ? `${n0.day !== today ? wkd(n0.day) + " " : ""}${clock(n0.start)} – ${nL.day !== n0.day ? wkd(nL.day) + " " : ""}${clock(nL.end)}` : ""}</b>{pushed.length ? <span>Pushes {pushed.length} job{pushed.length === 1 ? "" : "s"} later</span> : <span>Nothing else moves here</span>}{lateNow.map((x) => <span key={x.c.key} className="bad">#{x.c.job.number} {abbrCo(x.c.job.customer)} goes past in-hands</span>)}</div>;
+                })()}
+              </div>
+            );
+          })}
+          {flowBlocks.slice(1).map((bk, i) => <div key={"br" + bk.d} className="msf-break" style={{ marginTop: flowTop[i + 1] - 1.5 }} aria-hidden />)}
+        </div>
+      </div>
+      {comingUp()}
+      {lockMenu && <>
+        <div className="msf-menu-bg" onClick={() => setLockMenu(null)} onContextMenu={(e) => { e.preventDefault(); setLockMenu(null); }} />
+        <div className="msf-menu" style={{ left: Math.min(lockMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 280), top: lockMenu.y }}>
+          <div className="msf-menu-h">#{lockMenu.c.job.number} {abbrCo(lockMenu.c.job.customer)} · {WHY_T[whyOf(lockMenu.c)].toLowerCase()}</div>
+          {([["spot", "Lock to this spot", `${shortName(lockMenu.c.machine)} · ${clock(lockMenu.g.start)}`], ["press", `Lock to ${crewOf(lockMenu.c.machine)?.leader ? crewOf(lockMenu.c.machine)!.leader + "'s press" : shortName(lockMenu.c.machine)}`, "its time can move"], ["day", `Lock to ${new Date(lockMenu.g.day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" })}`, "any press"]] as const).map(([k, l, sub]) => (
+            <button key={k} type="button" className={lockMenu.c.slot?.locked === k ? "on" : ""} onClick={() => lockAs(lockMenu.c, lockMenu.g, k)}><WhyIcon w="lock" title="" /><span>{l}</span><small>{sub}</small></button>
+          ))}
+          {lockMenu.c.slot?.locked && <><hr /><button type="button" onClick={() => lockAs(lockMenu.c, lockMenu.g, null)}><WhyIcon w="ai" title="" /><span>Unlock, let re-plan move it</span></button></>}
+        </div>
+      </>}
+    </div>
+  );
+  /** the right side: who runs what tomorrow and the day after, press by press, in run order */
+  const comingUp = () => {
+    const ds: string[] = [];
+    for (let i = 1; i < 21 && ds.length < 2; i++) { const d = addDay(today, i); if (visible(d) && machines.some((m) => shiftOn(m, d) || at(m, d).length)) ds.push(d); }
+    const d = ds[Math.min(upDay, ds.length - 1)] || ds[0];
+    // one list, a gray header per person, each job on two short lines; one customer's jobs back to back are one row
+    // (Nov 11, Nick: option B, "one clean list")
+    return (
+      <aside className="msf-up">
+        <div className="msf-up-h"><b>Coming up</b><span className="spacer" />
+          <span className="msf-up-tabs" role="tablist">{ds.map((x, i) => <button key={x} type="button" role="tab" aria-selected={x === d} className={x === d ? "on" : ""} onClick={() => setUpDay(i)}>{new Date(x + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", day: "numeric" })}</button>)}</span>
+        </div>
+        {d && <div className="msf-up-cols"><span>Time</span><span>Job</span><span>Pcs</span></div>}
+        {d && machines.map((m) => {
+          const js = joined(m, d);
+          if (!js.length) return null;
+          const grp: (typeof js)[] = [];
+          for (const x of js) { const l = grp[grp.length - 1]; if (l && x.g.c.job.customer && l[0].g.c.job.customer === x.g.c.job.customer && x.g.c.job.kind !== "h" && l[0].g.c.job.kind !== "h") l.push(x); else grp.push([x]); }
+          return (
+            <section key={m.id} className="msf-up-m">
+              <div className="msf-up-mh"><b>{crewOf(m)?.leader || shortName(m)}</b>{crewOf(m) ? <span> · {shortName(m)}</span> : null}<span className="faint"> · {js.length} job{js.length === 1 ? "" : "s"} · {fmtMin(used(m, d))}</span></div>
+              {grp.map((g0) => {
+                const x = g0[0], gl = glance(x.g.c.need, x.g.c.minutes), many = g0.length > 1, id = "up:" + d + x.g.c.key, open = listOpen === id;
+                const late = g0.some((y) => ord(d) * 1440 + y.end > dueAbs(y.g.c.job));
+                const pcs = g0.reduce((t, y) => t + y.g.c.need.qty, 0);
+                return (
+                  <Fragment key={x.g.c.key + x.g.part}>
+                    <button type="button" className={"msf-up-r" + (x.g.c.job.kind === "h" ? " hold" : "")} onClick={() => (many ? setListOpen(open ? "" : id) : setOpen(x.g.c))} title={many ? `${g0.length} ${x.g.c.job.customer} jobs back to back` : tip(x.g)}>
+                      <span className="t">{clock(x.start)}</span>
+                      <span className="b"><span className="l1">{dotEl(x.g.c, x.g)}{many ? <><b className="c">{abbrCo(x.g.c.job.customer)}</b><span className="msf-up-car">{open ? "▾" : "▸"}</span></> : <><b className={late ? "late" : ""}>#{x.g.c.job.number}</b><span className="c">{abbrCo(x.g.c.job.customer || x.g.c.job.name)}</span></>}</span>
+                        <span className="l2">{many ? `${g0.length} jobs · ${g0.slice(0, 3).map((y) => y.g.c.job.name || "#" + y.g.c.job.number).join(", ")}${g0.length > 3 ? ` +${g0.length - 3}` : ""}` : `${x.g.c.job.customer && x.g.c.job.name ? x.g.c.job.name + " · " : ""}${gl.colors}`}</span></span>
+                      <span className="q">{pcs.toLocaleString()}</span>
+                    </button>
+                    {many && open && g0.map((y) => (
+                      <button key={y.g.c.key + y.g.part} type="button" className="msf-up-r sub" onClick={() => setOpen(y.g.c)} title={tip(y.g)}>
+                        <span className="t">{clock(y.start)}</span>
+                        <span className="b"><span className="l1">{dotEl(y.g.c, y.g)}<b className={ord(d) * 1440 + y.end > dueAbs(y.g.c.job) ? "late" : ""}>#{y.g.c.job.number}</b><span className="c">{y.g.c.job.name || y.g.c.need.label}</span></span></span>
+                        <span className="q">{y.g.c.need.qty.toLocaleString()}</span>
+                      </button>
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </section>
+          );
+        })}
+        {d && !machines.some((m) => joined(m, d).length) && <div className="faint msf-up-none">Nothing booked yet.</div>}
+      </aside>
+    );
+  };
   // what Renormalize Schedule would do: extra shifts from today on, and split jobs whose parts haven't started
   const renormItems = (): RenormItem[] => {
     const out: RenormItem[] = [], sb = createClient();
@@ -1758,13 +2125,13 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     setReplan({ why: `${w.title}${w.shifts.length ? " added" : ""}. Re-plan now to move the jobs into it?`, split: w.split });
   }
 
-  const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : setDay(nextVis(addDay(view === "split" ? d0 : day, dir), dir)));
+  const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : view === "flow" ? (setDay(nextVis(addDay(today, dir > 0 ? 1 : 0), dir)), setView("day")) : setDay(nextVis(addDay(day, dir), dir)));
   // test hook (off unless window.__MS_DEBUG is set): the scheduler's state and actions, for the automated stress test
   if (when || hold) return null;
   if (typeof window !== "undefined" && (window as unknown as { __MS_DEBUG?: boolean }).__MS_DEBUG) Object.assign(window, { __ms: { s, cards, segs, machines, today, now, tight, tray, slots, holds, planIt, applyPlan, whatIfs, whenCan, holdSpot, otReport, otOn, acceptAll, book, unbook, saveProgress, logAction, splitByLocation, saveHold, removeHold, cutOvertime, load } });
 
   return (
-    <div className="ms">
+    <div className="ms ms-calm">
       {/* the calendar's own controls on one line: what's shown on the left, how it's shown on the right */}
       {/* one line that never wraps: when it gets tight each control turns into a compact dropdown of the same choices */}
       <div className="ms-head-w">
@@ -1776,7 +2143,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         <label className="ms-wknd ms-desk" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> <span className="ms-full">Weekends</span><span className="ms-cmp">Sat/Sun</span></label>
         <label className="ms-wknd ms-desk" title="Quotes holding a spot (Hold the spot): off, they're a plain gray band so the time still looks taken"><input type="checkbox" checked={showHolds} onChange={(e) => setShowHolds(e.target.checked)} /> <span className="ms-full">Show holds</span><span className="ms-cmp">Holds</span></label>
         <div className="rv-seg ms-span ms-full ms-desk">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <select className="ms-cmp ms-sel ms-desk" value={view} aria-label="View" onChange={(e) => setView(e.target.value as View)}>{VIEW_OPTS.map(([k, l]) => <option key={k} value={k}>{k === "split" ? "24 hrs + 5 days" : l}</option>)}</select>
+        <select className="ms-cmp ms-sel ms-desk" value={view} aria-label="View" onChange={(e) => setView(e.target.value as View)}>{VIEW_OPTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
         <div className="ms-nav ms-desk">
           <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
           <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
@@ -1906,13 +2273,20 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
               <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{tray.length ? "drag onto a press and day, or take the suggested spot" : "nothing waiting"}</span>
               <span className="spacer" />
-              {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind !== "h").length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={() => { setRestart(false); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.job.kind !== "h")); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
+              {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked).length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={() => { setRestart(false); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked)); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
               {trayOpen && tray.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll}>Accept All Suggestions</button>}
             </div>
-            {trayOpen && tray.length > 0 && (
+            {trayOpen && tray.length > 0 && (() => {
+              const isLate = (t: (typeof tray)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
+              const kinds = { late: tray.filter(isLate), hold: tray.filter((t) => t.job.kind === "h"), ok: tray.filter((t) => t.job.kind !== "h" && !isLate(t)) };
+              const list = trayTab === "all" ? tray : kinds[trayTab];
+              return (
               <>
-                <ul className="ms-rc-l">{(trayAll ? tray : tray.slice(0, 12)).map((t) => (
-                  <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-rc " + t.need.type + (t.sug?.late ? " late" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
+                <div className="toolbar ms-rtabs"><div className="chips">
+                  {([["all", "All", tray.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ["ok", "On time", kinds.ok.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
+                </div></div>
+                <ul className="ms-rc-l">{(trayAll ? list : list.slice(0, 12)).map((t) => (
+                  <li key={t.job.key + t.need.type} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"ms-rc " + t.need.type + (t.job.kind === "h" ? " hold" : isLate(t) ? " late" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
                     <div className="ms-rc-1"><Link className="ms-r-n" href={t.job.href}>#{t.job.number}</Link><b>{t.job.customer || t.job.name}</b>{t.job.owner ? <span className="ms-own" title={t.job.owner}>{initials(t.job.owner)}</span> : null}</div>
                     {t.job.customer && t.job.name && <div className="ms-rc-nm" title={t.job.name}>{t.job.name}</div>}
                     <div className="ms-rc-2">{t.need.label}</div>
@@ -1924,17 +2298,20 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     </div>
                   </li>
                 ))}</ul>
-                {tray.length > 12 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${tray.length}`}</button>}
+                {!list.length && <div className="faint ms-rnone">Nothing here.</div>}
+                {list.length > 12 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${list.length}`}</button>}
               </>
-            )}
+              );
+            })()}
           </div>
         </>}
       </section>
 
       <div className="ms-main">
-        {view === "split" ? split() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
+        {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
+        <div className="ms-key2"><span><i className="k job" />Job</span><span><i className="k late" />Late (past its in-hands date)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span><span><i className="k past" />Already past</span></div>
+        {view === "flow" ? flowView() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
-        <div className="ms-key faint"><span><i className="k screen" />Screen print</span><span><i className="k embroidery" />Embroidery</span><span><i className="k heat" />Heat press</span><span><i className="k run" />Running</span><span><i className="k done" />Done</span><span><i className="k late" />Past in-hands</span></div>
       </div>
 
       {planOpen && <PlannerPanel method={typeF || "screen"} s={s} today={today} holds={holds} admin={isAdmin} spotOf={(id) => { const c = cards.find((x) => x.job.key === "h:" + id); const g = c ? (segs.ofCard.get(c.key) || [])[0] : undefined; return c && g ? `${shortName(c.machine)} · ${dayLbl(g.day)} · ${fmtMin(c.minutes)}` : ""; }} onSave={saveHold} onRemove={removeHold} onClose={() => setPlanOpen(false)} />}

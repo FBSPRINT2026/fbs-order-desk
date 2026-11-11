@@ -17421,12 +17421,15 @@ body.dock-dragging,body.dock-dragging *{cursor:col-resize!important;user-select:
    Ctrl/Cmd-click, like Printavo. The row's link covers it; anything clickable in the row sits above the link. */
 tr.rl, li.rl { position: relative; cursor: pointer; }
 a.rl-a { position: static; color: inherit; text-decoration: none; }
+/* the link fills its own cell (right-click / middle-click there); the rest of the row opens it by a click (RowLink).
+   Never stretched over the row: Safari lets it cover the whole table (Nov 11, Jorge) */
+:where(tr.rl) > td:has(> a.rl-a) { position: relative; }
 a.rl-a::after { content: ""; position: absolute; inset: 0; z-index: 0; }
 /* :where keeps this at no weight, so a control placed by its own rule (absolute) stays where it is */
 :where(tr.rl, li.rl) :where(button, input, select, textarea, label, summary, a:not(.rl-a)) { position: relative; z-index: 1; }
 tr.rl:has(a.rl-a:focus-visible), li.rl:has(a.rl-a:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* stacked by TableFit: the row's link still covers the whole row (its cell isn't the box it fills), the cell's label kept in place */
-table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a){position:static!important}
+table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a){position:relative!important}
 table.tbl-stack > tbody > tr.rl > td:has(> a.rl-a)[data-label]:not([data-label=""])::before{left:12px;top:14px}
 
 /* a print of customer supplied transfers: who made them in a line; the rest on the Goods tab (components/SuppliedBox.tsx) */
@@ -21744,3 +21747,247 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .phd-tag>summary::-webkit-details-marker{display:none}
 .phd-menu{position:absolute;right:0;top:calc(100% + 4px);z-index:30;min-width:220px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:10px 12px;display:flex;flex-direction:column;gap:4px;font-size:13px;white-space:nowrap}
 .phd-acts{display:flex;gap:6px;margin-top:6px}
+
+/* Receive a Payment (rcv-, Nov 11): one search, the customer's invoices grouped by how late, how they paid, today's list */
+.rcv{max-width:760px;width:100%;margin:0 auto}
+.rcv-b{display:flex;flex-direction:column;gap:12px}
+.rcv-search{position:relative}
+.rcv-search input{width:100%;height:42px;font-size:15px;border:1.5px solid var(--accent);border-radius:8px;padding:0 12px;background:var(--surface);color:var(--ink)}
+.rcv-hits{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);overflow:hidden}
+.rcv-hits button{all:unset;box-sizing:border-box;display:flex;justify-content:space-between;gap:12px;width:100%;padding:9px 12px;border-top:1px solid var(--line);cursor:pointer;font-size:14px}
+.rcv-hits button:first-child{border-top:0}
+.rcv-hits button.on{background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.rcv-hits .faint{font-size:12.5px}
+.rcv-none{padding:9px 12px;font-size:13px}
+.rcv-done{font-size:13.5px;color:var(--ok);font-weight:600}
+.rcv-done .faint{font-weight:400}
+.rcv-who{display:flex;flex-direction:column;gap:8px}
+.rcv-who>b{font-size:16px}
+.rcv-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.rcv-find{flex:1 1 200px;max-width:280px;height:36px}
+.rcv-amt{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.rcv-amt label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);width:180px}
+.rcv-amt .faint{font-size:12.5px;padding-bottom:9px}
+.rcv-list{border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.rcv-gh{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface-2);border-top:1px solid var(--line);font-size:13.5px}
+.rcv-grp:first-child .rcv-gh{border-top:0}
+.rcv-gh .faint{font-size:12.5px}
+.rcv-gsum{margin-left:auto}
+.rcv-inv{display:grid;grid-template-columns:18px minmax(56px,auto) minmax(0,1fr) auto;gap:10px;align-items:center;padding:7px 12px;border-top:1px solid var(--line);font-size:13.5px;cursor:pointer}
+.rcv-list>.rcv-inv:first-child{border-top:0}
+.rcv-grp .rcv-inv{padding-left:24px}
+.rcv-inv.on{background:color-mix(in srgb,var(--accent) 5%,var(--surface))}
+.rcv-inv input,.rcv-gh input{width:16px;height:16px;margin:0}
+.rcv-inv-n .faint{font-size:12.5px}
+.rcv-more{all:unset;display:block;padding:6px 12px 6px 52px;border-top:1px solid var(--line);font-size:12.5px;color:var(--accent);cursor:pointer}
+.rcv-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.rcv-seg button{height:36px;border:0;border-left:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:inherit;font-size:13.5px;cursor:pointer}
+.rcv-seg button:first-child{border-left:0}
+.rcv-seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.rcv-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.rcv-fields label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.rcv-fields input{height:36px}
+.rcv-go{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px}
+.rcv-go .faint{font-size:13px}
+.rcv-cardopts{display:flex;flex-wrap:wrap;gap:6px 18px}
+.err-inline{color:var(--danger)}
+.rcv-today{border-top:1px solid var(--line);padding:10px 16px 14px;background:var(--surface-2)}
+.rcv-today-h{display:flex;justify-content:space-between;font-size:11.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+.rcv-today-r{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0}
+.rcv-today-r .faint{font-size:12.5px}
+.rcv-ok{color:var(--ok);font-weight:700}
+
+/* ── Schedule, calm look (Nov 11 2026, Nick: "too busy… boxes, bars… a key at the top"). Scoped to .ms-calm so it wins
+   over the older layered rules above. Every job is a white card with its department's edge; only late (red edge + red
+   number) and holds (dashed) differ. Overtime is a soft band behind the hours, breaks plain gray, the past a light gray. */
+.ms-calm .ms-blk:not(.bar),.ms-calm .ms-blk.ot:not(.bar),.ms-calm .ms-blk.hold:not(.bar){background:var(--surface)!important;border:1px solid var(--line)!important;border-left:4px solid var(--fbs-blue)!important;box-shadow:0 1px 2px rgba(0,0,0,.05)!important;outline:0!important}
+.ms-calm .ms-blk.embroidery:not(.bar){border-left-color:#7C5CD6!important}
+.ms-calm .ms-blk.heat:not(.bar){border-left-color:var(--fbs-orange)!important}
+.ms-calm .ms-blk.late:not(.bar),.ms-calm .ms-blk.msh-late:not(.bar){border-left-color:var(--danger)!important;box-shadow:0 1px 2px rgba(0,0,0,.05)!important}
+.ms-calm .ms-blk.late .ms-l1>b,.ms-calm .ms-blk.late .ms-pj-1>b{color:var(--danger)!important}
+.ms-calm .ms-blk.hold:not(.bar){background:var(--surface-2)!important;border:1.5px dashed color-mix(in srgb,var(--ink) 35%,transparent)!important;border-left:4px dashed var(--fbs-blue)!important}
+.ms-calm .ms-blk.bar.late{box-shadow:none;background:color-mix(in srgb,var(--danger) 55%,var(--surface))}
+.ms-calm .ms-blk.bar.ot{background-image:none!important}
+.ms-calm .ms-blk.run:not(.bar){box-shadow:inset 0 0 0 2px var(--ok)!important}
+.ms-tag2{font-style:normal;display:inline-block;margin-left:5px;padding:0 5px;border-radius:4px;font-size:10.5px;font-weight:700;line-height:15px;white-space:nowrap;vertical-align:1px}
+.ms-tag2.late{background:var(--danger-soft);color:var(--danger)}
+.ms-tag2.hold{background:color-mix(in srgb,var(--ink) 8%,var(--surface));color:var(--ink-2)}
+.ms-calm .ms-ot{background:color-mix(in srgb,var(--warn) 9%,transparent)!important;border-top:0!important}
+.ms-calm .ms-ot span{color:color-mix(in srgb,var(--warn) 80%,var(--ink))}
+.ms-calm .ms-warm,.ms-calm .ms-lunch{background:color-mix(in srgb,var(--ink) 5%,var(--surface))!important;border:0!important}
+.ms-calm .ms-warm.h,.ms-calm .ms-lunch.h{background:color-mix(in srgb,var(--ink) 6%,transparent)!important;border:0!important}
+.ms-calm .ms-off{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.ms-calm .ms-pastv{background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.ms-key2{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;font-size:12px;color:var(--ink-3);padding:2px 2px 8px}
+.ms-key2 span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.ms-key2 .k{width:18px;height:12px;border-radius:3px;display:inline-block;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--fbs-blue)}
+.ms-key2 .k.late{border-left-color:var(--danger)}
+.ms-key2 .k.hold{background:var(--surface-2);border:1.5px dashed color-mix(in srgb,var(--ink) 35%,transparent);border-left:4px dashed var(--fbs-blue)}
+.ms-key2 .k.ot{border:0;background:color-mix(in srgb,var(--warn) 18%,var(--surface))}
+.ms-key2 .k.brk{border:0;background:color-mix(in srgb,var(--ink) 8%,var(--surface))}
+.ms-key2 .k.past{border:0;background:color-mix(in srgb,var(--ink) 12%,var(--surface))}
+.ms-rc.hold{background:var(--surface-2);border-style:dashed}
+.ms-rc.late{border-left-color:var(--danger)}
+.ms-rtabs{margin:4px 0 8px}
+.ms-rnone{padding:6px 2px}
+.ms-calm .ms-blk.msh-dim:not(.bar){background:repeating-linear-gradient(135deg,var(--surface-2) 0 6px,transparent 6px 12px)!important;border:1px dashed var(--line)!important;box-shadow:none!important}
+.ms-calm .ms-blk.done:not(.bar){opacity:.5}
+
+/* ── Schedule · Next 12 hours (Nov 11 2026, Nick): one run from now through the next 12 press hours, today flowing into
+   tomorrow with only the rainbow bar between them; a job over the day break stays one card; Coming up on the right. */
+.msf{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;align-items:start}
+@container mscal (max-width: 900px){.msf{grid-template-columns:minmax(0,1fr)}}
+@media (max-width: 1000px){.msf{grid-template-columns:minmax(0,1fr)}}
+.msf-main{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.msf-grid{display:grid;position:relative}
+.msf-corner{border-bottom:1px solid var(--line)}
+.msf-mh{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;padding:7px 8px;border-bottom:1px solid var(--line);border-left:1px solid var(--line);font-size:13px;min-width:0}
+.msf-mh>b{white-space:nowrap}.msf-mh>span{font-size:12px;color:var(--ink-3);white-space:nowrap}.msf-mh.off{opacity:.6}
+.msf-mh .ms-act,.msf-mh [class*="ms-sa"]{flex-basis:100%}
+.msf-gut{position:relative;grid-row:2}
+.msf-gut span{position:absolute;right:6px;transform:translateY(-50%);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.msf-gut span:first-child{transform:none}
+.msf-gut .msf-dl{transform:translateY(-100%);display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;padding-bottom:3px}
+.msf-gut .msf-dl b{color:var(--ink);font-size:11.5px}
+.msf-gut .msf-dl{transform:translateY(-50%);padding:0}
+.msf-col{position:relative;grid-row:2;border-left:1px solid var(--line);background-image:linear-gradient(to bottom,var(--line-2,#f1f3f6) 1px,transparent 1px);min-width:0}
+.msf-col.over{background-color:color-mix(in srgb,var(--accent) 5%,transparent)}.msf-col.no{background-color:color-mix(in srgb,var(--danger) 5%,transparent)}
+.msf-break{grid-row:2;grid-column:1/-1;align-self:start;height:3px;background:var(--fbs-fade);position:relative;z-index:5;pointer-events:none;border-radius:2px}
+.ms-calm .msf-card.ms-blk{position:absolute;left:4px;right:4px;display:flex;flex-direction:column;justify-content:flex-start;gap:0;padding:3px 7px;overflow:hidden;text-align:left;z-index:2}
+.ms-calm .msf-card.l1{flex-direction:row;align-items:center;padding:0 6px}
+.msf-1{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap;font-size:12.5px;line-height:16px}
+.msf-1 .msf-n{font-size:12.5px;color:var(--ink)}.msf-co{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.msf-x{color:var(--ink-3);font-size:11.5px}
+.msf-1 .msf-x{flex:0 0 auto}
+.msf-2{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:15px}
+.msf-3{font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:15px}
+.msf-card.l1 .msf-1{font-size:12px}
+.msf-up{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.msf-up-h{display:flex;align-items:baseline;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line)}.msf-up-h b{font-family:var(--display);font-size:15px}.msf-up-h .faint{font-size:12px}
+.msf-up-d{padding:6px 12px 8px;border-bottom:1px solid var(--line)}.msf-up-d:last-child{border-bottom:0}
+.msf-up-dh{display:flex;align-items:baseline;gap:4px;font-size:13px;margin:2px 0 4px;white-space:nowrap}
+.msf-up-m{margin-top:4px}
+.msf-up-mh{display:flex;justify-content:space-between;gap:6px;font-size:12.5px;margin:4px 0 1px}.msf-up-mh .faint{font-size:11.5px}
+.msf-up-r{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:40px auto minmax(0,1fr) auto;gap:6px;align-items:baseline;width:100%;padding:3px 0;border-bottom:1px solid var(--line-2,#f1f3f6);font-size:12.5px;white-space:nowrap}
+.msf-up-r:hover{background:var(--surface-2)}
+.msf-up-r .t{color:var(--ink-3);font-size:11.5px;font-variant-numeric:tabular-nums}.msf-up-r .c{overflow:hidden;text-overflow:ellipsis}.msf-up-r .q{color:var(--ink-3);font-size:11.5px}
+.msf-up-r.late b{color:var(--danger)}.msf-up-r.hold{color:var(--ink-3)}
+.msf-up-none{font-size:12px;padding:4px 0}
+@media (max-width: 700px){.msf{display:none}}
+/* live drag: the jobs it would push show by how much; the dragged one lands outlined; a dark tip says what happens */
+.ms-calm .msf-card.msf-bump{box-shadow:0 0 0 1.5px #7cc4e8!important;transition:top .12s ease}
+.ms-calm .msf-card.msf-drop{border:2px dashed var(--accent)!important;background:color-mix(in srgb,var(--accent) 6%,var(--surface))!important}
+.msf-bt{position:absolute;right:4px;top:3px;font-size:10.5px;font-weight:700;line-height:15px;color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface));border-radius:4px;padding:0 5px;white-space:nowrap}
+.msf-bt.bad{color:var(--danger);background:var(--danger-soft)}
+.msf-tip{position:absolute;left:calc(100% - 8px);z-index:20;display:flex;flex-direction:column;gap:1px;background:var(--ink);color:#fff;border-radius:7px;padding:6px 9px;font-size:11.5px;line-height:1.35;white-space:nowrap;box-shadow:0 6px 16px rgba(0,0,0,.2);pointer-events:none}
+.msf-tip .bad{color:#ff9d9d}
+.ms-calm .msf-card{transition:top .12s ease,height .12s ease}
+.ms-calm .msf-card.msf-ghost{opacity:.35;border-style:dashed!important;box-shadow:none!important;pointer-events:none}
+/* Production's shop floor (Receiving, Fulfillment, Outbound): the same for SP / EMB / HP, on a slightly lighter block */
+.nav-floor{display:flex;flex-direction:column;gap:inherit;margin-top:6px;padding:3px 0;border-radius:8px;background:rgba(255,255,255,.06)}
+/* Outbound (Nov 11 2026): Ship is the Shipping Center itself, under Outbound's tabs */
+.ob-tabs{margin:10px 0}
+.ob-ship .page-head>div:first-child{display:none}
+.ob-ship .page-head{justify-content:flex-end}
+.ob-late{color:var(--danger);font-weight:700}
+.ff-steps{display:inline-flex;flex-wrap:wrap;gap:4px}.ff-steps span{border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:12px;color:var(--ink-2);white-space:nowrap}
+/* Schedule: why-symbol, goods dot, a customer's run as one box, the lock menu, a roomier Coming up (Nov 11 2026) */
+@media (min-width: 1001px){.msf{grid-template-columns:minmax(0,1fr) 380px}}
+.msf-why{display:inline-flex;flex:0 0 auto;width:12px;height:12px;margin-right:4px;vertical-align:-1px}
+.msf-why svg{width:12px;height:12px;fill:currentColor}
+.msf-why.ai{color:#8fb9d6}.msf-why.me{color:var(--accent)}.msf-why.lock{color:var(--ink)}.msf-why.cap{color:var(--ink-3)}
+.msf-dot{display:inline-block;flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px;background:#fff;border:1.5px solid #b8c0cc;box-sizing:border-box}
+.msf-dot.g{background:var(--ok);border-color:var(--ok)}.msf-dot.a{background:var(--warn);border-color:var(--warn)}.msf-dot.r{background:var(--danger);border-color:var(--danger)}
+.msf-n{display:inline-flex;align-items:center}
+.msf-run{position:absolute;left:4px;right:4px;z-index:2;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--fbs-blue);border-radius:6px;padding:2px 6px 3px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.msf-run.embroidery{border-left-color:#7C5CD6}.msf-run.heat{border-left-color:var(--fbs-orange)}
+.msf-run.open{z-index:6;overflow:visible;box-shadow:0 8px 20px rgba(0,0,0,.15)}
+.msf-run-h{display:flex;align-items:baseline;gap:6px;font-size:12.5px;white-space:nowrap;line-height:18px;min-width:0}.msf-run-h b{overflow:hidden;text-overflow:ellipsis}.msf-run-h span{color:var(--ink-3);font-size:11.5px}
+.msf-run-r{all:unset;box-sizing:border-box;cursor:grab;display:flex;align-items:center;gap:0;height:19px;font-size:12px;white-space:nowrap;border-top:1px solid var(--line-2,#f1f3f6);min-width:0}
+.msf-run-r b{margin-right:6px}.msf-run-r .nm{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;color:var(--ink-2)}.msf-run-r small{color:var(--ink-3);font-size:11px;margin-left:6px}
+.msf-run-r.late b{color:var(--danger)}.msf-run-r.done{opacity:.5}.msf-run-r:hover{background:var(--surface-2)}
+.msf-run-more{all:unset;cursor:pointer;font-size:11.5px;color:var(--accent);padding-top:2px}
+.msf-menu-bg{position:fixed;inset:0;z-index:80}
+.msf-menu{position:fixed;z-index:81;width:270px;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 26px rgba(20,30,50,.18);padding:4px 0;font-size:13px}
+.msf-menu-h{padding:5px 12px 6px;font-size:11.5px;color:var(--ink-3);border-bottom:1px solid var(--line);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msf-menu button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;width:100%;padding:6px 12px;white-space:nowrap}
+.msf-menu button:hover,.msf-menu button.on{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.msf-menu button small{margin-left:auto;color:var(--ink-3);font-size:11.5px}
+.msf-menu hr{border:0;border-top:1px solid var(--line);margin:3px 0}
+.msf-up-r{grid-template-columns:44px minmax(0,1fr) auto;align-items:start;padding:4px 0}
+.msf-up-r .b{display:flex;flex-direction:column;min-width:0}.msf-up-r .l1{display:flex;align-items:center;gap:5px;min-width:0}.msf-up-r .l1 .c{overflow:hidden;text-overflow:ellipsis}
+.msf-up-r .l2{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis}
+.msf-up-r.sub{padding:2px 0 2px 10px;border-bottom:0}.msf-up-r.sub .t{display:none}.msf-up-r.sub{grid-template-columns:minmax(0,1fr) auto}
+.msf-up-grp{border-bottom:1px solid var(--line-2,#f1f3f6);padding:3px 0}
+.msf-up-gh{display:grid;grid-template-columns:44px auto minmax(0,1fr);gap:6px;align-items:baseline;font-size:12.5px;white-space:nowrap}.msf-up-gh .t{color:var(--ink-3);font-size:11.5px}.msf-up-gh .faint{font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
+/* the section arrow: a plain small chevron at the end of Sales / Production's heading (turns up when open) */
+.nav-fold{all:unset;cursor:pointer;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--side-ink);opacity:.8}
+.nav-fold:hover{opacity:1;color:var(--side-ink-strong)}
+.nav-fold svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s}
+.nav-fold.open svg{transform:rotate(180deg)}
+.nav-h-production .prod-side+.nav-fold{margin-left:6px}
+/* the shop floor block sits in line with the menu: same edges and spacing as the rows above, only a gray tint */
+.nav-floor{margin:0;padding:0;border-radius:6px;gap:2px;display:flex;flex-direction:column;background:rgba(255,255,255,.055)}
+.nav-h .nav-fold{order:9}.nav-h-production .nav-fold{margin-left:6px}
+/* the left menu a little wider (Nov 11 2026, Nick: so SP · EMB · HP and the section arrow fit without crowding) */
+@media (min-width: 821px){.app:not(:has(.side.mini)):not(:has(.side.auto)){grid-template-columns:238px minmax(0,1fr)}}
+/* Coming up, option B (Nov 11 2026): day tabs, a gray header per person, each job on two short lines, pieces on the right */
+.msf-up-tabs{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.msf-up-tabs button{all:unset;cursor:pointer;padding:3px 10px;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.msf-up-tabs button.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:700}
+.msf-up-cols{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;padding:6px 12px;font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2);border-bottom:1px solid var(--line)}
+.msf-up .msf-up-m{margin:0;padding:0}
+.msf-up .msf-up-mh{display:block;margin:0;padding:6px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msf-up .msf-up-mh .faint{font-size:12px}
+.msf-up .msf-up-r{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;align-items:start;padding:7px 12px;border-bottom:1px solid var(--line-2,#f1f3f6);width:100%}
+.msf-up .msf-up-r .t{color:var(--ink-3);font-size:12px;padding-top:1px}
+.msf-up .msf-up-r .l1{display:flex;align-items:center;gap:5px;min-width:0;font-size:13.5px}
+.msf-up .msf-up-r .l1 b.late{color:var(--danger)}
+.msf-up .msf-up-r .l2{display:block;font-size:12px;color:var(--ink-3);margin-left:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msf-up .msf-up-r .q{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums;padding-top:1px}
+.msf-up .msf-up-r.sub{padding:4px 12px;background:var(--surface-2)}.msf-up .msf-up-r.sub .l1{font-size:12.5px}.msf-up .msf-up-r.sub .t{font-size:11.5px}
+.msf-up-car{color:var(--ink-3);font-size:11px}
+.msf-up .msf-up-r.sub .t{display:block}
+/* live drag: the job's old spot closes up (kept on the page but invisible), the new spot is an empty dotted box */
+.ms-calm .msf-card.msf-ghost{visibility:hidden}
+.msf-slot{position:absolute;left:4px;right:4px;z-index:2;border:2px dashed var(--accent);border-radius:6px;background:color-mix(in srgb,var(--accent) 6%,transparent);display:flex;align-items:flex-start;padding:4px 8px;pointer-events:none;transition:top .12s ease,height .12s ease}
+.msf-slot span{font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap}
+.msf-dragchip{position:fixed;top:0;left:0;z-index:-1;padding:4px 10px;border-radius:999px;background:var(--ink);color:#fff;font:700 12px var(--body,Arial);white-space:nowrap}
+/* the section arrow lines up with the blue dots at the right of the menu rows */
+.nav-fold{margin-right:-4px}
+/* Shop Tools as tiles, four across: a bigger icon with a short name (up to two lines) under it (Nov 11 2026, Nick) */
+.lbl-k{display:none}
+.side:not(.mini) .nav-tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:2px 0 0}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas){width:auto;height:auto;min-height:52px;flex-direction:column;justify-content:flex-start;gap:4px;padding:7px 2px 5px;border-radius:8px}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:21px;height:21px}
+.side:not(.mini) .nav-tools .lbl-k{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:10px;line-height:1.15;text-align:center;color:var(--side-ink);opacity:.85;max-width:100%;word-break:normal;overflow-wrap:normal}
+.side:not(.mini) .nav-tools a.on .lbl-k{color:#fff;opacity:1}
+/* PRODUCTION, SP · EMB · HP and the arrow on one line, centered on each other */
+.nav-h-production{align-items:center}.nav-h-production .prod-side{align-self:center;align-items:center}.nav-h .nav-fold{align-self:center}
+/* live drag: the dotted box says what's moving and where; the spot it left says "was here" */
+.msf-slot{flex-direction:column;gap:1px}
+.msf-slot small{font-size:11.5px;color:var(--accent);white-space:nowrap}
+.msf-from{all:unset;box-sizing:border-box;position:absolute;left:4px;right:4px;z-index:2;border:2px dashed var(--ink-3);border-radius:6px;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 4%,transparent) 0 6px,transparent 6px 12px);display:flex;flex-direction:column;gap:1px;padding:4px 8px;overflow:hidden}
+.msf-from span{font-size:12px;font-weight:700;color:var(--ink-2);white-space:nowrap}.msf-from small{font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+/* Shop Tools tiles like the approved mockup: one short word, a bigger icon */
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas){min-height:50px;gap:5px;padding:8px 2px 6px}
+.side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:23px;height:23px}
+.side:not(.mini) .nav-tools .lbl-k{display:block;-webkit-line-clamp:unset;white-space:nowrap;text-overflow:ellipsis;font-size:11px;line-height:1.2}
+/* page titles (Nov 11 2026, Nick): a long title keeps its line across the top and the buttons drop below it, instead of
+   the title squeezing into two lines beside them */
+.page-head > div:first-child:has(> h1){flex:1 0 auto;max-width:100%;min-width:0}
+.page-head > div:first-child:has(> h1) + *{margin-left:auto}
+/* schedule cards drag in every browser (Edge selected text instead of dragging, Nov 11) */
+.msf-card,.msf-run-r,.msf-from,.msf-run{-webkit-user-select:none;user-select:none}
+.msf-card,.msf-run-r,.msf-from{-webkit-user-drag:element;cursor:grab}
+.msf-card:active,.msf-run-r:active{cursor:grabbing}
+.msf-card:focus-visible,.msf-run-r:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+/* the phone menu's Shop Tools: small icons in a row, no names (Nov 11, Nick: "use the little icons only like it was before
+   so it doesn't get too long"); press and hold or the tooltip names them */
+@media (max-width:820px){
+  .side .nav-tools{display:flex!important;flex-direction:row!important;flex-wrap:wrap;gap:4px;padding:2px 0 0}
+  .side .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas){width:44px!important;height:44px!important;min-height:0!important;padding:0!important;justify-content:center!important;align-items:center;flex-direction:row!important;border-radius:8px;position:relative}
+  .side .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) :is(.lbl-t,.lbl-s,.lbl-k){display:none!important}
+  .side .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:22px!important;height:22px!important}
+  .side .nav-tools .badge{position:absolute;top:2px;right:2px;margin:0}
+}

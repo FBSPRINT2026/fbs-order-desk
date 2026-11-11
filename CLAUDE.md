@@ -2,6 +2,8 @@
 
 **More than one person works on this site (Nick and Amanda). Read `docs/WORKING-ON-THE-SITE.md` first: start from the
 newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/ship.sh "what changed"`, read `tail -30 docs/SHIP-LOG.md` to see what the other person changed, never force-push.**
+**Only Nick changes these rules and the handbook. Anyone else's idea for a rule goes in `docs/SUGGESTIONS.md` for him to
+decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 
 - **Permanent solutions, never patches (the first rule; Nick, Oct 28 2026: "this is a system we're gonna use for five
   years, maybe more… we want really good permanent solutions that fix the problems, not 'we found a way to do this one
@@ -165,6 +167,11 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   dashed "Held · <day>" tag in the order's header (no big button). It reads the order (each garment's pieces, kind and
   darkness: `QuickJob.parts`) and guesses the spots and colors (the order's prints, else its art files' names, else the
   customer's recent orders); staff only fix what's off. Orders from the same email can be held together.
+- **Money in is one tool: Receive a Payment** (Nick, Nov 11 2026; it was Take a Payment): `components/tools/ReceivePaymentTool.tsx`
+  at `/shop/receive-payment` (the old `/shop/take-payment` address opens it). One search (customer, invoice # or PO),
+  the customer's invoices grouped by how late when there are many, quick picks and "Pay an amount" (oldest first),
+  then Card (cards they OK'd, a new card, fee, PIN) or Check / ACH / Cash recorded straight on (`recordLumpPayment`);
+  old Printavo invoices can be paid by check here. Every "take / record a payment" button opens it.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.
@@ -202,3 +209,9 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   - No new colors, radii, font sizes or shadows: use the CSS variables (`--ink*`, `--line*`, `--surface*`, `--accent*`,
     `--fbs-*`, `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
+- **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card with its
+  department's edge; only late (red edge, red number, "Late" tag) and holds (dashed, "Hold" tag) look different. Overtime
+  is a soft amber band behind the hours, warm-up and lunch plain gray, the past a light gray; the key sits at the top
+  (`.ms-calm` / `.ms-key2` in `app/globals.css`). Time lost to someone not clocked in yet (`Down` flagged "clock" in
+  `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
+  tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).

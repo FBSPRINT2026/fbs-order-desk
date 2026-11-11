@@ -17,6 +17,11 @@ Read this with CLAUDE.md (the house rules) at the start of every session. More t
    **Decisions are saved automatically, without being asked**: when Nick or Amanda settles how something should work
    (a rule, a preference, "always do it this way"), write it into CLAUDE.md (a house rule) or this handbook in the same
    ship, with their name and the date, so the other person's Claude follows it too.
+   **Only Nick changes the house rules.** CLAUDE.md and this handbook change only on Nick's word. Any other idea for a
+   rule or a handbook change, Amanda's included, goes in `docs/SUGGESTIONS.md` under "Waiting for Nick", and that's
+   it: don't edit the rules, don't keep reminding Amanda or Nick, and never bring back anything listed under
+   "Not doing" (Nick, Nov 11 2026). Nick's Claude: when Nick asks what's suggested, read it to him; do what he approves,
+   then move it to Done or Not doing.
 2. **Small changes, shipped often.** One fix or feature per ship. Long-running unshipped work is what collides.
 3. **Ship only with `SHIP_BY=<Nick or Amanda> bash scripts/ship.sh "what changed"`** (SHIP_BY = whose change it is;
    it goes in the ship log). It brings in the other person's latest work first, numbers

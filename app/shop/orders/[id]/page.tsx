@@ -1434,7 +1434,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       : !isQuote ? { tone: "ok", text: "Approved", sub: pvStatusOf(o as never) ? "In Printavo as an invoice" : "Invoice" }
       : o.status === "quote_sent" ? { tone: "wait", text: "Waiting on the customer's approval" } : { tone: "info", text: "Quote not sent yet" });
     // paid
-    if (seesMoney && calc.total > 0) out.push(calc.balance < -0.004 ? { tone: "info", text: `${money(-calc.balance)} credit`, sub: "Overpaid: the customer can use it or get it back (Take a Payment)" } : calc.balance <= 0.004 ? { tone: "ok", text: "Paid in full" } : calc.paid > 0 ? { tone: "wait", text: `${money(calc.balance)} still due`, sub: `${money(calc.paid)} paid` } : { tone: isQuote ? "info" : "wait", text: `${money(calc.balance)} due`, sub: "Nothing paid yet" });
+    if (seesMoney && calc.total > 0) out.push(calc.balance < -0.004 ? { tone: "info", text: `${money(-calc.balance)} credit`, sub: "Overpaid: the customer can use it or get it back (Receive a Payment)" } : calc.balance <= 0.004 ? { tone: "ok", text: "Paid in full" } : calc.paid > 0 ? { tone: "wait", text: `${money(calc.balance)} still due`, sub: `${money(calc.paid)} paid` } : { tone: isQuote ? "info" : "wait", text: `${money(calc.balance)} due`, sub: "Nothing paid yet" });
     return out;
   })();
   const tv = { first: firstName(cust?.name), number: o.number, job: o.nickname ? `"${o.nickname}"` : "your order", total: money(calc.total), balance: money(calc.balance),
@@ -2328,8 +2328,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </div>
               )}
               {canPay && String(o.status) !== "void" && <PayReadiness order={o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }} paid={calc.paid} depositPct={settings.depositPct} terms={cust?.payment_terms || "receipt"} deposit={Math.min(calc.balance, Math.round(calc.total * settings.depositPct) / 100)} />}
-              {/* running their card: the one Take a Payment tool, opened on this order (Nov 3, Nick; Nick and Amanda only) */}
-              {canTake && calc.balance > 0.004 && o.customer_id && <a className="btn sm" href={`/shop/take-payment?customer=${o.customer_id}&order=${o.id}`}>Take a payment</a>}
+              {/* a card run or a check recorded: the one Receive a Payment tool, opened on this order (Nov 11, Nick) */}
+              {canTake && calc.balance > 0.004 && o.customer_id && <a className="btn sm" href={`/shop/receive-payment?customer=${o.customer_id}&order=${o.id}`}>Receive a payment</a>}
             </div>
           </section>
           </div>

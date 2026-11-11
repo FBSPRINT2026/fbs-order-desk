@@ -58,7 +58,7 @@ export async function refundMyCredit(customerId: string, amount: number) {
     if (waiting) {
       const { SHOP_NOTIFY_EMAIL } = await import("@/lib/config");
       const { sendEmail, emailLayout, siteUrl } = await import("@/lib/email");
-      if (SHOP_NOTIFY_EMAIL) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Refund to approve: $${waiting.toFixed(2)}`, html: emailLayout("FBS Print", `A customer asked for $${waiting.toFixed(2)} of their credit back`, "It's waiting in Take a Payment for you or Amanda to approve.", "Open Take a Payment", `${siteUrl()}/shop/take-payment?customer=${customerId}`) }).catch(() => false);
+      if (SHOP_NOTIFY_EMAIL) await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: `Refund to approve: $${waiting.toFixed(2)}`, html: emailLayout("FBS Print", `A customer asked for $${waiting.toFixed(2)} of their credit back`, "It's waiting in Receive a Payment for you or Amanda to approve.", "Open Receive a Payment", `${siteUrl()}/shop/receive-payment?customer=${customerId}`) }).catch(() => false);
     }
     revalidatePath("/portal");
     return { ok: true as const, refunded: done, waiting };

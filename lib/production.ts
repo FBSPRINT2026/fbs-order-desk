@@ -99,7 +99,8 @@ export function withIssue(m: Machine, r: EquipRow | undefined, today: string): M
   return out;
 }
 /** [start, end, why, rate]: minutes after midnight; rate = the share of normal speed (0 = stopped) */
-export type Down = [number, number, string, number];
+/** [from, to, why, speed (0 = stopped)], and "clock" when it only comes from the time clock (someone not in yet): it keeps work off that time, but the schedule draws no Down box for it (Nov 11, Nick) */
+export type Down = [number, number, string, number, ("clock" | undefined)?];
 /** [start, end] in minutes after midnight (300 = 5:00 AM, 900 = 3:00 PM) */
 export type Shift = [number, number] | null;
 /** A press crew and its leader's schedule (hours for each weekday, 0 = Sunday; null = off that day). */
@@ -620,23 +621,23 @@ export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: 
     const crewIn = others.map((id) => punches.filter((p) => p.employee_id === id && (p.kind === "in" || p.kind === "break_end")).sort((a, b) => a.min - b.min)[0]).filter(Boolean);
     if (!first && crewIn.length) {
       const at = Math.min(...crewIn.map((p) => p!.min));
-      if (at > sh[0] + grace && at < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(at)), `${who}'s crew in at ${hm(at)}`, 0]);
+      if (at > sh[0] + grace && at < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(at)), `${who}'s crew in at ${hm(at)}`, 0, "clock"]);
       clock = { state: "crew", at, inAt: at, who, crew: crewIn.map((p) => names?.[p!.employee_id] || "").filter(Boolean) };
     } else if (!first) {
-      if (nowMin >= sh[1]) { downs.push([sh[0], sh[1], `${who} didn't clock in`, 0]); clock = { state: "noshow", at: null, who }; }
-      else if (nowMin > sh[0] + grace) { downs.push([sh[0], Math.min(sh[1], up5(nowMin + 1)), `Waiting on ${who} (not clocked in)`, 0]); clock = { state: "waiting", at: null, who }; }
+      if (nowMin >= sh[1]) { downs.push([sh[0], sh[1], `${who} didn't clock in`, 0, "clock"]); clock = { state: "noshow", at: null, who }; }
+      else if (nowMin > sh[0] + grace) { downs.push([sh[0], Math.min(sh[1], up5(nowMin + 1)), `Waiting on ${who} (not clocked in)`, 0, "clock"]); clock = { state: "waiting", at: null, who }; }
     } else {
       const late = first.min > sh[0] + grace;
-      if (late && first.min < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(first.min)), `${who} in at ${hm(first.min)}`, 0]);
+      if (late && first.min < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(first.min)), `${who} in at ${hm(first.min)}`, 0, "clock"]);
       clock = { state: late ? "late" : "in", at: first.min, inAt: first.min, who };
       let out: number | null = null;
       for (const p of mine.slice(mine.indexOf(first) + 1)) {
         if (p.kind === "out") { if (out == null) out = p.min; continue; }
-        if (out != null) { if (p.min - out > away && out < sh[1]) downs.push([Math.max(sh[0], out), Math.min(sh[1], up5(p.min)), `${who} out ${hm(out)}–${hm(p.min)}`, 0]); out = null; }
+        if (out != null) { if (p.min - out > away && out < sh[1]) downs.push([Math.max(sh[0], out), Math.min(sh[1], up5(p.min)), `${who} out ${hm(out)}–${hm(p.min)}`, 0, "clock"]); out = null; }
       }
       if (out != null) {
         clock = { state: "out", at: out, inAt: first.min, outAt: out, who };
-        if (nowMin - out > away && out < sh[1] - 10) downs.push([Math.max(sh[0], out), sh[1], `${who} clocked out at ${hm(out)}`, 0]);
+        if (nowMin - out > away && out < sh[1] - 10) downs.push([Math.max(sh[0], out), sh[1], `${who} clocked out at ${hm(out)}`, 0, "clock"]);
       }
     }
     if (!downs.length && !clock) return m;
