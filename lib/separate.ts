@@ -11,7 +11,7 @@
  * Plates are 0–255 ink coverage per pixel. Films come from them in lib/filmPdf.ts (solid or halftoned).
  * Everything here is plain math on RGBA arrays so it runs in the page, a worker, or a test.
  */
-import { WILFLEX_HEX, PMS_HEX, deltaE } from "./inkColors";
+import { WILFLEX_HEX, PMS_HEX, deltaE, colorHex } from "./inkColors";
 import { collapseRamps } from "./gradients";
 import { edgeRows } from "./edgeField";
 
@@ -507,6 +507,12 @@ const MESH = { underbase: 156, color: 230, sim: 305, highlight: 230, simBase: 23
  *  they print over the dark shirt as they are */
 export const baseByDefault = (hex: string) => lightness(hex) >= 30;
 /** black never gets underbase, no matter what: black ink over white bubbles (the shop's rule) */
+/**
+ * The color an ink really prints, for underbase and print order: its named ink's color ("PMS 151 C" is orange) when the
+ * name is a known ink, else the art's color. Customer films and one-color art are often drawn in black whatever the
+ * ink (Nov 11: #40473's back was PMS 151 C drawn black, so it got no underbase on a teal shirt and couldn't be given one)
+ */
+export const printShade = (k: { hex: string; name?: string }) => { const h = k.name ? colorHex(k.name) : ""; return /^#[0-9a-f]{6}$/i.test(h || "") ? h : k.hex; };
 export const neverBase = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L < 22 && Math.hypot(a, b) < 12; };
 
 /** a color this close (Lab distance) to an ink is that ink, printed solid (flat areas with a little noise) */
@@ -703,7 +709,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   };
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
   const add = (t: Uint8Array, a: Uint8Array) => { for (let i = 0; i < n; i++) { const v = t[i] + a[i]; t[i] = v > 255 ? 255 : v; } };
-  const based = (hex: string) => !neverBase(hex) && (s.baseFor?.["c" + hex.slice(1)] ?? baseByDefault(hex));
+  const based = (k: { hex: string; name?: string }) => !neverBase(printShade(k)) && (s.baseFor?.["c" + k.hex.slice(1)] ?? baseByDefault(printShade(k)));
   // highlight white (a top white): simulated process only. Spot color never has one (shop rule, as Separo does it):
   // the art's white is a White ink like any color, printed after the other colors and before black.
   const sim = s.method !== "spot";
@@ -720,10 +726,10 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   // last… highlight white last")
   body.sort((x, y) => lightness(y.k.hex) - lightness(x.k.hex));
   // spot: White goes after the colors, just before black (Separo's order: …, White, Black)
-  if (!sim) { const w = body.filter(({ k }) => isWhite(k.hex)), rest = body.filter(({ k }) => !isWhite(k.hex)); const b0 = rest.findIndex(({ k }) => neverBase(k.hex)); body.splice(0, body.length, ...(b0 < 0 ? [...rest, ...w] : [...rest.slice(0, b0), ...w, ...rest.slice(b0)])); }
+  if (!sim) { const w = body.filter(({ k }) => isWhite(k.hex)), rest = body.filter(({ k }) => !isWhite(k.hex)); const b0 = rest.findIndex(({ k }) => neverBase(printShade(k))); body.splice(0, body.length, ...(b0 < 0 ? [...rest, ...w] : [...rest.slice(0, b0), ...w, ...rest.slice(b0)])); }
   type Step = { key: string; name: string; hex: string; kind: PlateKind; a: Uint8Array; base: boolean };
   const seq: Step[] = [
-    ...body.map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a, base: dark && based(k.hex) })),
+    ...body.map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a, base: dark && based(k) })),
     ...(hw ? [{ key: "hw", name: "Highlight White", hex: "#FFFFFF", kind: "highlight" as PlateKind, a: hw, base: true }] : []),
   ];
   // the mix says how much of each ink should SHOW; on the press each ink covers its share of whatever is printed under
@@ -753,7 +759,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   const bumps = new Map<string, Uint8Array>();
   if (dark) {
     ub = new Uint8Array(n); const inked = new Uint8Array(n);
-    for (const { k, a } of colorPlates) { const kb = pre?.knock?.[inks.indexOf(k)] || a; if (based(k.hex)) add(ub, kb); add(inked, kb); }
+    for (const { k, a } of colorPlates) { const kb = pre?.knock?.[inks.indexOf(k)] || a; if (based(k)) add(ub, kb); add(inked, kb); }
     if (white) { add(ub, white); add(inked, white); }
     // choked only where it meets the bare shirt (so white can't peek out past the art); where two colors touch, or a
     // color meets black, it runs straight through (no gap in the white between yellow and orange)

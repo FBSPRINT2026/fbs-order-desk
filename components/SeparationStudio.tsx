@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, baseByDefault, neverBase, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, baseByDefault, neverBase, printShade, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, repaintLogo, suggestInk, inkChoices } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { garmentHex, guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
@@ -177,7 +177,7 @@ function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver:
   gshares.forEach((g, j) => { if (g) { const top = new Float32Array(m + 1); for (const st of g) for (let c = 0; c <= m; c++) top[c] = Math.max(top[c], st.s[c]); shares[j] = top; } });
   const paths = v.shapes.map((sh) => new Path2D(vpathD(sh.ops)));
   // black inks, and the shapes that print (mostly) black
-  const blackInk = inks.map((k) => neverBase(k.hex));
+  const blackInk = inks.map((k) => neverBase(printShade(k)));
   const isBlack = shares.map((sh, j) => { if (gshares[j]) return false; let b = 0; for (let c = 0; c < m; c++) if (blackInk[c]) b += sh[c]; return b > 0.9; });
   const whiteInk = inks.map((k) => { const [r, g, b] = rgb(k.hex); return r > 235 && g > 235 && b > 235; });
   const c = document.createElement("canvas"); c.width = w; c.height = h;
@@ -460,6 +460,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const widthIn = saved.widthIn || parseFloat(String(im?.size || "").replace(/[^\d.]/g, " ").trim().split(/\s+/)[0]) || 11;
     // the inks the order names for this print (the mockup's, snapped to the customer's brand colors): a found ink close
     // to one of them takes its name (Oct 16, Nick: #40070 found PMS 179 C / Cool Gray 4 C for their PMS 199 C / Cool Gray 5 C)
+    im0.current = im ? { colors: im.colors } : null;
     orderInks.current = String(im?.inks || "").split(",").map((n) => n.trim()).filter(Boolean).map((name) => ({ name, hex: colorHex(name) || "" })).filter((k) => k.hex);
     // the customer's brand colors only when the order names no inks for this print (several sets can't be guessed between)
     if (row0.customer_id && !orderInks.current.length) {
@@ -691,8 +692,14 @@ export default function SeparationStudio({ id }: { id: string }) {
       const spots = (vart?.shapes || []).filter((sh) => sh.ink && !/%$/.test(sh.ink));
       const swatch = (hex: string) => { let best = "", bd = 4; for (const sh of spots) { const d = deltaE(hex, sh.fill); if (d < bd) { bd = d; best = sh.ink!; } } return best; };
       const m = asOnMockup(f.map((x) => ({ hex: x.hex, name: swatch(x.hex) || orderName(x.hex) || inkName(x.hex, st.lib), ...("fadeTo" in x && x.fadeTo?.length ? { fadeTo: x.fadeTo } : {}) })));
-      const list: SepInk[] = m.list;
+      let list: SepInk[] = m.list;
       if (m.note) setMsg(m.note);
+      // one-color art is its ink, whatever color it's drawn in (Nov 11: #40351's logo drawn black, printed White on a
+      // black shirt, was read as "shirt" and printed almost nothing): the print names one ink and the art is one color
+      if (method === "spot" && orderInks.current.length === 1 && !(im0.current && +(im0.current.colors || 0) > 1)) {
+        const raw = findColors(px, 3, 9, 0.004);
+        if (raw.length && raw[0].share >= 0.9) { list = [{ hex: raw[0].hex, name: orderInks.current[0].name, shirt: false }]; setMsg(`One-color art: printed as ${orderInks.current[0].name}, the ink this print names.`); }
+      }
       setInks(list);
       setOrderKeys([]); setNames({}); setHidden(new Set()); setMatchAt(null); setBusy("");
     }, 30);
@@ -774,7 +781,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       const base = res.plates.find((p) => p.kind === "underbase");
       if (base && out[base.key]) {
         // the base prints under the colors' dots too: as fine as the finest based color
-        const based = res.plates.filter((p) => p.kind === "color" && !neverBase("#" + p.key.slice(1)) && (st.baseFor?.[p.key] ?? baseByDefault("#" + p.key.slice(1))) && out[p.key]);
+        const based = res.plates.filter((p) => p.kind === "color" && !neverBase(printShade({ hex: "#" + p.key.slice(1), name: p.name })) && (st.baseFor?.[p.key] ?? baseByDefault(printShade({ hex: "#" + p.key.slice(1), name: p.name }))) && out[p.key]);
         const finest = based.reduce((a, p) => (out[p.key].mesh > a.mesh ? { mesh: out[p.key].mesh, name: p.name } : a), { mesh: out[base.key].mesh, name: "" });
         if (finest.name && finest.mesh > out[base.key].mesh) out[base.key] = { mesh: finest.mesh, why: `${finest.name} needs ${finest.mesh} for its small detail, and the base prints under it, so the base is ${finest.mesh} too.` };
       }
@@ -883,6 +890,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const toggleMore = (k: string) => setMore(more.includes(k) ? more.filter((x) => x !== k) : [...more, k]);
   const designRef = useRef<(Design & { print_plan?: PrintPlan | null }) | null>(null);
   const orderInks = useRef<{ name: string; hex: string }[]>([]);
+  const im0 = useRef<{ colors?: number | string } | null>(null);
   /** the order's own ink name for a found color, when one is close (ΔE under 20) */
   const orderName = (hex: string) => { let best = "", bd = 20; for (const k of orderInks.current) { const d = deltaE(hex, k.hex); if (d < bd) { bd = d; best = k.name; } } return best; };
   const hiRef = useRef<{ key: string; plates: Plate[]; w: number; h: number; ppi: number } | null>(null);
@@ -1211,6 +1219,8 @@ export default function SeparationStudio({ id }: { id: string }) {
           {tab === "studio" && <>
             {row.status !== "cancelled" && <button type="button" className="btn primary" disabled={!res || !!busy} onClick={() => save(row.status === "films" ? "films" : "in_progress")}>Save</button>}
             {row.status === "films" && <button type="button" className="btn" disabled={!!busy} title="Films need redoing: back to Working" onClick={() => setStatus("in_progress")}>Back to Working</button>}
+            {/* films printed another way (the Illustrator file, the films PDF): mark it Printed so the next order reprints from it (Nov 11, Nick: #40118) */}
+            {row.status !== "films" && row.status !== "cancelled" && !!res && <button type="button" className="btn" disabled={!!busy} title="The films are printed (any way): save it as Printed, ready to reprint next time" onClick={() => markPrinted()}>Mark Printed</button>}
           </>}
           {order && <Link className="btn" href={`/shop/orders/${order.id}`}>Open Order</Link>}
           {!!(row.settings as { art?: SepArt }).art && row.status !== "films" && row.status !== "cancelled" && <label className="btn" title="Upload a different file (the inks are found again)"><input type="file" accept={ART_ACCEPT} hidden onChange={(e) => { replaceArt(e.target.files?.[0]); e.target.value = ""; }} />Replace Art</label>}
@@ -1336,7 +1346,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <div className="sep-basefor">
                 <div className="sep-f-h">Underbase under each color</div>
                 {plates.filter((p) => p.kind === "color").map((p) => {
-                  const art = "#" + p.key.slice(1), never = neverBase(art), on = !never && (st.baseFor?.[p.key] ?? baseByDefault(art));
+                  const art = printShade({ hex: "#" + p.key.slice(1), name: p.name }), never = neverBase(art), on = !never && (st.baseFor?.[p.key] ?? baseByDefault(art));
                   return <label key={p.key} className={"sep-chk" + (never ? " faint" : "")} title={never ? "Black never gets underbase: black ink on white bubbles" : on ? "Uncheck to print this color straight on the shirt (no white under it)" : "Check to put white underbase under this color"}>
                     <input type="checkbox" checked={on} disabled={never} onChange={(e) => set({ baseFor: { ...(st.baseFor || {}), [p.key]: e.target.checked } })} />
                     <span className="sep-sw" style={{ background: p.hex }} /> <span data-notranslate>{p.name}</span>{never ? " (black: never)" : !on ? " (straight on the shirt)" : ""}</label>;
@@ -1405,11 +1415,11 @@ export default function SeparationStudio({ id }: { id: string }) {
             {(() => {
               const ub = plates.find((p) => p.kind === "underbase");
               return (
-                <div className={"sep-chip sep-chip-ub" + (ub ? "" : " off")} title={ub ? "The underbase: a white screen that prints first (head 1) and gets flashed, under the colors." : "No underbase on this job (light shirt). Check Print it to add one."}>
+                <div className={"sep-chip sep-chip-ub" + (ub ? "" : " off")} role={ub ? undefined : "button"} onClick={(e) => { if (!ub && !(e.target as HTMLElement).closest("input,label")) set({ underbase: "on", baseFor: Object.fromEntries(Object.entries(st.baseFor || {}).filter(([, v]) => v !== false)) as Record<string, boolean> }); }} title={ub ? "The underbase: a white screen that prints first (head 1) and gets flashed, under the colors." : "No underbase on this job (light shirt). Check Print it to add one."}>
                   <span className="sep-chip-sw" style={{ background: "#FFFFFF" }}><i style={{ background: "#FFFFFF" }} /></span>
                   <input value={ub ? ub.name : "Underbase White"} onChange={(e) => { if (ub) setNames((m) => ({ ...m, [ub.key]: e.target.value })); }} readOnly={!ub} aria-label="Underbase" data-notranslate />
                   <span className="sep-chip-m q-exact">{ub ? "Underbase · head 1" : "Underbase · off"}</span>
-                  <label className={"sep-chip-shirt" + (ub ? " on" : "")} title="Print a white underbase under the colors"><input type="checkbox" checked={!!ub} onChange={(e) => set({ underbase: e.target.checked ? "on" : "off" })} /> Print it</label>
+                  <label className={"sep-chip-shirt" + (ub ? " on" : "")} title="Print a white underbase under the colors"><input type="checkbox" checked={!!ub} onChange={(e) => set(e.target.checked ? { underbase: "on", baseFor: Object.fromEntries(Object.entries(st.baseFor || {}).filter(([, v]) => v !== false)) as Record<string, boolean> } : { underbase: "off" })} /> Print it</label>
                 </div>
               );
             })()}
@@ -1433,7 +1443,7 @@ export default function SeparationStudio({ id }: { id: string }) {
                   // this color IS the shirt: knocked out (the shirt shows there); unchecking one that matches the shirt prints it anyway
                   const on = !!res?.dropped.includes(k.hex);
                   // UB: white underbase under this color (dark shirts); black never, and not on a color left to the shirt
-                  const key = "c" + k.hex.slice(1), never = neverBase(k.hex), ub = !on && !never && (st.baseFor?.[key] ?? baseByDefault(k.hex));
+                  const key = "c" + k.hex.slice(1), never = neverBase(printShade(k)), ub = !on && !never && (st.baseFor?.[key] ?? baseByDefault(printShade(k)));
                   return <div className="sep-chip-ft">
                     <label className={"sep-chip-shirt" + (on ? " on" : "") + (multiShirt ? " off" : "")} title={multiShirt ? `This print goes on ${groupShirts.map((x) => x.name).join(" and ")} shirts: one set of screens prints them all, so every color prints` : on ? "Knocked out: the shirt shows here. Uncheck to print this color." : "Check if this color is the shirt color: it's knocked out and the shirt shows there."}>
                       <input type="checkbox" checked={on} disabled={multiShirt} onChange={(e) => shirtInk(i, e.target.checked)} /> Shirt
