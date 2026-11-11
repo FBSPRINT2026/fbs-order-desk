@@ -143,7 +143,10 @@ export async function refreshUnseenProofs(orderId: string, before: string[], aft
     if (!user || !isStaff) return { ok: false, error: "Only shop staff can do that." };
     if (!before.length || !after.length) return { ok: true, updated: 0 };
     const admin = createAdminClient();
-    const { data: pfs } = await admin.from("proofs").select("id, mockup_id, title").eq("order_id", orderId).in("mockup_id", before).eq("status", "pending").is("viewed_at", null).is("archived_at", null);
+    // a version out with the customer isn't locked until they decide (Nov 10, Nick on #50013: "I quickly did a quick edit
+    // on the mock-up I just sent… until it's approved or declined, it wouldn't really lock"): an edit before then is the
+    // same version, whether or not it's been opened (an email's link checker opens it in seconds anyway)
+    const { data: pfs } = await admin.from("proofs").select("id, mockup_id, title, viewed_at").eq("order_id", orderId).in("mockup_id", before).eq("status", "pending").is("decided_at", null).is("archived_at", null);
     if (!pfs?.length) return { ok: true, updated: 0 };
     const { data: nm } = await admin.from("mockups").select("id, title, file_path").in("id", after);
     const news = after.map((id) => (nm || []).find((m) => m.id === id)).filter(Boolean) as { id: string; title: string; file_path: string }[];
@@ -155,12 +158,13 @@ export async function refreshUnseenProofs(orderId: string, before: string[], aft
       const m = news.find((x) => !used.has(x.id) && x.title === p.title) || news.filter((x) => !used.has(x.id))[Math.min(i, news.length - 1)] || news.find((x) => !used.has(x.id));
       if (!m) continue;
       used.add(m.id);
-      const { error } = await admin.from("proofs").update({ mockup_id: m.id, file_path: m.file_path, title: m.title }).eq("id", p.id).is("viewed_at", null);
+      const { error } = await admin.from("proofs").update({ mockup_id: m.id, file_path: m.file_path, title: m.title }).eq("id", p.id).eq("status", "pending").is("decided_at", null);
       if (error) return { ok: false, error: error.message };
       await admin.from("mockups").update({ proof_id: p.id }).eq("id", m.id);
       n++;
     }
-    if (n) await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: `Updated the mockup the customer hasn't opened yet (${n} picture${n === 1 ? "" : "s"}), same version`, actor: email });
+    const seen = pfs.some((p) => p.viewed_at);
+    if (n) await admin.from("order_events").insert({ order_id: orderId, kind: "note", detail: `Updated the mockup sent to the customer (${n} picture${n === 1 ? "" : "s"}), same version: no answer from them yet${seen ? "; they'd opened it, the link now shows the new one" : ""}`, actor: email });
     return { ok: true, updated: n };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

@@ -156,6 +156,10 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   is refused, never saved where nothing reads it. Add a new order field to the type and the compiler sends you there.
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
+- **A sent version isn't locked until the customer answers** (Nick, Nov 10 2026: "until it's approved or declined, it
+  wouldn't really lock"). Changing a group's mockup while its version is out and unanswered updates that same version
+  (`refreshUnseenProofs` in `app/shop/proof-actions.ts`), opened or not; a new version only starts once they've approved
+  or asked for changes. Anything that swaps a group's mockup pictures calls it.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.
