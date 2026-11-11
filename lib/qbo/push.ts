@@ -190,7 +190,8 @@ export class Pusher {
     const link = await this.link("invoice", o.id);
     const res = (row.resolution || {}) as { force?: boolean; void?: boolean };
 
-    if (!isInvoiceStatus(o.status)) {
+    // a canceled invoice (completed + declined_at) is handled like one that went back to a quote: never pushed live
+    if (!isInvoiceStatus(o.status) || (o.status === "completed" && o.type !== "quote" && !!(o as { declined_at?: string | null }).declined_at)) {
       if (link && link.source === "created") {
         if (res.void) return this.voidInvoice(row);
         return { status: "needs_review", reason: `#${n} went back to a quote after it was sent to QuickBooks (invoice #${link.qbo_id}). Press "Void in QuickBooks" if it's cancelled, or Skip to leave it.`, preview: { action: "void?", qboId: link.qbo_id } };

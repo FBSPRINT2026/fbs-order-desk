@@ -102,7 +102,7 @@ export const needsGoods = (o: { price_type?: string | null; type: string; status
 /** what the customer is asked about in their portal: not once it's printing or done (Nov 2 portal check: an order "In
  *  production" still said "Send the garments for this job and add the tracking") */
 export const customerSendsGoods = (o: { price_type?: string | null; type: string; status: string; submitted_at?: string | null }) =>
-  needsGoods(o) && !["production", "ready", "completed", "void"].includes(o.status);
+  needsGoods(o) && !["production", "fulfillment", "ready", "completed", "void"].includes(o.status);
 
 /**
  * Which supplier order a shipment belongs to, from the line the supplier's manifest writes on it ("SanMar order

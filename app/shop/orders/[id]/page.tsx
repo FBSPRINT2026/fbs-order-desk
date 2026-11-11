@@ -29,7 +29,7 @@ import RequestAsk from "@/components/RequestAsk";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, CLOSED_QUOTE, REVISION, type SampleRule, isClosedQuote, statusKey, uid,
+  calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, statusText, CLOSED_QUOTE, CANCELED, isCanceled, REVISION, type SampleRule, isClosedQuote, statusKey, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
 import GroupEditor, { saveFinishing } from "@/components/GroupEditor";
@@ -524,7 +524,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // contract jobs: specialty ink (poly / nylon / dyed garments) follows the garments on each group, unless staff set it
   // by hand. Only while the order is still being quoted or worked up, so a printed job's price doesn't move.
   useEffect(() => {
-    if (!o || o.price_type !== "wholesale" || !catalog.length || ["production", "ready", "completed"].includes(o.status)) return;
+    if (!o || o.price_type !== "wholesale" || !catalog.length || ["production", "fulfillment", "ready", "completed"].includes(o.status)) return;
     const want = o.groups.map((g) => {
       const hits = g.lines.filter((l) => (l.style || l.garment || "").trim()).map((l) => {
         const cat = garmentFor(catalog, l.style, l.brand);
@@ -569,7 +569,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   useEffect(() => {
     if (!o) return;
     // in production the prices stay as they are, except what's below (frozen)
-    const frozen = ["production", "ready", "completed"].includes(o.status);
+    const frozen = ["production", "fulfillment", "ready", "completed"].includes(o.status);
     const on = !!o.use_program && !!prog;
     const findGm = (l: GLine) => garmentFor(catalog, l.style, l.brand);
     // flat: a design's own price. Finishing on the job is added on top of it (Oct 21, Nick: Mewjira's tagging is $1 a
@@ -1032,7 +1032,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
   const numOr = (v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
-  async function setStatus(k: StatusKey | "closed") {
+  async function setStatus(k: StatusKey | "closed" | "canceled") {
     if (!o || statusKey(o) === k) return;
     await save();
     // Closed Quote: the same as the Job Center's Mark declined (stored as completed, its mockups to the Archive)
@@ -1044,6 +1044,21 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       if (latest.current) latest.current = { ...latest.current, status: "completed", type: "quote" };
       setLockOverride("");
       return loadSide();
+    }
+    // Canceled (an invoice called off): declined and finished, so every open list drops it (Nov 11, Nick)
+    if (k === "canceled") {
+      const r = await markDeclined(o.id, "Canceled by the shop");
+      if (!r.ok) return say(("error" in r && r.error) || "Couldn't cancel it.");
+      await createClient().from("orders").update({ status: "completed" }).eq("id", o.id);
+      setO((p) => (p ? ({ ...p, status: "completed", declined_at: new Date().toISOString(), declined_reason: "Canceled by the shop" } as Order) : p));
+      if (latest.current) latest.current = { ...latest.current, status: "completed" };
+      return loadSide();
+    }
+    // out of Canceled: put it back on first
+    if (isCanceled(o as never)) {
+      const r = await undoDeclined(o.id);
+      if (!r.ok) return say(("error" in r && r.error) || "Couldn't reopen it.");
+      setO((p) => (p ? ({ ...p, declined_at: null, declined_reason: "" } as Order) : p));
     }
     // out of a closed quote: put it back on first (clears the decline, brings its mockups back)
     if (isClosedQuote(o)) {
@@ -1313,7 +1328,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (v === "hold") return setHoldAsk(true);
     // another status while it's on hold: off hold, then the status
     if (holdOf((o as { flags?: unknown }).flags)) await offHold();
-    if (v !== statusKey(o)) await setStatus(v as StatusKey | "closed");
+    if (v !== statusKey(o)) await setStatus(v as StatusKey | "closed" | "canceled");
   }
   function sepsIfReady(why: string) {
     if (!o) return;
@@ -1420,13 +1435,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       const g = goodsSt?.status || "waiting", pv = goodsSt?.updated_by === "Printavo" ? " in Printavo" : "";
       out.push(g === "received" ? { tone: "ok", text: "Goods received" + pv } : g === "issue" ? { tone: "bad", text: "Problem with the goods" }
         : g === "partial" ? { tone: "wait", text: "Goods partly here" + pv } : g === "arrived" ? { tone: "wait", text: "Goods here, checking in" } : { tone: isQuote ? "info" : "wait", text: g === "on_way" ? "Goods on the way" : "Waiting on the customer's goods" });
-    } else if (!isQuote) out.push(["blanks", "production", "ready", "completed"].includes(o.status) ? { tone: "ok", text: "Garments ordered" } : { tone: "wait", text: "Garments not ordered yet" });
+    } else if (!isQuote) out.push(["blanks", "production", "fulfillment", "ready", "completed"].includes(o.status) ? { tone: "ok", text: "Garments ordered" } : { tone: "wait", text: "Garments not ordered yet" });
     // art
     const ap = proofs.filter((p) => p.status === "approved").length, ch = proofs.filter((p) => p.status === "changes").length;
     const mock = o.groups.length > 0 && o.groups.every((g) => g.mockupAt || g.mockupSkipped || (g.customerMockups || []).length || g.imprints.some((d) => d.supplied?.picture));
     // approved by staff another way (a call, an email: Request separations' "approved another way"), or a Printavo job past art
     const staffArt = events.find((e) => e.kind === "art_approved");
-    const pvPast = !!pvStatusOf(o as never) && ["blanks", "production", "ready", "completed"].includes(o.status);
+    const pvPast = !!pvStatusOf(o as never) && ["blanks", "production", "fulfillment", "ready", "completed"].includes(o.status);
     out.push(ch ? { tone: "bad", text: "Art changes asked for" } : ap ? { tone: "ok", text: "Art approved" } : staffArt ? { tone: "ok", text: "Art approved", sub: staffArt.detail || undefined } : pvPast ? { tone: "ok", text: "Art approved", sub: "In Printavo" } : pendingProofs ? { tone: "wait", text: "Proof waiting on the customer" }
       : mock ? { tone: isQuote ? "info" : "ok", text: "Mockup done", sub: isQuote ? undefined : "No proof sent" } : { tone: "wait", text: "No mockup yet" });
     // approval
@@ -1571,7 +1586,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             {/* a hold is for an order (Nov 3, Nick: "once it goes to invoice, it should say on hold"); a quote isn't held */}
             {(o.type === "invoice" || !!holdOf((o as { flags?: unknown }).flags)) && <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>}
             <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote").flatMap((s) => (s.k === "quote_sent" ? [s, REVISION] : [s])), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
-            <optgroup label="Invoice">{STATUSES.filter((s) => s.type === "invoice").map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
+            <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => <option key={s.k} value={s.k}>{statusText(s.k, o.delivery_method)}</option>)}</optgroup>
           </select>}
           {/* phone only: Documents, Production, Ask AI and More behind one button (the next step stays showing under it) */}
           <button type="button" className="btn ed-acts-tog" aria-expanded={actsOpen} onClick={() => setActsOpen((v) => !v)}>
@@ -1860,7 +1875,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                       <div className="prg-ask"><span><b>{cust ? custLabel(cust) : "This customer"}</b> has program pricing.</span><button type="button" className="btn sm primary" onClick={() => { setConfirmRetail(false); patch((d) => { d.use_program = true; }); }}>Apply program pricing</button></div>
                     )}
                     {o.use_program && prog && progOpen && <ProgramNotes groups={o.groups} card={prog.card} baseCost={prog.baseCost} ctx={(g) => designCtx(o, g)} />}
-                    {o.use_program && prog && progOpen && !["production", "ready", "completed"].includes(o.status) && <PriceSuggestions groups={o.groups} ctx={(g) => designCtx(o, g)} settings={settings}
+                    {o.use_program && prog && progOpen && !["production", "fulfillment", "ready", "completed"].includes(o.status) && <PriceSuggestions groups={o.groups} ctx={(g) => designCtx(o, g)} settings={settings}
                       onUse={(gid, price) => { patch((d) => { const g = d.groups.find((x) => x.id === gid); g?.lines.forEach((l) => { if (!l.extras && Object.values(l.sizes || {}).some((n) => +(n || 0) > 0)) { l.priceOverride = price; delete l.prog; l.progOff = true; } }); }); say(`Price set to ${money(price)}.`); }}
                       onSaved={() => { if (custId) programCard(custId).then((r) => { if (r.ok && (r.cards.length || r.items.length)) setProgAll({ cards: r.cards, items: r.items, applyMode: r.applyMode }); }); }} />}
                     {/* the "Last time…" past-price line is gone (Oct 15, Nick: it matched a job they had never printed) */}

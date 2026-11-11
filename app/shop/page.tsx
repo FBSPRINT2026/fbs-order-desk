@@ -185,7 +185,7 @@ export default function Dashboard() {
       today: work.filter((j) => j.due === t),
       tomorrow: work.filter((j) => j.due === tm),
       ship: js.filter((j) => j.ship),
-      production: work.filter((j) => ["production", "queue", "approved", "art", "blanks", "issue"].includes(j.status)),
+      production: work.filter((j) => ["production", "fulfillment", "queue", "approved", "art", "blanks", "issue"].includes(j.status)),
       waiting: js.filter((j) => ["quote_sent", "request"].includes(j.status) || (j.printavo && j.status === "quote")),
       issues: js.filter((j) => j.status === "issue"),
     };
@@ -252,6 +252,7 @@ export default function Dashboard() {
     { k: "art", label: "Art", match: (j) => j.status === "art" },
     { k: "blanks", label: "Blanks", match: (j) => j.status === "blanks" },
     { k: "production", label: "In Production", match: (j) => j.status === "production" },
+    { k: "fulfillment", label: "Fulfillment", match: (j) => j.status === "fulfillment" },
     { k: "issue", label: "Issues", match: (j) => j.status === "issue" },
     { k: "ship", label: "Ready To Ship", match: (j) => j.ship || j.status === "ready" },
   ];

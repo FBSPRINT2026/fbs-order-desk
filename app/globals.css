@@ -21991,3 +21991,176 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
   .side .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:22px!important;height:22px!important}
   .side .nav-tools .badge{position:absolute;top:2px;right:2px;margin:0}
 }
+/* the schedule's top (option G, Nov 11, Nick): tools 2/3, one AI tip at a time 1/3 */
+.msk{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px;align-items:stretch}
+@media (max-width:900px){.msk{grid-template-columns:minmax(0,1fr)}}
+.msk-tools{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.msk-h{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+.msk-row{display:flex;flex-wrap:wrap;gap:8px}
+.msk-b{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.msk-b.bad{border-color:color-mix(in srgb,var(--danger) 45%,var(--line));color:var(--danger)}
+.msk-b.warn{border-color:color-mix(in srgb,var(--warn) 55%,var(--line))}
+.msk-n{background:var(--surface-2);color:var(--ink-2);border-radius:99px;padding:0 7px;font-size:11.5px;font-weight:700}
+.msk-b.bad .msk-n{background:var(--danger);color:#fff}
+.msk-late{margin-top:10px}
+.msai{position:relative;display:flex;flex-direction:column;gap:6px;background:linear-gradient(110deg,color-mix(in srgb,var(--accent) 7%,var(--surface)),var(--surface) 75%);border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));border-left:4px solid var(--accent);border-radius:10px;padding:10px 14px 12px;min-width:0}
+.msai.bad{border-left-color:var(--danger)}.msai.warn{border-left-color:var(--warn)}.msai.ok{border-left-color:var(--ok)}
+.msai-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+.msai-dots{display:flex;gap:4px;margin-right:4px}.msai-dots i{width:6px;height:6px;border-radius:50%;background:var(--line)}.msai-dots i.on{width:14px;border-radius:3px;background:var(--accent)}
+.msai-nav{all:unset;cursor:pointer;width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink-3);font-size:13px}
+.msai-b{min-width:0}.msai-t{font-size:15px;font-weight:700;color:var(--ink)}.msai-s{font-size:13px;color:var(--ink-2);margin-top:2px}
+.msai-go{align-self:flex-start}
+/* schedule cards are one color: a plain edge all round, no blue / purple / orange / red left side (Nov 11, Nick: "it just
+   needs to be one color… let the dots and stuff do the talking"). Late shows in its number and Late tag; holds stay dashed */
+.ms-calm .msf-card.ms-blk:not(.bar),.ms-calm .msf-card.ms-blk.late:not(.bar),.ms-calm .msf-card.ms-blk.msh-late:not(.bar),.ms-calm .msf-card.ms-blk.embroidery:not(.bar),.ms-calm .msf-card.ms-blk.heat:not(.bar),.msf-run{border-left:1px solid var(--line)!important}
+.ms-calm .msf-card.ms-blk.hold:not(.bar){border-left:1.5px dashed color-mix(in srgb,var(--ink) 35%,transparent)!important}
+.ms-key-late{color:var(--danger);font-weight:700;margin-right:4px}
+/* a group: the customer and what the jobs share on top, the numbers on their own line under it (Nov 11, Nick) */
+.msf-run-h{flex-direction:column;align-items:flex-start;gap:0;line-height:16px;padding:1px 0 2px}
+.msf-run-h b{font-size:13px;max-width:100%}.msf-run-h span{display:block}
+.ms-calm .msf-n.late,.ms-calm .msf-run-r.late b{color:var(--danger)!important;font-weight:800}
+/* Ready To Schedule: small cards by due date, a suggested spot staff can change, then Make The Schedule (Nov 11, Nick) */
+.msr-l{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px}
+.msr-c{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:5px 8px 6px;cursor:grab;min-width:0}
+.msr-c.picked{border-color:color-mix(in srgb,var(--accent) 40%,var(--line));background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
+.msr-c.hold{border-style:dashed;background:var(--surface-2)}
+.msr-c.open{z-index:20}
+.msr-1{display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;font-size:13px}.msr-1 b{overflow:hidden;text-overflow:ellipsis}
+.msr-n{font-weight:800;color:var(--ink);text-decoration:none}.msr-n.late{color:var(--danger)}
+.msr-2{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.msr-3{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;white-space:nowrap}.msr-3 span{color:var(--ink-3)}.msr-3 span.late{color:var(--danger)}
+.msr-spot{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:3px;height:21px;padding:0 7px;border-radius:5px;border:1px dashed color-mix(in srgb,var(--accent) 55%,transparent);color:var(--accent);font-weight:700;font-size:11.5px;white-space:nowrap;max-width:60%;overflow:hidden;text-overflow:ellipsis}
+.msr-spot.mine{border:1px solid var(--accent);background:var(--accent);color:#fff}
+.msr-spot.none{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 50%,transparent)}
+.msr-pop{position:absolute;right:-4px;top:calc(100% + 4px);width:280px;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 28px rgba(20,30,50,.18);padding:9px 10px;cursor:default;display:flex;flex-direction:column;gap:6px}
+.msr-ph{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.msr-sug{font-size:12.5px;color:var(--ink)}
+.msr-seg{display:grid;gap:4px}.msr-seg button{all:unset;cursor:pointer;text-align:center;padding:5px 0;border:1px solid var(--line);border-radius:5px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msr-seg button.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface));color:var(--accent)}
+.msr-act{display:flex;gap:6px;flex-wrap:wrap}
+/* lunch / warm-up named on a small tag at the column's right edge, above the cards (Nov 11, Nick: "we're not seeing lunches") */
+.msf-brk-t{position:absolute;right:6px;z-index:6;height:16px;line-height:16px;padding:0 6px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-3);font-size:10.5px;font-weight:600;pointer-events:none;white-space:nowrap}
+/* downtime: no stripes (Nick, Nov 11). A solid soft gray block with a dark left edge and its reason on top */
+.ms-calm .ms-down,.ms-down{background:color-mix(in srgb,var(--ink) 9%,var(--surface))!important;border:1px solid color-mix(in srgb,var(--ink) 22%,transparent)!important;border-left:4px solid var(--ink-2)!important;color:var(--ink-2)!important;font-size:11px!important;padding:3px 7px!important;white-space:normal!important}
+.ms-calm .ms-down b,.ms-down b{color:var(--ink)!important}
+/* the schedule's job pop-up (option A, Nov 11, Nick) */
+.mjp{width:min(440px,calc(100vw - 24px));padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 40px);overflow:auto}
+.mjp-h{display:flex;align-items:center;gap:8px;min-width:0}.mjp-n{font:800 20px var(--display)}.mjp-co{font:700 16px var(--display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mjp-sub{font-size:12.5px;color:var(--ink-3);margin-top:-6px}
+.mjp-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mjp-pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:99px;font-size:11.5px;font-weight:700;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.mjp-pill.running{background:color-mix(in srgb,var(--ok) 15%,var(--surface));color:var(--ok)}.mjp-pill.paused{background:color-mix(in srgb,var(--warn) 18%,var(--surface))}.mjp-pill.due{background:color-mix(in srgb,var(--warn) 14%,var(--surface));color:color-mix(in srgb,var(--warn) 70%,var(--ink))}
+.mjp-fl{display:inline-flex;gap:10px;font-size:12.5px;color:var(--ink-3)}.mjp-fl label{display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap}
+.mjp-st{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.mjp-st .btn{justify-content:center}
+.mjp-go{background:var(--ok)!important;border-color:var(--ok)!important}
+.mjp-prog select{width:100%;height:36px;border:1px solid var(--line);border-radius:6px;font:600 13px var(--body);padding:0 8px;background:var(--surface);color:var(--ink)}
+.mjp-when{border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+.mjp-w1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:14px}.mjp-w1 .faint{font-size:12.5px;white-space:nowrap}.mjp-w2{font-size:12px;margin-top:2px}
+.mjp-move{border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--accent) 3%,var(--surface))}
+.mjp-acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.mjp-acts .btn{justify-content:center;text-align:center}
+.mjp-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mjp-off{color:var(--danger)!important}
+.mjp-sure{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--danger);flex-wrap:wrap}
+.mjp-more{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px}
+.mjp-segs{margin:0;padding-left:18px;font-size:12.5px;color:var(--ink-2)}
+.msk-row{gap:10px 14px}
+.msk-g{display:inline-flex;align-items:center;flex-wrap:wrap;gap:6px;padding-left:10px;border-left:3px solid var(--line)}
+.msk-g.plan{border-left-color:var(--fbs-blue)}.msk-g.press{border-left-color:var(--ok)}.msk-g.sales{border-left-color:#7C5CD6}
+.msk-gl{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap;margin-right:2px}
+.msk-g .msk-b{height:32px;padding:0 10px;font-size:12.5px}
+.msf-rn{width:16px;text-align:center}
+/* the schedule's search: a small box above Coming up; matches glow amber, the rest fade (Nov 11, Nick) */
+.msf-side{display:flex;flex-direction:column;gap:8px;min-width:0}
+.msq{display:flex;align-items:center;gap:6px;height:36px;padding:0 8px 0 10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;color:var(--ink-3)}
+.msq:focus-within{border-color:var(--accent)}
+.msq input{all:unset;flex:1;min-width:0;font:14px var(--body);color:var(--ink)}
+.msq-n{font-size:11.5px;font-weight:700;color:#8a5a0d;background:color-mix(in srgb,var(--warn) 16%,var(--surface));border-radius:99px;padding:1px 8px;white-space:nowrap}.msq-n.none{color:var(--ink-3);background:var(--surface-2)}
+.msq-x{all:unset;cursor:pointer;padding:2px 4px;color:var(--ink-3)}
+.ms-finding .ms-blk:not(.ms-hit):not(.bar),.ms-finding .msf-run-r:not(.ms-hit){opacity:.28}
+.ms-finding .msf-run:not(:has(.ms-hit)){opacity:.28}.ms-finding .msf-run:has(.ms-hit) .msf-run-h{opacity:.6}
+.ms-calm .ms-blk.ms-hit:not(.bar){border:2px solid var(--warn)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 25%,transparent)!important;z-index:4}
+.msf-run-r.ms-hit{background:color-mix(in srgb,var(--warn) 14%,var(--surface));box-shadow:inset 3px 0 0 var(--warn)}
+.ms-hit-on{outline:3px solid var(--accent)!important;outline-offset:1px}
+/* the Separation Studio thinking: a spinner over the picture, and the ink row waits (a second click used to undo the first) */
+.sep-think{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,var(--surface) 55%,transparent);border-radius:inherit;pointer-events:none}
+.sep-think b{font-size:13px;font-weight:700;color:var(--ink);background:var(--surface);padding:4px 12px;border-radius:99px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.sep-spin{width:38px;height:38px;border-radius:50%;border:4px solid color-mix(in srgb,var(--accent) 20%,transparent);border-top-color:var(--accent);animation:sep-spin .8s linear infinite;will-change:transform}
+@keyframes sep-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.sep-spin{animation-duration:2.4s}}
+.sep-inkbar.busy{pointer-events:none;opacity:.75}
+/* the schedule's right-click menu, as mocked (Nov 11, Nick): the name bold, what it does under it, nothing runs over */
+.msf-menu{width:300px;padding:5px;border-radius:10px;box-shadow:0 12px 30px rgba(20,30,50,.2);max-width:calc(100vw - 16px)}
+.msf-menu button{display:grid!important;grid-template-columns:20px minmax(0,1fr);grid-template-rows:auto auto;column-gap:8px;align-items:center;padding:7px 9px!important;border-radius:6px;white-space:normal!important}
+.msf-menu button > :first-child{grid-row:1/3;justify-self:center}
+.msf-menu button > span:not(:first-child){font-weight:700;font-size:13px;color:var(--ink)}
+.msf-menu button small{margin:0!important;grid-column:2;font-size:11.5px;line-height:1.3;color:var(--ink-3);white-space:normal}
+.msf-menu hr{margin:4px 6px;border:0;border-top:1px solid var(--line)}
+.msf-menu-h{padding:6px 9px 4px!important;font-size:11px!important;font-weight:700!important;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)!important;white-space:normal}
+
+/* the PIN in front of the pay pages (components/ScreenPin.tsx; Nov 11, Nick) */
+.spn-bg{position:fixed;inset:0;z-index:900;background:var(--surface-2,#f4f6f9);display:flex;align-items:center;justify-content:center;padding:16px}
+.spn-box{width:min(340px,100%);background:var(--surface,#fff);border:1px solid var(--line);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:10px;text-align:center;box-shadow:0 12px 30px rgba(20,30,50,.12)}
+.spn-box h2{margin:0;font-family:var(--display);font-size:20px;color:var(--ink)}
+.spn-box p{margin:0}
+.spn-ic{font-size:28px}
+.spn-in{height:44px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:22px;letter-spacing:.4em;text-align:center;color:var(--ink)}
+.spn-err{color:var(--danger);font-size:13px;font-weight:700}
+.spn-f{font-size:12px}
+
+/* Where things stand (components/ScheduleStartPoint.tsx; Nov 11, Nick) */
+.wts{width:min(1100px,calc(100vw - 24px))!important;max-height:calc(100vh - 40px);display:flex;flex-direction:column}
+.wts-tabs{display:flex;gap:2px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--surface)}
+.wts-tabs button{all:unset;cursor:pointer;padding:10px 14px;font-weight:700;font-size:14px;color:var(--ink-2);border-bottom:3px solid transparent;display:inline-flex;gap:6px;align-items:center}
+.wts-tabs button.on{color:var(--accent);border-color:var(--accent);background:var(--accent-soft,#eef3fd)}
+.wts-n{background:var(--line-2,#e3e9f6);color:var(--accent);border-radius:99px;font-size:11.5px;padding:1px 7px}
+.wts-b{padding:12px 16px;overflow:auto;flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+.wts-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.wts-top .faint{font-size:12.5px;flex:1 1 300px}
+.wts-q{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);flex:0 1 240px;min-width:160px}
+.wts-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px}
+.wts-r{padding:10px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:7px}
+.wts-r:first-child{border-top:0}
+.wts-r.ch{background:var(--accent-soft,#eef3fd)}
+.wts-j{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;font-size:14px;min-width:0}
+.wts-s{font-size:12.5px;color:var(--ink-3)}
+.wts-d{white-space:nowrap}
+.wts-dg{all:unset;cursor:pointer;margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;font-weight:700;color:var(--ink-2);background:var(--surface);white-space:nowrap}
+.wts-dg.y{background:#e8f5ee;border-color:#9fd4b4;color:var(--ok)}
+.wts-dg:disabled{cursor:default}
+.wts-box{width:13px;height:13px;border:1.5px solid var(--ink-4,#9aa3b2);border-radius:3px;display:inline-block;position:relative}
+.wts-dg.y .wts-box{background:var(--ok);border-color:var(--ok)}
+.wts-dg.y .wts-box::after{content:"✓";color:#fff;font-size:10px;position:absolute;top:-2px;left:1.5px}
+.wts-seg{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.wts-seg button{all:unset;cursor:pointer;text-align:center;padding:7px 2px;font-size:12px;font-weight:600;color:var(--ink-2);border-left:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wts-seg button:first-child{border-left:0}
+.wts-seg button.on{background:var(--accent);color:#fff}
+.wts-seg button.on.missing{background:var(--warn)}
+.wts-seg button.on.completed{background:var(--ok)}
+@media (max-width:820px){.wts-seg{grid-template-columns:repeat(3,minmax(0,1fr))}.wts-seg button:nth-child(3n+1){border-left:0}.wts-seg button:nth-child(n+4){border-top:1px solid var(--line)}}
+.wts-run{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:10px 12px;background:var(--surface);border:1px solid #c9d6f2;border-radius:8px}
+.wts-f{display:flex;flex-direction:column;gap:4px;min-width:150px}
+.wts-f-s{min-width:100px;flex:0 0 110px}
+.wts-f > span{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.wts-f select,.wts-f input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.wts-hint{font-size:12.5px;color:var(--ink-2);padding-bottom:9px;flex:1 1 220px}
+.wts-hint b{color:var(--ok)}
+.wts-ft{display:flex;gap:10px;align-items:center;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+.wts-err{color:var(--danger);font-weight:700;font-size:13px}
+
+/* lunch and warm-up on the schedule: a thin line with a small label, no bubbles (Nov 11, Nick) */
+.msf-brk-l{position:absolute;left:0;right:0;height:0;z-index:6;border-top:2px solid color-mix(in srgb,var(--ink) 25%,transparent);pointer-events:none}
+.msf-brk-l.warm{border-top-style:dotted}
+.msf-brk-l span{position:absolute;left:6px;top:-8px;background:var(--surface);padding:0 5px;font-size:10.5px;font-weight:700;line-height:14px;color:var(--ink-3);white-space:nowrap;border-radius:3px}
+.msf-col .ms-warm,.msf-col .ms-lunch{background:transparent!important;border:0!important}
+
+/* Shift + drag: pin a job to an exact time (components/MachineSchedule.tsx; Nov 11, Nick) */
+.msf-pinning .msf-card,.msf-pinning .msf-run{opacity:.28;filter:grayscale(1)}
+.msf-pinline{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--accent);z-index:8;pointer-events:none}
+.msf-pintip{position:absolute;left:8px;z-index:9;background:var(--ink);color:#fff;border-radius:7px;padding:5px 9px;font-size:12.5px;line-height:1.3;pointer-events:none;white-space:nowrap;box-shadow:0 8px 20px rgba(20,30,50,.25)}
+.msf-pintip b{display:block;font-size:13px}
+.msf-pintip small{color:color-mix(in srgb,#fff 75%,transparent);font-size:11.5px}
+.msf-pinbar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:950;background:var(--ink);color:#fff;border-radius:8px;padding:9px 14px;font-size:13.5px;box-shadow:0 10px 30px rgba(20,30,50,.3);pointer-events:none;white-space:nowrap}
+.msf-pinbar kbd{background:#fff;color:var(--ink);border-radius:4px;padding:1px 6px;font-weight:700;font-family:inherit}
+/* the tabs, header and footer never squeeze when the list is long (Nov 11, Nick: the tabs were cut off) */
+.wts > .pp-sheet-h,.wts > .wts-tabs,.wts > .wts-ft{flex:0 0 auto}
+.wts-tabs{min-height:44px;overflow:visible}

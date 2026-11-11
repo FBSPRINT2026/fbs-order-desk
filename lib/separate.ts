@@ -11,7 +11,7 @@
  * Plates are 0–255 ink coverage per pixel. Films come from them in lib/filmPdf.ts (solid or halftoned).
  * Everything here is plain math on RGBA arrays so it runs in the page, a worker, or a test.
  */
-import { WILFLEX_HEX, PMS_HEX, colorHex, deltaE } from "./inkColors";
+import { WILFLEX_HEX, PMS_HEX, deltaE, colorHex } from "./inkColors";
 import { collapseRamps } from "./gradients";
 import { edgeRows } from "./edgeField";
 
@@ -82,8 +82,12 @@ export const lightness = (hex: string) => labOf(...rgbOf(hex))[0];
 export const isDark = (hex: string) => lightness(hex) < 55;
 /** a white shirt (the only one printed without an underbase, by default) */
 export const isWhiteShirt = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L > 90 && Math.hypot(a, b) < 10; };
-/** the shop's rule (Nicholas, Oct 5): every shirt gets a white underbase except a white one */
-export const baseShirt = (hex: string) => !isWhiteShirt(hex);
+/** white or very pale (cream, ivory, natural): the only shirts printed without an underbase (Nick, Nov 11: "unless it's a
+ *  white shirt or a very light shirt like a cream, you're always going to underbase the colors") */
+export const paleShirt = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return isWhiteShirt(hex) || (L >= 88 && Math.hypot(a, b) < 18); };
+/** the shop's rule (Nicholas, Oct 5; Nick, Nov 11): every shirt gets a white underbase except a white or cream one,
+ *  unless the print itself says no underbase */
+export const baseShirt = (hex: string) => !paleShirt(hex);
 const d2 = (a: number[], b: number[]) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 
 /** the standard ink closest to a color, and how close (CIEDE2000) */
@@ -507,21 +511,13 @@ const MESH = { underbase: 156, color: 230, sim: 305, highlight: 230, simBase: 23
  *  they print over the dark shirt as they are */
 export const baseByDefault = (hex: string) => lightness(hex) >= 30;
 /** black never gets underbase, no matter what: black ink over white bubbles (the shop's rule) */
-export const neverBase = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L < 22 && Math.hypot(a, b) < 12; };
 /**
- * The color an ink really prints in on the press: the ink it's named for (a PMS, a Wilflex or stock ink, a custom mix),
- * else the art's color. The art's swatch only says WHERE an ink goes; whether it gets underbase, whether it's black
- * (never on the base, prints on top), whether it's the white, and where it falls in the light → dark print order go by
- * the ink itself (Nov 10, #40473: black art printed in PMS 151 C orange on a teal shirt got no underbase, and its
- * "Underbase under each color" box was locked as "black: never").
+ * The color an ink really prints, for underbase and print order: its named ink's color ("PMS 151 C" is orange) when the
+ * name is a known ink, else the art's color. Customer films and one-color art are often drawn in black whatever the
+ * ink (Nov 11: #40473's back was PMS 151 C drawn black, so it got no underbase on a teal shirt and couldn't be given one)
  */
-export const pressHex = (k: { hex: string; name?: string }) => (k.name && colorHex(k.name)) || k.hex;
-/** this ink never gets underbase (black ink: it bubbles over white) */
-export const neverBaseInk = (k: { hex: string; name?: string }) => neverBase(pressHex(k));
-/** does this ink get underbase under it on a dark shirt: never black; else the shop's switch for it (keyed by its art
- *  color, "c" + hex), else not dark colors */
-export const inkBased = (k: { hex: string; name?: string }, baseFor?: Record<string, boolean>) =>
-  !neverBaseInk(k) && (baseFor?.["c" + k.hex.slice(1)] ?? baseByDefault(pressHex(k)));
+export const printShade = (k: { hex: string; name?: string }) => { const h = k.name ? colorHex(k.name) : ""; return /^#[0-9a-f]{6}$/i.test(h || "") ? h : k.hex; };
+export const neverBase = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L < 22 && Math.hypot(a, b) < 12; };
 
 /** a color this close (Lab distance) to an ink is that ink, printed solid (flat areas with a little noise) */
 const SNAP = 5;
@@ -717,24 +713,25 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   };
   const colorPlates = print.map((k) => ({ k, a: cover[inks.indexOf(k)] }));
   const add = (t: Uint8Array, a: Uint8Array) => { for (let i = 0; i < n; i++) { const v = t[i] + a[i]; t[i] = v > 255 ? 255 : v; } };
-  const based = (k: SepInk) => inkBased(k, s.baseFor);
+  const based = (k: { hex: string; name?: string }) => !neverBase(printShade(k)) && (s.baseFor?.["c" + k.hex.slice(1)] ?? baseByDefault(printShade(k)));
   // highlight white (a top white): simulated process only. Spot color never has one (shop rule, as Separo does it):
   // the art's white is a White ink like any color, printed after the other colors and before black.
   const sim = s.method !== "spot";
-  const body = colorPlates.filter(({ k }) => !(sim && dark && s.highlight && isWhite(pressHex(k))));
+  const body = colorPlates.filter(({ k }) => !(sim && dark && s.highlight && isWhite(printShade(k))));
   // highlight white: the art's white plus the white left over after the inks
   let hw: Uint8Array | null = null;
   if (sim && dark && s.highlight) {
     hw = new Uint8Array(n);
-    for (const { k, a } of colorPlates) if (isWhite(pressHex(k))) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + a[i]);
+    for (const { k, a } of colorPlates) if (isWhite(printShade(k))) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + a[i]);
     if (white) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + white[i]);
   }
   // print order after the base: colors light → dark (black, the darkest, last of them), then the highlight white on
   // top: the usual order for spot color and simulated process on dark shirts (T-Biz: "light to dark… black next to
   // last… highlight white last")
-  body.sort((x, y) => lightness(pressHex(y.k)) - lightness(pressHex(x.k)));
+  // by the ink that prints (black art printed in White or orange is that ink, not black)
+  body.sort((x, y) => lightness(printShade(y.k)) - lightness(printShade(x.k)));
   // spot: White goes after the colors, just before black (Separo's order: …, White, Black)
-  if (!sim) { const w = body.filter(({ k }) => isWhite(pressHex(k))), rest = body.filter(({ k }) => !isWhite(pressHex(k))); const b0 = rest.findIndex(({ k }) => neverBaseInk(k)); body.splice(0, body.length, ...(b0 < 0 ? [...rest, ...w] : [...rest.slice(0, b0), ...w, ...rest.slice(b0)])); }
+  if (!sim) { const w = body.filter(({ k }) => isWhite(printShade(k))), rest = body.filter(({ k }) => !isWhite(printShade(k))); const b0 = rest.findIndex(({ k }) => neverBase(printShade(k))); body.splice(0, body.length, ...(b0 < 0 ? [...rest, ...w] : [...rest.slice(0, b0), ...w, ...rest.slice(b0)])); }
   type Step = { key: string; name: string; hex: string; kind: PlateKind; a: Uint8Array; base: boolean };
   const seq: Step[] = [
     ...body.map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a, base: dark && based(k) })),

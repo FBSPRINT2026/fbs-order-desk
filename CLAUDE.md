@@ -156,6 +156,18 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   order helper's line field `personalization`. Never in a print's notes or a line note. The helper's free edits are
   checked against `lib/orderShape.ts` (every key the order's types have, kept in step by the compiler): a made-up field
   is refused, never saved where nothing reads it. Add a new order field to the type and the compiler sends you there.
+- **A customer's own separations** (Tiger Blue sends seps with every order; Nick, Nov 11 2026: "this is how we're going
+  to put these orders in moving forward"). When a customer sends their own separations, the order is made the way the
+  Create order card picks it: their mockup picture is the visual mockup (`customerMockups`, "Visual mockup · theirs,
+  printed from their films"), their separation file (the .ai) goes on each print as Customer separations
+  (`custSeps.films`), and the color count and inks come off their order form and mockup. A PSD or other extra file they
+  send is reference only. Never build a Mockup Creator logo from their files or swap the card's pick for their art file
+  (that read #50030's front as 1 white color and put the PSD on the back).
+- **Underbase** (Nick, Nov 11 2026: "that's the rule"): every shirt gets a white underbase under the colors except a white
+  or very pale one (cream, ivory, natural: `paleShirt` in `lib/separate.ts`), unless the print says no underbase (the
+  order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
+  those pale ones only. Underbase and print order go by the ink's real color (`printShade`), not the color the art is
+  drawn in; one-color art prints as the one ink its print names.
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **A sent version isn't locked until the customer answers** (Nick, Nov 10 2026: "until it's approved or declined, it
@@ -175,6 +187,12 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.
+- **Order statuses** (Nick, Nov 11 2026): … Approved → In Production → Fulfillment (printed; finishing, counting, packing) →
+  Ready → Completed. Ready is worded by the order's delivery method: Ready for Pickup / Ready to Ship / Ready to Deliver
+  (`readyLabel` / `statusText` in `lib/pricing.ts`; `<Pill ship={o.delivery_method}>`). Any "open work" status list
+  includes fulfillment (`IN_WORK_STATUSES`).
+  Canceled (an invoice called off) is stored like a Closed Quote: status `completed` with `declined_at`, type invoice
+  (`isCanceled` / `statusKey` → "canceled"), so every finished-job filter skips it; it never goes to QuickBooks live.
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…
@@ -209,9 +227,21 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   - No new colors, radii, font sizes or shadows: use the CSS variables (`--ink*`, `--line*`, `--surface*`, `--accent*`,
     `--fbs-*`, `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
-- **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card with its
-  department's edge; only late (red edge, red number, "Late" tag) and holds (dashed, "Hold" tag) look different. Overtime
+- **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card, one color
+  all round (no colored edge; Nick, Nov 11: "let the dots and stuff do the talking"); only late (bold red number, no tag; Nick, Nov 11) and holds (dashed, "Hold" tag) look different. Overtime
   is a soft amber band behind the hours, warm-up and lunch plain gray, the past a light gray; the key sits at the top
   (`.ms-calm` / `.ms-key2` in `app/globals.css`). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
   tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
+  Jobs back to back show as one group only when they're one run: the same artwork and the same in-hands date (`oneRun`;
+  Nick, Nov 11: same customer alone is never a group).
+  An order's production date is the day it runs (Nine18's weekly AMS run; Nick, Nov 11): Re-plan and Ready To Schedule
+  put it on that day or later, never earlier (`Job.prod`).
+  Sending a crew home at 40 hours (Re-plan, Cut unused overtime) never makes their day shorter than the morning: the
+  earliest they go home is lunch (Nick, Nov 11). A job that won't finish today never starts with under an hour left in the day
+  (`DAY_TAIL`): it starts the next morning. A hold (Production holder) runs no earlier than 3 working days before its
+  in-hands date; it saves press time near its date, it never jumps the line (Nick, Nov 11).
+  Right-click a job: Run next (first on its press after what's running), or lock it to its spot (fixed), its person (any
+  press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). Downtime is a solid gray block (no stripes); lunch and warm-up are a thin line with a small label (solid for lunch,
+  dotted for warm-up; no bubbles). Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
+  everything else grays out while it's dragged.

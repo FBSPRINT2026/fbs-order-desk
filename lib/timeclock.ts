@@ -138,8 +138,38 @@ export const stateOf = (last: Punch | null | undefined): Card["state"] => (!last
  * overtime is per workweek over `otWeekly` hours. Time off counts as paid hours but not toward overtime.
  * `now` closes a shift that's still open (so today's hours show as they accrue).
  */
+/** at the same minute, the order a day's punches happen in */
+const ORDER: Record<string, number> = { in: 0, break_end: 1, break_start: 2, out: 3 };
+/**
+ * A day's punches the way they really went (Nov 11, Jose: fixes that never fell off the list):
+ *  - the same punch twice within 15 minutes (the clock's double, or a fix adding one that's there) counts once;
+ *  - back from a break with the wrong button: an "out" while on a break, with another "out" later that day, is the
+ *    return from the break (Carmen, Ana: lunch, then "out" at 1:07, then out at 3:26);
+ *  - a second return a few minutes after the first (a fix added "break end" too) counts once;
+ *  - two outs the same day with no in between: the later one is when they left.
+ */
+function tidyPunches<P extends { kind: string; at: string }>(ps: P[]): P[] {
+  const out: P[] = [];
+  let onBreak = false, lastBack = -Infinity;
+  for (let i = 0; i < ps.length; i++) {
+    let p = ps[i]; const t = Date.parse(p.at), q = out[out.length - 1];
+    if (q && q.kind === p.kind && t - Date.parse(q.at) < 15 * 60000) continue;
+    if (p.kind === "out" && onBreak && ps.slice(i + 1).some((x) => x.kind === "out" && localDay(x.at) === localDay(p.at))) p = { ...p, kind: "break_end" };
+    // two outs in a row the same day with no in between: the last one is when they left (a fix added an early out)
+    else if (p.kind === "out" && !onBreak) { const nx = ps.slice(i + 1).find((x) => localDay(x.at) === localDay(p.at) && x.kind !== "break_end"); if (nx && nx.kind === "out") continue; }
+    if ((p.kind === "break_end" || p.kind === "in") && !onBreak && t - lastBack < 15 * 60000) continue;
+    if (p.kind === "break_start") onBreak = true;
+    if (p.kind === "break_end") { if (!onBreak && out.length && out[out.length - 1].kind !== "out") continue; onBreak = false; lastBack = t; }
+    if (p.kind === "in") lastBack = t;
+    if (p.kind === "out") onBreak = false;
+    out.push(p);
+  }
+  return out;
+}
 export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[], offs: TimeOff[], start: string, end: string, now = new Date().toISOString()): Card {
-  const punches = withLunch(punchesIn.filter((p) => !p.voided && p.employee_id === employeeId)).map((p) => ({ ...p, at: round(p.at, s.rounding) })).sort((a, b) => a.at.localeCompare(b.at));
+  // the same punch twice (the clock sends a double, or a fix adds one that's already there: Sonia's Nov 9 had three
+  // 6:12 PM outs, so "out with no in" never went away however it was fixed; Nov 11, Jose): one punch
+  const punches = tidyPunches(withLunch(punchesIn.filter((p) => !p.voided && p.employee_id === employeeId)).map((p) => ({ ...p, at: round(p.at, s.rounding) })).sort((a, b) => a.at.localeCompare(b.at) || ORDER[a.kind] - ORDER[b.kind]));
   const days: Record<string, DayHours> = {};
   const dayRec = (d: string) => (days[d] ||= { day: d, worked: 0, breaks: 0, first: null, last: null, issues: [] });
   const issues: Issue[] = [];

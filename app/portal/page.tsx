@@ -356,7 +356,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
         : { step: 2, label: "Confirmed", tone: "ok" as const, note: "Confirmed. It's in your jobs below." };
       return { id: o.id, href: firstPending[o.id] && st.label === "Proof ready" ? link(`/portal/orders/${o.id}/approve`) : link(`/portal/orders/${o.id}`), number: o.number, name: o.nickname || (simpleO ? "Simple order" : ""), when: short(o.submitted_at), pcs, simple: simpleO, ...st };
     });
-  const IDX_AFTER_ART = ["blanks", "production", "ready"];
+  const IDX_AFTER_ART = ["blanks", "production", "fulfillment", "ready"];
   // what's waiting on them, with a picture and one button
   // the same balance the Payments tab shows: portal orders and invoices from before the portal
   const due = aOrders.filter((o) => o.type === "invoice" && o.balance > 0.004).reduce((a, o) => a + o.balance, 0);

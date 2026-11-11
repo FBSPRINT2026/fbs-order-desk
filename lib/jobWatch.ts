@@ -123,7 +123,7 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
     const printBy = bizAdd(shipBy, 1), proofBy = bizAdd(printBy, 1), artBy = bizAdd(proofBy, 1);
     const goodsHere = bizAdd(due, lead);
     const quote = o.type === "quote" || ["request", "quote", "quote_sent"].includes(o.status);
-    const started = ["blanks", "production"].includes(o.status);
+    const started = ["blanks", "production", "fulfillment"].includes(o.status);
     const wholesale = (o.price_type || c?.price_type) === "wholesale";
     const pieces = groups.reduce((n, g) => n + (g.lines || []).reduce((m, l) => m + Object.values(l.sizes || {}).reduce((a, q) => a + (+(q || 0)), 0), 0), 0);
     const garments = groups.some((g) => (g.lines || []).some((l) => l.style || l.garment || l.color));
@@ -165,8 +165,8 @@ export async function watchJobs(admin: SupabaseClient, opts: { live?: boolean; d
       const exp = goods.map((b) => b.expected_date).filter(Boolean).sort().pop();
       out.push({ orderId: o.id, number: o.number, step: "goods_late", title: `Goods for ${job} aren't in yet`, notes: `They were needed by ${nice(goodsHere)}${exp ? ` (expected ${nice(exp)})` : ""}. Check the tracking; in hands ${nice(due)}.`, by: goodsHere, today: true, url: "/shop/receiving", ref: `job:${o.id}:goods_late` });
     }
-    if (!quote && o.status !== "production" && printBy <= bizAdd(today, -1)) add("print", printBy, `Print ${job}${late(printBy)}`, `Still at "${o.status}". In hands ${nice(due)}${shipped ? `, ships ${nice(shipBy)}` : ""}.`, url, 1);
-    if (shipped && o.status === "production" && shipBy <= today) add("ship", shipBy, `Ship ${job}${late(shipBy)}`, `UPS Ground to be there ${nice(due)}.`, url, 0);
+    if (!quote && o.status !== "production" && o.status !== "fulfillment" && printBy <= bizAdd(today, -1)) add("print", printBy, `Print ${job}${late(printBy)}`, `Still at "${o.status}". In hands ${nice(due)}${shipped ? `, ships ${nice(shipBy)}` : ""}.`, url, 1);
+    if (shipped && (o.status === "production" || o.status === "fulfillment") && shipBy <= today) add("ship", shipBy, `Ship ${job}${late(shipBy)}`, `UPS Ground to be there ${nice(due)}.`, url, 0);
   }
   // a portal job's owner (Oct 15: Amanda's "Needs you today" had Nick's Little Groupies): the customer's account owner
   // (Settings → Staff), else whoever owns their latest Printavo job; none found = both owners, as before

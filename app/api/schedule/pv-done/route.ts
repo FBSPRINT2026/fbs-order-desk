@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   if (!s || req.headers.get("x-sync-token") !== s.token) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
   const dry = new URL(req.url).searchParams.get("dry") === "1";
   const ours = await readAll<{ id: string; number: number; nickname: string | null; status: string }>((from, to) =>
-    admin.from("orders").select("id, number, nickname, status").is("discarded_at", null).is("schedule_off_at", null).not("printavo_id", "is", null).in("status", ["approved", "art", "blanks", "production"]).order("id").range(from, to));
+    admin.from("orders").select("id, number, nickname, status").is("discarded_at", null).is("schedule_off_at", null).not("printavo_id", "is", null).in("status", ["approved", "art", "blanks", "production", "fulfillment"]).order("id").range(from, to));
   if (!ours.length) return NextResponse.json({ dry, off: [], kept: [] });
   const want = new Map(ours.map((o) => [String(o.number), o]));
   const low = Math.min(...ours.map((o) => o.number));

@@ -31,6 +31,9 @@ export const PERMS = [
   { k: "incoming", group: "Sales", label: "Can open Incoming Orders" },
   { k: "projects", group: "Sales", label: "Can open Projects" },
   { k: "stores", group: "Sales", label: "Can open Merch Stores (packing included)" },
+  /* the bottom-right pop-up when a customer messages (Nov 11, Nick: "except for Amanda, Claudia's, and myself, we shouldn't
+     see the message pop up… Jose's getting a lot of message pop-ups from customers that don't apply to him") */
+  { k: "chatPings", group: "Sales", label: "Gets the pop-up when a customer sends a message" },
   { k: "assistant", group: "Sales", label: "Can open the Assistant (follow-ups)" },
   { k: "artwork", group: "Production", label: "Can open Artwork" },
   { k: "separations", group: "Production", label: "Can open Separations" },
@@ -56,7 +59,7 @@ export type Perms = Record<PermKey, boolean>;
 export type AccessOverrides = Record<string, Partial<Perms>>;
 
 const ALL = Object.fromEntries(PERMS.map((p) => [p.k, true])) as Perms;
-const CREW: Perms = { ...ALL, masterLogos: false, takePayments: false, money: false, payments: false, quotes: false, customers: false, editCustomers: false, incoming: false, projects: false, assistant: false, settings: false, inkStock: false, pay: false, workbench: false };
+const CREW: Perms = { ...ALL, masterLogos: false, takePayments: false, money: false, payments: false, quotes: false, customers: false, editCustomers: false, incoming: false, projects: false, chatPings: false, assistant: false, settings: false, inkStock: false, pay: false, workbench: false };
 /** what each role starts with */
 export const roleDefaults = (role?: string | null): Perms => {
   if (!role || role === "owner") return { ...ALL };

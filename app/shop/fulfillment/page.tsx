@@ -22,7 +22,7 @@ export default function Fulfillment() {
     const sb = createClient();
     (async () => {
       const [n, p, st] = await Promise.all([
-        sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, status, groups").is("discarded_at", null).in("status", ["approved", "production", "ready"]).order("due_date", { ascending: true, nullsFirst: false }).limit(800),
+        sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, status, groups").is("discarded_at", null).in("status", ["approved", "production", "fulfillment", "ready"]).order("due_date", { ascending: true, nullsFirst: false }).limit(800),
         sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, status_name").is("removed_at", null).ilike("status_name", "%fulfillment%").order("due_date", { ascending: true, nullsFirst: false }).limit(300),
         sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       ]);
