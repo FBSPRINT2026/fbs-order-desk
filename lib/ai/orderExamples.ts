@@ -246,9 +246,25 @@ export async function orderTextFor(admin: SupabaseClient, customerId: string, nu
 export async function loadExamples(admin: SupabaseClient, customerId: string | null, about: string, n = 2): Promise<OrderExample[]> {
   if (!customerId) return [];
   const { data } = await admin.from("order_examples").select("id, order_id, title, source_text, order_text, reading_text, confirmed_at").eq("customer_id", customerId).eq("active", true).order("confirmed_at", { ascending: false }).limit(40);
+  // weighed by how rare each word is among this customer's examples (Nov 10, Nick: "none of these is All My Sons": Nine18's
+  // New City Moving jobs were made like All My Sons orders, because every Nine18 PO shares its letterhead, contact and
+  // layout, so the newest examples always "matched"). A word on most of the examples (the reseller's own address, their
+  // contact, "Purchase Order") says nothing; the end client's name, its city, its products do. An example that shares
+  // nothing distinctive with this job is not used: no example beats the wrong one
+  const xs = (data || []) as OrderExample[];
+  const sets = xs.map((x) => words(`${x.title} ${x.source_text.slice(0, 2500)}`));
+  const df = new Map<string, number>();
+  for (const w of sets) for (const t of w) df.set(t, (df.get(t) || 0) + 1);
+  const N = xs.length;
+  const idf = (t: string) => Math.max(0, Math.log((N + 1) / ((df.get(t) || 0) + 0.5)) - (N >= 4 ? Math.log(2) : 0));
   const want = words(about);
-  const scored = ((data || []) as OrderExample[]).map((x, i) => { const w = words(`${x.title} ${x.source_text.slice(0, 2500)}`); let s = 0; for (const t of want) if (w.has(t)) s++; return { x, s, i }; });
-  return scored.sort((a, b) => b.s - a.s || a.i - b.i).slice(0, n).map((y) => y.x);
+  // the job's own name words count most: they name the end client ("NCM 43242 CHICAGO", "AMS 43208 GREENSBORO")
+  const titleOf = (x: OrderExample) => words(x.title);
+  const scored = xs.map((x, i) => { let s = 0; for (const t of want) if (sets[i].has(t)) s += idf(t) * (titleOf(x).has(t) ? 2 : 1); return { x, s, i }; });
+  // and it must be the same end client: a word of the example's job name (its client, its city) in this job ("AMS",
+  // "Armstrong", "AOC"), numbers aside; a NCM job never takes an AMS example however much paperwork they share
+  const sameClient = (x: OrderExample) => [...titleOf(x)].some((t) => !/^\d+$/.test(t) && want.has(t));
+  return scored.filter((y) => y.s >= 1 && sameClient(y.x)).sort((a, b) => b.s - a.s || a.i - b.i).slice(0, n).map((y) => y.x);
 }
 
 export function examplesText(xs: OrderExample[], who: string): string {
