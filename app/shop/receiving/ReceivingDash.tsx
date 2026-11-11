@@ -33,12 +33,14 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   // jobs the press has started (or finished): their goods are on the press, off this list (Nov 11, Nick)
   const [started, setStarted] = useState<Set<string>>(new Set());
   const [err, setErr] = useState("");
-  const [day, setDay] = useSticky<Day>("receiving.dashDay", "today");
+  // Schedule · All · Today unless someone was just here: 5 minutes away and it's back (Nov 11, Nick)
+  const AWAY = 5 * 60 * 1000;
+  const [day, setDay] = useSticky<Day>("receiving.dashDay", "today", AWAY);
   // screen print / embroidery / heat press (Nov 11, Nick, option 1: a full-width switch over the list)
-  const [kind, setKind] = useSticky<"all" | JobKind>("receiving.dashKind", "all");
+  const [kind, setKind] = useSticky<"all" | JobKind>("receiving.dashKind", "all", AWAY);
   // the days go by the press schedule or the due date (Nov 11, Nick: "we have nothing on the schedule right now")
-  const [by, setBy] = useSticky<"schedule" | "due">("receiving.dashBy", "due");
-  const [truckDay, setTruckDay] = useSticky<"today" | "tomorrow">("receiving.truckDay", "today");
+  const [by, setBy] = useSticky<"schedule" | "due">("receiving.dashBy", "schedule", AWAY);
+  const [truckDay, setTruckDay] = useSticky<"today" | "tomorrow">("receiving.truckDay", "today", AWAY);
   const [q, setQ] = useState("");
   const [count, setCount] = useState<CheckJob | null>(null);
   const [msg, setMsg] = useState("");
