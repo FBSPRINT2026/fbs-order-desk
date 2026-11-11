@@ -1166,7 +1166,17 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
   const dragNeed = drag?.card?.need || drag?.need;
   const canDrop = (mach: Machine) => !dragNeed || fits(dragNeed, mach);
-  function startDrag(e: DragEvent, d: Drag) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", "job"); } catch { /* old browsers */ } setPv(null); setDrag(d); }
+  function startDrag(e: DragEvent, d: Drag) {
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", "job"); } catch { /* old browsers */ }
+    // the pointer carries a small label, not a see-through copy of the whole card
+    try {
+      const j = d.card?.job || d.job, chip = document.createElement("div");
+      chip.className = "msf-dragchip"; chip.textContent = j ? `#${j.number} ${abbrCo(j.customer || j.name)}` : "Job";
+      document.body.appendChild(chip); e.dataTransfer.setDragImage(chip, 12, 12); setTimeout(() => chip.remove(), 0);
+    } catch { /* setDragImage not supported */ }
+    setPv(null); setDrag(d);
+  }
   // dropping a job puts it in the running order where it lands, right up against the job before it (no gaps):
   // it goes before the first job whose middle is below the drop point
   function drop(mach: Machine, d: string, minuteAtPointer: number) {
@@ -1600,7 +1610,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   /** how a job moves in the live drag: "↓ 1h 30m", "→ Thu 8:20a", and whether that makes it miss its in-hands */
   const pvMove = (c: Card) => {
     if (!pvLay || c.key === pvKey) return null;
-    const o = segs.ofCard.get(c.key) || [], n = pvLay.ofCard.get(c.key) || [];
+    const byT = (a: Seg, b: Seg) => a.day.localeCompare(b.day) || a.start - b.start;
+    const o = [...(segs.ofCard.get(c.key) || [])].sort(byT), n = [...(pvLay.ofCard.get(c.key) || [])].sort(byT);
     if (!o.length || !n.length) return null;
     const oa = ord(o[0].day) * 1440 + o[0].start, na = ord(n[0].day) * 1440 + n[0].start;
     if (Math.abs(na - oa) < 5) return null;
@@ -1645,6 +1656,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const flowCard = (g: Seg, y1: number, y2: number, key: string, extraCls = "") => {
     const h = Math.max(16, y2 - y1 - 2), gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, lines = h >= 54 ? 3 : h >= 37 ? 2 : 1, mv = pvMove(g.c);
     const name = g.c.job.name || g.c.need.label;
+    // while dragging, where it would land is an empty dotted box the jobs around it make room for (Nov 11, Nick)
+    if (pvLay && g.c.key === pvKey && !extraCls) return <div key={key} className="msf-slot" style={{ top: y1 + 1, height: h }} aria-hidden><span>#{g.c.job.number} · {fmtMin(g.c.minutes)}</span></div>;
     const num = <b className="msf-n">{whyEl(g.c)}{dotEl(g.c, g)}#{g.c.job.number}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
     return (
       <button key={key} type="button" draggable className={cls(g) + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
