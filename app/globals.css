@@ -21974,3 +21974,8 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
    the title squeezing into two lines beside them */
 .page-head > div:first-child:has(> h1){flex:1 0 auto;max-width:100%;min-width:0}
 .page-head > div:first-child:has(> h1) + *{margin-left:auto}
+/* schedule cards drag in every browser (Edge selected text instead of dragging, Nov 11) */
+.msf-card,.msf-run-r,.msf-from,.msf-run{-webkit-user-select:none;user-select:none}
+.msf-card,.msf-run-r,.msf-from{-webkit-user-drag:element;cursor:grab}
+.msf-card:active,.msf-run-r:active{cursor:grabbing}
+.msf-card:focus-visible,.msf-run-r:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
