@@ -105,3 +105,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 10:47am · 1.3.308 · Nick · Left menu: Production's arrow sits after SP · EMB · HP, at the end of the heading like Sales'
 - Nov 11 10:48am · 1.3.309 · Nick · Schedule: a short job collapses to one line (#, customer · colors · pieces) instead of a cut-off second line; two lines only when both fit
 - Nov 11 10:49am · 1.3.310 · Nick · Left menu a little wider (238px) so SP · EMB · HP and the section arrows sit comfortably at the right of their headings
+- Nov 11 10:52am · 1.3.311 · Nick · Coming up (option B): Thu / Fri tabs instead of both days stacked; a gray header per person (name · press · jobs · hours); each job on two short lines (dot, #, customer / job name · colors) with pieces on the right; one customer's jobs back to back are one row that opens to its jobs

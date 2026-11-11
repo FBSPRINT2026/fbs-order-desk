@@ -21928,3 +21928,20 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .nav-h .nav-fold{order:9}.nav-h-production .nav-fold{margin-left:6px}
 /* the left menu a little wider (Nov 11 2026, Nick: so SP · EMB · HP and the section arrow fit without crowding) */
 @media (min-width: 821px){.app:not(:has(.side.mini)):not(:has(.side.auto)){grid-template-columns:238px minmax(0,1fr)}}
+/* Coming up, option B (Nov 11 2026): day tabs, a gray header per person, each job on two short lines, pieces on the right */
+.msf-up-tabs{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.msf-up-tabs button{all:unset;cursor:pointer;padding:3px 10px;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.msf-up-tabs button.on{background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:700}
+.msf-up-cols{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;padding:6px 12px;font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--ink-3);background:var(--surface-2);border-bottom:1px solid var(--line)}
+.msf-up .msf-up-m{margin:0;padding:0}
+.msf-up .msf-up-mh{display:block;margin:0;padding:6px 12px;background:var(--surface-2);border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msf-up .msf-up-mh .faint{font-size:12px}
+.msf-up .msf-up-r{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;align-items:start;padding:7px 12px;border-bottom:1px solid var(--line-2,#f1f3f6);width:100%}
+.msf-up .msf-up-r .t{color:var(--ink-3);font-size:12px;padding-top:1px}
+.msf-up .msf-up-r .l1{display:flex;align-items:center;gap:5px;min-width:0;font-size:13.5px}
+.msf-up .msf-up-r .l1 b.late{color:var(--danger)}
+.msf-up .msf-up-r .l2{display:block;font-size:12px;color:var(--ink-3);margin-left:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msf-up .msf-up-r .q{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums;padding-top:1px}
+.msf-up .msf-up-r.sub{padding:4px 12px;background:var(--surface-2)}.msf-up .msf-up-r.sub .l1{font-size:12.5px}.msf-up .msf-up-r.sub .t{font-size:11.5px}
+.msf-up-car{color:var(--ink-3);font-size:11px}
+.msf-up .msf-up-r.sub .t{display:block}

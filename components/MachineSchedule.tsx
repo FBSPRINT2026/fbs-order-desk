@@ -437,6 +437,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const pvCache = useRef<{ k: string; v: ReturnType<typeof layoutAll> | null }>({ k: "", v: null });
   // each order's goods (order_goods.status): the dot by its number (Nov 11 2026, Nick: "a green dot… counted")
   const [goodsSt, setGoodsSt] = useState<Map<string, string>>(new Map());
+  const [upDay, setUpDay] = useSticky<number>("cal.upDay", 0);
   const [lockMenu, setLockMenu] = useState<{ c: Card; g: Seg; x: number; y: number } | null>(null);
   // Re-plan results for the calendar as it is (the Re-plan window asks on every redraw): worked out again when anything changes
   const planCache = useRef<{ deps: unknown[]; v: Map<boolean, unknown> }>({ deps: [], v: new Map() });
@@ -1769,42 +1770,49 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const comingUp = () => {
     const ds: string[] = [];
     for (let i = 1; i < 21 && ds.length < 2; i++) { const d = addDay(today, i); if (visible(d) && machines.some((m) => shiftOn(m, d) || at(m, d).length)) ds.push(d); }
+    const d = ds[Math.min(upDay, ds.length - 1)] || ds[0];
+    // one list, a gray header per person, each job on two short lines; one customer's jobs back to back are one row
+    // (Nov 11, Nick: option B, "one clean list")
     return (
       <aside className="msf-up">
-        <div className="msf-up-h"><b>Coming up</b><span className="faint">who&apos;s on what</span></div>
-        {ds.map((d) => (
-          <section key={d} className="msf-up-d">
-            <div className="msf-up-dh"><b>{dayLbl(d).replace(",", "")}</b>{d === addDay(today, 1) ? <span className="faint"> · tomorrow</span> : null}<span className="spacer" /><small className="faint">{fmtMin(machines.reduce((t, m) => t + used(m, d), 0))}</small></div>
-            {machines.map((m) => {
-              const js = joined(m, d);
-              if (!js.length) return null;
-              return (
-                <div key={m.id} className="msf-up-m">
-                  <div className="msf-up-mh"><b>{crewOf(m)?.leader || shortName(m)}</b><span className="faint">{crewOf(m) ? shortName(m) : ""}</span></div>
-                  {(() => {
-                    // one customer's jobs back to back: their name once, then each job by its own name (Nine18's)
-                    const grp: (typeof js)[] = [];
-                    for (const x of js) { const l = grp[grp.length - 1]; if (l && x.g.c.job.customer && l[0].g.c.job.customer === x.g.c.job.customer && x.g.c.job.kind !== "h") l.push(x); else grp.push([x]); }
-                    const row = (x: (typeof js)[number], sub: boolean) => { const gl = glance(x.g.c.need, x.g.c.minutes), late = ord(d) * 1440 + x.end > dueAbs(x.g.c.job); return (
-                      <button key={x.g.c.key + x.g.part} type="button" className={"msf-up-r" + (late ? " late" : "") + (x.g.c.job.kind === "h" ? " hold" : "") + (sub ? " sub" : "")} onClick={() => setOpen(x.g.c)} title={tip(x.g)}>
-                        <span className="t">{sub ? "" : clock(x.start)}</span>
-                        <span className="b"><span className="l1">{dotEl(x.g.c, x.g)}<b>#{x.g.c.job.number}</b>{sub ? <span className="c">{x.g.c.job.name || x.g.c.need.label}</span> : <span className="c">{abbrCo(x.g.c.job.customer || x.g.c.job.name)}</span>}</span>{!sub && x.g.c.job.customer && x.g.c.job.name ? <span className="l2">{x.g.c.job.name}</span> : null}</span>
-                        <span className="q">{gl.colors} · {gl.units.toLocaleString()}</span>
+        <div className="msf-up-h"><b>Coming up</b><span className="spacer" />
+          <span className="msf-up-tabs" role="tablist">{ds.map((x, i) => <button key={x} type="button" role="tab" aria-selected={x === d} className={x === d ? "on" : ""} onClick={() => setUpDay(i)}>{new Date(x + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", day: "numeric" })}</button>)}</span>
+        </div>
+        {d && <div className="msf-up-cols"><span>Time</span><span>Job</span><span>Pcs</span></div>}
+        {d && machines.map((m) => {
+          const js = joined(m, d);
+          if (!js.length) return null;
+          const grp: (typeof js)[] = [];
+          for (const x of js) { const l = grp[grp.length - 1]; if (l && x.g.c.job.customer && l[0].g.c.job.customer === x.g.c.job.customer && x.g.c.job.kind !== "h" && l[0].g.c.job.kind !== "h") l.push(x); else grp.push([x]); }
+          return (
+            <section key={m.id} className="msf-up-m">
+              <div className="msf-up-mh"><b>{crewOf(m)?.leader || shortName(m)}</b>{crewOf(m) ? <span> · {shortName(m)}</span> : null}<span className="faint"> · {js.length} job{js.length === 1 ? "" : "s"} · {fmtMin(used(m, d))}</span></div>
+              {grp.map((g0) => {
+                const x = g0[0], gl = glance(x.g.c.need, x.g.c.minutes), many = g0.length > 1, id = "up:" + d + x.g.c.key, open = listOpen === id;
+                const late = g0.some((y) => ord(d) * 1440 + y.end > dueAbs(y.g.c.job));
+                const pcs = g0.reduce((t, y) => t + y.g.c.need.qty, 0);
+                return (
+                  <Fragment key={x.g.c.key + x.g.part}>
+                    <button type="button" className={"msf-up-r" + (x.g.c.job.kind === "h" ? " hold" : "")} onClick={() => (many ? setListOpen(open ? "" : id) : setOpen(x.g.c))} title={many ? `${g0.length} ${x.g.c.job.customer} jobs back to back` : tip(x.g)}>
+                      <span className="t">{clock(x.start)}</span>
+                      <span className="b"><span className="l1">{dotEl(x.g.c, x.g)}{many ? <><b className="c">{abbrCo(x.g.c.job.customer)}</b><span className="msf-up-car">{open ? "▾" : "▸"}</span></> : <><b className={late ? "late" : ""}>#{x.g.c.job.number}</b><span className="c">{abbrCo(x.g.c.job.customer || x.g.c.job.name)}</span></>}</span>
+                        <span className="l2">{many ? `${g0.length} jobs · ${g0.slice(0, 3).map((y) => y.g.c.job.name || "#" + y.g.c.job.number).join(", ")}${g0.length > 3 ? ` +${g0.length - 3}` : ""}` : `${x.g.c.job.customer && x.g.c.job.name ? x.g.c.job.name + " · " : ""}${gl.colors}`}</span></span>
+                      <span className="q">{pcs.toLocaleString()}</span>
+                    </button>
+                    {many && open && g0.map((y) => (
+                      <button key={y.g.c.key + y.g.part} type="button" className="msf-up-r sub" onClick={() => setOpen(y.g.c)} title={tip(y.g)}>
+                        <span className="t">{clock(y.start)}</span>
+                        <span className="b"><span className="l1">{dotEl(y.g.c, y.g)}<b className={ord(d) * 1440 + y.end > dueAbs(y.g.c.job) ? "late" : ""}>#{y.g.c.job.number}</b><span className="c">{y.g.c.job.name || y.g.c.need.label}</span></span></span>
+                        <span className="q">{y.g.c.need.qty.toLocaleString()}</span>
                       </button>
-                    ); };
-                    return grp.map((g0) => g0.length === 1 ? row(g0[0], false) : (
-                      <div key={"g" + g0[0].g.c.key} className="msf-up-grp">
-                        <div className="msf-up-gh"><span className="t">{clock(g0[0].start)}</span><b>{abbrCo(g0[0].g.c.job.customer)}</b><span className="faint">{g0.length} jobs · {fmtMin(g0.reduce((t, x) => t + x.g.c.minutes, 0))}</span></div>
-                        {g0.map((x) => row(x, true))}
-                      </div>
-                    ));
-                  })()}
-                </div>
-              );
-            })}
-            {!machines.some((m) => joined(m, d).length) && <div className="faint msf-up-none">Nothing booked yet.</div>}
-          </section>
-        ))}
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </section>
+          );
+        })}
+        {d && !machines.some((m) => joined(m, d).length) && <div className="faint msf-up-none">Nothing booked yet.</div>}
       </aside>
     );
   };
