@@ -71,7 +71,7 @@ export default function ProductionSettingsView({ part }: { part: "machines" | "t
                     <td><div className="ps-days">{WEEK_ORDER.map((di) => <button key={di} type="button" className={c.week[di] ? "on" : ""} onClick={() => set((x) => { x.week[di] = x.week[di] ? null : [...gen] as [number, number]; })}>{DAYS[di][0]}</button>)}</div></td>
                     <td className="r">{hrs(gen)}</td>
                     <td>{gen[1] - gen[0] > s.breaks.lunchAfterHours * 60 && s.breaks.lunchMin > 0
-                      ? <select value={c.lunchAt ?? s.breaks.lunchAt} aria-label="Lunch starts" onChange={(e) => set((x) => { x.lunchAt = +e.target.value; })}>{LUNCH_STARTS.map((t) => <option key={t} value={t}>{clock12(t)} – {clock12(t + s.breaks.lunchMin)}</option>)}</select>
+                      ? <select value={c.noLunch ? "none" : String(c.lunchAt ?? s.breaks.lunchAt)} aria-label="Lunch starts" onChange={(e) => set((x) => { if (e.target.value === "none") x.noLunch = true; else { x.noLunch = false; x.lunchAt = +e.target.value; } })}>{LUNCH_STARTS.map((t) => <option key={t} value={t}>{clock12(t)} – {clock12(t + s.breaks.lunchMin)}</option>)}<option value="none">No lunch</option></select>
                       : <span className="faint" style={{ fontSize: 12.5 }} title={`Lunch is only scheduled on shifts over ${s.breaks.lunchAfterHours} hours`}>None</span>}</td>
                     <td className="faint" style={{ fontSize: 12.5 }}>{presses.length ? presses.join(", ") : "No press yet"}</td>
                     <td><button type="button" className="linkbtn danger" onClick={() => upd((d) => { d.crews.splice(i, 1); d.machines.forEach((m) => { if (m.crew === c.id) m.crew = undefined; }); })}>Remove</button></td>
