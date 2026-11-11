@@ -22019,3 +22019,22 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msf-run-h{flex-direction:column;align-items:flex-start;gap:0;line-height:16px;padding:1px 0 2px}
 .msf-run-h b{font-size:13px;max-width:100%}.msf-run-h span{display:block}
 .ms-calm .msf-n.late,.ms-calm .msf-run-r.late b{color:var(--danger)!important;font-weight:800}
+/* Ready To Schedule: small cards by due date, a suggested spot staff can change, then Make The Schedule (Nov 11, Nick) */
+.msr-l{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px}
+.msr-c{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:5px 8px 6px;cursor:grab;min-width:0}
+.msr-c.picked{border-color:color-mix(in srgb,var(--accent) 40%,var(--line));background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
+.msr-c.hold{border-style:dashed;background:var(--surface-2)}
+.msr-c.open{z-index:20}
+.msr-1{display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;font-size:13px}.msr-1 b{overflow:hidden;text-overflow:ellipsis}
+.msr-n{font-weight:800;color:var(--ink);text-decoration:none}.msr-n.late{color:var(--danger)}
+.msr-2{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.msr-3{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;white-space:nowrap}.msr-3 span{color:var(--ink-3)}.msr-3 span.late{color:var(--danger)}
+.msr-spot{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:3px;height:21px;padding:0 7px;border-radius:5px;border:1px dashed color-mix(in srgb,var(--accent) 55%,transparent);color:var(--accent);font-weight:700;font-size:11.5px;white-space:nowrap;max-width:60%;overflow:hidden;text-overflow:ellipsis}
+.msr-spot.mine{border:1px solid var(--accent);background:var(--accent);color:#fff}
+.msr-spot.none{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 50%,transparent)}
+.msr-pop{position:absolute;right:-4px;top:calc(100% + 4px);width:280px;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 28px rgba(20,30,50,.18);padding:9px 10px;cursor:default;display:flex;flex-direction:column;gap:6px}
+.msr-ph{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.msr-sug{font-size:12.5px;color:var(--ink)}
+.msr-seg{display:grid;gap:4px}.msr-seg button{all:unset;cursor:pointer;text-align:center;padding:5px 0;border:1px solid var(--line);border-radius:5px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msr-seg button.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface));color:var(--accent)}
+.msr-act{display:flex;gap:6px;flex-wrap:wrap}
