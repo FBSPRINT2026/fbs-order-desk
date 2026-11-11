@@ -147,3 +147,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 2:10pm · 1.3.351 · Nick · Pay screens (Time Clock, Employees, Payroll) ask for a PIN for crew who run the time clock; first visit makes it, 10 minutes idle or leaving locks it
 - Nov 11 2:13pm · 1.3.352 · Nick · Schedule: Where things stand: one list of every scheduled / in-production job to set Goods not in, Counted, Printed, Ready or Completed in one go (no emails, no pace learned)
 - Nov 11 2:31pm · 1.3.353 · Nick · Where Things Stand: screen printing / embroidery tabs, 9 statuses (not counted → completed), Printing today with press and finish time (the schedule runs it until then), digitized mark on embroidery jobs
+- Nov 11 2:36pm · 1.3.354 · Nick · Where Things Stand lists every open job (approved, in production, ready), booked or not

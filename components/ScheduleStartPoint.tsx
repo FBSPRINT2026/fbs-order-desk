@@ -6,7 +6,7 @@ import { digitizeState, liveSewout, type DgzSewout } from "@/lib/digitizeStatus"
 import type { Design, Group, Imprint } from "@/lib/pricing";
 
 /**
- * Where things stand (Nov 11 2026, Nick: "a simple pop-up… a list of jobs that I can just check… one moment to set
+ * Where things stand: every open order (approved, in production, ready, or on the calendar). (Nov 11 2026, Nick: "a simple pop-up… a list of jobs that I can just check… one moment to set
  * everything right so that we can start using the system"). Every job on the schedule or In Production, in two tabs
  * (screen printing, embroidery: an order with both shows in each, for its own press time), one switch per job:
  *   Not counted / Counted in full / Counted missing → the goods (order_goods), the job stays on the schedule to print;
@@ -46,7 +46,8 @@ export default function ScheduleStartPoint({ by, presses, onClose, onSaved }: { 
       const sb = createClient();
       const { data: open } = await sb.from("production_slots").select("order_id").not("order_id", "is", null).neq("status", "done").limit(1000);
       const ids = new Set(((open || []) as { order_id: string }[]).map((x) => x.order_id));
-      const { data: prod } = await sb.from("orders").select("id").eq("status", "production").is("discarded_at", null).limit(1000);
+      // every open job, booked or not (after a Start over most are back in Ready To Schedule): approved, in production, ready
+      const { data: prod } = await sb.from("orders").select("id").in("status", ["approved", "production", "ready"]).eq("type", "invoice").is("discarded_at", null).limit(1000);
       for (const o of (prod || []) as { id: string }[]) ids.add(o.id);
       const list = [...ids];
       type O = { id: string; number: number; nickname: string | null; customer_id: string | null; due_date: string | null; qty: number | null; status: string; groups: Group[] | null; stage_checks: Record<string, Check> | null };
@@ -186,7 +187,7 @@ export default function ScheduleStartPoint({ by, presses, onClose, onSaved }: { 
         </div>
         <div className="wts-b">
           <div className="wts-top">
-            <span className="faint">Soonest in-hands first. Set each job, then save. No emails go out.</span>
+            <span className="faint">Every open job, soonest in-hands first. Set each one, then save. No emails go out.</span>
             <input className="wts-q" placeholder="Find a job or customer" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
           {!rows ? <div className="empty">Loading jobs…</div> : !shown.length ? <div className="empty">No jobs here.</div> : (
