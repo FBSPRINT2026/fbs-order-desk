@@ -91,3 +91,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 9:44pm · 1.3.294 · Nick · Create order keeps 'not said' delivery as TBD (it was saved as Pickup); same for the AI-drafted and blank orders
 - Nov 10 10:05pm · 1.3.295 · Nick · Production holder replaces Hold the spot: in Production ▾ on a quote; reads the order's garments (sweatshirts and tees timed apart), guesses each print spot and its colors (order prints, art file names, the customer's recent orders), shows the press time, holds all orders from the same email in one go; a held spot is a small dashed tag in the header
 - Nov 10 10:09pm · 1.3.296 · Nick · Production holder lists the spots front first (Full Front, Full Back, chest, sleeves…)
+- Nov 11 8:54am · 1.3.297 · Nick · Left menu: Production → Schedule; the page is that department's schedule (Screen Print / Embroidery / Heat Press Schedule, from the SP · EMB · HP switch)

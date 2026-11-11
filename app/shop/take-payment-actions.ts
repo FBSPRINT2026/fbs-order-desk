@@ -18,7 +18,7 @@ import { money } from "@/lib/format";
  * Access: Nick, and Amanda).
  */
 const STAX = "https://apiprod.fattlabs.com";
-export type TPInvoice = { id: string; number: number; nickname: string; po_number: string; created_at: string; total: number; paid: number; balance: number; pay_due: string | null; /** the card fee already in it (lib/cardFeeIn.ts) */ cardFeeIn?: number };
+export type TPInvoice = { /** an old Printavo invoice ("pv:<id>"): a check / ACH / cash can pay it here; a card can't */ old?: boolean; id: string; number: number; nickname: string; po_number: string; created_at: string; total: number; paid: number; balance: number; pay_due: string | null; /** the card fee already in it (lib/cardFeeIn.ts) */ cardFeeIn?: number };
 export type TPMethod = { id: string; method: string; brand: string; last4: string; exp: string; holder: string; ok: boolean };
 export type TPResult = { orderIds: string[]; numbers: number[]; amount: number; fee: number; ok: boolean; ref?: string; error?: string };
 
@@ -44,7 +44,7 @@ export async function paymentContext(customerId: string): Promise<{ ok: true; cu
     const inv = await openInvoices(admin, [customerId]);
     return {
       ok: true, customer: c as { id: string; name: string; company: string; no_card_fee: boolean; charge_split: boolean },
-      invoices: inv.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, po_number: o.po_number, created_at: o.created_at, total: o.total, paid: o.paid, balance: o.balance, pay_due: o.pay_due, cardFeeIn: o.cardFeeIn })),
+      invoices: [...(await oldOpen(admin, [customerId])), ...inv.map((o) => ({ id: o.id, number: o.number, nickname: o.nickname, po_number: o.po_number, created_at: o.created_at, total: o.total, paid: o.paid, balance: o.balance, pay_due: o.pay_due, cardFeeIn: o.cardFeeIn }))].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.number - b.number),
       methods: ((pms || []) as { id: string; method: string; brand: string; last4: string; exp: string; holder: string; staff_charge_ok: boolean }[]).map((m) => ({ id: m.id, method: m.method, brand: m.brand, last4: m.last4, exp: m.exp || "", holder: m.holder || "", ok: !!m.staff_charge_ok })),
       feePct: mergeSettings(s?.data).pay.cardFeePct,
     };
@@ -245,4 +245,81 @@ export async function shopRefundCredit(customerId: string, amount: number, pin: 
     }
     return { ok: true as const, refunded: Math.round(done * 100) / 100 };
   } catch (e) { return { ok: false as const, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+
+/** old Printavo invoices still owed (archived_orders), as invoices a check, ACH or cash can pay ("pv:<id>", as recordLumpPayment takes them) */
+async function oldOpen(admin: ReturnType<typeof createAdminClient>, customerIds: string[]): Promise<(TPInvoice & { customer_id: string })[]> {
+  if (!customerIds.length) return [];
+  const { data } = await admin.from("archived_orders").select("id, visual_id, nickname, po_number, total, balance, order_date, due_date, imported_at, customer_id").in("customer_id", customerIds).eq("kind", "invoice").is("removed_at", null).gt("balance", 0.004).order("id").limit(1000);
+  return ((data || []) as { id: string; visual_id: string; nickname: string | null; po_number: string | null; total: number; balance: number; order_date: string | null; due_date: string | null; imported_at: string | null; customer_id: string }[])
+    .map((a) => ({ old: true, id: `pv:${a.id}`, number: +a.visual_id || 0, nickname: a.nickname || "Printavo invoice", po_number: a.po_number || "", created_at: a.order_date || a.imported_at || "", total: r2(+a.total || 0), paid: r2((+a.total || 0) - (+a.balance || 0)), balance: r2(+a.balance || 0), pay_due: a.due_date || null, customer_id: a.customer_id }));
+}
+
+export type PayerHit = { kind: "customer"; id: string; name: string; balance: number; open: number } | { kind: "invoice"; id: string; customerId: string; customer: string; number: number; nickname: string; balance: number };
+
+/**
+ * Receive a payment's search (Nov 11, Nick: "I should be able to search up top, just type in invoices… or a customer,
+ * and it should bring up their balance"): customers by name, and invoices by number or PO, each with what's owed.
+ */
+export async function findPayers(q0: string): Promise<{ ok: true; hits: PayerHit[] } | { ok: false; error: string }> {
+  try {
+    const { admin } = await allowed();
+    const q = q0.trim().replace(/^#/, "").slice(0, 60);
+    if (q.length < 2 && !/^\d+$/.test(q)) return { ok: true, hits: [] };
+    const like = `%${q.replace(/[%_,()]/g, " ")}%`;
+    const num = /^\d{3,6}$/.test(q) ? +q : null;
+    const [{ data: cs }, { data: os }, { data: ar }] = await Promise.all([
+      admin.from("customers").select("id, name, company").or(`company.ilike.${like},name.ilike.${like}`).limit(8),
+      admin.from("orders").select("id, number, nickname, customer_id").eq("type", "invoice").is("discarded_at", null).or(num ? `number.eq.${num},po_number.ilike.${like}` : `po_number.ilike.${like}`).limit(6),
+      admin.from("archived_orders").select("id, visual_id, nickname, customer_id, balance").eq("kind", "invoice").is("removed_at", null).gt("balance", 0.004).or(num ? `visual_id.eq.${num},po_number.ilike.${like}` : `po_number.ilike.${like}`).limit(6),
+    ]);
+    const custs = (cs || []) as { id: string; name: string | null; company: string | null }[];
+    const ords = (os || []) as { id: string; number: number; nickname: string | null; customer_id: string | null }[];
+    const arcs = (ar || []) as { id: string; visual_id: string; nickname: string | null; customer_id: string | null; balance: number }[];
+    const ids = [...new Set([...custs.map((c) => c.id), ...ords.map((o) => o.customer_id || ""), ...arcs.map((a) => a.customer_id || "")].filter(Boolean))];
+    const { openInvoices } = await import("@/lib/statementServer");
+    const [inv, old, { data: names }] = await Promise.all([openInvoices(admin, ids), oldOpen(admin, ids), admin.from("customers").select("id, name, company").in("id", ids)]);
+    const nameOf = new Map(((names || []) as { id: string; name: string | null; company: string | null }[]).map((c) => [c.id, c.company || c.name || "Customer"]));
+    const owed = new Map<string, { b: number; n: number }>();
+    for (const o of [...inv, ...old]) { const x = owed.get(o.customer_id) || { b: 0, n: 0 }; x.b += o.balance; x.n++; owed.set(o.customer_id, x); }
+    const bal = new Map<string, number>(inv.map((o) => [o.id, o.balance]));
+    const hits: PayerHit[] = [
+      ...custs.map((c) => ({ kind: "customer" as const, id: c.id, name: c.company || c.name || "Customer", balance: r2(owed.get(c.id)?.b || 0), open: owed.get(c.id)?.n || 0 })).sort((a, b) => b.balance - a.balance),
+      ...ords.filter((o) => o.customer_id).map((o) => ({ kind: "invoice" as const, id: o.id, customerId: o.customer_id!, customer: nameOf.get(o.customer_id!) || "", number: o.number, nickname: o.nickname || "", balance: r2(Number(bal.get(o.id) || 0)) })),
+      ...arcs.filter((a) => a.customer_id).map((a) => ({ kind: "invoice" as const, id: `pv:${a.id}`, customerId: a.customer_id!, customer: nameOf.get(a.customer_id!) || "", number: +a.visual_id || 0, nickname: a.nickname || "Printavo invoice", balance: r2(+a.balance || 0) })),
+    ];
+    return { ok: true, hits: hits.slice(0, 12) };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+export type TodayPay = { key: string; customer: string; numbers: number[]; amount: number; method: string; note: string; at: string };
+/** payments recorded or charged today (shop time), one line per check or charge: the running list under Receive a payment */
+export async function receivedToday(): Promise<{ ok: true; rows: TodayPay[] } | { ok: false; error: string }> {
+  try {
+    const { admin } = await allowed();
+    const day = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    const start = new Date(`${day}T00:00:00-06:00`).toISOString();
+    const { data } = await admin.from("payments").select("id, order_id, archived_order_id, amount, method, note, processor_id, created_at").gte("created_at", start).order("created_at", { ascending: false }).limit(300);
+    const ps = (data || []) as { id: string; order_id: string | null; archived_order_id: string | null; amount: number; method: string; note: string | null; processor_id: string | null; created_at: string }[];
+    const oIds = [...new Set(ps.map((p) => p.order_id).filter(Boolean))] as string[], aIds = [...new Set(ps.map((p) => p.archived_order_id).filter(Boolean))] as string[];
+    const [{ data: os }, { data: as }] = await Promise.all([
+      oIds.length ? admin.from("orders").select("id, number, customer_id").in("id", oIds) : Promise.resolve({ data: [] }),
+      aIds.length ? admin.from("archived_orders").select("id, visual_id, customer_id").in("id", aIds) : Promise.resolve({ data: [] }),
+    ]);
+    const ord = new Map(((os || []) as { id: string; number: number; customer_id: string }[]).map((o) => [o.id, o]));
+    const arc = new Map(((as || []) as { id: string; visual_id: string; customer_id: string }[]).map((a) => [a.id, { number: +a.visual_id || 0, customer_id: a.customer_id }]));
+    const cIds = [...new Set([...ord.values(), ...arc.values()].map((x) => x.customer_id).filter(Boolean))];
+    const { data: cs } = cIds.length ? await admin.from("customers").select("id, name, company").in("id", cIds) : { data: [] };
+    const cn = new Map(((cs || []) as { id: string; name: string | null; company: string | null }[]).map((c) => [c.id, c.company || c.name || ""]));
+    const rows = new Map<string, TodayPay>();
+    for (const p of ps) {
+      const o = p.order_id ? ord.get(p.order_id) : p.archived_order_id ? arc.get(p.archived_order_id) : null;
+      const key = p.processor_id || p.id;
+      const r = rows.get(key) || { key, customer: o ? cn.get(o.customer_id) || "" : "", numbers: [], amount: 0, method: p.method, note: (p.note || "").replace(/ · \$[\d,.]+ .*applied to.*$/, "").replace(/^\$[\d,.]+ .*applied to.*$/, ""), at: p.created_at };
+      r.amount = r2(r.amount + (+p.amount || 0)); if (o?.number && !r.numbers.includes(o.number)) r.numbers.push(o.number);
+      rows.set(key, r);
+    }
+    return { ok: true, rows: [...rows.values()] };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }

@@ -41,8 +41,10 @@ export default function TakePaymentTool({ customerId: c0 = "", orderId = "", sta
   const load = (id: string) => {
     setErr(""); setResults(null); setCtx(null);
     if (!id) return;
-    void paymentContext(id).then((r) => {
+    void paymentContext(id).then((r0) => {
+      let r = r0;
       if (!r.ok) return setErr(r.error);
+      r = { ...r, invoices: r.invoices.filter((o) => !o.old) };
       setCtx(r); setCLabel(r.customer.company || r.customer.name); loadCr(id);
       setSplit(r.customer.charge_split); setFee(!r.customer.no_card_fee);
       // the order it was opened from, else everything owed
