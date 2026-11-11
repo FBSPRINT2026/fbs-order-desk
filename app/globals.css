@@ -22088,3 +22088,11 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 @keyframes sep-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.sep-spin{animation-duration:2.4s}}
 .sep-inkbar.busy{pointer-events:none;opacity:.75}
+/* the schedule's right-click menu, as mocked (Nov 11, Nick): the name bold, what it does under it, nothing runs over */
+.msf-menu{width:300px;padding:5px;border-radius:10px;box-shadow:0 12px 30px rgba(20,30,50,.2);max-width:calc(100vw - 16px)}
+.msf-menu button{display:grid!important;grid-template-columns:20px minmax(0,1fr);grid-template-rows:auto auto;column-gap:8px;align-items:center;padding:7px 9px!important;border-radius:6px;white-space:normal!important}
+.msf-menu button > :first-child{grid-row:1/3;justify-self:center}
+.msf-menu button > span:not(:first-child){font-weight:700;font-size:13px;color:var(--ink)}
+.msf-menu button small{margin:0!important;grid-column:2;font-size:11.5px;line-height:1.3;color:var(--ink-3);white-space:normal}
+.msf-menu hr{margin:4px 6px;border:0;border-top:1px solid var(--line)}
+.msf-menu-h{padding:6px 9px 4px!important;font-size:11px!important;font-weight:700!important;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)!important;white-space:normal}

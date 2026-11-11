@@ -1919,17 +1919,17 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       </div>
       {downMenu && <>
         <div className="msf-menu-bg" onClick={() => setDownMenu(null)} onContextMenu={(e) => { e.preventDefault(); setDownMenu(null); }} />
-        <div className="msf-menu" style={{ left: Math.min(downMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 280), top: downMenu.y }}>
+        <div className="msf-menu" style={{ left: Math.max(8, Math.min(downMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 310)), top: Math.max(8, Math.min(downMenu.y, (typeof window !== "undefined" ? window.innerHeight : 900) - 160)) }}>
           <div className="msf-menu-h">{downMenu.why} · {clock(downMenu.a)}–{clock(downMenu.b)}</div>
           {downMenu.row ? <>
-            <button type="button" onClick={async () => { const r = downMenu.row!; setDownMenu(null); const x = await createClient().from("production_days_off").delete().eq("id", r.id); setMsg(x.error ? x.error.message : `Removed ${r.note || "the downtime"} on ${dayLbl(r.day)}. That time is back on the schedule.`); load(); }}><span>Remove this downtime</span><small>the time goes back on the schedule</small></button>
-            <button type="button" onClick={() => { const r = downMenu.row!; setDownMenu(null); setDownEdit({ machine: downMenu.machine, day: r.day, start: r.start_min ?? undefined, end: r.end_min ?? undefined, allDay: r.start_min == null, replace: r }); }}><span>Change its times</span><small>or move it to another day or press</small></button>
+            <button type="button" onClick={async () => { const r = downMenu.row!; setDownMenu(null); const x = await createClient().from("production_days_off").delete().eq("id", r.id); setMsg(x.error ? x.error.message : `Removed ${r.note || "the downtime"} on ${dayLbl(r.day)}. That time is back on the schedule.`); load(); }}><span className="msf-rn">✕</span><span>Remove this downtime</span><small>the time goes back on the schedule</small></button>
+            <button type="button" onClick={() => { const r = downMenu.row!; setDownMenu(null); setDownEdit({ machine: downMenu.machine, day: r.day, start: r.start_min ?? undefined, end: r.end_min ?? undefined, allDay: r.start_min == null, replace: r }); }}><span className="msf-rn">✎</span><span>Change its times</span><small>or move it to another day or press</small></button>
           </> : <div className="msf-menu-h">This comes from the crew&apos;s hours or a time card, not a downtime entry.</div>}
         </div>
       </>}
       {lockMenu && <>
         <div className="msf-menu-bg" onClick={() => setLockMenu(null)} onContextMenu={(e) => { e.preventDefault(); setLockMenu(null); }} />
-        <div className="msf-menu" style={{ left: Math.min(lockMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 280), top: lockMenu.y }}>
+        <div className="msf-menu" style={{ left: Math.max(8, Math.min(lockMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 310)), top: Math.max(8, Math.min(lockMenu.y, (typeof window !== "undefined" ? window.innerHeight : 900) - 340)) }}>
           <div className="msf-menu-h">#{lockMenu.c.job.number} {abbrCo(lockMenu.c.job.customer)} · {WHY_T[whyOf(lockMenu.c)].toLowerCase()}</div>
           {lockMenu.c.slot?.status !== "running" && lockMenu.c.slot?.status !== "done" && <button type="button" onClick={() => runNext(lockMenu.c)}><span className="msf-rn">⚡</span><span>Run next</span><small>first on {crewOf(lockMenu.c.machine)?.leader || shortName(lockMenu.c.machine)}&apos;s press after what&apos;s running</small></button>}
           <hr />
