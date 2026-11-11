@@ -54,7 +54,9 @@ export async function simpleOrderSource(admin: SupabaseClient, orderId: string, 
       // orders came in as "Pickup" and were made with no ship-to, though every PO had one): the PO's Ship To wins
       o.delivery_method === "ship" && (o.ship_to || "").trim() ? `How they'll get it: ship to ${o.ship_to}`
         : o.delivery_method === "deliver" && (o.ship_to || "").trim() ? `How they'll get it: local delivery to ${o.ship_to}`
-        : `How they'll get it: the form says pickup (its default). If their PO or another file has a Ship To address, it ships there: put that address in ship_to, the whole block (name, ATTN, street, city). A Ship To that says pick up / P/U means pickup.`,
+        // the form's own default isn't something they said (Nov 10, #40514: "the form says pickup" was read as their choice,
+        // and its carrier words hid the customer's shipping default and kept the order from teaching it): no carrier words here
+        : `How they'll get it: not chosen on the form. A Ship To address on their PO or another file means it goes there: put that whole address block in ship_to (name, ATTN, street, city) and set delivery to ship. Leave delivery empty unless their files say how.`,
       atts.length ? `Their files: ${atts.map((f) => `${f.name} (${kindOf.get(f.path)})`).join("; ")}` : "",
       sizeSet.has("message") ? `The sizes and quantities are in their message above${sizeSet.size > 1 ? " (with the files marked HAS THE SIZES)" : ", not in a file"}.` : "",
       s.helper_note ? `Staff say: ${s.helper_note}` : "",

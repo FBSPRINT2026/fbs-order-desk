@@ -174,22 +174,27 @@ function locationsIn(S: Tok[], from: number, to: number): string[] {
 }
 
 function sizesIn(S: Tok[], from: number, to: number): Record<string, number> {
-  const out: Record<string, number> = {};
+  // the sizes in this stretch, a two-word size read as one ("X-LARGE", "2X-LARGE", "XX LARGE", "ONE SIZE")
+  const found: { sz: string; at: number; end: number }[] = [];
+  let osQty = 0;
   for (let k = from; k < to; k++) {
-    let sz = SIZE_WORDS[S[k].w], used = 0;
-    if (S[k].w === "x" && S[k + 1]?.w === "large") { sz = "XL"; used = 1; }
-    if (S[k].w === "xx" && S[k + 1]?.w === "large") { sz = "2XL"; used = 1; }
-    if (S[k].w === "one" && S[k + 1]?.w === "size") { sz = "OS"; used = 1; }
-    if (!sz && QTY.has(S[k].w) && /^\d+$/.test(S[k + 1]?.w || "") && !Object.keys(out).length) { out.OS = (out.OS || 0) + +S[k + 1].w; k++; continue; }
-    if (!sz) continue;
-    // the number that goes with it: right after, past "|", "/" or "qty"
-    let j = k + used + 1;
-    if (S[j] && QTY.has(S[j].w)) j++;
-    const n = S[j] && /^\d{1,4}$/.test(S[j].w) ? +S[j].w : 0;
-    if (!n) continue;
-    out[sz] = (out[sz] || 0) + n;
-    k = j;
+    const w = S[k].w, nx = S[k + 1]?.w;
+    if (nx === "large" && /^(x|xx|xxx|[1-5]x)$/.test(w)) { found.push({ sz: w === "x" || w === "1x" ? "XL" : w === "xx" ? "2XL" : w === "xxx" ? "3XL" : `${w[0]}XL`, at: k, end: k + 1 }); k++; continue; }
+    if (w === "x" && nx === "small") { found.push({ sz: "XS", at: k, end: k + 1 }); k++; continue; }
+    if (w === "one" && nx === "size") { found.push({ sz: "OS", at: k, end: k + 1 }); k++; continue; }
+    if (!found.length && QTY.has(w) && /^\d+$/.test(nx || "")) { osQty += +(nx as string); k++; continue; }
+    if (SIZE_WORDS[w]) found.push({ sz: SIZE_WORDS[w], at: k, end: k });
   }
+  // the number that goes with each size: after it ("M 20", "M | qty 20") or before it ("20 MEDIUM", a PO with the
+  // quantity column first: Nov 10, Nine18's POs read "2 LARGE / 2 X-LARGE" as L 2). Whichever way pairs more sizes is
+  // how this paperwork is written: read the wrong way, every size takes its neighbor's number and one is left over
+  const num = (k: number) => (k >= from && k < to && /^\d{1,4}$/.test(S[k]?.w || "") ? +S[k].w : 0);
+  const after = found.map((f) => { let j = f.end + 1; if (S[j] && QTY.has(S[j].w)) j++; return num(j); });
+  const before = found.map((f, i) => (i > 0 && found[i - 1].end === f.at - 1 ? 0 : num(f.at - 1)));
+  const pick = before.filter(Boolean).length > after.filter(Boolean).length ? before : after;
+  const out: Record<string, number> = {};
+  if (osQty && !found.length) out.OS = osQty;
+  found.forEach((f, i) => { if (pick[i]) out[f.sz] = (out[f.sz] || 0) + pick[i]; });
   return out;
 }
 
