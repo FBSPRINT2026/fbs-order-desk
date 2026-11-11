@@ -21959,3 +21959,5 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:21px;height:21px}
 .side:not(.mini) .nav-tools .lbl-k{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:10px;line-height:1.15;text-align:center;color:var(--side-ink);opacity:.85;max-width:100%;word-break:normal;overflow-wrap:normal}
 .side:not(.mini) .nav-tools a.on .lbl-k{color:#fff;opacity:1}
+/* PRODUCTION, SP · EMB · HP and the arrow on one line, centered on each other */
+.nav-h-production{align-items:center}.nav-h-production .prod-side{align-self:center;align-items:center}.nav-h .nav-fold{align-self:center}
