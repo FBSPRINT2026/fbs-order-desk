@@ -111,3 +111,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 11:00am · 1.3.314 · Nick · Left menu: PRODUCTION, SP · EMB · HP and the arrow sit on one line, centered
 - Nov 11 11:03am · 1.3.315 · Nick · Schedule drag: the spot a job leaves stays as a dotted 'was here' box (moving to …) while it's over another press; the dotted box where it lands says '#… moves here · press · time'; the job you point at decides where it goes (top half = before it, bottom half = after it) and it drops exactly where the box is; a cancelled or redrawn drag always clears
 - Nov 11 11:06am · 1.3.316 · Nick · Shop Tools tiles back to the approved look: bigger icons with one short word (AI, Order, Time, Gang, Art, Payment, Portal)
+- Nov 11 11:06am · 1.3.317 · Nick · Schedule drag: the press a job is dragged from shows its 'was here' box (not a second 'moves here' box)
