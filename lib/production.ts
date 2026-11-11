@@ -481,13 +481,19 @@ export function estimateRaw(s: ProductionSettings, need: Need, mach: Machine): E
       if (st.puff) suF /= S.puffSetupFactor ?? 1.5;
       // more screens + flashes than the press has heads: two rounds, every piece goes around twice
       const rounds = Math.min(Math.max(2, st.rounds || 1), roundsOn(st, mach));
-      // the same print on two kinds of garment (tees and sweatshirts) is one set of screens: set up and torn down once
-      const again = setUp.has(locKey(st)); setUp.add(locKey(st));
-      const su = again ? 0 : (st.screens * S.setupPerScreen) / suF, td = again ? 0 : (st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60 * rounds;
+      // the same print (same art, same inks) on two kinds of garment (tees and sweatshirts) is one set of screens: set up
+      // and torn down once. Another design at the same spot is its own setup, and the same design in other inks is a color
+      // change: the screens stay, every ink is washed out and swapped, about half a setup (Nov 11, Nick, #40496: four
+      // groups with five different backs were timed as one setup, "2 hours 8 minutes… there's no way")
+      const printKey = st.art || `${locKey(st)}|${st.colors}`, designKey = st.art ? st.art.split("|").slice(0, 2).join("|") : "";
+      const again = setUp.has(printKey), change = !again && !!designKey && setUp.has("d:" + designKey);
+      setUp.add(printKey); if (designKey) setUp.add("d:" + designKey);
+      const sf = again ? 0 : change ? 0.5 : 1;
+      const su = (sf * st.screens * S.setupPerScreen) / suF, td = (sf * st.screens * S.teardownPerScreen) / (k ? pct(k.teardown) : 1), r = (st.qty / Math.max(1, rate)) * 60 * rounds;
       const tot = Math.max(S.minMinutes, su + r + td);
       setup += su; run += tot - su - td; teardown += td;
       const fl = flashesFor(st);
-      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}${need.steps.some((o) => o !== st && locKey(o) === locKey(st)) ? ` · ${st.garment === "heavy" ? "sweats / hoodies" : st.garment === "tee" ? "tees" : st.garment === "bag" ? "bags" : "caps"}` : ""}: ${again ? "same screens" : `${st.screens} screens`}${fl ? ` + ${fl} flash${fl === 1 ? "" : "es"}` : ""}, ${st.qty} pcs @ ${Math.round(rate)}/hr${rounds > 1 ? ` · 2 rounds (${st.screens + fl} heads needed, ${mach.colors} on this press)` : ""}`, minutes: tot * f, loc: locKey(st) });
+      parts.push({ label: `${st.location}${st.puff ? " (puff)" : ""}${need.steps.some((o) => o !== st && locKey(o) === locKey(st)) ? ` · ${st.garment === "heavy" ? "sweats / hoodies" : st.garment === "tee" ? "tees" : st.garment === "bag" ? "bags" : "caps"}` : ""}: ${again ? "same screens" : change ? `color change, ${st.screens} screens` : `${st.screens} screens`}${fl ? ` + ${fl} flash${fl === 1 ? "" : "es"}` : ""}, ${st.qty} pcs @ ${Math.round(rate)}/hr${rounds > 1 ? ` · 2 rounds (${st.screens + fl} heads needed, ${mach.colors} on this press)` : ""}`, minutes: tot * f, loc: locKey(st) });
     }
   } else if (need.type === "embroidery") {
     const E = s.embroidery;
