@@ -167,16 +167,18 @@ export async function listIssues(admin: SupabaseClient, customerIds: string[] | 
   // the order's number and name, and photos to look at
   const oIds = [...new Set(list.map((i) => i.order_id).filter(Boolean))] as string[], aIds = [...new Set(list.map((i) => i.archived_order_id).filter(Boolean))] as string[];
   const [{ data: os }, { data: as }] = await Promise.all([
-    oIds.length ? admin.from("orders").select("id, number, nickname").in("id", oIds) : Promise.resolve({ data: [] }),
+    oIds.length ? admin.from("orders").select("id, number, nickname, discarded_at").in("id", oIds) : Promise.resolve({ data: [] }),
     aIds.length ? admin.from("archived_orders").select("id, visual_id, nickname").in("id", aIds) : Promise.resolve({ data: [] }),
   ]);
   const name = new Map<string, { number: string; nickname: string }>();
+  // an order that was deleted (a test order, a duplicate) takes its goods issues with it (Nov 11, Nick: #99005)
+  const gone = new Set(((os || []) as { id: string; discarded_at: string | null }[]).filter((o) => o.discarded_at).map((o) => o.id));
   for (const o of (os || []) as { id: string; number: number; nickname: string }[]) name.set(o.id, { number: String(o.number), nickname: o.nickname || "" });
   for (const o of (as || []) as { id: string; visual_id: string; nickname: string }[]) name.set(o.id, { number: String(o.visual_id), nickname: o.nickname || "" });
   const paths = [...new Set(list.flatMap((i) => (i.photos || []) as string[]))];
   const signed = paths.length ? (await admin.storage.from("proofs").createSignedUrls(paths, 30 * 86400)).data || [] : [];
   const url = new Map(paths.map((p, k) => [p, signed[k]?.signedUrl || ""]));
-  return list.map((i) => ({ ...i, number: name.get(i.order_id || i.archived_order_id || "")?.number || "", nickname: name.get(i.order_id || i.archived_order_id || "")?.nickname || "", photoUrls: ((i.photos || []) as string[]).map((p) => url.get(p) || "").filter(Boolean) }));
+  return list.filter((i) => !(i.order_id && gone.has(i.order_id))).map((i) => ({ ...i, number: name.get(i.order_id || i.archived_order_id || "")?.number || "", nickname: name.get(i.order_id || i.archived_order_id || "")?.nickname || "", photoUrls: ((i.photos || []) as string[]).map((p) => url.get(p) || "").filter(Boolean) }));
 }
 
 /** the supplier reps on file: the shop's (customer null) and this customer's */
