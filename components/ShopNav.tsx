@@ -83,6 +83,8 @@ const ICONS: Record<string, React.ReactNode> = {
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
 
 /** shorter names for the tightest menu (two links a row) */
+/** Shop Tools / Admin Tools tiles: a short name under each icon, two lines at most (Nov 11 2026, Nick) */
+const TOOL_LBL: Record<string, string> = { "AI Workbench": "AI workbench", "Order Goods": "Order goods", "Time Clock": "Time clock", "Gang Sheet Builder": "Gang sheet", "Customer Artwork Builder": "Art builder", "Receive a Payment": "Receive payment", "Portal customers": "Portal", "QuickBooks": "QuickBooks", "Printavo Sync": "Printavo sync", "ClickUp Jobs": "ClickUp", "Payroll Center": "Payroll", "Necklines": "Necklines", "Support": "Support" };
 const SHORT: Record<string, string> = { "ClickUp Jobs": "ClickUp", "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving", "Order Goods": "Order", "Reorder Details": "Details", "Conversations": "Chats", "AI Workbench": "AI", "Thread Wall": "Threads", "Digitizing": "Digitize" };
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
@@ -313,7 +315,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const link = ([href, icon, label]: [string, string, string]) => !canOpen(href, perms) ? null : (
     <NavLink key={href} href={href} className={active(href) ? "on" : ""} title={mini ? undefined : label} data-tip={href === "/shop/time" && timeCount > 0 ? `${label}: ${timeCount} to fix` : label} aria-label={label}
       >
-      {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}
+      {ICONS[icon]}<span className="lbl-t">{label}</span>{SHORT[label] && <span className="lbl-s" aria-hidden>{SHORT[label]}</span>}{TOOL_LBL[label] && <span className="lbl-k" aria-hidden>{TOOL_LBL[label]}</span>}
       {href === "/shop/assistant" && todo.all > 0 && <span className={"badge" + (todo.urgent ? "" : " soft")} title={`${todo.all} follow-up${todo.all === 1 ? "" : "s"}${todo.urgent ? `, ${todo.urgent} urgent` : ""}`}>{todo.urgent || todo.all}</span>}
       {href === "/shop/clickup" && clickup > 0 && <span className="badge" title={`${clickup} new ClickUp job${clickup === 1 ? "" : "s"} to process`}>{clickup}</span>}
       {href === "/shop/time" && timeCount > 0 && <span className="badge" title={`${timeCount} time clock issue${timeCount === 1 ? "" : "s"} to fix`}>{timeCount}</span>}
