@@ -463,7 +463,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-10h";
+export const READER_REV = "2026-11-10i";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -1101,6 +1101,18 @@ ${staffSays}` : ""}`;
     const rowsOnPaper = Math.max(0, ...fileWords.map((w) => (w.match(/(?<![\w/])PERSONALI[SZ]ATION(?!S)\b/g) || []).length));
     const namesRead = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + (l.persList || []).length, 0), 0);
     if (namesRead && rowsOnPaper > namesRead) persAsk.push(`The paperwork has ${rowsOnPaper} personalized pieces but I read ${namesRead} name${namesRead === 1 ? "" : "s"}: which name is missing, and on which garment and size?`);
+  }
+  // a print's notes are how it's decorated, read by production; a question or a doubt for staff written there ("City
+  // logo (Charlotte): confirm which Armstrong logo art to use", "NCM logo - no logo on file yet, needs to be added",
+  // Nov 10, Nick: "I don't know why that keeps coming in… and I don't know how to remove it") is asked instead, once,
+  // and never left on the print
+  const ASKY = /\?|\b(confirm|verify|double.?check|check (which|what|with)|which (logo|art|file|version)|not sure|unclear|unknown|needs? to be (added|confirmed|checked)|no (logo|art) on file|to be determined|tbd)\b/i;
+  for (const g of groups) for (const d of g.imprints || []) {
+    const parts = String(d.notes || "").split(/\n|(?<=[.;])\s+/).map((x) => x.trim()).filter(Boolean);
+    const asks = parts.filter((x) => ASKY.test(x));
+    if (!asks.length) continue;
+    d.notes = parts.filter((x) => !ASKY.test(x)).join(" ").trim();
+    for (const q of asks) persAsk.push(`${d.location || "A print"}${g.name ? ` (${g.name})` : ""}: ${q.replace(/[.;]+$/, "")}${/\?$/.test(q) ? "" : "?"}`);
   }
   const draft: EODraft = {
     v: 2, kind: job ? "reorder" : "new", summary: (p.summary || "").slice(0, 400), confidence: p.confidence || "medium",
