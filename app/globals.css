@@ -21970,3 +21970,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas){min-height:50px;gap:5px;padding:8px 2px 6px}
 .side:not(.mini) .nav-tools :is(a,.nav-support,.nav-add-sc,.nav-viewas) svg{width:23px;height:23px}
 .side:not(.mini) .nav-tools .lbl-k{display:block;-webkit-line-clamp:unset;white-space:nowrap;text-overflow:ellipsis;font-size:11px;line-height:1.2}
+/* page titles (Nov 11 2026, Nick): a long title keeps its line across the top and the buttons drop below it, instead of
+   the title squeezing into two lines beside them */
+.page-head > div:first-child:has(> h1){flex:1 0 auto;max-width:100%;min-width:0}
+.page-head > div:first-child:has(> h1) + *{margin-left:auto}
