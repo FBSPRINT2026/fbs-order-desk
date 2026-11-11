@@ -128,3 +128,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 1:03pm · 1.3.331 · Nick · Ready To Schedule: same-art jobs due the same day are suggested on the same press and day as each other and booked back to back by Book all (Re-plan already does this)
 - Nov 11 1:04pm · 1.3.332 · Nick · Schedule: an order's production date is the day it runs; Re-plan and Ready To Schedule never put it earlier, and same-art jobs only group within the same production date (Nine18's weekly run)
 - Nov 11 1:08pm · 1.3.333 · Nick · House rule: a customer's own separations (Tiger Blue): their mockup is the visual, their .ai goes in Customer separations, PSDs are reference; never build a logo from their files
+- Nov 11 1:18pm · 1.3.334 · Nick · Schedule downtime: right-click a downtime block to remove it or change its times/day/press; Re-plan replaces its own 'leaving early (no overtime)' blocks instead of piling more on

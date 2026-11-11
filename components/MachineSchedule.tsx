@@ -413,7 +413,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [trayOpen, setTrayOpen] = useSticky("cal.trayOpen", true);
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
-  const [downEdit, setDownEdit] = useState<{ machine?: string; day?: string; start?: number; allDay?: boolean } | null>(null);
+  const [downEdit, setDownEdit] = useState<{ machine?: string; day?: string; start?: number; end?: number; allDay?: boolean; replace?: DayOff } | null>(null);
+  // right-click on a downtime block: remove it or change its times (Nov 11, Nick: "right click on those blocks… remove")
+  const [downMenu, setDownMenu] = useState<{ x: number; y: number; row: DayOff | null; machine: string; day: string; a: number; b: number; why: string } | null>(null);
   const [extras, setExtras] = useState<Extra[]>([]);
   const [shiftEdit, setShiftEdit] = useState(false);
   const [replan, setReplan] = useState<null | { why: string; split?: boolean }>(null);
@@ -978,7 +980,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
    * date with the overtime would miss it without; crew by crew, so one crew's overtime can go even if another's is needed.
    */
   const planAvoidingOT = (allowSplit: boolean): PlanResult & { otCuts: OtCut[] } => {
-    const base = planFresh(allowSplit, machines);
+    // the early finishes an earlier Re-plan made are worked out again, not stacked on (Nov 11: each Re-plan added more blocks)
+    const pm = !replanNoOT ? machines : machines.map((m) => (m.down ? { ...m, down: Object.fromEntries(Object.entries(m.down).map(([d, xs]) => [d, xs.filter((x) => x[2] !== "Leaving early (no overtime)")])) } : m));
+    const base = planFresh(allowSplit, pm);
     if (!replanNoOT) return { ...base, otCuts: [] };
     const nowAbs = ord(today) * 1440 + now.min, cuts = new Map<string, OtCut[]>();
     for (const m of machines) {
@@ -992,7 +996,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       }
     }
     if (!cuts.size) return { ...base, otCuts: [] };
-    const withCuts = (list: OtCut[]) => machines.map((m) => { const mine = list.filter((x) => x.m.id === m.id); if (!mine.length) return m; const down = { ...(m.down || {}) }; for (const x of mine) down[x.day] = [...(down[x.day] || []), [x.start, x.end, "Leaving early (no overtime)", 0]]; return { ...m, down }; });
+    const withCuts = (list: OtCut[]) => pm.map((m) => { const mine = list.filter((x) => x.m.id === m.id); if (!mine.length) return m; const down = { ...(m.down || {}) }; for (const x of mine) down[x.day] = [...(down[x.day] || []), [x.start, x.end, "Leaving early (no overtime)", 0]]; return { ...m, down }; });
     const ok = (p: PlanResult) => [...p.lateKeys].every((k) => base.lateKeys.has(k));
     const all = [...cuts.values()].flat(), pAll = planFresh(allowSplit, withCuts(all), base.how);
     if (ok(pAll)) return { ...pAll, otCuts: all };
@@ -1190,6 +1194,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (ins.length) await sb.from("production_slots").insert(ins);
     // the crews sent home at 40 hours: an early finish, like Cut Unused Overtime
     const cuts = (p as { otCuts?: OtCut[] }).otCuts || [];
+    // the last Re-plan's early finishes go first: this plan works them out again (they used to pile up)
+    if (replanNoOT) await sb.from("production_days_off").delete().eq("note", "Leaving early (no overtime)").gte("day", today);
     if (cuts.length) await sb.from("production_days_off").insert(cuts.map((x) => ({ machine: x.m.id, crew_id: null, day: x.day, start_min: x.start, end_min: x.end, capacity: 0, employee: "", note: "Leaving early (no overtime)", created_by: me.email })));
     setReplanBusy(false); setReplan(null);
     setMsg(`Re-planned: ${p.moves.length} job${p.moves.length === 1 ? "" : "s"} moved${p.added ? ` (${p.added} booked from Ready To Schedule)` : ""}. Late: ${p.lateBefore} → ${p.lateAfter}.${cuts.length ? ` Overtime avoided: ${fmtMin(cuts.reduce((t, x) => t + x.end - x.start, 0))} (${[...new Set(cuts.map((x) => crewOf(x.m)?.leader || shortName(x.m)))].join(", ")} leave at 40 hours).` : ""}`);
@@ -1371,7 +1377,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             ); }) : null; })()}
             {(m.down?.[day] || []).filter((x) => !x[4]).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
               ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
-              : <button type="button" key={"dn" + a} className="ms-down" style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
+              : <button type="button" key={"dn" + a} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, day, a), machine: m.id, day, a, b, why }); }} style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
             {(day < today || (day === today && now.min > vS)) && <div className="ms-pastv" style={{ height: ((Math.min(day < today ? vE : now.min, vE) - vS) / 60) * HOUR_PX }} />}
             {day === today && now.min >= vS && now.min <= vE && <div className="ms-now" style={{ top: ((now.min - vS) / 60) * HOUR_PX }} />}
             {(() => {
@@ -1731,6 +1737,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       </div>
     );
   };
+  /** the downtime entry a block on the board comes from (its press's or its crew's) */
+  const offRow = (m: Machine, d: string, a: number) => offs.find((x) => x.day === d && (x.machine === m.id || (!!m.crew && x.crew_id === m.crew)) && (x.start_min ?? -1) === a) || offs.find((x) => x.day === d && (x.machine === m.id || (!!m.crew && x.crew_id === m.crew)) && x.start_min == null && a <= 0) || null;
   const flowView = () => (
     <div className="msf">
       <div className="msf-main">
@@ -1808,7 +1816,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       {off.map(([x, y]) => <div key={"of" + x} className="ms-off" style={{ top: flowY(bi, x), height: flowY(bi, y) - flowY(bi, x) }} />)}
                       {sh && oa != null && oa < sh[1] && <div className="ms-ot" style={{ top: flowY(bi, oa), height: flowY(bi, sh[1]) - flowY(bi, oa) }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`} />}
                       {sh && breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d)).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <div key={"bk" + a0} className={why === "Warm-up" ? "ms-warm" : "ms-lunch"} style={{ top: flowY(bi, a0), height: flowY(bi, b0) - flowY(bi, a0) }} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} /> : null)}
-                      {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
+                      {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, bk.d, a0), machine: m.id, day: bk.d, a: a0, b: b0, why }); }} style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
                       {bk.d === today && now.min > bk.a && <div className="ms-pastv" style={{ top: flowTop[bi], height: flowY(bi, now.min) - flowTop[bi] }} />}
                       {bk.d === today && now.min >= bk.a && now.min <= bk.b && <div className="ms-now" style={{ top: flowY(bi, now.min) }} />}
                     </Fragment>
@@ -1859,6 +1867,16 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         </div>
       </div>
       {comingUp()}
+      {downMenu && <>
+        <div className="msf-menu-bg" onClick={() => setDownMenu(null)} onContextMenu={(e) => { e.preventDefault(); setDownMenu(null); }} />
+        <div className="msf-menu" style={{ left: Math.min(downMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 280), top: downMenu.y }}>
+          <div className="msf-menu-h">{downMenu.why} · {clock(downMenu.a)}–{clock(downMenu.b)}</div>
+          {downMenu.row ? <>
+            <button type="button" onClick={async () => { const r = downMenu.row!; setDownMenu(null); const x = await createClient().from("production_days_off").delete().eq("id", r.id); setMsg(x.error ? x.error.message : `Removed ${r.note || "the downtime"} on ${dayLbl(r.day)}. That time is back on the schedule.`); load(); }}><span>Remove this downtime</span><small>the time goes back on the schedule</small></button>
+            <button type="button" onClick={() => { const r = downMenu.row!; setDownMenu(null); setDownEdit({ machine: downMenu.machine, day: r.day, start: r.start_min ?? undefined, end: r.end_min ?? undefined, allDay: r.start_min == null, replace: r }); }}><span>Change its times</span><small>or move it to another day or press</small></button>
+          </> : <div className="msf-menu-h">This comes from the crew&apos;s hours or a time card, not a downtime entry.</div>}
+        </div>
+      </>}
       {lockMenu && <>
         <div className="msf-menu-bg" onClick={() => setLockMenu(null)} onContextMenu={(e) => { e.preventDefault(); setLockMenu(null); }} />
         <div className="msf-menu" style={{ left: Math.min(lockMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 280), top: lockMenu.y }}>
@@ -2554,21 +2572,23 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
  * all day or a time window, and how much it still runs: stopped, or at 25–75% (operator out: the press keeps running,
  * jobs just take longer). The calendar blocks or slows that time and moves work around it.
  */
-function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSaved }: { machines: Machine[]; crews: Crew[]; init: { machine?: string; day?: string; start?: number; allDay?: boolean }; offs: DayOff[]; today: string; win: [number, number]; me: string; onClose: () => void; onSaved: (msg: string) => void }) {
+function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSaved }: { machines: Machine[]; crews: Crew[]; init: { machine?: string; day?: string; start?: number; end?: number; allDay?: boolean; replace?: DayOff }; offs: DayOff[]; today: string; win: [number, number]; me: string; onClose: () => void; onSaved: (msg: string) => void }) {
   const [mach, setMach] = useState(init.machine || machines[0]?.id || "");
   const m = machines.find((x) => x.id === mach);
   const crew0 = m?.crew ? crews.find((c) => c.id === m.crew) : undefined;
   // a new entry starts as Maintenance with no one named: it used to start as "Employee out · Juan" on a whole day, so
   // opening it again to look and pressing Save added "Juan out" rows (Nov 9, Nick: Walmart days on Press 4 came back as
   // "Employee out"). Pick Employee out to name who's out.
-  const [reason, setReason] = useState("Maintenance");
-  const [other, setOther] = useState("");
-  const [emp, setEmp] = useState("");
+  const REASONS = ["Maintenance", "Repair", "Cleaning", "Employee out", "Training", "Meeting", "Press closed", "Holiday", "Other"];
+  const rp = init.replace, rpWhy = rp ? (rp.employee ? "Employee out" : REASONS.includes(rp.note) ? rp.note : "Other") : "";
+  const [reason, setReason] = useState(rpWhy || "Maintenance");
+  const [other, setOther] = useState(rpWhy === "Other" ? rp!.note : "");
+  const [emp, setEmp] = useState(rp?.employee || "");
   const [from, setFrom] = useState(init.day || today), [to, setTo] = useState(init.day || today);
   const [allDay, setAllDay] = useState(!!init.allDay || init.start == null);
   const start0 = init.start ?? 720;
-  const [a, setA] = useState(start0), [b, setB] = useState(Math.min(win[1], start0 + 60));
-  const [cap, setCap] = useState(init.allDay && crew0 ? 50 : 0);
+  const [a, setA] = useState(start0), [b, setB] = useState(init.end ?? Math.min(win[1], start0 + 60));
+  const [cap, setCap] = useState(rp ? rp.capacity || 0 : init.allDay && crew0 ? 50 : 0);
   const [wholeCrew, setWholeCrew] = useState(true);
   const [busy, setBusy] = useState(false);
   const empOut = reason === "Employee out";
@@ -2585,6 +2605,8 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
     const note = reason === "Other" ? other.trim() : reason;
     const crewWide = empOut && !!leadCrew && wholeCrew;
     const rows = Array.from({ length: nDays }, (_, i) => addDay(from, i)).map((d) => ({ machine: crewWide ? null : mach, crew_id: crewWide ? leadCrew!.id : null, day: d, start_min: allDay ? null : a, end_min: allDay ? null : b, capacity: cap, employee: empOut ? emp.trim() : "", note, created_by: me }));
+    // changing an entry: the old one goes, the new one takes its place
+    if (init.replace) await createClient().from("production_days_off").delete().eq("id", init.replace.id);
     const r = await createClient().from("production_days_off").insert(rows);
     setBusy(false);
     const when = `${from === to ? dayLbl(from) : `${dayLbl(from)} – ${dayLbl(to)}`}${allDay ? "" : `, ${clockLong(a)} – ${clockLong(b)}`}`;
@@ -2594,7 +2616,7 @@ function DownPanel({ machines, crews, init, offs, today, win, me, onClose, onSav
   return (
     <div className="pp-modal" onClick={onClose}>
       <div className="pp-sheet tmx-ed" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add downtime or maintenance">
-        <div className="pp-sheet-h"><b>Add Downtime / Maintenance</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="pp-sheet-h"><b>{rp ? "Change Downtime" : "Add Downtime / Maintenance"}</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
         <div className="tmx-ed-b">
           <div className="tmx-2 ms-3">
             <label>Why<select value={reason} onChange={(e) => pickReason(e.target.value)}>{["Maintenance", "Repair", "Cleaning", "Employee out", "Training", "Meeting", "Press closed", "Holiday", "Other"].map((r) => <option key={r} value={r}>{r}</option>)}</select></label>
