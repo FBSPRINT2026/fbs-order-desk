@@ -26,7 +26,7 @@ import type { WebBack } from "@/lib/backFinder";
 import { LESSON_KIND, widthOf, type MockupLesson } from "@/lib/mockupLessons";
 import { LOCATIONS, fitLocation, METHODS, methodLabel, designLabel, mergeSettings, newImprint, orderGroups, printHow, shopNotes, uid, type Customer, type Design, type Garment, type Imprint, type Method, type Order } from "@/lib/pricing";
 import { custLabel, parseDate } from "@/lib/format";
-import { DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
+import { cropPreviews, DESIGN_ACCEPT, hasColorwayArt, previewUrls, printArtUrl, setDesignPreview, uploadDesign } from "@/lib/designs";
 import NameNumberBuilder from "@/components/NameNumberBuilder";
 import type { RosterSpec } from "@/lib/rosterArt";
 import { applyColorway, sewKindOf, withMethod, colorwaysOf, cwLetter, sewFilesOf, withLogoSetup, type Brand as LogoBrand } from "@/lib/brands";
@@ -726,6 +726,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         setUrls((x) => ({ ...x, ...u }));
       })();
     }
+  }, [designs, imprints]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a logo on this mockup whose picture is still the whole page around the art (made before its picture was cropped):
+  // cropped once here, so it's sized on the shirt by the art itself (the same as the customer page does, lib/designs.ts)
+  const cropTried = useRef(new Set<string>());
+  useEffect(() => {
+    if (portal) return;
+    const todo = designs.filter((d) => d.preview_path && !d.specs?.cropped && !cropTried.current.has(d.id) && imprints.some((im) => im.design_id === d.id));
+    if (!todo.length) return;
+    todo.forEach((d) => cropTried.current.add(d.id));
+    void cropPreviews(sb, todo).then(async (fixed) => {
+      if (!fixed.length) return;
+      const byId = new Map(fixed.map((x) => [x.id, x]));
+      for (const x of fixed) resetLogo(x);
+      setDesigns((xs) => xs.map((x) => byId.get(x.id) || x));
+      const u = await previewUrls(sb, fixed);
+      setUrls((x) => ({ ...x, ...u }));
+    }).catch(() => null);
   }, [designs, imprints]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the customer's designs; again when the order check (on the right) changes a logo's art, so the shirt shows it

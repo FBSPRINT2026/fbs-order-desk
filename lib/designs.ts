@@ -101,12 +101,16 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
 }
 
 /** Replace a design's preview image (keeps the original file). */
-export async function setDesignPreview(sb: SupabaseClient, d: Design, f: File): Promise<Design> {
+export async function setDesignPreview(sb: SupabaseClient, d: Design, f0: File): Promise<Design> {
+  // cropped to the art, like every other way a logo's picture is made (Nov 10, Nick on #40503: "the art isn't getting
+  // clipped right… because we use the order helper": a PDF made into a logo on the server got its picture here, in the
+  // Mockup Creator, as the whole page, so the art sat small in a big empty box on the shirt)
+  const f = (await cropFileToArt(f0).catch(() => null)) || f0;
   const path = `designs/${d.id}-${crypto.randomUUID().slice(0, 8)}/preview-${safe(f.name)}`;
   const up = await sb.storage.from("proofs").upload(path, f, { contentType: f.type });
   if (up.error) throw new Error(up.error.message);
   const dims = await imageSize(f);
-  const { data, error } = await sb.from("designs").update({ preview_path: path, width_px: dims?.w || null, height_px: dims?.h || null }).eq("id", d.id).select("*").single();
+  const { data, error } = await sb.from("designs").update({ preview_path: path, width_px: dims?.w || null, height_px: dims?.h || null, art_box: null, specs: { ...(d.specs || {}), cropped: true } }).eq("id", d.id).select("*").single();
   if (error) throw new Error(error.message);
   return data as Design;
 }
