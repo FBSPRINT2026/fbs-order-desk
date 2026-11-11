@@ -22043,3 +22043,23 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 /* downtime: no stripes (Nick, Nov 11). A solid soft gray block with a dark left edge and its reason on top */
 .ms-calm .ms-down,.ms-down{background:color-mix(in srgb,var(--ink) 9%,var(--surface))!important;border:1px solid color-mix(in srgb,var(--ink) 22%,transparent)!important;border-left:4px solid var(--ink-2)!important;color:var(--ink-2)!important;font-size:11px!important;padding:3px 7px!important;white-space:normal!important}
 .ms-calm .ms-down b,.ms-down b{color:var(--ink)!important}
+/* the schedule's job pop-up (option A, Nov 11, Nick) */
+.mjp{width:min(440px,calc(100vw - 24px));padding:14px 16px 12px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 40px);overflow:auto}
+.mjp-h{display:flex;align-items:center;gap:8px;min-width:0}.mjp-n{font:800 20px var(--display)}.mjp-co{font:700 16px var(--display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mjp-sub{font-size:12.5px;color:var(--ink-3);margin-top:-6px}
+.mjp-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.mjp-pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:99px;font-size:11.5px;font-weight:700;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.mjp-pill.running{background:color-mix(in srgb,var(--ok) 15%,var(--surface));color:var(--ok)}.mjp-pill.paused{background:color-mix(in srgb,var(--warn) 18%,var(--surface))}.mjp-pill.due{background:color-mix(in srgb,var(--warn) 14%,var(--surface));color:color-mix(in srgb,var(--warn) 70%,var(--ink))}
+.mjp-fl{display:inline-flex;gap:10px;font-size:12.5px;color:var(--ink-3)}.mjp-fl label{display:inline-flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap}
+.mjp-st{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.mjp-st .btn{justify-content:center}
+.mjp-go{background:var(--ok)!important;border-color:var(--ok)!important}
+.mjp-prog select{width:100%;height:36px;border:1px solid var(--line);border-radius:6px;font:600 13px var(--body);padding:0 8px;background:var(--surface);color:var(--ink)}
+.mjp-when{border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+.mjp-w1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:14px}.mjp-w1 .faint{font-size:12.5px;white-space:nowrap}.mjp-w2{font-size:12px;margin-top:2px}
+.mjp-move{border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--accent) 3%,var(--surface))}
+.mjp-acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.mjp-acts .btn{justify-content:center;text-align:center}
+.mjp-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mjp-off{color:var(--danger)!important}
+.mjp-sure{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--danger);flex-wrap:wrap}
+.mjp-more{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px}
+.mjp-segs{margin:0;padding-left:18px;font-size:12.5px;color:var(--ink-2)}

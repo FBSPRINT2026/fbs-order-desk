@@ -2520,12 +2520,55 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
   const times: number[] = []; for (let t = Math.min(win[0], (shiftOn(m, day) || typicalShift(m))[0]); t < win[1]; t += 15) times.push(t);
   const newStart = st === "auto" ? null : +st;
   const same = mach === c.machine.id && day === c.day && newStart === c.startMin && !c.fromPv;
+  const [more, setMore] = useState(false), [moving, setMoving] = useState(false), [sure, setSure] = useState(false);
+  const first = segs[0], last = segs[segs.length - 1], lead = (mm: Machine) => s.crews.find((k) => k.id === mm.crew)?.leader;
+  const dW = (d: string) => dayLbl(d).split(",")[0];
   return (
     <div className="pp-modal" onClick={onClose}>
-      <div className="pp-sheet tmx-ed" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Scheduled job">
-        <div className="pp-sheet-h"><b>{c.job.hold ? "HOLD #" : "#"}{c.job.number} {c.job.customer}</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
-        <div className="tmx-ed-b">
-          <div className="faint">{c.job.name}{c.job.due ? ` · in-hands ${dayLbl(c.job.due)}${c.job.dueTime != null ? ` by ${clockLong(c.job.dueTime)}` : ""}` : ""} · {c.job.status}</div>
+      {/* the job pop-up, option A (Nov 11, Nick): status buttons first, where and when in one line, the main actions; times,
+          labor, dates and the log behind More details. Take off schedule asks once more before it goes */}
+      <div className="pp-sheet mjp" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Scheduled job">
+        <div className="mjp-h"><b className="mjp-n">{c.job.hold ? "HOLD #" : "#"}{c.job.number}</b><b className="mjp-co">{c.job.customer}</b><span className="spacer" /><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="mjp-sub">{[c.job.name, c.need.label, `${c.need.qty.toLocaleString()} pcs`].filter(Boolean).join(" · ")}</div>
+        <div className="mjp-pills">
+          <span className={"mjp-pill " + stt}>{stt === "scheduled" ? "Not started" : stt === "running" ? "Running" : stt === "paused" ? "Paused" : "Done"}{(stt === "running" || stt === "paused") && +(sl?.progress || 0) > 0 ? ` · ${Math.round(+(sl!.progress || 0) * 100)}%` : ""}</span>
+          {c.job.due && <span className="mjp-pill due">Due {dW(c.job.due)} {dayShort(c.job.due)}{c.job.dueTime != null ? ` · ${clock(c.job.dueTime)}` : ""}</span>}
+          <span className="spacer" />
+          {c.job.kind === "o" && <span className="mjp-fl"><label><input type="checkbox" checked={!!c.job.rush} onChange={(e) => onFlags({ rush: e.target.checked })} /> 🔥 Rush</label><label><input type="checkbox" checked={!!c.job.firm} onChange={(e) => onFlags({ firm: e.target.checked, ...(e.target.checked ? {} : { due_time: null }) })} /> Firm</label></span>}
+        </div>
+        {sl && <div className="mjp-st">
+          {stt === "scheduled" && <button type="button" className="btn primary mjp-go" onClick={() => onLog("start")}>▶ Start</button>}
+          {stt === "running" && <button type="button" className="btn" onClick={() => onLog("pause", prog / 100)}>Pause / Stop</button>}
+          {stt === "paused" && <button type="button" className="btn primary mjp-go" onClick={() => onLog("resume", prog / 100)}>Resume</button>}
+          {stt !== "done" && <span className="mjp-prog"><select value={prog} aria-label="Done so far" onChange={(e) => { const v = +e.target.value; setProg(v); onLog("progress", v / 100); }}>{[0, 10, 20, 30, 40, 50, 60, 70, 80, 90].map((p) => <option key={p} value={p}>{p ? `${p}% done` : "Done so far"}</option>)}</select></span>}
+          {stt !== "done" ? <button type="button" className="btn" onClick={() => onLog("done")}>✓ Finished</button> : <button type="button" className="btn" onClick={() => onLog("reopen", 0.9)}>Reopen</button>}
+        </div>}
+        <div className="mjp-when">
+          <div className="mjp-w1"><b>{lead(c.machine) ? `${lead(c.machine)} · ` : ""}{shortName(c.machine)}</b>{first && last ? <span className="faint">{dW(first.day)} {clock(first.start)} → {last.day !== first.day ? `${dW(last.day)} ` : ""}{clock(last.end)}</span> : null}<span className="spacer" /><b>{fmtMin(c.minutes)}</b></div>
+          <div className="faint mjp-w2">{segs.length > 1 ? `${segs.length} days` : first ? dayLbl(first.day) : ""}{otMin > 0 ? ` · runs ${fmtMin(otMin)} in overtime` : ""}{c.fromPv ? " · from its Printavo schedule" : c.carried ? ` · rolled forward from ${dayLbl(c.carried)}` : ""}</div>
+        </div>
+        {moving && <div className="mjp-move">
+          <div className="tmx-2 ms-3">
+            <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id} disabled={!fits(c.need, x)}>{x.name}{!fits(c.need, x) ? (pressOnlyOf(c.need, x) ? ` (must run on ${pressOnlyOf(c.need, x)!.name.split(" · ")[0]})` : " (not enough colors)") : ""}</option>)}</select></label>
+            <label>Day<select value={day} onChange={(e) => setDay(e.target.value)}>{[...new Set([c.day, ...days])].sort().map((d) => <option key={d} value={d}>{dayLbl(d)}</option>)}</select></label>
+            <label>Start<select value={st} onChange={(e) => setSt(e.target.value)}><option value="auto">After the job before it</option>{times.map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
+          </div>
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}><button type="button" className="btn sm" onClick={() => setMoving(false)}>Cancel</button><button type="button" className="btn sm primary" disabled={same} onClick={() => onMove(m, day, newStart)}>{c.fromPv ? "Book Here" : `Move to ${lead(m) || shortName(m)} · ${dW(day)}`}</button></div>
+        </div>}
+        <div className="mjp-acts">
+          <button type="button" className={"btn primary" + (moving ? " on" : "")} onClick={() => setMoving(!moving)}>{c.fromPv ? "Book Here…" : "Move…"}</button>
+          {c.job.kind !== "h" ? <Link className="btn" href={c.job.href}>Open Job</Link> : c.job.hold ? <Link className="btn" href={`/shop/orders/${c.job.hold.orderId}`}>Open The Quote</Link> : <span />}
+          {c.job.kind === "o" && c.need.type === "screen" ? <button type="button" className={"btn" + (sepsOpen ? " on" : "")} aria-expanded={sepsOpen} onClick={() => setSepsOpen(!sepsOpen)} title="Send this job's approved art to the Separation Center">Separations {sepsOpen ? "▴" : "▾"}</button> : <span />}
+        </div>
+        {sepsOpen && c.job.kind === "o" && <div className="ms-seps"><div className="ms-seps-h"><b>Separations</b><span className="faint">Approved art goes straight to the Separation Center.</span></div><SepRequest orderId={c.job.id} /></div>}
+        <div className="mjp-foot">
+          <button type="button" className="linkbtn" onClick={() => setMore(!more)} aria-expanded={more}>More details {more ? "▴" : "▾"}</button>
+          <span className="spacer" />
+          {c.slot && (sure
+            ? <span className="mjp-sure">{c.job.hold ? "Bump this hold?" : "Take it off the schedule?"}<button type="button" className="btn sm danger" onClick={() => { setSure(false); onUnbook(c.slot!); }}>Yes, {c.job.hold ? "bump it" : "take it off"}</button><button type="button" className="btn sm" onClick={() => setSure(false)}>No</button></span>
+            : <button type="button" className="btn sm mjp-off" onClick={() => setSure(true)}>{c.job.hold ? "Bump It" : "Take Off Schedule"}</button>)}
+        </div>
+        {more && <div className="mjp-more">
           {c.job.kind === "o" && <div className="ms-flagrow">
             <label className={"check" + (c.job.rush ? " on f-rush" : "")}><input type="checkbox" checked={!!c.job.rush} onChange={(e) => onFlags({ rush: e.target.checked })} /> 🔥 Rush</label>
             <label className={"check" + (c.job.firm ? " on f-firm" : "")}><input type="checkbox" checked={!!c.job.firm} onChange={(e) => onFlags({ firm: e.target.checked, ...(e.target.checked ? {} : { due_time: null }) })} /> ⛰️ Firm date</label>
@@ -2536,11 +2579,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
               <label className="check"><input type="checkbox" checked={c.job.dueTime != null} disabled={!c.job.due} onChange={(e) => onFlags(e.target.checked ? { due_time: 600, firm: true } : { due_time: null })} /> Specific time</label>
             </span>
           </div>}
-          <div className="ms-when"><b>{c.machine.name}</b>{segs.length > 1 ? <span className="faint"> · {fmtMin(c.minutes)} over {segs.length} days</span> : null}
-            <ul>{segs.map((g) => <li key={g.part}>{dayLbl(g.day)}, {clockLong(g.start)} – {clockLong(g.end)}</li>)}</ul>
-            {c.fromPv ? <span className="faint">From its Printavo schedule{c.carried ? ` (was ${dayLbl(c.carried)}, still in the machine status)` : ""}.</span> : c.carried ? <span className="faint">Rolled forward from {dayLbl(c.carried)} (not marked Done).</span> : null}
-          </div>
-          <div><b>{TYPE_LBL[c.need.type]}:</b> {c.need.label} · {c.need.qty} pcs{c.need.steps.some((x) => x.note) ? <span className="faint"> ({c.need.steps.find((x) => x.note)?.note})</span> : null}</div>
+          {segs.length > 1 && <ul className="mjp-segs">{segs.map((g) => <li key={g.part}>{dayLbl(g.day)}, {clockLong(g.start)} – {clockLong(g.end)}</li>)}</ul>}
           <RunTimes s={s} c={c} m={m} est={est} onSaved={onRunTime} />
           {(() => {
             const k = cost(m); if (!k) return null;
@@ -2550,41 +2589,15 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             return <div className="ms-cost"><b>Labor ${Math.round(total).toLocaleString()}</b><span>{ot ? `${fmtMin(reg)} × ${rate} + ${fmtMin(ot)} overtime × ${mult} ` : `${fmtMin(est.minutes)} × ${rate} `}crew ({k.who.join(" + ")}) · ${(total / Math.max(1, glance(c.need, est.minutes).units)).toFixed(2)} a piece</span>{ot ? <small>Runs {fmtMin(ot)} in overtime: ${Math.round((ot / 60) * k.perHour * (mult - 1)).toLocaleString()} more than straight time</small> : null}</div>;
           })()}
           {c.fromPv && c.minutes !== est.minutes && <div className="faint" style={{ fontSize: 12.5 }}>Printavo has it blocked for {fmtMin(c.minutes)}; our estimate is {fmtMin(est.minutes)}. Booking it here uses our estimate.</div>}
+          {c.slot && locsOf(c.need).length > 1 && stt !== "done" && !splitting && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setSplitting([])} title="Run some print locations (like a sleeve) separately, on another day or press">Split Job…</button>}
           {splitting && <div className="ms-ask">
             <b>Which part would you like to split off?</b>
             <span>Tick what should run separately. The rest stays together on this press. The two parts never run at the same time.</span>
             <div className="ms-pick">{locsOf(c.need).map((l) => { const on = splitting.includes(l); return <button key={l} type="button" className={on ? "on" : ""} onClick={() => setSplitting(on ? splitting.filter((x) => x !== l) : [...splitting, l])}>{subNeed(c.need, [l]).label}<small>{on ? "split off" : "stays"}</small></button>; })}</div>
             <div className="row" style={{ gap: 8 }}><button type="button" className="btn sm primary" disabled={!splitting.length || splitting.length >= locsOf(c.need).length} onClick={() => onSplit(splitting)}>Split</button><button type="button" className="btn sm" onClick={() => setSplitting(null)}>Cancel</button></div>
           </div>}
-          {sl && <div className="ms-job">
-            <div className="ms-job-h"><span className={"ms-st " + stt}>{stt === "scheduled" ? "Not started" : stt === "running" ? "Running" : stt === "paused" ? "Paused" : "Done"}</span>
-              <span className="faint">{sl.started_at ? `Started ${when(sl.started_at)}` : ""}{sl.finished_at ? ` · Finished ${when(sl.finished_at)}` : ""}{(stt === "running" || stt === "paused") && +(sl.progress || 0) > 0 ? ` · ${Math.round(+(sl.progress || 0) * 100)}% done` : ""}</span></div>
-            <div className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {stt === "scheduled" && <button type="button" className="btn sm primary" onClick={() => onLog("start")}>Start</button>}
-              {stt === "running" && <button type="button" className="btn sm" onClick={() => onLog("pause", prog / 100)}>Pause / Stop</button>}
-              {stt === "paused" && <button type="button" className="btn sm primary" onClick={() => onLog("resume", prog / 100)}>Resume</button>}
-              {stt !== "done" && <button type="button" className="btn sm" onClick={() => onLog("done")}>Finished</button>}
-              {stt === "done" && <button type="button" className="btn sm" onClick={() => onLog("reopen", 0.9)}>Reopen</button>}
-              {stt !== "scheduled" && stt !== "done" && <button type="button" className="btn sm ghost" onClick={() => onLog("not_started")}>Not Started</button>}
-              {stt !== "done" && <label className="ms-inl">Done so far <select value={prog} onChange={(e) => setProg(+e.target.value)}>{[0, 10, 20, 30, 40, 50, 60, 70, 80, 90].map((p) => <option key={p} value={p}>{p}%</option>)}</select><button type="button" className="btn sm" onClick={() => onLog("progress", prog / 100)}>Save</button></label>}
-            </div>
-            {log.length > 0 && <ul className="ms-log">{log.map((x) => <li key={x.id}><span>{when(x.at)}</span><span>{ACT[x.action] || x.action}{x.progress != null && x.action !== "done" && x.action !== "not_started" ? ` · ${Math.round(+x.progress * 100)}%` : ""}{x.note ? ` · ${x.note}` : ""}</span><span className="faint">{x.by}</span></li>)}</ul>}
-          </div>}
-          <div className="tmx-2 ms-3">
-            <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id} disabled={!fits(c.need, x)}>{x.name}{!fits(c.need, x) ? (pressOnlyOf(c.need, x) ? ` (must run on ${pressOnlyOf(c.need, x)!.name.split(" · ")[0]})` : " (not enough colors)") : ""}</option>)}</select></label>
-            <label>Day<select value={day} onChange={(e) => setDay(e.target.value)}>{[...new Set([c.day, ...days])].sort().map((d) => <option key={d} value={d}>{dayLbl(d)}</option>)}</select></label>
-            <label>Start<select value={st} onChange={(e) => setSt(e.target.value)}><option value="auto">After the job before it</option>{times.map((t) => <option key={t} value={t}>{clockLong(t)}</option>)}</select></label>
-          </div>
-          {sepsOpen && c.job.kind === "o" && <div className="ms-seps"><div className="ms-seps-h"><b>Separations</b><span className="faint">Approved art goes straight to the Separation Center.</span></div><SepRequest orderId={c.job.id} /></div>}
-          <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {c.job.kind !== "h" ? <Link className="btn" href={c.job.href}>Open Job</Link> : null}
-            {c.job.kind === "o" && c.need.type === "screen" && <button type="button" className={"btn" + (sepsOpen ? " on" : "")} aria-expanded={sepsOpen} onClick={() => setSepsOpen(!sepsOpen)} title="Send this job's approved art to the Separation Center">Separations {sepsOpen ? "▴" : "▾"}</button>}
-            {c.slot && locsOf(c.need).length > 1 && stt !== "done" && <button type="button" className="btn" onClick={() => setSplitting([])} title="Run some print locations (like a sleeve) separately, on another day or press">Split Job…</button>}
-            {c.job.hold && <Link className="btn" href={`/shop/orders/${c.job.hold.orderId}`}>Open the quote</Link>}
-            {c.slot && <button type="button" className="btn danger" onClick={() => onUnbook(c.slot!)}>{c.job.hold ? "Bump it" : "Take Off Schedule"}</button>}
-            <button type="button" className="btn primary" disabled={same} onClick={() => onMove(m, day, newStart)}>{c.fromPv ? "Book Here" : "Move"}</button>
-          </div>
-        </div>
+          {log.length > 0 && <ul className="ms-log">{log.map((x) => <li key={x.id}><span>{when(x.at)}</span><span>{ACT[x.action] || x.action}{x.progress != null && x.action !== "done" && x.action !== "not_started" ? ` · ${Math.round(+x.progress * 100)}%` : ""}{x.note ? ` · ${x.note}` : ""}</span><span className="faint">{x.by}</span></li>)}</ul>}
+        </div>}
       </div>
     </div>
   );
