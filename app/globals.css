@@ -21949,7 +21949,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ms-calm .msf-card.msf-ghost{visibility:hidden}
 .msf-slot{position:absolute;left:4px;right:4px;z-index:2;border:2px dashed var(--accent);border-radius:6px;background:color-mix(in srgb,var(--accent) 6%,transparent);display:flex;align-items:flex-start;padding:4px 8px;pointer-events:none;transition:top .12s ease,height .12s ease}
 .msf-slot span{font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap}
-.msf-dragchip{position:fixed;top:-100px;left:-100px;padding:4px 10px;border-radius:999px;background:var(--ink);color:#fff;font:700 12px var(--body,Arial);white-space:nowrap}
+.msf-dragchip{position:fixed;top:0;left:0;z-index:-1;padding:4px 10px;border-radius:999px;background:var(--ink);color:#fff;font:700 12px var(--body,Arial);white-space:nowrap}
 /* the section arrow lines up with the blue dots at the right of the menu rows */
 .nav-fold{margin-right:-4px}
 /* Shop Tools as tiles, four across: a bigger icon with a short name (up to two lines) under it (Nov 11 2026, Nick) */

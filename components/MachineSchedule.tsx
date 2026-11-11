@@ -1729,10 +1729,14 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   if (el?.dataset.slot && pv?.mid === m.id) return;
                   const r = e.currentTarget.getBoundingClientRect(), y = e.clientY - r.top, p = flowAt(y);
                   let d0 = p.d, b = dropBefore(m, p.d, p.min);
-                  if (el?.dataset.k && el.dataset.d) {
-                    const cell = at(m, el.dataset.d).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag.card?.key && g.c.slot.status !== "done").sort((x, z) => x.start - z.start);
-                    const i = cell.findIndex((g) => g.c.key === el.dataset.k), r2 = el.getBoundingClientRect();
-                    if (i >= 0) { d0 = el.dataset.d; b = e.clientY < r2.top + r2.height / 2 ? cell[i].c.key : cell[i + 1]?.c.key || ""; }
+                  if (el?.dataset.k) {
+                    // the job pointed at, by where it really is now (the preview may have pushed it to another day)
+                    const k = el.dataset.k, first = [...(segs.ofCard.get(k) || [])].sort((x, z) => x.day.localeCompare(z.day) || x.start - z.start)[0];
+                    if (first && first.c.machine.id === m.id) {
+                      const cell = at(m, first.day).filter((g) => g.part === 1 && g.c.slot && g.c.key !== drag.card?.key && g.c.slot.status !== "done").sort((x, z) => x.start - z.start);
+                      const i = cell.findIndex((g) => g.c.key === k), r2 = el.getBoundingClientRect();
+                      if (i >= 0) { d0 = first.day; b = e.clientY < r2.top + r2.height / 2 ? cell[i].c.key : cell[i + 1]?.c.key || ""; }
+                    }
                   }
                   if (!pv || pv.mid !== m.id || pv.d !== d0 || pv.before !== b) setPv({ mid: m.id, d: d0, before: b, y });
                 }}
