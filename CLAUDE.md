@@ -207,3 +207,9 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   - No new colors, radii, font sizes or shadows: use the CSS variables (`--ink*`, `--line*`, `--surface*`, `--accent*`,
     `--fbs-*`, `--warn`, `--danger`, `--ok`, `--r`). When a page needs something the kit doesn't have, add it to the kit
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
+- **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card with its
+  department's edge; only late (red edge, red number, "Late" tag) and holds (dashed, "Hold" tag) look different. Overtime
+  is a soft amber band behind the hours, warm-up and lunch plain gray, the past a light gray; the key sits at the top
+  (`.ms-calm` / `.ms-key2` in `app/globals.css`). Time lost to someone not clocked in yet (`Down` flagged "clock" in
+  `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
+  tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
