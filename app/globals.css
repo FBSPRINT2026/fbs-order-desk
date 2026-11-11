@@ -21888,3 +21888,32 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ob-ship .page-head{justify-content:flex-end}
 .ob-late{color:var(--danger);font-weight:700}
 .ff-steps{display:inline-flex;flex-wrap:wrap;gap:4px}.ff-steps span{border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:12px;color:var(--ink-2);white-space:nowrap}
+/* Schedule: why-symbol, goods dot, a customer's run as one box, the lock menu, a roomier Coming up (Nov 11 2026) */
+@media (min-width: 1001px){.msf{grid-template-columns:minmax(0,1fr) 380px}}
+.msf-why{display:inline-flex;flex:0 0 auto;width:12px;height:12px;margin-right:4px;vertical-align:-1px}
+.msf-why svg{width:12px;height:12px;fill:currentColor}
+.msf-why.ai{color:#8fb9d6}.msf-why.me{color:var(--accent)}.msf-why.lock{color:var(--ink)}.msf-why.cap{color:var(--ink-3)}
+.msf-dot{display:inline-block;flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px;background:#fff;border:1.5px solid #b8c0cc;box-sizing:border-box}
+.msf-dot.g{background:var(--ok);border-color:var(--ok)}.msf-dot.a{background:var(--warn);border-color:var(--warn)}.msf-dot.r{background:var(--danger);border-color:var(--danger)}
+.msf-n{display:inline-flex;align-items:center}
+.msf-run{position:absolute;left:4px;right:4px;z-index:2;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--fbs-blue);border-radius:6px;padding:2px 6px 3px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.msf-run.embroidery{border-left-color:#7C5CD6}.msf-run.heat{border-left-color:var(--fbs-orange)}
+.msf-run.open{z-index:6;overflow:visible;box-shadow:0 8px 20px rgba(0,0,0,.15)}
+.msf-run-h{display:flex;align-items:baseline;gap:6px;font-size:12.5px;white-space:nowrap;line-height:18px;min-width:0}.msf-run-h b{overflow:hidden;text-overflow:ellipsis}.msf-run-h span{color:var(--ink-3);font-size:11.5px}
+.msf-run-r{all:unset;box-sizing:border-box;cursor:grab;display:flex;align-items:center;gap:0;height:19px;font-size:12px;white-space:nowrap;border-top:1px solid var(--line-2,#f1f3f6);min-width:0}
+.msf-run-r b{margin-right:6px}.msf-run-r .nm{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;color:var(--ink-2)}.msf-run-r small{color:var(--ink-3);font-size:11px;margin-left:6px}
+.msf-run-r.late b{color:var(--danger)}.msf-run-r.done{opacity:.5}.msf-run-r:hover{background:var(--surface-2)}
+.msf-run-more{all:unset;cursor:pointer;font-size:11.5px;color:var(--accent);padding-top:2px}
+.msf-menu-bg{position:fixed;inset:0;z-index:80}
+.msf-menu{position:fixed;z-index:81;width:270px;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 26px rgba(20,30,50,.18);padding:4px 0;font-size:13px}
+.msf-menu-h{padding:5px 12px 6px;font-size:11.5px;color:var(--ink-3);border-bottom:1px solid var(--line);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msf-menu button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:6px;width:100%;padding:6px 12px;white-space:nowrap}
+.msf-menu button:hover,.msf-menu button.on{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.msf-menu button small{margin-left:auto;color:var(--ink-3);font-size:11.5px}
+.msf-menu hr{border:0;border-top:1px solid var(--line);margin:3px 0}
+.msf-up-r{grid-template-columns:44px minmax(0,1fr) auto;align-items:start;padding:4px 0}
+.msf-up-r .b{display:flex;flex-direction:column;min-width:0}.msf-up-r .l1{display:flex;align-items:center;gap:5px;min-width:0}.msf-up-r .l1 .c{overflow:hidden;text-overflow:ellipsis}
+.msf-up-r .l2{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis}
+.msf-up-r.sub{padding:2px 0 2px 10px;border-bottom:0}.msf-up-r.sub .t{display:none}.msf-up-r.sub{grid-template-columns:minmax(0,1fr) auto}
+.msf-up-grp{border-bottom:1px solid var(--line-2,#f1f3f6);padding:3px 0}
+.msf-up-gh{display:grid;grid-template-columns:44px auto minmax(0,1fr);gap:6px;align-items:baseline;font-size:12.5px;white-space:nowrap}.msf-up-gh .t{color:var(--ink-3);font-size:11.5px}.msf-up-gh .faint{font-size:11.5px;overflow:hidden;text-overflow:ellipsis}
