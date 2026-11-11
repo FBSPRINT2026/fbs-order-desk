@@ -111,8 +111,9 @@ export async function readEmb(buf: ArrayBuffer): Promise<EmbInfo> {
     const k = threads.find((t) => t.code === x.code && t.chart === x.chart);
     if (k) { k.stitches += x.stitches; k.stops++; } else threads.push({ needle: x.needle, code: x.code, name: x.name, chart: x.chart, stitches: x.stitches, stops: 1 });
   }
-  // the size: Wilcom's extents in 1/65536 mm (Richardson Landscape: 7,342,536 × 2,416,199 = 4.41" × 1.45")
-  const wIn = r2(num(8) / 65536 / 25.4), hIn = r2(num(9) / 65536 / 25.4);
+  // the size: the design's width (17) and height (16) in Wilcom's 4,572 units an inch (checked against the DSTs of ten
+  // logos: D10303 19,259 × 5,401 = 4.21" × 1.18", Keslow's back 41,229 × 17,649 = 9.02" × 3.86", all to the hundredth)
+  const wIn = r2(num(17) / 4572), hIn = r2(num(16) / 4572);
   const stitches = num(6) || seq.reduce((a, x) => a + x.stitches, 0);
   const ws: Worksheet = { stitches, wIn, hIn, colors: threads.length, changes: Math.max(0, seq.length - 1), stops: seq.length, trims: num(7),
     sequence: seq, threads, real: threads.some((t) => !/^default$/i.test(t.chart)) };

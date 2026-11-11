@@ -28,19 +28,26 @@ export async function addSewFiles(sb: SupabaseClient, d: Pick<Design, "id" | "nu
   const sets = dsts.map((dst) => [dst, ...files.filter((f) => f !== dst && !dsts.includes(f) && (dsts.length === 1 || stem(f.name) === stem(dst.name)))]);
   const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
   const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[] };
-  const have = [...(em.files || [])], added: SewFile[] = [];
+  const have = [...(em.files || [])], added: SewFile[] = [], confirmed: SewFile[] = [];
   // a removed file's number isn't used again: the Tajima may still have the old D10316E5 in its memory
   const gone = ((em as { removed?: SewFile[] }).removed || []);
+  const { readDst } = await import("@/lib/dst");
   for (const set0 of sets) {
-    const code = nextSewCode([...have, ...gone, ...added]), name = tajimaName(d.number, Number(code.slice(1)));
+    // a DST for a logo whose file so far is only its EMB (Nov 10, Nick: "embroidery has to confirm the DST… upload it and
+    // say this is the right DST"): it confirms that file (same stitches, within 1%), keeping its EMB, number and threads
+    const dst0 = set0.find((f) => /\.dst$/i.test(f.name));
+    const st0 = dst0 ? await dst0.arrayBuffer().then((b) => readDst(b).stitches).catch(() => 0) : 0;
+    const waiting = st0 ? have.findIndex((x) => x.embOnly && Math.abs((x.stitches || 0) - st0) <= Math.max(10, st0 * 0.01)) : -1;
+    const code = waiting >= 0 && have[waiting].code ? have[waiting].code! : nextSewCode([...have, ...gone, ...added]), name = tajimaName(d.number, Number(code.slice(1)));
     const named = await Promise.all(set0.map((f) => tajimaFile(f, name)));
     const { set } = await takeDigitized(sb, d.id, named, { link: false });
+    if (waiting >= 0) { const w = have[waiting]; have[waiting] = { ...w, ...set, code: w.code, kind: w.kind, placement: w.placement, emb: w.emb || set.emb, ws: set.sheet ? set.ws : w.ws || set.ws, embOnly: false, pic: undefined, confirmedAt: new Date().toISOString() } as SewFile; confirmed.push(have[waiting]); continue; }
     added.push({ ...set, code, kind: o.kind, ...(o.placement?.trim() ? { placement: o.placement.trim() } : {}) });
   }
   const specs = { ...sp, embroidery: { ...em, files: [...have, ...added] } };
   const { error } = await sb.from("designs").update({ specs }).eq("id", d.id);
   if (error) throw new Error(error.message);
-  return added;
+  return [...confirmed, ...added];
 }
 
 /**

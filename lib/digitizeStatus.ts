@@ -13,7 +13,7 @@ import type { Design, Imprint } from "@/lib/pricing";
  */
 export type DgzState = "need" | "asked" | "done" | "sent" | "ok";
 export type DgzSewout = { order_id: string; imprint_id: string; status: "pending" | "approved" | "changes"; archived_at: string | null; photo_path?: string; sent_at?: string | null; decided_at?: string | null; created_at?: string; version?: number };
-type EmbFileLite = { at?: string; lastUsed?: unknown; path?: string };
+type EmbFileLite = { at?: string; lastUsed?: unknown; path?: string; /** only the EMB came in (lib/embFile.ts): embroidery still confirms its DST */ embOnly?: boolean; emb?: { path: string } };
 type EmbLite = { files?: EmbFileLite[]; request?: { at: string; changes?: string } | null };
 
 export const embSpecsOf = (d: Pick<Design, "specs"> | null | undefined): EmbLite => (((d?.specs as { embroidery?: EmbLite } | null)?.embroidery) || {});
@@ -29,7 +29,8 @@ export function sewVersions<F extends EmbFileLite>(files: F[] | undefined): (F &
 /** the file this print sews: the one the order names, else the logo's newest */
 export function currentSewFile<F extends EmbFileLite>(im: Pick<Imprint, "emb">, files: F[] | undefined): F | undefined {
   const mine = im.emb?.file as F | undefined;
-  if (mine) return (files || []).find((x) => x.path && x.path === mine.path) || mine;
+  // by its DST, or by its EMB: an EMB-only file confirmed later with its DST keeps its EMB (lib/sewAdd.ts)
+  if (mine) return (files || []).find((x) => (x.path && x.path === mine.path) || (!!x.emb?.path && x.emb.path === mine.emb?.path)) || mine;
   const v = sewVersions(files);
   return v[v.length - 1];
 }
@@ -41,7 +42,13 @@ export const requestOf = (im: Pick<Imprint, "emb">, d: Pick<Design, "specs"> | n
 export const liveSewout = <S extends DgzSewout>(sws: S[], orderId: string, imprintId: string): S | undefined =>
   sws.find((x) => x.order_id === orderId && x.imprint_id === imprintId && !x.archived_at);
 
-export function digitizeState(im: Pick<Imprint, "digitized" | "emb">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean } {
+export function digitizeState(im: Pick<Imprint, "digitized" | "emb">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean; needDst?: boolean } {
+  // the logo's file is only the EMB (Nov 10, Nick: "if we have the EMB, that's good enough… but embroidery has to confirm
+  // the DST file… upload it and say this is the right DST"): it counts as digitized, and asks embroidery for the DST
+  { const e0 = embSpecsOf(d), f0 = currentSewFile(im, e0.files) || (im.emb?.file as EmbFileLite | undefined); if (f0?.embOnly) { const r = digitizeState0(im, d, live); return { ...r, needDst: true }; } }
+  return digitizeState0(im, d, live);
+}
+function digitizeState0(im: Pick<Imprint, "digitized" | "emb">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean } {
   if (live) return { state: live.status === "approved" ? "ok" : live.status === "pending" ? "sent" : "done", repeat: false, changes: false };
   const e = embSpecsOf(d), file = currentSewFile(im, e.files), req = requestOf(im, d);
   // a repeat: marked Already digitized, or the file sewed on an earlier job (Oct 28, Nick: "#40195… that's a repeat")
@@ -54,6 +61,7 @@ export function digitizeState(im: Pick<Imprint, "digitized" | "emb">, d: Pick<De
 
 /** the stamp on the order's print. `gray`: the details are estimates until the digitizer's files come back */
 export function digitizeStamp(s: ReturnType<typeof digitizeState>): { title: string; sub: string; gray: boolean; tone: "gray" | "blue" | "warn" | "ok" } | null {
+  if (s.needDst) return { title: "DST needed", sub: "Digitized (EMB in). Embroidery adds the DST to sew", gray: false, tone: "warn" };
   if (s.repeat) return null;
   switch (s.state) {
     case "need": return { title: "Needs digitizing", sub: "Stitches and price confirmed after sew-out", gray: true, tone: "gray" };

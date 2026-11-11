@@ -107,6 +107,8 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
     a thread or a PMS: the order's thread nearest that color goes on it);
   - where an embroidered print is in digitizing: `digitizeState` / `digitizeStamp` in `lib/digitizeStatus.ts` (the
     Digitizing page's tabs and the order's print stamps).
+    An EMB alone is a digitized logo (`lib/embFile.ts` reads its size, stitches, stops, threads and TrueView picture;
+    Nick, Nov 10 2026): the print says "DST needed" until embroidery adds the DST on the logo, which confirms that file.
   When you tell Nick it's fixed, say where else it was fixed.
 - **Lists over 1,000 rows are read in pages** (Oct 31: the database answers at most 1,000 rows per request whatever
   `.limit()` says, so the Time page's pay period, a mail folder, the dashboard's Printavo jobs and SanMar's styles were

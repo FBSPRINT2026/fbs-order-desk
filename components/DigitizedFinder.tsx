@@ -59,7 +59,17 @@ export default function DigitizedFinder({ designId, where, hint, onClose, onDone
       const got = await expandFiles(list), kind = (f: File) => (f.name.match(/\.(dst|emb|pdf)$/i)?.[1] || "").toLowerCase();
       const all = [...got, ...files.filter((f) => !got.some((g) => kind(g) && kind(g) === kind(f)))];
       const dst = all.find((f) => /\.dst$/i.test(f.name));
-      if (!dst) { setFiles(all); setInfo(null); setErr("No DST in those. It's the file the machine sews: add it too."); return; }
+      // only the EMB (the master file): read for its size, stitches and threads; embroidery adds the DST later (Nov 10)
+      if (!dst) {
+        const emb = all.find((f) => /\.emb$/i.test(f.name));
+        if (!emb) { setFiles(all); setInfo(null); setErr("No DST or EMB in those: add the stitch file."); return; }
+        const { readEmb } = await import("@/lib/embFile");
+        const e = await readEmb(await emb.arrayBuffer()).catch(() => null);
+        if (!e) { setFiles(all); setInfo(null); setErr("Couldn't read that EMB (an older Wilcom file?). Add its DST."); return; }
+        setInfo({ name: e.title || emb.name, stitches: e.stitches, sewn: e.stitches, changes: Math.max(0, e.stops - 1), colors: e.colors, jumps: 0, trims: e.trims, wIn: e.wIn, hIn: e.hIn, header: {}, blocks: [] });
+        setFiles([emb, all.find((f) => /\.pdf$/i.test(f.name))].filter(Boolean) as File[]);
+        return;
+      }
       setInfo(readDst(await dst.arrayBuffer()));
       // one DST, its EMB and worksheet (the same name, else the first of each)
       const base = dst.name.replace(/\.[^.]+$/, "").toLowerCase();
@@ -138,13 +148,14 @@ export default function DigitizedFinder({ designId, where, hint, onClose, onDone
 
         {/* the package: one DST to sew, its EMB to edit in Hatch, the worksheet with the stops and threads */}
         <div className="dgf-pack">
-          {([["DST", has.dst, "To sew · needed"], ["EMB", has.emb, "To edit in Hatch"], ["PDF worksheet", has.pdf, "Stops and threads"]] as [string, File | undefined, string][]).map(([k, f, s]) => (
+          {([["DST", has.dst, has.emb ? "Embroidery adds it to sew" : "To sew · needed"], ["EMB", has.emb, "The master file"], ["PDF worksheet", has.pdf, "Stops and threads"]] as [string, File | undefined, string][]).map(([k, f, s]) => (
             <div key={k} className={"dgf-slot" + (f ? " ok" : "")}><b>{f ? "✓ " : ""}{k}</b><span className="faint" data-notranslate>{f ? f.name : s}</span></div>
           ))}
         </div>
-        {info && <div className="dgf-read">Read from the DST: <b>{inch(info.wIn)} × {inch(info.hIn)} · {info.stitches.toLocaleString()} stitches · {info.colors} color{info.colors === 1 ? "" : "s"}</b>. The order&apos;s print takes these, and its price follows.{(!has.emb || !has.pdf) && <span className="dgf-miss"> {[!has.emb && "the EMB", !has.pdf && "the worksheet"].filter(Boolean).join(" and ")} {!has.emb && !has.pdf ? "are" : "is"} missing: add {!has.emb && !has.pdf ? "them" : "it"} from another tab if you have {!has.emb && !has.pdf ? "them" : "it"}.</span>}</div>}
+        {info && <div className="dgf-read">Read from the {has.dst ? "DST" : "EMB"}: <b>{inch(info.wIn)} × {inch(info.hIn)} · {info.stitches.toLocaleString()} stitches · {info.colors} color{info.colors === 1 ? "" : "s"}</b>. The order&apos;s print takes these, and its price follows.{(!has.emb || !has.pdf) && <span className="dgf-miss"> {[!has.emb && "the EMB", !has.pdf && "the worksheet"].filter(Boolean).join(" and ")} {!has.emb && !has.pdf ? "are" : "is"} missing: add {!has.emb && !has.pdf ? "them" : "it"} from another tab if you have {!has.emb && !has.pdf ? "them" : "it"}.</span>}</div>}
         {err && <div className="pv-err">{err}</div>}
-        {info && has.dst && <div className="dgf-ask">
+        {info && !has.dst && has.emb && <div className="dgf-miss">No DST yet: it counts as digitized, and the print shows <b>DST needed</b> until embroidery adds the DST on the logo.</div>}
+        {info && (has.dst || has.emb) && <div className="dgf-ask">
           <b>Do we need a sew-out?</b>
           <span className="faint">Yes when it&apos;s never been sewn, or its size or thread changed. No when it&apos;s been sewn before and approved.</span>
           <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
