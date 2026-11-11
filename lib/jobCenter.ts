@@ -47,7 +47,7 @@ export type JobItem = {
 const TWO_WEEKS = 14 * 864e5;
 const deptOf = (m?: string): Dept => (m === "embroidery" ? "embroidery" : m === "dtf" ? "heat" : "screen");
 /** everything not completed: approved jobs stay on (under Approved) until the job is done (Oct 29, Nick) */
-const OPEN = ["request", "quote", "quote_sent", "approved", "art", "blanks", "production", "ready"];
+const OPEN = ["request", "quote", "quote_sent", "approved", "art", "blanks", "production", "fulfillment", "ready"];
 /** before production: what's still needed (a mockup, a sew-out) counts; once it's in production it's past that */
 const EARLY = ["quote", "quote_sent", "approved", "art"];
 
@@ -211,7 +211,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
       const theirs = o.price_type === "wholesale" || ((o as { flags?: { key?: string }[] | null }).flags || []).some((f) => f?.key === "customer_goods");
       // the Job Center is the sales side: once the goods are ordered (or the customer sends theirs) it's Receiving's, and the
       // job sits under Approved (Nov 9, Nick: "why would there be a coming tab… that would be in receiving")
-      if (!["production", "ready"].includes(o.status) && !here && !ordered && !theirs) { steps.push("goods_order"); tracks.push({ k: "goods", state: "needed", label: "Goods to order" }); }
+      if (!["production", "fulfillment", "ready"].includes(o.status) && !here && !ordered && !theirs) { steps.push("goods_order"); tracks.push({ k: "goods", state: "needed", label: "Goods to order" }); }
       // goods handled: it's the production schedule's now (Nov 9, Nick: "now that job should be off the board"); it shows
       // under Done › Approved for three days after it's approved, like a receipt, then it's off
       else if (Date.parse(o.approved_at || o.updated_at || o.created_at) > now - 3 * 864e5) steps.push("approved");

@@ -53,7 +53,7 @@ export type AMessage = { id: string; order_id: string | null; number: number | n
 export type AAttn = { kind: "draft" | "request" | "quote" | "art" | "pay" | "receive"; order_id: string; number: number; date: string; hash?: string; /** overrides the default wording */ label?: string; href?: string };
 export type Area = "home" | "quotes" | "orders" | "invoices" | "payments" | "artwork" | "designs" | "messages" | "texts" | "receive" | "details" | "projects" | "program" | "pricing";
 
-const IN_WORK = ["approved", "art", "blanks", "production", "ready"];
+const IN_WORK = ["approved", "art", "blanks", "production", "fulfillment", "ready"];
 const WAITING = ["approved", "art", "blanks"];
 const has = matches;
 const when = (d?: string | null) => (d ? fmtDateLong(d.slice(0, 10)) : "");

@@ -27,7 +27,7 @@ type Kind = "mockups" | "logos";
 /** which of a client's logos its shelf shows (Oct 27, Nick: "toggle between active, favorites or most used") */
 type LogoView = "active" | "favorites" | "used";
 type Ord = { id: string; number: number; nickname: string | null; status: string; customer_id: string | null; total: number | null; created_at: string; discarded_at: string | null; draft: boolean | null; groups: { imprints?: { design_id?: string }[] }[] | null; lines?: unknown };
-const ACTIVE = new Set(["request", "quote_sent", "approved", "art", "blanks", "production", "ready"]);
+const ACTIVE = new Set(["request", "quote_sent", "approved", "art", "blanks", "production", "fulfillment", "ready"]);
 const SHELF = 12;
 
 /** Artwork: every customer's logos and mockups in one place, searchable. Each logo upload gets its own number (D-10001). */

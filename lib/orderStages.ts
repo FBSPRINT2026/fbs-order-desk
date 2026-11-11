@@ -120,6 +120,7 @@ export function customerStatus(o: { status: string; flags?: Flag[] | null; deliv
   }
   if (o.status === "approved") return say("approved", "Approved", "Approved, thank you.");
   if (o.status === "art") return extra.proofSent ? say("proof", "Proof ready", "Your proof is ready: please approve it.") : say("approved", "Approved", "Approved, thank you. We're working on your art proof.");
+  if (o.status === "fulfillment") return say("production", "Finishing up", "Printed. We're finishing, counting and packing your order.");
   return say("production", "In production", "Your order is in production.");
 }
 

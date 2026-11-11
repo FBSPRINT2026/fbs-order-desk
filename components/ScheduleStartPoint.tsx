@@ -47,7 +47,7 @@ export default function ScheduleStartPoint({ by, presses, onClose, onSaved }: { 
       const { data: open } = await sb.from("production_slots").select("order_id").not("order_id", "is", null).neq("status", "done").limit(1000);
       const ids = new Set(((open || []) as { order_id: string }[]).map((x) => x.order_id));
       // every open job, booked or not (after a Start over most are back in Ready To Schedule): approved, in production, ready
-      const { data: prod } = await sb.from("orders").select("id").in("status", ["approved", "production", "ready"]).eq("type", "invoice").is("discarded_at", null).limit(1000);
+      const { data: prod } = await sb.from("orders").select("id").in("status", ["approved", "production", "fulfillment", "ready"]).eq("type", "invoice").is("discarded_at", null).limit(1000);
       for (const o of (prod || []) as { id: string }[]) ids.add(o.id);
       const list = [...ids];
       type O = { id: string; number: number; nickname: string | null; customer_id: string | null; due_date: string | null; qty: number | null; status: string; groups: Group[] | null; stage_checks: Record<string, Check> | null };
@@ -89,7 +89,7 @@ export default function ScheduleStartPoint({ by, presses, onClose, onSaved }: { 
         if (!tabs.size) tabs.add("screen");
         for (const t of tabs) {
           const mine = slots.filter((x) => x.order_id === o.id && tabOf(x.kind) === t);
-          const now: St = o.status === "ready" ? (checks.out?.note === "delivery" ? "delivery" : "shipping")
+          const now: St = o.status === "fulfillment" ? "fulfill" : o.status === "ready" ? (checks.out?.note === "delivery" ? "delivery" : "shipping")
             : mine.length && mine.every((x) => x.status === "done") ? (checks.qc ? "fulfill" : "printed")
             : mine.some((x) => x.status === "running" || x.status === "paused" || x.status === "done") ? "printing"
             : g === "received" ? "full" : g === "issue" || g === "partial" ? "missing" : "not";
@@ -166,7 +166,7 @@ export default function ScheduleStartPoint({ by, presses, onClose, onSaved }: { 
         if (p === "delivery") checks.out = check("delivery");
         else if (p === "shipping" && checks.out?.note === "delivery") delete checks.out;
         if (dig[r.key] !== undefined && dig[r.key] !== r.digit && !r.digitAuto) { if (dig[r.key]) checks.digitized = check(); else delete checks.digitized; }
-        const status = p === "completed" ? "completed" : p === "shipping" || p === "delivery" ? "ready" : rk >= RANK.printing && r.status !== "production" ? "production" : r.status === "ready" && rk < RANK.shipping ? "production" : r.status;
+        const status = p === "completed" ? "completed" : p === "shipping" || p === "delivery" ? "ready" : p === "fulfill" ? "fulfillment" : rk >= RANK.printing && r.status !== "production" ? "production" : (r.status === "ready" || r.status === "fulfillment") && rk < RANK.fulfill ? "production" : r.status;
         const patchO: Record<string, unknown> = {};
         if (JSON.stringify(checks) !== JSON.stringify(r.checks)) patchO.stage_checks = checks;
         if (status !== r.status) patchO.status = status;

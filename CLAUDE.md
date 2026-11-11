@@ -187,6 +187,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.
+- **Order statuses** (Nick, Nov 11 2026): … Approved → In Production → Fulfillment (printed; finishing, counting, packing) →
+  Ready → Completed. Ready is worded by the order's delivery method: Ready for Pickup / Ready to Ship / Ready to Deliver
+  (`readyLabel` / `statusText` in `lib/pricing.ts`; `<Pill ship={o.delivery_method}>`). Any "open work" status list
+  includes fulfillment (`IN_WORK_STATUSES`).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

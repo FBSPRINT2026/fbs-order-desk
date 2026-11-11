@@ -8,7 +8,7 @@ import { offRun, pcsOf, sizesText } from "@/lib/sizeFit";
 export type Check = { level: "high" | "medium" | "low"; text: string };
 
 const inkCount = (s: string) => (s || "").split(/[,;/+]|\s&\s/).map((x) => x.trim()).filter(Boolean).length;
-const LATE_STAGE = ["art", "blanks", "production", "ready", "completed"];
+const LATE_STAGE = ["art", "blanks", "production", "fulfillment", "ready", "completed"];
 
 export function checkOrder(o: Order, c: OrderCalc, cust: Customer | undefined, proofs: Pick<Proof, "status">[]): Check[] {
   const out: Check[] = [];
@@ -61,7 +61,7 @@ export function checkOrder(o: Order, c: OrderCalc, cust: Customer | undefined, p
   if (cust?.tax_exempt && !o.tax_exempt) add("medium", "Customer is tax exempt, but this order is being taxed.");
   if (o.status === "production" && proofs.some((p) => p.status !== "approved")) add("high", "In production, but not every proof is approved.");
   if (o.status === "art" && proofs.length === 0) add("low", "Art & Proofs stage, but no proof uploaded yet.");
-  if (["production", "ready", "completed"].includes(o.status) && c.paid < 0.005 && c.total > 0 && cust?.payment_terms === "prepay") add("high", "Pre-pay customer and nothing has been paid.");
+  if (["production", "fulfillment", "ready", "completed"].includes(o.status) && c.paid < 0.005 && c.total > 0 && cust?.payment_terms === "prepay") add("high", "Pre-pay customer and nothing has been paid.");
   if (o.status === "ready" && o.delivery_method === "ship" && !(o.tracking || "").trim()) add("low", "Ready to ship: add the tracking number when it goes out.");
 
   const order = { high: 0, medium: 1, low: 2 };

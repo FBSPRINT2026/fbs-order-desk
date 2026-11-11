@@ -258,7 +258,7 @@ const SETUP_LABEL = { screens: "Screen setup (new screens)", remake: "Screen set
 const SETUP_ITEM = { screens: "setup_screens", remake: "setup_remake", digitize: "digitize", sewout: "sewout", pms: "pms", inkchange: "inkchange", min: "min" } as const;
 
 /** Is this order an invoice (past the quote stage)? Quotes are never sent to QuickBooks. */
-export const isInvoiceStatus = (status: string) => ["approved", "art", "blanks", "production", "ready", "completed"].includes(status);
+export const isInvoiceStatus = (status: string) => ["approved", "art", "blanks", "production", "fulfillment", "ready", "completed"].includes(status);
 
 /**
  * The QuickBooks invoice for one of our orders. `customerRef` is the QuickBooks customer it's billed to (the primary

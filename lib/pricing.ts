@@ -32,7 +32,7 @@ export const sizeLabel = (z: string) => (z === ONE_SIZE ? "Qty" : isWaist(z) ? `
 export type Size = (typeof SIZES)[number];
 
 export type StatusKey =
-  | "request" | "quote" | "quote_sent" | "revision" | "approved" | "art" | "blanks" | "production" | "ready" | "completed";
+  | "request" | "quote" | "quote_sent" | "revision" | "approved" | "art" | "blanks" | "production" | "fulfillment" | "ready" | "completed";
 
 export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quote" | "invoice"; c: string }[] = [
   { k: "request", label: "Order request", portal: "Sent to FBS", type: "quote", c: "#0E9F9A" },
@@ -43,7 +43,10 @@ export const STATUSES: { k: StatusKey; label: string; portal: string; type: "quo
   { k: "art", label: "Art & Proofs", portal: "Artwork", type: "quote", c: "#A152C9" },
   { k: "approved", label: "Approved", portal: "Approved", type: "invoice", c: "#0A8FC0" },
   { k: "production", label: "In Production", portal: "Printing", type: "invoice", c: "#E0582E" },
-  { k: "ready", label: "Ready for Pickup", portal: "Ready for pickup", type: "invoice", c: "#2E9D5B" },
+  // printed, being finished, counted and packed (Nov 11, Nick: "you need to add fulfillment… after in production")
+  { k: "fulfillment", label: "Fulfillment", portal: "Finishing up", type: "invoice", c: "#C77A12" },
+  // Ready says how it leaves: pickup, ship or deliver, from the order's delivery method (readyLabel; Nov 11, Nick)
+  { k: "ready", label: "Ready", portal: "Ready", type: "invoice", c: "#2E9D5B" },
   { k: "completed", label: "Completed", portal: "Completed", type: "invoice", c: "#6B7688" },
 ];
 /**
@@ -65,6 +68,16 @@ export const REVISION = { k: "revision" as StatusKey, label: "Revision", portal:
 /** a status no longer used, for an old record that still has it */
 const LEGACY = { k: "blanks" as StatusKey, label: "Approved", portal: "Approved", type: "invoice" as const, c: "#0A8FC0" };
 export const ST: Record<string, (typeof STATUSES)[number]> = { ...Object.fromEntries(STATUSES.map((s) => [s.k, s])), closed: CLOSED_QUOTE, revision: REVISION, blanks: LEGACY };
+
+/**
+ * Ready, in the words of how the order leaves (Nov 11, Nick: "ready to pick up, ready to deliver, ready to ship… the status
+ * will just be whatever's in the job"): the order's delivery method. THE one place every status label comes from
+ * (statusText); a page that has the order passes its delivery_method.
+ */
+export const readyLabel = (delivery?: string | null) => (delivery === "ship" ? "Ready to Ship" : delivery === "deliver" ? "Ready to Deliver" : delivery === "pickup" ? "Ready for Pickup" : "Ready");
+export const statusText = (status: string, delivery?: string | null, portal = false) => (status === "ready" ? readyLabel(delivery) : (ST[status] || ST.quote)[portal ? "portal" : "label"]);
+/** the statuses an order is being worked on in the shop (approved through ready): one list for every "open work" filter */
+export const IN_WORK_STATUSES = ["approved", "art", "blanks", "production", "fulfillment", "ready"];
 
 export const METHODS: Record<string, string> = { screen: "Screen print", embroidery: "Embroidery", dtf: "Heat press (DTF)" };
 /** what a print's way of decorating is called: a patch pressed on is "Heat press patch" (Oct 31, Nick: "instead of

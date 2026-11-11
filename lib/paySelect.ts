@@ -99,7 +99,7 @@ function dateOf(s: string, today: Date, edge: "start" | "day" = "day"): string |
 /** True when the filter says anything at all. */
 export const hasFilter = (f: PayFilter) => Object.values(f).some((v) => (Array.isArray(v) ? v.length : v !== undefined && v !== false));
 
-const inWork = ["approved", "art", "blanks", "production"];
+const inWork = ["approved", "art", "blanks", "production", "fulfillment"];
 /** The orders a filter picks (from the list of open orders it's given). */
 export function applyPay(f: PayFilter, list: PayOrderLite[], today = new Date()): PayOrderLite[] {
   const td = ymd(today);
