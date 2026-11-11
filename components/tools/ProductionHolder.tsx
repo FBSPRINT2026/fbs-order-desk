@@ -118,7 +118,8 @@ export default function ProductionHolder({ order, customer, chip }: { order: Ord
     };
     const usual = [...past.reduce((mm, x) => mm.set(x.loc, (mm.get(x.loc) || 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1]).map(([l]) => l);
     const names = fromFiles.length ? fromFiles : usual.length ? usual.slice(0, 2) : [m === "embroidery" ? "Left Chest" : "Full Front"];
-    setLocs(names.map((n) => ({ name: n, colors: colorAt(n) })));
+    const rank = (n: string) => { const i = SPOTS.indexOf(n); return i < 0 ? 99 : i; };
+    setLocs([...names].sort((x, y) => rank(x) - rank(y)).map((n) => ({ name: n, colors: colorAt(n) })));
     setWhy(`${fromFiles.length ? "Spots from the art files' names" : usual.length ? "Spots from their recent orders" : "No prints or art yet"}; ${m !== "screen" ? "" : past.length ? `colors from their recent orders (${past.length} prints).` : "colors not known yet."}`.replace(/; $/, "."));
   }, [order.id, order.customer_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
