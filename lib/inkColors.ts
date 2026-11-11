@@ -11,7 +11,7 @@ export const WILFLEX_HEX: Record<string, string> = {
   "Dolphin Orange": "#FF6A13", "Bright Orange": "#FF5F00", "Electric Orange": "#FF7A1A", "National Red": "#C8102E",
   "Drake Red": "#BA0C2F", "Dallas Scarlet": "#D22630", Scarlet: "#CE1126", "Electric Red": "#EF3340", Maroon: "#6F263D",
   Brandywine: "#7A2638", "Russell Purple": "#4B2E83", "Electric Purple": "#8A3FFC", "Russell Gray": "#8A8D8F",
-  "Dark Gray": "#53565A", Tan: "#C4A77D", Aqua: "#00A3AD", "Contact Blue": "#0072CE", Royal: "#003DA5",
+  "Dark Gray": "#53565A", Tan: "#C4A77D", Aqua: "#00A3AD", "Contact Blue": "#12A8EA", Royal: "#003DA5",
   "Light Royal": "#1F5FBF", "Bears Navy": "#0B162A", Navy: "#1B2A4A", "Electric Blue": "#0096FF", "Kelly Green": "#00843D",
   "Light Green": "#78BE20", "Dark Green": "#154734", "Electric Green": "#4CFF00", "Electric Yellow": "#EEFF1A",
   "Electric Pink": "#FF3EB5", "Black Diamond": "#101820", Black: "#111111",
