@@ -979,6 +979,15 @@ export function shapeGroups(gs: Group[]): Group[] {
       if (!["screen", "embroidery", "dtf"].includes(String(x.method))) x.method = "screen";
       if (!(+(x.colors as number) > 0)) x.colors = 1;
       if (!x.id) x.id = globalThis.crypto?.randomUUID?.() || `i${Math.random().toString(36).slice(2)}`;
+      // an ink saved with the print's colors shows as that ink is now (Nov 10, Nick on #40503: Contact Blue's color was
+      // corrected but the mockup still drew the old one saved on the print): a named ink takes its current screen color;
+      // a hand-mixed one, "none" and an ink with no known color keep what was saved
+      const map = (im.inkMap as { map?: Record<string, { name?: string; hex?: string; mix?: string }> } | undefined)?.map;
+      if (map && typeof map === "object") for (const v of Object.values(map)) {
+        if (!v || typeof v !== "object" || !v.name || v.name === "none" || v.mix) continue;
+        const hx = colorHex(v.name);
+        if (hx && /^#[0-9a-f]{6}$/i.test(hx)) v.hex = hx.toUpperCase();
+      }
       // a part of a print that is a box of its own, written as a word (Nov 9, #40400: the order check wrote supplied: "no"
       // on 11 heat transfers and the order page couldn't open): read as the yes / no it says
       for (const k of OBJ_FIELDS) {
