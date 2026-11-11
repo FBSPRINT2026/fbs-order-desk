@@ -21880,3 +21880,11 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msf-tip .bad{color:#ff9d9d}
 .ms-calm .msf-card{transition:top .12s ease,height .12s ease}
 .ms-calm .msf-card.msf-ghost{opacity:.35;border-style:dashed!important;box-shadow:none!important;pointer-events:none}
+/* Production's shop floor (Receiving, Fulfillment, Outbound): the same for SP / EMB / HP, on a slightly lighter block */
+.nav-floor{display:flex;flex-direction:column;gap:inherit;margin-top:6px;padding:3px 0;border-radius:8px;background:rgba(255,255,255,.06)}
+/* Outbound (Nov 11 2026): Ship is the Shipping Center itself, under Outbound's tabs */
+.ob-tabs{margin:10px 0}
+.ob-ship .page-head>div:first-child{display:none}
+.ob-ship .page-head{justify-content:flex-end}
+.ob-late{color:var(--danger);font-weight:700}
+.ff-steps{display:inline-flex;flex-wrap:wrap;gap:4px}.ff-steps span{border:1px solid var(--line);border-radius:4px;padding:0 6px;font-size:12px;color:var(--ink-2);white-space:nowrap}
