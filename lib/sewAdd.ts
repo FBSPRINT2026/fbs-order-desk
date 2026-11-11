@@ -20,10 +20,12 @@ export async function addSewFiles(sb: SupabaseClient, d: Pick<Design, "id" | "nu
   const { expandFiles, takeDigitized } = await import("@/lib/digitizedFiles");
   const files = await expandFiles(list);
   const stem = (n: string) => n.replace(/\.[^.]+$/, "").replace(/\s*(worksheet|sheet)$/i, "").trim().toLowerCase();
-  const dsts = files.filter((f) => /\.dst$/i.test(f.name));
-  if (!dsts.length) throw new Error("No DST in those files. The digitizer's zip should have one (the machine file).");
+  // each machine file makes a set: the DSTs, or with none, the EMBs (read for their size, stitches, threads and picture)
+  const dsts0 = files.filter((f) => /\.dst$/i.test(f.name));
+  const dsts = dsts0.length ? dsts0 : files.filter((f) => /\.emb$/i.test(f.name));
+  if (!dsts.length) throw new Error("No DST or EMB in those files. The digitizer's zip should have one.");
   // each DST with the EMB and worksheet of the same name; one DST takes everything that came with it
-  const sets = dsts.map((dst) => [dst, ...files.filter((f) => f !== dst && !/\.dst$/i.test(f.name) && (dsts.length === 1 || stem(f.name) === stem(dst.name)))]);
+  const sets = dsts.map((dst) => [dst, ...files.filter((f) => f !== dst && !dsts.includes(f) && (dsts.length === 1 || stem(f.name) === stem(dst.name)))]);
   const { data } = await sb.from("designs").select("specs").eq("id", d.id).maybeSingle();
   const sp = (data?.specs || {}) as Record<string, unknown>, em = (sp.embroidery || {}) as { files?: SewFile[] };
   const have = [...(em.files || [])], added: SewFile[] = [];

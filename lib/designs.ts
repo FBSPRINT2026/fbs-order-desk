@@ -89,7 +89,7 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   }).select("*").single();
   if (error) throw new Error(error.message);
   // a DST uploaded as the logo is its sew file too: read (size, stitches) and kept on the logo like a digitizer's file
-  if (/\.dst$/i.test(opts.file.name)) {
+  if (/\.(dst|emb)$/i.test(opts.file.name)) {
     try {
       const { takeDigitized } = await import("@/lib/digitizedFiles");
       await takeDigitized(sb, (data as Design).id, [opts.file]);
