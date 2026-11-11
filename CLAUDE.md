@@ -142,6 +142,12 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   Moving…: a job only gets the rules, worked examples, brand logos and program rate card of the end client it names
   (`trainingsForText`, `loadExamples`' same-client check, `logosOnFile(…, jobText)` / `namesBrand`, `cardForOrder`'s match
   words). A job for an end client with nothing on file is read from scratch, never as the customer's biggest client.
+  **"No" to the rules question means from scratch** (Nick, Nov 10 2026: "it doesn't know who it is, it doesn't know
+  what it is"): on the Create order card, while "This looks like a … order" is asked and after "No, use the card",
+  everything the card makes is read as a new customer's job (`SCRATCH` / `isScratch` in `lib/emailOrderShared.ts`): no
+  trainings, examples, memories, logos, past-job matching, learned styles or file guesses, standard or master mockups,
+  training defaults, program pricing or confirmed specs. Only rules or a past job staff pick by hand still count. New
+  customer knowledge in the reader or Create order goes behind `knowId` / `scratch` too.
 - **Names on pieces are the line's personalization** (Nick, Nov 10 2026: the order helper "is not using the add
   personalization tool"). Anything that makes or changes an order puts names on `GLine.persList` (what "Add
   personalization" makes, charged per name) through `persFromNames` in `lib/persNames.ts`: the order reader and the AI

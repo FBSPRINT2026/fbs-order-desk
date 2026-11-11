@@ -28,7 +28,7 @@ import { loadMemories, memoryText, loadShopRules, shopRulesText } from "@/lib/ai
 import { examplesText, groupNamesLikeBefore, loadExamples, suppliedLikeBefore } from "@/lib/ai/orderExamples";
 import { spotKey } from "@/lib/spotChange";
 import { fillFromOldNotes } from "@/lib/ai/oldJobNotes";
-import { isPicture, looksLikeSignature, oldNoteText, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
+import { isPicture, isScratch, looksLikeSignature, oldNoteText, type EODraft, type EOFile, type EOPart, type PastJob } from "@/lib/emailOrderShared";
 
 /**
  * "Create order" from a customer email. The AI reads the email AND its attachments (pictures and PDFs it looks at,
@@ -463,7 +463,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-10g";
+export const READER_REV = "2026-11-10h";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -515,21 +515,25 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // other stuff would just be reference files"); the rest are kept with the order by Create order, never read
   if (o.read) { const want = new Set(o.read); const keep = atts.filter((f) => want.has(f.path)); atts.length = 0; atts.push(...keep); }
   const told = (o.told || "").trim().slice(0, 5000);
+  // "No, use the card" (lib/emailOrderShared.ts SCRATCH): nothing learned about this customer is used; a past job staff
+  // picked themselves still is
+  const scratch = isScratch(told);
+  const knowId = scratch ? null : ((a.customer_id as string) || null);
   const [{ data: cust }, recent, mems] = await Promise.all([
     a.customer_id ? admin.from("customers").select("id, company, name, email, price_type, notes").eq("id", a.customer_id).maybeSingle() : Promise.resolve({ data: null }),
-    pastJobs(admin, a.customer_id as string | null),
-    loadMemories(admin, (a.customer_id as string) || null).catch(() => []),
+    scratch && !o.jobRef && !(o.jobRefs || []).length ? Promise.resolve([] as PastJob[]) : pastJobs(admin, a.customer_id as string | null),
+    loadMemories(admin, knowId).catch(() => []),
   ]);
   // a job staff picked or named goes first, so it's J1 (and jobs named in what staff taught about this customer)
   // their logos on file and brand standards (rule 4g)
-  const onFile = a.customer_id ? await logosOnFile(admin, a.customer_id as string, `${told} ${String(a.subject || "")} ${String(a.body || "").slice(0, 6000)} ${atts.map((f) => f.name).join(" ")}`).catch(() => null) : null;
-  const memText = [memoryText(mems, String(cust?.company || cust?.name || "this customer")), shopRulesText(await loadShopRules(admin).catch(() => []))].filter(Boolean).join("\n\n");
+  const onFile = knowId ? await logosOnFile(admin, knowId, `${told} ${String(a.subject || "")} ${String(a.body || "").slice(0, 6000)} ${atts.map((f) => f.name).join(" ")}`).catch(() => null) : null;
+  const memText = [scratch ? "" : memoryText(mems, String(cust?.company || cust?.name || "this customer")), shopRulesText(await loadShopRules(admin).catch(() => []))].filter(Boolean).join("\n\n");
   // numbers in the email (or the ClickUp job's notes) too: "Reorder from 86798" names the job by their PO
   const said = `${String(a.subject || "")} ${String(a.body || "").slice(0, 3000)} ${atts.filter((f) => !CAMERA_NAME.test(f.name)).map((f) => f.name.replace(/[_-]+/g, " ")).join(" ")}`;
   // orders staff finished from this customer's past emails, the closest first (lib/ai/orderExamples.ts): read the same way
   // the shop's own trainings for this customer that this job is for (lib/orderTrainings.ts, Oct 30: a big client's
   // playbook, one per end client), in full
-  const trns0 = a.customer_id ? trainingsForText(await customerTrainings(admin, a.customer_id as string).catch(() => []), `${told} ${said} ${String(a.body || "").slice(3000, 6000)}`) : [];
+  const trns0 = knowId ? trainingsForText(await customerTrainings(admin, knowId).catch(() => []), `${told} ${said} ${String(a.body || "").slice(3000, 6000)}`) : [];
   // rules staff picked on the Create order card when none were found ("[training:<id>]", Nov 6): any customer's, in full
   const pickedRules = [...new Set([...String(told || "").matchAll(/\[training:([0-9a-f-]{36})\]/gi)].map((m) => m[1]))].filter((id) => !trns0.some((t) => t.id === id));
   const trns = pickedRules.length ? [...trns0, ...(((await admin.from("order_trainings").select("id, customer_id, name, when_words, rules, updated_at, updated_by, defaults").in("id", pickedRules)).data || []) as typeof trns0)] : trns0;
@@ -538,8 +542,8 @@ export async function suggestEmailOrder(admin: SupabaseClient, activityId: strin
   // confirmation are put on the order after it's made, never read (Oct 31, #40311's next cart: "ORDER DEFAULTS: Reorder"
   // made the reader treat a new cart as a reorder of an old job and ask about its files)
   const trainText = trns.map((t) => { const d = t.defaults || {}; const dft = defaultsText({ delivery_method: d.delivery_method, ship_method: d.ship_method }); return `${trns.length > 1 || t.name ? `[${t.name || "Training"}]\n` : ""}${t.rules.trim().slice(0, 8000)}${dft ? `\n\nSHIPPING DEFAULT (unless the job says otherwise): ${dft}.` : ""}`; }).join("\n\n").slice(0, 12000);
-  const exText = (trainText ? `HOW TO MAKE ${String(trns.map((t) => t.name).filter(Boolean).join(" / ") || cust?.company || cust?.name || "THIS CUSTOMER").toUpperCase()}'S ORDERS (the shop's own training for this customer: follow it exactly; it wins over your general rules where they differ):\n${trainText}\n\n` : "") + examplesText(await loadExamples(admin, (a.customer_id as string) || null, `${told} ${said}`).catch(() => []), String(cust?.company || cust?.name || "this customer"));
-  let past = [...await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => []), ...recent];
+  const exText = (trainText ? `HOW TO MAKE ${String(trns.map((t) => t.name).filter(Boolean).join(" / ") || cust?.company || cust?.name || "THIS CUSTOMER").toUpperCase()}'S ORDERS (the shop's own training for this customer: follow it exactly; it wins over your general rules where they differ):\n${trainText}\n\n` : "") + examplesText(knowId ? await loadExamples(admin, knowId, `${told} ${said}`).catch(() => []) : [], String(cust?.company || cust?.name || "this customer"));
+  let past = [...(scratch ? [] : await jobsNamed(admin, `${told} ${mems.map((m) => m.text).join(" ")} ${said}`, (a.customer_id as string) || null, recent).catch(() => [])), ...recent];
   // the past job whose mockup is the picture in their email (app/api/inbox/order/look): first, and said so
   const lookRef = ((a as { meta?: { look?: { ref?: string; why?: string } } }).meta?.look?.ref) || "";
   if (lookRef) {
@@ -609,7 +613,7 @@ Never invent prices or dates. Anything unclear or missing goes in questions, wri
 11. CHECK WITH STAFF FIRST (Oct 22, Nick: "take steps to get things right, but when there's a clear contradiction, or I can't find this product, or there's a clear anything, you need to just ask… I'm processing this for the first time, and then remember it moving forward"). Before the order is made, ask the shop in check_with_staff about anything that doesn't add up, with your best guess: a note or spec that contradicts the order ("best fit for onesie" with no onesies in it), two files that disagree (PO vs work order sizes, quantities, colors), a style or color written oddly or not one you know ("NeonBlue": Neon Blue?), a garment you can't identify, a file you can't place, a size grid that doesn't add up, a print with no location or art. Don't ask what the files settle (a color count one more than the inks named, on a shirt that isn't white, is the white underbase: not a question, set colors to the named inks), and don't ask what staff already told you or taught you about this customer. Never copy a contradicting note into the order as if it applied: ask instead. Keep each question to one short line (15 words at most) and the guess to a few words; one question per thing; no explanations. Say which group it's about (about), and give choices to click, with their files when the answer is a file (which art goes on Variation 2: both logos). Give every group its shown_in when a file pictures it. Don't repeat the question in the print notes either.
 12. READ THE PAPERWORK'S PICTURES LIKE A PERSON (Oct 23, Nick on Logotology's Work_Order_91537: "page two shows the blue gray logo across the front of a shirt… that's the same as listing the imprint color… page four shows me it's all black"). A work order, PO or proof often has no ink names, only a picture of each variation's print (the logo as it prints, often on a shirt). That picture IS the spec: which art goes on which variation, where, and in what colors. Match each variation to the art file that looks like its picture (the blue/gray logo → SS-logo.png; the all-black logo → SS-logo-black.pdf) and don't ask about it. When the picture's colors are the art file's own colors, leave inks empty (the art's colors are used); when the picture shows the art in different colors than the file (the blue logo printed all black), say so in inks by plain color name ("Black"). Never ask staff to confirm colors a picture already shows. Art sitting on a solid box (a black square behind the logo): the box isn't an ink when it's the shirt's color; count only the other colors, and don't ask about the box (Create order asks that itself, with the picture). The same for any color in the art that's the shirt's own color (black lines in the art on a black shirt, yellow on a yellow shirt; not a heathered shirt): it doesn't print, the shirt shows through, so never count it as an ink and never ask about it (Oct 23, Nick: "black on a black shirt, you should always think I'm removing it").
 When staff tell you something about this email (which past job it is, that it's a reorder, what the customer wants changed, colors used before), it's fact: follow it over your own reading.`;
-  const custText = cust ? `Customer: ${cust.company || cust.name} <${cust.email || a.from_email}>. ${cust.price_type === "wholesale" ? "WHOLESALE customer: they supply their own garments (we only print)." : "Retail customer: we normally supply the garments."}${cust.notes ? ` Notes on file: ${String(cust.notes).slice(0, 400)}` : ""}` : `Sender ${a.from_email} isn't a customer on file yet.`;
+  const custText = cust ? `Customer: ${cust.company || cust.name} <${cust.email || a.from_email}>. ${cust.price_type === "wholesale" ? "WHOLESALE customer: they supply their own garments (we only print)." : "Retail customer: we normally supply the garments."}${cust.notes && !scratch ? ` Notes on file: ${String(cust.notes).slice(0, 400)}` : ""}` : `Sender ${a.from_email} isn't a customer on file yet.`;
   const prompt = `${custText}
 
 ${past.length ? `This customer's past jobs (newest first):\n${jobsText(past)}` : "No past jobs on file for this customer."}
@@ -617,7 +621,7 @@ ${onFile?.text ? `\n${onFile.text}\n` : ""}
 Attached files:
 ${listing.join("\n") || "(none)"}
 
-${otherText ? `OTHER RECENT EMAILS WITH THIS CUSTOMER (other subjects: use them only where they're clearly about this same order):
+${otherText && !scratch ? `OTHER RECENT EMAILS WITH THIS CUSTOMER (other subjects: use them only where they're clearly about this same order):
 ${otherText}
 
 ` : ""}${convText ? `THE CONVERSATION (every email in it but the one below, oldest first; what was decided along the way counts, the latest decision wins${after.length ? "; the emails dated after the one below are newer and override it" : ""}):
@@ -984,7 +988,7 @@ ${staffSays}` : ""}`;
         // where and how big the customer's mockup shows it, so our Mockup Creator rebuilds the same picture
         let w = +(pr.width_in || 0), dr = +(pr.drop_in ?? -1);
         if (!(w || dr >= 0) || im.size) return;
-        const fix = w ? correction(lessons, im.location, body.kind, (a.customer_id as string) || null) : null;
+        const fix = w ? correction(lessons, im.location, body.kind, knowId) : null;
         if (fix) { w *= fix.factor; if (dr >= 0) dr = Math.max(0, dr + fix.dropAdd); }
         // a centered print read wider than its location allows is the bigger location, not a shrunken small one
         // (an 8.5" toddler front called "Center Chest" was cut to that spot's 3.5" max)
@@ -1127,23 +1131,23 @@ ${staffSays}` : ""}`;
   if (job?.ref.startsWith("a:")) await fillFromOldNotes(admin, settings, draft, by, a.customer_id).catch((e) => console.warn("fillFromOldNotes", e));
   // the program's master mockups (lib/masterMockups.ts): a garment or design a program price covers goes straight into
   // its mockup's group, with the mockup's prints; only the garments, colors and quantities come from the paperwork
-  if (a.customer_id && draft.kind === "new") {
+  if (knowId && draft.kind === "new") {
     const about = `${a.subject || ""} ${String(a.body || "").slice(0, 4000)} ${draft.nickname || ""}`;
     const did = applyMasters(draft, await loadMasters(admin, a.customer_id as string, about).catch(() => ({ leads: "garment" as const, masters: [] })), about);
     if (did.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}Master mockups: ${did.join(", ")}.`.slice(0, 1200);
   }
   // a garment named by product, no style number: the style the shop put that product on before (lib/ai/stylesFromHistory.ts)
-  if (a.customer_id) {
+  if (knowId) {
     const got = await stylesFromHistory(admin, a.customer_id as string, draft).catch((e) => { console.warn("stylesFromHistory", e); return [] as string[]; });
     if (got.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}Styles: ${got.join("; ")}.`.slice(0, 1600);
   }
   // their own heat transfers, the way the orders staff last marked right had them (lib/ai/orderExamples.ts suppliedLikeBefore)
-  if (a.customer_id) {
+  if (knowId) {
     const n = await suppliedLikeBefore(admin, a.customer_id as string, draft.groups).catch((e) => { console.warn("suppliedLikeBefore", e); return 0; });
     if (n) draft.summary = `${draft.summary}${draft.summary ? " " : ""}Heat transfers: customer supplied, like their last orders.`.slice(0, 1600);
   }
   // each garment's description checked against its style: blank, or naming a logo instead of the garment → the style's name
-  await describeFromStyles(admin, (a.customer_id as string) || null, draft).catch((e) => { console.warn("describeFromStyles", e); return [] as string[]; });
+  await describeFromStyles(admin, knowId, draft).catch((e) => { console.warn("describeFromStyles", e); return [] as string[]; });
   // an embroidered logo on file with no sew file yet (Oct 31, #40334: a hat's Stacked logo came in with no version, no
   // file and 11" wide, its print never tied to the logo by number): filled from the logo like any other
   const fillSew = () => {
@@ -1180,7 +1184,7 @@ ${staffSays}` : ""}`;
     const cwFixed = applyColorwayFixes(draft.groups, sourceCheck(paper, draft.groups, ctx), ctx.designs);
     draft.groups = cwFixed.groups;
     // named the way staff name the same logos (lib/ai/orderExamples.ts groupNamesLikeBefore), not for their spot
-    if (a.customer_id && onFile) await groupNamesLikeBefore(admin, a.customer_id as string, draft.groups, { designs: onFile.designs, brands: onFile.brands as never }).catch((e) => console.warn("groupNames", e));
+    if (knowId && onFile) await groupNamesLikeBefore(admin, a.customer_id as string, draft.groups, { designs: onFile.designs, brands: onFile.brands as never }).catch((e) => console.warn("groupNames", e));
     const left = sourceCheck(paper, draft.groups, ctx);
     const didAll = [...moved.did, ...fixed.did, ...logoFixed.did, ...cwFixed.did];
     if (didAll.length) draft.summary = `${draft.summary}${draft.summary ? " " : ""}From the paperwork: ${didAll.join("; ")}.`.slice(0, 1800);
