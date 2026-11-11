@@ -82,8 +82,12 @@ export const lightness = (hex: string) => labOf(...rgbOf(hex))[0];
 export const isDark = (hex: string) => lightness(hex) < 55;
 /** a white shirt (the only one printed without an underbase, by default) */
 export const isWhiteShirt = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return L > 90 && Math.hypot(a, b) < 10; };
-/** the shop's rule (Nicholas, Oct 5): every shirt gets a white underbase except a white one */
-export const baseShirt = (hex: string) => !isWhiteShirt(hex);
+/** white or very pale (cream, ivory, natural): the only shirts printed without an underbase (Nick, Nov 11: "unless it's a
+ *  white shirt or a very light shirt like a cream, you're always going to underbase the colors") */
+export const paleShirt = (hex: string) => { const [L, a, b] = labOf(...rgbOf(hex)); return isWhiteShirt(hex) || (L >= 88 && Math.hypot(a, b) < 18); };
+/** the shop's rule (Nicholas, Oct 5; Nick, Nov 11): every shirt gets a white underbase except a white or cream one,
+ *  unless the print itself says no underbase */
+export const baseShirt = (hex: string) => !paleShirt(hex);
 const d2 = (a: number[], b: number[]) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 
 /** the standard ink closest to a color, and how close (CIEDE2000) */

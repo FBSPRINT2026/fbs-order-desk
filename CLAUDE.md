@@ -163,6 +163,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (`custSeps.films`), and the color count and inks come off their order form and mockup. A PSD or other extra file they
   send is reference only. Never build a Mockup Creator logo from their files or swap the card's pick for their art file
   (that read #50030's front as 1 white color and put the PSD on the back).
+- **Underbase** (Nick, Nov 11 2026: "that's the rule"): every shirt gets a white underbase under the colors except a white
+  or very pale one (cream, ivory, natural: `paleShirt` in `lib/separate.ts`), unless the print says no underbase (the
+  order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
+  those pale ones only. Underbase and print order go by the ink's real color (`printShade`), not the color the art is
+  drawn in; one-color art prints as the one ink its print names.
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **A sent version isn't locked until the customer answers** (Nick, Nov 10 2026: "until it's approved or declined, it

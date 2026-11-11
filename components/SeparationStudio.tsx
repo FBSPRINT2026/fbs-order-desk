@@ -474,11 +474,16 @@ export default function SeparationStudio({ id }: { id: string }) {
     // a new separation starts from what the coach has learned (Make Separations Better, last 30 days)
     if (!saved.inks?.length) {
       const { data: ls } = await sb.from("sep_lessons").select("lesson, default_setting").eq("active", true).gt("expires_at", new Date().toISOString()).not("default_setting", "is", null).order("created_at");
-      const meth = (saved.method as string) || "spot", dk = isDark(garment), p: Partial<Studio> = {}, used: string[] = [];
+      // "light" in a lesson means a shirt that gets no underbase by the shop's rule (white, cream), not every
+      // shirt lighter than navy: a "light shirts: underbase off" lesson turned it off on gray, teal and kelly green (Nov 11)
+      const meth = (saved.method as string) || "spot", dk = !garment || baseShirt(garment), p: Partial<Studio> = {}, used: string[] = [];
       for (const l of (ls || []) as { lesson: string; default_setting: LessonDefault }[]) {
         const d = l.default_setting; if (!d || !lessonFits(d, meth, dk) || d.setting === "method" || d.setting === "addMiddle" || d.setting === "colors") continue;
         (p as Record<string, unknown>)[d.setting] = d.value; used.push(l.lesson);
       }
+      // the print says it (the order's underbase switch): that wins over anything learned
+      if (im?.underbase === false) p.underbase = "off"; else if (im?.underbase === true) p.underbase = "on";
+      if (!used.length && p.underbase) setSt((s) => ({ ...s, underbase: p.underbase! }));
       if (used.length) { setSt((s) => ({ ...s, ...p })); lessonNote.current = `Started from what the coach learned: ${used.join(" · ")}`; setMsg(lessonNote.current); }
     }
     // not on film yet: the inks follow the mockup (a separation opened before the mockup changed the colors)
