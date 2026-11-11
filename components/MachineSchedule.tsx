@@ -680,6 +680,15 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
    * got these jobs. Would you like me to run them all together?"): one offer per set, to run them back to back on the
    * press and day that already has the most of them, where it fits each job and keeps it on time.
    */
+  /**
+   * Two jobs back to back show as one group only when they're one run: the same artwork and the same in-hands date
+   * (Nov 11, Nick: "the only thing that should be grouped is jobs with the exact same artwork that are due at the exact
+   * same time"). Same customer alone is not a group (Dear Heart's Take Heart and Count Joy are separate jobs).
+   */
+  const oneRun = (a: Card, b: Card) => {
+    if (a.job.kind === "h" || b.job.kind === "h" || !a.job.due || a.job.due !== b.job.due) return false;
+    const aa = artsOf(a.need); return [...artsOf(b.need)].some((x) => aa.has(x));
+  };
   const artOffers = useMemo(() => {
     if (!s) return [] as { key: string; cards: Card[]; machine: Machine; day: string; saves: number }[];
     const by = new Map<string, Card[]>();
@@ -1781,7 +1790,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   const runs: (typeof items)[] = [];
                   for (const x of [...items].sort((a, b) => a.y1 - b.y1)) {
                     const last = runs[runs.length - 1], lx = last?.[last.length - 1];
-                    if (lx && x.g.c.key !== pvKey && lx.g.c.key !== pvKey && !(drag?.card && (x.g.c.key === drag.card.key || lx.g.c.key === drag.card.key)) && x.g.c.job.kind !== "h" && lx.g.c.job.kind !== "h" && x.g.c.job.customer && lx.g.c.job.customer === x.g.c.job.customer && x.y1 - lx.y2 < 6) last.push(x); else runs.push([x]);
+                    if (lx && x.g.c.key !== pvKey && lx.g.c.key !== pvKey && !(drag?.card && (x.g.c.key === drag.card.key || lx.g.c.key === drag.card.key)) && oneRun(lx.g.c, x.g.c) && x.y1 - lx.y2 < 6) last.push(x); else runs.push([x]);
                   }
                   return runs.map((r) => {
                     if (r.length === 1) { const x = r[0]; return flowCard(x.g, x.y1, x.y2, (x.g.c.key === pvKey && pvLay ? "pv:" : "") + x.g.c.key + x.g.part); }
@@ -1790,7 +1799,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     const pcs = r.reduce((t, x) => t + x.g.c.need.qty, 0), mins = r.reduce((t, x) => t + x.g.c.minutes, 0);
                     return (
                       <div key={id} className={"msf-run " + r[0].g.c.need.type + (open ? " open" : "")} style={{ top: top + 1, ...(open ? { minHeight: H } : { height: H }) }}>
-                        <div className="msf-run-h"><b>{abbrCo(r[0].g.c.job.customer)}</b><span>{r.length} jobs · {pcs.toLocaleString()} pcs · {fmtMin(mins)}</span></div>
+                        <div className="msf-run-h"><b>{abbrCo(r[0].g.c.job.customer)}</b><span>{r.length} jobs · same art · {pcs.toLocaleString()} pcs · {fmtMin(mins)}</span></div>
                         {show.map((x) => { const gl = glance(x.g.c.need, x.g.c.minutes); return (
                           <div key={x.g.c.key + x.g.part} role="button" tabIndex={0} draggable data-k={x.g.c.key} data-d={x.g.day} className={"msf-run-r" + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
                             onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(x.g.c); } }}
@@ -1847,7 +1856,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           const js = joined(m, d);
           if (!js.length) return null;
           const grp: (typeof js)[] = [];
-          for (const x of js) { const l = grp[grp.length - 1]; if (l && x.g.c.job.customer && l[0].g.c.job.customer === x.g.c.job.customer && x.g.c.job.kind !== "h" && l[0].g.c.job.kind !== "h") l.push(x); else grp.push([x]); }
+          for (const x of js) { const l = grp[grp.length - 1]; if (l && oneRun(l[l.length - 1].g.c, x.g.c)) l.push(x); else grp.push([x]); }
           return (
             <section key={m.id} className="msf-up-m">
               <div className="msf-up-mh"><b>{crewOf(m)?.leader || shortName(m)}</b>{crewOf(m) ? <span> · {shortName(m)}</span> : null}<span className="faint"> · {js.length} job{js.length === 1 ? "" : "s"} · {fmtMin(used(m, d))}</span></div>

@@ -22010,3 +22010,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msai-nav{all:unset;cursor:pointer;width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink-3);font-size:13px}
 .msai-b{min-width:0}.msai-t{font-size:15px;font-weight:700;color:var(--ink)}.msai-s{font-size:13px;color:var(--ink-2);margin-top:2px}
 .msai-go{align-self:flex-start}
+/* schedule cards are one color: a plain edge all round, no blue / purple / orange / red left side (Nov 11, Nick: "it just
+   needs to be one color… let the dots and stuff do the talking"). Late shows in its number and Late tag; holds stay dashed */
+.ms-calm .msf-card.ms-blk:not(.bar),.ms-calm .msf-card.ms-blk.late:not(.bar),.ms-calm .msf-card.ms-blk.msh-late:not(.bar),.ms-calm .msf-card.ms-blk.embroidery:not(.bar),.ms-calm .msf-card.ms-blk.heat:not(.bar),.msf-run{border-left:1px solid var(--line)!important}
+.ms-calm .msf-card.ms-blk.hold:not(.bar){border-left:1.5px dashed color-mix(in srgb,var(--ink) 35%,transparent)!important}
