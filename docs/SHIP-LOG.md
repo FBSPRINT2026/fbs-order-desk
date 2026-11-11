@@ -83,3 +83,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 10 8:17pm · 1.3.286 · Nick · Logo pictures are always cropped to the art: a PDF/AI logo whose picture is made in the Mockup Creator (art the Order helper saved on the server) or a replaced preview is cropped like every other; the Mockup Creator crops any older whole-page picture on its logos when it opens
 - Nov 10 8:18pm · 1.3.287 · Nick · Ink colors: Contact Blue shows as the can's color (#12A8EA, was nearly royal); the Ink Room's Wilflex Contact Blue swatch matched too
 - Nov 10 8:24pm · 1.3.288 · Nick · Ink colors: a print's saved ink colors show as each ink is now (a corrected ink like Contact Blue updates on every order's mockup, order page, production and separations); hand-mixed inks keep theirs
+- Nov 10 8:24pm · 1.3.289 · Nick · Contact Blue shows as #00AEEF (Nick)
