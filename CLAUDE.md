@@ -53,6 +53,9 @@ newest code, ship small and often with `SHIP_BY=<Nick or Amanda> bash scripts/sh
   when it's wider than its box or a cell is narrower than a word in it (a side panel squeezing the page, a phone), the
   table becomes stacked rows with each column's name in front, and goes back when there's room. Don't build a
   table-only phone layout or a sideways scroll; put `data-nofit` only on a table that must never stack.
+  Columns never run into each other (Nick, Nov 10 2026): don't give a column a fixed width its contents can outgrow
+  ("Nov 11 · tomorrow" in a 96px Due column); TableFit also lays out by contents any `table-layout:fixed` table whose
+  cell spills into the next column (`tbl-fitcols`).
 - **A side panel squeezes the page like a narrower window** (Nick, Nov 3: "when you scale down the job center… it looks
   good but when you create an order in that panel comes up… it acts completely different"). `components/DockFit.tsx`,
   mounted for every page, moves every `(max-width/min-width)` rule by the open panel's width (`.dla-bg.dock`), so the

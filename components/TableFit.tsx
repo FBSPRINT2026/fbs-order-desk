@@ -10,6 +10,11 @@ import { useEffect } from "react";
  * when a table doesn't fit its box (it's wider than the box, or a cell is narrower than the longest word in it), it
  * turns into stacked rows: each row a block, each cell on its own line with its column's name in front. When there's
  * room again it goes back to a table. Nothing for a page to do; a table that must stay a table gets data-nofit.
+ *
+ * Columns never run into each other (Nov 10, Nick: "they keep collapsing… they should just always be good so they don't
+ * cross over on each other" — "Nov 11 · tomorrow" printed over the Files column): a table with set column widths
+ * (table-layout: fixed) whose cell spills past its column is laid out by its contents instead (tbl-fitcols), so each
+ * column is as wide as what's in it; only if it then doesn't fit does it stack.
  * The printed pages (/print) are left alone.
  */
 const SEL = "main table, .main table, [role=dialog] table, .ap table";
@@ -89,12 +94,28 @@ function squished(t: HTMLTableElement, box: HTMLElement): boolean {
   return false;
 }
 
+/** a cell whose words run past its column into the next one (set column widths with text kept on one line) */
+function spills(t: HTMLTableElement): boolean {
+  if (getComputedStyle(t).tableLayout !== "fixed") return false;
+  const rows = [...t.querySelectorAll<HTMLTableRowElement>("thead > tr, tbody > tr")].slice(0, 30);
+  for (const tr of rows) for (const c of [...tr.cells]) {
+    if (c.colSpan > 1 || !c.firstChild) continue;
+    const cs = getComputedStyle(c);
+    if (cs.textOverflow === "ellipsis" || cs.display === "none") continue;
+    if (c.scrollWidth > c.clientWidth + 1) return true;
+  }
+  return false;
+}
+
 function fit(t: HTMLTableElement) {
   if (t.closest("[data-nofit]") || location.pathname.startsWith("/print")) return;
   const box = (t.parentElement as HTMLElement) || t;
   label(t);
   const was = t.classList.contains("tbl-stack");
   t.classList.remove("tbl-stack");
+  // set column widths first, as the page made them; laid out by its contents when a cell spills into the next column
+  if (t.classList.contains("tbl-fitcols")) t.classList.remove("tbl-fitcols");
+  if (spills(t)) t.classList.add("tbl-fitcols");
   const bad = squished(t, box);
   if (bad) t.classList.add("tbl-stack");
   if (bad !== was) t.dispatchEvent(new CustomEvent("tablefit", { bubbles: true, detail: { stacked: bad } }));
