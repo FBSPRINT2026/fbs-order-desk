@@ -211,3 +211,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 10:06am · 1.3.415 · Nick · Job card: wider, every mockup in a grid of 4, run time and goods side by side, garments as style + color, inks without PMS, counted time with its day, PO hidden when it's the job name; Split (pick spots and the press) and Unite
 - Nov 12 10:09am · 1.3.416 · Nick · Job card: due date reads 'Due Thu 11/12' (the weekday was doubled)
 - Nov 12 10:15am · 1.3.417 · Nick · Right click: Complete beside Pause, a wider time box, 'When it's done, the order goes to' Fulfillment / Ready (default) / Completed; Pause asks why and what's done so far spot by spot (Done / Part with pieces / Not yet)
+- Nov 12 10:24am · 1.3.418 · Nick · Schedule: a job marked complete stays on the board grayed, even after its order moves to Ready or Completed

@@ -549,7 +549,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
   const load = useCallback(async () => {
     const sb = createClient();
-    const [{ data: st }, { data: o }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }, { data: ho0 }] = await Promise.all([
+    const [{ data: st }, { data: o0 }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }, { data: ho0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       // not a job on hold for payment: production gets it once it's paid (lib/holds.ts)
       sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times, order_type").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production", "fulfillment"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
@@ -560,6 +560,17 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       sb.from("production_extra_shifts").select("id, machine, crew_id, day, start_min, end_min, note").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
       sb.from("production_holds").select("*").eq("status", "planned").order("due_date"),
     ]);
+    // a job marked complete stays on the schedule, grayed (Nov 12, Nick: "it doesn't go away… we still want to see it"),
+    // even once its order has moved on to Fulfillment, Ready or Completed
+    let o = (o0 || []) as Record<string, unknown>[];
+    {
+      const have = new Set(o.map((x) => x.id as string));
+      const doneIds = [...new Set(((sl0 || []) as Slot[]).filter((x) => x.status === "done" && x.order_id && !have.has(x.order_id)).map((x) => x.order_id!))];
+      for (let i = 0; i < doneIds.length; i += 150) {
+        const { data: more } = await sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times, order_type").in("id", doneIds.slice(i, i + 150)).is("discarded_at", null);
+        o = [...o, ...((more || []) as Record<string, unknown>[])];
+      }
+    }
     // what each style number is (a line that only says "562M" is timed as the sweatshirt it is; Nov 12, #50036)
     const stys = new Set<string>();
     for (const x of (o || []) as { groups?: Group[] | null }[]) for (const g of x.groups || []) for (const l of g.lines || []) if (l.style) stys.add(String(l.style));
