@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { inflateRawSync } from "node:zlib";
 import { Canva, CanvaError, NO_ACCESS_MSG, canvaConnected, designIdFrom } from "@/lib/canva/client";
 import { exportBoth, fileTitle } from "@/lib/canva/save";
+import { isPrintavoLink, readPrintavoPage } from "@/lib/printavoLink";
 
 /**
  * Artwork sent as a LINK instead of an attachment (Oct 9, Nick: "she sent me a Canva link… learn to work with Canva").
@@ -21,7 +22,7 @@ import { exportBoth, fileTitle } from "@/lib/canva/save";
  * the Mockup Creator use it the same way.
  */
 export type LinkFile = { name: string; path: string; type: string; size: number; from_link: string; source: "canva-preview" | "canva-export" | "download"; note?: string };
-type Found = { url: string; final: string; kind: "canva" | "dropbox" | "drive" | "file" | "other"; saved?: LinkFile; /** the Canva export's second file (PDF + PNG) */ also?: LinkFile; /** the rest of a shared folder's files */ more?: LinkFile[]; error?: string };
+type Found = { url: string; final: string; kind: "canva" | "dropbox" | "drive" | "file" | "printavo" | "other"; saved?: LinkFile; /** the Canva export's second file (PDF + PNG) */ also?: LinkFile; /** the rest of a shared folder's files */ more?: LinkFile[]; error?: string };
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 const ART_TYPE = /^(image\/|application\/(pdf|postscript|illustrator|zip|x-zip|octet-stream)|image\/svg)/i;
@@ -144,6 +145,7 @@ const kindOf = (u: string): Found["kind"] => {
   try {
     const h = new URL(u).hostname;
     if (/(^|\.)canva\.com$/i.test(h) && /\/design\//i.test(u)) return "canva";
+    if (isPrintavoLink(u)) return "printavo";
     if (/(^|\.)dropbox(usercontent)?\.com$/i.test(h)) return "dropbox";
     if (/drive\.google\.com|docs\.google\.com/i.test(h)) return "drive";
     if (/\.(png|jpe?g|gif|webp|svg|pdf|ai|eps|zip|tiff?|xlsx|xlsm|docx|pptx|csv)(\?|$)/i.test(new URL(u).pathname)) return "file";
@@ -299,6 +301,30 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
     const f: Found = { url, final, kind };
     found.push(f);
     if (kind === "other") continue;
+    // another shop's Printavo order page: the order as their work order (text), each line's pictures, their art files
+    if (kind === "printavo") {
+      if (have.has(final)) continue;
+      try {
+        const p = await readPrintavoPage(final);
+        const saved: LinkFile[] = [];
+        const put = async (name: string, buf: Buffer, type: string, note?: string) => {
+          const path = `emails/${a.customer_id || "leads"}/${Date.now().toString(36)}-${saved.length}-${name.replace(/[^\w.\- ()#]+/g, "_").slice(-120)}`;
+          const { error } = await admin.storage.from("proofs").upload(path, buf, { contentType: type, upsert: false });
+          if (error) { f.error = error.message; return; }
+          saved.push({ name, path, type, size: buf.length, from_link: final, source: "download", ...(note ? { note } : {}) });
+        };
+        await put(`${p.title} (their Printavo).txt`, Buffer.from(p.text, "utf8"), "text/plain", "The order as it reads on their Printavo page (their prices left out).");
+        for (const x of p.files) {
+          const got = await download(x.url, MAX, KEEP_TYPE).catch(() => null);
+          if (!got) continue;
+          const ext = /\.[a-z0-9]{2,4}$/i.test(x.name) ? "" : got.type.includes("png") ? ".png" : got.type.includes("pdf") ? ".pdf" : /jpe?g/.test(got.type) ? ".jpg" : got.type.includes("webp") ? ".webp" : "";
+          const name = x.name + ext;
+          await put(name, got.buf, /octet-stream|binary/i.test(got.type) ? typeByName(name) : got.type);
+        }
+        if (saved.length) { f.saved = saved[0]; f.more = saved.slice(1); }
+      } catch (e) { f.error = e instanceof Error ? e.message : String(e); }
+      continue;
+    }
     if (kind === "canva" && canvaOn) {
       if (exported.has(final)) continue;
       // the design itself, through the shop's Canva account: PDF (print) + see-through PNG (mockup)
