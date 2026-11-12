@@ -185,3 +185,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:28am · 1.3.389 · Nick · Schedule on a phone: today's jobs per press, done or not (Done / Running / Next / Waiting / Late start), job names, day buttons, Screen/Emb/Heat and My jobs; no planning tools
 - Nov 12 8:28am · 1.3.390 · Nick · Phone schedule: its styles (press cards, status pills, day buttons, summary)
 - Nov 12 8:29am · 1.3.391 · Nick · Schedule shows the whole day from the first crew in (live clock on or off); the already-past tint sits behind the jobs, not over them
+- Nov 12 8:32am · 1.3.392 · Nick · Schedule's day so far (option C): a bar per press on top (done of today's, on pace / behind), done jobs grayed with the number struck and the time, printing job green with how far, Not started in red; no gray shade over the past

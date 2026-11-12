@@ -1509,7 +1509,6 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             {(m.down?.[day] || []).filter((x) => !x[4]).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
               ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
               : <button type="button" key={"dn" + a} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, day, a), machine: m.id, day, a, b, why }); }} style={{ top: ((a - vS) / 60) * HOUR_PX, height: Math.max(16, ((b - a) / 60) * HOUR_PX) }} title={`${m.name} down ${clockLong(a)} – ${clockLong(b)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day, start: a })}><b>Down</b> {clock(a)}–{clock(b)} · {why}</button>; })}
-            {(day < today || (day === today && now.min > vS)) && <div className="ms-pastv" style={{ height: ((Math.min(day < today ? vE : now.min, vE) - vS) / 60) * HOUR_PX }} />}
             {day === today && now.min >= vS && now.min <= vE && <div className="ms-now" style={{ top: ((now.min - vS) / 60) * HOUR_PX }} />}
             {(() => {
               // same-art jobs run back to back: one box around the run (option G, Nov 9); when its jobs are too short to read
@@ -1892,21 +1891,53 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     ); }
     const num = <b className={"msf-n" + (segLate(g) ? " late" : "")}>{whyEl(g.c)}{dotEl(g.c, g)}{numLink(g.c.job)}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
     return (
-      <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
+      <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + (notYet(g) ? " mdy-ny" : "") + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
         onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(g.c); } }}
         onContextMenu={(e) => { e.preventDefault(); setLockMenu({ c: g.c, g, x: e.clientX, y: e.clientY }); }}>
-        <span className="msf-1">{num}{tagOf(g)}{flags(g.c.job)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()}</span> : null}</span>
+        <span className="msf-1">{num}{tagOf(g)}{flags(g.c.job)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{dayState(g)}{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()}</span> : null}</span>
         {lines === 2 ? <span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : ""}<span className="msf-x">{g.c.job.customer ? " · " : ""}{gl.colors} · {gl.units.toLocaleString()} · {gl.run}</span></span> : null}
         {mv ? <span className={"msf-bt" + (mv.late ? " bad" : "")}>{mv.txt}</span> : null}
         {lines === 3 ? <><span className="msf-2">{holdTag(g.c.job)}{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.customer ? name : g.c.need.label}</span><span className="msf-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}</span></> : null}
       </div>
     );
   };
+  /** how a job on the board is doing today (Nov 12, Nick, option C: "see the day… what we've completed and where it's at"):
+   *  done (with the time), printing (how far), or not started when its start has gone by */
+  const notYet = (g: Seg) => g.day === today && g.part === 1 && g.c.job.kind !== "h" && (!g.c.slot || g.c.slot.status === "scheduled" || g.c.slot.status === "paused") && g.start + 15 < now.min;
+  const dayState = (g: Seg) => {
+    const st = g.c.slot?.status;
+    if (st === "done") { const f = g.c.slot?.finished_at; return <em className="mdy-st ok">{f ? "✓ " + new Date(f).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p") : "✓ Done"}</em>; }
+    if (st === "running") return <em className="mdy-st run">Printing{g.c.slot?.progress ? ` · ${Math.round(+g.c.slot.progress * 100)}%` : ""}</em>;
+    if (notYet(g)) return <em className="mdy-st bad">Not started</em>;
+    return null;
+  };
+  /** each press's day so far: jobs done of today's, and how far behind it is (the running job against where it should be,
+   *  or a job whose start has gone by) */
+  const dayScore = (m: Machine) => {
+    const seen = new Map<string, Seg>();
+    for (const g of at(m, today)) if (g.c.job.kind !== "h" && !seen.has(g.c.key)) seen.set(g.c.key, g);
+    const gs = [...seen.values()], done = gs.filter((g) => g.c.slot?.status === "done").length;
+    let behind = 0;
+    for (const g of gs) {
+      const st = g.c.slot?.status;
+      if (st === "running") { const want = Math.min(1, Math.max(0, (now.min - g.start) / Math.max(1, g.end - g.start))), got = +(g.c.slot?.progress || 0); behind = Math.max(behind, Math.round((want - got) * (g.end - g.start))); }
+      else if (notYet(g)) behind = Math.max(behind, now.min - g.start);
+    }
+    return { n: gs.length, done, behind };
+  };
   /** the downtime entry a block on the board comes from (its press's or its crew's) */
   const offRow = (m: Machine, d: string, a: number) => offs.find((x) => x.day === d && (x.machine === m.id || (!!m.crew && x.crew_id === m.crew)) && (x.start_min ?? -1) === a) || offs.find((x) => x.day === d && (x.machine === m.id || (!!m.crew && x.crew_id === m.crew)) && x.start_min == null && a <= 0) || null;
   const flowView = () => (
     <div className={"msf" + (findWords.length ? " ms-finding" : "")}>
       <div className="msf-main">
+        {flowBlocks[0].d === today && (
+          <div className="mdy-sb" style={{ gridTemplateColumns: `repeat(${machines.length}, minmax(0,1fr))` }}>
+            {machines.map((m) => { const sc = dayScore(m); if (!sc.n) return <div key={m.id} className="mdy-sbc"><b>{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><small>Nothing today</small></div>; return (
+              <div key={m.id} className="mdy-sbc"><b>{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><i className="mdy-bar"><i style={{ width: `${Math.round((sc.done / sc.n) * 100)}%` }} /></i>
+                <small className={sc.behind >= 15 ? "bad" : ""}>{sc.done} of {sc.n} done · {sc.done === sc.n ? "all done" : sc.behind >= 15 ? `${fmtMin(sc.behind)} behind` : "on pace"}</small></div>
+            ); })}
+          </div>
+        )}
         <div className="msf-grid" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
           <div className="msf-corner" />
           {machines.map((m) => <div key={m.id} className={"msf-mh " + m.type + (isOffDay(m, today) ? " off" : "")}><b title={m.name}>{shortName(m)}<IssueTag m={m} /></b>{crewOf(m) ? <span>{crewOf(m)!.leader}</span> : <span>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} heads` : "heat"}</span>}{flowBlocks[0].d === today && crewOf(m) && <ActualCell m={m} />}</div>)}
@@ -2007,7 +2038,6 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                         </Fragment>;
                       })}
                       {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, bk.d, a0), machine: m.id, day: bk.d, a: a0, b: b0, why }); }} style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
-                      {bk.d === today && now.min > bk.a && <div className="ms-pastv" style={{ top: flowTop[bi], height: flowY(bi, now.min) - flowTop[bi] }} />}
                       {bk.d === today && now.min >= bk.a && now.min <= bk.b && <div className="ms-now" style={{ top: flowY(bi, now.min) }} />}
                     </Fragment>
                   );
@@ -2670,7 +2700,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
       <div className="ms-main">
         {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
-        <div className="ms-key2"><span><b className="ms-key-late">#</b>Late (red number)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span><span><i className="k past" />Already past</span></div>
+        <div className="ms-key2"><span><b className="ms-key-late">#</b>Late (red number)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span></div>
         {view === "flow" ? flowView() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
       </div>

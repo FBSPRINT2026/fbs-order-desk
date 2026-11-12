@@ -251,7 +251,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
 - **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card, one color
   all round (no colored edge; Nick, Nov 11: "let the dots and stuff do the talking"); only late (bold red number, no tag; Nick, Nov 11) and holds (dashed, "Hold" tag) look different. Overtime
-  is a soft amber band behind the hours, warm-up and lunch plain gray, the past a light gray; the key sits at the top
+  is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): a bar per press on top ("2 of 4 done · on pace" / "35m behind", `dayScore`), done jobs grayed and dashed with the number struck through and the time, the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits at the top
   (`.ms-calm` / `.ms-key2` in `app/globals.css`). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
   tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
