@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadFile } from "@/lib/dropbox";
+import { filmAsOnePlate } from "@/lib/filmFix";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,8 +32,12 @@ export async function POST(req: Request) {
     const name = String(b.name || path.split("/").pop() || "film.pdf").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 180);
     const { data, error } = await admin.storage.from("proofs").download(path);
     if (error || !data) return NextResponse.json({ error: "Couldn't read that file." }, { status: 404 });
+    // their art drawn in a spot plate ("Black") prints as solid black, not just the crop marks (lib/filmFix.ts)
+    const raw = new Uint8Array(await data.arrayBuffer());
+    const fixed = await filmAsOnePlate(raw).catch(() => null);
+    const out = fixed ? name.replace(/\.(ai|eps)$/i, "") + (/\.pdf$/i.test(name) ? "" : ".pdf") : name;
     try {
-      const e = await uploadFile(admin, `${HOT_FOLDER}/${name}`, new Uint8Array(await data.arrayBuffer()));
+      const e = await uploadFile(admin, `${HOT_FOLDER}/${out}`, fixed || raw);
       return NextResponse.json({ ok: true, name: e.name });
     } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 }); }
   }

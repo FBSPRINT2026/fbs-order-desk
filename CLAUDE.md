@@ -173,6 +173,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (that read #50030's front as 1 white color and put the PSD on the back).
   Their work order (Nick, Nov 12, #40382): page 1 as always, then their mockup as big as the page goes with each print's
   inks as a line under it, and no press sheets (nothing to show but black boxes): `theirSeps` in `WorkOrderDoc`.
+  Their films print as one plate (Nick, Nov 12: only the crop marks came out): every spot color in a PDF/.ai film is put
+  on every plate (`filmAsOnePlate` in `lib/filmFix.ts`, run by Print in Their separations), so the art prints solid black.
 - **Underbase** (Nick, Nov 11 2026: "that's the rule"): every shirt gets a white underbase under the colors except a white
   or very pale one (cream, ivory, natural: `paleShirt` in `lib/separate.ts`), unless the print says no underbase (the
   order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
