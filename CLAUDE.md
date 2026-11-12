@@ -143,6 +143,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   about the size.
   Prints set as a color change of one another by hand (`changeOf`) are the same print too: one set of screens however many
   groups use them, and their pieces counted together for the price break.
+- **A price set by hand is the price** (Nick, Nov 12 2026: "if it says $1, just leave it $1"): a garment line with its
+  price typed in (`priceOverride`) gets no wholesale minimum on top (`minCharge` in `calcGroup`, `lib/pricing.ts`); the
+  12-piece minimum only fills in when the price is the price list's own.
 - **A program's screen price is for every screen** (Nick, Nov 10 2026: Tiger Blue "always pays $15 per screen new or
   remake"): `screenFeeOf` in `lib/pricing.ts`; a remake fee never overrides it.
   A program can also charge a print's youth screens but price youth and adult pieces together at the group's break
