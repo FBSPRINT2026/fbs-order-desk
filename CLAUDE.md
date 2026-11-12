@@ -302,6 +302,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   **Live clock** (Nick, Nov 11 2026; `ProductionSettings.liveClock`, the switch in the schedule's Press & crew tools): off
   (the default while the floor learns to clock in), the schedule is a plan made by hand like Printavo's: no time lost to
   someone not clocked in, nothing not started is pushed up to now, unfinished days don't roll to today, punching onto a
-  job doesn't start it. On, all of that follows the time clock and press timers. Either way, the Actual box under each press shows when its
-  crew clocked in (display only). Anything new that reacts to punches
+  job doesn't start it. On, all of that follows the time clock and press timers. Either way, each press line shows when its crew clocked in at
+  its right end ("In 6:12a", "In 7:21a · late", "Not in yet"; display only), and the press under its name ("Gauntlet III ·
+  12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.

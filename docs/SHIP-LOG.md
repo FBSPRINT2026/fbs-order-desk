@@ -202,3 +202,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:22am · 1.3.406 · Nick · Schedule: each press's Actual box shows when the crew clocked in with the live clock off too (display only)
 - Nov 12 9:24am · 1.3.407 · Nick · Dragging anywhere on the site: the mouse wheel scrolls smoothly mid-drag, and holding near the top or bottom edge scrolls that way
 - Nov 12 9:28am · 1.3.408 · Nick · Schedule cards: no dot after a printing job's number in any view; the strip says just 'Printing' until it runs over; Rush and Firm as small words on the right of the first line (no emoji)
+- Nov 12 9:30am · 1.3.409 · Nick · Schedule press headers: clock-in at the right end of the press line (In 6:12a / late / Not in yet), the press under the name (Gauntlet III · 12 color); Press 4 named 10C Sportsman

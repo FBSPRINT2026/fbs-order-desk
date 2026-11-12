@@ -2065,7 +2065,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         )}
         <div className="msf-grid" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
           <div className="msf-corner" />
-          {machines.map((m) => <div key={m.id} className={"msf-mh " + m.type + (isOffDay(m, today) ? " off" : "")}><b title={m.name}>{shortName(m)}<IssueTag m={m} /></b>{crewOf(m) ? <span>{crewOf(m)!.leader}</span> : <span>{m.type === "screen" ? `${m.colors} colors` : m.type === "embroidery" ? `${m.heads} heads` : "heat"}</span>}{flowBlocks[0].d === today && crewOf(m) && <ActualCell m={m} />}</div>)}
+          {machines.map((m) => <div key={m.id} className={"msf-mh mph " + m.type + (isOffDay(m, today) ? " off" : "")}>
+            <div className="mph-1"><b title={m.name}>{shortName(m)}<IssueTag m={m} /></b>{crewOf(m) ? <span className="mph-who">{crewOf(m)!.leader}</span> : null}{flowBlocks[0].d === today && crewOf(m) ? <ClockIn m={m} /> : null}</div>
+            <div className="mph-spec">{pressSpec(m)}</div>
+          </div>)}
           <div className="msf-gut" style={{ height: flowH, gridColumn: 1 }}>
             {flowBlocks.flatMap((bk, bi) => {
               const hs: ReactNode[] = [];
@@ -3886,4 +3889,24 @@ function RcIco({ k }: { k: "play" | "pause" | "check" | "next" | "undo" | "chev"
  *  within a day, orange not here yet; cut tight to the shirt so its height is the numbers' height */
 function GoodsTee({ k, t }: { k: string; t: string }) {
   return <svg className={"msf-tee " + k} viewBox="1.6 2.1 16.8 15.8" role="img" aria-label={t || undefined}>{t ? <title>{t}</title> : null}<path d="M6 2.5l-4 2.2 1.6 3.3 1.6-.8V17.5h9.6V7.2l1.6.8 1.6-3.3-4-2.2c-.5 1.3-1.7 2-3 2s-2.5-.7-3-2z" /></svg>;
+}
+
+/** the press under its name (Nov 12, Nick: "press one is the gauntlet, 12 color"): "Gauntlet III · 12 color" from its name and colors */
+function pressSpec(m: Machine) {
+  const rest = m.name.split(" · ").slice(1).join(" · ").replace(/\b\d+\s*C\b|\b\d+\s*colou?rs?\b/i, "").replace(/\s+/g, " ").trim();
+  if (m.type === "screen") return [rest, `${m.colors} color`].filter(Boolean).join(" · ");
+  if (m.type === "embroidery") return rest || `${m.heads} head${m.heads === 1 ? "" : "s"}`;
+  return rest || "Heat press";
+}
+/** when the press's crew clocked in today, at the right end of the press line (Nov 12, Nick: replaces the Actual box) */
+function ClockIn({ m }: { m: Machine }) {
+  const c = m.clock, t = (x: number | null | undefined) => (x == null ? "" : clock(x));
+  if (!c) return <span className="mph-in none" title="No time clock punches for this crew today">—</span>;
+  const [txt, cls, tip] = c.state === "waiting" ? ["Not in yet", "none", `${c.who} hasn't clocked in`]
+    : c.state === "noshow" ? ["No punch", "bad", `${c.who} didn't clock in today`]
+    : c.state === "crew" ? [`Crew in ${t(c.inAt)}`, "warn", `${c.who} has no punch; ${c.crew?.length ? c.crew.join(" and ") : "the crew"} clocked in at ${t(c.inAt)}`]
+    : c.state === "out" ? [`${t(c.inAt)}–${t(c.outAt)}`, "none", `${c.who} clocked in at ${t(c.inAt)} and out at ${t(c.outAt)}`]
+    : c.state === "late" ? [`In ${t(c.inAt)} · late`, "warn", `${c.who} clocked in late at ${t(c.inAt)}`]
+    : [`In ${t(c.inAt)}`, "ok", `${c.who} clocked in at ${t(c.inAt)}`];
+  return <span className={"mph-in " + cls} title={`${tip} (time clock)`}>{txt}</span>;
 }
