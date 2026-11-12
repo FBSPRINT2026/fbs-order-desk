@@ -702,7 +702,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     const open = liveInvoices.filter((o) => o.status !== "request" && o.balance > 0.004 && has(q, o.number, o.nickname));
     const waitingQuotes = quotes.filter((o) => !o.archived && o.status === "quote_sent" && has(q, o.number, o.nickname));
     const canPay = mode === "portal" && !!payCfg;
-    const item = (o: AOrder): PayItem => ({ id: o.id, cardFeeIn: o.cardFeeIn, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
+    const item = (o: AOrder): PayItem => ({ id: o.id, cardFeeIn: o.cardFeeIn, number: o.number, nickname: o.nickname, balance: Math.round(o.balance * 100) / 100, quote: o.type === "quote", deposit: payCfg && terms !== "prepay" && o.paid < 0.005 ? Math.min(o.balance, Math.round(o.total * payCfg.depositPct) / 100) : undefined });
     // only what's open for paying (Oct 24, Nick): a deposit-only order pays its deposit; one that isn't ready can't be picked
     // an old invoice is paid here once the account has moved (Nov 2, Nick); "pv:" tells the server it's an old one
     const payable = (o: AOrder) => (o.archived ? mode !== "portal" || !!o.payHere : mode !== "portal" || o.payCan !== "none");

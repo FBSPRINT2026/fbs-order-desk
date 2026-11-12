@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { linkArtForEmail } from "@/lib/linkArt";
+import { linkArtForEmail, printavoIntoEmail } from "@/lib/linkArt";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,11 @@ async function staff() { const v = await getViewer(); return v.user && v.isStaff
 
 export async function POST(req: Request) {
   if (!(await staff())) return NextResponse.json({ error: "Staff only." }, { status: 403 });
-  const { activity, force } = await req.json().catch(() => ({}));
+  const { activity, force, printavo } = await req.json().catch(() => ({}));
+  // a Printavo order page read in a browser (Printavo turns the portal's server away): { printavo: { url, html } }
+  // …or already read into the order's text and its files: { printavo: { url, order: { title, text, files: [{ url, name }] } } }
+  if (printavo?.url && printavo?.order?.text) return NextResponse.json(await printavoIntoEmail(createAdminClient(), String(activity || ""), String(printavo.url), "", printavo.order));
+  if (printavo?.url && printavo?.html) return NextResponse.json(await printavoIntoEmail(createAdminClient(), String(activity || ""), String(printavo.url), String(printavo.html).slice(0, 3_000_000)));
   const r = await linkArtForEmail(createAdminClient(), String(activity || ""), { force: !!force });
   return NextResponse.json(r);
 }

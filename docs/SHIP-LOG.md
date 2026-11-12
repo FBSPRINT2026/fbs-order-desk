@@ -217,3 +217,17 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 10:58am · 1.3.421 · Nick · Work order: customer separations jobs skip the press sheets; their mockup big on page 2 with the ink lines
 - Nov 12 11:00am · 1.3.422 · Nick · Customer films print their art: spot plates in a PDF/.ai film go on every plate, so FilmMaker prints the art solid black, not just the crop marks
 - Nov 12 12:07pm · 1.3.423 · Nick · Schedule right click: Done on a job that never started; a mixed job's unbooked part keeps the order in production; phone Job done only finishes that kind of machine's bookings
+- Nov 12 12:33pm · 1.3.424 · Nick · Spot color seps are solid: every color goes to its nearest picked ink, no halftoned plates (underbase included) except a real fade
+- Nov 12 12:46pm · 1.3.425 · Nick · Mixed jobs: SP / EMB / HP strip under the status on the Orders list, order header and schedule job card
+- Nov 12 1:07pm · 1.3.426 · Nick · Customer contacts: rows wrap instead of cutting off; Portal, its email button and remove stay together
+- Nov 12 1:21pm · 1.3.427 · Nick · Read another shop's Printavo order link (work order / invoice / quote): the order as their work order text (their prices left out), each line's pictures, their art files
+- Nov 12 1:25pm · 1.3.428 · Nick · Email link filter: follow the scanner's own 'looks safe' Open link
+- Nov 12 1:29pm · 1.3.429 · Nick · Email link filter: read the scanner's swapped-in 'looks safe' page for its Open link
+- Nov 12 1:38pm · 1.3.430 · Nick · Printavo order pages read in a browser can be handed to an email (Printavo turns the portal's server away)
+- Nov 12 1:47pm · 1.3.431 · Nick · Youth styles show youth size columns only; a sister style made for moved sizes keeps its real sizes
+- Nov 12 1:55pm · 1.3.432 · Nick · Send emails greet a contact by their name, never their email address
+- Nov 12 2:14pm · 1.3.433 · Nick · Pay from the emailed review link without signing in (that order only; saved cards: sign in)
+- Nov 12 2:18pm · 1.3.434 · Nick · Prepay customers are never offered a deposit in the pay window (order page, review link, Payments screen, and the server)
+- Nov 12 2:24pm · 1.3.435 · Nick · A garment price set by hand gets no wholesale minimum on top
+- Nov 12 2:54pm · 1.3.436 · Nick · QuickBooks: an invoice held back by hand (orders.qbo_hold) and its payments wait in the queue
+- Nov 12 4:23pm · 1.3.437 · Nick · QuickBooks: a closed quote (or canceled invoice) never syncs; one check, qboInvoiceable

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Settings } from "@/lib/pricing";
 import { Qbo, QboError, QBO_NO_DELETES } from "@/lib/qbo/client";
 import {
-  customerCreateBody, customerDiff, fromPrintavo, hashOf, invoiceFingerprint, invoicePayload, isInvoiceStatus, matchPayment,
+  customerCreateBody, customerDiff, fromPrintavo, hashOf, invoiceFingerprint, invoicePayload, isInvoiceStatus, qboInvoiceable, matchPayment,
   ownedFromOurs, ownedFromQbo, paymentPayload, type OrderRow, type OurCustomer, type OurPayment, type Owned, type QboSettings,
 } from "@/lib/qbo/map";
 
@@ -97,8 +97,8 @@ export class Pusher {
     return (data as OurCustomer) || null;
   }
   private async needsQboCustomer(customerId: string) {
-    const { data } = await this.admin.from("orders").select("status").eq("customer_id", customerId).gte("number", this.qs.live_from_number).limit(200);
-    return (data || []).some((o) => isInvoiceStatus(String(o.status)));
+    const { data } = await this.admin.from("orders").select("status, type, declined_at").eq("customer_id", customerId).gte("number", this.qs.live_from_number).limit(200);
+    return (data || []).some((o) => qboInvoiceable(o));
   }
 
   async customer(row: QRow, dependency = false): Promise<Outcome & { qboId?: string }> {
@@ -187,11 +187,14 @@ export class Pusher {
     if (n < this.qs.adopt_from_number) return { status: "skipped", reason: `#${n} is from Printavo's time (below #${this.qs.adopt_from_number}): never touched.` };
     const cust = o.customer_id ? await this.ourCustomer(o.customer_id) : null;
     if (cust?.is_test) return { status: "skipped", reason: "Test customer: never sent." };
+    // held back from QuickBooks by hand (orders.qbo_hold): it waits, with why, until the hold is taken off
+    const held = (o as { qbo_hold?: string | null }).qbo_hold;
+    if (held) return { status: "needs_review", reason: `#${n} is held back from QuickBooks: ${held}` };
     const link = await this.link("invoice", o.id);
     const res = (row.resolution || {}) as { force?: boolean; void?: boolean };
 
-    // a canceled invoice (completed + declined_at) is handled like one that went back to a quote: never pushed live
-    if (!isInvoiceStatus(o.status) || (o.status === "completed" && o.type !== "quote" && !!(o as { declined_at?: string | null }).declined_at)) {
+    // a quote (a closed one included) or a canceled invoice is never pushed live: handled like one that went back to a quote
+    if (!qboInvoiceable(o)) {
       if (link && link.source === "created") {
         if (res.void) return this.voidInvoice(row);
         return { status: "needs_review", reason: `#${n} went back to a quote after it was sent to QuickBooks (invoice #${link.qbo_id}). Press "Void in QuickBooks" if it's cancelled, or Skip to leave it.`, preview: { action: "void?", qboId: link.qbo_id } };
@@ -269,7 +272,7 @@ export class Pusher {
     if (!this.qbo) return { status: "error", reason: "QuickBooks isn't connected." };
     if (!o.customer_id) return { status: "error", reason: "The order has no customer." };
     // like the real sync (and Printavo): a quote never goes to QuickBooks, only an invoice (Oct 24, Nick)
-    if (!isInvoiceStatus(o.status)) return { status: "error", reason: `#${o.number} is still a quote. Quotes never go to QuickBooks: turn it into an invoice first, then send it.` };
+    if (!qboInvoiceable(o)) return { status: "error", reason: `#${o.number} is a quote or canceled. Quotes never go to QuickBooks: turn it into an invoice first, then send it.` };
     const n = +o.number, doc = `TEST-${n}`;
     const cust = await this.ourCustomer(o.customer_id);
     let custLink = await this.link("customer", o.customer_id);
@@ -437,6 +440,7 @@ export class Pusher {
     if (n < this.qs.adopt_from_number) return { status: "skipped", reason: `Payment on #${n}, from Printavo's time: never touched.` };
     const cust = o.customer_id ? await this.ourCustomer(o.customer_id) : null;
     if (cust?.is_test) return { status: "skipped", reason: "Test customer: never sent." };
+    if ((o as { qbo_hold?: string | null }).qbo_hold) return { status: "needs_review", reason: `Payment on #${n}: the invoice is held back from QuickBooks (${(o as { qbo_hold?: string | null }).qbo_hold}).` };
     const link = await this.link("payment", p.id);
 
     if (link && link.source !== "created") {
@@ -543,6 +547,8 @@ export class Pusher {
       } else if (x.order_id) {
         const o = await this.order(x.order_id);
         const cust = o?.customer_id ? await this.ourCustomer(o.customer_id) : null;
+        // one charge across several invoices waits whole while any of them is held back (never half posted)
+        if (o && (o as { qbo_hold?: string | null }).qbo_hold) return { status: "needs_review", reason: `Part of this charge is on #${o.number}, held back from QuickBooks (${(o as { qbo_hold?: string | null }).qbo_hold}).` };
         if (o && !cust?.is_test) parts.push({ id: x.id, amount: r2(+x.amount), doc: String((o as { printavo_visual_id?: string | null }).printavo_visual_id || o.number) });
       }
     }

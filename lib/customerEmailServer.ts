@@ -30,7 +30,14 @@ export async function peopleOf(admin: SupabaseClient, customerId: string): Promi
   ]);
   const cu = (c || {}) as { name?: string; company?: string; email?: string; email_prefs?: EmailPrefs; contact2_name?: string; contact2_email?: string; message_email?: boolean | null };
   const people: EmailPerson[] = [];
-  const add = (email: string, name: string, main = false) => { const e = low(email || ""); if (!/@/.test(e) || people.some((p) => p.email === e)) return; people.push({ email: e, name: (name || "").trim() || e, main }); };
+  // the same address named again with a real name (the account's email, then its contact "Andrew Rodriguez"): the name
+  // is kept (Nov 12, Nick: the quote email said "Hi andrew@ilsv.net")
+  const add = (email: string, name: string, main = false) => {
+    const e = low(email || ""), n = (name || "").trim(); if (!/@/.test(e)) return;
+    const had = people.find((p) => p.email === e);
+    if (had) { if (n && !/@/.test(n) && (!had.name || /@/.test(had.name))) had.name = n; return; }
+    people.push({ email: e, name: n || e, main });
+  };
   add(cu.email || "", cu.name || "", true);
   for (const x of (cs || []) as { name: string; email: string; is_primary: boolean }[]) add(x.email, x.name, !cu.email && x.is_primary);
   add(cu.contact2_email || "", cu.contact2_name || "");

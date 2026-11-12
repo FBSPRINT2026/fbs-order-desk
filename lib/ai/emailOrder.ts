@@ -275,7 +275,7 @@ export const isPaperwork = (name: string) => PAPERWORK.has(kindByName(name)?.kin
 const isConfirmName = (n: string) => /confirmation|orderdetail\.so-|order ?detail|packing ?slip|invoice ?#?\s*so-/i.test(n);
 /** the customer's own order sheet is among the files: a PO / work order by name, or their order form ("…_Order.pdf") */
 export function hasOwnSheet(atts: { name: string }[]): boolean {
-  return atts.some((a) => !isConfirmName(a.name) && /\.(pdf|xlsx?|csv|docx?)$/i.test(a.name) && (isPaperwork(a.name) || /(^|[^a-z])(order|po|purchase|work ?order)([^a-z]|$)/i.test(a.name.replace(/[_-]+/g, " "))));
+  return atts.some((a) => !isConfirmName(a.name) && /\.(pdf|xlsx?|csv|docx?|txt)$/i.test(a.name) && (isPaperwork(a.name) || /(^|[^a-z])(order|po|purchase|work ?order)([^a-z]|$)/i.test(a.name.replace(/[_-]+/g, " "))));
 }
 
 export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<string> = new Set()) {
@@ -463,7 +463,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-10j";
+export const READER_REV = "2026-11-12a";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];

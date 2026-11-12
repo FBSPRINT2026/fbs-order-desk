@@ -143,6 +143,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   about the size.
   Prints set as a color change of one another by hand (`changeOf`) are the same print too: one set of screens however many
   groups use them, and their pieces counted together for the price break.
+- **A price set by hand is the price** (Nick, Nov 12 2026: "if it says $1, just leave it $1"): a garment line with its
+  price typed in (`priceOverride`) gets no wholesale minimum on top (`minCharge` in `calcGroup`, `lib/pricing.ts`); the
+  12-piece minimum only fills in when the price is the price list's own.
 - **A program's screen price is for every screen** (Nick, Nov 10 2026: Tiger Blue "always pays $15 per screen new or
   remake"): `screenFeeOf` in `lib/pricing.ts`; a remake fee never overrides it.
   A program can also charge a print's youth screens but price youth and adult pieces together at the group's break
@@ -180,6 +183,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
   those pale ones only. Underbase and print order go by the ink's real color (`printShade`), not the color the art is
   drawn in; one-color art prints as the one ink its print names.
+- **Spot color films are solid** (Nick, Nov 12, #50013's camo: "they should all be solid. No halftones and crisp lines"):
+  in the Separation Studio's spot color every color prints as its nearest picked ink, solid, and no plate (underbase
+  included) is halftoned; only an ink at an end of a fade picked in the art is (`spotMixer` / `tonalOf` in
+  `lib/separate.ts`). Tones come from simulated process.
 - **What a garment is, for timing** (Nick, Nov 12, #50036's sweatshirts timed as tees): `garmentKind` in `lib/production.ts`
   reads the line's words (plurals and "sweatshirt"/"crewneck" included), and when they say nothing, the style number's
   catalog name (our garments, then SanMar: `seedStyleTitles`, loaded by the schedule and Production settings).
@@ -222,7 +229,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (`readyLabel` / `statusText` in `lib/pricing.ts`; `<Pill ship={o.delivery_method}>`). Any "open work" status list
   includes fulfillment (`IN_WORK_STATUSES`).
   Canceled (an invoice called off) is stored like a Closed Quote: status `completed` with `declined_at`, type invoice
-  (`isCanceled` / `statusKey` → "canceled"), so every finished-job filter skips it; it never goes to QuickBooks live.
+  (`isCanceled` / `statusKey` → "canceled"), so every finished-job filter skips it; it never goes to QuickBooks live. Neither does a quote of any kind, a Closed
+  Quote included (Nick, Nov 12): every QuickBooks "is this an invoice" check is `qboInvoiceable` in `lib/qbo/map.ts`.
 - **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
   to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule
   yet is Later; a goods problem stays on Today), under a full-width All / Screen print / Embroidery / Heat press switch, Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
@@ -329,3 +337,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   its right end ("In 6:12a", "In 7:21a · late", "Not in yet"; display only), and the press under its name ("Gauntlet III ·
   12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.
+- **A mixed job's parts show under its status** (Nick, Nov 12, option B): an order printing on more than one kind of
+  machine shows SP / EMB / HP blocks (green done, blue printing, gray booked, amber dashed not on the schedule; hover
+  for when and where) on the Orders list, the order's header and the schedule's job card: `MixStrip` / `useMixParts`
+  (`components/MixStrip.tsx`, `lib/mixParts.ts`). The order moves past In Production only when every part is done, and a
+  part not booked yet holds it there; the phone's Job done finishes only its own kind of machine's bookings.

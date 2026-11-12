@@ -3,7 +3,7 @@
  *   1. find the art's inks: k-means in Lab over the opaque pixels, near-duplicates merged, specks dropped
  *   2. snap each to a real ink (Wilflex RFU by default, PMS if you pick one)
  *   3. split the art into one plate per ink:
- *        spot   every pixel goes to its nearest ink (solid plates; soft edges keep their alpha)
+ *        spot   every pixel goes to its nearest ink (solid plates, crisp edges; only a real fade is halftoned)
  *        sim    simulated process: each pixel is unmixed into the inks over the garment (halftone plates)
  *   4. dark garment: a white underbase under everything that isn't the shirt color or near-black, choked a
  *      little so it doesn't peek out; simulated process prints the art's white again last as the highlight white (spot color doesn't: its White is an ink like the others, before black)
@@ -532,8 +532,8 @@ const FADE = 42;
  *   - a color on the line between two inks (the soft pixels along the edge where they meet, or a color made of
  *     those two) is split between them by where it sits on that line, the way the art was drawn, so each plate
  *     keeps a smooth edge and the two edges meet exactly
- *   - anything else is unmixed into all the inks (halftones), over the shirt (light shirt) or over the underbase
- *     with the shirt free to show (dark shirt); shares near 100% or 0% are rounded so flat areas stay solid
+ *   - anything else is its nearest ink, solid (no halftone mixes: spot color plates are solid with crisp edges;
+ *     only a fade the art really has prints as halftones)
  * Also used for vector art, where a shape's fill becomes tints of the inks.
  */
 export function spotMixer(inks: SepInk[], s: SepSettings): (r: number, g: number, b: number, flat?: boolean) => Float32Array {
@@ -555,10 +555,7 @@ function spotMixerOne(inks: SepInk[], s: SepSettings): (r: number, g: number, b:
   const dark = s.underbase === "on" || (s.underbase === "auto" && baseShirt(s.garment));
   const dropped = inks.map((k) => isShirtInk(k, s));
   const labs = inks.map((k) => labOf(...rgbOf(k.hex))), rgb = inks.map((k) => rgbOf(k.hex));
-  const g = rgbOf(s.garment).map((v) => MIX[v]), base = dark ? [1, 1, 1] : g;
   const use = inks.map((_, j) => j).filter((j) => !dropped[j]);
-  const K = use.map((j) => rgbOf(inks[j].hex).map((v) => MIX[v]));
-  if (dark) K.push(g);
   const m = inks.length;
   // fades in the art: pairs of inks (by index) a gradient runs between
   const fades: [number, number][] = [];
@@ -611,10 +608,10 @@ function spotMixerOne(inks: SepInk[], s: SepSettings): (r: number, g: number, b:
       if (!dropped[bj]) out[bj] = t;
       return out;
     }
-    const ws = unmix([MIX[r], MIX[gg], MIX[b]], base, K);
-    let sum = 0; use.forEach((j, c) => { let v = ws[c]; if (v > 0.93) v = 1; else if (v < 0.04) v = 0; out[j] = v; sum += v; });
-    if (sum > 1) for (const j of use) out[j] /= sum;
-    if (dark) out[m] = Math.max(0, 1 - Math.min(1, sum) - ws[use.length]);
+    // anything else is its nearest ink, solid (Nov 12, Nick, #50013's camo came out in halftones: "we use the separation
+    // mockup tool to pick the colors. They should all be solid. No halftones and crisp lines"): spot color never mixes
+    // a color out of halftones; a color that needs its own ink gets picked as one
+    if (!dropped[i1]) out[i1] = 1;
     return out;
   };
 }
@@ -690,8 +687,12 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   const plates: Plate[] = [];
   // tonal: a good part of what it prints is in-between (not just soft edges): it needs halftones
   // (in-between values inside an area, not the soft rim along every edge; judged before trapping, whose rim would count)
-  const tonalOf = (alpha: Uint8Array) => {
+  // spot color is solid plates with crisp edges (Nov 12, Nick): only an ink at either end of a fade the art really has
+  // (picked as a fade in the Studio) prints as halftones; a soft value anywhere else is where an edge crosses a pixel
+  const fadeHex = new Set(inks.flatMap((k) => (k.fadeTo?.length ? [k.hex, ...k.fadeTo] : [])).map((h) => h.toLowerCase()));
+  const tonalOf = (alpha: Uint8Array, hex?: string) => {
     if (s.method === "sim") return true;
+    if (!hex || !fadeHex.has(hex.toLowerCase())) return false;
     const midv = (v: number) => v > 30 && v < 225;
     let on = 0, mid = 0;
     for (let i = 0; i < n; i++) {
@@ -746,7 +747,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   {
     const open = new Float32Array(n).fill(1);
     for (let j = seq.length - 1; j >= 0; j--) {
-      const src = seq[j].a, layer = tonalOf(src), a = layer ? new Uint8Array(n) : src;
+      const src = seq[j].a, layer = tonalOf(src, seq[j].hex), a = layer ? new Uint8Array(n) : src;
       for (let i = 0; i < n; i++) {
         const v = src[i]; if (!v) continue;
         const o = open[i], t = !layer ? v / 255 : o > 0.004 ? Math.min(1, v / 255 / o) : 1;
@@ -756,7 +757,7 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
       seq[j] = { ...seq[j], a };
     }
   }
-  const tonals = seq.map((x) => tonalOf(x.a));
+  const tonals = seq.map((x) => tonalOf(x.a, x.hex));
 
   // underbase (dark shirts): under every ink that gets base (by default not black or dark colors like navy; each can
   // be switched) and under the white.

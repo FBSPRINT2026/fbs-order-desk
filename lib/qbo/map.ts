@@ -1,5 +1,5 @@
 import { billAddressText, billToOf } from "@/lib/billTo";
-import { calcOrder, imprintLabel, PERS_SHOW, orderGroups, withoutShopPieces, payDueDate, r2, sizeLabel, SIZES, type Order, type PayTerms, type Settings } from "@/lib/pricing";
+import { calcOrder, imprintLabel, isCanceled, isClosedQuote, PERS_SHOW, orderGroups, withoutShopPieces, payDueDate, r2, sizeLabel, SIZES, type Order, type PayTerms, type Settings } from "@/lib/pricing";
 
 /**
  * QuickBooks Online: what we send, built from our records. Pure functions (no database, no network), so they can be
@@ -259,6 +259,14 @@ const SETUP_ITEM = { screens: "setup_screens", remake: "setup_remake", digitize:
 
 /** Is this order an invoice (past the quote stage)? Quotes are never sent to QuickBooks. */
 export const isInvoiceStatus = (status: string) => ["approved", "art", "blanks", "production", "fulfillment", "ready", "completed"].includes(status);
+/**
+ * Does this order belong in QuickBooks as an invoice? Only a real invoice does: never a quote of any kind, a closed quote
+ * included (status "completed" with type "quote" reads as finished, so the status alone let it through), and never a
+ * canceled invoice (Nov 12, Nick: "closed quote doesn't sync to QuickBooks as a status"). Every QuickBooks check of
+ * "is this an invoice" goes through here.
+ */
+export const qboInvoiceable = (o: { status?: string | null; type?: string | null; declined_at?: string | null } | null | undefined) =>
+  !!o && isInvoiceStatus(String(o.status || "")) && !isClosedQuote(o) && !isCanceled(o);
 
 /**
  * The QuickBooks invoice for one of our orders. `customerRef` is the QuickBooks customer it's billed to (the primary

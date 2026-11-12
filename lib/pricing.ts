@@ -1393,7 +1393,10 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
   const sub = r2(lines.reduce((a, l) => a + l.sub, 0) + persTotal + sampleCharges.reduce((a, c) => a + num(c.amount), 0));
   // contract minimum: a job under minQty pieces is charged as minQty pieces (the missing pieces at the average price)
   // (screen printing: embroidery has its own 6-11 break)
-  const minCharge = !g.allIn && !smp && !gs && pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
+  // a price set by hand on a garment is the price: no minimum on top of it (Nov 12, Nick: "if it says $1, just leave it
+  // $1… we'd have to set the custom pricing")
+  const byHand = (g.lines || []).some((l) => l.priceOverride != null && (l.priceOverride as unknown) !== "");
+  const minCharge = !g.allIn && !smp && !gs && !byHand && pl.minQty && qty > 0 && qty < pl.minQty && imps.some((d) => d.method === "screen") ? r2((pl.minQty - qty) * (sub / qty)) : 0;
   const setup = r2(screens + inkFees + minCharge);
   // the setup charge itemized (as Printavo lists it: new / repeat screens, digitizing, PMS match, ink changes, minimum)
   const setupItems: { kind: "screens" | "remake" | "digitize" | "sewout" | "pms" | "inkchange" | "min"; qty: number; unit: number; amount: number; /** an embroidery thread change */ thread?: boolean; /** a print's own youth screens / file */ youth?: boolean }[] = [];

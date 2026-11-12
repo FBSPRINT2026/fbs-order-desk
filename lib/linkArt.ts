@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { inflateRawSync } from "node:zlib";
 import { Canva, CanvaError, NO_ACCESS_MSG, canvaConnected, designIdFrom } from "@/lib/canva/client";
 import { exportBoth, fileTitle } from "@/lib/canva/save";
+import { isPrintavoLink, readPrintavoPage, printavoHead, type PrintavoOrder } from "@/lib/printavoLink";
 
 /**
  * Artwork sent as a LINK instead of an attachment (Oct 9, Nick: "she sent me a Canva link… learn to work with Canva").
@@ -21,7 +22,7 @@ import { exportBoth, fileTitle } from "@/lib/canva/save";
  * the Mockup Creator use it the same way.
  */
 export type LinkFile = { name: string; path: string; type: string; size: number; from_link: string; source: "canva-preview" | "canva-export" | "download"; note?: string };
-type Found = { url: string; final: string; kind: "canva" | "dropbox" | "drive" | "file" | "other"; saved?: LinkFile; /** the Canva export's second file (PDF + PNG) */ also?: LinkFile; /** the rest of a shared folder's files */ more?: LinkFile[]; error?: string };
+type Found = { url: string; final: string; kind: "canva" | "dropbox" | "drive" | "file" | "printavo" | "other"; saved?: LinkFile; /** the Canva export's second file (PDF + PNG) */ also?: LinkFile; /** the rest of a shared folder's files */ more?: LinkFile[]; error?: string };
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 const ART_TYPE = /^(image\/|application\/(pdf|postscript|illustrator|zip|x-zip|octet-stream)|image\/svg)/i;
@@ -94,9 +95,9 @@ async function emailProtection(pageUrl: string, html: string): Promise<string | 
   if (!info || !WS) return null;
   const host = new URL(pageUrl).host;
   for (let round = 0; round < 3 && info; round++) {
-    const got = await new Promise<{ url?: string; meta?: string } | null>((done) => {
+    const got = await new Promise<{ url?: string; meta?: string; text?: string } | null>((done) => {
       let settled = false;
-      const end = (v: { url?: string; meta?: string } | null) => { if (settled) return; settled = true; try { sock.close(); } catch { /* closed */ } done(v); };
+      const end = (v: { url?: string; meta?: string; text?: string } | null) => { if (settled) return; settled = true; try { sock.close(); } catch { /* closed */ } done(v); };
       // only the scanner's own all-clear is followed: its "continue anyway?" step (/scanning/force) is never pressed for you
       const sock = new WS(`wss://${host}/scanning`);
       const timer = setTimeout(() => end(null), 25_000);
@@ -104,14 +105,27 @@ async function emailProtection(pageUrl: string, html: string): Promise<string | 
       sock.onerror = () => { clearTimeout(timer); end(null); };
       sock.onmessage = (ev: MessageEvent) => {
         try {
-          const d = JSON.parse(String(ev.data)) as { redirect?: { url?: string }; refresh?: { meta?: string } };
+          const d = JSON.parse(String(ev.data)) as { redirect?: { url?: string }; refresh?: { meta?: string; text?: string } };
           if (d.redirect?.url) { clearTimeout(timer); end({ url: d.redirect.url }); }
-          else if (d.refresh?.meta) { clearTimeout(timer); end({ meta: d.refresh.meta }); }
+          else if (d.refresh?.meta || d.refresh?.text) { clearTimeout(timer); end({ meta: d.refresh.meta, text: d.refresh.text }); }
         } catch { /* keep waiting */ }
       };
     });
     if (got?.url) return new URL(got.url, pageUrl).toString();
+    // the verdict page it swaps in ("This site looks safe… Open"): its Open link
+    const ok = got?.text ? safeOpen(got.text) : null; if (ok) return ok;
     info = got?.meta;
+  }
+  return null;
+}
+
+/** the scanner's "This site looks safe" page: the Open link it offers (only that verdict; a warning page is never followed) */
+function safeOpen(html: string): string | null {
+  if (!/looks safe/i.test(html) || /dangerous|malicious|suspicious|blocked/i.test(html.replace(/known dangerous sites/gi, ""))) return null;
+  for (const m of html.matchAll(/<a\b[^>]*href\s*=\s*["'](https?:\/\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const href = m[1].replace(/&amp;/g, "&"), text = m[2].replace(/<[^>]+>/g, " ").trim();
+    try { const h = new URL(href).hostname; if (/emailprotection\.link$|\.int$|zix|proofpoint|mimecast/i.test(h)) continue; } catch { continue; }
+    if (/^open$/i.test(text) || text.includes(new URL(href).hostname)) return href;
   }
   return null;
 }
@@ -128,7 +142,16 @@ export async function resolveLink(url: string): Promise<string> {
     // wrappers that answer with a page that sends you on (meta refresh or window.location)
     if (/text\/html/i.test(r.headers.get("content-type") || "") && !/canva\.com|dropbox\.com|drive\.google\.com/i.test(new URL(u).hostname)) {
       const html = (await r.text().catch(() => "")).slice(0, 200_000);
-      if (/emailprotection\.link$/i.test(new URL(u).hostname)) { const real = await emailProtection(u, html); if (real) { u = real; continue; } return u; }
+      if (/emailprotection\.link$/i.test(new URL(u).hostname)) {
+        // the scanner's own all-clear page ("This site looks safe… Open"): its Open link is where it goes (Nov 12, Illusive's
+        // Printavo link: once a link's been scanned, the page comes back with that verdict and no WebSocket step)
+        const safe = safeOpen(html); if (safe) { u = safe; continue; }
+        const real = await emailProtection(u, html); if (real) { u = real; continue; }
+        // scanned just now: the page answers with its verdict the second time
+        const again = await fetch(u, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(12_000) }).then((x) => x.text()).catch(() => "");
+        const s2 = safeOpen(again); if (s2) { u = s2; continue; }
+        return u;
+      }
       const m = html.match(/http-equiv=["']?refresh["']?[^>]*content=["'][^"']*url=([^"'>]+)/i) || html.match(/(?:window\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']/i) || html.match(/location\.replace\(\s*["']([^"']+)["']/i);
       if (m) { u = new URL(m[1].replace(/&amp;/g, "&"), u).toString(); continue; }
     }
@@ -144,6 +167,7 @@ const kindOf = (u: string): Found["kind"] => {
   try {
     const h = new URL(u).hostname;
     if (/(^|\.)canva\.com$/i.test(h) && /\/design\//i.test(u)) return "canva";
+    if (isPrintavoLink(u)) return "printavo";
     if (/(^|\.)dropbox(usercontent)?\.com$/i.test(h)) return "dropbox";
     if (/drive\.google\.com|docs\.google\.com/i.test(h)) return "drive";
     if (/\.(png|jpe?g|gif|webp|svg|pdf|ai|eps|zip|tiff?|xlsx|xlsm|docx|pptx|csv)(\?|$)/i.test(new URL(u).pathname)) return "file";
@@ -299,6 +323,21 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
     const f: Found = { url, final, kind };
     found.push(f);
     if (kind === "other") continue;
+    // another shop's Printavo order page: the order as their work order (text), each line's pictures, their art files
+    if (kind === "printavo") {
+      if (have.has(final)) continue;
+      try {
+        const p = await readPrintavoPage(final);
+        const saved = await savePrintavo(admin, a.customer_id as string | null, final, p);
+        if (saved.files.length) { f.saved = saved.files[0]; f.more = saved.files.slice(1); }
+        if (saved.error) f.error = saved.error;
+      } catch (e) {
+        const m = e instanceof Error ? e.message : String(e);
+        // Printavo turns the portal's server away: the page is brought in from a browser instead (Bring in from Printavo)
+        f.error = /403/.test(m) ? "Printavo won't let the portal open this page by itself. Open it in Chrome and bring it in from there." : m;
+      }
+      continue;
+    }
     if (kind === "canva" && canvaOn) {
       if (exported.has(final)) continue;
       // the design itself, through the shop's Canva account: PDF (print) + see-through PNG (mockup)
@@ -355,4 +394,46 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
   const links = found.filter((f) => f.kind !== "other").map((f) => ({ url: f.final, kind: f.kind, ok: !!f.saved, error: f.error }));
   await admin.from("activities").update({ meta: { ...meta, attachments: [...(meta.attachments || []), ...add], link_art_at: new Date().toISOString(), ...(links.length ? { links } : {}) } }).eq("id", activityId);
   return { ok: true, found };
+}
+
+/**
+ * Another shop's Printavo order saved onto an email like attachments: the order as text (their prices left out), then
+ * each picture and file. Used when the portal reads the page itself, and when the page was read in a browser (Printavo
+ * turns servers away; Nov 12) and handed in: lib/printavoLink.ts.
+ */
+export async function savePrintavo(admin: SupabaseClient, customerId: string | null, link: string, p: PrintavoOrder): Promise<{ files: LinkFile[]; error?: string }> {
+  const saved: LinkFile[] = [];
+  let error = "";
+  const put = async (name: string, buf: Buffer, type: string, note?: string) => {
+    const path = `emails/${customerId || "leads"}/${Date.now().toString(36)}-${saved.length}-${name.replace(/[^\w.\- ()#]+/g, "_").slice(-120)}`;
+    const { error: e } = await admin.storage.from("proofs").upload(path, buf, { contentType: type, upsert: false });
+    if (e) { error = e.message; return; }
+    saved.push({ name, path, type, size: buf.length, from_link: link, source: "download", ...(note ? { note } : {}) });
+  };
+  await put(`${p.title} (their Printavo).txt`, Buffer.from(p.text, "utf8"), "text/plain", "The order as it reads on their Printavo page (their prices left out).");
+  for (const x of p.files.slice(0, 14)) {
+    // only the files Printavo keeps (its file host), never an address handed in from elsewhere
+    try { if (!/(^|\.)(filepicker\.io|filestackcontent\.com|printavo\.com|amazonaws\.com)$/i.test(new URL(x.url).hostname)) continue; } catch { continue; }
+    const got = await download(x.url, MAX, KEEP_TYPE).catch(() => null);
+    if (!got) { error = error || `Couldn't download ${x.name}.`; continue; }
+    const ext = /\.[a-z0-9]{2,4}$/i.test(x.name) ? "" : got.type.includes("png") ? ".png" : got.type.includes("pdf") ? ".pdf" : /jpe?g/.test(got.type) ? ".jpg" : got.type.includes("webp") ? ".webp" : "";
+    const name = x.name + ext;
+    await put(name, got.buf, /octet-stream|binary/i.test(got.type) ? typeByName(name) : got.type);
+  }
+  return { files: saved, ...(error ? { error } : {}) };
+}
+
+/** a Printavo page read in a browser, handed in for an email: saved onto it like attachments (once per link) */
+export async function printavoIntoEmail(admin: SupabaseClient, activityId: string, link: string, html: string, read?: PrintavoOrder): Promise<{ ok: true; files: string[]; error?: string } | { ok: false; error: string }> {
+  if (!isPrintavoLink(link)) return { ok: false, error: "That isn't a Printavo order link." };
+  const { data: a } = await admin.from("activities").select("id, customer_id, meta").eq("id", activityId).maybeSingle();
+  if (!a) return { ok: false, error: "Email not found." };
+  const { parsePrintavoHtml } = await import("@/lib/printavoLink");
+  const p: PrintavoOrder = read ? { title: String(read.title || "Printavo order").slice(0, 120), text: printavoHead(String(read.title || "Printavo order").slice(0, 120), link) + String(read.text || "").slice(0, 20_000), files: (Array.isArray(read.files) ? read.files : []).slice(0, 14).map((x) => ({ url: String(x.url || ""), name: String(x.name || "File").slice(0, 120) })) } : parsePrintavoHtml(html, link);
+  const meta = (a.meta || {}) as { attachments?: LinkFile[]; links?: { url: string; kind: string; ok: boolean; error?: string }[] };
+  const keep = (meta.attachments || []).filter((x) => x.from_link !== link);
+  const r = await savePrintavo(admin, a.customer_id as string | null, link, p);
+  const links = [...(meta.links || []).filter((x) => x.url !== link), { url: link, kind: "printavo", ok: r.files.length > 0, ...(r.error ? { error: r.error } : {}) }];
+  await admin.from("activities").update({ meta: { ...meta, attachments: [...keep, ...r.files], links } }).eq("id", activityId);
+  return { ok: true, files: r.files.map((x) => x.name), ...(r.error ? { error: r.error } : {}) };
 }
