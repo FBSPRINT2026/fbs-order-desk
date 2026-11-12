@@ -411,9 +411,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const s = useMemo(() => {
     if (!sBase) return sBase;
-    // Live clock off: a plan made by hand; nobody's punches move it
-    if (!sBase.liveClock) return sBase;
     const withTc = tc.ok ? withClock(sBase, tc.punches, today, now.min, 5, new Set(tc.tracked), tc.names) : sBase;
+    // Live clock off: a plan made by hand; nobody's punches move it, but each press still shows when its crew clocked in
+    // (the Actual box under the press; Nov 12, Nick: "why doesn't it show their clock in time")
+    if (!sBase.liveClock) { const ck = new Map(withTc.machines.map((m) => [m.id, m.clock])); return { ...sBase, machines: sBase.machines.map((m) => (ck.get(m.id) ? { ...m, clock: ck.get(m.id) } : m)) }; }
     return Object.keys(tc.worked).length ? withCrewHours(withTc, tc.worked, tc.names, today, now.min) : withTc;
   }, [sBase, tc, today, clockBucket]);
   const [view0, setView] = useSticky<View>("cal.view", "flow");
