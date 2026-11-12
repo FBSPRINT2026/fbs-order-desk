@@ -54,6 +54,10 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   // old Printavo jobs (pv:) have no work order of ours
   const woBtn = (j: CheckJob) => j.ref.startsWith("pv:") ? null : <button type="button" className="btn sm rvd-wo" onClick={() => setWo(j)} title="Open this job's work order to print"><PrinterIcon />Work order</button>;
   const today = ymd(new Date()), d1 = nextWork(today), d2 = nextWork(d1);
+  // a phone gets its own view (Nick, Nov 12, option A: "needs to be really good on the phone… that's where we will use it")
+  const [phone, setPhone] = useState(false);
+  useEffect(() => { const m = window.matchMedia("(max-width: 700px)"); const f = () => setPhone(m.matches); f(); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, []);
+  const [ptab, setPtab] = useState<"count" | "trucks" | "issues">("count");
 
   // this week and next (a Friday's "next day" is Monday)
   const load = useCallback(async () => {
@@ -129,6 +133,64 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
     );
   };
 
+  const modals = <>
+      {wo && <WorkOrderView orderId={wo.ref} number={wo.number} title={[wo.customer, wo.nickname].filter(Boolean).join(" · ")} onClose={() => setWo(null)} />}
+      {count && <CheckinModal job={count} onClose={() => setCount(null)} onSaved={(c) => { setCount(null); setMsg(c.status === "issue" ? `#${count.number} checked in with ${c.lines.filter((l) => l.issue).length} problem(s): it's under the issues until resolved.` : `#${count.number} checked in: all ${c.received} here.`); load(); }} />}
+  </>;
+  // the phone view: a card per job, big Count in, the work order a printer button; Count in / Trucks / Issues tabs at the bottom
+  const pcard = (j: CheckJob, done: boolean) => {
+    const st = done ? { label: "✓ Counted" + (j.checkins[0] ? " " + new Date(j.checkins[0].created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""), tone: "ok" } : STATE[j.state];
+    const sup = supOf(j);
+    return (
+      <div key={j.ref} className={"rvm-card " + st.tone + (done ? " done" : "")}>
+        <div className="rvm-c1"><Link className="rvm-no" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link><span className={"rvd-pill " + st.tone}>{st.label}</span></div>
+        <div className="rvm-cu" data-notranslate>{j.customer}</div>
+        {j.nickname ? <div className="rvm-nk" data-notranslate>{j.nickname}</div> : null}
+        <div className="rvm-meta">{j.due ? <span>Due {short(j.due)}</span> : null}<span>{pcsOf(j)} pcs</span>{sup ? <span>{sup}{j.lines ? ` · ${j.arrived} of ${j.shipped} here` : ""}</span> : <span>No manifest</span>}</div>
+        <div className="rvm-acts">
+          {!j.ref.startsWith("pv:") && <button type="button" className="btn rvm-pr" aria-label="Work order" title="Work order" onClick={() => setWo(j)}><PrinterIcon /></button>}
+          <button type="button" className={"btn rvm-go" + (done ? "" : " primary")} onClick={() => setCount(j)}>{done || j.state === "issue" ? "Recount" : "Count in"}</button>
+        </div>
+      </div>
+    );
+  };
+  if (phone) return (
+    <div className="rvm">
+      {ptab === "count" && <>
+        <div className="rvm-seg" role="tablist">{([["today", "Today"], ["tomorrow", "Tmrw"], ["next", "Next"], ["later", "Later"]] as [Day, string][]).map(([k, l]) => (
+          <button key={k} type="button" role="tab" aria-selected={day === k} className={day === k && !q.trim() ? "on" : ""} onClick={() => { setDay(k); setQ(""); }}>{l}<em>{jobs ? n(k) : "…"}</em></button>
+        ))}</div>
+        <div className="rvm-chips">
+          {([["all", "All"], ["sp", "Screen"], ["emb", "Emb"], ["hp", "Heat"]] as ["all" | JobKind, string][]).map(([k, l]) => <button key={k} type="button" className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{l}</button>)}
+          <button type="button" className={day === "counted" && !q.trim() ? "on" : ""} onClick={() => { setDay("counted"); setQ(""); }}>✓ {jobs ? n("counted") : "…"}</button>
+        </div>
+        <input className="rvm-q" placeholder="Find an order #, customer…" value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" />
+        {msg && <div className="banner rvm-msg">{msg}</div>}
+        <div className="rvm-list">
+          {err ? <div className="empty">{err}</div> : !jobs ? <div className="empty">Loading…</div> : !shown.length && !grayed.length ? <div className="empty">{q.trim() ? "No order matches." : day === "counted" ? "Nothing counted is waiting for the press." : "Nothing to count in."}</div> : <>
+            {shown.map((j) => pcard(j, false))}
+            {grayed.length > 0 && day !== "counted" && <div className="rvm-sec">Counted · waiting for the press · {grayed.length}</div>}
+            {grayed.map((j) => pcard(j, true))}
+          </>}
+        </div>
+      </>}
+      {ptab === "trucks" && <div className="rvm-list">
+        <div className="rvm-chips">{(["today", "tomorrow"] as const).map((k) => <button key={k} type="button" className={truckDay === k ? "on" : ""} onClick={() => setTruckDay(k)}>{k === "today" ? "Today" : "Tomorrow"}</button>)}</div>
+        {truck("ss", "S&S", "ss")}
+        {truck("sanmar", "SanMar", "sm")}
+      </div>}
+      {ptab === "issues" && <div className="rvm-list"><GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} /></div>}
+      <nav className="rvm-nav" aria-label="Goods & Receiving">
+        {([["count", "Count in", <svg key="i" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg>],
+          ["trucks", "Trucks", <svg key="i" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><rect x="1" y="6" width="14" height="10" /><path d="M15 10h4l3 3v3h-7z" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></svg>],
+          ["issues", "Issues", <svg key="i" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18v.5" /></svg>]] as const).map(([k, l, ic]) => (
+          <button key={k} type="button" className={ptab === k ? "on" : ""} onClick={() => setPtab(k)}>{ic}<span>{l}</span></button>
+        ))}
+      </nav>
+      {modals}
+    </div>
+  );
+
   const DAYS: [Day, string][] = [["today", "Today"], ["tomorrow", "Tomorrow"], ["next", "Next day"], ["later", "Later"]];
   const KINDS: ["all" | JobKind, string][] = [["all", "All"], ["sp", "SP"], ["emb", "EMB"], ["hp", "HP"]];
   return (
@@ -197,8 +259,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         {truck("sanmar", "SanMar", "sm")}
         </div>
       </aside>
-      {wo && <WorkOrderView orderId={wo.ref} number={wo.number} title={[wo.customer, wo.nickname].filter(Boolean).join(" · ")} onClose={() => setWo(null)} />}
-      {count && <CheckinModal job={count} onClose={() => setCount(null)} onSaved={(c) => { setCount(null); setMsg(c.status === "issue" ? `#${count.number} checked in with ${c.lines.filter((l) => l.issue).length} problem(s): it's under the issues until resolved.` : `#${count.number} checked in: all ${c.received} here.`); load(); }} />}
+      {modals}
     </div>
   );
 }
