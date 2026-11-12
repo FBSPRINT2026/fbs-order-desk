@@ -1986,7 +1986,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     <div className={"msf" + (findWords.length ? " ms-finding" : "")}>
       <div className="msf-main">
         {flowBlocks[0].d === today && (
-          <div className="mdy-sb" style={{ gridTemplateColumns: `repeat(${machines.length}, minmax(0,1fr))` }}>
+          <div className="mdy-sb" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
+            <span />
             {machines.map((m) => { const sc = dayScore(m); if (!sc.n) return <div key={m.id} className="mdy-sbc"><b>{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><small>Nothing today</small></div>; return (
               <div key={m.id} className="mdy-sbc"><b>{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><i className="mdy-bar"><i style={{ width: `${Math.round((sc.done / sc.n) * 100)}%` }} /></i>
                 <small className={sc.behind >= 15 ? "bad" : ""}>{sc.done} of {sc.n} done · {sc.done === sc.n ? "all done" : sc.behind >= 15 ? `${fmtMin(sc.behind)} behind` : "on pace"}</small></div>

@@ -22535,12 +22535,12 @@ label.ckm-tile.over{border-color:var(--warn)}
 
 /* The schedule's day so far (Nov 12, Nick, option C): a bar per press on top; done jobs grayed with the number struck
    through and the time; the printing job a green border; a job whose start went by red. No shade over the past. */
-.mdy-sb{display:grid;gap:10px;margin:0 0 10px}
-.mdy-sbc{background:var(--surface,#fff);border:1px solid var(--line);border-radius:var(--r,8px);padding:9px 12px;min-width:0}
-.mdy-sbc b{font-size:13px;color:var(--ink);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mdy-bar{display:block;height:6px;background:var(--line-2,#eef1f5);border-radius:3px;margin:6px 0 4px;overflow:hidden}
-.mdy-bar>i{display:block;height:100%;background:var(--ok)}
-.mdy-sbc small{font-size:12px;color:var(--ink-3);white-space:nowrap}.mdy-sbc small.bad{color:var(--danger);font-weight:600}
+.mdy-sb{display:grid;margin:0;padding:8px 0;border-bottom:1px solid var(--line);background:var(--surface-2,#f6f7f9)}
+.mdy-sbc{margin:0 4px;background:var(--fbs-navy);color:#fff;border-radius:8px;padding:9px 11px;min-width:0}
+.mdy-sbc b{font-size:13px;color:#fff;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mdy-bar{display:block;height:6px;background:rgba(255,255,255,.18);border-radius:3px;margin:6px 0 4px;overflow:hidden}
+.mdy-bar>i{display:block;height:100%;background:color-mix(in srgb,var(--ok) 60%,#fff)}
+.mdy-sbc small{font-size:12px;color:color-mix(in srgb,#fff 78%,var(--fbs-navy));white-space:nowrap}.mdy-sbc small.bad{color:color-mix(in srgb,var(--danger) 45%,#fff);font-weight:700}
 .mdy-st{font-style:normal;font-size:11.5px;font-weight:700;margin-left:6px;white-space:nowrap}
 .mdy-st.ok{color:var(--ok)}.mdy-st.run{color:var(--ok)}.mdy-st.bad{color:var(--danger)}
 .ms-calm .msf-card.ms-blk.done:not(.bar){opacity:1;background:var(--surface-2,#f3f5f8);border:1px dashed var(--line);box-shadow:none;color:var(--ink-3)}
@@ -22574,3 +22574,8 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mrc-opt i{width:16px;height:16px;border:2px solid var(--line);border-radius:50%;margin-top:2px;flex:none}.mrc-opt.on{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface,#fff))}.mrc-opt.on i{border:5px solid var(--accent)}
 .mrc-opt b{font-size:14px;display:block;color:var(--ink)}.mrc-opt small{color:var(--ink-3);font-size:12.5px}
 .mrc-ft{margin-top:auto;padding:14px 18px;border-top:1px solid var(--line-2,#eef0f3);display:flex;gap:8px;align-items:center}.mrc-ft .spacer{flex:1}.mrc-un{color:var(--danger)}
+
+/* the kit's dark blue (the schedule's day scoreboard) */
+:root{--fbs-navy:#1f3a5f}
+/* on the board the now line passes behind the jobs, never through their words (Nov 12) */
+.msf-col .ms-now{z-index:1}

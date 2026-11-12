@@ -188,3 +188,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:32am · 1.3.392 · Nick · Schedule's day so far (option C): a bar per press on top (done of today's, on pace / behind), done jobs grayed with the number struck and the time, printing job green with how far, Not started in red; no gray shade over the past
 - Nov 12 8:38am · 1.3.393 · Nick · Schedule right-click does what the press timer does: Mark started / pieces done / Pause with a reason / Resume / Mark complete (order to Fulfillment, Ready or Completed after its last job), each with a time; Lock… opens a side panel
 - Nov 12 8:41am · 1.3.394 · Nick · Employee card: owner/admin can reset someone's pay pages PIN (they make a new one next time they open Time Clock, Employees or Payroll)
+- Nov 12 8:45am · 1.3.395 · Nick · Schedule scoreboard: dark blue cards lined up over each press (option A); the now line passes behind the jobs
