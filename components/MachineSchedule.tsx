@@ -524,6 +524,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const pvCache = useRef<{ k: string; v: ReturnType<typeof layoutAll> | null }>({ k: "", v: null });
   // each order's goods (order_goods.status): the dot by its number (Nov 11 2026, Nick: "a green dot… counted")
   const [goodsSt, setGoodsSt] = useState<Map<string, string>>(new Map());
+  const [goodsRev, setGoodsRev] = useState(0);
   const [upDay, setUpDay] = useSticky<number>("cal.upDay", 0);
   const [lockMenu, setLockMenu] = useState<{ c: Card; g: Seg; x: number; y: number } | null>(null);
   // the right-click's times and picks (Nov 12, Nick: "he should be able to do with a right click what the live clock will do")
@@ -715,11 +716,19 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     (async () => {
       const sb = createClient(), m = new Map<string, string>();
       for (let i = 0; i < ids.length; i += 200) { const r = await sb.from("order_goods").select("order_id, status").in("order_id", ids.slice(i, i + 200)); for (const x of (r.data || []) as { order_id: string; status: string }[]) m.set(x.order_id, x.status); }
+      // a count saved on Goods & Receiving or from the right-click is the answer, whether or not the order has a goods row
+      // (Nov 12, Nick: Fossil marked All here stayed red)
+      const seenC = new Set<string>();
+      for (let i = 0; i < ids.length; i += 200) {
+        const r = await sb.from("goods_checkins").select("order_id, status, resolved_at, created_at").in("order_id", ids.slice(i, i + 200)).order("created_at", { ascending: false });
+        for (const x of (r.data || []) as { order_id: string; status: string; resolved_at: string | null }[]) { if (seenC.has(x.order_id)) continue; seenC.add(x.order_id); m.set(x.order_id, x.status === "issue" && !x.resolved_at ? "issue" : "received"); }
+      }
       setGoodsSt(m);
     })();
-  }, [jobs]);
+  }, [jobs, goodsRev]);
   const slotKey = (x: { order_id: string | null; archived_order_id: string | null; hold_id?: string | null; sample?: boolean }) => (x.hold_id ? "h:" + x.hold_id : x.order_id ? "o:" + x.order_id + (x.sample ? ":s" : "") : "a:" + x.archived_order_id);
   // everything on the calendar: our bookings, then Printavo machine statuses that aren't booked here
+  const nowTick = useMemo(() => ({ day: now.day, min: Math.floor(now.min / 5) * 5 }), [now.day, Math.floor(now.min / 5)]); // eslint-disable-line react-hooks/exhaustive-deps
   const cards = useMemo<Card[]>(() => {
     if (!s || !jobs) return [];
     const out: Card[] = [];
@@ -741,6 +750,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       // its finish time set by hand (Where things stand → Printing today): it runs until then
       const en = sl.status === "running" && sl.ends_at ? shopTime(sl.ends_at) : null;
       if (en && en.day === sl.day) { const st1 = startMin ?? (st0 && st0.day === sl.day ? st0.min : en.min - minutes); startMin = st1; minutes = Math.max(15, en.min - st1); }
+      // a started job runs until it's marked complete (Nick, Nov 12: "you'll keep dragging down the bottom of it… until it's
+      // marked completed"): past its planned finish it stretches to now and a little beyond, and the jobs after it move down
+      // with it, live clock on or off
+      if (sl.status === "running" && startMin != null && sl.day === nowTick.day && startMin + minutes < nowTick.min + 10) minutes = nowTick.min + 10 - startMin;
       out.push({ key: sl.id, job, need, machine: mach, day: sl.day, minutes: Math.max(15, minutes), startMin, slot: sl, fromPv: false, carried: sl.rolled_from });
     }
     for (const p of pvLane) {
@@ -764,7 +777,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       }
     }
     return out;
-  }, [s, jobs, slots, pvLane, byKey]);
+  }, [s, jobs, slots, pvLane, byKey, nowTick]);
 
   // every machine's work laid out on its hours, split into per-day pieces
   // Live clock off: jobs keep their planned times; nothing not started is pushed up to "now"
@@ -1939,6 +1952,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const r = await fetch("/api/goods/checkin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: job.ref, lines, boxes: null, note: "All here (marked on the schedule)", photos: [], source: job.source, owner: job.owner || "customer" }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     setMsg(!r?.ok || j.error ? j.error || "Couldn't save the count." : `#${job.number}: all ${lines.reduce((a, l) => a + l.expected, 0)} pieces received.`);
+    setGoodsRev((x) => x + 1);
   }
   async function lockAs(c: Card, g: Seg, kind: "spot" | "press" | "day" | "person" | null) {
     setLockMenu(null);
@@ -2248,7 +2262,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           </div>
         </>;
       })()}
-      {countJob && <CheckinModal job={countJob} onClose={() => setCountJob(null)} onSaved={(c) => { setCountJob(null); setMsg(c.status === "issue" ? `#${countJob.number} counted with ${c.lines.filter((l) => l.issue).length} problem${c.lines.filter((l) => l.issue).length === 1 ? "" : "s"}; it's on Goods & Receiving's issues.` : `#${countJob.number} counted in.`); }} />}
+      {countJob && <CheckinModal job={countJob} onClose={() => setCountJob(null)} onSaved={(c) => { setCountJob(null); setGoodsRev((x) => x + 1); setMsg(c.status === "issue" ? `#${countJob.number} counted with ${c.lines.filter((l) => l.issue).length} problem${c.lines.filter((l) => l.issue).length === 1 ? "" : "s"}; it's on Goods & Receiving's issues.` : `#${countJob.number} counted in.`); }} />}
       {lockSide && (() => {
         const { c, g } = lockSide, lead = crewOf(c.machine)?.leader, dayName = new Date(g.day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
         const opts = [["spot", "This spot", `${shortName(c.machine)} at ${clock(g.start)} ${dayName}. Nothing moves it; other jobs go around it.`], ...(lead ? [["person", lead, "Any press they run, any time."]] : []), ["press", shortName(c.machine), "This press; its time can move."], ["day", dayName, "Any press, as long as it runs that day."]] as [typeof lockSide.k, string, string][];
