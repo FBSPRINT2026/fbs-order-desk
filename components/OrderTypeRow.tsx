@@ -29,7 +29,7 @@ export const confirmTitle = (why?: string | null) => (/^full color art\b/i.test(
 export const orderTypeOf = (o: O): T => o.order_type || (isReorder(o) ? "reorder" : "new");
 export const ORDER_TYPE_LABEL: Record<T, string> = { new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes", sample: "Sample" };
 
-export default function OrderTypeRow({ o, patch, bare, sampleRule, me = "" }: { o: O; patch: (fn: (d: Order) => void) => void; /** inside Job details' Order type tab */ bare?: boolean; /** the customer's sample rule (else the shop's): a Sample is priced by it */ sampleRule?: SampleRule | null; me?: string }) {
+export default function OrderTypeRow({ o, patch, bare, sampleRule, me = "", onSample }: { o: O; patch: (fn: (d: Order) => void) => void; /** New order with sample picked: open the Sample tool (it adds the sample as the first group) */ onSample?: () => void; /** inside Job details' Order type tab */ bare?: boolean; /** the customer's sample rule (else the shop's): a Sample is priced by it */ sampleRule?: SampleRule | null; me?: string }) {
   const [chg, setChg] = useState<{ each: string; why: string } | null>(null);
   const t = orderTypeOf(o);
   const prints = o.groups.flatMap((g) => g.imprints);
@@ -84,8 +84,9 @@ export default function OrderTypeRow({ o, patch, bare, sampleRule, me = "" }: { 
   return (
     <div className={"pt-row ot-row" + (bare ? " ot-bare" : "")}>
       <span className="pt-l">Order type</span>
-      <select className="ot-sel" aria-label="Order type" value={t} onChange={(e) => pick(e.target.value as T)}>
+      <select className="ot-sel" aria-label="Order type" value={t === "new" && o.groups.some((g) => g.sample?.kind === "pre") ? "new_sample" : t} onChange={(e) => { const v = e.target.value; if (v === "new_sample") { if (t !== "new") pick("new"); onSample?.(); return; } pick(v as T); }}>
         <option value="new">New order</option>
+        {onSample && <option value="new_sample">New order with sample</option>}
         <option value="reorder">Reorder</option>
         <option value="reorder_changes">Reorder with changes</option>
         <option value="sample">Sample</option>

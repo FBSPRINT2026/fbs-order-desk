@@ -178,3 +178,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 7:39pm · 1.3.382 · Nick · Schedule: a job locked to its spot never moves (others flow around it); nothing new booked into time already past today; Start over asks: keep locks or release them too
 - Nov 11 7:48pm · 1.3.383 · Nick · Ready To Schedule: Job Filters menu (Regular Orders, then each customer's kinds under its name; each job one kind, the narrowest; Other … for the broader; Title Case)
 - Nov 11 7:52pm · 1.3.384 · Nick · Schedule: Start over only clears the schedule you're on (it cleared screen print from embroidery); job numbers on cards open the job
+- Nov 11 7:57pm · 1.3.385 · Nick · Samples: Order type → New order with sample opens the Sample tool (sample busted out as the first group, its own Sample card + Production run card); order type Sample is just the type (no per-group bars), Production ▾ → Make the order from it

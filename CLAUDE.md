@@ -175,13 +175,15 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (`refreshUnseenProofs` in `app/shop/proof-actions.ts`), opened or not; a new version only starts once they've approved
   or asked for changes. Anything that swaps a group's mockup pictures calls it.
 - **Samples** (Nick, Nov 11 2026: "two types of an order that has a pre-production sample… anything goes type of thing"):
-  one Sample tool, `components/tools/SampleRunTool.tsx` (`lib/samples.ts`), from Create order's card (+ Sample / Sample
-  only), the order's Production ▾ → Sample run, and a sample group's Edit. Order + sample: the sample is its own group at
+  one Sample tool, `components/tools/SampleRunTool.tsx` (`lib/samples.ts`), from Create order's card (+ Sample), the
+  order's Order type → New order with sample, Production ▾ → Sample run, and a sample group's Edit (Nick, Nov 11: like a
+  mixed job busted out by kind, the sample is busted out of the same job: a "Sample · …" and a "Production run · …" card). Order + sample: the sample is its own group at
   the top (`Group.sample`, kind "pre": its pieces picked from the order's lines, `GLine.sampleOf`), its pieces off the top
   (the run prints that many fewer, never ordered or counted twice: `runParts` / `goodsGroups`), extra from the customer,
   or extra blanks; its own "Sample" card on the schedule (`production_slots.sample`), and the full run says "Waits for
-  sample OK" and runs no earlier than the day after it. Sample only: every group a sample (kind "only"); Make the order
-  starts the real order from one, linked both ways (`orders.from_sample` / `GroupSample.made`). Charges are rows of a name
+  sample OK" and runs no earlier than the day after it. Order type Sample (Create order's Sample only) is only the type: its own
+  pricing, a "Sample" tag for production, no sample groups; Production ▾ → Make the order
+  starts the real order from it, linked both ways (`orders.from_sample` / `GroupSample.made`). Charges are rows of a name
   and an amount, never a rule; a charge ticked "Credit on the full run" comes off the real order (the same order for a
   pre-production sample, a Sample credit fee on the order made from a sample only one). Planned → Pulled → Printed → Approved.
 - **Production holder** (Nick, Nov 10 2026; replaced Hold the spot): saving press time for a quote before its art is in
