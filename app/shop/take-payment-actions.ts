@@ -293,7 +293,7 @@ export async function findPayers(q0: string): Promise<{ ok: true; hits: PayerHit
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 
-export type TodayPay = { key: string; customer: string; numbers: number[]; amount: number; method: string; note: string; at: string };
+export type TodayPay = { key: string; customer: string; customerId?: string; numbers: number[]; amount: number; method: string; note: string; at: string };
 /** payments recorded or charged today (shop time), one line per check or charge: the running list under Receive a payment */
 export async function receivedToday(): Promise<{ ok: true; rows: TodayPay[] } | { ok: false; error: string }> {
   try {
@@ -316,10 +316,50 @@ export async function receivedToday(): Promise<{ ok: true; rows: TodayPay[] } | 
     for (const p of ps) {
       const o = p.order_id ? ord.get(p.order_id) : p.archived_order_id ? arc.get(p.archived_order_id) : null;
       const key = p.processor_id || p.id;
-      const r = rows.get(key) || { key, customer: o ? cn.get(o.customer_id) || "" : "", numbers: [], amount: 0, method: p.method, note: (p.note || "").replace(/ · \$[\d,.]+ .*applied to.*$/, "").replace(/^\$[\d,.]+ .*applied to.*$/, ""), at: p.created_at };
+      const r = rows.get(key) || { key, customer: o ? cn.get(o.customer_id) || "" : "", customerId: o?.customer_id || "", numbers: [], amount: 0, method: p.method, note: (p.note || "").replace(/ · \$[\d,.]+ .*applied to.*$/, "").replace(/^\$[\d,.]+ .*applied to.*$/, ""), at: p.created_at };
       r.amount = r2(r.amount + (+p.amount || 0)); if (o?.number && !r.numbers.includes(o.number)) r.numbers.push(o.number);
       rows.set(key, r);
     }
     return { ok: true, rows: [...rows.values()] };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+
+
+export type Waiting = { id: string; name: string; owed: number; pastDue: number; open: number; late: number };
+/**
+ * Who owes us, for Receive a Payment with nobody picked (Nov 11, Nick: "something that looks a little different when
+ * it's open, nothing selected"): every customer with open invoices (ours and the old Printavo ones), most past due first.
+ */
+export async function waitingOnPayment(): Promise<{ ok: true; rows: Waiting[]; pastDue: number; owed: number } | { ok: false; error: string }> {
+  try {
+    const { admin } = await allowed();
+    const { allRows } = await import("@/lib/readAll");
+    const [os, { data: ar }] = await Promise.all([
+      allRows((r0, r1) => admin.from("orders").select("customer_id").eq("type", "invoice").is("discarded_at", null).is("declined_at", null).gt("total", 0).not("customer_id", "is", null).order("id").range(r0, r1)),
+      admin.from("archived_orders").select("customer_id").eq("kind", "invoice").is("removed_at", null).gt("balance", 0.004).not("customer_id", "is", null).order("id").limit(1000),
+    ]);
+    const ids = [...new Set([...((os || []) as { customer_id: string }[]), ...((ar || []) as { customer_id: string }[])].map((x) => x.customer_id).filter(Boolean))];
+    const { openInvoices } = await import("@/lib/statementServer");
+    // in batches: a long list of ids is too long for one request
+    const inv: Awaited<ReturnType<typeof openInvoices>> = [], old: Awaited<ReturnType<typeof oldOpen>> = [], names: unknown[] = [];
+    for (let i = 0; i < ids.length; i += 80) {
+      const part = ids.slice(i, i + 80);
+      const [a, b, { data: c }] = await Promise.all([openInvoices(admin, part), oldOpen(admin, part), admin.from("customers").select("id, name, company, is_test").in("id", part)]);
+      inv.push(...a); old.push(...b); names.push(...(c || []));
+    }
+    const nm = new Map(((names || []) as { id: string; name: string | null; company: string | null; is_test?: boolean }[]).filter((c) => !c.is_test).map((c) => [c.id, c.company || c.name || "Customer"]));
+    const day = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    const by = new Map<string, Waiting>();
+    for (const o of [...inv, ...old] as { customer_id: string; balance: number; pay_due?: string | null; created_at?: string }[]) {
+      if (!nm.has(o.customer_id)) continue;
+      const w = by.get(o.customer_id) || { id: o.customer_id, name: nm.get(o.customer_id)!, owed: 0, pastDue: 0, open: 0, late: 0 };
+      const due = o.pay_due || (o.created_at ? new Date(Date.parse(o.created_at) + 30 * 86400000).toISOString().slice(0, 10) : "");
+      const late = due ? Math.floor((Date.parse(day) - Date.parse(due.slice(0, 10))) / 86400000) : 0;
+      w.owed = r2(w.owed + o.balance); w.open++;
+      if (late > 0) { w.pastDue = r2(w.pastDue + o.balance); w.late = Math.max(w.late, late); }
+      by.set(o.customer_id, w);
+    }
+    const rows = [...by.values()].sort((a, b) => b.pastDue - a.pastDue || b.owed - a.owed);
+    return { ok: true, rows, pastDue: r2(rows.reduce((a, w) => a + w.pastDue, 0)), owed: r2(rows.reduce((a, w) => a + w.owed, 0)) };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
