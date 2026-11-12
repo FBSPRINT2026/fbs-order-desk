@@ -29,7 +29,9 @@ export async function GET(req: Request) {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
   const from = weekOf(sp.get("week") || today);
   const to = new Date(new Date(from + "T12:00").getTime() + 6 * 86400000).toISOString().slice(0, 10);
-  try { return NextResponse.json({ from, to, today, ...(await checkinJobs(createAdminClient(), from, to, null, sp.get("open") === "1")) }); }
+  // ?ref=<order id | pv:archived id>: just that job (the schedule's right-click Goods section)
+  const ref = sp.get("ref") || "", only = ref ? (ref.startsWith("pv:") ? { kind: "a" as const, id: ref.slice(3) } : { kind: "o" as const, id: ref }) : null;
+  try { return NextResponse.json({ from, to, today, ...(await checkinJobs(createAdminClient(), from, to, only, sp.get("open") === "1" || !!only)) }); }
   catch (e) { return fail(e); }
 }
 

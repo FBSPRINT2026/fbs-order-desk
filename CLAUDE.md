@@ -269,6 +269,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (Lunch / Break / Ink / screen / Other), Resume, Mark complete (then the order goes to Fulfillment / Ready / Completed
   once it's its last job on the schedule), Not started after all, Not done yet. All through `logAction`, the same booking
   fields and job log the press timer writes. Lock… opens a side panel with the four locks (`rcDo`, `lockSide`).
+  Its Goods section (Nick, Nov 12) shows the job's count (Not counted / ✓ Counted / Problem) with Count in, All here
+  (every size saved as received) and Missing… (the counter), saved the same as Goods & Receiving's counts.
   Right-click a job: Run next (first on its press after what's running), or lock it to its spot (fixed), its person (any
   press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). A job locked to its spot
   never moves: the other jobs flow around it, finishing before it or starting after it. Nothing new is booked into time

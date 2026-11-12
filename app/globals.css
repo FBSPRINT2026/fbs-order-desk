@@ -22579,3 +22579,11 @@ label.ckm-tile.over{border-color:var(--warn)}
 :root{--fbs-navy:#1f3a5f}
 /* on the board the now line passes behind the jobs, never through their words (Nov 12) */
 .msf-col .ms-now{z-index:1}
+/* the right-click's Goods section (Nov 12): count in, all here, missing */
+.mrc-gd{border-top:1px solid var(--line-2,#eef0f3)}
+.mrc-gs{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.mrc-pill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.mrc-pill.bad{background:color-mix(in srgb,var(--danger) 12%,var(--surface,#fff));color:var(--danger)}.mrc-pill.ok{background:color-mix(in srgb,var(--ok) 12%,var(--surface,#fff));color:var(--ok)}
+.mrc-gsub{font-size:12px;color:var(--ink-3)}
+.mrc-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.mrc-g3 .mrc-act{justify-content:center;padding:0 6px;font-size:12.5px;gap:5px}.mrc-g3 .s2{grid-column:span 2}
+.mrc-act.warn{color:var(--danger)}.mrc-act.warn .mrc-i{color:var(--danger)}.mrc-act .mrc-i.box{color:var(--accent)}

@@ -12,6 +12,8 @@ import { addTask } from "@/app/shop/myday-actions";
 import { mergeProduction, estimateRaw, locKey, artsOf, MIN_JOB_MIN, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, ST, type StatusKey, type Group, type AccountOwner } from "@/lib/pricing";
 import { orderStatusEmail } from "@/app/shop/customer-email-actions";
+import CheckinModal from "@/components/CheckinModal";
+import type { CheckJob, CheckLine } from "@/lib/checkinShared";
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
 import ScheduleStartPoint from "@/components/ScheduleStartPoint";
@@ -525,6 +527,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [lockMenu, setLockMenu] = useState<{ c: Card; g: Seg; x: number; y: number } | null>(null);
   // the right-click's times and picks (Nov 12, Nick: "he should be able to do with a right click what the live clock will do")
   const [rcF, setRcF] = useState({ t: "", pcs: "", why: "Lunch", next: "fulfillment" as "fulfillment" | "ready" | "completed", edit: false });
+  // the job's goods in the right-click (Nov 12, Nick: "mark all received, or mark missing"): the same counts as Goods & Receiving
+  const [rcGoods, setRcGoods] = useState<{ ref: string; job: CheckJob | null; err: string } | null>(null);
+  const [countJob, setCountJob] = useState<CheckJob | null>(null);
   const [lockSide, setLockSide] = useState<{ c: Card; g: Seg; k: "spot" | "press" | "day" | "person" } | null>(null);
   // Re-plan results for the calendar as it is (the Re-plan window asks on every redraw): worked out again when anything changes
   const planCache = useRef<{ deps: unknown[]; v: Map<boolean, unknown> }>({ deps: [], v: new Map() });
@@ -1869,6 +1874,12 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(Math.round(min % 60)).padStart(2, "0")}`;
   const isoAt = (t: string) => (t ? new Date(`${today}T${t}:00`).toISOString() : new Date().toISOString());
   function openRc(c: Card, g: Seg, x: number, y: number) {
+    const ref = c.job.kind === "o" ? c.job.id : c.job.kind === "a" ? "pv:" + c.job.id : "";
+    setRcGoods(ref ? { ref, job: null, err: "" } : null);
+    if (ref) void fetch(`/api/goods/checkin?ref=${encodeURIComponent(ref)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      const job = [...((j.jobs || []) as CheckJob[]), ...((j.problems || []) as CheckJob[])].find((x) => x.ref === ref) || null;
+      setRcGoods((g) => (g && g.ref === ref ? { ref, job, err: j.error || (job ? "" : "No goods on this job.") } : g));
+    }).catch(() => setRcGoods((g) => (g && g.ref === ref ? { ...g, err: "Couldn't load the goods." } : g)));
     setRcF({ t: hhmm(now.min), pcs: String(Math.round(+(c.slot?.progress || 0) * c.need.qty) || ""), why: "Lunch", next: "fulfillment", edit: false });
     setLockMenu({ c, g, x, y });
   }
@@ -1914,6 +1925,15 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     }
     setMsg(`#${c.job.number} complete${moved}.`);
     load();
+  }
+  /** every piece here: a count saved with what's expected, the same as counting each size on Goods & Receiving */
+  async function goodsAllHere(job: CheckJob) {
+    const lines: CheckLine[] = job.items.flatMap((it) => Object.entries(it.sizes).map(([size, n]) => ({ item: [it.style, it.color].filter(Boolean).join(" · "), style: it.style, color: it.color, size, expected: n, received: n, issue: "" as const })));
+    setLockMenu(null);
+    if (!lines.length) { setMsg(`#${job.number} has no sizes to count yet.`); return; }
+    const r = await fetch("/api/goods/checkin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: job.ref, lines, boxes: null, note: "All here (marked on the schedule)", photos: [], source: job.source, owner: job.owner || "customer" }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setMsg(!r?.ok || j.error ? j.error || "Couldn't save the count." : `#${job.number}: all ${lines.reduce((a, l) => a + l.expected, 0)} pieces received.`);
   }
   async function lockAs(c: Card, g: Seg, kind: "spot" | "press" | "day" | "person" | null) {
     setLockMenu(null);
@@ -2200,10 +2220,23 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             {st === "done" && <div className="mrc-sec"><div className="mrc-row"><span className="mrc-ok"><RcIco k="check" />Done {c.slot?.finished_at ? new Date(c.slot.finished_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</span><button type="button" className="linkbtn mrc-chg" onClick={() => { const sl = c.slot!; setLockMenu(null); void logAction(sl, "reopen"); }}>Not done yet</button></div></div>}
             {st !== "running" && st !== "done" && <button type="button" className="mrc-li" onClick={() => runNext(c)}><RcIco k="next" />Run next<small>first on {crewOf(c.machine)?.leader || shortName(c.machine)}&apos;s press</small></button>}
             {(st === "running" || st === "paused") && <button type="button" className="mrc-li" onClick={() => void rcDo(c, g, "not_started")}><RcIco k="undo" />Not started after all</button>}
+            {rcGoods && (() => {
+              const gj = rcGoods.job, ck = gj?.checkins?.[0], counted = gj && (gj.state === "checked" || gj.state === "issue");
+              const pcs = gj ? gj.ordered || gj.items.reduce((a, it) => a + Object.values(it.sizes).reduce((x, y) => x + y, 0), 0) : 0;
+              return <div className="mrc-sec mrc-gd"><div className="mrc-l">Goods</div>
+                {!gj ? <div className="mrc-note">{rcGoods.err || "Loading…"}</div> : <>
+                  <div className="mrc-gs">{gj.state === "issue" ? <span className="mrc-pill bad">Problem reported</span> : counted ? <span className="mrc-pill ok">✓ Counted{ck ? " " + new Date(ck.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</span> : <span className="mrc-pill bad">Not counted</span>}
+                    <span className="mrc-gsub">{counted && ck ? `${ck.received} of ${ck.expected}${ck.by ? ` · by ${ck.by.split(" ")[0]}` : ""}` : `${pcs} pcs${gj.suppliers.length ? " · " + gj.suppliers.join(" / ") : ""}${gj.lines ? ` · ${gj.arrived} of ${gj.shipped} delivered` : ""}`}</span></div>
+                  {counted ? <div className="mrc-g3"><button type="button" className="mrc-act st" onClick={() => { setLockMenu(null); setCountJob(gj); }}><RcIco k="box" />Recount</button><button type="button" className="mrc-act warn s2" onClick={() => { setLockMenu(null); setCountJob(gj); }}><RcIco k="warn" />Report missing / damaged…</button></div>
+                    : <div className="mrc-g3"><button type="button" className="mrc-act st" onClick={() => { setLockMenu(null); setCountJob(gj); }}><RcIco k="box" />Count in</button><button type="button" className="mrc-act" onClick={() => void goodsAllHere(gj)}><RcIco k="check" />All here</button><button type="button" className="mrc-act warn" onClick={() => { setLockMenu(null); setCountJob(gj); }}><RcIco k="warn" />Missing…</button></div>}
+                </>}
+              </div>;
+            })()}
             <button type="button" className="mrc-li" onClick={() => { setLockMenu(null); setLockSide({ c, g, k: (c.slot?.locked as "spot" | "press" | "day" | "person") || "spot" }); }}><WhyIcon w="lock" title="" />{c.slot?.locked ? "Locked · change…" : "Lock…"}<small><RcIco k="chev" /></small></button>
           </div>
         </>;
       })()}
+      {countJob && <CheckinModal job={countJob} onClose={() => setCountJob(null)} onSaved={(c) => { setCountJob(null); setMsg(c.status === "issue" ? `#${countJob.number} counted with ${c.lines.filter((l) => l.issue).length} problem${c.lines.filter((l) => l.issue).length === 1 ? "" : "s"}; it's on Goods & Receiving's issues.` : `#${countJob.number} counted in.`); }} />}
       {lockSide && (() => {
         const { c, g } = lockSide, lead = crewOf(c.machine)?.leader, dayName = new Date(g.day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
         const opts = [["spot", "This spot", `${shortName(c.machine)} at ${clock(g.start)} ${dayName}. Nothing moves it; other jobs go around it.`], ...(lead ? [["person", lead, "Any press they run, any time."]] : []), ["press", shortName(c.machine), "This press; its time can move."], ["day", dayName, "Any press, as long as it runs that day."]] as [typeof lockSide.k, string, string][];
@@ -3788,12 +3821,14 @@ function SkIco({ d }: { d: string }) {
 }
 
 /** the right-click's icons (no emoji) */
-function RcIco({ k }: { k: "play" | "pause" | "check" | "next" | "undo" | "chev" }) {
+function RcIco({ k }: { k: "play" | "pause" | "check" | "next" | "undo" | "chev" | "box" | "warn" }) {
   const d: Record<string, ReactNode> = {
     play: <path d="M6 4l10 6-10 6z" />, pause: <><rect x="5" y="4" width="3.5" height="12" /><rect x="11.5" y="4" width="3.5" height="12" /></>,
     check: <path d="M4 10l4 4 8-8" fill="none" stroke="currentColor" strokeWidth="2.2" />, next: <path d="M4 4l7 6-7 6zM12 4h3v12h-3z" />,
     undo: <><path d="M5 8h7a4 4 0 010 8H8" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M8 4L4 8l4 4" fill="none" stroke="currentColor" strokeWidth="2" /></>,
     chev: <path d="M8 5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="2" />,
+    box: <><path d="M3 6l7-3 7 3v8l-7 3-7-3z" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M3 6l7 3 7-3M10 9v8" fill="none" stroke="currentColor" strokeWidth="1.8" /></>,
+    warn: <><path d="M10 3l8 14H2z" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M10 8v4M10 14v1.5" stroke="currentColor" strokeWidth="2" /></>,
   };
   return <svg className={"mrc-i " + k} viewBox="0 0 20 20" fill="currentColor" aria-hidden>{d[k]}</svg>;
 }

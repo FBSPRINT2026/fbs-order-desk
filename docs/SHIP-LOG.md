@@ -190,3 +190,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:41am · 1.3.394 · Nick · Employee card: owner/admin can reset someone's pay pages PIN (they make a new one next time they open Time Clock, Employees or Payroll)
 - Nov 12 8:45am · 1.3.395 · Nick · Schedule scoreboard: dark blue cards lined up over each press (option A); the now line passes behind the jobs
 - Nov 12 8:54am · 1.3.396 · Nick · Goods & Receiving: a job the press started that was never counted stays on Today as 'On the press · not counted' instead of dropping off (#50036)
+- Nov 12 8:58am · 1.3.397 · Nick · Schedule right-click: a Goods section (Not counted / Counted / Problem) with Count in, All here and Missing…, saved the same as Goods & Receiving
