@@ -190,21 +190,43 @@ export class Pusher {
     // held back from QuickBooks by hand (orders.qbo_hold): it waits, with why, until the hold is taken off
     const held = (o as { qbo_hold?: string | null }).qbo_hold;
     if (held) return { status: "needs_review", reason: `#${n} is held back from QuickBooks: ${held}` };
-    const link = await this.link("invoice", o.id);
+    const link0 = await this.link("invoice", o.id);
     const res = (row.resolution || {}) as { force?: boolean; void?: boolean };
 
     // a quote (a closed one included) or a canceled invoice is never pushed live: handled like one that went back to a quote
     if (!qboInvoiceable(o)) {
-      if (link && link.source === "created") {
+      if (link0 && link0.source === "created") {
         if (res.void) return this.voidInvoice(row);
-        return { status: "needs_review", reason: `#${n} went back to a quote after it was sent to QuickBooks (invoice #${link.qbo_id}). Press "Void in QuickBooks" if it's cancelled, or Skip to leave it.`, preview: { action: "void?", qboId: link.qbo_id } };
+        return { status: "needs_review", reason: `#${n} went back to a quote after it was sent to QuickBooks (invoice #${link0.qbo_id}). Press "Void in QuickBooks" if it's cancelled, or Skip to leave it.`, preview: { action: "void?", qboId: link0.qbo_id } };
       }
       return { status: "skipped", reason: "Quote: quotes aren't sent to QuickBooks." };
     }
-    if (n < this.qs.live_from_number) return this.adopt(row, o, link);
+    // #40000-#49999 (Nick, Nov 12 2026: "you're going to have to sync invoices that were already created in Printavo. We're
+    // going to have to add shipping to a lot of those"): our order is the truth. Printavo's QuickBooks invoice is found by
+    // its number and brought to ours (lines, fees, shipping, total), keeping Printavo's number and date; one Printavo
+    // never sent is made by us like any new invoice.
+    let link: Link | null = link0;
+    let adopted: (Rec & { CustomerRef?: { value: string; name?: string }; TotalAmt?: number }) | null = null;
+    if (n < this.qs.live_from_number) {
+      const a = await this.adoptFind(o, link);
+      if ("stop" in a) return a.stop;
+      link = a.link;
+      adopted = a.rec;
+    }
 
     if (!o.customer_id) return { status: "needs_review", reason: "The order has no customer." };
     let custLink = await this.link("customer", o.customer_id);
+    // the QuickBooks customer on Printavo's invoice is this customer's: linked to it, never a second one made
+    if (adopted?.CustomerRef?.value) {
+      const owner = await this.linkByQbo("customer", String(adopted.CustomerRef.value));
+      if (owner && owner.local_id !== o.customer_id) return { status: "needs_review", reason: `Printavo's QuickBooks invoice #${n} is under ${adopted.CustomerRef.name || "a QuickBooks customer"}, which is linked to a different customer of ours. Check the customer matching, then Retry.` };
+      if (!custLink) {
+        if (this.live) { await this.saveLink({ entity: "customer", local_id: o.customer_id, qbo_id: String(adopted.CustomerRef.value), source: "adopted_invoice" }); custLink = await this.link("customer", o.customer_id); }
+        else custLink = { qbo_id: String(adopted.CustomerRef.value) } as Link;
+      } else if (custLink.qbo_id !== String(adopted.CustomerRef.value)) {
+        return { status: "needs_review", reason: `Printavo's QuickBooks invoice #${n} is under ${adopted.CustomerRef.name || "another QuickBooks customer"}, but this customer is linked to QuickBooks customer #${custLink.qbo_id}. Check the customer matching, then Retry.` };
+      }
+    }
     if (!custLink && this.qbo) {
       // the customer goes first (made with its first invoice)
       const co = await this.customer({ ...row, entity: "customer", local_id: o.customer_id, resolution: null }, true);
@@ -216,7 +238,10 @@ export class Pusher {
       }
     }
     const build = invoicePayload({ order: o, customer: cust, customerRef: custLink ? { value: custLink.qbo_id } : null, settings: this.settings, qs: this.qs });
-    const preview: Record<string, unknown> = { action: link ? "update" : "create", qboId: link?.qbo_id || null, total: build.total, storedTotal: build.storedTotal, summary: build.summary, warnings: build.warnings, problems: build.problems, body: build.body };
+    // Printavo's invoice keeps its own number and date
+    if (adopted) { const b = build.body as Record<string, unknown>; delete b.DocNumber; delete b.TxnDate; }
+    const qboTotal = adopted ? r2(+(adopted.TotalAmt || 0)) : null;
+    const preview: Record<string, unknown> = { action: link ? (adopted ? "adopt-update" : "update") : "create", qboId: link?.qbo_id || null, qboTotal, total: build.total, storedTotal: build.storedTotal, summary: build.summary, warnings: build.warnings, problems: build.problems, body: build.body };
     const localProblems = build.problems.filter((p) => !/isn't in QuickBooks yet/.test(p));
     if (!this.qbo) return { status: "pending", reason: `Not connected: would ${link ? "update" : "create"} QuickBooks invoice #${n} for ${build.total.toFixed(2)}.`, preview };
 
@@ -232,7 +257,10 @@ export class Pusher {
         else return { status: "needs_review", reason: `QuickBooks already has an invoice numbered #${n} (QuickBooks #${e.Id}, for ${e.CustomerRef?.name || "another customer"}, ${r2(+(e.TotalAmt || 0)).toFixed(2)})${ours ? "" : " that wasn't made by the portal"}. Not sent, so it isn't duplicated: check it in QuickBooks.`, preview };
       }
     }
-    if (!this.live) return { status: "pending", reason: `Preview: would ${lk ? "update" : "create"} QuickBooks invoice #${n} for ${build.total.toFixed(2)}.`, preview };
+    if (!this.live) {
+      if (adopted) return { status: "pending", reason: qboTotal === build.total ? `Preview: Printavo's QuickBooks invoice #${n} is ${qboTotal!.toFixed(2)}, the same as ours: lines brought to ours, total unchanged.` : `Preview: would change Printavo's QuickBooks invoice #${n} from ${qboTotal!.toFixed(2)} to ours, ${build.total.toFixed(2)}.`, preview };
+      return { status: "pending", reason: `Preview: would ${lk ? "update" : "create"} QuickBooks invoice #${n} for ${build.total.toFixed(2)}.`, preview };
+    }
     if (localProblems.length || !custLink) return { status: "needs_review", reason: [...localProblems, ...(!custLink ? ["The customer isn't in QuickBooks yet."] : [])].join(" "), preview };
     // the saved order total is what the customer was shown: if today's prices give a different total, a person decides
     if (build.total !== build.storedTotal) return { status: "needs_review", reason: `#${n}'s saved total is ${build.storedTotal.toFixed(2)} but its lines work out to ${build.total.toFixed(2)} with today's prices (a price list changed since it was saved?). Not sent: open the order, check it and save it, then Retry.`, preview };
@@ -245,9 +273,11 @@ export class Pusher {
     } else {
       const cur = await q.read<Rec & { TotalAmt?: number; PrivateNote?: string }>("Invoice", lk.qbo_id);
       if (!cur) return { status: "needs_review", reason: `QuickBooks invoice #${lk.qbo_id} is gone (deleted in QuickBooks).`, preview };
+      // Printavo's invoice we've never sent to is brought to ours whatever was done to it in QuickBooks before
+      const sentBefore = !!(lk.last_sent as { fingerprint?: string } | null)?.fingerprint;
       const base = (lk.last_sent as { fingerprint?: string } | null)?.fingerprint || (lk.last_seen_qbo ? invoiceFingerprint(lk.last_seen_qbo) : "");
       const fp = invoiceFingerprint(cur);
-      if (base && fp !== base && !res.force) {
+      if (base && fp !== base && !res.force && (sentBefore || !adopted)) {
         return { status: "needs_review", reason: `QuickBooks invoice #${n} was changed in QuickBooks since we last sent it (its total there is ${r2(+(cur.TotalAmt || 0)).toFixed(2)}, ours is ${build.total.toFixed(2)}). Press "Send ours anyway" to replace it with ours, or Skip to leave QuickBooks' version.`, preview: { ...preview, qboTotal: cur.TotalAmt } };
       }
       if (lk.last_pushed_hash === hashOf(build.body) && fp === base) return { status: "done", reason: "No changes since it was last sent.", qboId: lk.qbo_id, preview };
@@ -257,7 +287,7 @@ export class Pusher {
     // checked against the SAVED order total (what the customer was shown)
     const diff = r2(+(rec.TotalAmt || 0) - build.storedTotal);
     if (Math.abs(diff) >= 0.01) return { status: "needs_review", reason: `Sent, but QuickBooks' total for #${n} is ${r2(+(rec.TotalAmt || 0)).toFixed(2)} and the order's saved total is ${build.storedTotal.toFixed(2)} (difference ${diff.toFixed(2)}). Usually the sales tax setting: check it, then Retry.`, preview, result: { qboId: rec.Id, qboTotal: rec.TotalAmt } };
-    return { status: "done", reason: `${link ? "Updated" : "Created"} QuickBooks invoice #${n} (${build.total.toFixed(2)}).`, preview, result: { qboId: rec.Id, total: rec.TotalAmt }, qboId: rec.Id };
+    return { status: "done", reason: adopted ? `Brought Printavo's QuickBooks invoice #${n} to ours: ${qboTotal!.toFixed(2)} → ${build.total.toFixed(2)}.` : `${link ? "Updated" : "Created"} QuickBooks invoice #${n} (${build.total.toFixed(2)}).`, preview, result: { qboId: rec.Id, total: rec.TotalAmt }, qboId: rec.Id };
   }
 
   /**
@@ -369,31 +399,34 @@ export class Pusher {
     return { status: "done", reason: `Voided QuickBooks invoice ${cur.DocNumber || st.qboId}.` };
   }
 
-  /** #40000-#49999: Printavo made the QuickBooks invoice; we link to it by its number and never make our own. */
-  private async adopt(row: QRow, o: OrderRow, link: Link | null): Promise<Outcome & { qboId?: string }> {
+  /**
+   * #40000-#49999: finds Printavo's QuickBooks invoice for the order (by its number, or Printavo's), links to it, and hands
+   * it back so invoice() brings it to ours. None found: rec is null and invoice() makes it like a new one (Printavo
+   * stopped sending to QuickBooks on Nov 4 2026). A test invoice link is never treated as Printavo's.
+   */
+  private async adoptFind(o: OrderRow, link: Link | null): Promise<{ link: Link | null; rec: (Rec & { CustomerRef?: { value: string; name?: string }; TotalAmt?: number }) | null } | { stop: Outcome & { qboId?: string } }> {
     const n = +o.number;
-    if (link) return { status: "done", reason: `Linked to Printavo's QuickBooks invoice (#${link.qbo_id}); not changed.`, qboId: link.qbo_id };
-    // made after going live but numbered below live_from: Printavo is off, so nobody will put it in QuickBooks
-    if (this.live && this.qs.live_since && o.created_at && new Date(o.created_at).getTime() > new Date(this.qs.live_since).getTime()) {
-      return { status: "needs_review", reason: `#${n} was made after the sync went live, but it's numbered below #${this.qs.live_from_number}, so it's treated as a Printavo order and isn't sent. New orders are still being numbered in the ${Math.floor(n / 10000) * 10000}s: start numbering at ${this.qs.live_from_number} (in Supabase → SQL: alter sequence public.order_number_seq restart with ${this.qs.live_from_number};). Enter this invoice in QuickBooks by hand, then Skip.` };
+    if (!this.qbo) return { stop: { status: "pending", reason: `Not connected: would bring QuickBooks invoice #${n} (made by Printavo) to ours.` } };
+    type Inv = Rec & { DocNumber?: string; CustomerRef?: { value: string; name?: string }; TotalAmt?: number };
+    const q = this.qbo.with({ entity: "invoice", localId: o.id });
+    if (link && link.source !== "test") {
+      if (link.source === "created") return { link, rec: null };
+      const cur = await q.with({ qboId: link.qbo_id }).read<Inv>("Invoice", link.qbo_id);
+      if (!cur) return { stop: { status: "needs_review", reason: `QuickBooks invoice #${link.qbo_id} (Printavo's #${n}) is gone (deleted in QuickBooks). Skip, or remove the link to make ours.` } };
+      return { link, rec: cur };
     }
     const nums = [...new Set([String(n), String(o.printavo_visual_id || "").trim()].filter(Boolean))];
-    // our own version of the invoice, for comparing with Printavo's (Printavo adds its card surcharge on its copy)
-    const cust = o.customer_id ? await this.ourCustomer(o.customer_id) : null;
-    const ours = invoicePayload({ order: o, customer: cust, customerRef: null, settings: this.settings, qs: this.qs });
-    const preview = { action: "adopt", lookFor: nums, note: `#${n} is a transition order: Printavo sends it to QuickBooks; we only link to it (payments recorded here after the cutover go on it).`, total: ours.total, storedTotal: ours.storedTotal, summary: ours.summary, warnings: ours.warnings };
-    if (!this.qbo) return { status: "pending", reason: `Not connected: would look for QuickBooks invoice ${nums.map((x) => "#" + x).join(" / ")} (made by Printavo) and link to it.`, preview };
-    const found = await this.qbo.with({ entity: "invoice", localId: o.id }).query<Rec & { DocNumber?: string; CustomerRef?: { value: string; name?: string }; TotalAmt?: number }>("Invoice", `WHERE DocNumber IN (${nums.map((x) => `'${esc(x)}'`).join(", ")})`);
-    if (!found.length) {
-      if (row.attempts < 6) return { status: "error", reason: `No QuickBooks invoice #${nums.join(" / ")} yet (Printavo sends it). Will look again.`, retryMin: 60 * Math.max(1, row.attempts), preview };
-      return { status: "needs_review", reason: `No QuickBooks invoice #${nums.join(" / ")} found. Printavo should have sent it; check Printavo's QuickBooks sync, or Skip.`, preview };
-    }
+    const found = await q.query<Inv>("Invoice", `WHERE DocNumber IN (${nums.map((x) => `'${esc(x)}'`).join(", ")})`);
+    if (!found.length) return { link: null, rec: null };
     let pick = found[0];
-    for (const f of found) { const owner = await this.linkByQbo("customer", String(f.CustomerRef?.value || "")); if (owner?.local_id === o.customer_id) { pick = f; break; } }
+    if (found.length > 1) {
+      const mine: Inv[] = [];
+      for (const f of found) { const owner = await this.linkByQbo("customer", String(f.CustomerRef?.value || "")); if (owner?.local_id === o.customer_id) mine.push(f); }
+      if (mine.length !== 1) return { stop: { status: "needs_review", reason: `QuickBooks has ${found.length} invoices numbered ${nums.map((x) => "#" + x).join(" / ")}: check which is this order's, then Retry.` } };
+      pick = mine[0];
+    }
     await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: pick.Id, source: "adopted_docnumber", rec: pick });
-    const owner = await this.linkByQbo("customer", String(pick.CustomerRef?.value || ""));
-    const note = owner && owner.local_id !== o.customer_id ? " Its QuickBooks customer is linked to a different customer of ours: check the matching." : !owner ? ` Its QuickBooks customer (${pick.CustomerRef?.name || pick.CustomerRef?.value}) isn't linked yet: run Customer matching.` : "";
-    return { status: "done", reason: `Linked to Printavo's QuickBooks invoice #${pick.DocNumber} (QuickBooks #${pick.Id}, ${r2(+(pick.TotalAmt || 0)).toFixed(2)}).${note}`, result: { qboId: pick.Id, qboTotal: pick.TotalAmt }, qboId: pick.Id, preview };
+    return { link: await this.link("invoice", o.id), rec: pick };
   }
 
   async voidInvoice(row: QRow): Promise<Outcome> {
