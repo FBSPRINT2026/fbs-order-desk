@@ -249,7 +249,7 @@ export type Step = { method: MachineType; location: string; colors: number; scre
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
 const LIGHT = /\b(white|natural|ash|cream|ivory|light|silver|heather\s*grey|sport\s*grey|pink|yellow|lime|sand|oatmeal|bone|vanilla|butter|mint|sky|baby)\b/i;
-const kindOfWords = (text: string): Step["garment"] | null => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hoodies?|sweat|sweatshirts?|sweatpants?|joggers?|crew\s*neck|crewneck|fleece|jackets?|pullovers?|quarter|zip)\b/i.test(text) ? "heavy" : null);
+const kindOfWords = (text: string): Step["garment"] | null => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hooded|hoodies?|sweats?|sweatshirts?|sweatpants?|joggers?|crew\s*neck|crewnecks?|fleece|jackets?|pullovers?|quarter|zip|full-zip|1\/4-zip)\b/i.test(text) ? "heavy" : null);
 /** what each catalog style is called ("562M" → "Jerzees - NuBlend Crewneck Sweatshirt"), seeded by the pages that time jobs
  *  (`seedStyleTitles`), so a line that only says its style number is timed as what it really is (Nov 12, Nick: #50036's 228
  *  Jerzees 562M sweatshirts were timed as tees) */
