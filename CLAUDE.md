@@ -68,6 +68,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   over the page (`position: fixed` placed by top/left: right-click menus, dropdowns, popovers) back inside the window, up
   from the bottom and in from the right, and one taller than the window scrolls inside. Place a menu at the pointer as
   usual; put `data-nopopfit` only on one that must stay exactly where it's put.
+- **Dragging scrolls with you** (Nick, Nov 12: "as you're dragging it, use your scroll wheel… it's not working smooth").
+  `components/DragScroll.tsx`, mounted for every page: while anything is dragged, the wheel scrolls the page (or the box
+  under the pointer) smoothly, and holding near the top or bottom edge scrolls that way. Never build a drag-only scroll.
 - **Every feature's class names are its own** (Oct 31: the Assistant's to-do cards were squeezed and stacked because
   the Inbox's after-send pop-up and the Artwork shelf also defined `.as-card` / `.as-t` in the global stylesheet). Give a
   new feature its own prefix, grep `app/globals.css` for a name before using it, and run `node scripts/css-clashes.mjs`

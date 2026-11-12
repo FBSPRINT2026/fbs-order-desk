@@ -200,3 +200,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:16am · 1.3.404 · Nick · Schedule: no dot after a printing job's number
 - Nov 12 9:21am · 1.3.405 · Nick · Schedule: a printing job gets a strip along the bottom (green on time, yellow up to 30m over, red past), time used / figured; short jobs just 'Printing' at the end of the line
 - Nov 12 9:22am · 1.3.406 · Nick · Schedule: each press's Actual box shows when the crew clocked in with the live clock off too (display only)
+- Nov 12 9:24am · 1.3.407 · Nick · Dragging anywhere on the site: the mouse wheel scrolls smoothly mid-drag, and holding near the top or bottom edge scrolls that way
