@@ -3147,7 +3147,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
           <div className="mji-jn">{[c.job.name, info?.po && info.po.trim().toLowerCase() !== (c.job.name || "").trim().toLowerCase() ? `PO ${info.po}` : ""].filter(Boolean).join(" · ")}</div>
           <div className="mji-pills">
             <span className={"mji-pill " + (stt === "running" ? "g" : stt === "done" ? "g" : stt === "paused" ? "a" : "gr")}>{stt === "scheduled" ? "Not started" : stt === "running" ? "Printing" : stt === "paused" ? "Paused" : "Done"}</span>
-            {c.job.due && <span className="mji-pill o">Due {dW(c.job.due)} {dayShort(c.job.due)}{c.job.dueTime != null ? ` · ${clock(c.job.dueTime)}` : ""}</span>}
+            {c.job.due && <span className="mji-pill o">Due {dayShort(c.job.due).replace(",", "")}{c.job.dueTime != null ? ` · ${clock(c.job.dueTime)}` : ""}</span>}
             {goodsPill && <span className="mji-pill gr"><GoodsTee k={goodsPill[0]} t="" />{goodsPill[1]}</span>}
             {sl?.locked && <span className="mji-pill b">Locked to {sl.locked === "spot" ? "this spot" : sl.locked === "press" ? "this press" : sl.locked === "person" ? lead(c.machine) || "this person" : "this day"}</span>}
             {c.job.rush && <span className="mji-pill r">Rush</span>}{c.job.firm && <span className="mji-pill o">Firm · {firmLbl(c.job)}</span>}
