@@ -281,8 +281,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   inks without "PMS"; Open job, Separations, Mockup, Work order, and Split (pick the print spots that run separately and
   the press for them: `splitByLocation`) or, on a split job, Unite (`uniteJob`: back into one run on the first run's
   press); More details (in-hands date, run times, labor, the log). Nothing on it starts, finishes or moves a job. Right click (option B): the run as three steps
-  (Started → Printing → Done, each with its time) with one time box and Start / Pause (pick why) / Resume / Complete;
-  then Goods tiles (Count in, All here, Missing), Schedule tiles (Run next, Move, Lock), Rush / Firm, and Take off the
+  (Started → Printing → Done, each with its time); one row of the time box, Pause (or Resume) and Complete; under it
+  "When it's done, the order goes to" Fulfillment / Ready (picked to start with) / Completed; Pause asks why (Lunch, Break,
+  Ink, End of day, Other) and what's done so far, spot by spot (Done / Part with pieces / Not yet), which sets how much is
+  left (`pauseDone`, each spot weighed by its print time); then Goods tiles (Count in, All here, Missing), Schedule tiles (Run next, Move, Lock), Rush / Firm, and Take off the
   schedule (asks once).
   Right-click a job does by hand what the press timer and time clock do (Nick, Nov 12: "he should be able to do with a right
   click what the live clock will do"), each with a time box (now, changeable): Mark started, pieces done so far, Pause

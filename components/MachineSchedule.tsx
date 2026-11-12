@@ -539,6 +539,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [openMove, setOpenMove] = useState(false);
   const [keyOpen, setKeyOpen] = useSticky("cal.key", true);
   const [rcPause, setRcPause] = useState(false), [rcSure, setRcSure] = useState(false);
+  // a pause says what's done so far, print spot by print spot (Nov 12, Nick: "the sleeves are done… half the fronts")
+  const [rcDone, setRcDone] = useState<Record<string, { s: "d" | "p" | "n"; n: string }>>({});
   const [rcGoods, setRcGoods] = useState<{ ref: string; job: CheckJob | null; err: string } | null>(null);
   const [countJob, setCountJob] = useState<CheckJob | null>(null);
   const [lockSide, setLockSide] = useState<{ c: Card; g: Seg; k: "spot" | "press" | "day" | "person" } | null>(null);
@@ -1928,7 +1930,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const job = [...((j.jobs || []) as CheckJob[]), ...((j.problems || []) as CheckJob[])].find((x) => x.ref === ref) || null;
       setRcGoods((g) => (g && g.ref === ref ? { ref, job, err: j.error || (job ? "" : "No goods on this job.") } : g));
     }).catch(() => setRcGoods((g) => (g && g.ref === ref ? { ...g, err: "Couldn't load the goods." } : g)));
-    setRcF({ t: hhmm(now.min), pcs: String(Math.round(+(c.slot?.progress || 0) * c.need.qty) || ""), why: "Lunch", next: "fulfillment", edit: false });
+    setRcF({ t: hhmm(now.min), pcs: String(Math.round(+(c.slot?.progress || 0) * c.need.qty) || ""), why: "Lunch", next: "ready", edit: false });
+    setRcDone({});
     setRcPause(false); setRcSure(false);
     setLockMenu({ c, g, x, y });
   }
@@ -1939,6 +1942,15 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (r.error) { setMsg(r.error.message); return null; }
     return r.data as Slot;
   }
+  /** what's done at a pause, from the print spots ticked: each spot weighs what it takes to print */
+  const pauseDone = (c: Card) => {
+    const locs = locsOf(c.need), q = c.need.qty || 1;
+    const w = locs.map((l) => ({ l, m: Math.max(1, estimate(s!, subNeed(c.need, [l]), c.machine).minutes) }));
+    let tot = 0, got = 0; const bits: string[] = [];
+    for (const x of w) { const d = rcDone[x.l]; tot += x.m; if (d?.s === "d") { got += x.m; bits.push(`${x.l} done`); } else if (d?.s === "p") { const n = Math.max(0, Math.min(q, +d.n || 0)); got += (x.m * n) / q; bits.push(`${x.l} ${n}/${q}`); } }
+    const p = tot ? got / tot : 0, est = c.plan?.est ?? estimate(s!, c.need, c.machine).minutes;
+    return { p, left: Math.round(est * (1 - p)), marked: Object.values(rcDone).some((d) => d.s !== "n"), note: bits.join("; ") };
+  };
   async function rcDo(c: Card, g: Seg, action: "start" | "pause" | "resume" | "progress" | "done" | "not_started" | "restart", why?: string) {
     const sl = await slotFor(c, g); if (!sl) return;
     const when = isoAt(rcF.t);
@@ -1952,7 +1964,11 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     }
     const q = c.need.qty || 0, pcs = Math.max(0, Math.min(q, Math.round(+rcF.pcs || 0)));
     if (action === "progress") { await logAction(sl, "progress", q ? pcs / q : 0, true, when); setMsg(`#${c.job.number}: ${pcs} of ${q} done.`); return; }
-    if (action === "pause") { const w = why || rcF.why; await logAction(sl, "pause", undefined, true, when, `Paused: ${w}`); setMsg(`#${c.job.number} paused (${w}).`); return; }
+    if (action === "pause") {
+      const w = why || rcF.why, pz = pauseDone(c);
+      await logAction(sl, "pause", pz.marked ? pz.p : undefined, true, when, `Paused: ${w}${pz.note ? ` · ${pz.note}` : ""}`);
+      setMsg(`#${c.job.number} paused (${w})${pz.marked ? `: ${Math.round(pz.p * 100)}% done` : ""}.`); return;
+    }
     if (action !== "done") { await logAction(sl, action, undefined, true, when); setMsg(`#${c.job.number} ${action === "start" ? "started" : action === "resume" ? "back on" : "set back to not started"}.`); return; }
     await logAction(sl, "done", 1, false, when);
     // the order moves on once its last job on the schedule is done
@@ -2308,11 +2324,23 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               {st === "scheduled" && <div className="mrb-row">{tIn}<button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "start")}><RcIco k="play" />Start</button></div>}
               {st === "running" && <>
                 <div className="mrb-row">{tIn}<button type="button" className={"mrc-act" + (rcPause ? " on" : "")} onClick={() => setRcPause(!rcPause)}><RcIco k="pause" />Pause</button><button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "done")}><RcIco k="check" />Complete</button></div>
-                {rcPause && <div className="mrb-why">{["Lunch", "Break", "Ink / screen", "Other"].map((w) => <button key={w} type="button" onClick={() => { setRcF({ ...rcF, why: w }); void rcDo(c, g, "pause", w); }}>{w}</button>)}</div>}
-                <div className="mrb-pcs"><span>Pieces done</span><input className="mrc-t mrc-n" inputMode="numeric" value={rcF.pcs} onChange={(e) => setRcF({ ...rcF, pcs: e.target.value.replace(/\D/g, "") })} /><span className="faint">of {q.toLocaleString()}</span><button type="button" className="linkbtn" onClick={() => void rcDo(c, g, "progress")}>Update</button></div>
+                {rcPause && (() => { const pz = pauseDone(c); return <div className="mrb-pz">
+                  <b>Why?</b>
+                  <div className="mrb-why">{["Lunch", "Break", "Ink", "End of day", "Other"].map((w) => <button key={w} type="button" className={rcF.why === w ? "on" : ""} onClick={() => setRcF({ ...rcF, why: w })}>{w}</button>)}</div>
+                  {locsOf(c.need).length > 0 && <><b>What&apos;s done so far?</b>
+                    {locsOf(c.need).map((l) => { const d = rcDone[l] || { s: "n", n: "" }, st1 = c.need.steps.find((x) => locKey(x) === l || x.location === l); return <div key={l} className="mrb-loc">
+                      <span><b>{l}</b><small>{st1 ? `${st1.colors ? `${st1.colors} color${st1.colors === 1 ? "" : "s"}` : "blank"} · ` : ""}{q.toLocaleString()}</small></span>
+                      <span className="mrb-ch">{(["d", "p", "n"] as const).map((k) => <button key={k} type="button" className={(d.s === k ? "on " : "") + k} onClick={() => setRcDone({ ...rcDone, [l]: { ...d, s: k } })}>{k === "d" ? "Done" : k === "p" ? "Part" : "Not yet"}</button>)}</span>
+                      {d.s === "p" && <span className="mrb-pn">Pieces done <input className="mrc-t mrc-n" inputMode="numeric" value={d.n} onChange={(e) => setRcDone({ ...rcDone, [l]: { ...d, n: e.target.value.replace(/\D/g, "") } })} /> of {q.toLocaleString()}</span>}
+                    </div>; })}</>}
+                  <button type="button" className="mrb-pgo" onClick={() => void rcDo(c, g, "pause")}>Pause{pz.marked ? ` · ${Math.round(pz.p * 100)}% done, ${fmtMin(pz.left)} left` : ""}</button>
+                </div>; })()}
               </>}
-              {st === "paused" && <div className="mrb-row">{tIn}<button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "resume")}><RcIco k="play" />Resume</button><button type="button" className="mrc-act" onClick={() => void rcDo(c, g, "done")}><RcIco k="check" />Complete</button></div>}
-              {(st === "running" || st === "paused") && c.slot?.order_id && <div className="mrb-then">then the order goes to <select value={rcF.next} onChange={(e) => setRcF({ ...rcF, next: e.target.value as typeof rcF.next })}><option value="fulfillment">Fulfillment</option><option value="ready">Ready</option><option value="completed">Completed</option></select> once it&apos;s its last job{rcF.next !== "fulfillment" ? " (the customer gets the status email)" : ""}</div>}
+              {st === "paused" && <div className="mrb-row">{tIn}<button type="button" className="mrc-act" onClick={() => void rcDo(c, g, "resume")}><RcIco k="play" />Resume</button><button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "done")}><RcIco k="check" />Complete</button></div>}
+              {(st === "running" || st === "paused") && c.slot?.order_id && <div className="mrb-dest"><div className="mrb-dl">When it&apos;s done, the order goes to</div>
+                <div className="mrb-seg">{([["fulfillment", "Fulfillment", "fold, bag, count"], ["ready", "Ready", "pickup / ship"], ["completed", "Completed", "picked up"]] as const).map(([k, l, sub]) => <button key={k} type="button" className={rcF.next === k ? "on" : ""} onClick={() => setRcF({ ...rcF, next: k })}>{l}<small>{sub}</small></button>)}</div>
+                {rcF.next !== "fulfillment" && <div className="mrb-note">Once it&apos;s the order&apos;s last job; the customer gets the usual status email.</div>}
+              </div>}
               {st === "done" && <div className="mrb-row"><button type="button" className="mrc-act" onClick={() => { const sl = c.slot!; setLockMenu(null); void logAction(sl, "reopen"); }}><RcIco k="undo" />Not done yet</button></div>}
               {(st === "running" || st === "paused") && <button type="button" className="linkbtn mrb-undo" onClick={() => void rcDo(c, g, "not_started")}>Not started after all</button>}
             </div>}
