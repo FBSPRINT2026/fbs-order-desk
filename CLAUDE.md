@@ -275,6 +275,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   earliest they go home is lunch (Nick, Nov 11). A job that won't finish today never starts with under an hour left in the day
   (`DAY_TAIL`): it starts the next morning. A hold (Production holder) runs no earlier than 3 working days before its
   in-hands date; it saves press time near its date, it never jumps the line (Nick, Nov 11).
+  **Left click is information, right click is doing** (Nick, Nov 12). Left click opens the job card (`CardPanel`):
+  status, due, goods, lock; mockup pictures; run time (press, planned, started, so far); each print with its inks; the
+  garments and who counted them; Open job, Separations, Mockup, Work order; More details (in-hands date, run times,
+  labor, split, the log). Nothing on it starts, finishes or moves a job. Right click (option B): the run as three steps
+  (Started → Printing → Done, each with its time) with one time box and Start / Pause (pick why) / Resume / Complete;
+  then Goods tiles (Count in, All here, Missing), Schedule tiles (Run next, Move, Lock), Rush / Firm, and Take off the
+  schedule (asks once).
   Right-click a job does by hand what the press timer and time clock do (Nick, Nov 12: "he should be able to do with a right
   click what the live clock will do"), each with a time box (now, changeable): Mark started, pieces done so far, Pause
   (Lunch / Break / Ink / screen / Other), Resume, Mark complete (then the order goes to Fulfillment / Ready / Completed
