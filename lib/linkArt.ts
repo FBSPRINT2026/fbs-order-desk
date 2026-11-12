@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { inflateRawSync } from "node:zlib";
 import { Canva, CanvaError, NO_ACCESS_MSG, canvaConnected, designIdFrom } from "@/lib/canva/client";
 import { exportBoth, fileTitle } from "@/lib/canva/save";
-import { isPrintavoLink, readPrintavoPage } from "@/lib/printavoLink";
+import { isPrintavoLink, readPrintavoPage, printavoHead, type PrintavoOrder } from "@/lib/printavoLink";
 
 /**
  * Artwork sent as a LINK instead of an attachment (Oct 9, Nick: "she sent me a Canva link… learn to work with Canva").
@@ -328,23 +328,14 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
       if (have.has(final)) continue;
       try {
         const p = await readPrintavoPage(final);
-        const saved: LinkFile[] = [];
-        const put = async (name: string, buf: Buffer, type: string, note?: string) => {
-          const path = `emails/${a.customer_id || "leads"}/${Date.now().toString(36)}-${saved.length}-${name.replace(/[^\w.\- ()#]+/g, "_").slice(-120)}`;
-          const { error } = await admin.storage.from("proofs").upload(path, buf, { contentType: type, upsert: false });
-          if (error) { f.error = error.message; return; }
-          saved.push({ name, path, type, size: buf.length, from_link: final, source: "download", ...(note ? { note } : {}) });
-        };
-        await put(`${p.title} (their Printavo).txt`, Buffer.from(p.text, "utf8"), "text/plain", "The order as it reads on their Printavo page (their prices left out).");
-        for (const x of p.files) {
-          const got = await download(x.url, MAX, KEEP_TYPE).catch(() => null);
-          if (!got) continue;
-          const ext = /\.[a-z0-9]{2,4}$/i.test(x.name) ? "" : got.type.includes("png") ? ".png" : got.type.includes("pdf") ? ".pdf" : /jpe?g/.test(got.type) ? ".jpg" : got.type.includes("webp") ? ".webp" : "";
-          const name = x.name + ext;
-          await put(name, got.buf, /octet-stream|binary/i.test(got.type) ? typeByName(name) : got.type);
-        }
-        if (saved.length) { f.saved = saved[0]; f.more = saved.slice(1); }
-      } catch (e) { f.error = e instanceof Error ? e.message : String(e); }
+        const saved = await savePrintavo(admin, a.customer_id as string | null, final, p);
+        if (saved.files.length) { f.saved = saved.files[0]; f.more = saved.files.slice(1); }
+        if (saved.error) f.error = saved.error;
+      } catch (e) {
+        const m = e instanceof Error ? e.message : String(e);
+        // Printavo turns the portal's server away: the page is brought in from a browser instead (Bring in from Printavo)
+        f.error = /403/.test(m) ? "Printavo won't let the portal open this page by itself. Open it in Chrome and bring it in from there." : m;
+      }
       continue;
     }
     if (kind === "canva" && canvaOn) {
@@ -403,4 +394,46 @@ export async function linkArtForEmail(admin: SupabaseClient, activityId: string,
   const links = found.filter((f) => f.kind !== "other").map((f) => ({ url: f.final, kind: f.kind, ok: !!f.saved, error: f.error }));
   await admin.from("activities").update({ meta: { ...meta, attachments: [...(meta.attachments || []), ...add], link_art_at: new Date().toISOString(), ...(links.length ? { links } : {}) } }).eq("id", activityId);
   return { ok: true, found };
+}
+
+/**
+ * Another shop's Printavo order saved onto an email like attachments: the order as text (their prices left out), then
+ * each picture and file. Used when the portal reads the page itself, and when the page was read in a browser (Printavo
+ * turns servers away; Nov 12) and handed in: lib/printavoLink.ts.
+ */
+export async function savePrintavo(admin: SupabaseClient, customerId: string | null, link: string, p: PrintavoOrder): Promise<{ files: LinkFile[]; error?: string }> {
+  const saved: LinkFile[] = [];
+  let error = "";
+  const put = async (name: string, buf: Buffer, type: string, note?: string) => {
+    const path = `emails/${customerId || "leads"}/${Date.now().toString(36)}-${saved.length}-${name.replace(/[^\w.\- ()#]+/g, "_").slice(-120)}`;
+    const { error: e } = await admin.storage.from("proofs").upload(path, buf, { contentType: type, upsert: false });
+    if (e) { error = e.message; return; }
+    saved.push({ name, path, type, size: buf.length, from_link: link, source: "download", ...(note ? { note } : {}) });
+  };
+  await put(`${p.title} (their Printavo).txt`, Buffer.from(p.text, "utf8"), "text/plain", "The order as it reads on their Printavo page (their prices left out).");
+  for (const x of p.files.slice(0, 14)) {
+    // only the files Printavo keeps (its file host), never an address handed in from elsewhere
+    try { if (!/(^|\.)(filepicker\.io|filestackcontent\.com|printavo\.com|amazonaws\.com)$/i.test(new URL(x.url).hostname)) continue; } catch { continue; }
+    const got = await download(x.url, MAX, KEEP_TYPE).catch(() => null);
+    if (!got) { error = error || `Couldn't download ${x.name}.`; continue; }
+    const ext = /\.[a-z0-9]{2,4}$/i.test(x.name) ? "" : got.type.includes("png") ? ".png" : got.type.includes("pdf") ? ".pdf" : /jpe?g/.test(got.type) ? ".jpg" : got.type.includes("webp") ? ".webp" : "";
+    const name = x.name + ext;
+    await put(name, got.buf, /octet-stream|binary/i.test(got.type) ? typeByName(name) : got.type);
+  }
+  return { files: saved, ...(error ? { error } : {}) };
+}
+
+/** a Printavo page read in a browser, handed in for an email: saved onto it like attachments (once per link) */
+export async function printavoIntoEmail(admin: SupabaseClient, activityId: string, link: string, html: string, read?: PrintavoOrder): Promise<{ ok: true; files: string[]; error?: string } | { ok: false; error: string }> {
+  if (!isPrintavoLink(link)) return { ok: false, error: "That isn't a Printavo order link." };
+  const { data: a } = await admin.from("activities").select("id, customer_id, meta").eq("id", activityId).maybeSingle();
+  if (!a) return { ok: false, error: "Email not found." };
+  const { parsePrintavoHtml } = await import("@/lib/printavoLink");
+  const p: PrintavoOrder = read ? { title: String(read.title || "Printavo order").slice(0, 120), text: printavoHead(String(read.title || "Printavo order").slice(0, 120), link) + String(read.text || "").slice(0, 20_000), files: (Array.isArray(read.files) ? read.files : []).slice(0, 14).map((x) => ({ url: String(x.url || ""), name: String(x.name || "File").slice(0, 120) })) } : parsePrintavoHtml(html, link);
+  const meta = (a.meta || {}) as { attachments?: LinkFile[]; links?: { url: string; kind: string; ok: boolean; error?: string }[] };
+  const keep = (meta.attachments || []).filter((x) => x.from_link !== link);
+  const r = await savePrintavo(admin, a.customer_id as string | null, link, p);
+  const links = [...(meta.links || []).filter((x) => x.url !== link), { url: link, kind: "printavo", ok: r.files.length > 0, ...(r.error ? { error: r.error } : {}) }];
+  await admin.from("activities").update({ meta: { ...meta, attachments: [...keep, ...r.files], links } }).eq("id", activityId);
+  return { ok: true, files: r.files.map((x) => x.name), ...(r.error ? { error: r.error } : {}) };
 }

@@ -39,7 +39,11 @@ export type PrintavoOrder = { title: string; text: string; files: { url: string;
 export async function readPrintavoPage(url: string): Promise<PrintavoOrder> {
   const r = await fetch(url, { headers: { "user-agent": UA, accept: "text/html" }, redirect: "follow", signal: AbortSignal.timeout(20_000) });
   if (!r.ok) throw new Error(`Their Printavo page answered ${r.status}.`);
-  const html = await r.text();
+  return parsePrintavoHtml(await r.text(), url);
+}
+
+/** the page's HTML (read by the portal, or in a browser and handed in) → the order as text and its files */
+export function parsePrintavoHtml(html: string, url: string): PrintavoOrder {
   const title = ent(html.match(/<title>([^<]*)<\/title>/i)?.[1] || "").replace(/^Printavo\s*-\s*/i, "").replace(/\s*-\s*[^-]*$/, "").trim() || "Printavo order";
   const files: { url: string; name: string }[] = [], seen = new Set<string>();
   const add = (u: string, name: string) => { const f = fileUrl(u); if (!/^https:\/\//.test(f) || seen.has(f)) return; seen.add(f); files.push({ url: f, name }); };
@@ -60,13 +64,16 @@ export async function readPrintavoPage(url: string): Promise<PrintavoOrder> {
   // the large mockups at the end of a work order
   const big = html.indexOf("workorder-large-mockups");
   if (big > 0) { let k = 0; for (const a of html.slice(big).match(/<a\b[^>]*fancybox[^>]*>/gi) || []) add(attr(a, "href"), `Mockup ${++k}`); }
-  const head = [
+  const head = printavoHead(title, url);
+  return { title, text: head + pageText(html.slice(html.search(/<body\b/i) >= 0 ? html.search(/<body\b/i) : 0)).slice(0, 20_000), files: files.slice(0, 14) };
+}
+
+/** what the reader is told about another shop's Printavo order before its text */
+export const printavoHead = (title: string, url: string) => [
     `${title}: the customer's order on their own Printavo (${new URL(url).hostname}), read off the page.`,
     "The line items are the order: their quantities and sizes are what to make (a size sheet among the pictures is only a reference).",
     "Their prices and fees are what they charge their own customer and were left out: price this at our own rates.",
     "Customer Shipping is where the finished order ships (their customer, a drop ship). Customer Billing is their customer, not who we bill.",
     "Each line's pictures are saved as \"Line N picture …\": the art on that line's garments.",
     "",
-  ].join("\n");
-  return { title, text: head + pageText(html.slice(html.search(/<body\b/i) >= 0 ? html.search(/<body\b/i) : 0)).slice(0, 20_000), files: files.slice(0, 14) };
-}
+  ].join("\n") + "\n";
