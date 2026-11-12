@@ -6,6 +6,7 @@ import { isBoss, seesPay, type TimeData } from "./types";
 import { useSticky } from "@/lib/useSticky";
 import { fmtPhone } from "@/lib/phone";
 import { sendToFaceClock } from "@/app/shop/time-actions";
+import { clearScreenPin } from "@/app/shop/screen-pin-actions";
 
 const COLORS = ["#0E9BD8", "#F26660", "#FCB122", "#0F8C78", "#7C5CD6", "#D0487A", "#3F7F2E", "#B8621B"];
 const blank = (): Partial<Employee> => ({ first_name: "", last_name: "", email: "", phone: "", staff_email: null, department: "", title: "", pay_type: "hourly", paid_by: "payroll", color: "", active: true, hire_date: new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" }), notes: "" });
@@ -147,6 +148,10 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
               {v.has_pin && <button type="button" className="linkbtn" onClick={clearPin}>Remove PIN</button>}
             </div>
           ) : <div className="faint">{v.has_pin ? "PIN is set." : "No PIN."}</div>}
+          {(d.role === "owner" || d.role === "admin") && v.staff_email && (
+            // the PIN in front of the pay pages is theirs to make; a reset makes them pick a new one next time (Nov 12)
+            <div className="faint" style={{ fontSize: 12.5 }}>Pay pages PIN (keeps others from seeing pay on their screen): <button type="button" className="linkbtn" onClick={async () => { const r = await clearScreenPin(v.staff_email!); setNote(r.ok ? "Pay pages PIN reset. They'll make a new one the next time they open Time Clock, Employees or Payroll." : r.error || "Couldn't reset it."); }}>Reset it</button></div>
+          )}
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}><span className="lbl">Color</span>{COLORS.map((c) => <button key={c} type="button" className={"tmx-sw" + (v.color === c ? " on" : "")} style={{ background: c }} onClick={() => set("color", c)} aria-label={c} />)}</div>
           <label>Notes<input type="text" value={v.notes || ""} onChange={(ev) => set("notes", ev.target.value)} /></label>
           </>}
