@@ -74,12 +74,15 @@ function SearchInner() {
   const searchedFor = useRef("");
   const [ai, setAi] = useState<{ answer?: string; refs?: { label: string; href: string }[]; off?: boolean; reason?: string; error?: string; busy?: boolean; skip?: boolean } | null>(null);
 
-  // an order number or a customer's name goes straight there; anything else is searched (and the AI answers) (Oct 24, Nick)
+  // an order number goes straight there; anything else is searched (and the AI answers) (Oct 24, Nick; names: Nov 12)
   const [jump, setJump] = useState<"wait" | "none">("wait");
   useEffect(() => {
     let live = true;
     setJump("wait");
     if (!q0) { setJump("none"); return; }
+    // a customer's name no longer jumps straight to them (Nov 12, Nick: "Armstrong… we're getting Armstrong McCall"):
+    // names show the results; only an exact order number still opens its order
+    if (!/^#?\d{3,7}$/.test(q0.trim())) { setJump("none"); return; }
     quickJump(q0).then((h) => { if (!live) return; if (h) router.replace(h); else setJump("none"); }, () => live && setJump("none"));
     return () => { live = false; };
   }, [q0]); // eslint-disable-line react-hooks/exhaustive-deps
