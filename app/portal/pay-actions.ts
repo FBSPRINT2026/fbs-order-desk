@@ -20,8 +20,31 @@ const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e
  * The signed-in customer's orders (row security checks they're theirs) with what's owed on each,
  * worked out here from the order and its payments — never taken from the browser.
  */
-async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], applyAmount?: number) {
-  const { supabase, user, email, isStaff } = await getViewer();
+/**
+ * Paying from the emailed link without signing in (Nov 12, Nick: Pay now on the proof page went to the sign-in): the link
+ * (a proof of the order) pays that one order only, with a card or bank account typed in, never a saved one.
+ */
+async function guestOrder(proofId: string /* the review link's id */): Promise<{ orderId: string; customerId: string | null }> {
+  const admin = createAdminClient();
+  // the emailed review link (proof_links: the order's page), the key the customer was sent
+  const { openLink } = await import("@/lib/proofLinks");
+  const oid = (await openLink(admin, proofId))?.order_id;
+  if (!oid) throw new Error("This payment link isn't valid. Open your portal to pay, or call us.");
+  const { data: o } = await admin.from("orders").select("customer_id").eq("id", oid).maybeSingle();
+  return { orderId: oid, customerId: (o as { customer_id?: string } | null)?.customer_id || null };
+}
+
+async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], applyAmount?: number, guestProof?: string) {
+  let { supabase, user, email, isStaff } = await getViewer();
+  if (guestProof) {
+    // the emailed link: its one order, read as the shop (the link is the customer's key to it)
+    const g = await guestOrder(guestProof);
+    if (items.length !== 1 || items[0].orderId !== g.orderId) throw new Error("This link pays its own order only.");
+    supabase = createAdminClient() as unknown as typeof supabase;
+    const { data: gc } = g.customerId ? await supabase.from("customers").select("email").eq("id", g.customerId).maybeSingle() : { data: null };
+    email = (gc as { email?: string } | null)?.email || `link:${guestProof.slice(0, 8)}`;
+    user = (user || { id: "guest" }) as typeof user; isStaff = false;
+  }
   if (!user) throw new Error("Please sign in again.");
   if (isStaff) throw new Error("This is a preview. Customers pay from their own login.");
   if (!items.length) throw new Error("Pick at least one order to pay.");
@@ -35,7 +58,7 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
   const [{ data: pays }, { data: s }, { data: cs }] = await Promise.all([
     ids.length ? admin.from("payments").select("*").in("order_id", ids) : Promise.resolve({ data: [] }),
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
-    allRows((ra, rb) => supabase.from("customers").select("*").order("id").range(ra, rb)),
+    guestProof ? supabase.from("customers").select("*").eq("id", orders[0]?.customer_id || "").then((x) => ({ data: x.data })) : allRows((ra, rb) => supabase.from("customers").select("*").order("id").range(ra, rb)),
   ]);
   const settings = mergeSettings(s?.data);
   // old invoices: only their own (row security above lists only their customers), only once the account has moved
@@ -105,11 +128,13 @@ const cardFee = (sum: number, pct: number) => r2((sum * Math.max(0, pct)) / 100)
 export async function payOrders(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "card" | "bank"; paymentMethodId: string; applyAmount?: number; receiptTo?: string;
   /** keep this card / bank account on file (they ticked the box and saw the authorization) */ save?: boolean;
   /** pay with one of their saved ones (our id; the server looks up Stax's) */ savedId?: string;
-  /** a bank transfer through QuickBooks Payments (Nov 3): the account typed in, charged once, never kept */ bank?: import("@/lib/qbo/payments").BankIn }): Promise<Result> {
+  /** a bank transfer through QuickBooks Payments (Nov 3): the account typed in, charged once, never kept */ bank?: import("@/lib/qbo/payments").BankIn;
+  /** paying from the emailed link without signing in: the link's proof (one order, nothing saved or used from file) */ guestProof?: string }): Promise<Result> {
   try {
     const viaQbo = input.method === "bank" && !!input.bank && !input.savedId;
     if (!viaQbo && !process.env.STAX_API_KEY) return { ok: false, error: "Online payments aren't set up yet. Please contact the shop." };
-    const { admin, email, settings, lines: lines0, customer } = await owed(input.items, input.applyAmount);
+    if (input.guestProof && (input.savedId || input.save)) return { ok: false, error: "Sign in to use or save a card on file." };
+    const { admin, email, settings, lines: lines0, customer } = await owed(input.items, input.applyAmount, input.guestProof);
     // a run of failed tries locks the pay form for a while (a bot testing stolen cards)
     const since = new Date(Date.now() - 30 * 60000).toISOString();
     const { count: fails } = await admin.from("pay_attempts").select("id", { count: "exact", head: true }).eq("email", email).eq("ok", false).gte("created_at", since);
@@ -296,9 +321,9 @@ export async function removeSavedMethod(id: string): Promise<Result> {
 }
 
 /** Customer says they sent a Zelle or Venmo payment. Staff confirm it and record the payment. */
-export async function sentPaymentNotice(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "Zelle" | "Venmo"; note: string; applyAmount?: number }): Promise<Result> {
+export async function sentPaymentNotice(input: { items: { orderId: string; kind: "deposit" | "balance" }[]; method: "Zelle" | "Venmo"; note: string; applyAmount?: number; guestProof?: string }): Promise<Result> {
   try {
-    const { admin, email, settings, lines: lines0, customer } = await owed(input.items, input.applyAmount);
+    const { admin, email, settings, lines: lines0, customer } = await owed(input.items, input.applyAmount, input.guestProof);
     // no card fee by Zelle or Venmo: one already on an invoice comes off, as for ACH
     const lines = lines0.map((l) => { const off = l.full && l.feeIn > 0.004 ? l.feeIn : 0; return { ...l, off, amount: r2(l.amount - off) }; });
     const sum = r2(lines.reduce((a, l) => a + l.amount, 0));

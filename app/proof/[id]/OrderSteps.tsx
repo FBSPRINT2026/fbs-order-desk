@@ -5,6 +5,12 @@ import type { StepView } from "@/lib/customerSend";
 import ProofAnswer from "./ProofAnswer";
 import { PREVIEW_OFF, PreviewCtx, usePreview } from "./previewCtx";
 import { answerProof, answerQuote, approveAll } from "./actions";
+import PayPanel, { type PayItem } from "@/components/PayPanel";
+import { createContext, useContext } from "react";
+
+/** paying right on this page from the emailed link (Nov 12, Nick: Pay now went to the portal's sign-in) */
+export type GuestPay = { item: PayItem; pay: { cardFeePct: number; zelle: string; venmo: string }; staxToken: string; receiptEmail: string } | null;
+const PayCtx = createContext<{ cfg: GuestPay; link: string; open: boolean; setOpen: (v: boolean) => void }>({ cfg: null, link: "", open: false, setOpen: () => {} });
 
 /**
  * The order's customer page, one screen at a time (Oct 29, Nick: "you would click on the first thing, the proof, when it
@@ -20,8 +26,9 @@ const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency
 const whoWhen = (s: StepView) => [s.who, s.when ? new Date(s.when).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""].filter(Boolean).join(" · ");
 const listOf = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : xs[0] || "");
 
-export default function OrderSteps({ id, orderId = "", steps, preview = false }: { id: string; orderId?: string; steps: StepView[]; preview?: boolean }) {
-  return <PreviewCtx.Provider value={preview}><Steps id={id} orderId={orderId} steps={steps} /></PreviewCtx.Provider>;
+export default function OrderSteps({ id, orderId = "", steps, preview = false, pay = null }: { id: string; orderId?: string; steps: StepView[]; preview?: boolean; pay?: GuestPay }) {
+  const [open, setOpen] = useState(false);
+  return <PreviewCtx.Provider value={preview}><PayCtx.Provider value={{ cfg: pay, link: id, open, setOpen }}><Steps id={id} orderId={orderId} steps={steps} /></PayCtx.Provider></PreviewCtx.Provider>;
 }
 
 function Steps({ id, orderId, steps }: { id: string; orderId: string; steps: StepView[] }) {
@@ -161,6 +168,7 @@ function LookOver({ id, step, note0, nextLabel, isLast, onGood, onChanges }: { i
 /** the last screen: what they looked over, their name once, Submit approval; under it, Request changes and Decline the
  *  quote (Oct 29, Nick: "two small buttons under submit approval… request changes… decline the quote") */
 function Final({ id, orderId, todo, ok, goTo, onDone, onBack }: { id: string; orderId: string; todo: StepView[]; ok: Record<string, string>; goTo: (k: string) => void; onDone: (msg: string) => void; onBack: (kind: "changes" | "declined", note: string) => void }) {
+  const payCx = useContext(PayCtx);
   const pv = usePreview();
   const [name, setName] = useState(""), [err, setErr] = useState(""), [mode, setMode] = useState<"" | "changes" | "decline">(""), [why, setWhy] = useState(""), [sent, setSent] = useState<"" | "changes" | "declined">("");
   const [pending, start] = useTransition();
@@ -181,7 +189,7 @@ function Final({ id, orderId, todo, ok, goTo, onDone, onBack }: { id: string; or
     if (!r.ok) { setErr(r.error); return; }
     onDone(`We've got your approval for the ${label}. We'll take it from here.`);
     // paid up front: straight on to the payment (Nov 3, Nick: "approve and proceed to payment")
-    if (payFirst && orderId) window.location.href = payHref(orderId);
+    if (payFirst && orderId) { if (payCx.cfg) payCx.setOpen(true); else window.location.href = payHref(orderId); }
   });
   const sendBack = (decision: "changes" | "decline") => start(async () => {
     setErr("");
@@ -245,17 +253,23 @@ function Result({ tone, title, line, note, who }: { tone: "ok" | "chg" | "no"; t
 export const payHref = (orderId: string) => `/portal/orders/${orderId}?view=1&pay=1`;
 function PayNow({ orderId, label }: { orderId: string; label: string }) {
   const pv = usePreview();
+  const cx = useContext(PayCtx);
   const [err, setErr] = useState(""), [going, setGoing] = useState(false);
   const go = () => {
     setErr("");
     if (pv) { setErr(PREVIEW_OFF); return; }
     if (!orderId) { setErr("Open your portal to pay, or call us."); return; }
+    // right here, no sign-in: the link pays its own order (saved cards: sign in, a link in the pay window)
+    if (cx.cfg) { cx.setOpen(true); return; }
     setGoing(true); window.location.href = payHref(orderId);
   };
+  const router = useRouter();
+  const payWin = cx.cfg && cx.open ? <PayPanel modal guest={{ proof: cx.link, signIn: payHref(orderId) }} receiptEmail={cx.cfg.receiptEmail} items={[cx.cfg.item]} pay={cx.cfg.pay} staxToken={cx.cfg.staxToken} onClose={() => { cx.setOpen(false); router.refresh(); }} /> : null;
   return (
     <div className="pfl-pay">
       <button type="button" className="btn primary pfl-ok pfl-big" disabled={going} onClick={go}>{going ? "Opening payment…" : label}</button>
-      <div className="pfl-fine">Pay by card, bank transfer, Zelle or Venmo in your secure portal.</div>
+      <div className="pfl-fine">Pay by card, bank transfer, Zelle or Venmo.</div>
+      {payWin}
       {err && <div className="pv-err">{err}</div>}
     </div>
   );

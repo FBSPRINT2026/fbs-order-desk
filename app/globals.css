@@ -22737,3 +22737,5 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mxs-p.wt{background:var(--surface-2);color:var(--ink-3)}
 .mxs-p.ns{background:var(--warn-soft);color:var(--warn);outline:1px dashed var(--warn);outline-offset:-1px}
 .mxs-h{display:inline-flex;align-items:center}.mxs-h .mxs{margin-top:0}
+/* paying from the emailed link: sign in for a saved card (components/PayPanel.tsx guest) */
+.pp-saved-in{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2);font-size:13.5px;color:var(--ink-2)}.pp-saved-in svg{flex:none;color:var(--accent)}.pp-saved-in a{color:var(--accent);font-weight:700}

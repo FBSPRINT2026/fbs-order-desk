@@ -33,6 +33,9 @@ export default async function ProofPage({ params, searchParams }: { params: Prom
     const art = os.steps.find((x) => x.kind === "art" && x.state === "todo");
     if (art && counts) { const lp = await linkPage(admin, id, { kind: "art" }); if (lp) await linkViewed(admin, lp).catch(() => null); }
     if (counts) for (const s0 of os.steps.filter((x) => x.kind === "sewout" && x.state === "todo")) { const lp = await linkPage(admin, id, { kind: "sewout", id: s0.sewoutId! }); if (lp) await linkViewed(admin, lp).catch(() => null); }
+    // pay right here from the emailed link, no sign-in (lib/payItemFor.ts; app/portal/pay-actions.ts guestProof)
+    const pi = preview ? null : await (await import("@/lib/payItemFor")).payItemFor(admin, os.o.id).catch(() => null);
+    const guestPay = pi ? { ...pi, staxToken: (process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim() } : null;
     const backHref = from === "portal" ? `/portal/orders/${os.o.id}?view=1${preview ? `&as=${as}` : ""}` : "";
     return (
       <div className="pfl">
@@ -46,7 +49,7 @@ export default async function ProofPage({ params, searchParams }: { params: Prom
           <a className="pfl-portal" href={preview ? `/portal?as=${as}` : "/portal"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M15 18l-6-6 6-6" /></svg>Back to your portal</a>
         </header>
         {preview && <div className="preview-bar">Preview of the customer&apos;s review page. Buttons are turned off.</div>}
-        <OrderSteps id={id} orderId={os.o.id} steps={os.steps} preview={preview} />
+        <OrderSteps id={id} orderId={os.o.id} steps={os.steps} preview={preview} pay={guestPay} />
         <FrameFit />
       </div>
     );

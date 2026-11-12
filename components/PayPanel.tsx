@@ -22,7 +22,9 @@ const STAX_SRC = "https://staxjs.staxpayments.com/staxjs-captcha.js";
  * Pay one order or several together: credit card (with the card fee), ACH bank transfer, Zelle or Venmo.
  * Card and bank numbers go into Stax's own secure fields; we only get back a one-time token to charge.
  */
-export default function PayPanel({ items, pay, staxToken, canAct = true, onClose, amount, modal = false, receiptEmail = "", allHref }: {
+export default function PayPanel({ items, pay, staxToken, canAct = true, onClose, amount, modal = false, receiptEmail = "", allHref, guest }: {
+  /** paying from the emailed link without signing in (Nov 12, Nick): the link's proof pays its one order; saved cards need
+   *  signing in (signIn: where that link goes, back to paying) */ guest?: { proof: string; signIn: string };
   /** paying one invoice from its page: a link to all their invoices (the portal's Payments screen) to pay several at once (Nov 10, Nick) */ allHref?: string;
   items: PayItem[];
   /** open as its own window over the page (payments screen) instead of inline */
@@ -64,7 +66,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
   const [useSaved, setUseSaved] = useState("");
   const [keep, setKeep] = useState(false);
   useEffect(() => {
-    if (!canAct) return;
+    if (!canAct || guest) return;
     void mySavedMethods().then((r) => { setSaved(r.list); setConsent(r.consent); const first = r.list.find((x) => x.method === "card"); if (first) setUseSaved(first.id); });
   }, [canAct]);
   const savedHere = saved.filter((x) => (method === "bank" ? x.method === "bank" : method === "card" ? x.method === "card" : false));
@@ -126,7 +128,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     setMsg(null);
     if (method === "Zelle" || method === "Venmo") {
       setBusy(true);
-      const r = await sentPaymentNotice({ items: itemsReq, method, note: f.note, applyAmount: amount });
+      const r = await sentPaymentNotice({ items: itemsReq, method, note: f.note, applyAmount: amount, guestProof: guest?.proof });
       setBusy(false);
       if (!r.ok) return setMsg({ ok: false, text: r.error || "Couldn't send that." });
       setMsg({ ok: true, text: `Thanks! We'll confirm your ${method} payment of ${money(r.paid)} and mark it paid.` });
@@ -160,7 +162,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
     setBusy(true); busyRef.current = true;
     try {
       const pm = await stax.current.tokenize(details);
-      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: pm.id, applyAmount: amount, receiptTo: receipt.trim(), save: keep });
+      const r = await payOrders({ items: itemsReq, method: method === "card" ? "card" : "bank", paymentMethodId: pm.id, applyAmount: amount, receiptTo: receipt.trim(), save: guest ? false : keep, guestProof: guest?.proof });
       if (!r.ok) setMsg({ ok: false, text: r.error || "The payment didn't go through." });
       else { setSentTo(r.receiptTo || ""); setMsg({ ok: true, text: `Payment of ${money(r.paid)} received. Thank you!` }); router.refresh(); }
     } catch (e) {
@@ -212,7 +214,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
             </div>
           </div>
         )}
-        {(consent.card || consent.bank) && (
+        {!guest && (consent.card || consent.bank) && (
           <label className="pp-keep">
             <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
             <span><b>Keep this {method === "bank" ? "bank account" : "card"} on file</b><small>{method === "bank" ? consent.bank : consent.card}</small></span>
@@ -285,6 +287,7 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
               {forms()}
               {msg && <div className={msg.ok ? "okmsg" : "banner"} role={msg.ok ? "status" : "alert"}>{msg.text}</div>}
               {payButton()}
+              {guest && !done && <div className="pp-saved-in"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg><span>Have a card saved with us? <a href={guest.signIn}>Sign in to use it</a></span></div>}
               <div className="pp-secure">🔒 {method === "bank" ? "Bank details go straight to our payment processor (Stax). We never see or store them." : "Card numbers go straight to our payment processor (Stax). We never see or store them."}</div>
             </section>
           </div>
@@ -358,6 +361,8 @@ export default function PayPanel({ items, pay, staxToken, canAct = true, onClose
       )}
       {!canAct && <div className="faint" style={{ fontSize: 12 }}>Payments are turned off in the preview.</div>}
       {allHref && !done && <div className="faint pp-all">To pay multiple invoices together, <a href={allHref}>click here</a>.</div>}
+      {guest && !done && <div className="pp-saved-in"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg><span>Have a card saved with us? <a href={guest.signIn}>Sign in to use it</a></span></div>}
+      {guest && done && <div className="pp-saved-in"><span>Want to save a card for next time? <a href={guest.signIn}>Sign in</a></span></div>}
     </div>
   );
 }

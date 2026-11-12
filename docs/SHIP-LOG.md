@@ -226,3 +226,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 1:38pm · 1.3.430 · Nick · Printavo order pages read in a browser can be handed to an email (Printavo turns the portal's server away)
 - Nov 12 1:47pm · 1.3.431 · Nick · Youth styles show youth size columns only; a sister style made for moved sizes keeps its real sizes
 - Nov 12 1:55pm · 1.3.432 · Nick · Send emails greet a contact by their name, never their email address
+- Nov 12 2:14pm · 1.3.433 · Nick · Pay from the emailed review link without signing in (that order only; saved cards: sign in)
