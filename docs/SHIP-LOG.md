@@ -214,3 +214,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 10:24am · 1.3.418 · Nick · Schedule: a job marked complete stays on the board grayed, even after its order moves to Ready or Completed
 - Nov 12 10:35am · 1.3.419 · Nick · Schedule: a finished job sits where it really ran (its start to its finish), grayed, and the press's remaining jobs come after it
 - Nov 12 10:48am · 1.3.420 · Nick · Search: a customer's name shows the results instead of jumping to one customer (Armstrong matched Armstrong McCall); an order number still opens its order
+- Nov 12 10:58am · 1.3.421 · Nick · Work order: customer separations jobs skip the press sheets; their mockup big on page 2 with the ink lines

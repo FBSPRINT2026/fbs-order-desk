@@ -200,8 +200,12 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
     // doesn't change, you just need one close-up")
     // two close-ups a page (Oct 30, Nick: "a close-up of the left chest with the details on it, and then below it, close-up of
     // the full back"): a front and back print share one page
-    const printPages = allSup ? 0 : Math.ceil(sheetsOf(g, p.designs).length / 2);
-    return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
+    // the customer's own separations (Nov 12, Nick, #40382: "you would just blow up the visual mock-up to be as big as it
+    // could be… the page three would skip"): every print runs from their films, so no press sheets (they'd be empty black
+    // boxes) and the mockup page is their mockup, big, with each print's inks as a line under it
+    const theirSeps = !allSup && g.imprints.length > 0 && g.imprints.every((d) => d.custSeps || d.supplied);
+    const printPages = allSup || theirSeps ? 0 : Math.ceil(sheetsOf(g, p.designs).length / 2);
+    return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
   const starts: number[] = [];
@@ -216,7 +220,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
       <WoFit />
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
-        const { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup } = plans[gi];
+        const { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps } = plans[gi];
         const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, p.settings.wholesale));
         const sizes = SIZES.filter((z) => lines.some((l) => l.sizes?.[z]));
         const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
@@ -235,7 +239,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
         const sheets = sheetsOf(g, p.designs);
         sheets.forEach((sh, k) => { if (printPg[sh.di] == null) printPg[sh.di] = pgPrint + Math.floor(k / 2); });
         // their transfers: the print box points at the placement page
-        if (allSup) g.imprints.forEach((_d, di) => { printPg[di] = mk.length ? pgMk : pg; });
+        if (allSup || theirSeps) g.imprints.forEach((_d, di) => { printPg[di] = mk.length ? pgMk : pg; });
         const where = g.imprints.map((d) => d.supplied?.where || "").find(Boolean) || "";
         const notesBlock = (
           <>
@@ -338,7 +342,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                     <div className="specs wo-place-f">{["Press temp", "Time", "Pressure", "Peel"].map((k) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v fill" /></div>)}</div>
                   </>}
                   {g.imprints.length > 0 && !allSup && (
-                    <div className={"wo-cubes n" + Math.min(3, g.imprints.length)}>
+                    <div className={"wo-cubes n" + Math.min(3, g.imprints.length) + (theirSeps ? " wo-cs" : "")}>
                       {g.imprints.map((d0, di) => {
                         const des = d0.design_id ? p.designs[d0.design_id] : null;
                         // on this mockup's garment color: a colorway change runs that colorway (its own picture), else the print
@@ -347,9 +351,9 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                         const v = col && dc === d0 ? vars[di].find((x) => ckey(x.color) === ckey(col)) : undefined;
                         return (
                           <div className="wo-cube" key={d.id}>
-                            <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
+                            {!theirSeps && <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
                               {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} swap={v?.swap} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
-                            </div>
+                            </div>}
                             <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[d.colorway && des ? `${cwLetter(des, { name: d.colorway }) || ""} ${d.colorway}`.trim() : "", sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="wo-cc">{changeWord(d.method)}</span> : dc !== d0 ? <span className="wo-cc">Colorway</span> : null}</div>
                           </div>
                         );
@@ -371,7 +375,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
               </section>
             )}
             {/* 4. each print's press sheet */}
-            {!allSup && sheets.map((sh, k) => (k % 2 ? null : sheets[k + 1]
+            {!allSup && !theirSeps && sheets.map((sh, k) => (k % 2 ? null : sheets[k + 1]
               ? (
                 <section key={sh.d.id + k} className="sheet cu-pair">
                   {[sh, sheets[k + 1]].map((x, j) => <CloseUp key={x.d.id + (k + j)} half d={x.d} di={x.di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={x.variant ? x.variant.color : colors} qty={x.qty ?? (gc?.allQty || 0)} page={pgPrint + Math.floor(k / 2)} total={total} footL={footL} variant={x.variant} />)}
