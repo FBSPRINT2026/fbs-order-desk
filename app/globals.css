@@ -22668,3 +22668,7 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mrb-flags button.on.rush{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,var(--surface,#fff))}.mrb-flags button.on.firm{border-color:var(--fbs-orange);color:color-mix(in srgb,var(--fbs-orange) 55%,var(--ink));background:color-mix(in srgb,var(--fbs-orange) 10%,var(--surface,#fff))}
 .mrb-off{border-top:1px solid var(--line-2,#eef0f3)!important;color:var(--danger)!important}.mrb-off .mrc-i{color:var(--danger)!important}
 .mrb-sure{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--line-2,#eef0f3);font-size:13px;font-weight:600;color:var(--danger)}.mrb-sure .btn:first-of-type{margin-left:auto}
+/* the schedule's tools: three lines, Planning / Press & crew / Sales, each on its own row (Nov 12, Nick) */
+.msk-tools .msk-row{flex-direction:column;align-items:stretch;gap:8px}
+.msk-tools .msk-g{display:flex;width:100%}
+.msk-tools .msk-gl{width:92px;flex:none}
