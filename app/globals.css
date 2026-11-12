@@ -22613,3 +22613,11 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mph-1 b{font-size:14px;color:var(--ink)}.mph-who{color:var(--ink-3);font-size:12.5px;overflow:hidden;text-overflow:ellipsis}
 .mph-in{margin-left:auto;font-size:12.5px;font-weight:700;white-space:nowrap}.mph-in.ok{color:var(--ok)}.mph-in.warn{color:var(--warn)}.mph-in.bad{color:var(--danger)}.mph-in.none{color:var(--ink-3);font-weight:600}
 .mph-spec{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the press header is one dark card (Nov 12, option A): replaces the separate scoreboard row */
+.msf-mh.mph{padding:8px 4px;background:var(--surface-2,#f6f7f9)}
+.msf-grid>.msf-corner{background:var(--surface-2,#f6f7f9)}
+.mph-card{background:var(--fbs-navy);color:#fff;border-radius:8px;padding:8px 11px;display:flex;flex-direction:column;gap:1px;min-width:0}
+.mph-card .mph-1 b{color:#fff}.mph-card .mph-who{color:color-mix(in srgb,#fff 78%,var(--fbs-navy))}.mph-card .mph-spec{color:color-mix(in srgb,#fff 62%,var(--fbs-navy))}
+.mph-card .mph-in.ok{color:color-mix(in srgb,var(--ok) 50%,#fff)}.mph-card .mph-in.warn{color:color-mix(in srgb,var(--warn) 55%,#fff)}.mph-card .mph-in.bad{color:color-mix(in srgb,var(--danger) 45%,#fff)}.mph-card .mph-in.none{color:color-mix(in srgb,#fff 62%,var(--fbs-navy))}
+.mph-card .mdy-bar{margin:6px 0 3px}
+.mph-st{font-size:12px;color:color-mix(in srgb,#fff 78%,var(--fbs-navy));white-space:nowrap}.mph-st.bad{color:color-mix(in srgb,var(--danger) 45%,#fff);font-weight:700}

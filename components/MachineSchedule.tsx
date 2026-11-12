@@ -2054,20 +2054,18 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const flowView = () => (
     <div className={"msf" + (findWords.length ? " ms-finding" : "")}>
       <div className="msf-main">
-        {flowBlocks[0].d === today && (
-          <div className="mdy-sb" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
-            <span />
-            {machines.map((m) => { const sc = dayScore(m); if (!sc.n) return <div key={m.id} className="mdy-sbc"><b>{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><small>Nothing today</small></div>; return (
-              <div key={m.id} className="mdy-sbc"><b>{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><i className="mdy-bar"><i style={{ width: `${Math.round((sc.done / sc.n) * 100)}%` }} /></i>
-                <small className={sc.off != null && sc.off >= 15 ? "bad" : ""}>{sc.done} of {sc.n} done{sc.done === sc.n ? " · all done" : sc.off == null ? "" : sc.off >= 15 ? ` · ${fmtMin(sc.off)} behind` : sc.off <= -15 ? ` · ${fmtMin(-sc.off)} ahead` : " · on pace"}</small></div>
-            ); })}
-          </div>
-        )}
         <div className="msf-grid" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
           <div className="msf-corner" />
           {machines.map((m) => <div key={m.id} className={"msf-mh mph " + m.type + (isOffDay(m, today) ? " off" : "")}>
-            <div className="mph-1"><b title={m.name}>{shortName(m)}<IssueTag m={m} /></b>{crewOf(m) ? <span className="mph-who">{crewOf(m)!.leader}</span> : null}{flowBlocks[0].d === today && crewOf(m) ? <ClockIn m={m} /> : null}</div>
-            <div className="mph-spec">{pressSpec(m)}</div>
+            {/* one header per press (Nov 12, Nick, option A): name, crew, clock-in, the press, then the day so far */}
+            <div className="mph-card">
+              <div className="mph-1"><b title={m.name}>{shortName(m)}<IssueTag m={m} /></b>{crewOf(m) ? <span className="mph-who">{crewOf(m)!.leader}</span> : null}{flowBlocks[0].d === today && crewOf(m) ? <ClockIn m={m} /> : null}</div>
+              <div className="mph-spec">{pressSpec(m)}</div>
+              {flowBlocks[0].d === today && (() => { const sc = dayScore(m); return sc.n ? <>
+                <i className="mdy-bar"><i style={{ width: `${Math.round((sc.done / sc.n) * 100)}%` }} /></i>
+                <small className={"mph-st" + (sc.off != null && sc.off >= 15 ? " bad" : "")}>{sc.done} of {sc.n} done{sc.done === sc.n ? " · all done" : sc.off == null ? "" : sc.off >= 15 ? ` · ${fmtMin(sc.off)} behind` : sc.off <= -15 ? ` · ${fmtMin(-sc.off)} ahead` : " · on pace"}</small>
+              </> : <small className="mph-st">Nothing today</small>; })()}
+            </div>
           </div>)}
           <div className="msf-gut" style={{ height: flowH, gridColumn: 1 }}>
             {flowBlocks.flatMap((bk, bi) => {
