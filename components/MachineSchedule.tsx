@@ -197,7 +197,8 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
     const notStarted = !c.slot || c.slot.status === "scheduled" || c.slot.status === "paused";
     const planned = ord(c.day) * 1440 + (c.startMin ?? hrs(c.day)[0]);
     const asked = Math.max(planned, notStarted ? nowAbs : -Infinity);
-    let t = norm(Math.max(cursor, asked), cursor < asked && c.startMin != null && asked === planned);
+    const fixedMe = fixedAt.get(c.key);
+    let t = fixedMe ? norm(planned, true) : norm(Math.max(cursor, asked), cursor < asked && c.startMin != null && asked === planned);
     const free = t;
     // lay it out from t; if another part of this job is on another machine then, start after that part is done
     const lay = (t0: number) => {
@@ -236,12 +237,20 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
     let blocked = false;
     for (let k = 0; k < 30 && c.slot?.status !== "running"; k++) {
       const hit = jb.find(([a, b]) => r.pieces.some((p) => ord(p.day) * 1440 + p.start < b && ord(p.day) * 1440 + p.end > a));
-      if (!hit) break;
-      blocked = true;
-      t = norm(hit[1]); r = lay(t);
+      // a locked job's time is taken: a job that would run into it starts after it instead
+      const fx = fixedMe ? undefined : [...fixedAt.entries()].find(([k2, [a, b]]) => k2 !== c.key && r.pieces.some((p) => ord(p.day) * 1440 + p.start < b && ord(p.day) * 1440 + p.end > a));
+      if (!hit && !fx) break;
+      if (hit) blocked = true;
+      t = norm(hit ? hit[1] : fx![1][1]); r = lay(t);
     }
     return { t, r, planned, free, blocked };
   };
+  // a job locked to its spot (Lock → this spot, or Shift + drag) is fixed: it runs at its own time whatever runs before it,
+  // and the other jobs flow around it, finishing before it when they fit, else starting after it (Nov 11, Nick: "the
+  // whole point is to lock its location": Make The Schedule's jobs carried into the morning and pushed #40408 down)
+  const isFixed = (c: Card) => c.slot?.locked === "spot" && c.startMin != null && (c.slot.status === "scheduled" || c.slot.status === "paused");
+  const fixedAt = new Map<string, [number, number]>();
+  for (const c of sorted) if (isFixed(c)) { const a = ord(c.day) * 1440 + (c.startMin as number); fixedAt.set(c.key, [a, a + Math.max(15, c.minutes)]); }
   const pending = [...sorted];
   while (pending.length) {
     let c = pending[0];
@@ -277,7 +286,9 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
     // work laid past a day's lunch settles it
     for (const p of pieces) if (!lunch.has(p.day)) { const L = lunchStart(mach, hrs(p.day)); if (L != null && p.end > L) lunch.set(p.day, L); }
     const pushed = t > planned + 1;
-    cursor = r.end;
+    // the next job carries on from the latest work laid out (a fixed job laid early doesn't pull it back)
+    cursor = fixedAt.has(c.key) ? Math.max(cursor, Number.isFinite(cursor) ? cursor : -Infinity) : r.end;
+    if (fixedAt.has(c.key)) fixedAt.set(c.key, [ord(pieces[0]?.day || c.day) * 1440 + (pieces[0]?.start ?? 0), r.end]);
     busy.set(c.job.key, [...(busy.get(c.job.key) || []), ...pieces.map((p): [number, number, number] => [ord(p.day) * 1440 + p.start, ord(p.day) * 1440 + p.end, order.get(c.key) ?? 0])]);
     pieces.forEach((p, i) => out.push({ c, day: p.day, start: p.start, end: p.end, part: i + 1, parts: pieces.length, pushed: pushed && i === 0, work: p.work, slow: p.slow < 1 ? p.slow : undefined }));
   }
@@ -484,6 +495,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [grpEdit, setGrpEdit] = useState<Card[] | null>(null); // a same-art run's time being edited
   const [standOpen, setStandOpen] = useState(false); // Where things stand: set every job's real state at once
   const [restart, setRestart] = useState(false); // asking: take every not-started job off the calendar?
+  const [relLocks, setRelLocks] = useState(false); // …and release the locks too
   // live drag (Nov 11 2026, Nick: "when you drag a card over, you should see how it bumps everything… in real time"):
   // where the dragged job would land (press, day, before which job) and the schedule laid out that way
   const dragAt = useRef(0); // when a drag last started or ended: the click that follows it is not "add downtime"
@@ -822,6 +834,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     // just treat it like any other schedule job… in the queue above")
     const ready = jobs.filter((j) => (j.kind === "o" ? j.status === "approved" || j.status === "production" : j.kind === "h" ? true : PV_READY.test(j.status)) && (!mine || isMe(j.owner, owners, me)));
     const ld = JSON.parse(JSON.stringify(loadMap)) as Record<string, Record<string, number>>;
+    // the part of today's shift that's already gone is taken: nothing new is booked into time that's past, whatever the
+    // Live clock says (Nov 11, Nick: Make The Schedule at 7:35 pm put five jobs on today)
+    if (now.day === today) for (const m of s.machines) { const sh = shiftOn(m, today); if (sh) { const gone = Math.max(0, Math.min(sh[1], now.min) - sh[0]); if (gone) (ld[m.id] ||= {})[today] = (ld[m.id]?.[today] || 0) + gone; } }
     const out: { job: Job; need: Need; sug: Suggestion | null; picked?: boolean; auto?: Suggestion | null }[] = [];
     // where each art already runs (booked, not done), and later where it's suggested: same art goes together (Nov 9)
     const artAt = new Map<string, { machine: string; day: string; with: string }[]>();
@@ -856,7 +871,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       out.push({ job: j, need: n, sug, picked: !!(pk && pm), auto });
     }
     return out;
-  }, [s, jobs, cards, loadMap, today, mine, owners, me, typeF, picks]);
+  }, [s, jobs, cards, loadMap, today, mine, owners, me, typeF, picks, now.day, Math.floor(now.min / 15)]); // eslint-disable-line react-hooks/exhaustive-deps
   const coming = (jobs || []).filter((j) => j.kind === "o" && j.status === "art");
   // too tight: waiting jobs with no room before in-hands, and booked jobs that finish after their in-hands date
   const tight = useMemo(() => {
@@ -2462,7 +2477,31 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{trayV.length}</span></button>
               <span className="faint ms-band-sub">{trayV.filter((t) => t.sug?.late).length ? <span className="ms-late">{trayV.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{trayV.length ? (Object.keys(picks).length ? `${trayV.filter((t) => t.picked).length} picked by you · ` : "") + "by due date · click a spot to change it, then Make The Schedule" : "nothing waiting"}</span>
               <span className="spacer" />
-              {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked).length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={async () => { setRestart(false); /* the early finishes a plan made for overtime go too; real downtime (a press down, someone out) stays (Nov 11, Nick) */ await createClient().from("production_days_off").delete().eq("note", "Leaving early (no overtime)").gte("day", today); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked)); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
+              {(() => {
+                // Start over asks first, and what to do with the locks (Nov 11, Nick: "yes, start over… release all locks or leave locks there")
+                const open = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today), locked = open.filter((c) => c.slot!.locked), free = open.filter((c) => !c.slot!.locked);
+                if (!open.length) return null;
+                const go = async () => {
+                  setRestart(false);
+                  /* the early finishes a plan made for overtime go too; real downtime (a press down, someone out) stays (Nov 11, Nick) */
+                  await createClient().from("production_days_off").delete().eq("note", "Leaving early (no overtime)").gte("day", today);
+                  unbookMany(relLocks ? open : free);
+                };
+                return <>
+                  <button type="button" className="btn sm" onClick={() => { setRelLocks(false); setRestart(true); }} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>
+                  {restart && <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Start over" onClick={() => setRestart(false)}>
+                    <div className="dla mso-dlg" onClick={(e) => e.stopPropagation()}>
+                      <h3>Start over?</h3>
+                      <p className="dla-sub">Takes every job that hasn&apos;t started off the calendar ({free.length + (relLocks ? locked.length : 0)}), back into Ready To Schedule, so Make The Schedule can plan it again.</p>
+                      {locked.length > 0 && <div className="mso-opts" role="radiogroup">
+                        <label className={"mso-opt" + (!relLocks ? " on" : "")}><input type="radio" name="mso-l" checked={!relLocks} onChange={() => setRelLocks(false)} /><span><b>Keep my locks</b><small>{locked.length} locked job{locked.length === 1 ? "" : "s"} stay{locked.length === 1 ? "s" : ""} where {locked.length === 1 ? "it is" : "they are"}: {locked.slice(0, 4).map((c) => `#${c.job.number} ${shortName(c.machine)} ${dayLbl(c.day).split(",")[0]}${c.startMin != null ? " " + clock(c.startMin) : ""}`).join(", ")}{locked.length > 4 ? "…" : ""}</small></span></label>
+                        <label className={"mso-opt" + (relLocks ? " on" : "")}><input type="radio" name="mso-l" checked={relLocks} onChange={() => setRelLocks(true)} /><span><b>Release all locks too</b><small>Every job not started comes off, locked ones included</small></span></label>
+                      </div>}
+                      <div className="dla-acts"><button type="button" className="btn ghost" onClick={() => setRestart(false)}>Cancel</button><button type="button" className="btn danger" onClick={() => void go()}>Yes, start over</button></div>
+                    </div>
+                  </div>}
+                </>;
+              })()}
               {trayOpen && trayV.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make The Schedule</button>}
             </div>
             {trayOpen && tray.length > 0 && (() => {

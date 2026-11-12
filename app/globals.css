@@ -22378,3 +22378,12 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msk-kinds-r>span:first-of-type{display:flex;flex-direction:column;flex:1;min-width:0}
 .msk-kinds-r small{font-size:12px;color:var(--ink-3)}
 .msk-kinds-a{display:flex;gap:6px;justify-content:flex-end;padding:6px 4px 2px;border-top:1px solid var(--line);margin-top:4px}
+
+/* Schedule: Start over asks, and what to do with the locks (Nov 11, Nick) */
+.mso-dlg{width:min(520px,100%)}
+.mso-opts{display:flex;flex-direction:column;gap:8px;margin:10px 0 4px}
+.mso-opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--r,8px);padding:10px 12px;cursor:pointer}
+.mso-opt.on{border-color:var(--accent);background:var(--accent-soft)}
+.mso-opt input{margin-top:3px}
+.mso-opt span{display:flex;flex-direction:column;gap:2px;font-size:14px}
+.mso-opt small{font-size:12.5px;color:var(--ink-3)}
