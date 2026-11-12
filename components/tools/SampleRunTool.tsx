@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import MoneyField from "@/components/MoneyField";
-import { uid, type Group, type GLine, type Order } from "@/lib/pricing";
+import { SIZES, uid, type Group, type GLine, type Order } from "@/lib/pricing";
 import { SAMPLE_STAGES, SOURCE_LABEL, sampleCharged, sampleCredit, samplePieces, startCharges, type GroupSample, type SampleCharge, type SampleKind, type SampleSource, type SampleStage } from "@/lib/samples";
 
 /**
@@ -17,7 +17,7 @@ import { SAMPLE_STAGES, SOURCE_LABEL, sampleCharged, sampleCredit, samplePieces,
  */
 type Patch = (fn: (d: Order) => void) => void;
 const PRESETS = ["Sample fee", "Screens / setup", "PMS / ink matching", "Pieces", "Shipping the sample"];
-const sizeOrder = (z: string[]) => z;
+const sizeOrder = (z: string[]) => [...z].sort((a, b) => ((SIZES as readonly string[]).indexOf(a) + 1 || 99) - ((SIZES as readonly string[]).indexOf(b) + 1 || 99));
 const pcs = (sizes: Record<string, number | undefined>) => Object.values(sizes || {}).reduce<number>((a, v) => a + (+(v || 0)), 0);
 
 export default function SampleRunTool({ o, patch, groupId, kind, onClose }: { o: Pick<Order, "groups" | "number" | "nickname">; patch: Patch;

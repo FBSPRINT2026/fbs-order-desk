@@ -171,3 +171,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 6:14pm · 1.3.375 · Nick · Schedule: lunch and warm-up tinted again (and across a job's card when lunch falls inside it); Shift held before grabbing a job pins it too
 - Nov 11 6:28pm · 1.3.376 · Nick · Email signature: logo and portal banner pictures are now the size they show (52px, 480px), so a reply that drops the size tags can't blow them up
 - Nov 11 7:11pm · 1.3.377 · Nick · Samples: Order + sample and Sample only. One Sample tool (pieces off the top / from customer / extra, anything-goes charges with credit on the full run, run day); sample group on the order with Planned→Pulled→Printed→Approved; own Sample card on the schedule, full run waits for OK; Make the order from a sample, linked both ways
+- Nov 11 7:15pm · 1.3.378 · Nick · Sample tool: sizes in size order
