@@ -229,3 +229,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 2:14pm · 1.3.433 · Nick · Pay from the emailed review link without signing in (that order only; saved cards: sign in)
 - Nov 12 2:18pm · 1.3.434 · Nick · Prepay customers are never offered a deposit in the pay window (order page, review link, Payments screen, and the server)
 - Nov 12 2:24pm · 1.3.435 · Nick · A garment price set by hand gets no wholesale minimum on top
+- Nov 12 2:54pm · 1.3.436 · Nick · QuickBooks: an invoice held back by hand (orders.qbo_hold) and its payments wait in the queue

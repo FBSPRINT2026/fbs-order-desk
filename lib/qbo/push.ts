@@ -187,6 +187,9 @@ export class Pusher {
     if (n < this.qs.adopt_from_number) return { status: "skipped", reason: `#${n} is from Printavo's time (below #${this.qs.adopt_from_number}): never touched.` };
     const cust = o.customer_id ? await this.ourCustomer(o.customer_id) : null;
     if (cust?.is_test) return { status: "skipped", reason: "Test customer: never sent." };
+    // held back from QuickBooks by hand (orders.qbo_hold): it waits, with why, until the hold is taken off
+    const held = (o as { qbo_hold?: string | null }).qbo_hold;
+    if (held) return { status: "needs_review", reason: `#${n} is held back from QuickBooks: ${held}` };
     const link = await this.link("invoice", o.id);
     const res = (row.resolution || {}) as { force?: boolean; void?: boolean };
 
@@ -437,6 +440,7 @@ export class Pusher {
     if (n < this.qs.adopt_from_number) return { status: "skipped", reason: `Payment on #${n}, from Printavo's time: never touched.` };
     const cust = o.customer_id ? await this.ourCustomer(o.customer_id) : null;
     if (cust?.is_test) return { status: "skipped", reason: "Test customer: never sent." };
+    if ((o as { qbo_hold?: string | null }).qbo_hold) return { status: "needs_review", reason: `Payment on #${n}: the invoice is held back from QuickBooks (${(o as { qbo_hold?: string | null }).qbo_hold}).` };
     const link = await this.link("payment", p.id);
 
     if (link && link.source !== "created") {
@@ -543,6 +547,8 @@ export class Pusher {
       } else if (x.order_id) {
         const o = await this.order(x.order_id);
         const cust = o?.customer_id ? await this.ourCustomer(o.customer_id) : null;
+        // one charge across several invoices waits whole while any of them is held back (never half posted)
+        if (o && (o as { qbo_hold?: string | null }).qbo_hold) return { status: "needs_review", reason: `Part of this charge is on #${o.number}, held back from QuickBooks (${(o as { qbo_hold?: string | null }).qbo_hold}).` };
         if (o && !cust?.is_test) parts.push({ id: x.id, amount: r2(+x.amount), doc: String((o as { printavo_visual_id?: string | null }).printavo_visual_id || o.number) });
       }
     }
