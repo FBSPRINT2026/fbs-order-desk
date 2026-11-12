@@ -75,7 +75,7 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
   const searchRef = useRef<HTMLInputElement>(null);
   const loadPins = () => void pinInfo().then((r) => { if (r.ok) setPins(r); });
   const loadToday = () => void receivedToday().then((r) => { if (r.ok) setTodayRows(r.rows); });
-  const loadWaiting = () => void waitingOnPayment().then((r) => { if (r.ok) setWaiting(r); });
+  const loadWaiting = () => void waitingOnPayment().then((r) => { setWaiting(r.ok ? r : { rows: [], pastDue: 0, owed: 0 }); if (!r.ok) setErr(r.error); }).catch(() => setWaiting({ rows: [], pastDue: 0, owed: 0 }));
   useEffect(() => { loadPins(); loadToday(); loadWaiting(); }, []);
 
   const load = (id: string, focus = "") => {

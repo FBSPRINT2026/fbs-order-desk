@@ -192,7 +192,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 - **Money in is one tool: Receive a Payment** (Nick, Nov 11 2026; it was Take a Payment): `components/tools/ReceivePaymentTool.tsx`
   at `/shop/receive-payment` (the old `/shop/take-payment` address opens it). One search (customer, invoice # or PO),
   the customer's invoices grouped by how late when there are many, quick picks and "Pay an amount" (oldest first),
-  then Card (cards they OK'd, a new card, fee, PIN) or Check / ACH / Cash recorded straight on (`recordLumpPayment`);
+  then Run a card (cards they OK'd, a new card, fee, PIN) or a payment made elsewhere recorded straight on with nothing
+  charged (`recordLumpPayment`): Card · already paid (a Stax link, Square), Check, ACH, Cash, Venmo / Zelle. Two panes
+  (Nick, Nov 11): today's numbers and Received today by customer on the left; the customer card, invoices and how they
+  paid on the right, or who's waiting on payment when nobody's picked (`waitingOnPayment`);
   old Printavo invoices can be paid by check here. Every "take / record a payment" button opens it.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never

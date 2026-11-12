@@ -334,7 +334,7 @@ export async function waitingOnPayment(): Promise<{ ok: true; rows: Waiting[]; p
   try {
     const { admin } = await allowed();
     const { allRows } = await import("@/lib/readAll");
-    const [os, { data: ar }] = await Promise.all([
+    const [{ data: os }, { data: ar }] = await Promise.all([
       allRows((r0, r1) => admin.from("orders").select("customer_id").eq("type", "invoice").is("discarded_at", null).is("declined_at", null).gt("total", 0).not("customer_id", "is", null).order("id").range(r0, r1)),
       admin.from("archived_orders").select("customer_id").eq("kind", "invoice").is("removed_at", null).gt("balance", 0.004).not("customer_id", "is", null).order("id").limit(1000),
     ]);

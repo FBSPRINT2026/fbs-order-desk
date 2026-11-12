@@ -173,3 +173,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 7:11pm · 1.3.377 · Nick · Samples: Order + sample and Sample only. One Sample tool (pieces off the top / from customer / extra, anything-goes charges with credit on the full run, run day); sample group on the order with Planned→Pulled→Printed→Approved; own Sample card on the schedule, full run waits for OK; Make the order from a sample, linked both ways
 - Nov 11 7:15pm · 1.3.378 · Nick · Sample tool: sizes in size order
 - Nov 11 7:19pm · 1.3.379 · Nick · Receive a Payment: two panes (today's summary and Received today by customer on the left; customer card, invoices and how they paid on the right; who's waiting on payment when nobody's picked); record a card already paid elsewhere (Stax link, Square) or Venmo / Zelle without charging
+- Nov 11 7:23pm · 1.3.380 · Nick · Receive a Payment: Waiting on payment list loads
