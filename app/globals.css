@@ -22530,3 +22530,5 @@ label.ckm-tile.over{border-color:var(--warn)}
 .msp-st.late{background:#fdecec;color:var(--danger)}
 .msp-j.done{opacity:.6}.msp-j.done .msp-n b{text-decoration:line-through}
 .msp-j.run{background:#f1faf4}
+/* "already past" sits behind the jobs, a plain tint, never over them (Nov 12) */
+.ms-pastv,.ms-calm .ms-pastv{z-index:0;background:color-mix(in srgb,var(--ink) 4%,transparent)}

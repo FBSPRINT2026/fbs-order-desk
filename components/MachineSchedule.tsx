@@ -1759,9 +1759,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const gs = machines.flatMap((m) => at(m, d));
       if (!sh.length && !gs.length) continue;
       const a0 = Math.min(...sh.map((x) => x[0]), ...gs.map((g) => g.start)), b0 = Math.max(...sh.map((x) => x[1]), ...gs.map((g) => g.end));
-      if (d === today && b0 <= now.min) continue;
-      // today starts an hour before now (greyed: what already happened); later days at the first crew in
-      const a = d === today ? Math.max(Math.floor(a0 / 30) * 30, Math.floor((now.min - 60) / 30) * 30) : Math.floor(a0 / 30) * 30;
+      // every day, today too, shows whole from the first crew in, live clock on or off (Nov 12, Nick: "you have to show
+      // the whole day… you should see the past, like at least the morning"); what already happened is a light tint behind
+      // the jobs, never a shade over them
+      const a = Math.floor(a0 / 30) * 30;
       out.push({ d, a, b: Math.ceil(b0 / 30) * 30 });
       if (d !== today) full++;
     }

@@ -184,3 +184,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:15am · 1.3.388 · Nick · Goods & Receiving on a phone: its own view (day switch, kind chips, a card per job with a big Count in and a printer button, Count in / Trucks / Issues tabs at the bottom); Count in on a phone: full screen, progress bar, a garment to a card with big size tiles
 - Nov 12 8:28am · 1.3.389 · Nick · Schedule on a phone: today's jobs per press, done or not (Done / Running / Next / Waiting / Late start), job names, day buttons, Screen/Emb/Heat and My jobs; no planning tools
 - Nov 12 8:28am · 1.3.390 · Nick · Phone schedule: its styles (press cards, status pills, day buttons, summary)
+- Nov 12 8:29am · 1.3.391 · Nick · Schedule shows the whole day from the first crew in (live clock on or off); the already-past tint sits behind the jobs, not over them
