@@ -195,3 +195,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:01am · 1.3.399 · Nick · Run times: 'Hooded Sweatshirt' and every hoodie name read as heavy (they were timed as tees)
 - Nov 12 9:02am · 1.3.400 · Nick · Pop-ups and right-click menus anywhere on the site are moved back inside the window (up from the bottom, in from the right; too tall scrolls inside)
 - Nov 12 9:05am · 1.3.401 · Nick · Schedule: a started job stretches past its planned finish until it's marked complete (jobs after it move down); the goods dot follows saved counts (Fossil's All here stayed red) and refreshes right after counting
+- Nov 12 9:08am · 1.3.402 · Nick · Pop-up fitter runs on a short timer (works in every tab)

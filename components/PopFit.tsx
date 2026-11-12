@@ -35,7 +35,7 @@ export default function PopFit() {
     const floating = new WeakSet<HTMLElement>();
     const pending = new Set<HTMLElement>();
     const run = () => { raf = 0; for (const el of pending) if (el.isConnected) fit(el); pending.clear(); };
-    const kick = () => { if (!raf) raf = requestAnimationFrame(run); };
+    const kick = () => { if (!raf) raf = window.setTimeout(run, 16); };
     const look = (el: HTMLElement) => { if (floating.has(el)) { pending.add(el); return; } if (getComputedStyle(el).position === "fixed") { floating.add(el); pending.add(el); } };
     const added = (n: Node) => {
       if (!(n instanceof HTMLElement)) return;
@@ -52,7 +52,7 @@ export default function PopFit() {
     mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
     const onResize = () => { document.querySelectorAll<HTMLElement>("[style*='top']").forEach(look); kick(); };
     window.addEventListener("resize", onResize);
-    return () => { mo.disconnect(); window.removeEventListener("resize", onResize); if (raf) cancelAnimationFrame(raf); };
+    return () => { mo.disconnect(); window.removeEventListener("resize", onResize); if (raf) clearTimeout(raf); };
   }, []);
   return null;
 }
