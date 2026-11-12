@@ -1,4 +1,5 @@
 import "server-only";
+import { goodsGroups } from "@/lib/samples";
 import { whoWorks } from "@/lib/goodsIssueShared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
@@ -58,7 +59,7 @@ function itemsFromPrintavo(data: { groups?: { lines?: PvLine[] }[] } | null): Ch
 }
 function itemsFromOrder(o: Pick<Order, "groups" | "lines">): CheckItem[] {
   const out: CheckItem[] = [];
-  for (const g of orderGroups(o)) for (const l of g.lines) {
+  for (const g of goodsGroups(orderGroups(o))) for (const l of g.lines) {
     const sizes: Record<string, number> = {};
     for (const [k, q] of Object.entries(l.sizes || {})) if (+(q || 0) > 0) { const z = sizeOf(k); sizes[z] = (sizes[z] || 0) + +(q || 0); }
     if (!Object.keys(sizes).length) continue;

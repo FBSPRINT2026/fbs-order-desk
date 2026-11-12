@@ -1,4 +1,5 @@
 "use client";
+import { startCharges } from "@/lib/samples";
 import { remakeMockup } from "@/lib/mockupFresh";
 import { sizeRank } from "@/lib/sizeOrder";
 import { clearPageFile } from "@/lib/inkColors";
@@ -1023,6 +1024,13 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     if (goodsId) { const lk = await linkGoods(goodsId, j.id).catch(() => null); if (!lk?.ok) did.push(`The goods order couldn't be linked to #${j.number}: link it on Order goods`); }
     // the order type picked on Create order's card (New order / Reorder / Reorder with changes): the order's Job details → Order type
     { const ot = part?.orderType || start.orderType; if (ot) await createClient().from("orders").update({ order_type: ot }).eq("id", j.id).then(() => null, () => null); }
+    // + Sample / Sample only picked on the card (Nov 11, Nick; lib/samples.ts): a Sample only order's every group is a
+    // sample with a flat fee to change; + Sample opens the Sample tool when the order opens here (this browser)
+    if (start.sample === "only") {
+      const { data: og } = await createClient().from("orders").select("groups").eq("id", j.id).maybeSingle();
+      const gs = ((og?.groups || []) as Group[]).map((g) => (g.sample ? g : { ...g, sample: { kind: "only" as const, source: "extra" as const, charges: startCharges(20), stage: "planned" as const } }));
+      await createClient().from("orders").update({ order_type: "sample", groups: gs }).eq("id", j.id).then(() => null, () => null);
+    } else if (start.sample === "pre") { try { localStorage.setItem("fbs:sampleAsk:" + j.id, "pre"); } catch { /* storage off: Production ▾ → Sample run */ } }
     // its logos are the order's now; art you replaced in the Resolution Center is taken off (if on no order)
     made0.current = new Set();
     if (replaced.length) void discardDraftArt(replaced).catch(() => null);

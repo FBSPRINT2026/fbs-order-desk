@@ -18,6 +18,7 @@ export type OrderStart = { told?: string; job?: string; /** several past jobs re
   /** which emails make up the order (Oct 24, Nick): other emails brought in, and conversation emails left out */ include?: string[]; exclude?: string[];
   /** New order / Reorder / Reorder with changes, picked on the card: the order's Order type */ orderType?: "new" | "reorder" | "reorder_changes";
   /** "Other options": only part of the order, made with no questions (components/tools/PartialOrder.tsx) */ partial?: PartKind;
+  /** + Sample (a pre-production sample in the order: the Sample tool opens on it) or Sample only (an order of samples) (Nov 11, Nick; lib/samples.ts) */ sample?: "pre" | "only";
   /** "Anything to tell the AI?" with an Other option */ note?: string;
   /** Reorder with a past job picked (Nov 6, Nick: "if you click reorder… find the order in the client's files. And then we go
    *  into the reorder how we have it already"): "o:<order id>" or "a:<archived id>", opened in the Reorder pop-up */ reorderOf?: string;
@@ -71,7 +72,10 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
   // a customer with Create order training, and this job is theirs (the question at the top; set below)
   const [trained, setTrained] = useState<{ customer: string; name: string } | null>(null);
   const blind = scratch || !!trained;
-  const onPick = (st0: OrderStart, withRules = false) => {
+  // + Sample / Sample only, picked beside New order / Reorder (Nov 11, Nick: "two types of an order that has a pre-production sample")
+  const [smp, setSmp] = useState<"" | "pre" | "only">("");
+  const onPick = (st00: OrderStart, withRules = false) => {
+    let st0: OrderStart = smp && !st00.reorderOf ? { ...st00, sample: smp, ...(smp === "only" ? { told: [st00.told, "This is a SAMPLE order: each design is one sample (a piece or a few), not a production run."].filter(Boolean).join(" ") } : {}) } : st00;
     if (blind && !withRules && !ruleOf && !st0.reorderOf && !st0.job && !(st0.jobs || []).length) st0 = { ...st0, told: [SCRATCH, st0.told].filter(Boolean).join(" ") };
     const ruleTold = ruleOf ? `[training:${ruleOf.id}] Make this order EXACTLY by the shop's training "${ruleName(ruleOf)}" (HOW TO MAKE ${ruleName(ruleOf).toUpperCase()} ORDERS): it wins over everything else. Don't ask about anything the training settles.` : "";
     const st = { ...st0, ...(ruleTold && !st0.reorderOf ? { told: [ruleTold, st0.told].filter(Boolean).join(" ") } : {}), ...(mOn.size ? { include: [...mOn] } : {}), ...(mOff.size ? { exclude: [...mOff] } : {}) };
@@ -244,8 +248,8 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
           <div className="field"><label id={`ot-${key}`}>Order type</label>
             {/* two buttons, not a dropdown: its open list sat over Make the order and a pick clicked through (Nov 6, Nick) */}
             <div className="osp-seg" role="radiogroup" aria-labelledby={`ot-${key}`}>
-              {([["new", "New order"], ["reorder", "Reorder"]] as const).map(([t, l]) => { const on = (c.type === "new" ? "new" : "reorder") === t; return (
-                <button key={t} type="button" role="radio" aria-checked={on} className={on ? "on" : ""} onClick={() => { if (on) return; setCard(key, { type: t }); if (key === SOLO) { setWay(""); setOtherFor(null); setJobFor(t === "new" ? null : SOLO); } }}>{l}</button>); })}
+              {([["new", "New order"], ["reorder", "Reorder"], ["pre", "+ Sample"], ["only", "Sample only"]] as const).map(([t, l]) => { const on = t === "pre" || t === "only" ? smp === t : !smp && (c.type === "new" ? "new" : "reorder") === t; return (
+                <button key={t} type="button" role="radio" aria-checked={on} className={on ? "on" : ""} title={t === "pre" ? "A new order with a pre-production sample first: the Sample tool opens on it" : t === "only" ? "An order of samples only; any of them can be made into an order later" : undefined} onClick={() => { if (on) return; const tt: OT = t === "reorder" ? "reorder" : "new"; setSmp(t === "pre" || t === "only" ? t : ""); if (c.type !== tt) setCard(key, { type: tt }); if (key === SOLO) { setWay(""); setOtherFor(null); setJobFor(tt === "new" ? null : SOLO); } }}>{l}</button>); })}
             </div>
           </div>
           {c.type !== "new" && (

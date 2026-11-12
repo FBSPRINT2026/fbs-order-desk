@@ -174,6 +174,16 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   wouldn't really lock"). Changing a group's mockup while its version is out and unanswered updates that same version
   (`refreshUnseenProofs` in `app/shop/proof-actions.ts`), opened or not; a new version only starts once they've approved
   or asked for changes. Anything that swaps a group's mockup pictures calls it.
+- **Samples** (Nick, Nov 11 2026: "two types of an order that has a pre-production sample… anything goes type of thing"):
+  one Sample tool, `components/tools/SampleRunTool.tsx` (`lib/samples.ts`), from Create order's card (+ Sample / Sample
+  only), the order's Production ▾ → Sample run, and a sample group's Edit. Order + sample: the sample is its own group at
+  the top (`Group.sample`, kind "pre": its pieces picked from the order's lines, `GLine.sampleOf`), its pieces off the top
+  (the run prints that many fewer, never ordered or counted twice: `runParts` / `goodsGroups`), extra from the customer,
+  or extra blanks; its own "Sample" card on the schedule (`production_slots.sample`), and the full run says "Waits for
+  sample OK" and runs no earlier than the day after it. Sample only: every group a sample (kind "only"); Make the order
+  starts the real order from one, linked both ways (`orders.from_sample` / `GroupSample.made`). Charges are rows of a name
+  and an amount, never a rule; a charge ticked "Credit on the full run" comes off the real order (the same order for a
+  pre-production sample, a Sample credit fee on the order made from a sample only one). Planned → Pulled → Printed → Approved.
 - **Production holder** (Nick, Nov 10 2026; replaced Hold the spot): saving press time for a quote before its art is in
   is `components/tools/ProductionHolder.tsx`, opened from the order's Production ▾ menu; a held spot shows as a small
   dashed "Held · <day>" tag in the order's header (no big button). It reads the order (each garment's pieces, kind and

@@ -1,4 +1,5 @@
 import "server-only";
+import { goodsGroups } from "@/lib/samples";
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiState, askClaude } from "@/lib/ai/claude";
@@ -37,7 +38,7 @@ function fromPv(o: PvRow): Job {
 }
 function fromLive(o: Order & { id: string; number: number; nickname: string; po_number: string; customer_id: string | null; status: string; due_date: string | null; customers: { company: string; name: string } | null }): Job {
   const items: Item[] = [];
-  for (const g of orderGroups(o)) for (const l of g.lines) for (const [z, q] of Object.entries(l.sizes || {})) if (+(q || 0) > 0) items.push({ style: l.style || "", color: l.color || "", size: sizeKey(z), qty: +(q || 0), desc: [l.brand, l.garment].filter(Boolean).join(" ").slice(0, 60) });
+  for (const g of goodsGroups(orderGroups(o), true)) for (const l of g.lines) for (const [z, q] of Object.entries(l.sizes || {})) if (+(q || 0) > 0) items.push({ style: l.style || "", color: l.color || "", size: sizeKey(z), qty: +(q || 0), desc: [l.brand, l.garment].filter(Boolean).join(" ").slice(0, 60) });
   return { id: o.id, number: o.number, customer: o.customers?.company || o.customers?.name || "", customerId: o.customer_id, nickname: o.nickname || "", po: o.po_number || "", status: o.status, due: o.due_date, items };
 }
 /** quotes and cancelled jobs never get goods; completed ones can (goods often show up after the job ran) */
