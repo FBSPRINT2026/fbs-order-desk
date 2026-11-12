@@ -197,3 +197,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:05am · 1.3.401 · Nick · Schedule: a started job stretches past its planned finish until it's marked complete (jobs after it move down); the goods dot follows saved counts (Fossil's All here stayed red) and refreshes right after counting
 - Nov 12 9:08am · 1.3.402 · Nick · Pop-up fitter runs on a short timer (works in every tab)
 - Nov 12 9:14am · 1.3.403 · Nick · Schedule: the goods dot is now a tiny shirt in the goods color, the numbers' exact height on their baseline, everywhere on the schedule and in the key
+- Nov 12 9:16am · 1.3.404 · Nick · Schedule: no dot after a printing job's number
