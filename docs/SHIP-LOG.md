@@ -176,3 +176,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 7:23pm · 1.3.380 · Nick · Receive a Payment: Waiting on payment list loads
 - Nov 11 7:36pm · 1.3.381 · Nick · Ready To Schedule: a kinds-of-order button beside the tabs (each customer's Create order trainings it names, else Regular): hide Store carts, All My Sons… and Make The Schedule books only what's shown
 - Nov 11 7:39pm · 1.3.382 · Nick · Schedule: a job locked to its spot never moves (others flow around it); nothing new booked into time already past today; Start over asks: keep locks or release them too
+- Nov 11 7:48pm · 1.3.383 · Nick · Ready To Schedule: Job Filters menu (Regular Orders, then each customer's kinds under its name; each job one kind, the narrowest; Other … for the broader; Title Case)

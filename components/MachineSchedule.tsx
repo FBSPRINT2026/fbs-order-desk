@@ -903,12 +903,31 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     load();
   }
   // the kinds a job is (its customer's trainings named in it), and what's left when some kinds are hidden
+  // each job is ONE kind: the narrowest of its customer's trainings it names (the one fewest jobs name: an MEI store cart
+  // is MEI, not Store Carts), and a training that lost jobs to a narrower one reads "Other …" (Nick, Nov 11: "MEI… and
+  // other store carts")
+  const titleCase = (t: string) => t.trim().replace(/\S+/g, (w) => (w === w.toUpperCase() ? w : w[0].toUpperCase() + w.slice(1)));
+  const kindIx = useMemo(() => {
+    const said = new Map<string, { key: string; name: string; customer_id: string }[]>(), n = new Map<string, number>();
+    for (const j of jobs || []) {
+      if (!j.cid) continue;
+      const m = new Map<string, { key: string; name: string; customer_id: string }>();
+      for (const t of trains) if (t.customer_id === j.cid && trainingSaid(t, j.name || "")) { const key = t.customer_id + "|" + t.name.trim().toLowerCase(); m.set(key, { key, name: t.name.trim(), customer_id: t.customer_id }); }
+      if (!m.size) continue;
+      said.set(j.key, [...m.values()]); for (const k of m.keys()) n.set(k, (n.get(k) || 0) + 1);
+    }
+    const of = new Map<string, { key: string; name: string }>(), lost = new Set<string>();
+    for (const [jk, ts] of said) {
+      const pick = [...ts].sort((a, b) => (n.get(a.key) || 0) - (n.get(b.key) || 0) || a.name.localeCompare(b.name))[0];
+      of.set(jk, pick); for (const t of ts) if (t.key !== pick.key) lost.add(t.key);
+    }
+    return { of, lost };
+  }, [jobs, trains]);
   const kindsOfJob = (j: Job): { key: string; label: string }[] => {
-    const ts = j.cid ? trains.filter((t) => t.customer_id === j.cid && trainingSaid(t, j.name || "")) : [];
-    const out = new Map<string, string>(); for (const t of ts) out.set(t.customer_id + "|" + t.name.trim().toLowerCase(), t.name.trim());
-    return out.size ? [...out].map(([key, label]) => ({ key, label })) : [{ key: "regular", label: "Regular orders" }];
+    const k = kindIx.of.get(j.key);
+    return k ? [{ key: k.key, label: (kindIx.lost.has(k.key) ? "Other " : "") + titleCase(k.name) }] : [{ key: "regular", label: "Regular Orders" }];
   };
-  const trayV = useMemo(() => (hideKinds.length ? tray.filter((t) => !kindsOfJob(t.job).some((k) => hideKinds.includes(k.key))) : tray), [tray, hideKinds, trains]); // eslint-disable-line react-hooks/exhaustive-deps
+  const trayV = useMemo(() => (hideKinds.length ? tray.filter((t) => !kindsOfJob(t.job).some((k) => hideKinds.includes(k.key))) : tray), [tray, hideKinds, kindIx]); // eslint-disable-line react-hooks/exhaustive-deps
   async function acceptAll() {
     // every suggestion, late ones too (Nov 9, Nick: "if a job is… past due… all that would mean is they just have to go
     // first in the list"): a late or past-due job goes ahead of the day's jobs that haven't started, most overdue first
@@ -2514,27 +2533,35 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   {([["all", "All", trayV.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ["ok", "On time", kinds.ok.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
                 </div>
                   {(() => {
-                    // every kind in Ready To Schedule, with how many jobs each has
+                    // Job Filters (Nick, Nov 11): Regular Orders first, then each customer's kinds under its name
                     const all = new Map<string, { label: string; who: string; n: number }>();
                     for (const t of tray) for (const k of kindsOfJob(t.job)) { const x = all.get(k.key) || { label: k.label, who: k.key === "regular" ? "" : t.job.customer, n: 0 }; x.n++; all.set(k.key, x); }
-                    const list = [...all].sort((a, b) => (a[0] === "regular" ? -1 : b[0] === "regular" ? 1 : b[1].n - a[1].n));
                     const hidden = hideKinds.filter((k) => all.has(k));
-                    if (list.length < 2 && !hidden.length) return null;
+                    if (all.size < 2 && !hidden.length) return null;
+                    const byWho = new Map<string, [string, { label: string; who: string; n: number }][]>();
+                    for (const e of all) if (e[0] !== "regular") byWho.set(e[1].who, [...(byWho.get(e[1].who) || []), e]);
+                    const whos = [...byWho].sort((a, b) => b[1].reduce((x, e) => x + e[1].n, 0) - a[1].reduce((x, e) => x + e[1].n, 0));
                     const flip = (k: string) => setHideKinds(hideKinds.includes(k) ? hideKinds.filter((x) => x !== k) : [...hideKinds, k]);
+                    const others = [...all.keys()].filter((k) => k !== "regular");
+                    const onlyReg = all.has("regular") && others.length > 0 && others.every((k) => hideKinds.includes(k)) && !hideKinds.includes("regular");
+                    const row = (k: string, x: { label: string; n: number }) => (
+                      <label key={k} className="msk-kinds-r"><input type="checkbox" checked={!hideKinds.includes(k)} onChange={() => flip(k)} /><b>{x.label}</b><span className="chip-n">{x.n}</span></label>
+                    );
                     return (
                       <div className="msk-kinds">
-                        <button type="button" className={"btn sm" + (hidden.length ? " on" : "")} aria-expanded={kindsOpen} onClick={() => setKindsOpen(!kindsOpen)} title="Show or hide kinds of order: a customer's carts, a program like All My Sons, regular orders">
-                          {hidden.length ? `Hiding ${hidden.map((k) => all.get(k)!.label).join(", ")}` : `All kinds of order`} ▾</button>
+                        <button type="button" className={"btn sm" + (hidden.length ? " on" : "")} aria-expanded={kindsOpen} onClick={() => setKindsOpen(!kindsOpen)} title="Show or hide kinds of jobs: a customer's carts, a program like All My Sons, regular orders">
+                          Job Filters{onlyReg ? " · Regular Orders only" : hidden.length ? ` · Hiding ${hidden.length}` : ""} ▾</button>
                         {kindsOpen && <>
                           <div className="msk-kinds-bg" onClick={() => setKindsOpen(false)} />
                           <div className="msk-kinds-m" role="menu">
-                            {list.map(([k, x]) => (
-                              <label key={k} className="msk-kinds-r"><input type="checkbox" checked={!hideKinds.includes(k)} onChange={() => flip(k)} />
-                                <span><b>{x.label}</b>{x.who ? <small>{x.who}</small> : null}</span><span className="chip-n">{x.n}</span></label>
+                            {all.has("regular") && row("regular", all.get("regular")!)}
+                            {whos.map(([who, es]) => (
+                              <div key={who} className="msk-kinds-g"><div className="msk-kinds-h" data-notranslate>{who}</div>
+                                {[...es].sort((a, b) => Number(a[1].label.startsWith("Other ")) - Number(b[1].label.startsWith("Other ")) || b[1].n - a[1].n).map(([k, x]) => row(k, x))}</div>
                             ))}
                             <div className="msk-kinds-a">
-                              <button type="button" className="btn sm" onClick={() => setHideKinds(list.map(([k]) => k).filter((k) => k !== "regular"))}>Only regular</button>
-                              <button type="button" className="btn sm" onClick={() => setHideKinds([])}>Show all</button>
+                              <button type="button" className="btn sm" onClick={() => setHideKinds(others)}>Only Regular Orders</button>
+                              <button type="button" className="btn sm" onClick={() => setHideKinds([])}>Show All</button>
                             </div>
                           </div>
                         </>}
