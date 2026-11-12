@@ -61,7 +61,7 @@ type Slot = { /** a booking of the order's sample run */ sample?: boolean; id: s
   /** job log: when it really started / finished, how far along (0–1) as of progress_at; which print locations this booking covers (null = all) */
   started_at?: string | null; finished_at?: string | null; progress?: number; progress_at?: string | null; locations?: string[] | null };
 /** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
-type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; carried?: string | null; /** runs right after a job with the same art: the setup it skips */ sameArt?: { with: string; saved: number } };
+type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; /** a job printing since today: when it started and the time it was figured to take (the Printing strip) */ plan?: { start: number; est: number }; carried?: string | null; /** runs right after a job with the same art: the setup it skips */ sameArt?: { with: string; saved: number } };
 /** the locations a booking covers when it's only part of the job's work on that kind of machine (null = all of it) */
 const locsFor = (job: { needs: Need[] }, need: Need) => { const full = job.needs.find((n) => n.type === need.type); return full && locsOf(need).length < locsOf(full).length ? locsOf(need) : null; };
 /** Screen print colors the way the shop says them: front / back, then any sleeves etc. A front-only 4 color is "4/0". */
@@ -754,7 +754,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       // marked completed"): past its planned finish it stretches to now and a little beyond, and the jobs after it move down
       // with it, live clock on or off
       if (sl.status === "running" && startMin != null && sl.day === nowTick.day && startMin + minutes < nowTick.min + 10) minutes = nowTick.min + 10 - startMin;
-      out.push({ key: sl.id, job, need, machine: mach, day: sl.day, minutes: Math.max(15, minutes), startMin, slot: sl, fromPv: false, carried: sl.rolled_from });
+      out.push({ key: sl.id, job, need, machine: mach, day: sl.day, minutes: Math.max(15, minutes), startMin, slot: sl, fromPv: false, carried: sl.rolled_from, ...(sl.status === "running" && st0 && st0.day === sl.day ? { plan: { start: st0.min, est } } : {}) });
     }
     for (const p of pvLane) {
       const need = p.job.needs.find((n) => n.type === p.machine.type) || p.job.needs[0];
@@ -1974,8 +1974,21 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   }
   /** a job's card, by how much room it has: one line (#, customer, colors, pieces), two (the job's name under the
    *  customer), three (name, then colors · pieces · run time) (Nov 11, Nick: "anytime you have space… the job name") */
+  /** a printing job against the time it was figured to take (Nov 12, Nick, option A): green on time, yellow up to 30 minutes
+   *  over, red past that; the lunch it ran through doesn't count as its time */
+  const runState = (c: Card) => {
+    if (c.slot?.status !== "running" || !c.plan || c.day !== now.day) return null;
+    const brk = c.machine.brk || s!.breaks, L = segs.lunch.get(c.machine.id + "|" + c.day);
+    let used = now.min - c.plan.start, lunchIn = 0;
+    if (L != null && L >= c.plan.start && L < now.min) { lunchIn = Math.min(brk.lunchMin || 0, now.min - L); used -= lunchIn; }
+    else if (L != null && L >= c.plan.start && L < c.plan.start + c.plan.est) lunchIn = brk.lunchMin || 0;
+    used = Math.max(0, used);
+    const over = Math.round(used - c.plan.est);
+    return { k: over <= 0 ? "g" : over <= 30 ? "y" : "r", over, used, est: c.plan.est, doneAt: c.plan.start + c.plan.est + lunchIn };
+  };
   const flowCard = (g: Seg, y1: number, y2: number, key: string, extraCls = "") => {
-    const h = Math.max(16, y2 - y1 - 2), gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, lines = h >= 54 ? 3 : h >= 37 ? 2 : 1, mv = pvMove(g.c);
+    const rs = runState(g.c), band = !!rs && y2 - y1 - 2 >= 37;
+    const h = Math.max(16, y2 - y1 - 2), gl = glance(g.c.need, g.c.minutes), st = g.c.slot?.status, hc = band ? h - 18 : h, lines = hc >= 54 ? 3 : hc >= 37 ? 2 : 1, mv = pvMove(g.c);
     const name = g.c.job.name || g.c.need.label;
     // while dragging, where it would land is an empty dotted box the jobs around it make room for (Nov 11, Nick)
     if (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid) { const n0 = [...(pvLay.ofCard.get(pvKey) || [])].sort((a, b) => a.day.localeCompare(b.day) || a.start - b.start)[0]; return <div key={key} className="msf-slot" data-slot="1" style={{ top: y1 + 1, height: h }} aria-hidden><span>#{g.c.job.number} moves here</span><small>{shortName(g.c.machine)}{n0 ? ` · ${n0.day !== today ? wkd(n0.day) + " " : ""}${clock(n0.start)}` : ""} · {fmtMin(g.c.minutes)}</small></div>; }
@@ -1988,13 +2001,16 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     ); }
     const num = <b className={"msf-n" + (segLate(g) ? " late" : "")}>{whyEl(g.c)}{tn(dotEl(g.c, g), numLink(g.c.job))}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
     return (
-      <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + (notYet(g) ? " mdy-ny" : "") + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
+      <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + (notYet(g) ? " mdy-ny" : "") + (rs ? " mpr-c " + rs.k + (band ? " mpr-hasb" : "") : "") + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
         onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(g.c); } }}
         onContextMenu={(e) => { e.preventDefault(); openRc(g.c, g, e.clientX, e.clientY); }}>
         <span className="msf-1">{num}{tagOf(g)}{flags(g.c.job)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{dayState(g)}{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()}</span> : null}</span>
         {lines === 2 ? <span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : ""}<span className="msf-x">{g.c.job.customer ? " · " : ""}{gl.colors} · {gl.units.toLocaleString()} · {gl.run}</span></span> : null}
         {mv ? <span className={"msf-bt" + (mv.late ? " bad" : "")}>{mv.txt}</span> : null}
         {lines === 3 ? <><span className="msf-2">{holdTag(g.c.job)}{g.c.job.firm ? <b className="ms-firm">Firm · {firmLbl(g.c.job)}</b> : null}{g.c.job.customer ? name : g.c.need.label}</span><span className="msf-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}</span></> : null}
+        {rs ? (band
+          ? <span className={"mpr-band " + rs.k}><span>Printing{rs.over > 0 ? ` · ${fmtMin(rs.over)} over` : ` · done ~${clock(rs.doneAt)}`}</span><span className="mpr-t">{fmtMin(rs.used)} / {fmtMin(rs.est)}</span></span>
+          : <span className={"mpr-side " + rs.k}>Printing</span>) : null}
       </div>
     );
   };
@@ -2004,6 +2020,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const dayState = (g: Seg) => {
     const st = g.c.slot?.status;
     if (st === "done") { const f = g.c.slot?.finished_at; return <em className="mdy-st ok">{f ? "✓ " + new Date(f).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p") : "✓ Done"}</em>; }
+    if (st === "running" && runState(g.c)) return null;
     if (st === "running") return <em className="mdy-st run">Printing{g.c.slot?.progress ? ` · ${Math.round(+g.c.slot.progress * 100)}%` : ""}</em>;
     if (notYet(g)) return <em className="mdy-st bad">Not started</em>;
     return null;

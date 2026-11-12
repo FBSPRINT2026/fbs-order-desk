@@ -277,6 +277,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (Lunch / Break / Ink / screen / Other), Resume, Mark complete (then the order goes to Fulfillment / Ready / Completed
   once it's its last job on the schedule), Not started after all, Not done yet. All through `logAction`, the same booking
   fields and job log the press timer writes. Lock… opens a side panel with the four locks (`rcDo`, `lockSide`).
+  A printing job shows it against the time it was figured to take (Nick, Nov 12, option A; `runState`): a strip across
+  the bottom, green "Printing · done ~1:45p", yellow up to 30 minutes over, red past that, with time used / figured
+  (lunch it ran through doesn't count); a job too short for a strip gets just "Printing" at the end of its line.
   A started job runs until it's marked complete: past its planned finish it stretches to now and the jobs after it move
   down, live clock on or off (Nick, Nov 12). The tiny shirt before a job's number is its goods (`GoodsTee`, the digits' exact height on their baseline; green
   counted, amber here not counted, red a problem or not counted and runs within a day, orange not here yet; in the key too), from the latest count first, then the

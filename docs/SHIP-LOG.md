@@ -198,3 +198,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:08am · 1.3.402 · Nick · Pop-up fitter runs on a short timer (works in every tab)
 - Nov 12 9:14am · 1.3.403 · Nick · Schedule: the goods dot is now a tiny shirt in the goods color, the numbers' exact height on their baseline, everywhere on the schedule and in the key
 - Nov 12 9:16am · 1.3.404 · Nick · Schedule: no dot after a printing job's number
+- Nov 12 9:21am · 1.3.405 · Nick · Schedule: a printing job gets a strip along the bottom (green on time, yellow up to 30m over, red past), time used / figured; short jobs just 'Printing' at the end of the line
