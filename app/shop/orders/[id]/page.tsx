@@ -1969,7 +1969,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               }} />
           )}
           {isSimpleKind(o.product_kind) ? <SimpleLines orderId={o.id} kind={o.product_kind} groups={o.groups} hidePrices={!seesMoney || undefined} update={(fn) => patch((d) => fn(d.groups))} save={save} /> : <>
-          <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => (<Fragment key={g.id}>
+          <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => (<div key={g.id} className={g.sample ? "smr-grp" : "smr-grp0"}>
             {g.sample && <SampleBar g={g} orderId={o.id} me={who.staffName || who.email || ""} patch={patch} onEdit={() => setSampleTool({ kind: g.sample?.kind || "only", groupId: g.id })} />}
             <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
@@ -1979,7 +1979,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })}
               moveTo={o.groups.flatMap((x, xi) => (x.id === g.id ? [] : [{ id: x.id, label: [x.name?.trim() || `Group ${xi + 1}`, x.lines.map((l) => l.style).filter(Boolean).slice(0, 2).join(", ")].filter(Boolean).join(" · ") }]))}
               onMoveLine={moveLine} />
-          </Fragment>))}</OrderInkCtx.Provider>
+          </div>))}</OrderInkCtx.Provider>
           {sampleTool && <SampleRunTool o={o} patch={patch} kind={sampleTool.kind} groupId={sampleTool.groupId} onClose={() => setSampleTool(null)} />}
           <div className="row grp-add">
             <button className="btn" type="button" onClick={() => patch((d) => { const ng = newGroup(); if (!finPerGroup) { ng.finishing = (d.groups[0]?.finishing || []).filter(isFin); if (d.groups[0]?.customFin?.length) ng.customFin = [...d.groups[0].customFin]; } d.groups.push(ng); })}>+ Add line item group</button>

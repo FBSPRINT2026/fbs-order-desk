@@ -54,6 +54,10 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   // old Printavo jobs (pv:) have no work order of ours
   const woBtn = (j: CheckJob) => j.ref.startsWith("pv:") ? null : <button type="button" className="btn sm rvd-wo" onClick={() => setWo(j)} title="Open this job's work order to print"><PrinterIcon />Work order</button>;
   const today = ymd(new Date()), d1 = nextWork(today), d2 = nextWork(d1);
+  // a phone gets its own view (Nick, Nov 12, option A: "needs to be really good on the phone… that's where we will use it")
+  const [phone, setPhone] = useState(false);
+  useEffect(() => { const m = window.matchMedia("(max-width: 700px)"); const f = () => setPhone(m.matches); f(); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, []);
+  const [ptab, setPtab] = useState<"count" | "trucks" | "issues">("count");
 
   // this week and next (a Friday's "next day" is Monday)
   const load = useCallback(async () => {
@@ -129,6 +133,64 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
     );
   };
 
+  const modals = <>
+      {wo && <WorkOrderView orderId={wo.ref} number={wo.number} title={[wo.customer, wo.nickname].filter(Boolean).join(" · ")} onClose={() => setWo(null)} />}
+      {count && <CheckinModal job={count} onClose={() => setCount(null)} onSaved={(c) => { setCount(null); setMsg(c.status === "issue" ? `#${count.number} checked in with ${c.lines.filter((l) => l.issue).length} problem(s): it's under the issues until resolved.` : `#${count.number} checked in: all ${c.received} here.`); load(); }} />}
+  </>;
+  // the phone view: a card per job, big Count in, the work order a printer button; Count in / Trucks / Issues tabs at the bottom
+  const pcard = (j: CheckJob, done: boolean) => {
+    const st = done ? { label: "✓ Counted" + (j.checkins[0] ? " " + new Date(j.checkins[0].created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""), tone: "ok" } : STATE[j.state];
+    const sup = supOf(j);
+    return (
+      <div key={j.ref} className={"rvm-card " + st.tone + (done ? " done" : "")}>
+        <div className="rvm-c1"><Link className="rvm-no" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link><span className={"rvd-pill " + st.tone}>{st.label}</span></div>
+        <div className="rvm-cu" data-notranslate>{j.customer}</div>
+        {j.nickname ? <div className="rvm-nk" data-notranslate>{j.nickname}</div> : null}
+        <div className="rvm-meta">{j.due ? <span>Due {short(j.due)}</span> : null}<span>{pcsOf(j)} pcs</span>{sup ? <span>{sup}{j.lines ? ` · ${j.arrived} of ${j.shipped} here` : ""}</span> : <span>No manifest</span>}</div>
+        <div className="rvm-acts">
+          {!j.ref.startsWith("pv:") && <button type="button" className="btn rvm-pr" aria-label="Work order" title="Work order" onClick={() => setWo(j)}><PrinterIcon /></button>}
+          <button type="button" className={"btn rvm-go" + (done ? "" : " primary")} onClick={() => setCount(j)}>{done || j.state === "issue" ? "Recount" : "Count in"}</button>
+        </div>
+      </div>
+    );
+  };
+  if (phone) return (
+    <div className="rvm">
+      {ptab === "count" && <>
+        <div className="rvm-seg" role="tablist">{([["today", "Today"], ["tomorrow", "Tmrw"], ["next", "Next"], ["later", "Later"]] as [Day, string][]).map(([k, l]) => (
+          <button key={k} type="button" role="tab" aria-selected={day === k} className={day === k && !q.trim() ? "on" : ""} onClick={() => { setDay(k); setQ(""); }}>{l}<em>{jobs ? n(k) : "…"}</em></button>
+        ))}</div>
+        <div className="rvm-chips">
+          {([["all", "All"], ["sp", "Screen"], ["emb", "Emb"], ["hp", "Heat"]] as ["all" | JobKind, string][]).map(([k, l]) => <button key={k} type="button" className={kind === k ? "on" : ""} onClick={() => setKind(k)}>{l}</button>)}
+          <button type="button" className={day === "counted" && !q.trim() ? "on" : ""} onClick={() => { setDay("counted"); setQ(""); }}>✓ {jobs ? n("counted") : "…"}</button>
+        </div>
+        <input className="rvm-q" placeholder="Find an order #, customer…" value={q} onChange={(e) => setQ(e.target.value)} inputMode="search" />
+        {msg && <div className="banner rvm-msg">{msg}</div>}
+        <div className="rvm-list">
+          {err ? <div className="empty">{err}</div> : !jobs ? <div className="empty">Loading…</div> : !shown.length && !grayed.length ? <div className="empty">{q.trim() ? "No order matches." : day === "counted" ? "Nothing counted is waiting for the press." : "Nothing to count in."}</div> : <>
+            {shown.map((j) => pcard(j, false))}
+            {grayed.length > 0 && day !== "counted" && <div className="rvm-sec">Counted · waiting for the press · {grayed.length}</div>}
+            {grayed.map((j) => pcard(j, true))}
+          </>}
+        </div>
+      </>}
+      {ptab === "trucks" && <div className="rvm-list">
+        <div className="rvm-chips">{(["today", "tomorrow"] as const).map((k) => <button key={k} type="button" className={truckDay === k ? "on" : ""} onClick={() => setTruckDay(k)}>{k === "today" ? "Today" : "Tomorrow"}</button>)}</div>
+        {truck("ss", "S&S", "ss")}
+        {truck("sanmar", "SanMar", "sm")}
+      </div>}
+      {ptab === "issues" && <div className="rvm-list"><GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} /></div>}
+      <nav className="rvm-nav" aria-label="Goods & Receiving">
+        {([["count", "Count in", <svg key="i" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5z" /><path d="M3 8l9 5 9-5M12 13v8" /></svg>],
+          ["trucks", "Trucks", <svg key="i" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><rect x="1" y="6" width="14" height="10" /><path d="M15 10h4l3 3v3h-7z" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></svg>],
+          ["issues", "Issues", <svg key="i" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18v.5" /></svg>]] as const).map(([k, l, ic]) => (
+          <button key={k} type="button" className={ptab === k ? "on" : ""} onClick={() => setPtab(k)}>{ic}<span>{l}</span></button>
+        ))}
+      </nav>
+      {modals}
+    </div>
+  );
+
   const DAYS: [Day, string][] = [["today", "Today"], ["tomorrow", "Tomorrow"], ["next", "Next day"], ["later", "Later"]];
   const KINDS: ["all" | JobKind, string][] = [["all", "All"], ["sp", "SP"], ["emb", "EMB"], ["hp", "HP"]];
   return (
@@ -151,7 +213,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
           </div>
           {msg && <div className="banner" style={{ margin: "8px 12px 0" }}>{msg}</div>}
           {err ? <div className="empty">{err}</div> : !jobs ? <div className="empty">Loading…</div> : !shown.length && !grayed.length ? <div className="empty">{q.trim() ? "No order matches." : day === "counted" ? "Nothing counted is waiting for the press." : day === "today" ? "Nothing to count in today." : "Nothing to count in that day."}</div> : (
-            <div className="tbl-wrap"><table className="tbl">
+            <div className="tbl-wrap"><table className="tbl rvd-tbl">
               <thead><tr>{([["number", "Order #"], ["customer", "Customer"], ["due", "Due date"], ["supplier", "Supplier"], ["pcs", "Pieces"], ["status", "Status"]] as const).map(([k, l]) => (
                 <th key={k} className={"rvd-th" + (sortBy?.k === k ? " on" : "")} onClick={() => setSortBy((x) => (x?.k === k ? (x.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }))} title="Sort by this">{l}<span className="rvd-ar" aria-hidden>{sortBy?.k === k ? (sortBy.dir === 1 ? "▲" : "▼") : "↕"}</span></th>
               ))}<th /></tr></thead>
@@ -159,26 +221,26 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
                 const st = STATE[j.state], pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
                 return (
                   <tr key={j.ref} className={day === "today" && !q.trim() && j.state !== "way" && j.state !== "none" ? "rvd-urg" : ""}>
-                    <td className="nw"><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
-                    <td><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
-                    <td className="rvd-from">{j.due ? short(j.due) : "—"}</td>
-                    <td><span className="rvd-from">{supOf(j) || "No manifest"}</span>{j.lines ? <div className="sub">{`${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}`}</div> : null}</td>
-                    <td className="rvd-pcs">{j.shipped && j.lines ? <span className="rvd-bar2"><i style={{ width: `${Math.min(100, Math.round((j.arrived / Math.max(1, j.shipped)) * 100))}%` }} /></span> : null}<b>{pcs}</b> <span className="sub">pcs</span></td>
-                    <td><span className={"rvd-pill " + st.tone}>{st.label}</span></td>
-                    <td className="rvd-act">{woBtn(j)}<button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
+                    <td className="nw rvd-c-no" data-label=""><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
+                    <td className="rvd-c-cu" data-label=""><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
+                    <td className="rvd-from rvd-c-due" data-label=""><span className="rvd-ph">Due </span>{j.due ? short(j.due) : "—"}</td>
+                    <td className="rvd-c-sup" data-label=""><span className="rvd-from">{supOf(j) || "No manifest"}</span>{j.lines ? <div className="sub">{`${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}`}</div> : null}</td>
+                    <td className="rvd-pcs rvd-c-pcs" data-label="">{j.shipped && j.lines ? <span className="rvd-bar2"><i style={{ width: `${Math.min(100, Math.round((j.arrived / Math.max(1, j.shipped)) * 100))}%` }} /></span> : null}<b>{pcs}</b> <span className="sub">pcs</span></td>
+                    <td className="rvd-c-st" data-label=""><span className={"rvd-pill " + st.tone}>{st.label}</span></td>
+                    <td className="rvd-act" data-label="">{woBtn(j)}<button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
                   </tr>
                 );
               })}
               {grayed.length > 0 && day !== "counted" && <tr className="rvd-sub"><td colSpan={7}>Counted · waiting for the press to start <span className="rvd-n">{grayed.length}</span></td></tr>}
               {grayed.map((j) => { const pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0), last = j.checkins[0]; return (
                 <tr key={j.ref} className="rvd-done">
-                  <td className="nw"><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
-                  <td><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
-                  <td className="rvd-from">{j.due ? short(j.due) : "—"}</td>
-                  <td><span className="rvd-from">{supOf(j) || "No manifest"}</span></td>
-                  <td className="rvd-pcs"><b>{pcs}</b> <span className="sub">pcs</span></td>
-                  <td><span className="rvd-pill ok">✓ Counted{last ? ` · ${new Date(last.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</span></td>
-                  <td className="rvd-act">{woBtn(j)}<button type="button" className="btn sm ghost" onClick={() => setCount(j)}>Recount</button></td>
+                  <td className="nw rvd-c-no" data-label=""><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
+                  <td className="rvd-c-cu" data-label=""><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
+                  <td className="rvd-from rvd-c-due" data-label=""><span className="rvd-ph">Due </span>{j.due ? short(j.due) : "—"}</td>
+                  <td className="rvd-c-sup" data-label=""><span className="rvd-from">{supOf(j) || "No manifest"}</span></td>
+                  <td className="rvd-pcs rvd-c-pcs" data-label=""><b>{pcs}</b> <span className="sub">pcs</span></td>
+                  <td className="rvd-c-st" data-label=""><span className="rvd-pill ok">✓ Counted{last ? ` · ${new Date(last.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</span></td>
+                  <td className="rvd-act" data-label="">{woBtn(j)}<button type="button" className="btn sm ghost" onClick={() => setCount(j)}>Recount</button></td>
                 </tr>
               ); })}</tbody>
             </table></div>
@@ -197,8 +259,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         {truck("sanmar", "SanMar", "sm")}
         </div>
       </aside>
-      {wo && <WorkOrderView orderId={wo.ref} number={wo.number} title={[wo.customer, wo.nickname].filter(Boolean).join(" · ")} onClose={() => setWo(null)} />}
-      {count && <CheckinModal job={count} onClose={() => setCount(null)} onSaved={(c) => { setCount(null); setMsg(c.status === "issue" ? `#${count.number} checked in with ${c.lines.filter((l) => l.issue).length} problem(s): it's under the issues until resolved.` : `#${count.number} checked in: all ${c.received} here.`); load(); }} />}
+      {modals}
     </div>
   );
 }

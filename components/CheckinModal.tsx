@@ -82,7 +82,30 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
   // every size any garment has, smallest first (a garment without one gets a dot)
   const sizes = [...new Set(cells.map((c) => c.size))].sort(bySize);
   const short = cells.reduce((x, c) => { const v = n(c.k); return x + (v !== null && v < c.expected ? c.expected - v : 0); }, 0);
+  // a phone counts with big size tiles, a garment to a card (Nick, Nov 12: "really good on the phone… that's where we will use it")
+  const [phone, setPhone] = useState(false);
+  useEffect(() => { const m = window.matchMedia("(max-width: 700px)"); const f = () => setPhone(m.matches); f(); m.addEventListener("change", f); return () => m.removeEventListener("change", f); }, []);
 
+  // one size: tap to take the full amount, tap again to type (Enter / Next goes on to the next size)
+  const sizeBox = (c: (typeof cells)[number], cls = "ckg-c") => {
+    const v = n(c.k), on = editing === c.k;
+    return (
+<label className={cls + (v === null ? "" : tone(c))} title={v === null ? t("Tap for all {0}", c.expected) : undefined}
+                            onPointerDown={(e) => { if (v === null && !on) { e.preventDefault(); fill([c]); } }}>
+                              <input type="number" min={0} inputMode="numeric" aria-label={t("{0} received", c.size)} value={got[c.k] ?? ""} placeholder="–" data-ck={cells.indexOf(c)}
+                                onFocus={(e) => { setEditing(c.k); e.target.select(); }} onBlur={() => setEditing("")} onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                                onChange={(e) => setGot((g) => ({ ...g, [c.k]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  // Enter works like Tab (next size, then the next garment's); on the last size, to the Check In button
+                                  if (e.key !== "Enter") return;
+                                  e.preventDefault();
+                                  const nx = document.querySelector<HTMLElement>(`.ck-modal [data-ck="${cells.indexOf(c) + (e.shiftKey ? -1 : 1)}"]`) || document.querySelector<HTMLElement>(".ck-foot .ck-go");
+                                  nx?.focus();
+                                }} />
+                              <small>{phone ? <b className="ckm-z">{c.size === "OTHER" ? t("Other") : c.size}</b> : null}{t("of {0}", c.expected)}</small>
+                          </label>
+    );
+  };
   return (
     <div className="mk-modal-back ck-back" role="dialog" aria-modal="true" aria-labelledby="ck-t" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
       <div className="ck-modal">
@@ -111,13 +134,27 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
               counted, what's left and what's short beside it */}
           {/* the totals as the shop's summary card, across the top; the grid gets the full width (Oct 27, Nick: "make this
               fill up the space… move the All to the right side") */}
-          <div className="stats ckg-stats">
+          {phone ? (
+            <div className="ckm-prog"><div className="ckm-pl"><span><b>{counted.toLocaleString()}</b> {t("of {0} counted", expected.toLocaleString())}</span>{short ? <span className="ckm-short">{t("{0} short", short)}</span> : <span>{left === 1 ? t("1 size left") : t("{0} sizes left", left)}</span>}</div>
+              <i className={"ckm-bar" + (short ? " short" : "")}><b style={{ width: `${expected ? Math.min(100, (counted / expected) * 100) : 0}%` }} /></i></div>
+          ) : <div className="stats ckg-stats">
             <div className="stat"><span className="v">{counted.toLocaleString()}<small> / {expected.toLocaleString()}</small></span><span className="k">{t("Counted")}</span></div>
             <div className="stat"><span className="v">{left}</span><span className="k">{left === 1 ? t("Size left to count") : t("Sizes left to count")}</span></div>
             <div className="stat"><span className={"v" + (short ? " alert" : "")}>{short}</span><span className="k">{t("Short")}</span></div>
             <div className="stat"><span className="v">{expected ? Math.round((counted / expected) * 100) : 0}%</span><span className="k">{t("Done")}</span><i className="ckg-bar"><b style={{ width: `${expected ? Math.min(100, (counted / expected) * 100) : 0}%` }} /></i></div>
-          </div>
-          <div className="ckg">
+          </div>}
+          {phone && <div className="ckm-cards">{items.map(({ it, cs }) => {
+            const exp = cs.reduce((x, c) => x + c.expected, 0), cnt = cs.reduce((x, c) => x + (n(c.k) ?? 0), 0), done = cs.every((c) => n(c.k) !== null);
+            return (
+              <div key={it.key} className="ckm-card">
+                <div className="ckm-h"><span className="ckm-sw" style={{ background: lookOf(it).hex }} />
+                  <div className="ckm-t"><b data-notranslate>{[lookOf(it).brand, it.style].filter(Boolean).join(" ") || t("Item")}</b><small data-notranslate>{it.color || t("No color")} · {done ? `${cnt} / ${exp}` : exp}</small></div>
+                  <button type="button" className={"btn sm" + (done && cnt === exp ? " ckg-done" : "")} onClick={() => fill(cs)}>{done && cnt === exp ? t("✓ All here") : t("✓ All")}</button></div>
+                <div className="ckm-tiles">{cs.map((c) => <div key={c.k}>{sizeBox(c, "ckm-tile")}</div>)}</div>
+              </div>
+            );
+          })}</div>}
+          {!phone && <div className="ckg">
             <div className="ckg-wrap"><table className="ckg-t">
               <thead><tr><th className="ckg-g">{t("Garment")}</th>{sizes.map((z) => <th key={z}>{z === "OTHER" ? t("Other") : z}</th>)}<th className="ckg-n">{t("Count")}</th><th className="ckg-a" /></tr></thead>
               <tbody>{items.map(({ it, cs }) => {
@@ -133,25 +170,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
                     {sizes.map((z) => {
                       const c = cs.find((x) => x.size === z);
                       if (!c) return <td key={z} className="ckg-na" aria-hidden><span /></td>;
-                      const v = n(c.k), on = editing === c.k;
-                      return (
-                        <td key={z}>
-                          <label className={"ckg-c" + (v === null ? "" : tone(c))} title={v === null ? t("Tap for all {0}", c.expected) : undefined}
-                            onPointerDown={(e) => { if (v === null && !on) { e.preventDefault(); fill([c]); } }}>
-                              <input type="number" min={0} inputMode="numeric" aria-label={t("{0} received", c.size)} value={got[c.k] ?? ""} placeholder="–" data-ck={cells.indexOf(c)}
-                                onFocus={(e) => { setEditing(c.k); e.target.select(); }} onBlur={() => setEditing("")} onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                                onChange={(e) => setGot((g) => ({ ...g, [c.k]: e.target.value }))}
-                                onKeyDown={(e) => {
-                                  // Enter works like Tab (next size, then the next garment's); on the last size, to the Check In button
-                                  if (e.key !== "Enter") return;
-                                  e.preventDefault();
-                                  const nx = document.querySelector<HTMLElement>(`.ck-modal [data-ck="${cells.indexOf(c) + (e.shiftKey ? -1 : 1)}"]`) || document.querySelector<HTMLElement>(".ck-foot .ck-go");
-                                  nx?.focus();
-                                }} />
-                              <small>{t("of {0}", c.expected)}</small>
-                          </label>
-                        </td>
-                      );
+                      return <td key={z}>{sizeBox(c)}</td>;
                     })}
                     <td className={"ckg-n" + (done ? (cnt === exp ? " ok" : " off") : "")}><b>{cnt.toLocaleString()}</b><small>{t("of {0}", exp.toLocaleString())}</small><i className="ckg-bar"><b style={{ width: `${exp ? Math.min(100, (cnt / exp) * 100) : 0}%` }} /></i></td>
                     <td className="ckg-a"><button type="button" className={"btn sm" + (done && cnt === exp ? " ckg-done" : "")} tabIndex={-1} onClick={() => fill(cs)}>{done && cnt === exp ? t("✓ All here") : t("✓ All")}</button></td>
@@ -159,7 +178,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
                 );
               })}</tbody>
             </table></div>
-          </div>
+          </div>}
 
           <section className={"ck-probs" + (problems.length ? " has" : "")}>
             <div className="ck-item-h"><b>{problems.length ? (problems.length === 1 ? t("1 problem") : t("{0} problems", problems.length)) : t("No problems")}</b>
