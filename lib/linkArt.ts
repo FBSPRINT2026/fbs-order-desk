@@ -117,6 +117,17 @@ async function emailProtection(pageUrl: string, html: string): Promise<string | 
   return null;
 }
 
+/** the scanner's "This site looks safe" page: the Open link it offers (only that verdict; a warning page is never followed) */
+function safeOpen(html: string): string | null {
+  if (!/looks safe/i.test(html) || /dangerous|malicious|suspicious|blocked/i.test(html.replace(/known dangerous sites/gi, ""))) return null;
+  for (const m of html.matchAll(/<a\b[^>]*href\s*=\s*["'](https?:\/\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const href = m[1].replace(/&amp;/g, "&"), text = m[2].replace(/<[^>]+>/g, " ").trim();
+    try { const h = new URL(href).hostname; if (/emailprotection\.link$|\.int$|zix|proofpoint|mimecast/i.test(h)) continue; } catch { continue; }
+    if (/^open$/i.test(text) || text.includes(new URL(href).hostname)) return href;
+  }
+  return null;
+}
+
 /** follow redirects (HTTP, meta refresh, a script redirect) to the real address, at most 8 hops */
 export async function resolveLink(url: string): Promise<string> {
   let u = url;
@@ -129,7 +140,16 @@ export async function resolveLink(url: string): Promise<string> {
     // wrappers that answer with a page that sends you on (meta refresh or window.location)
     if (/text\/html/i.test(r.headers.get("content-type") || "") && !/canva\.com|dropbox\.com|drive\.google\.com/i.test(new URL(u).hostname)) {
       const html = (await r.text().catch(() => "")).slice(0, 200_000);
-      if (/emailprotection\.link$/i.test(new URL(u).hostname)) { const real = await emailProtection(u, html); if (real) { u = real; continue; } return u; }
+      if (/emailprotection\.link$/i.test(new URL(u).hostname)) {
+        // the scanner's own all-clear page ("This site looks safe… Open"): its Open link is where it goes (Nov 12, Illusive's
+        // Printavo link: once a link's been scanned, the page comes back with that verdict and no WebSocket step)
+        const safe = safeOpen(html); if (safe) { u = safe; continue; }
+        const real = await emailProtection(u, html); if (real) { u = real; continue; }
+        // scanned just now: the page answers with its verdict the second time
+        const again = await fetch(u, { headers: { "user-agent": UA }, signal: AbortSignal.timeout(12_000) }).then((x) => x.text()).catch(() => "");
+        const s2 = safeOpen(again); if (s2) { u = s2; continue; }
+        return u;
+      }
       const m = html.match(/http-equiv=["']?refresh["']?[^>]*content=["'][^"']*url=([^"'>]+)/i) || html.match(/(?:window\.)?location(?:\.href)?\s*=\s*["']([^"']+)["']/i) || html.match(/location\.replace\(\s*["']([^"']+)["']/i);
       if (m) { u = new URL(m[1].replace(/&amp;/g, "&"), u).toString(); continue; }
     }
