@@ -22266,3 +22266,11 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rvd-wo{margin-right:6px}
 .rvd-wo svg{margin-right:5px;vertical-align:-2px}
 @media (max-width:640px){.wov-bg{padding:0}.wov{border-radius:0}}
+
+/* Schedule breaks, option D (Nov 11, Nick): a tinted band with the word centered; lunch inside a job is a line through the card */
+.msf-brk-c{position:absolute;left:0;right:0;z-index:1;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.msf-brk-c span{font-size:10.5px;font-weight:700;color:var(--ink-3);white-space:nowrap}
+.msf-brk-in{position:absolute;left:4px;right:4px;height:0;z-index:6;border-top:1px solid color-mix(in srgb,var(--ink) 22%,transparent);display:flex;justify-content:center;pointer-events:none}
+.msf-brk-in span{margin-top:-8px;background:var(--surface);padding:0 6px;font-size:10.5px;font-weight:700;line-height:14px;color:var(--ink-3);white-space:nowrap;border-radius:3px}
+.ms-calm .ms-brkc{display:flex;align-items:center;justify-content:center}
+.ms-calm .ms-brkc span{position:static;font-size:10.5px;font-weight:700;letter-spacing:0;text-transform:none;color:var(--ink-3)}

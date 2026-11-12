@@ -319,6 +319,17 @@ const withRunTimes = (needs: Need[], rt: Record<string, { min: number; by: strin
 /** the customer and the job's name together (Nov 9, Nick: "I need to see the job names") */
 const who = (j: { customer: string; name: string }) => (j.customer && j.name ? `${j.customer} · ${j.name}` : j.customer || j.name);
 
+/** a press's breaks as the schedule draws them: the warm-up right after lunch joins lunch's band (min = lunch alone) */
+function brkBands(bs: [number, number, string, ...unknown[]][]) {
+  const out: { a: number; b: number; lunch: boolean; min: number }[] = [];
+  for (const [a, b, why] of [...bs].sort((x, y) => x[0] - y[0])) {
+    const warm = why === "Warm-up", last = out[out.length - 1];
+    if (warm && last?.lunch && Math.abs(last.b - a) < 1) { last.b = b; continue; }
+    out.push({ a, b, lunch: !warm, min: Math.round(b - a) });
+  }
+  return out;
+}
+
 export default function MachineSchedule({ when, hold }: { /** hidden mode: no calendar, just the When answer for these groups */ when?: { groups: Group[]; onDates: (d: WhenDates | null) => void }; /** hidden mode: hold a spot for this quote (Hold the spot) */ hold?: HoldAsk } = {}) {
   const canEquip = useCan("pressDefaults");
   // crew pay rates (job labor cost, overtime cost): owners / admins, and anyone with the "pay" permission
@@ -1413,8 +1424,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             {shade(m).map(([a, b]) => <div key={a} className="ms-off" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} />)}
             {/* a firm job's deadline is said on its card ("Firm Wed 12p"), not as a line on the calendar (Nov 9, Nick) */}
             {(() => { const sh = shiftOn(m, day), oa = sh ? otOn(m, day) : null; if (!sh || oa == null) return null; const a = Math.max(oa, vS), b = Math.min(sh[1], vE); return b > a ? <div className="ms-ot" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`}><span>Overtime</span></div> : null; })()}
-            {(() => { const sh = shiftOn(m, day); return sh ? breaksOn(m, day, sh, segs.lunch.get(m.id + "|" + day)).map(([a0, b0, why]) => { const a = Math.max(a0, vS), b = Math.min(b0, vE); if (b <= a) return null; const warm = why === "Warm-up"; return (
-              <div key={"bk" + a0} className={warm ? "ms-warm" : "ms-lunch"} style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} title={`${warm ? "Press warm-up" : `${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "Crew"} lunch`} ${clockLong(a0)} – ${clockLong(b0)}`}>{((b - a) / 60) * HOUR_PX >= 13 && <span>{warm ? "Warm-up" : "Lunch"}</span>}</div>
+            {(() => { const sh = shiftOn(m, day); return sh ? brkBands(breaksOn(m, day, sh, segs.lunch.get(m.id + "|" + day))).map(({ a: a0, b: b0, lunch, min }) => { const a = Math.max(a0, vS), b = Math.min(b0, vE); if (b <= a) return null; const warm = !lunch; return (
+              <div key={"bk" + a0} className={(warm ? "ms-warm" : "ms-lunch") + " ms-brkc"} style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }} title={`${warm ? "Press warm-up" : `${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "Crew"} lunch`} ${clockLong(a0)} – ${clockLong(b0)}`}>{((b - a) / 60) * HOUR_PX >= 13 && <span>{warm ? "Warm-up" : `Lunch ${min} min`}</span>}</div>
             ); }) : null; })()}
             {(m.down?.[day] || []).filter((x) => !x[4]).map(([a0, b0, why, rate]) => { const [sa, sb] = shiftOn(m, day) || typicalShift(m), a = Math.max(a0, rate ? sa : a0, vS), b = Math.min(b0, rate ? sb : b0, vE); if (b <= a) return null; return rate
               ? <div key={"sl" + a} className="ms-slow" style={{ top: ((a - vS) / 60) * HOUR_PX, height: ((b - a) / 60) * HOUR_PX }}><button type="button" onClick={() => setDownEdit({ machine: m.id, day })} title={`${why}: ${m.name} runs at ${Math.round(rate * 100)}% ${clockLong(a)} – ${clockLong(b)} (jobs take ${+(1 / rate).toFixed(1)}× as long)`}>{why} · {Math.round(rate * 100)}%</button></div>
@@ -1903,8 +1914,18 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     <Fragment key={bk.d}>
                       {off.map(([x, y]) => <div key={"of" + x} className="ms-off" style={{ top: flowY(bi, x), height: flowY(bi, y) - flowY(bi, x) }} />)}
                       {sh && oa != null && oa < sh[1] && <div className="ms-ot" style={{ top: flowY(bi, oa), height: flowY(bi, sh[1]) - flowY(bi, oa) }} title={`${crewOf(m)?.leader ? crewOf(m)!.leader + "'s crew" : "This crew"} is past 40 hours this pay week from ${clockLong(oa)}: overtime`} />}
-                      {sh && breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d)).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <Fragment key={"bk" + a0}><div className={why === "Warm-up" ? "ms-warm" : "ms-lunch"} style={{ top: flowY(bi, a0), height: flowY(bi, b0) - flowY(bi, a0) }} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} />{/* a thin line where it starts with its name and times on it (Nov 11, Nick: "don't like the bubbles… go back to the
-                          line"): solid for lunch, dotted for warm-up */}<div className={"msf-brk-l" + (why === "Warm-up" ? " warm" : "")} style={{ top: flowY(bi, a0) }}><span>{why === "Warm-up" ? "Warm-up" : "Lunch"} {clock(a0)}–{clock(b0)}</span></div></Fragment> : null)}
+                      {/* breaks (Nov 11, Nick, option D: "lunch 30 minutes… they'll know about warm up, it's just part of the deal"):
+                          the warm-up after lunch is part of lunch's tinted band; the word sits centered in it. A lunch that falls
+                          inside a job is counted in the job (its card runs longer) and shows as a line through the card. */}
+                      {sh && brkBands(breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d))).map(({ a: a0, b: b0, lunch, min }) => {
+                        const ya = flowY(bi, a0), yb = flowY(bi, b0);
+                        if (yb <= ya) return null;
+                        const mid = (ya + yb) / 2, inJob = items.some((x) => x.y1 < mid && x.y2 > mid), word = lunch ? `Lunch ${min} min` : "Warm-up";
+                        return <Fragment key={"bk" + a0}>
+                          <div className={lunch ? "ms-lunch" : "ms-warm"} style={{ top: ya, height: yb - ya }} title={`${lunch ? "Lunch" : "Warm-up"} ${clockLong(a0)} – ${clockLong(b0)}`} />
+                          {inJob ? <div className="msf-brk-in" style={{ top: ya }}><span>{word}</span></div> : yb - ya >= 12 ? <div className="msf-brk-c" style={{ top: ya, height: yb - ya }}><span>{word}</span></div> : null}
+                        </Fragment>;
+                      })}
                       {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, bk.d, a0), machine: m.id, day: bk.d, a: a0, b: b0, why }); }} style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
                       {bk.d === today && now.min > bk.a && <div className="ms-pastv" style={{ top: flowTop[bi], height: flowY(bi, now.min) - flowTop[bi] }} />}
                       {bk.d === today && now.min >= bk.a && now.min <= bk.b && <div className="ms-now" style={{ top: flowY(bi, now.min) }} />}
