@@ -189,3 +189,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:38am · 1.3.393 · Nick · Schedule right-click does what the press timer does: Mark started / pieces done / Pause with a reason / Resume / Mark complete (order to Fulfillment, Ready or Completed after its last job), each with a time; Lock… opens a side panel
 - Nov 12 8:41am · 1.3.394 · Nick · Employee card: owner/admin can reset someone's pay pages PIN (they make a new one next time they open Time Clock, Employees or Payroll)
 - Nov 12 8:45am · 1.3.395 · Nick · Schedule scoreboard: dark blue cards lined up over each press (option A); the now line passes behind the jobs
+- Nov 12 8:54am · 1.3.396 · Nick · Goods & Receiving: a job the press started that was never counted stays on Today as 'On the press · not counted' instead of dropping off (#50036)

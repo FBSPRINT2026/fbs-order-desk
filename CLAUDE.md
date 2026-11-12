@@ -211,7 +211,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 - **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
   to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule
   yet is Later; a goods problem stays on Today), under a full-width All / Screen print / Embroidery / Heat press switch, Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
-  the press starts it, then it drops off. Issues to work under the list; S&S and SanMar trucks (today / next day) on the right.
+  the press starts it, then it drops off; a job the press started that was never counted stays on Today as "On the press ·
+  not counted" (Nick, Nov 12, #50036). Issues to work under the list; S&S and SanMar trucks (today / next day) on the right.
   Its top: a Dashboard button (box icon) beside the Shipments tabs (Arriving & tracking, FBS orders, Customer supplied,
   Ignored); Settings in the header. Two blocks: Counting (a Schedule | Due date switch for the days; All/SP/EMB/HP with the
   search beside it; Today / Tomorrow / Next day / Later / ✓ Counted) and Receiving (trucks).
