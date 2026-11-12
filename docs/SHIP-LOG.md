@@ -232,3 +232,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 2:54pm · 1.3.436 · Nick · QuickBooks: an invoice held back by hand (orders.qbo_hold) and its payments wait in the queue
 - Nov 12 4:23pm · 1.3.437 · Nick · QuickBooks: a closed quote (or canceled invoice) never syncs; one check, qboInvoiceable
 - Nov 12 4:31pm · 1.3.438 · Nick · Printavo balances can be written off (archived_orders.written_off), kept through re-reads
+- Nov 12 4:34pm · 1.3.439 · Nick · QuickBooks payments: overpaid part leaves credit instead of stopping the whole charge; paid held invoices and parts already sent don't block it
