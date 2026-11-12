@@ -10,6 +10,7 @@ import { CLOSED_QUOTE, STATUSES, isClosedQuote, statusKey } from "@/lib/pricing"
 import { custLabel, daysUntil, money } from "@/lib/format";
 import { summaryLine, useShopData } from "@/lib/shopData";
 import { Due, Pill, pvStatusOf, PaidMark } from "@/components/bits";
+import { MixStrip, useMixParts } from "@/components/MixStrip";
 import AssistantStrip from "@/components/AssistantStrip";
 import { holdLabel } from "@/lib/holds";
 import DraftRecovery from "@/components/DraftRecovery";
@@ -144,6 +145,8 @@ export default function OrdersPage() {
     });
   }, [arch, pvAll, q, type, status, customers]);
   // one list, newest number first (Printavo and new orders share the numbering)
+  // a mixed job's parts under its status (screen print done, embroidery printing…)
+  const mix = useMixParts(list);
   const rows = useMemo(() => [
     ...list.map((o) => ({ n: o.number, o, a: null as ArchiveSummary | null })),
     ...archShown.map((a) => ({ n: +a.visual_id || 0, o: null as (typeof list)[number] | null, a })),
@@ -210,7 +213,7 @@ export default function OrdersPage() {
                     <td><RowLink href={`/shop/orders/${o.id}`} label={`Open #${o.number}`} off={picking} /><span className="ordno">{o.number}</span> <span className="ol-tags"><span className={"tag " + (o.type === "quote" ? "q" : "i")}>{o.type === "quote" ? "Quote" : "Inv"}</span><PaidMark total={o.total} balance={o.balance} /></span>{o.unread > 0 && <span className="unread" title="Unread customer message" />}</td>
                     <td><div>{o.nickname || "Untitled Job"}{o.rush && <span className="tag" style={{ marginLeft: 6, background: "var(--danger)", color: "#fff" }}>Rush</span>}</div><div className="sub">{summaryLine(o)}{o.po_number ? ` · PO ${o.po_number}` : ""}</div></td>
                     <td><div>{custLabel(c)}</div><div className="sub">{c?.company ? c.name : ""}</div></td>
-                    <td><Pill status={statusKey(o)} ship={(o as { delivery_method?: string }).delivery_method} pv={pvStatusOf(o as never)} hold={holdLabel((o as { flags?: unknown }).flags)} />{orderNeedsDetails(o.groups) && <div className="pdn-tag" title="Production confirms the print size and inks from the old job">Reorder Details Needed</div>}</td>
+                    <td><Pill status={statusKey(o)} ship={(o as { delivery_method?: string }).delivery_method} pv={pvStatusOf(o as never)} hold={holdLabel((o as { flags?: unknown }).flags)} /><MixStrip parts={mix[o.id]} />{orderNeedsDetails(o.groups) && <div className="pdn-tag" title="Production confirms the print size and inks from the old job">Reorder Details Needed</div>}</td>
                     <td><Due date={o.due_date} status={o.status} /></td>
                     <td className="r">{o.qty}</td>
                     <td className="r money-only">{money(o.total)}</td>

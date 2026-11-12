@@ -22727,3 +22727,13 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mrb-pn{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)}.mrb-pn .mrc-t{height:28px;width:64px}
 .mrb-pgo{height:36px;border:0;border-radius:6px;background:var(--warn);color:#fff;font:800 13.5px var(--body);cursor:pointer;margin-top:2px}
 .mrc.mrb{width:360px}
+
+/* a mixed job's parts under its status (components/MixStrip.tsx; Nick, Nov 12, option B) */
+.mxs{display:flex;gap:3px;margin-top:5px;width:max-content;max-width:100%}
+.mxs-p{display:inline-flex;align-items:center;justify-content:center;gap:3px;min-width:44px;padding:1px 7px;border-radius:4px;font-size:10.5px;font-weight:800;letter-spacing:.03em;white-space:nowrap;line-height:16px}
+.mxs-p svg{width:10px;height:10px}
+.mxs-p.ok{background:var(--ok-soft);color:var(--ok)}
+.mxs-p.run{background:var(--accent);color:#fff}
+.mxs-p.wt{background:var(--surface-2);color:var(--ink-3)}
+.mxs-p.ns{background:var(--warn-soft);color:var(--warn);outline:1px dashed var(--warn);outline-offset:-1px}
+.mxs-h{display:inline-flex;align-items:center}.mxs-h .mxs{margin-top:0}

@@ -22,6 +22,7 @@ import PressLayout from "@/components/PressLayout";
 import ScheduleStartPoint from "@/components/ScheduleStartPoint";
 import { useCan, useRole } from "@/components/RoleContext";
 import { allRows } from "@/lib/readAll";
+import { MixStrip, useMixParts } from "@/components/MixStrip";
 
 /**
  * The production calendar, on the shop's real hours.
@@ -3158,6 +3159,8 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
   const dW = (d: string) => dayLbl(d).split(",")[0];
   // what the job is (Nov 12, Nick, left click option A: "information. Open the job, run time… the separations"): its prints
   // and inks, garments, mockup pictures and goods, read when the card opens; doing things is the right click
+  const [ord, setOrd] = useState<{ id: string; status: string; groups: unknown } | null>(null);
+  const mixP = useMixParts(useMemo(() => (ord ? [ord] : []), [ord]));
   const [info, setInfo] = useState<{ po: string; pcs: number; prints: { loc: string; inks: string; colors: number }[]; garments: [string, number][]; pics: { url: string; title: string }[] } | null>(null);
   const [splitTo, setSplitTo] = useState(c.machine.id), [uniting, setUniting] = useState(false);
   const [gd, setGd] = useState<CheckJob | null>(null);
@@ -3166,7 +3169,8 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
     if (c.job.kind !== "o") return;
     const sb = createClient();
     void (async () => {
-      const { data: o } = await sb.from("orders").select("po_number, groups").eq("id", c.job.id).maybeSingle();
+      const { data: o } = await sb.from("orders").select("id, status, po_number, groups").eq("id", c.job.id).maybeSingle();
+      if (o) setOrd(o as { id: string; status: string; groups: unknown });
       const gs = ((o as { groups?: Group[] } | null)?.groups || []) as Group[];
       const seen = new Set<string>(), prints: { loc: string; inks: string; colors: number }[] = [], gm = new Map<string, number>();
       let pcs = 0;
@@ -3203,6 +3207,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             {sl?.locked && <span className="mji-pill b">Locked to {sl.locked === "spot" ? "this spot" : sl.locked === "press" ? "this press" : sl.locked === "person" ? lead(c.machine) || "this person" : "this day"}</span>}
             {c.job.rush && <span className="mji-pill r">Rush</span>}{c.job.firm && <span className="mji-pill o">Firm · {firmLbl(c.job)}</span>}
           </div>
+          <MixStrip parts={mixP[c.job.id]} />
         </div>
         {parts.length > 1 && <div className="mji-sec"><div className="mji-l">This job runs in {parts.length} parts</div>
           <div className="mji-parts">{parts.map((x, i) => <div key={x.key} className={"mji-part" + (x.me ? " me" : "")}><b>Run {i + 1} · {x.press}{x.me ? " · this one" : ""}</b><span>{x.what}</span><small>{x.when}</small></div>)}</div>

@@ -268,7 +268,7 @@ export const garmentKind = (text: string): Step["garment"] => {
   return "tee";
 };
 const smallLoc = (loc: string) => /\b(pocket|sleeve|neck|nape|leg|hip|cuff|hood)\b/i.test(loc);
-const methodType = (m: string): MachineType => (m === "embroidery" ? "embroidery" : m === "dtf" || m === "dtg" || m === "heat" ? "heat" : "screen");
+export const methodType = (m: string): MachineType => (m === "embroidery" ? "embroidery" : m === "dtf" || m === "dtg" || m === "heat" ? "heat" : "screen");
 
 export function stitchesFor(s: ProductionSettings, location: string, given?: number | null) {
   if (given && given > 0) return given;

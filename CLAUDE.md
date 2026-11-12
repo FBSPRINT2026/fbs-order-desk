@@ -333,3 +333,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   its right end ("In 6:12a", "In 7:21a · late", "Not in yet"; display only), and the press under its name ("Gauntlet III ·
   12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.
+- **A mixed job's parts show under its status** (Nick, Nov 12, option B): an order printing on more than one kind of
+  machine shows SP / EMB / HP blocks (green done, blue printing, gray booked, amber dashed not on the schedule; hover
+  for when and where) on the Orders list, the order's header and the schedule's job card: `MixStrip` / `useMixParts`
+  (`components/MixStrip.tsx`, `lib/mixParts.ts`). The order moves past In Production only when every part is done, and a
+  part not booked yet holds it there; the phone's Job done finishes only its own kind of machine's bookings.
