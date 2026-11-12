@@ -22494,3 +22494,236 @@ label.ckm-tile.over{border-color:var(--warn)}
   .ck-foot .btn{height:50px;font-size:15px;font-weight:800;justify-content:center}
   .ck-foot .ck-go{flex:1}
 }
+
+/* Schedule on a phone (Nov 12, option B): today's jobs per press, done or not; read only */
+.msp{display:flex;flex-direction:column;gap:10px;padding:0 0 24px}
+.msp-menu{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;background:var(--surface-2,#f3f5f8);border-radius:var(--r,8px);padding:4px}
+.msp-menu button{border:0;background:transparent;border-radius:6px;padding:8px 4px;font:600 13px var(--body);color:var(--ink-3)}
+.msp-menu button.on{background:#fff;color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.msp-days{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.msp-days button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:1px;color:var(--ink)}
+.msp-days button small{font-size:11px;color:var(--ink-3);text-transform:uppercase}
+.msp-days button b{font-size:16px}
+.msp-days button.on{border-color:var(--accent);background:var(--accent-soft,#eaf2ff);color:var(--accent)}
+.msp-sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:#fff;border:1px solid var(--line);border-radius:var(--r,8px);overflow:hidden}
+.msp-sum>div{display:flex;flex-direction:column;align-items:center;padding:10px 4px}
+.msp-sum>div+div{border-left:1px solid var(--line)}
+.msp-sum b{font-size:22px;color:var(--ink)}
+.msp-sum span{font-size:11.5px;color:var(--ink-3);text-transform:uppercase;font-weight:600}
+.msp-sum .ok{color:var(--ok)}.msp-sum .run{color:var(--accent)}
+.msp-empty{padding:24px 12px;text-align:center;color:var(--ink-3)}
+.msp-pr{background:#fff;border:1px solid var(--line);border-radius:var(--r,8px);overflow:hidden}
+.msp-ph{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:10px 12px 6px}
+.msp-ph b{font-size:15px}.msp-ph small{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.msp-bar{display:block;height:4px;background:var(--line-2,#eef0f3);margin:0 12px 6px;border-radius:2px;overflow:hidden}
+.msp-bar b{display:block;height:100%;background:var(--ok)}
+.msp-j{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px 12px;border-top:1px solid var(--line-2,#eef0f3);color:var(--ink);text-decoration:none}
+.msp-t{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+.msp-m{display:flex;flex-direction:column;min-width:0}
+.msp-n{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msp-jn{font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msp-run{font-size:12px;color:var(--ok);font-weight:600}
+.msp-st{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:99px;white-space:nowrap;background:var(--surface-2,#f3f5f8);color:var(--ink-3)}
+.msp-st.done{background:#e7f6ec;color:var(--ok)}
+.msp-st.run{background:var(--ok);color:#fff}
+.msp-st.next{background:var(--accent-soft,#eaf2ff);color:var(--accent)}
+.msp-st.late{background:#fdecec;color:var(--danger)}
+.msp-j.done{opacity:.6}.msp-j.done .msp-n b{text-decoration:line-through}
+.msp-j.run{background:#f1faf4}
+/* "already past" sits behind the jobs, a plain tint, never over them (Nov 12) */
+
+
+/* The schedule's day so far (Nov 12, Nick, option C): a bar per press on top; done jobs grayed with the number struck
+   through and the time; the printing job a green border; a job whose start went by red. No shade over the past. */
+.mdy-sb{display:grid;margin:0;padding:8px 0;border-bottom:1px solid var(--line);background:var(--surface-2,#f6f7f9)}
+.mdy-sbc{margin:0 4px;background:var(--fbs-navy);color:#fff;border-radius:8px;padding:9px 11px;min-width:0}
+.mdy-sbc b{font-size:13px;color:#fff;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mdy-bar{display:block;height:6px;background:rgba(255,255,255,.18);border-radius:3px;margin:6px 0 4px;overflow:hidden}
+.mdy-bar>i{display:block;height:100%;background:color-mix(in srgb,var(--ok) 60%,#fff)}
+.mdy-sbc small{font-size:12px;color:color-mix(in srgb,#fff 78%,var(--fbs-navy));white-space:nowrap}.mdy-sbc small.bad{color:color-mix(in srgb,var(--danger) 45%,#fff);font-weight:700}
+.mdy-st{font-style:normal;font-size:11.5px;font-weight:700;margin-left:6px;white-space:nowrap}
+.mdy-st.ok{color:var(--ok)}.mdy-st.run{color:var(--ok)}.mdy-st.bad{color:var(--danger)}
+.ms-calm .msf-card.ms-blk.done:not(.bar){opacity:1;background:var(--surface-2,#f3f5f8);border:1px dashed var(--line);box-shadow:none;color:var(--ink-3)}
+.ms-calm .msf-card.ms-blk.done .msf-n a,.ms-calm .msf-card.ms-blk.done .msf-n{text-decoration:line-through;color:var(--ink-3)}
+.ms-calm .msf-card.ms-blk.run{border:2px solid var(--ok);background:color-mix(in srgb,var(--ok) 6%,var(--surface,#fff))}
+.ms-calm .msf-card.ms-blk.mdy-ny{border-color:color-mix(in srgb,var(--danger) 45%,var(--line))}
+
+/* Right-click on a job on the schedule (Nov 12, Nick): what the press timer does, by hand; Lock… opens a side panel */
+.mrc{position:fixed;z-index:81;width:340px;max-height:calc(100vh - 16px);overflow:auto;background:var(--surface,#fff);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,30,50,.18)}
+.mrc-h{padding:10px 14px;border-bottom:1px solid var(--line-2,#eef0f3)}.mrc-h b{font-size:14px;color:var(--ink)}.mrc-h small{display:block;color:var(--ink-3);font-size:12px;margin-top:2px}
+.mrc-sec{padding:10px 14px;border-bottom:1px solid var(--line-2,#eef0f3)}
+.mrc-l{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}.mrc-l2{margin-top:10px}
+.mrc-row{display:flex;align-items:center;gap:8px}.mrc-gap{margin-top:8px}
+.mrc-act{flex:1;display:flex;align-items:center;gap:8px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface,#fff);padding:0 10px;font:600 13.5px var(--body);color:var(--ink);cursor:pointer;text-align:left}
+.mrc-act.st{color:var(--accent)}.mrc-act.go{background:var(--ok);border-color:var(--ok);color:#fff}.mrc-act.mrc-auto{flex:0 0 auto;margin-left:auto}
+.mrc-t{width:110px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);color:var(--ink);background:var(--surface,#fff)}.mrc-n{width:72px}
+.mrc-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--surface-2,#f1f3f6);border-radius:6px;padding:3px;gap:3px}.mrc-seg.c4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.mrc-seg button{border:0;background:transparent;border-radius:4px;padding:6px 0;font:600 12.5px var(--body);color:var(--ink-3);cursor:pointer;white-space:nowrap}
+.mrc-seg button.on{background:var(--surface,#fff);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.mrc-note{font-size:12px;color:var(--ink-3);margin-top:6px}
+.mrc-ok{display:flex;align-items:center;gap:6px;color:var(--ok);font-weight:600;font-size:13px}.mrc-chg{margin-left:auto;font-size:12.5px}
+.mrc-li{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:0;background:transparent;font:600 13.5px var(--body);color:var(--ink);cursor:pointer;text-align:left}
+.mrc-li+.mrc-li{border-top:1px solid var(--line-2,#eef0f3)}.mrc-li:hover{background:var(--surface-2,#f6f7f9)}
+.mrc-li small{margin-left:auto;color:var(--ink-3);font-weight:400;font-size:12px;display:flex;align-items:center}
+.mrc-i{width:16px;height:16px;flex:none}.mrc-li .mrc-i{color:var(--ink-3)}.mrc-act.st .mrc-i{color:var(--accent)}.mrc-act .mrc-i.check{color:var(--ok)}.mrc-act.go .mrc-i{color:#fff}
+.mrc-bg{position:fixed;inset:0;z-index:82;background:rgba(20,30,50,.12)}
+.mrc-side{position:fixed;right:0;top:0;bottom:0;width:min(360px,100vw);z-index:83;background:var(--surface,#fff);border-left:1px solid var(--line);box-shadow:-12px 0 32px rgba(20,30,50,.12);display:flex;flex-direction:column}
+.mrc-sh{padding:16px 18px;border-bottom:1px solid var(--line-2,#eef0f3)}.mrc-sh h2{font:800 17px var(--display);margin:0;color:var(--ink)}.mrc-sh small{color:var(--ink-3);font-size:12.5px}
+.mrc-sl{padding:12px 18px 0;margin:0}
+.mrc-opt{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;margin:8px 12px 0;border:1px solid var(--line);border-radius:8px;background:var(--surface,#fff);text-align:left;cursor:pointer;font:inherit}
+.mrc-opt i{width:16px;height:16px;border:2px solid var(--line);border-radius:50%;margin-top:2px;flex:none}.mrc-opt.on{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface,#fff))}.mrc-opt.on i{border:5px solid var(--accent)}
+.mrc-opt b{font-size:14px;display:block;color:var(--ink)}.mrc-opt small{color:var(--ink-3);font-size:12.5px}
+.mrc-ft{margin-top:auto;padding:14px 18px;border-top:1px solid var(--line-2,#eef0f3);display:flex;gap:8px;align-items:center}.mrc-ft .spacer{flex:1}.mrc-un{color:var(--danger)}
+
+/* the kit's dark blue (the schedule's day scoreboard) */
+:root{--fbs-navy:#1f3a5f}
+/* on the board the now line passes behind the jobs, never through their words (Nov 12) */
+.msf-col .ms-now{z-index:1}
+/* the right-click's Goods section (Nov 12): count in, all here, missing */
+.mrc-gd{border-top:1px solid var(--line-2,#eef0f3)}
+.mrc-gs{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.mrc-pill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.mrc-pill.bad{background:color-mix(in srgb,var(--danger) 12%,var(--surface,#fff));color:var(--danger)}.mrc-pill.ok{background:color-mix(in srgb,var(--ok) 12%,var(--surface,#fff));color:var(--ok)}
+.mrc-gsub{font-size:12px;color:var(--ink-3)}
+.mrc-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.mrc-g3 .mrc-act{justify-content:center;padding:0 6px;font-size:12.5px;gap:5px}.mrc-g3 .s2{grid-column:span 2}
+.mrc-act.warn{color:var(--danger)}.mrc-act.warn .mrc-i{color:var(--danger)}.mrc-act .mrc-i.box{color:var(--accent)}
+/* the schedule's goods shirt (Nov 12): the digits' height (cap height), resting on the number's baseline */
+.msf-tn{display:inline;white-space:nowrap;min-width:0}
+.msf-tee{display:inline-block;height:0.72em;width:auto;aspect-ratio:16.8/15.8;vertical-align:baseline;margin-right:4px;fill:var(--surface,#fff);stroke:var(--ink-3);stroke-width:1.4;stroke-linejoin:round;overflow:visible}
+.msf-tee.g{fill:var(--ok);stroke:var(--ok)}.msf-tee.a{fill:var(--warn);stroke:var(--warn)}.msf-tee.r{fill:var(--danger);stroke:var(--danger)}.msf-tee.o{fill:var(--fbs-orange);stroke:var(--fbs-orange)}
+.ms-key2 .msf-tn{display:inline-flex;align-items:baseline;gap:0}
+/* a printing job's strip (Nov 12, Nick, option A): green on time, yellow a little over the figured time, red well over;
+   a job too short for a strip gets just "Printing" at the end of its line */
+.ms-calm .msf-card.ms-blk.mpr-c{border:2px solid var(--ok);background:var(--surface,#fff)}
+.ms-calm .msf-card.ms-blk.mpr-c.y{border-color:var(--warn)}.ms-calm .msf-card.ms-blk.mpr-c.r{border-color:var(--danger)}
+.ms-calm .msf-card.ms-blk.mpr-c.mpr-hasb{padding-bottom:20px}
+.mpr-band{position:absolute;left:0;right:0;bottom:0;height:18px;display:flex;justify-content:space-between;align-items:center;gap:6px;padding:0 7px;font-size:11.5px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;background:var(--ok)}
+.mpr-band .mpr-t{font-weight:600;opacity:.92}
+.mpr-side{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;padding:0 7px;font-size:11.5px;font-weight:700;color:#fff;background:var(--ok);white-space:nowrap}
+.mpr-band.y,.mpr-side.y{background:var(--warn)}.mpr-band.r,.mpr-side.r{background:var(--danger)}
+.ms-calm .msf-card.ms-blk.mpr-c:not(.mpr-hasb) .msf-1{padding-right:64px}
+/* rush / firm: small words at the right end of a job's first line (Nov 12) */
+.mfl{margin-left:auto;display:inline-flex;gap:4px;flex:none;padding-left:6px}
+.mfl em{font-style:normal;font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;line-height:15px;white-space:nowrap}
+.mfl-firm{color:color-mix(in srgb,var(--fbs-orange) 55%,var(--ink));background:color-mix(in srgb,var(--fbs-orange) 14%,var(--surface,#fff));border:1px solid color-mix(in srgb,var(--fbs-orange) 45%,var(--surface,#fff))}
+.mfl-rush{color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface,#fff));border:1px solid color-mix(in srgb,var(--danger) 35%,var(--surface,#fff))}
+/* a press's header (Nov 12): name, crew leader, clock-in at the far right; the press itself under it */
+.msf-mh.mph{display:flex;flex-direction:column;align-items:stretch;gap:1px}
+.mph-1{display:flex;align-items:baseline;gap:6px;min-width:0;white-space:nowrap}
+.mph-1 b{font-size:14px;color:var(--ink)}.mph-who{color:var(--ink-3);font-size:12.5px;overflow:hidden;text-overflow:ellipsis}
+.mph-in{margin-left:auto;font-size:12.5px;font-weight:700;white-space:nowrap}.mph-in.ok{color:var(--ok)}.mph-in.warn{color:var(--warn)}.mph-in.bad{color:var(--danger)}.mph-in.none{color:var(--ink-3);font-weight:600}
+.mph-spec{font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* the press header is one dark card (Nov 12, option A): replaces the separate scoreboard row */
+.msf-mh.mph{padding:8px 4px;background:var(--surface-2,#f6f7f9)}
+.msf-grid>.msf-corner{background:var(--surface-2,#f6f7f9)}
+.mph-card{background:var(--fbs-navy);color:#fff;border-radius:8px;padding:8px 11px;display:flex;flex-direction:column;gap:1px;min-width:0}
+.mph-card .mph-1 b{color:#fff}.mph-card .mph-who{color:color-mix(in srgb,#fff 78%,var(--fbs-navy))}.mph-card .mph-spec{color:color-mix(in srgb,#fff 62%,var(--fbs-navy))}
+.mph-card .mph-in.ok{color:color-mix(in srgb,var(--ok) 50%,#fff)}.mph-card .mph-in.warn{color:color-mix(in srgb,var(--warn) 55%,#fff)}.mph-card .mph-in.bad{color:color-mix(in srgb,var(--danger) 45%,#fff)}.mph-card .mph-in.none{color:color-mix(in srgb,#fff 62%,var(--fbs-navy))}
+.mph-card .mdy-bar{margin:6px 0 3px}
+.mph-st{font-size:12px;color:color-mix(in srgb,#fff 78%,var(--fbs-navy));white-space:nowrap}.mph-st.bad{color:color-mix(in srgb,var(--danger) 45%,#fff);font-weight:700}
+
+/* Left click on a scheduled job: the job card, information only (Nov 12, Nick, option A) */
+.pp-sheet.mji{width:min(500px,100%);padding:0;overflow:hidden}
+.mji-h{padding:12px 14px 10px;border-bottom:1px solid var(--line-2,#eef0f3)}
+.mji-n{display:flex;align-items:baseline;gap:8px;min-width:0}.mji-no{font:800 18px var(--display);color:var(--ink)}.mji-co{font-size:15px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mji-jn{font-size:13px;color:var(--ink-3);margin-top:2px}
+.mji-pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.mji-pill{font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap;display:inline-flex;align-items:baseline}
+.mji-pill.g{background:color-mix(in srgb,var(--ok) 12%,var(--surface,#fff));color:var(--ok)}.mji-pill.a{background:color-mix(in srgb,var(--warn) 14%,var(--surface,#fff));color:color-mix(in srgb,var(--warn) 70%,var(--ink))}
+.mji-pill.o{background:color-mix(in srgb,var(--fbs-orange) 14%,var(--surface,#fff));color:color-mix(in srgb,var(--fbs-orange) 55%,var(--ink))}.mji-pill.gr{background:var(--surface-2,#f1f3f6);color:var(--ink-2,#4b5563)}
+.mji-pill.b{background:color-mix(in srgb,var(--accent) 10%,var(--surface,#fff));color:var(--accent)}.mji-pill.r{background:color-mix(in srgb,var(--danger) 10%,var(--surface,#fff));color:var(--danger)}
+.mji-sec{padding:10px 14px;border-bottom:1px solid var(--line-2,#eef0f3)}
+.mji-top{display:flex;gap:12px;align-items:flex-start}.mji-pics{display:flex;gap:8px;flex:none}.mji-pics img{width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid var(--line);display:block;background:var(--surface-2,#f6f7f9)}
+.mji-run{flex:1;min-width:0}
+.mji-l{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}
+.mji-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:3px 12px;font-size:13px}.mji-kv>span{color:var(--ink-3)}.mji-kv>b{font-weight:600;color:var(--ink);min-width:0}
+.mji-gl{display:flex;flex-direction:column}.mji-bar{margin-top:6px;background:var(--line-2,#eef1f5)}.mji-bar>i{background:var(--ok)}
+.mji-pr{display:grid;grid-template-columns:minmax(90px,auto) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px;padding:3px 0}.mji-pr b{font-weight:700}
+.mji-inks{display:flex;flex-wrap:wrap;gap:4px 8px}.mji-ink{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--ink-2,#4b5563)}.mji-ink i{width:10px;height:10px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
+.mji-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px;padding:10px 14px}
+.mji-lk{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--line);border-radius:8px;padding:8px 4px;font:600 12.5px var(--body);color:var(--ink);background:var(--surface,#fff);text-decoration:none;cursor:pointer}
+.mji-lk.p{background:var(--accent);border-color:var(--accent);color:#fff}.mji-lk.on{border-color:var(--accent);color:var(--accent)}
+.mji-i{width:18px;height:18px;color:var(--accent)}.mji-lk.p .mji-i{color:#fff}
+.mji-tip{font-size:12px}
+/* Right click on a scheduled job (Nov 12, Nick, option B): the run as three steps, then tiles */
+.mrc.mrb{width:330px}
+.mrb-steps{display:grid;grid-template-columns:repeat(3,1fr);margin:2px 0 8px}
+.mrb-st{text-align:center;position:relative;min-width:0}
+.mrb-st .mrb-dot{width:24px;height:24px;border-radius:50%;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;border:2px solid var(--line);background:var(--surface,#fff);color:var(--ink-3);position:relative;z-index:1}
+.mrb-st .mrb-dot .mrc-i{width:12px;height:12px;color:inherit}
+.mrb-st.on .mrb-dot{background:var(--ok);border-color:var(--ok);color:#fff}.mrb-st.cur .mrb-dot{border-color:var(--ok);color:var(--ok)}.mrb-st.cur.pz .mrb-dot{border-color:var(--warn);color:var(--warn)}
+.mrb-st b{display:block;font-size:12.5px;color:var(--ink)}.mrb-st small{display:block;font-size:12px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrb-st:not(:last-child)::after{content:"";position:absolute;top:12px;left:calc(50% + 14px);right:calc(-50% + 14px);height:2px;background:var(--line)}.mrb-st.on:not(:last-child)::after{background:var(--ok)}
+.mrb-row{display:flex;gap:6px;align-items:center}.mrb-row .mrc-t{flex:1;min-width:0;width:auto}.mrb-row .mrc-act{flex:0 0 auto}.mrc-act.on{border-color:var(--warn);color:var(--warn)}
+.mrb-why{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:6px}.mrb-why button{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--surface,#fff);font:600 12px var(--body);color:var(--ink);cursor:pointer;white-space:nowrap}.mrb-why button:hover{border-color:var(--warn)}
+.mrb-pcs{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12.5px;color:var(--ink-3)}.mrb-pcs .mrc-t{height:30px;width:64px}
+.mrb-then{font-size:12px;color:var(--ink-3);margin-top:8px}.mrb-then select{height:26px;border:1px solid var(--line);border-radius:6px;font:600 12px var(--body);color:var(--accent);background:var(--surface,#fff)}
+.mrb-undo{font-size:12px;margin-top:6px}
+.mrb-gl{font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;padding:9px 14px 4px;display:flex;align-items:baseline;gap:4px}
+.mrb-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:2px 14px 6px}
+.mrb-tile{border:1px solid var(--line);border-radius:8px;padding:7px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;font:600 12px var(--body);color:var(--ink);background:var(--surface,#fff);cursor:pointer}
+.mrb-tile .mrc-i,.mrb-tile svg{width:17px;height:17px;color:var(--ink-3)}.mrb-tile:hover{border-color:var(--accent)}
+.mrb-tile.ok .mrc-i{color:var(--ok)}.mrb-tile.bad{color:var(--danger)}.mrb-tile.bad .mrc-i{color:var(--danger)}.mrb-tile.off{opacity:.45}
+.mrb-flags{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px 14px 10px}.mrb-flags button{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--surface,#fff);font:600 12.5px var(--body);color:var(--ink-3);cursor:pointer}
+.mrb-flags button.on.rush{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,var(--surface,#fff))}.mrb-flags button.on.firm{border-color:var(--fbs-orange);color:color-mix(in srgb,var(--fbs-orange) 55%,var(--ink));background:color-mix(in srgb,var(--fbs-orange) 10%,var(--surface,#fff))}
+.mrb-off{border-top:1px solid var(--line-2,#eef0f3)!important;color:var(--danger)!important}.mrb-off .mrc-i{color:var(--danger)!important}
+.mrb-sure{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--line-2,#eef0f3);font-size:13px;font-weight:600;color:var(--danger)}.mrb-sure .btn:first-of-type{margin-left:auto}
+/* the schedule's tools: three lines, Planning / Press & crew / Sales, each on its own row (Nov 12, Nick) */
+.msk-tools .msk-row{flex-direction:column;align-items:stretch;gap:8px}
+.msk-tools .msk-g{display:flex;width:100%}
+.msk-tools .msk-gl{width:92px;flex:none}
+/* time off from the operator's own clock (lunch, a break): striped, with who and when (Nov 12) */
+.ms-lunch.mlc,.msf-brk-in.mlc{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 5%,transparent) 0 6px,color-mix(in srgb,var(--ink) 10%,transparent) 6px 12px)!important;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
+.msf-brk-in.mlc span{background:var(--surface,#fff);border-radius:99px;padding:1px 8px;font-weight:700;color:var(--ink-2,#4b5563)}
+/* the schedule's key, under its search (Nov 12) */
+.mky{background:var(--surface,#fff);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:10px}
+.mky-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
+.mky-h .linkbtn{margin-left:auto;font-size:12px;text-transform:none;letter-spacing:0}.mky-mini{margin-left:auto;display:inline-flex;align-items:center;gap:6px}.mky-mini+.linkbtn{margin-left:4px}
+.mky-g{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;font-size:12px;color:var(--ink-2,#4b5563);margin-top:6px}
+.mky-g>div{display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:0}.mky-g .msf-tee{margin:0}
+.mky-g .mky-sub{grid-column:1/-1;font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
+.mky-sw{width:16px;height:10px;border-radius:3px;flex:none;display:inline-block}.mky-sw.ok{background:var(--ok)}.mky-sw.warn{background:var(--warn)}.mky-sw.bad{background:var(--danger)}
+.mky-sw.pz{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 6%,transparent) 0 4px,color-mix(in srgb,var(--ink) 16%,transparent) 4px 8px)}
+.mky-sw.hold{border:1.5px dashed var(--ink-3)}.mky-sw.ot{background:color-mix(in srgb,var(--warn) 18%,var(--surface,#fff))}.mky-sw.brk{background:color-mix(in srgb,var(--ink) 7%,transparent)}
+.mky-late{color:var(--danger);font-weight:800;width:16px;text-align:center}
+/* the job card, wider (Nov 12): every mockup in a grid of 4, run time and goods side by side, split / unite */
+.pp-sheet.mji{width:min(700px,100%)}
+.mji-l{display:flex;align-items:baseline}.mji-cnt{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.mji-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.mji-mk{position:relative;aspect-ratio:1/1;border:1px solid var(--line);border-radius:8px;background:var(--surface-2,#f7f8fa);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.mji-mk img{width:100%;height:100%;object-fit:contain;display:block}
+.mji-mk small{position:absolute;left:5px;bottom:4px;right:5px;font-size:10.5px;font-weight:700;color:var(--ink-2,#4b5563);background:color-mix(in srgb,var(--surface,#fff) 88%,transparent);border-radius:4px;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:fit-content;max-width:calc(100% - 10px)}
+.mji-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--line-2,#eef0f3)}.mji-two>.mji-sec{border-bottom:0}.mji-two>.mji-sec+.mji-sec{border-left:1px solid var(--line-2,#eef0f3)}
+.mji-spec{display:block;font-style:normal;font-weight:500;color:var(--ink-3);font-size:12.5px}
+.mji-gl{display:grid;grid-template-columns:auto auto;gap:2px 14px;justify-content:start}.mji-gl b{font-weight:600;color:var(--ink)}.mji-gl em{font-style:normal;color:var(--ink-3)}
+.mji-parts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.mji-part{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;font-size:12.5px}.mji-part b{font-size:13px}.mji-part small{color:var(--ink-3)}.mji-part.me{border:2px solid var(--fbs-violet)}
+.mji-lk.sp .mji-i{color:var(--fbs-violet)}.mji-lk.sp.on{border-color:var(--fbs-violet);color:var(--fbs-violet);background:color-mix(in srgb,var(--fbs-violet) 6%,var(--surface,#fff))}
+.mji-spl{display:flex;flex-direction:column;gap:8px;padding:12px 16px;background:color-mix(in srgb,var(--fbs-violet) 4%,var(--surface,#fff));border-top:1px solid color-mix(in srgb,var(--fbs-violet) 18%,var(--surface,#fff))}
+.mji-spl>.faint{font-size:12.5px}
+.mji-locs{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px}
+.mji-locs button{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface,#fff);text-align:left;font:inherit;cursor:pointer;display:flex;flex-direction:column}.mji-locs button b{font-size:13px}.mji-locs button small{color:var(--ink-3);font-size:12px}
+.mji-locs button.on{border:2px solid var(--fbs-violet);background:color-mix(in srgb,var(--fbs-violet) 6%,var(--surface,#fff))}
+.mji-fld{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;max-width:320px}.mji-fld select{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);text-transform:none;padding:0 8px;background:var(--surface,#fff)}
+.mji-res{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mji-res>div{border:1px dashed color-mix(in srgb,var(--fbs-violet) 45%,var(--surface,#fff));border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;font-size:12.5px;background:var(--surface,#fff)}.mji-res b{font-size:13px}
+.mji-act{display:flex;gap:8px;justify-content:flex-end}.btn.mji-pv{background:var(--fbs-violet);border-color:var(--fbs-violet);color:#fff}
+@media (max-width:620px){.mji-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mji-two{grid-template-columns:1fr}.mji-two>.mji-sec+.mji-sec{border-left:0;border-top:1px solid var(--line-2,#eef0f3)}.mji-res{grid-template-columns:1fr}}
+/* right click (Nov 12): Complete beside Pause, where the order goes, and a pause that says what's done */
+.mrb-row .mrc-t{flex:0 0 122px;width:122px}
+.mrb-row .mrc-act{flex:1 1 0;justify-content:center}
+.mrb-dest{margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.mrb-dl{font-size:12px;font-weight:700;color:var(--ink);padding:7px 10px 5px;background:var(--surface-2,#f6f7f9);border-bottom:1px solid var(--line-2,#eef0f3)}
+.mrb-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:6px}
+.mrb-seg button{border:1px solid var(--line);border-radius:6px;background:var(--surface,#fff);padding:6px 2px;font:700 12.5px var(--body);color:var(--ink-2,#4b5563);cursor:pointer;display:flex;flex-direction:column;align-items:center}
+.mrb-seg button small{font-weight:500;font-size:11px;opacity:.85}.mrb-seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.mrb-note{font-size:11.5px;color:var(--ink-3);padding:0 10px 7px}
+.mrb-pz{margin-top:8px;border:1px solid color-mix(in srgb,var(--warn) 45%,var(--surface,#fff));background:color-mix(in srgb,var(--warn) 6%,var(--surface,#fff));border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.mrb-pz>b{font-size:12px}
+.mrb-pz .mrb-why{grid-template-columns:1fr 1fr .8fr 1.5fr 1fr;margin:0}.mrb-pz .mrb-why button.on{border-color:var(--warn);color:color-mix(in srgb,var(--warn) 70%,var(--ink));background:color-mix(in srgb,var(--warn) 14%,var(--surface,#fff))}
+.mrb-loc{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 6px;align-items:center;padding:5px 0;border-top:1px solid color-mix(in srgb,var(--warn) 20%,var(--surface,#fff))}
+.mrb-loc>span:first-child{display:flex;flex-direction:column;min-width:0}.mrb-loc b{font-size:13px}.mrb-loc small{color:var(--ink-3);font-size:11.5px}
+.mrb-ch{display:flex;gap:3px}.mrb-ch button{height:28px;padding:0 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface,#fff);font:600 12px var(--body);color:var(--ink-2,#4b5563);cursor:pointer;white-space:nowrap}
+.mrb-ch button.on.d{background:var(--ok);border-color:var(--ok);color:#fff}.mrb-ch button.on.p{background:var(--warn);border-color:var(--warn);color:#fff}.mrb-ch button.on.n{background:var(--surface-2,#eef1f5);color:var(--ink)}
+.mrb-pn{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3)}.mrb-pn .mrc-t{height:28px;width:64px}
+.mrb-pgo{height:36px;border:0;border-radius:6px;background:var(--warn);color:#fff;font:800 13.5px var(--body);cursor:pointer;margin-top:2px}
+.mrc.mrb{width:360px}

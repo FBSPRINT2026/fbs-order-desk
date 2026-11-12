@@ -91,9 +91,12 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   // not on the schedule yet: Later (Nov 11, Nick)
   const dayOf = (j: CheckJob): Day => {
     const d = by === "due" ? j.due : onSched.get(j.ref) || null;
-    return j.state === "issue" || (d && d <= today) ? "today" : !d ? "later" : d === d1 ? "tomorrow" : d === d2 ? "next" : "later";
+    return j.state === "issue" || started.has(j.ref) || (d && d <= today) ? "today" : !d ? "later" : d === d1 ? "tomorrow" : d === d2 ? "next" : "later";
   };
-  const all = useMemo(() => (jobs || []).filter((j) => !started.has(j.ref)), [jobs, started]);
+  // a started job leaves only once its goods were counted: one on the press that was never counted stays on Today, flagged,
+  // so nothing goes missing (Nov 12, #50036 was started on the schedule before its goods came in and vanished from here)
+  const all = useMemo(() => (jobs || []).filter((j) => !started.has(j.ref) || j.state !== "checked"), [jobs, started]);
+  const stOf = (j: CheckJob) => (started.has(j.ref) && j.state !== "checked" ? { label: "On the press · not counted", tone: "bad" } : STATE[j.state]);
   const kindN = (k: "all" | JobKind) => all.filter((j) => j.state !== "checked" && (k === "all" || j.kind === k)).length;
   const live = useMemo(() => all.filter((j) => kind === "all" || j.kind === kind), [all, kind]);
   const open = useMemo(() => live.filter((j) => j.state !== "checked"), [live]);
@@ -139,7 +142,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   </>;
   // the phone view: a card per job, big Count in, the work order a printer button; Count in / Trucks / Issues tabs at the bottom
   const pcard = (j: CheckJob, done: boolean) => {
-    const st = done ? { label: "✓ Counted" + (j.checkins[0] ? " " + new Date(j.checkins[0].created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""), tone: "ok" } : STATE[j.state];
+    const st = done ? { label: "✓ Counted" + (j.checkins[0] ? " " + new Date(j.checkins[0].created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""), tone: "ok" } : stOf(j);
     const sup = supOf(j);
     return (
       <div key={j.ref} className={"rvm-card " + st.tone + (done ? " done" : "")}>
@@ -218,7 +221,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
                 <th key={k} className={"rvd-th" + (sortBy?.k === k ? " on" : "")} onClick={() => setSortBy((x) => (x?.k === k ? (x.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }))} title="Sort by this">{l}<span className="rvd-ar" aria-hidden>{sortBy?.k === k ? (sortBy.dir === 1 ? "▲" : "▼") : "↕"}</span></th>
               ))}<th /></tr></thead>
               <tbody>{shown.map((j) => {
-                const st = STATE[j.state], pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
+                const st = stOf(j), pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
                 return (
                   <tr key={j.ref} className={day === "today" && !q.trim() && j.state !== "way" && j.state !== "none" ? "rvd-urg" : ""}>
                     <td className="nw rvd-c-no" data-label=""><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>

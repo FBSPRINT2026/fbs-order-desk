@@ -63,6 +63,14 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   mounted for every page, moves every `(max-width/min-width)` rule by the open panel's width (`.dla-bg.dock`), so the
   page lays out for the room it really has. Keep writing width rules as usual; a layout that lives in a box of its own
   (a list in a panel) uses a container query (`container: name / inline-size`, as `.pjr-list` does), never the window.
+- **Pop-ups never open off the page** (Nick, Nov 12: "if you're at the bottom of the browser and you right-click… it
+  doesn't pop up off the page"). `components/PopFit.tsx`, mounted for every page like TableFit, moves anything that floats
+  over the page (`position: fixed` placed by top/left: right-click menus, dropdowns, popovers) back inside the window, up
+  from the bottom and in from the right, and one taller than the window scrolls inside. Place a menu at the pointer as
+  usual; put `data-nopopfit` only on one that must stay exactly where it's put.
+- **Dragging scrolls with you** (Nick, Nov 12: "as you're dragging it, use your scroll wheel… it's not working smooth").
+  `components/DragScroll.tsx`, mounted for every page: while anything is dragged, the wheel scrolls the page (or the box
+  under the pointer) smoothly, and holding near the top or bottom edge scrolls that way. Never build a drag-only scroll.
 - **Every feature's class names are its own** (Oct 31: the Assistant's to-do cards were squeezed and stacked because
   the Inbox's after-send pop-up and the Artwork shelf also defined `.as-card` / `.as-t` in the global stylesheet). Give a
   new feature its own prefix, grep `app/globals.css` for a name before using it, and run `node scripts/css-clashes.mjs`
@@ -163,11 +171,18 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (`custSeps.films`), and the color count and inks come off their order form and mockup. A PSD or other extra file they
   send is reference only. Never build a Mockup Creator logo from their files or swap the card's pick for their art file
   (that read #50030's front as 1 white color and put the PSD on the back).
+  Their work order (Nick, Nov 12, #40382): page 1 as always, then their mockup as big as the page goes with each print's
+  inks as a line under it, and no press sheets (nothing to show but black boxes): `theirSeps` in `WorkOrderDoc`.
+  Their films print as one plate (Nick, Nov 12: only the crop marks came out): every spot color in a PDF/.ai film is put
+  on every plate (`filmAsOnePlate` in `lib/filmFix.ts`, run by Print in Their separations), so the art prints solid black.
 - **Underbase** (Nick, Nov 11 2026: "that's the rule"): every shirt gets a white underbase under the colors except a white
   or very pale one (cream, ivory, natural: `paleShirt` in `lib/separate.ts`), unless the print says no underbase (the
   order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
   those pale ones only. Underbase and print order go by the ink's real color (`printShade`), not the color the art is
   drawn in; one-color art prints as the one ink its print names.
+- **What a garment is, for timing** (Nick, Nov 12, #50036's sweatshirts timed as tees): `garmentKind` in `lib/production.ts`
+  reads the line's words (plurals and "sweatshirt"/"crewneck" included), and when they say nothing, the style number's
+  catalog name (our garments, then SanMar: `seedStyleTitles`, loaded by the schedule and Production settings).
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **A sent version isn't locked until the customer answers** (Nick, Nov 10 2026: "until it's approved or declined, it
@@ -211,7 +226,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 - **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
   to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule
   yet is Later; a goods problem stays on Today), under a full-width All / Screen print / Embroidery / Heat press switch, Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
-  the press starts it, then it drops off. Issues to work under the list; S&S and SanMar trucks (today / next day) on the right.
+  the press starts it, then it drops off; a job the press started that was never counted stays on Today as "On the press ·
+  not counted" (Nick, Nov 12, #50036). Issues to work under the list; S&S and SanMar trucks (today / next day) on the right.
   Its top: a Dashboard button (box icon) beside the Shipments tabs (Arriving & tracking, FBS orders, Customer supplied,
   Ignored); Settings in the header. Two blocks: Counting (a Schedule | Due date switch for the days; All/SP/EMB/HP with the
   search beside it; Today / Tomorrow / Next day / Later / ✓ Counted) and Receiving (trucks).
@@ -251,8 +267,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
 - **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card, one color
   all round (no colored edge; Nick, Nov 11: "let the dots and stuff do the talking"); only late (bold red number, no tag; Nick, Nov 11) and holds (dashed, "Hold" tag) look different. Overtime
-  is a soft amber band behind the hours, warm-up and lunch plain gray, the past a light gray; the key sits at the top
-  (`.ms-calm` / `.ms-key2` in `app/globals.css`). Time lost to someone not clocked in yet (`Down` flagged "clock" in
+  is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): one dark header card per press (name, crew, clock-in, the press, then a bar: "2 of 4 done · on pace" / "35m behind" / "20m ahead", `dayScore`: only from what's been marked, the last job marked done against its planned finish or a printing job's updated pieces; a start that went by counts only with the live clock on; nothing marked, no pace is claimed), done jobs grayed and dashed with the number struck through and the time, the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits under the schedule's search on the
+  right (Goods / Printing / On the board; Hide folds it to one line, remembered: `.mky`, Nick Nov 12). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
   tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
   Jobs back to back show as one group only when they're one run: the same artwork and the same in-hands date (`oneRun`;
@@ -263,6 +279,36 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   earliest they go home is lunch (Nick, Nov 11). A job that won't finish today never starts with under an hour left in the day
   (`DAY_TAIL`): it starts the next morning. A hold (Production holder) runs no earlier than 3 working days before its
   in-hands date; it saves press time near its date, it never jumps the line (Nick, Nov 11).
+  **Left click is information, right click is doing** (Nick, Nov 12). Left click opens the job card (`CardPanel`):
+  status, due, goods, lock; mockup pictures; run time (press, planned, started, so far); each print with its inks; the
+  garments by style number and color ("1717 Sage") and who counted them; every mockup on the order in a grid of four;
+  inks without "PMS"; Open job, Separations, Mockup, Work order, and Split (pick the print spots that run separately and
+  the press for them: `splitByLocation`) or, on a split job, Unite (`uniteJob`: back into one run on the first run's
+  press); More details (in-hands date, run times, labor, the log). Nothing on it starts, finishes or moves a job. Right click (option B): the run as three steps
+  (Started → Printing → Done, each with its time); one row of the time box, Pause (or Resume) and Complete; under it
+  "When it's done, the order goes to" Fulfillment / Ready (picked to start with) / Completed; Pause asks why (Lunch, Break,
+  Ink, End of day, Other) and what's done so far, spot by spot (Done / Part with pieces / Not yet), which sets how much is
+  left (`pauseDone`, each spot weighed by its print time); then Goods tiles (Count in, All here, Missing), Schedule tiles (Run next, Move, Lock), Rush / Firm, and Take off the
+  schedule (asks once).
+  Right-click a job does by hand what the press timer and time clock do (Nick, Nov 12: "he should be able to do with a right
+  click what the live clock will do"), each with a time box (now, changeable): Mark started, pieces done so far, Pause
+  (Lunch / Break / Ink / screen / Other), Resume, Mark complete (then the order goes to Fulfillment / Ready / Completed
+  once it's its last job on the schedule), Not started after all, Not done yet. All through `logAction`, the same booking
+  fields and job log the press timer writes. Lock… opens a side panel with the four locks (`rcDo`, `lockSide`).
+  A printing job shows it against the time it was figured to take (Nick, Nov 12, option A; `runState`): a strip across
+  the bottom, green "Printing" while on time (no finish time), yellow "Printing · 12m over" up to 30 minutes over, red past that, with time used / figured
+  (lunch it ran through doesn't count); a job too short for a strip gets just "Printing" at the end of its line.
+  Rush and Firm are small words at the right end of a job's first line, never emoji or a second-line tag (Nick, Nov 12);
+  no dot after a printing job's number.
+  A job marked complete sits where it really ran, from its start to its finish, and later work stays after it; it
+  stays on the schedule grayed, even after its order moves to Fulfillment, Ready or Completed (Nick,
+  Nov 12: "it doesn't go away… we still want to see it there"); only bookings not yet done leave when the order moves on.
+  A started job runs until it's marked complete: past its planned finish it stretches to now and the jobs after it move
+  down, live clock on or off (Nick, Nov 12). The tiny shirt before a job's number is its goods (`GoodsTee`, the digits' exact height on their baseline; green
+  counted, amber here not counted, red a problem or not counted and runs within a day, orange not here yet; in the key too), from the latest count first, then the
+  order's goods status.
+  Its Goods section (Nick, Nov 12) shows the job's count (Not counted / ✓ Counted / Problem) with Count in, All here
+  (every size saved as received) and Missing… (the counter), saved the same as Goods & Receiving's counts.
   Right-click a job: Run next (first on its press after what's running), or lock it to its spot (fixed), its person (any
   press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). A job locked to its spot
   never moves: the other jobs flow around it, finishing before it or starting after it. Nothing new is booked into time
@@ -271,8 +317,15 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   the job and drawn as the same tinted band across its card (Nick, Nov 11). Shift held before or after grabbing a job
   pins it. Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
   everything else grays out while it's dragged.
+  **Lunch comes from the time clock** (Nick, Nov 12: "if the press operator clocks out… that marks their lunch"): when a
+  press's operator clocks out and back in, that time is off the press (`Machine.away`, from `withClock`), live clock on or
+  off: it pauses whatever was printing (the job grows by it) and shows as a striped band inside the job ("Lunch · Miguel
+  out 11:30–12:04 · 34m", under 15 minutes "Break"); still out, it runs to now. Once they've taken a lunch that way, the
+  planned lunch for that day is dropped (`breaksOn`). Only the operator's own punches count.
   **Live clock** (Nick, Nov 11 2026; `ProductionSettings.liveClock`, the switch in the schedule's Press & crew tools): off
   (the default while the floor learns to clock in), the schedule is a plan made by hand like Printavo's: no time lost to
   someone not clocked in, nothing not started is pushed up to now, unfinished days don't roll to today, punching onto a
-  job doesn't start it. On, all of that follows the time clock and press timers. Anything new that reacts to punches
+  job doesn't start it. On, all of that follows the time clock and press timers. Either way, each press line shows when its crew clocked in at
+  its right end ("In 6:12a", "In 7:21a · late", "Not in yet"; display only), and the press under its name ("Gauntlet III ·
+  12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.

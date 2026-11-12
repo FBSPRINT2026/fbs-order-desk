@@ -17,6 +17,10 @@ export type Machine = {
   mirror?: boolean;
   /** today: where the crew's press operator is on the time clock (uAttend), attached by the calendar */
   clock?: ClockState;
+  /** today's time off the press from the operator's own punches (clocked out and back in: lunch, a break), by day:
+   *  they replace the planned lunch and pause whatever was printing (Nov 12, Nick: "if the press operator clocks out…
+   *  that marks their lunch") */
+  away?: Record<string, [number, number, string][]>;
   /** this pay week, from the time clock: each crew member's hours so far and on pace for, and `head` = how far the
    *  busiest one is ahead of the crew's schedule (minutes; overtime starts that much sooner). Attached by the calendar. */
   crewHours?: { ws: string; head: number; who: string | null; members: { id: string; name: string; role: string; worked: number; projected: number; missing: boolean }[] };
@@ -249,7 +253,20 @@ export type Step = { method: MachineType; location: string; colors: number; scre
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
 const LIGHT = /\b(white|natural|ash|cream|ivory|light|silver|heather\s*grey|sport\s*grey|pink|yellow|lime|sand|oatmeal|bone|vanilla|butter|mint|sky|baby)\b/i;
-export const garmentKind = (text: string): Step["garment"] => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hoodie|sweat|crew\s*neck|fleece|jacket|pullover|quarter|zip)\b/i.test(text) ? "heavy" : "tee");
+const kindOfWords = (text: string): Step["garment"] | null => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hooded|hoodies?|sweats?|sweatshirts?|sweatpants?|joggers?|crew\s*neck|crewnecks?|fleece|jackets?|pullovers?|quarter|zip|full-zip|1\/4-zip)\b/i.test(text) ? "heavy" : null);
+/** what each catalog style is called ("562M" → "Jerzees - NuBlend Crewneck Sweatshirt"), seeded by the pages that time jobs
+ *  (`seedStyleTitles`), so a line that only says its style number is timed as what it really is (Nov 12, Nick: #50036's 228
+ *  Jerzees 562M sweatshirts were timed as tees) */
+const STYLE_TITLES = new Map<string, string>();
+const styleKey = (x: string) => x.trim().toUpperCase().replace(/\s+/g, "");
+export function seedStyleTitles(rows: Record<string, string>) { for (const [k, v] of Object.entries(rows)) if (k && v) STYLE_TITLES.set(styleKey(k), v); }
+export const garmentKind = (text: string): Step["garment"] => {
+  const w = kindOfWords(text);
+  if (w) return w;
+  // no garment words: any style number in it that the catalog knows
+  for (const tok of text.split(/[\s,/·|]+/)) { const t = tok && STYLE_TITLES.get(styleKey(tok)); const k = t ? kindOfWords(t) : null; if (k) return k; }
+  return "tee";
+};
 const smallLoc = (loc: string) => /\b(pocket|sleeve|neck|nape|leg|hip|cuff|hood)\b/i.test(loc);
 const methodType = (m: string): MachineType => (m === "embroidery" ? "embroidery" : m === "dtf" || m === "dtg" || m === "heat" ? "heat" : "screen");
 
@@ -624,6 +641,7 @@ export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: 
     const who = crew.leader || "Operator";
     const mine = punches.filter((p) => p.employee_id === op).sort((a, b) => a.min - b.min).map((p) => ({ ...p, kind: p.kind === "break_start" ? "out" : p.kind === "break_end" ? "in" : p.kind }));
     const downs: Down[] = [], up5 = (x: number) => Math.ceil(x / 5) * 5;
+    const awayList: [number, number, string][] = [];
     let clock: ClockState | undefined;
     const first = mine.find((p) => p.kind === "in");
     // the operator has no punch but the rest of the crew clocked in: the press is running (he most likely forgot to punch)
@@ -641,17 +659,19 @@ export function withClock(ps: ProductionSettings, punches: ClockPunch[], today: 
       if (late && first.min < sh[1]) downs.push([sh[0], Math.min(sh[1], up5(first.min)), `${who} in at ${hm(first.min)}`, 0, "clock"]);
       clock = { state: late ? "late" : "in", at: first.min, inAt: first.min, who };
       let out: number | null = null;
+      const lab = (a: number, b: number | null) => b == null ? `Clock:${who} out since ${hm(a)}` : b - a >= 15 ? `Clock:Lunch · ${who} out ${hm(a)}–${hm(b)} · ${b - a}m` : `Clock:Break · ${b - a}m`;
       for (const p of mine.slice(mine.indexOf(first) + 1)) {
         if (p.kind === "out") { if (out == null) out = p.min; continue; }
-        if (out != null) { if (p.min - out > away && out < sh[1]) downs.push([Math.max(sh[0], out), Math.min(sh[1], up5(p.min)), `${who} out ${hm(out)}–${hm(p.min)}`, 0, "clock"]); out = null; }
+        if (out != null) { if (p.min - out >= 3 && out < sh[1]) awayList.push([Math.max(sh[0], out), Math.min(sh[1], p.min), lab(out, p.min)]); out = null; }
       }
       if (out != null) {
         clock = { state: "out", at: out, inAt: first.min, outAt: out, who };
-        if (nowMin - out > away && out < sh[1] - 10) downs.push([Math.max(sh[0], out), sh[1], `${who} clocked out at ${hm(out)}`, 0, "clock"]);
+        // still out: the press is stopped from then until now (lunch in progress); past the shift it's the end of the day
+        if (out < sh[1] - 10 && nowMin < sh[1]) awayList.push([Math.max(sh[0], out), Math.max(out + 1, Math.min(sh[1], nowMin)), lab(out, null)]);
       }
     }
-    if (!downs.length && !clock) return m;
-    return { ...m, clock, down: downs.length ? { ...(m.down || {}), [today]: [...(m.down?.[today] || []), ...downs] } : m.down };
+    if (!downs.length && !clock && !awayList.length) return m;
+    return { ...m, clock, ...(awayList.length ? { away: { ...(m.away || {}), [today]: awayList } } : {}), down: downs.length ? { ...(m.down || {}), [today]: [...(m.down?.[today] || []), ...downs] } : m.down };
   });
   return { ...ps, machines };
 }
@@ -682,10 +702,10 @@ export function lunchStart(mach: Machine, sh: [number, number], at?: number): nu
   return Math.max(sh[0] + b.warmupMin, Math.min(at ?? b.lunchAt, sh[1] - b.lunchMin));
 }
 /** Press warm-up at the start of every shift, and lunch on a shift over 8 hours (noon unless `lunchAt` moves it) followed by a short warm-up. */
-export function breakDowns(mach: Machine, sh: [number, number], lunchAt?: number): Down[] {
+export function breakDowns(mach: Machine, sh: [number, number], lunchAt?: number, noLunch = false): Down[] {
   const b = mach.brk || DEFAULT_BREAKS, out: Down[] = [];
   if (b.warmupMin > 0) out.push([sh[0], Math.min(sh[1], sh[0] + b.warmupMin), "Warm-up", 0]);
-  const at = lunchStart(mach, sh, lunchAt);
+  const at = noLunch ? null : lunchStart(mach, sh, lunchAt);
   if (at != null) {
     out.push([at, at + b.lunchMin, "Lunch", 0]);
     // then the press warms back up (10 minutes) before printing again
@@ -698,7 +718,9 @@ export function breakDowns(mach: Machine, sh: [number, number], lunchAt?: number
 export const breaksOn = (mach: Machine, day: string, sh: [number, number], lunchAt?: number): Down[] => {
   let a = sh[0];
   for (const d of [...(mach.down?.[day] || [])].filter((x) => !(x[3] > 0)).sort((x, y) => x[0] - y[0])) if (d[0] <= a && d[1] > a) a = d[1];
-  return a < sh[1] ? breakDowns(mach, [a, sh[1]], lunchAt) : [];
+  // the operator's own time off today (from the time clock) stands in for the planned lunch once they've taken one
+  const aw = mach.away?.[day] || [], tookLunch = aw.some(([x, y]) => y - x >= 15);
+  return [...(a < sh[1] ? breakDowns(mach, [a, sh[1]], lunchAt, tookLunch) : []), ...aw.map(([x, y, l]) => [x, y, l, 0] as Down)];
 };
 /** Everything that takes time out of a day: warm-ups, lunch, downtime and slow stretches. */
 export const downsOn = (mach: Machine, day: string, sh: [number, number], lunchAt?: number): Down[] => [...breaksOn(mach, day, sh, lunchAt), ...(mach.down?.[day] || [])];

@@ -182,3 +182,38 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 8:00pm · 1.3.386 · Nick · Order type: New order / Reorder / Sample; a Pre-production sample tick under New order opens the Sample tool (Remove sample in it)
 - Nov 12 8:04am · 1.3.387 · Nick · Goods & Receiving on a phone: each job a card (number, customer, status; due, supplier, pieces; Work Order and Count in full width); stacked tables drop sort arrows from their labels everywhere; the pre-production sample group is highlighted on the order
 - Nov 12 8:15am · 1.3.388 · Nick · Goods & Receiving on a phone: its own view (day switch, kind chips, a card per job with a big Count in and a printer button, Count in / Trucks / Issues tabs at the bottom); Count in on a phone: full screen, progress bar, a garment to a card with big size tiles
+- Nov 12 8:28am · 1.3.389 · Nick · Schedule on a phone: today's jobs per press, done or not (Done / Running / Next / Waiting / Late start), job names, day buttons, Screen/Emb/Heat and My jobs; no planning tools
+- Nov 12 8:28am · 1.3.390 · Nick · Phone schedule: its styles (press cards, status pills, day buttons, summary)
+- Nov 12 8:29am · 1.3.391 · Nick · Schedule shows the whole day from the first crew in (live clock on or off); the already-past tint sits behind the jobs, not over them
+- Nov 12 8:32am · 1.3.392 · Nick · Schedule's day so far (option C): a bar per press on top (done of today's, on pace / behind), done jobs grayed with the number struck and the time, printing job green with how far, Not started in red; no gray shade over the past
+- Nov 12 8:38am · 1.3.393 · Nick · Schedule right-click does what the press timer does: Mark started / pieces done / Pause with a reason / Resume / Mark complete (order to Fulfillment, Ready or Completed after its last job), each with a time; Lock… opens a side panel
+- Nov 12 8:41am · 1.3.394 · Nick · Employee card: owner/admin can reset someone's pay pages PIN (they make a new one next time they open Time Clock, Employees or Payroll)
+- Nov 12 8:45am · 1.3.395 · Nick · Schedule scoreboard: dark blue cards lined up over each press (option A); the now line passes behind the jobs
+- Nov 12 8:54am · 1.3.396 · Nick · Goods & Receiving: a job the press started that was never counted stays on Today as 'On the press · not counted' instead of dropping off (#50036)
+- Nov 12 8:58am · 1.3.397 · Nick · Schedule right-click: a Goods section (Not counted / Counted / Problem) with Count in, All here and Missing…, saved the same as Goods & Receiving
+- Nov 12 9:00am · 1.3.398 · Nick · Run times: 'sweatshirt', 'crewneck', plurals read as heavy garments, and a style-only line timed by its catalog name (#50036's sweatshirts were timed as tees). Scoreboard pace only from what's been marked (behind / ahead / on pace)
+- Nov 12 9:01am · 1.3.399 · Nick · Run times: 'Hooded Sweatshirt' and every hoodie name read as heavy (they were timed as tees)
+- Nov 12 9:02am · 1.3.400 · Nick · Pop-ups and right-click menus anywhere on the site are moved back inside the window (up from the bottom, in from the right; too tall scrolls inside)
+- Nov 12 9:05am · 1.3.401 · Nick · Schedule: a started job stretches past its planned finish until it's marked complete (jobs after it move down); the goods dot follows saved counts (Fossil's All here stayed red) and refreshes right after counting
+- Nov 12 9:08am · 1.3.402 · Nick · Pop-up fitter runs on a short timer (works in every tab)
+- Nov 12 9:14am · 1.3.403 · Nick · Schedule: the goods dot is now a tiny shirt in the goods color, the numbers' exact height on their baseline, everywhere on the schedule and in the key
+- Nov 12 9:16am · 1.3.404 · Nick · Schedule: no dot after a printing job's number
+- Nov 12 9:21am · 1.3.405 · Nick · Schedule: a printing job gets a strip along the bottom (green on time, yellow up to 30m over, red past), time used / figured; short jobs just 'Printing' at the end of the line
+- Nov 12 9:22am · 1.3.406 · Nick · Schedule: each press's Actual box shows when the crew clocked in with the live clock off too (display only)
+- Nov 12 9:24am · 1.3.407 · Nick · Dragging anywhere on the site: the mouse wheel scrolls smoothly mid-drag, and holding near the top or bottom edge scrolls that way
+- Nov 12 9:28am · 1.3.408 · Nick · Schedule cards: no dot after a printing job's number in any view; the strip says just 'Printing' until it runs over; Rush and Firm as small words on the right of the first line (no emoji)
+- Nov 12 9:30am · 1.3.409 · Nick · Schedule press headers: clock-in at the right end of the press line (In 6:12a / late / Not in yet), the press under the name (Gauntlet III · 12 color); Press 4 named 10C Sportsman
+- Nov 12 9:36am · 1.3.410 · Nick · Schedule: one dark header per press (name, crew, clock-in, the press, the day's bar) instead of a scoreboard row over a second header
+- Nov 12 9:48am · 1.3.411 · Nick · Schedule: left click is the job card (status, pictures, run time, prints and inks, goods; Open job / Separations / Mockup / Work order); right click is the run as three steps with Start / Pause / Resume / Complete, then Goods and Schedule tiles, Rush / Firm, Take off
+- Nov 12 9:48am · 1.3.412 · Nick · Schedule tools: Planning, Press & crew and Sales each on their own line
+- Nov 12 9:53am · 1.3.413 · Nick · Schedule: the press operator's clock-out and back in is that press's lunch or break: it pauses the printing job (which grows by it), shows striped inside the job with who and when, and replaces the planned lunch; live clock on or off
+- Nov 12 9:55am · 1.3.414 · Nick · Schedule: the key moves under the search on the right (Goods / Printing / On the board), with Hide to fold it to one line
+- Nov 12 10:06am · 1.3.415 · Nick · Job card: wider, every mockup in a grid of 4, run time and goods side by side, garments as style + color, inks without PMS, counted time with its day, PO hidden when it's the job name; Split (pick spots and the press) and Unite
+- Nov 12 10:09am · 1.3.416 · Nick · Job card: due date reads 'Due Thu 11/12' (the weekday was doubled)
+- Nov 12 10:15am · 1.3.417 · Nick · Right click: Complete beside Pause, a wider time box, 'When it's done, the order goes to' Fulfillment / Ready (default) / Completed; Pause asks why and what's done so far spot by spot (Done / Part with pieces / Not yet)
+- Nov 12 10:24am · 1.3.418 · Nick · Schedule: a job marked complete stays on the board grayed, even after its order moves to Ready or Completed
+- Nov 12 10:35am · 1.3.419 · Nick · Schedule: a finished job sits where it really ran (its start to its finish), grayed, and the press's remaining jobs come after it
+- Nov 12 10:48am · 1.3.420 · Nick · Search: a customer's name shows the results instead of jumping to one customer (Armstrong matched Armstrong McCall); an order number still opens its order
+- Nov 12 10:58am · 1.3.421 · Nick · Work order: customer separations jobs skip the press sheets; their mockup big on page 2 with the ink lines
+- Nov 12 11:00am · 1.3.422 · Nick · Customer films print their art: spot plates in a PDF/.ai film go on every plate, so FilmMaker prints the art solid black, not just the crop marks
+- Nov 12 12:07pm · 1.3.423 · Nick · Schedule right click: Done on a job that never started; a mixed job's unbooked part keeps the order in production; phone Job done only finishes that kind of machine's bookings
