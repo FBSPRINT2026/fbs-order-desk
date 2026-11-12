@@ -115,6 +115,7 @@ export default function SampleRunTool({ o, patch, groupId, kind, onClose }: { o:
           </div>
           <div className="smr-foot">
             <span className="faint">{kind === "pre" ? `${picked} pc${picked === 1 ? "" : "s"} · ` : ""}${total.toFixed(2)} on the sample{credit ? ` · $${credit.toFixed(2)} credited on the full run` : ""}{kind === "pre" ? " · the full run waits for their OK" : ""}</span>
+            {editing && kind === "pre" && <button type="button" className="btn ghost" onClick={() => { patch((d) => { d.groups = d.groups.filter((g) => g.id !== editing.id); }); onClose(); }}>Remove sample</button>}
             <button type="button" className="btn primary" disabled={!canSave} onClick={save}>{editing ? "Save" : kind === "pre" ? "Add sample" : "Save"}</button>
           </div>
         </div>

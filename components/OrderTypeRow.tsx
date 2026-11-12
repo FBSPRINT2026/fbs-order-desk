@@ -84,11 +84,11 @@ export default function OrderTypeRow({ o, patch, bare, sampleRule, me = "", onSa
   return (
     <div className={"pt-row ot-row" + (bare ? " ot-bare" : "")}>
       <span className="pt-l">Order type</span>
-      <select className="ot-sel" aria-label="Order type" value={t === "new" && o.groups.some((g) => g.sample?.kind === "pre") ? "new_sample" : t} onChange={(e) => { const v = e.target.value; if (v === "new_sample") { if (t !== "new") pick("new"); onSample?.(); return; } pick(v as T); }}>
+      {/* New order / Reorder / Sample (Nick, Nov 11); a pre-production sample is a tick under New order, not a type */}
+      <select className="ot-sel" aria-label="Order type" value={t} onChange={(e) => pick(e.target.value as T)}>
         <option value="new">New order</option>
-        {onSample && <option value="new_sample">New order with sample</option>}
         <option value="reorder">Reorder</option>
-        <option value="reorder_changes">Reorder with changes</option>
+        {t === "reorder_changes" && <option value="reorder_changes">Reorder with changes</option>}
         <option value="sample">Sample</option>
       </select>
       {t === "sample" && (() => { const r = o.sample || sampleRule || SAMPLE_DEFAULT; return (
@@ -104,6 +104,9 @@ export default function OrderTypeRow({ o, patch, bare, sampleRule, me = "", onSa
             </span>
           )}
         </div>
+      ); })()}
+      {t === "new" && onSample && (() => { const has = o.groups.some((g) => g.sample?.kind === "pre"); return (
+        <label className="check ot-conf"><input type="checkbox" checked={has} onChange={(e) => { if (e.target.checked || has) onSample(); }} />Pre-production sample</label>
       ); })()}
       {prints.length > 0 && (
         <>
