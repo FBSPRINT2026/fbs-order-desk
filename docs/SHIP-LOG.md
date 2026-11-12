@@ -206,3 +206,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:36am · 1.3.410 · Nick · Schedule: one dark header per press (name, crew, clock-in, the press, the day's bar) instead of a scoreboard row over a second header
 - Nov 12 9:48am · 1.3.411 · Nick · Schedule: left click is the job card (status, pictures, run time, prints and inks, goods; Open job / Separations / Mockup / Work order); right click is the run as three steps with Start / Pause / Resume / Complete, then Goods and Schedule tiles, Rush / Firm, Take off
 - Nov 12 9:48am · 1.3.412 · Nick · Schedule tools: Planning, Press & crew and Sales each on their own line
+- Nov 12 9:53am · 1.3.413 · Nick · Schedule: the press operator's clock-out and back in is that press's lunch or break: it pauses the printing job (which grows by it), shows striped inside the job with who and when, and replaces the planned lunch; live clock on or off

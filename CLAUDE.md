@@ -306,6 +306,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   the job and drawn as the same tinted band across its card (Nick, Nov 11). Shift held before or after grabbing a job
   pins it. Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
   everything else grays out while it's dragged.
+  **Lunch comes from the time clock** (Nick, Nov 12: "if the press operator clocks out… that marks their lunch"): when a
+  press's operator clocks out and back in, that time is off the press (`Machine.away`, from `withClock`), live clock on or
+  off: it pauses whatever was printing (the job grows by it) and shows as a striped band inside the job ("Lunch · Miguel
+  out 11:30–12:04 · 34m", under 15 minutes "Break"); still out, it runs to now. Once they've taken a lunch that way, the
+  planned lunch for that day is dropped (`breaksOn`). Only the operator's own punches count.
   **Live clock** (Nick, Nov 11 2026; `ProductionSettings.liveClock`, the switch in the schedule's Press & crew tools): off
   (the default while the floor learns to clock in), the schedule is a plan made by hand like Printavo's: no time lost to
   someone not clocked in, nothing not started is pushed up to now, unfinished days don't roll to today, punching onto a

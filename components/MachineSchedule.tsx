@@ -346,11 +346,11 @@ const who = (j: { customer: string; name: string }) => (j.customer && j.name ? `
 
 /** a press's breaks as the schedule draws them: the warm-up right after lunch joins lunch's band (min = lunch alone) */
 function brkBands(bs: [number, number, string, ...unknown[]][]) {
-  const out: { a: number; b: number; lunch: boolean; min: number }[] = [];
+  const out: { a: number; b: number; lunch: boolean; min: number; clock?: string }[] = [];
   for (const [a, b, why] of [...bs].sort((x, y) => x[0] - y[0])) {
     const warm = why === "Warm-up", last = out[out.length - 1];
-    if (warm && last?.lunch && Math.abs(last.b - a) < 1) { last.b = b; continue; }
-    out.push({ a, b, lunch: !warm, min: Math.round(b - a) });
+    if (warm && last?.lunch && !last.clock && Math.abs(last.b - a) < 1) { last.b = b; continue; }
+    out.push({ a, b, lunch: !warm, min: Math.round(b - a), ...(why.startsWith("Clock:") ? { clock: why.slice(6) } : {}) });
   }
   return out;
 }
@@ -418,7 +418,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const withTc = tc.ok ? withClock(sBase, tc.punches, today, now.min, 5, new Set(tc.tracked), tc.names) : sBase;
     // Live clock off: a plan made by hand; nobody's punches move it, but each press still shows when its crew clocked in
     // (the Actual box under the press; Nov 12, Nick: "why doesn't it show their clock in time")
-    if (!sBase.liveClock) { const ck = new Map(withTc.machines.map((m) => [m.id, m.clock])); return { ...sBase, machines: sBase.machines.map((m) => (ck.get(m.id) ? { ...m, clock: ck.get(m.id) } : m)) }; }
+    // and the operator's clock-outs pause the press either way (lunch, breaks: Nov 12, Nick)
+    if (!sBase.liveClock) { const ck = new Map<string, Machine>(withTc.machines.map((m: Machine) => [m.id, m])); return { ...sBase, machines: sBase.machines.map((m) => { const w = ck.get(m.id); return w && (w.clock || w.away) ? { ...m, clock: w.clock, away: w.away } : m; }) }; }
     return Object.keys(tc.worked).length ? withCrewHours(withTc, tc.worked, tc.names, today, now.min) : withTc;
   }, [sBase, tc, today, clockBucket]);
   const [view0, setView] = useSticky<View>("cal.view", "flow");
@@ -2166,13 +2167,13 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       {/* breaks (Nov 11, Nick, option D: "lunch 30 minutes… they'll know about warm up, it's just part of the deal"):
                           the warm-up after lunch is part of lunch's tinted band; the word sits centered in it. A lunch that falls
                           inside a job is counted in the job (its card runs longer) and shows as a line through the card. */}
-                      {sh && brkBands(breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d))).map(({ a: a0, b: b0, lunch, min }) => {
+                      {sh && brkBands(breaksOn(m, bk.d, sh, segs.lunch.get(m.id + "|" + bk.d))).map(({ a: a0, b: b0, lunch, min, clock: ck }) => {
                         const ya = flowY(bi, a0), yb = flowY(bi, b0);
                         if (yb <= ya) return null;
-                        const mid = (ya + yb) / 2, inJob = items.some((x) => x.y1 < mid && x.y2 > mid), word = lunch ? `Lunch ${min} min` : "Warm-up";
+                        const mid = (ya + yb) / 2, inJob = items.some((x) => x.y1 < mid && x.y2 > mid), word = ck || (lunch ? `Lunch ${min} min` : "Warm-up");
                         return <Fragment key={"bk" + a0}>
-                          <div className={lunch ? "ms-lunch" : "ms-warm"} style={{ top: ya, height: yb - ya }} title={`${lunch ? "Lunch" : "Warm-up"} ${clockLong(a0)} – ${clockLong(b0)}`} />
-                          {inJob ? <div className="msf-brk-in" style={{ top: ya, height: yb - ya }}><span>{word}</span></div> : yb - ya >= 12 ? <div className="msf-brk-c" style={{ top: ya, height: yb - ya }}><span>{word}</span></div> : null}
+                          <div className={(lunch ? "ms-lunch" : "ms-warm") + (ck ? " mlc" : "")} style={{ top: ya, height: yb - ya }} title={`${lunch ? "Lunch" : "Warm-up"} ${clockLong(a0)} – ${clockLong(b0)}`} />
+                          {inJob ? <div className={"msf-brk-in" + (ck ? " mlc" : "")} style={{ top: ya, height: yb - ya }}><span>{word}</span></div> : yb - ya >= 12 ? <div className="msf-brk-c" style={{ top: ya, height: yb - ya }}><span>{word}</span></div> : null}
                         </Fragment>;
                       })}
                       {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, bk.d, a0), machine: m.id, day: bk.d, a: a0, b: b0, why }); }} style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}
