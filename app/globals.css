@@ -22390,3 +22390,5 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msk-kinds-r>b{flex:1;font-weight:700}
 .msk-kinds-g .msk-kinds-r>b{font-weight:600}
 .msk-kinds-h{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);padding:10px 8px 2px}
+.ms-numl{color:inherit;text-decoration:none;cursor:pointer}
+.ms-numl:hover{text-decoration:underline;color:var(--accent)}
