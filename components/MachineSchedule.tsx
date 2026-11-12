@@ -269,9 +269,12 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
       pending.shift();
       const [s0, s1] = hrs(c.day);
       const prior = out.filter((g) => g.day === c.day).reduce((m, g) => Math.max(m, g.end), s0);
-      const st = Math.min(prior, s1 - 15);
-      const en = Math.min(s1, st + Math.max(15, c.minutes));
+      // where it really ran when its start and finish are known; else after the finished work before it
+      const st = c.startMin != null ? c.startMin : Math.min(prior, s1 - 15);
+      const en = c.startMin != null ? c.startMin + Math.max(15, c.minutes) : Math.min(s1, st + Math.max(15, c.minutes));
       out.push({ c, day: c.day, start: st, end: en, part: 1, parts: 1, pushed: false, work: en - st });
+      // what's still to run on this press can't sit in the time this already used
+      if (c.startMin != null) cursor = Math.max(cursor, ord(c.day) * 1440 + en);
       busy.set(c.job.key, [...(busy.get(c.job.key) || []), [ord(c.day) * 1440 + st, ord(c.day) * 1440 + en, order.get(c.key) ?? 0]]);
       continue;
     }
@@ -768,6 +771,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       // started: it sits where it really started; what's left is the estimate less the share already done
       const st0 = sl.started_at ? shopTime(sl.started_at) : null, pa = sl.progress_at ? shopTime(sl.progress_at) : null;
       if (sl.status === "running" && st0 && st0.day === sl.day) { startMin = st0.min; minutes = (pa && pa.day === sl.day && pa.min > st0.min ? pa.min - st0.min : 0) + est * (1 - prog); }
+      // finished: it sits where it really ran, from its start to its finish (Nov 12, Nick: "from when she started to when
+      // she finished it… so we can still see it there, but grayed out")
+      else if (sl.status === "done" && st0 && st0.day === sl.day && sl.finished_at) { const fi = shopTime(sl.finished_at); if (fi && fi.day === st0.day && fi.min > st0.min) { startMin = st0.min; minutes = fi.min - st0.min; } }
       else if (sl.status === "running" || sl.status === "paused") minutes = Math.max(15, est * (1 - prog));
       // its finish time set by hand (Where things stand → Printing today): it runs until then
       const en = sl.status === "running" && sl.ends_at ? shopTime(sl.ends_at) : null;

@@ -296,7 +296,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (lunch it ran through doesn't count); a job too short for a strip gets just "Printing" at the end of its line.
   Rush and Firm are small words at the right end of a job's first line, never emoji or a second-line tag (Nick, Nov 12);
   no dot after a printing job's number.
-  A job marked complete stays on the schedule grayed, even after its order moves to Fulfillment, Ready or Completed (Nick,
+  A job marked complete sits where it really ran, from its start to its finish, and later work stays after it; it
+  stays on the schedule grayed, even after its order moves to Fulfillment, Ready or Completed (Nick,
   Nov 12: "it doesn't go away… we still want to see it there"); only bookings not yet done leave when the order moves on.
   A started job runs until it's marked complete: past its planned finish it stretches to now and the jobs after it move
   down, live clock on or off (Nick, Nov 12). The tiny shirt before a job's number is its goods (`GoodsTee`, the digits' exact height on their baseline; green
