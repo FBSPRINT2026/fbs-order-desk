@@ -476,6 +476,16 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   // live drag (Nov 11 2026, Nick: "when you drag a card over, you should see how it bumps everything… in real time"):
   // where the dragged job would land (press, day, before which job) and the schedule laid out that way
   const dragAt = useRef(0); // when a drag last started or ended: the click that follows it is not "add downtime"
+  // Shift held while grabbing a job pins it too (Nov 11, Nick): Chrome's dragstart doesn't always carry the Shift key,
+  // so the key's state is kept from the keyboard and the mouse press
+  const shiftHeld = useRef(false);
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { shiftHeld.current = e.shiftKey; };
+    const md = (e: MouseEvent) => { shiftHeld.current = e.shiftKey; };
+    const off = () => { shiftHeld.current = false; };
+    window.addEventListener("keydown", k, true); window.addEventListener("keyup", k, true); window.addEventListener("mousedown", md, true); window.addEventListener("blur", off);
+    return () => { window.removeEventListener("keydown", k, true); window.removeEventListener("keyup", k, true); window.removeEventListener("mousedown", md, true); window.removeEventListener("blur", off); };
+  }, []);
   const [pv, setPv] = useState<{ mid: string; d: string; before: string; y: number } | null>(null);
   const pvCache = useRef<{ k: string; v: ReturnType<typeof layoutAll> | null }>({ k: "", v: null });
   // each order's goods (order_goods.status): the dot by its number (Nov 11 2026, Nick: "a green dot… counted")
@@ -1284,7 +1294,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     } catch { /* setDragImage not supported */ }
     dragAt.current = Date.now();
     window.getSelection()?.removeAllRanges();
-    const pin = !!(e as unknown as MouseEvent).shiftKey && !d.group;
+    const pin = !!((e as unknown as MouseEvent).shiftKey || shiftHeld.current) && !d.group;
     setTimeout(() => { setPv(null); setPinAt(null); setDrag(pin ? { ...d, pin } : d); }, 0);
   }
   // dropping a job puts it in the running order where it lands, right up against the job before it (no gaps):
@@ -1923,7 +1933,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                         const mid = (ya + yb) / 2, inJob = items.some((x) => x.y1 < mid && x.y2 > mid), word = lunch ? `Lunch ${min} min` : "Warm-up";
                         return <Fragment key={"bk" + a0}>
                           <div className={lunch ? "ms-lunch" : "ms-warm"} style={{ top: ya, height: yb - ya }} title={`${lunch ? "Lunch" : "Warm-up"} ${clockLong(a0)} – ${clockLong(b0)}`} />
-                          {inJob ? <div className="msf-brk-in" style={{ top: ya }}><span>{word}</span></div> : yb - ya >= 12 ? <div className="msf-brk-c" style={{ top: ya, height: yb - ya }}><span>{word}</span></div> : null}
+                          {inJob ? <div className="msf-brk-in" style={{ top: ya, height: yb - ya }}><span>{word}</span></div> : yb - ya >= 12 ? <div className="msf-brk-c" style={{ top: ya, height: yb - ya }}><span>{word}</span></div> : null}
                         </Fragment>;
                       })}
                       {(m.down?.[bk.d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => flowY(bi, b0) > flowY(bi, a0) ? <button type="button" key={"dn" + a0} className="ms-down" onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setDownMenu({ x: e.clientX, y: e.clientY, row: offRow(m, bk.d, a0), machine: m.id, day: bk.d, a: a0, b: b0, why }); }} style={{ top: flowY(bi, a0), height: Math.max(16, flowY(bi, b0) - flowY(bi, a0)) }} title={`${m.name} down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} onClick={() => setDownEdit({ machine: m.id, day: bk.d, start: a0 })}><b>Down</b> {clock(a0)}–{clock(b0)} · {why}</button> : null)}

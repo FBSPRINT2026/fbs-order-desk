@@ -251,7 +251,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Right-click a job: Run next (first on its press after what's running), or lock it to its spot (fixed), its person (any
   press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). Downtime is a solid gray block (no stripes); lunch and warm-up are a lightly tinted band with the word centered
   ("Lunch 30 min"; the warm-up after lunch is part of its band, no times); a lunch that falls inside a job is counted in
-  the job and drawn as a thin line through its card (Nick, Nov 11). Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
+  the job and drawn as the same tinted band across its card (Nick, Nov 11). Shift held before or after grabbing a job
+  pins it. Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
   everything else grays out while it's dragged.
   **Live clock** (Nick, Nov 11 2026; `ProductionSettings.liveClock`, the switch in the schedule's Press & crew tools): off
   (the default while the floor learns to clock in), the schedule is a plan made by hand like Printavo's: no time lost to
