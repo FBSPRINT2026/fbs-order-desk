@@ -180,6 +180,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
   those pale ones only. Underbase and print order go by the ink's real color (`printShade`), not the color the art is
   drawn in; one-color art prints as the one ink its print names.
+- **Spot color films are solid** (Nick, Nov 12, #50013's camo: "they should all be solid. No halftones and crisp lines"):
+  in the Separation Studio's spot color every color prints as its nearest picked ink, solid, and no plate (underbase
+  included) is halftoned; only an ink at an end of a fade picked in the art is (`spotMixer` / `tonalOf` in
+  `lib/separate.ts`). Tones come from simulated process.
 - **What a garment is, for timing** (Nick, Nov 12, #50036's sweatshirts timed as tees): `garmentKind` in `lib/production.ts`
   reads the line's words (plurals and "sweatshirt"/"crewneck" included), and when they say nothing, the style number's
   catalog name (our garments, then SanMar: `seedStyleTitles`, loaded by the schedule and Production settings).
