@@ -537,6 +537,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [rcF, setRcF] = useState({ t: "", pcs: "", why: "Lunch", next: "fulfillment" as "fulfillment" | "ready" | "completed", edit: false });
   // the job's goods in the right-click (Nov 12, Nick: "mark all received, or mark missing"): the same counts as Goods & Receiving
   const [openMove, setOpenMove] = useState(false);
+  const [keyOpen, setKeyOpen] = useSticky("cal.key", true);
   const [rcPause, setRcPause] = useState(false), [rcSure, setRcSure] = useState(false);
   const [rcGoods, setRcGoods] = useState<{ ref: string; job: CheckJob | null; err: string } | null>(null);
   const [countJob, setCountJob] = useState<CheckJob | null>(null);
@@ -2240,6 +2241,18 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             }} />
           {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size; return <><span className={"msq-n" + (n ? "" : " none")}>{n ? `${n} found` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
         </div>
+        {/* the key under the search (Nov 12, Nick): what the marks mean, folded to one line when hidden */}
+        <div className={"mky" + (keyOpen ? "" : " shut")}>
+          <div className="mky-h"><span>Key</span>{!keyOpen && <span className="mky-mini"><GoodsTee k="g" t="" /><GoodsTee k="a" t="" /><i className="mky-sw ok" /><i className="mky-sw bad" /></span>}<button type="button" className="linkbtn" onClick={() => setKeyOpen(!keyOpen)}>{keyOpen ? "Hide" : "Show"}</button></div>
+          {keyOpen && <div className="mky-g">
+            <div className="mky-sub">Goods</div>
+            <div><GoodsTee k="g" t="" />Counted in</div><div><GoodsTee k="a" t="" />Here, not counted</div><div><GoodsTee k="r" t="" />Problem / runs soon</div><div><GoodsTee k="o" t="" />Not here yet</div>
+            <div className="mky-sub">Printing</div>
+            <div><i className="mky-sw ok" />On time</div><div><i className="mky-sw warn" />A little over</div><div><i className="mky-sw bad" />Well over</div><div><i className="mky-sw pz" />Paused / lunch</div>
+            <div className="mky-sub">On the board</div>
+            <div><b className="mky-late">#</b>Late</div><div><i className="mky-sw hold" />Hold</div><div><i className="mky-sw ot" />Overtime</div><div><i className="mky-sw brk" />Warm-up / lunch</div>
+          </div>}
+        </div>
         {comingUp()}
       </div>
       {downMenu && <>
@@ -2894,7 +2907,6 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
       <div className="ms-main">
         {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
-        <div className="ms-key2"><span className="msf-tn"><GoodsTee k="g" t="" />Counted in</span><span className="msf-tn"><GoodsTee k="a" t="" />Here, not counted</span><span className="msf-tn"><GoodsTee k="r" t="" />Problem, or not counted and runs within a day</span><span className="msf-tn"><GoodsTee k="o" t="" />Not here yet</span><span><b className="ms-key-late">#</b>Late (red number)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span></div>
         {view === "flow" ? flowView() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
       </div>

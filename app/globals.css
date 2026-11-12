@@ -22675,3 +22675,14 @@ label.ckm-tile.over{border-color:var(--warn)}
 /* time off from the operator's own clock (lunch, a break): striped, with who and when (Nov 12) */
 .ms-lunch.mlc,.msf-brk-in.mlc{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 5%,transparent) 0 6px,color-mix(in srgb,var(--ink) 10%,transparent) 6px 12px)!important;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line)}
 .msf-brk-in.mlc span{background:var(--surface,#fff);border-radius:99px;padding:1px 8px;font-weight:700;color:var(--ink-2,#4b5563)}
+/* the schedule's key, under its search (Nov 12) */
+.mky{background:var(--surface,#fff);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-bottom:10px}
+.mky-h{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
+.mky-h .linkbtn{margin-left:auto;font-size:12px;text-transform:none;letter-spacing:0}.mky-mini{margin-left:auto;display:inline-flex;align-items:center;gap:6px}.mky-mini+.linkbtn{margin-left:4px}
+.mky-g{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;font-size:12px;color:var(--ink-2,#4b5563);margin-top:6px}
+.mky-g>div{display:flex;align-items:center;gap:6px;white-space:nowrap;min-width:0}.mky-g .msf-tee{margin:0}
+.mky-g .mky-sub{grid-column:1/-1;font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
+.mky-sw{width:16px;height:10px;border-radius:3px;flex:none;display:inline-block}.mky-sw.ok{background:var(--ok)}.mky-sw.warn{background:var(--warn)}.mky-sw.bad{background:var(--danger)}
+.mky-sw.pz{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 6%,transparent) 0 4px,color-mix(in srgb,var(--ink) 16%,transparent) 4px 8px)}
+.mky-sw.hold{border:1.5px dashed var(--ink-3)}.mky-sw.ot{background:color-mix(in srgb,var(--warn) 18%,var(--surface,#fff))}.mky-sw.brk{background:color-mix(in srgb,var(--ink) 7%,transparent)}
+.mky-late{color:var(--danger);font-weight:800;width:16px;text-align:center}
