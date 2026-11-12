@@ -82,7 +82,8 @@ async function owed(items: { orderId: string; kind: "deposit" | "balance" }[], a
     const ps = payState(o as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: settings.depositPct, terms });
     if (ps.can === "none") throw new Error(`#${o.number} isn't ready to pay yet. ${ps.why}`);
     const deposit = Math.min(c.balance, r2((c.total * (tPct > 0 && tPct < 100 ? tPct : settings.depositPct)) / 100));
-    const amount = r2(ps.can === "deposit" || (it.kind === "deposit" && c.paid < 0.005) ? deposit : c.balance);
+    // paid in full up front (prepay): never a deposit (Nov 12: the pay window offered prepay customers a 50% deposit)
+    const amount = r2(ps.can === "deposit" || (it.kind === "deposit" && c.paid < 0.005 && tPct < 100) ? deposit : c.balance);
     if (amount <= 0.004) throw new Error(`#${o.number} is already paid.`);
     return { o, amount, old: false, feeIn: cardFeeInOrder(o as never, c.balance), full: Math.abs(amount - c.balance) < 0.005 };
   });

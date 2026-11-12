@@ -26,7 +26,7 @@ export async function payItemFor(admin: SupabaseClient, orderId: string): Promis
   const ps = payState(order as Order & { pay_mode?: string | null; pay_not_final?: boolean | null; pay_note?: string | null }, { paid: c.paid, depositPct: settings.depositPct, terms });
   if (!(c.balance > 0.004 && ps.can !== "none" && (order.type === "invoice" || order.status === "quote_sent"))) return null;
   return {
-    item: { id: order.id, number: order.number, nickname: order.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: order.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note, cardFeeIn: cardFeeInOrder(order as never, c.balance), part: ps.can === "deposit" },
+    item: { id: order.id, number: order.number, nickname: order.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: tPct < 100 && c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: order.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note, cardFeeIn: cardFeeInOrder(order as never, c.balance), part: ps.can === "deposit" },
     pay: settings.pay, receiptEmail: (cu as { email?: string } | null)?.email || "",
   };
 }

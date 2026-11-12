@@ -416,7 +416,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                     {(() => { const d = o.type === "invoice" ? payDueDate(o, terms) : null; return <div className="pod-row pod-terms"><span>Terms</span><b>{PAY_TERMS[terms]}{d && c.balance > 0.004 ? ` · due ${fmtDateLong(d)}` : ""}</b></div>; })()}
                   </div>
                   {canPay ? (
-                    <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: o.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note, cardFeeIn: cardFeeInOrder(o as never, c.balance), part: ps.can === "deposit" }}
+                    <PayButton item={{ id: o.id, number: o.number, nickname: o.nickname || "", balance: ps.can === "deposit" ? deposit : c.balance, deposit: tPct < 100 && c.paid < 0.005 && ps.can !== "deposit" ? deposit : undefined, quote: o.type === "quote", notFinal: ps.notFinal, notFinalNote: ps.note, cardFeeIn: cardFeeInOrder(o as never, c.balance), part: ps.can === "deposit" }}
                       pay={ctx.settings.pay} staxToken={(process.env.STAX_WEB_PAYMENTS_TOKEN || "").trim()} canAct={!preview} receiptEmail={preview ? "" : cust?.email || ctx.email} due={false} autoOpen={payOpen === "1" && !preview} allHref={`/portal?area=payments${preview ? `&as=${ctx.preview!.id}` : ""}`} />
                   ) : c.balance > 0.004 && String(o.status) !== "void" ? (
                     <div className="pay-notready"><b>Not ready to pay yet</b><span>{o.type === "quote" && o.status !== "quote_sent" ? "You can pay once we send your quote." : ps.why}</span></div>
