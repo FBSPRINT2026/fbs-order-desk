@@ -219,3 +219,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 12:07pm · 1.3.423 · Nick · Schedule right click: Done on a job that never started; a mixed job's unbooked part keeps the order in production; phone Job done only finishes that kind of machine's bookings
 - Nov 12 12:33pm · 1.3.424 · Nick · Spot color seps are solid: every color goes to its nearest picked ink, no halftoned plates (underbase included) except a real fade
 - Nov 12 12:46pm · 1.3.425 · Nick · Mixed jobs: SP / EMB / HP strip under the status on the Orders list, order header and schedule job card
+- Nov 12 1:07pm · 1.3.426 · Nick · Customer contacts: rows wrap instead of cutting off; Portal, its email button and remove stay together
