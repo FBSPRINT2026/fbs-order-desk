@@ -22547,3 +22547,30 @@ label.ckm-tile.over{border-color:var(--warn)}
 .ms-calm .msf-card.ms-blk.done .msf-n a,.ms-calm .msf-card.ms-blk.done .msf-n{text-decoration:line-through;color:var(--ink-3)}
 .ms-calm .msf-card.ms-blk.run{border:2px solid var(--ok);background:color-mix(in srgb,var(--ok) 6%,var(--surface,#fff))}
 .ms-calm .msf-card.ms-blk.mdy-ny{border-color:color-mix(in srgb,var(--danger) 45%,var(--line))}
+
+/* Right-click on a job on the schedule (Nov 12, Nick): what the press timer does, by hand; Lock… opens a side panel */
+.mrc{position:fixed;z-index:81;width:340px;max-height:calc(100vh - 16px);overflow:auto;background:var(--surface,#fff);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(20,30,50,.18)}
+.mrc-h{padding:10px 14px;border-bottom:1px solid var(--line-2,#eef0f3)}.mrc-h b{font-size:14px;color:var(--ink)}.mrc-h small{display:block;color:var(--ink-3);font-size:12px;margin-top:2px}
+.mrc-sec{padding:10px 14px;border-bottom:1px solid var(--line-2,#eef0f3)}
+.mrc-l{font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px}.mrc-l2{margin-top:10px}
+.mrc-row{display:flex;align-items:center;gap:8px}.mrc-gap{margin-top:8px}
+.mrc-act{flex:1;display:flex;align-items:center;gap:8px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface,#fff);padding:0 10px;font:600 13.5px var(--body);color:var(--ink);cursor:pointer;text-align:left}
+.mrc-act.st{color:var(--accent)}.mrc-act.go{background:var(--ok);border-color:var(--ok);color:#fff}.mrc-act.mrc-auto{flex:0 0 auto;margin-left:auto}
+.mrc-t{width:110px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);color:var(--ink);background:var(--surface,#fff)}.mrc-n{width:72px}
+.mrc-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--surface-2,#f1f3f6);border-radius:6px;padding:3px;gap:3px}.mrc-seg.c4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.mrc-seg button{border:0;background:transparent;border-radius:4px;padding:6px 0;font:600 12.5px var(--body);color:var(--ink-3);cursor:pointer;white-space:nowrap}
+.mrc-seg button.on{background:var(--surface,#fff);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.mrc-note{font-size:12px;color:var(--ink-3);margin-top:6px}
+.mrc-ok{display:flex;align-items:center;gap:6px;color:var(--ok);font-weight:600;font-size:13px}.mrc-chg{margin-left:auto;font-size:12.5px}
+.mrc-li{display:flex;align-items:center;gap:10px;width:100%;padding:10px 14px;border:0;background:transparent;font:600 13.5px var(--body);color:var(--ink);cursor:pointer;text-align:left}
+.mrc-li+.mrc-li{border-top:1px solid var(--line-2,#eef0f3)}.mrc-li:hover{background:var(--surface-2,#f6f7f9)}
+.mrc-li small{margin-left:auto;color:var(--ink-3);font-weight:400;font-size:12px;display:flex;align-items:center}
+.mrc-i{width:16px;height:16px;flex:none}.mrc-li .mrc-i{color:var(--ink-3)}.mrc-act.st .mrc-i{color:var(--accent)}.mrc-act .mrc-i.check{color:var(--ok)}.mrc-act.go .mrc-i{color:#fff}
+.mrc-bg{position:fixed;inset:0;z-index:82;background:rgba(20,30,50,.12)}
+.mrc-side{position:fixed;right:0;top:0;bottom:0;width:min(360px,100vw);z-index:83;background:var(--surface,#fff);border-left:1px solid var(--line);box-shadow:-12px 0 32px rgba(20,30,50,.12);display:flex;flex-direction:column}
+.mrc-sh{padding:16px 18px;border-bottom:1px solid var(--line-2,#eef0f3)}.mrc-sh h2{font:800 17px var(--display);margin:0;color:var(--ink)}.mrc-sh small{color:var(--ink-3);font-size:12.5px}
+.mrc-sl{padding:12px 18px 0;margin:0}
+.mrc-opt{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;margin:8px 12px 0;border:1px solid var(--line);border-radius:8px;background:var(--surface,#fff);text-align:left;cursor:pointer;font:inherit}
+.mrc-opt i{width:16px;height:16px;border:2px solid var(--line);border-radius:50%;margin-top:2px;flex:none}.mrc-opt.on{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface,#fff))}.mrc-opt.on i{border:5px solid var(--accent)}
+.mrc-opt b{font-size:14px;display:block;color:var(--ink)}.mrc-opt small{color:var(--ink-3);font-size:12.5px}
+.mrc-ft{margin-top:auto;padding:14px 18px;border-top:1px solid var(--line-2,#eef0f3);display:flex;gap:8px;align-items:center}.mrc-ft .spacer{flex:1}.mrc-un{color:var(--danger)}

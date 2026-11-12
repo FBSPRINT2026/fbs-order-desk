@@ -263,6 +263,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   earliest they go home is lunch (Nick, Nov 11). A job that won't finish today never starts with under an hour left in the day
   (`DAY_TAIL`): it starts the next morning. A hold (Production holder) runs no earlier than 3 working days before its
   in-hands date; it saves press time near its date, it never jumps the line (Nick, Nov 11).
+  Right-click a job does by hand what the press timer and time clock do (Nick, Nov 12: "he should be able to do with a right
+  click what the live clock will do"), each with a time box (now, changeable): Mark started, pieces done so far, Pause
+  (Lunch / Break / Ink / screen / Other), Resume, Mark complete (then the order goes to Fulfillment / Ready / Completed
+  once it's its last job on the schedule), Not started after all, Not done yet. All through `logAction`, the same booking
+  fields and job log the press timer writes. Lock… opens a side panel with the four locks (`rcDo`, `lockSide`).
   Right-click a job: Run next (first on its press after what's running), or lock it to its spot (fixed), its person (any
   press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). A job locked to its spot
   never moves: the other jobs flow around it, finishing before it or starting after it. Nothing new is booked into time
