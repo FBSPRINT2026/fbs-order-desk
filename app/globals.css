@@ -22602,3 +22602,8 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mpr-side{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;padding:0 7px;font-size:11.5px;font-weight:700;color:#fff;background:var(--ok);white-space:nowrap}
 .mpr-band.y,.mpr-side.y{background:var(--warn)}.mpr-band.r,.mpr-side.r{background:var(--danger)}
 .ms-calm .msf-card.ms-blk.mpr-c:not(.mpr-hasb) .msf-1{padding-right:64px}
+/* rush / firm: small words at the right end of a job's first line (Nov 12) */
+.mfl{margin-left:auto;display:inline-flex;gap:4px;flex:none;padding-left:6px}
+.mfl em{font-style:normal;font-size:10.5px;font-weight:700;border-radius:4px;padding:0 5px;line-height:15px;white-space:nowrap}
+.mfl-firm{color:color-mix(in srgb,var(--fbs-orange) 55%,var(--ink));background:color-mix(in srgb,var(--fbs-orange) 14%,var(--surface,#fff));border:1px solid color-mix(in srgb,var(--fbs-orange) 45%,var(--surface,#fff))}
+.mfl-rush{color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,var(--surface,#fff));border:1px solid color-mix(in srgb,var(--danger) 35%,var(--surface,#fff))}
