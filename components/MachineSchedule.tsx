@@ -1,6 +1,7 @@
 "use client";
 import { useProdSide } from "@/lib/prodSide";
 import { runParts, sampleRunOn, samplePieces, waitsOnSample } from "@/lib/samples";
+import { trainingSaid } from "@/lib/orderTrainings";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
@@ -26,7 +27,7 @@ import { allRows } from "@/lib/readAll";
  * machine, day or time (a job only drops on a machine that can run it), or tap it to move it. Only our own orders are
  * planned here; Printavo jobs are left off (the Printavo-lane code stays, fed nothing, in case it's wanted again).
  */
-type Job = { /** a pre-production sample run of the order (its own card), or the order's full run waiting on one (lib/samples.ts) */ sample?: "run" | "only"; waits?: boolean; key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; /** the order's production date: it runs that day, never earlier (Nine18's weekly run; Nov 11) */ prod?: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null;
+type Job = { /** the customer (orders only): which of their kinds of order it is (their Create order trainings) */ cid?: string; /** a pre-production sample run of the order (its own card), or the order's full run waiting on one (lib/samples.ts) */ sample?: "run" | "only"; waits?: boolean; key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; /** the order's production date: it runs that day, never earlier (Nine18's weekly run; Nov 11) */ prod?: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null;
   /** a hold from a quote (Hold the spot): its order, when its details are due, who held it */ hold?: { orderId: string | null; detailsDue: string | null; by: string; art: string } };
 /** when a job has to be done (absolute minutes): end of its in-hands day, or the set time on a firm date */
 const dueAbs = (j: Job) => (j.due ? ord(j.due) * 1440 + (j.dueTime != null ? j.dueTime : 1440) : Infinity);
@@ -435,6 +436,13 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [trayAll, setTrayAll] = useState(false);
   // Ready To Schedule's tabs (Nov 11, Nick: "late jobs, holders, and… jobs that are on time")
   const [trayTab, setTrayTab] = useSticky<"all" | "late" | "hold" | "ok">("cal.trayTab", "all");
+  // kinds of order (Nov 11, Nick: "distinguish… what's a cart order from Cedar Promos, what's an All My Sons… order, and
+  // what's a regular order… hide the cart orders and… All My Sons… so I can just see the regular"): a customer's Create
+  // order trainings (their when-words in the job's name) are its kinds; a job none of them names is Regular. Hidden kinds
+  // are left out of Ready To Schedule and Make The Schedule
+  const [trains, setTrains] = useState<{ id: string; customer_id: string; name: string; when_words: string }[]>([]);
+  const [hideKinds, setHideKinds] = useSticky<string[]>("cal.hideKinds", []);
+  const [kindsOpen, setKindsOpen] = useState(false);
   const [trayOpen, setTrayOpen] = useSticky("cal.trayOpen", true);
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
@@ -631,7 +639,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null; production_date?: string | null; order_type?: string | null; run_times?: Record<string, { min: number; by: string }> | null }[]).flatMap((x) => {
         // a pre-production sample is its own card, and the full run (less the pieces taken off the top) waits on it (Nov 11, Nick; lib/samples.ts)
         const parts = runParts(x.groups || []), runOn = sampleRunOn(x.groups || []);
-        const base = { rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", due: x.due_date, status: x.status, href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" };
+        const base = { cid: x.customer_id || "", rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", due: x.due_date, status: x.status, href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" };
         const out: Job[] = [];
         if (parts.sample.length) out.push({ ...base, key: "o:" + x.id + ":s", sample: "run", prod: runOn, due: runOn || x.due_date, name: `Sample · ${x.nickname || ""}`.trim(), qty: parts.sample.reduce((a, g) => a + samplePieces(g), 0), needs: withRunTimes(needsForOrder(ps, x as never, parts.sample), undefined) });
         const rest = needsForOrder(ps, x as never, parts.rest);
@@ -645,6 +653,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       ...holdRows.map((h) => ({ prod: h.due_date ? minusWorkdays(h.due_date, 3) : null, key: "h:" + h.id, kind: "h" as const, id: h.id, number: h.order_id ? String(holdOrd.get(h.order_id)?.number ?? "HOLD") : "PLAN", customer: h.customer || "Planned", name: h.name || "Planned job", due: h.due_date, dueTime: h.due_time, firm: h.due_time != null, qty: +(h.spec as QuickJob)?.qty || 0, status: "planned", needs: [quickNeed(ps, h.spec as QuickJob)], href: h.order_id ? `/shop/orders/${h.order_id}` : "", owner: "", ...(h.order_id ? { hold: { orderId: h.order_id, detailsDue: h.details_due || null, by: h.created_by, art: h.art || "" } } : {}) })),
     ];
     setHolds((ho0 || []) as Hold[]);
+    void sb.from("order_trainings").select("id, customer_id, name, when_words").then(({ data: tr }) => setTrains((tr || []) as { id: string; customer_id: string; name: string; when_words: string }[]));
     setJobs(js);
     // Printavo jobs in a machine status sit on that machine at their Printavo times; past ones still in the status carry to today
     setPvLane(pv.map((x) => {
@@ -878,13 +887,20 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     setMsg(`#${job.number} → ${machine.name}, ${dayLbl(d)}${startMin != null ? ` at ${clockLong(startMin)}` : ""} (${fmtMin(minutes)})`);
     load();
   }
+  // the kinds a job is (its customer's trainings named in it), and what's left when some kinds are hidden
+  const kindsOfJob = (j: Job): { key: string; label: string }[] => {
+    const ts = j.cid ? trains.filter((t) => t.customer_id === j.cid && trainingSaid(t, j.name || "")) : [];
+    const out = new Map<string, string>(); for (const t of ts) out.set(t.customer_id + "|" + t.name.trim().toLowerCase(), t.name.trim());
+    return out.size ? [...out].map(([key, label]) => ({ key, label })) : [{ key: "regular", label: "Regular orders" }];
+  };
+  const trayV = useMemo(() => (hideKinds.length ? tray.filter((t) => !kindsOfJob(t.job).some((k) => hideKinds.includes(k.key))) : tray), [tray, hideKinds, trains]); // eslint-disable-line react-hooks/exhaustive-deps
   async function acceptAll() {
     // every suggestion, late ones too (Nov 9, Nick: "if a job is… past due… all that would mean is they just have to go
     // first in the list"): a late or past-due job goes ahead of the day's jobs that haven't started, most overdue first
     const pos: Record<string, number> = {}, early: Record<string, number> = {};
     const late = (t: (typeof tray)[number]) => !!t.sug?.late || (!!t.job.due && t.job.due < today);
     // same-art jobs for the same date stay in one line, one after another (their order in the tray already keeps them together)
-    const list = tray.filter((t) => t.sug).map((t, i) => ({ t, i })).sort((x, y) => Number(late(y.t)) - Number(late(x.t)) || (x.t.job.due || "9").localeCompare(y.t.job.due || "9") || x.i - y.i).map((x) => x.t);
+    const list = trayV.filter((t) => t.sug).map((t, i) => ({ t, i })).sort((x, y) => Number(late(y.t)) - Number(late(x.t)) || (x.t.job.due || "9").localeCompare(y.t.job.due || "9") || x.i - y.i).map((x) => x.t);
     const rows = list.map((t) => {
       const k = t.sug!.machine.id + t.sug!.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === t.sug!.machine.id && c.day === t.sug!.day).length;
       const position = late(t) ? -1000 + (early[k] = (early[k] ?? 0) + 1) : pos[k]++;
@@ -2443,21 +2459,50 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             onDragOver={(e) => { if (drag?.card?.slot) { e.preventDefault(); setOver("tray"); } }} onDragLeave={() => setOver((o) => (o === "tray" ? "" : o))}
             onDrop={(e) => { e.preventDefault(); setOver(""); if (drag?.card?.slot) unbookMany(drag.group || [drag.card]); setDrag(null); }}>
             <div className="ms-ready-h">
-              <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{tray.length}</span></button>
-              <span className="faint ms-band-sub">{tray.filter((t) => t.sug?.late).length ? <span className="ms-late">{tray.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{tray.length ? (Object.keys(picks).length ? `${tray.filter((t) => t.picked).length} picked by you · ` : "") + "by due date · click a spot to change it, then Make The Schedule" : "nothing waiting"}</span>
+              <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{trayV.length}</span></button>
+              <span className="faint ms-band-sub">{trayV.filter((t) => t.sug?.late).length ? <span className="ms-late">{trayV.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{trayV.length ? (Object.keys(picks).length ? `${trayV.filter((t) => t.picked).length} picked by you · ` : "") + "by due date · click a spot to change it, then Make The Schedule" : "nothing waiting"}</span>
               <span className="spacer" />
               {(() => { const n = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked).length; return n ? (restart ? <span className="ms-restart">Take all {n} not-started job{n === 1 ? "" : "s"} off the calendar? <button type="button" className="btn sm danger" onClick={async () => { setRestart(false); /* the early finishes a plan made for overtime go too; real downtime (a press down, someone out) stays (Nov 11, Nick) */ await createClient().from("production_days_off").delete().eq("note", "Leaving early (no overtime)").gte("day", today); unbookMany(cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && !c.slot.locked)); }}>Yes, start over</button><button type="button" className="btn sm ghost" onClick={() => setRestart(false)}>No</button></span> : <button type="button" className="btn sm" onClick={() => setRestart(true)} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>) : null; })()}
-              {trayOpen && tray.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make The Schedule</button>}
+              {trayOpen && trayV.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make The Schedule</button>}
             </div>
             {trayOpen && tray.length > 0 && (() => {
-              const isLate = (t: (typeof tray)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
-              const kinds = { late: tray.filter(isLate), hold: tray.filter((t) => t.job.kind === "h"), ok: tray.filter((t) => t.job.kind !== "h" && !isLate(t)) };
-              const list = trayTab === "all" ? tray : kinds[trayTab];
+              const isLate = (t: (typeof trayV)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
+              const kinds = { late: trayV.filter(isLate), hold: trayV.filter((t) => t.job.kind === "h"), ok: trayV.filter((t) => t.job.kind !== "h" && !isLate(t)) };
+              const list = trayTab === "all" ? trayV : kinds[trayTab];
               return (
               <>
                 <div className="toolbar ms-rtabs"><div className="chips">
-                  {([["all", "All", tray.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ["ok", "On time", kinds.ok.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
-                </div></div>
+                  {([["all", "All", trayV.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ["ok", "On time", kinds.ok.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
+                </div>
+                  {(() => {
+                    // every kind in Ready To Schedule, with how many jobs each has
+                    const all = new Map<string, { label: string; who: string; n: number }>();
+                    for (const t of tray) for (const k of kindsOfJob(t.job)) { const x = all.get(k.key) || { label: k.label, who: k.key === "regular" ? "" : t.job.customer, n: 0 }; x.n++; all.set(k.key, x); }
+                    const list = [...all].sort((a, b) => (a[0] === "regular" ? -1 : b[0] === "regular" ? 1 : b[1].n - a[1].n));
+                    const hidden = hideKinds.filter((k) => all.has(k));
+                    if (list.length < 2 && !hidden.length) return null;
+                    const flip = (k: string) => setHideKinds(hideKinds.includes(k) ? hideKinds.filter((x) => x !== k) : [...hideKinds, k]);
+                    return (
+                      <div className="msk-kinds">
+                        <button type="button" className={"btn sm" + (hidden.length ? " on" : "")} aria-expanded={kindsOpen} onClick={() => setKindsOpen(!kindsOpen)} title="Show or hide kinds of order: a customer's carts, a program like All My Sons, regular orders">
+                          {hidden.length ? `Hiding ${hidden.map((k) => all.get(k)!.label).join(", ")}` : `All kinds of order`} ▾</button>
+                        {kindsOpen && <>
+                          <div className="msk-kinds-bg" onClick={() => setKindsOpen(false)} />
+                          <div className="msk-kinds-m" role="menu">
+                            {list.map(([k, x]) => (
+                              <label key={k} className="msk-kinds-r"><input type="checkbox" checked={!hideKinds.includes(k)} onChange={() => flip(k)} />
+                                <span><b>{x.label}</b>{x.who ? <small>{x.who}</small> : null}</span><span className="chip-n">{x.n}</span></label>
+                            ))}
+                            <div className="msk-kinds-a">
+                              <button type="button" className="btn sm" onClick={() => setHideKinds(list.map(([k]) => k).filter((k) => k !== "regular"))}>Only regular</button>
+                              <button type="button" className="btn sm" onClick={() => setHideKinds([])}>Show all</button>
+                            </div>
+                          </div>
+                        </>}
+                      </div>
+                    );
+                  })()}
+                </div>
                 <ul className="msr-l">{(() => {
                   // by due date, due today first (no date last); jobs that print together stay in their order
                   const byDue = list.map((t, i) => ({ t, i })).sort((x, y) => (x.t.job.due || "9999").localeCompare(y.t.job.due || "9999") || x.i - y.i).map((x) => x.t);

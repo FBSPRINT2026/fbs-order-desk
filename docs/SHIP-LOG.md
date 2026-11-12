@@ -174,3 +174,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 7:15pm · 1.3.378 · Nick · Sample tool: sizes in size order
 - Nov 11 7:19pm · 1.3.379 · Nick · Receive a Payment: two panes (today's summary and Received today by customer on the left; customer card, invoices and how they paid on the right; who's waiting on payment when nobody's picked); record a card already paid elsewhere (Stax link, Square) or Venmo / Zelle without charging
 - Nov 11 7:23pm · 1.3.380 · Nick · Receive a Payment: Waiting on payment list loads
+- Nov 11 7:36pm · 1.3.381 · Nick · Ready To Schedule: a kinds-of-order button beside the tabs (each customer's Create order trainings it names, else Regular): hide Store carts, All My Sons… and Make The Schedule books only what's shown

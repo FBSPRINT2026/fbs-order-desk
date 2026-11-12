@@ -22366,3 +22366,15 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rcv2 .rcv-seg button:nth-child(n+4){border-top:1px solid var(--line)}
 .rcv2 .rcv-seg button{white-space:nowrap;padding:0 4px}
 .rcv-fields select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:14px var(--body);color:var(--ink);background:var(--surface);text-transform:none;letter-spacing:0;font-weight:400}
+
+/* Ready To Schedule: show or hide kinds of order (Nov 11, Nick: carts, All My Sons, regular) */
+.ms-rtabs{flex-wrap:wrap}
+.msk-kinds{position:relative;margin-left:8px}
+.msk-kinds>.btn.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.msk-kinds-bg{position:fixed;inset:0;z-index:40}
+.msk-kinds-m{position:absolute;left:0;top:calc(100% + 4px);z-index:41;min-width:280px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r,8px);box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px}
+.msk-kinds-r{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:14px}
+.msk-kinds-r:hover{background:var(--surface-2)}
+.msk-kinds-r>span:first-of-type{display:flex;flex-direction:column;flex:1;min-width:0}
+.msk-kinds-r small{font-size:12px;color:var(--ink-3)}
+.msk-kinds-a{display:flex;gap:6px;justify-content:flex-end;padding:6px 4px 2px;border-top:1px solid var(--line);margin-top:4px}
