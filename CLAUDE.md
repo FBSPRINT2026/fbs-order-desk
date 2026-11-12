@@ -229,7 +229,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (`readyLabel` / `statusText` in `lib/pricing.ts`; `<Pill ship={o.delivery_method}>`). Any "open work" status list
   includes fulfillment (`IN_WORK_STATUSES`).
   Canceled (an invoice called off) is stored like a Closed Quote: status `completed` with `declined_at`, type invoice
-  (`isCanceled` / `statusKey` → "canceled"), so every finished-job filter skips it; it never goes to QuickBooks live.
+  (`isCanceled` / `statusKey` → "canceled"), so every finished-job filter skips it; it never goes to QuickBooks live. Neither does a quote of any kind, a Closed
+  Quote included (Nick, Nov 12): every QuickBooks "is this an invoice" check is `qboInvoiceable` in `lib/qbo/map.ts`.
 - **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
   to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule
   yet is Later; a goods problem stays on Today), under a full-width All / Screen print / Embroidery / Heat press switch, Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
