@@ -169,3 +169,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 5:47pm · 1.3.373 · Nick · Goods & Receiving: Work order button beside Count in opens the job's work order in a pop-up with Print at the top
 - Nov 11 6:11pm · 1.3.374 · Nick · Schedule breaks: tinted band with the word centered (Lunch 30 min, warm-up after lunch folded in); lunch inside a job is a line through the card
 - Nov 11 6:14pm · 1.3.375 · Nick · Schedule: lunch and warm-up tinted again (and across a job's card when lunch falls inside it); Shift held before grabbing a job pins it too
+- Nov 11 6:28pm · 1.3.376 · Nick · Email signature: logo and portal banner pictures are now the size they show (52px, 480px), so a reply that drops the size tags can't blow them up
