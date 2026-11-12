@@ -111,7 +111,7 @@ export async function importOrder(sb: SupabaseClient, printavoId: string, custom
   if (+o.visualId >= 40000) throw new PrintavoError(`Not imported: Printavo #${o.visualId} is in the 40,000 series, which belongs to the new system.`);
   const cid = customerId || (o.customer.id ? await ensureCustomer(sb, o.customer.id) : null);
   if (!cid) throw new Error("This order has no customer in Printavo.");
-  const { data: prev } = await sb.from("archived_orders").select("id, files, data_hash, removed_at, paid_here").eq("printavo_id", o.id).maybeSingle();
+  const { data: prev } = await sb.from("archived_orders").select("id, files, data_hash, removed_at, paid_here, written_off").eq("printavo_id", o.id).maybeSingle();
   const urls = fileUrls(o);
   const kept = Object.fromEntries(Object.entries((prev?.files || {}) as Record<string, string>).filter(([u, path]) => urls.includes(u) && fileDone(path)));
   // nothing changed since the last import: don't rewrite the whole order (the database's heaviest write)
@@ -125,7 +125,7 @@ export async function importOrder(sb: SupabaseClient, printavoId: string, custom
     order_date: (o.createdAt || "").slice(0, 10) || null, due_date: (o.customerDueAt || o.dueAt || "").slice(0, 10) || null,
     total: o.total,
     // what's been paid here on it too (migration 260: old invoices paid in the portal)
-    paid: o.amountPaid + (+(prev?.paid_here || 0)), balance: Math.max(0, Math.round((o.amountOutstanding - (+(prev?.paid_here || 0))) * 100) / 100), qty: o.totalQuantity, po_number: o.poNumber,
+    paid: o.amountPaid + (+(prev?.paid_here || 0)), balance: Math.max(0, Math.round((o.amountOutstanding - (+(prev?.paid_here || 0)) - (+(prev?.written_off || 0))) * 100) / 100), qty: o.totalQuantity, po_number: o.poNumber,
     data: o, data_hash: hash, files: kept, files_total: urls.length, files_copied: Object.keys(kept).length, imported_at: new Date().toISOString(), removed_at: null,
   };
   const { data, error } = await sb.from("archived_orders").upsert(row, { onConflict: "printavo_id" }).select("id").single();
