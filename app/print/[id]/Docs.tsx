@@ -981,6 +981,8 @@ export function InvoiceDoc(p: DocData) {
             {gc.finishing.length > 0 && <div className="iv2-set fin"><span>Finishing: {gc.finishing.map((f) => { const ns = isRelabel(f) ? setFor((cust as { neck_labels?: NeckLabelSet[] }).neck_labels, g.neckLabel) : null; return ns ? `${f.name} (their ${ns.name || "neck label"} printed inside the neck)` : f.name; }).join(", ")}</span></div>}
             {g.imprints.some((d) => (d.artChanges || []).length) && <div className="iv2-note">Changes we made to your art: {g.imprints.flatMap((d) => d.artChanges || []).join("; ")}</div>}
             {gc.setupItems.map((s, i) => <div className="iv2-set" key={`s${i}`}><span>{s.youth ? "Youth " + SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread).replace(/^Setup: /, "setup: ").replace(/^Digitizing/, "digitizing") : SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</span><span>{money(s.amount)}</span></div>)}
+            {/* a sample run's own charges (Group.sample; lib/samples.ts) */}
+            {(gc.sampleCharges || []).map((c) => <div className="iv2-set" key={"smp" + c.id}><span>Sample: {c.label || "charge"}</span><span>{money(+(c.amount || 0))}</span></div>)}
             {gc.materials > 0 && <div className="iv2-set"><span>2XL+ materials</span><span>{money(gc.materials)}</span></div>}
           </div>
         );

@@ -1,4 +1,5 @@
 import "server-only";
+import { goodsGroups } from "@/lib/samples";
 import { whoWorks } from "@/lib/goodsIssueShared";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
@@ -58,7 +59,7 @@ function itemsFromPrintavo(data: { groups?: { lines?: PvLine[] }[] } | null): Ch
 }
 function itemsFromOrder(o: Pick<Order, "groups" | "lines">): CheckItem[] {
   const out: CheckItem[] = [];
-  for (const g of orderGroups(o)) for (const l of g.lines) {
+  for (const g of goodsGroups(orderGroups(o))) for (const l of g.lines) {
     const sizes: Record<string, number> = {};
     for (const [k, q] of Object.entries(l.sizes || {})) if (+(q || 0) > 0) { const z = sizeOf(k); sizes[z] = (sizes[z] || 0) + +(q || 0); }
     if (!Object.keys(sizes).length) continue;
@@ -87,12 +88,12 @@ const CLOSED = /job\s*completed|quote|cancel|closed/i;
  * The jobs scheduled from `from` to `to` (inclusive), with their goods: what's expected, what the manifests say shipped
  * and arrived, and any check-ins. Also every job with an open check-in problem, whatever its date.
  */
-export async function checkinJobs(admin: SupabaseClient, from: string, to: string, only?: { kind: "o" | "a"; id: string }): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
+export async function checkinJobs(admin: SupabaseClient, from: string, to: string, only?: { kind: "o" | "a"; id: string } | null, /** every open order, whatever its week (the Goods & Receiving dashboard) */ allOpen = false): Promise<{ jobs: CheckJob[]; problems: CheckJob[] }> {
   const lo = addDays(from, -21), hi = addDays(to, 30);
   // a fresh query each time it's used (a query is changed by each filter put on it: one can't be read page after page)
   const pvQ0 = () => admin.from("archived_orders").select("id, visual_id, nickname, status_name, due_date, po_number, qty, data, customers(company, name)").is("removed_at", null);
   const pvQ = pvQ0();
-  const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name), printavo_id, pv:printavo_state->pv, pv_status:printavo_state->>status");
+  const oQ = admin.from("orders").select("id, number, nickname, status, due_date, production_date, po_number, qty, groups, lines, customers(company, name, is_test), printavo_id, pv:printavo_state->pv, pv_status:printavo_state->>status").is("discarded_at", null);
   const [{ data: pv, error: e1 }, { data: os, error: e2 }, { data: open, error: e3 }] = await Promise.all([
     only ? (only.kind === "a" ? pvQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : allRows((ra, rb) => pvQ0().gte("due_date", lo).lte("due_date", hi).order("id").range(ra, rb), 3000),
     only ? (only.kind === "o" ? oQ.eq("id", only.id) : Promise.resolve({ data: [], error: null })) : oQ.not("status", "in", "(completed,quote,quote_sent,request)").limit(800),
@@ -111,7 +112,8 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     const start = localDay(a.data?.startAt), day = start || ymd(a.due_date);
     return !!only || (openPv.has(a.id)) || (!CLOSED.test(a.status_name || "") && inWeek(day));
   });
-  const oJobs = ((os || []) as unknown as ORow[]).filter((o) => !!only || openO.has(o.id) || inWeek(ymd(o.production_date) || ymd(o.due_date)));
+  // a deleted order or a test customer's never needs counting in (Nov 11, Nick: ABC Test Company's #40428, #99005)
+  const oJobs = ((os || []) as unknown as ORow[]).filter((o) => !(o.customers as { is_test?: boolean } | null)?.is_test).filter((o) => !!only || allOpen || openO.has(o.id) || inWeek(ymd(o.production_date) || ymd(o.due_date)));
 
   const pvIds = pvJobs.map((a) => a.id), oIds = oJobs.map((o) => o.id);
   const [{ data: ml }, { data: ck }] = await Promise.all([
@@ -160,6 +162,13 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
       const g = x.pv ? goodsFromPrintavo(x.pv) : null;
       if (g === "received") j.state = "checked"; else if (g === "partial" && j.state !== "issue") j.state = "partial";
     }
+  }
+  // the order's goods marked counted here (order_goods "received": a count in, Where things stand, the order's Goods tab)
+  // count as counted, the same as a check-in (Nov 11, Nick: "I still only see 6 jobs marked as counted")
+  if (oIds.length) {
+    const { data: og } = await admin.from("order_goods").select("order_id, status").in("order_id", oIds);
+    const gs = new Map(((og || []) as { order_id: string; status: string }[]).map((x) => [x.order_id, x.status]));
+    for (const j of jobs) { const st = gs.get(j.ref); if (st === "received" && j.state !== "issue") j.state = "checked"; }
   }
   // mixed boxes: a box that also holds goods for another job
   const mix = await mixedBoxes(admin, lines.map((l) => l.tracking)).catch(() => new Map<string, MixedBox>());

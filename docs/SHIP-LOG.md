@@ -154,3 +154,29 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 11 2:59pm · 1.3.358 · Nick · Where Things Stand also lists approved orders still at the old Blanks or Art status
 - Nov 11 4:02pm · 1.3.359 · Nick · Canceled status for invoices called off (stored like Closed Quote: finished + declined, never sent to QuickBooks as a live invoice); Fulfillment allowed by the database
 - Nov 11 4:04pm · 1.3.360 · Nick · Goods & Receiving: a deleted order's goods issues no longer show (test order #99005)
+- Nov 11 4:15pm · 1.3.361 · Nick · Goods & Receiving dashboard: jobs to count in by the day they run on the press, counted ones grayed then under ✓ Counted until the press starts, issues, S&S and SanMar trucks on the right
+- Nov 11 4:21pm · 1.3.362 · Nick · Goods & Receiving dashboard: All / Screen print / Embroidery / Heat press switch; days are Today / Tomorrow / Next day / Later (not scheduled = Later)
+- Nov 11 4:26pm · 1.3.363 · Nick · Schedule: Live clock switch (off by default): off, the schedule is a plan made by hand; nothing moves on its own until someone updates it
+- Nov 11 4:41pm · 1.3.364 · Nick · Goods & Receiving: Dashboard button beside the Shipments tabs, Counting and Receiving blocks, Schedule | Due date days, SP/EMB/HP with search, ✓ Counted in the day row, Settings in the header
+- Nov 11 4:46pm · 1.3.365 · Nick · Goods & Receiving dashboard opens on Schedule · All · Today; its switches keep your picks only while you're there (5 minutes away and they reset)
+- Nov 11 4:47pm · 1.3.366 · Nick · Goods & Receiving count-in list: Order # · Customer (job name under) · Due date · Supplier · Pieces · Status, click any header to sort; one date only
+- Nov 11 4:51pm · 1.3.367 · Nick · Goods & Receiving: Schedule days go by the real schedule (nothing booked = Later); smaller day buttons left, ✓ Counted on its own right; deleted and test-customer orders never listed to count in (Check-In too)
+- Nov 11 4:57pm · 1.3.368 · Nick · Schedule: Ready To Schedule cards show the same goods dot as the calendar (green counted, amber here not counted, red problem)
+- Nov 11 4:58pm · 1.3.369 · Nick · Fix: schedule page crash (Invalid time value) with Live clock off
+- Nov 11 5:02pm · 1.3.370 · Nick · Goods & Receiving dashboard lists every open order (not just this week's), so every counted job shows under ✓ Counted
+- Nov 11 5:06pm · 1.3.371 · Nick · Goods counted on the order (counted in full) now shows as Counted in Goods & Receiving and Check-In, not only jobs counted with the Check-In counter
+- Nov 11 5:34pm · 1.3.372 · Nick · Run-time estimate: each different design is its own setup, the same design in other inks is a color change (half a setup), the same print on two garments shares screens (#40496 was 2h 8m, now 3h 52m)
+- Nov 11 5:47pm · 1.3.373 · Nick · Goods & Receiving: Work order button beside Count in opens the job's work order in a pop-up with Print at the top
+- Nov 11 6:11pm · 1.3.374 · Nick · Schedule breaks: tinted band with the word centered (Lunch 30 min, warm-up after lunch folded in); lunch inside a job is a line through the card
+- Nov 11 6:14pm · 1.3.375 · Nick · Schedule: lunch and warm-up tinted again (and across a job's card when lunch falls inside it); Shift held before grabbing a job pins it too
+- Nov 11 6:28pm · 1.3.376 · Nick · Email signature: logo and portal banner pictures are now the size they show (52px, 480px), so a reply that drops the size tags can't blow them up
+- Nov 11 7:11pm · 1.3.377 · Nick · Samples: Order + sample and Sample only. One Sample tool (pieces off the top / from customer / extra, anything-goes charges with credit on the full run, run day); sample group on the order with Planned→Pulled→Printed→Approved; own Sample card on the schedule, full run waits for OK; Make the order from a sample, linked both ways
+- Nov 11 7:15pm · 1.3.378 · Nick · Sample tool: sizes in size order
+- Nov 11 7:19pm · 1.3.379 · Nick · Receive a Payment: two panes (today's summary and Received today by customer on the left; customer card, invoices and how they paid on the right; who's waiting on payment when nobody's picked); record a card already paid elsewhere (Stax link, Square) or Venmo / Zelle without charging
+- Nov 11 7:23pm · 1.3.380 · Nick · Receive a Payment: Waiting on payment list loads
+- Nov 11 7:36pm · 1.3.381 · Nick · Ready To Schedule: a kinds-of-order button beside the tabs (each customer's Create order trainings it names, else Regular): hide Store carts, All My Sons… and Make The Schedule books only what's shown
+- Nov 11 7:39pm · 1.3.382 · Nick · Schedule: a job locked to its spot never moves (others flow around it); nothing new booked into time already past today; Start over asks: keep locks or release them too
+- Nov 11 7:48pm · 1.3.383 · Nick · Ready To Schedule: Job Filters menu (Regular Orders, then each customer's kinds under its name; each job one kind, the narrowest; Other … for the broader; Title Case)
+- Nov 11 7:52pm · 1.3.384 · Nick · Schedule: Start over only clears the schedule you're on (it cleared screen print from embroidery); job numbers on cards open the job
+- Nov 11 7:57pm · 1.3.385 · Nick · Samples: Order type → New order with sample opens the Sample tool (sample busted out as the first group, its own Sample card + Production run card); order type Sample is just the type (no per-group bars), Production ▾ → Make the order from it
+- Nov 11 8:00pm · 1.3.386 · Nick · Order type: New order / Reorder / Sample; a Pre-production sample tick under New order opens the Sample tool (Remove sample in it)

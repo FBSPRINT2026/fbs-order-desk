@@ -1,4 +1,5 @@
 import "server-only";
+import { goodsGroups } from "@/lib/samples";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { orderGroups, ST, SIZES, type Order } from "@/lib/pricing";
 import { NO_GOODS, type GoodsItem, type GoodsState, type Shipment } from "@/lib/goods";
@@ -10,7 +11,7 @@ type O = { id: string; number: number; nickname: string | null; status: string; 
 /** Style + color with quantities by size, in size order (for counting goods in). */
 function expectedLines(o: O) {
   if (!o.groups && !o.lines) return undefined;
-  return orderGroups(o as unknown as Order).flatMap((g) => g.lines).map((l) => ({
+  return goodsGroups(orderGroups(o as unknown as Order)).flatMap((g) => g.lines).map((l) => ({
     label: [l.brand, l.style, l.garment, l.color].filter(Boolean).join(" ") || "Garment",
     sizes: Object.fromEntries(SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => [z, +(l.sizes?.[z] || 0)])),
   })).filter((l) => Object.keys(l.sizes).length);

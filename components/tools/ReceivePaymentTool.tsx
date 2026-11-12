@@ -7,7 +7,7 @@ import { staxReason } from "@/lib/staxReason";
 import { fmtDate, money } from "@/lib/format";
 import { useSticky } from "@/lib/useSticky";
 import { recordLumpPayment } from "@/app/shop/pay-actions";
-import { decideRefund, findPayers, paymentContext, pinInfo, receivedToday, savePin, setPayOptions, shopApplyCredit, shopCredit, shopRefundCredit, takePayment, type PayerHit, type TodayPay, type TPInvoice, type TPMethod, type TPResult } from "@/app/shop/take-payment-actions";
+import { decideRefund, findPayers, waitingOnPayment, type Waiting, paymentContext, pinInfo, receivedToday, savePin, setPayOptions, shopApplyCredit, shopCredit, shopRefundCredit, takePayment, type PayerHit, type TodayPay, type TPInvoice, type TPMethod, type TPResult } from "@/app/shop/take-payment-actions";
 
 /**
  * Receive a payment (Nov 11, Nick; it was Take a Payment): one tool for every way money comes in.
@@ -25,9 +25,15 @@ type StaxJsT = { showCardForm: () => Promise<unknown>; tokenize: (d: Record<stri
 declare global { interface Window { StaxJs?: new (token: string, opts: Record<string, unknown>) => StaxJsT } }
 const STAX_SRC = "https://staxjs.staxpayments.com/staxjs-captcha.js";
 type Ctx = { customer: { id: string; name: string; company: string; no_card_fee: boolean; charge_split: boolean }; invoices: TPInvoice[]; methods: TPMethod[]; feePct: number };
-type How = "card" | "check" | "ach" | "cash";
-const HOW: [How, string][] = [["card", "Card"], ["check", "Check"], ["ach", "ACH"], ["cash", "Cash"]];
-const METHOD: Record<Exclude<How, "card">, string> = { check: "Check", ach: "ACH", cash: "Cash" };
+// how it came in (Nov 11, Nick: "I got a payment from Alicia today via credit card. I don't need to run it"): a card we
+// run here, or a payment that already happened somewhere else (a card through a Stax link or Square, a check, ACH, cash,
+// Venmo / Zelle), recorded straight onto the invoices with nothing charged
+type How = "card" | "cardx" | "check" | "ach" | "cash" | "app";
+const HOW: [How, string][] = [["card", "Run a card"], ["cardx", "Card · already paid"], ["check", "Check"], ["ach", "ACH"], ["cash", "Cash"], ["app", "Venmo / Zelle"]];
+const METHOD: Record<Exclude<How, "card">, string> = { cardx: "Card", check: "Check", ach: "ACH", cash: "Cash", app: "Venmo" };
+const APPS = ["Venmo", "Zelle", "Cash App", "PayPal"];
+const THROUGH = ["Stax link", "Square", "PayPal", "Their portal"];
+const initials = (n: string) => (n.match(/\b[A-Za-z0-9]/g) || []).slice(0, 2).join("").toUpperCase() || "?";
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
 /** days past due (negative: not due yet); no due date reads as 30 days after the invoice */
@@ -51,6 +57,8 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
   const [find, setFind] = useState(""), [open, setOpen] = useState<Set<string>>(new Set()), [amtMode, setAmtMode] = useState(false), [payAmt, setPayAmt] = useState("");
   // check / ACH / cash
   const [amount, setAmount] = useState(""), [ref, setRef] = useState(""), [day, setDay] = useState(today());
+  const [via, setVia] = useState(""), [app, setApp] = useState("Venmo");
+  const [waiting, setWaiting] = useState<{ rows: Waiting[]; pastDue: number; owed: number } | null>(null);
   const [prev, setPrev] = useState<{ applied?: { number: number; amount: number; full: boolean }[]; error?: string } | null>(null);
   const [done, setDone] = useState(""), [todayRows, setTodayRows] = useState<TodayPay[]>([]);
   // card
@@ -67,7 +75,8 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
   const searchRef = useRef<HTMLInputElement>(null);
   const loadPins = () => void pinInfo().then((r) => { if (r.ok) setPins(r); });
   const loadToday = () => void receivedToday().then((r) => { if (r.ok) setTodayRows(r.rows); });
-  useEffect(() => { loadPins(); loadToday(); }, []);
+  const loadWaiting = () => void waitingOnPayment().then((r) => { setWaiting(r.ok ? r : { rows: [], pastDue: 0, owed: 0 }); if (!r.ok) setErr(r.error); }).catch(() => setWaiting({ rows: [], pastDue: 0, owed: 0 }));
+  useEffect(() => { loadPins(); loadToday(); loadWaiting(); }, []);
 
   const load = (id: string, focus = "") => {
     setErr(""); setResults(null); setCtx(null); setFind(""); setAmtMode(false); setPayAmt(""); setPrev(null); setRef("");
@@ -134,7 +143,7 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
   // where a check goes, before it's saved
   useEffect(() => {
     if (how === "card" || !ctx || !(amountN > 0) || !chosen.length) { setPrev(null); return; }
-    const t = setTimeout(() => void recordLumpPayment(ctx.customer.id, { amount: amountN, method: METHOD[how], paid_on: day, note: "", orderIds: chosen.map((o) => o.id), preview: true }).then(setPrev), 300);
+    const t = setTimeout(() => void recordLumpPayment(ctx.customer.id, { amount: amountN, method: how === "app" ? app : METHOD[how], paid_on: day, note: "", orderIds: chosen.map((o) => o.id), preview: true }).then(setPrev), 300);
     return () => clearTimeout(t);
   }, [how, amountN, pickKey, ctx]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -143,12 +152,14 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
     if (!chosen.length) return setErr("Tick the invoices it pays.");
     if (!(amountN > 0)) return setErr("Enter the amount received.");
     setErr(""); setBusy(true);
-    const label = how === "check" ? (ref.trim() ? `Check #${ref.trim()}` : "Check") : how === "ach" ? (ref.trim() ? `ACH ${ref.trim()}` : "ACH") : "Cash";
-    const r = await recordLumpPayment(ctx.customer.id, { amount: amountN, method: METHOD[how], paid_on: day, note: label, orderIds: chosen.map((o) => o.id) });
+    const method = how === "app" ? app : METHOD[how];
+    const label = how === "check" ? (ref.trim() ? `Check #${ref.trim()}` : "Check") : how === "ach" ? (ref.trim() ? `ACH ${ref.trim()}` : "ACH") : how === "cash" ? "Cash"
+      : how === "cardx" ? ["Card", via.trim() ? `paid through ${via.trim()}` : "paid outside the portal", ref.trim()].filter(Boolean).join(" · ") : [app, ref.trim()].filter(Boolean).join(" · ");
+    const r = await recordLumpPayment(ctx.customer.id, { amount: amountN, method, paid_on: day, note: label, orderIds: chosen.map((o) => o.id) });
     setBusy(false);
     if (!r.ok) return setErr(r.error || "Couldn't record it.");
-    setDone(`${money(amountN)} ${label.toLowerCase().startsWith("check") ? label : METHOD[how]} from ${ctx.customer.company || ctx.customer.name} recorded on ${(r.applied || []).map((a) => `#${a.number}`).join(", ")}.`);
-    loadToday();
+    setDone(`${money(amountN)} ${label.toLowerCase().startsWith("check") ? label : method} from ${ctx.customer.company || ctx.customer.name} recorded on ${(r.applied || []).map((a) => `#${a.number}`).join(", ")}.`);
+    loadToday(); loadWaiting(); setVia("");
     // ready for the next one in the stack
     setCid(""); setCtx(null); setRef(""); setAmount(""); setPick(new Set()); setFocusId("");
     setTimeout(() => searchRef.current?.focus(), 50);
@@ -182,7 +193,7 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
     const r = await takePayment({ customerId: ctx.customer.id, orderIds: cardable.map((o) => o.id), savedId: pm !== "new" ? pm : undefined, newPmId: newPmId || undefined, newMethod: "card", split, fee: pct > 0, save: pm === "new" && keep, pin });
     setBusy(false); setPin("");
     if (!r.ok) { if (r.pin) return setPinErr(r.error); setPinAsk(false); return setErr(r.error); }
-    setPinAsk(false); setResults(r.results); loadToday();
+    setPinAsk(false); setResults(r.results); loadToday(); loadWaiting();
     load(ctx.customer.id);
   };
 
@@ -225,8 +236,8 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
         </div>
       )}
 
-      <section className="panel rcv">
-        <div className="panel-b rcv-b">
+      <div className="rcv2">
+        <div className="rcv2-main">
           {/* one search: a customer, or an invoice # / PO */}
           <div className="rcv-search">
             <input ref={searchRef} type="search" autoFocus={!c0} value={q} placeholder="Customer, invoice # or PO" aria-label="Find a customer or invoice"
@@ -245,11 +256,69 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
           </div>
           {done && !ctx && <div className="rcv-done" role="status">✓ {done} <span className="faint">Next one?</span></div>}
           {err && !ctx && <div className="err">{err}</div>}
-          {!ctx && !cid && !done && <p className="faint" style={{ margin: 0 }}>Type a name, an invoice number or a PO. Enter picks the first one.</p>}
-          {cid && !ctx && !err && <p className="faint" style={{ margin: 0 }}>Loading…</p>}
+          {/* today at a glance (Nov 11, Nick: "received today should be a nice list of… total amount by customer") */}
+          {(() => {
+            const sum = (f: (r: TodayPay) => boolean) => r2(todayRows.filter(f).reduce((a, r) => a + r.amount, 0));
+            const isCard = (r: TodayPay) => /card|visa|master|amex|discover|stax/i.test(`${r.method} ${r.note}`);
+            const isBank = (r: TodayPay) => /check|ach/i.test(r.method);
+            return (
+              <div className="stats rcv2-stats">
+                <div className="stat"><span className="v">{money(sum(() => true))}</span><span className="k">Received today</span></div>
+                <div className="stat"><span className="v">{todayRows.length}</span><span className="k">Payments</span></div>
+                <div className="stat"><span className="v">{money(sum(isCard))}</span><span className="k">By card</span></div>
+                <div className="stat"><span className="v">{money(sum(isBank))}</span><span className="k">Check &amp; ACH</span></div>
+                <div className="stat"><span className={"v" + ((waiting?.pastDue || 0) > 0 ? " alert" : "")}>{waiting ? money(waiting.pastDue) : "…"}</span><span className="k">Past due</span></div>
+              </div>
+            );
+          })()}
+          <section className="panel">
+            <div className="panel-h"><h2>Received today</h2><span className="faint">by customer</span></div>
+            <div className="panel-b rcv2-today">
+              {!todayRows.length ? <div className="faint">Nothing received yet today. Each payment you record shows up here.</div> : (() => {
+                const by = new Map<string, { name: string; id: string; amount: number; n: number; numbers: number[]; methods: Set<string> }>();
+                for (const r of todayRows) {
+                  const k = r.customerId || r.customer || "?";
+                  const x = by.get(k) || { name: r.customer || "Customer", id: r.customerId || "", amount: 0, n: 0, numbers: [] as number[], methods: new Set<string>() };
+                  x.amount = r2(x.amount + r.amount); x.n++; r.numbers.forEach((nn) => { if (!x.numbers.includes(nn)) x.numbers.push(nn); }); x.methods.add(r.method || "Payment");
+                  by.set(k, x);
+                }
+                const list = [...by.values()].sort((a2, b2) => b2.amount - a2.amount);
+                return <>
+                  {list.map((x) => (
+                    <button key={x.id || x.name} type="button" className="rcv2-tr" disabled={!x.id} onClick={() => { if (x.id) { setFocusId(""); if (x.id === cid) load(x.id); else setCid(x.id); } }} title={x.numbers.length ? x.numbers.map((nn) => `#${nn}`).join(", ") : undefined}>
+                      <span className="rcv2-av" aria-hidden>{initials(x.name)}</span>
+                      <span className="rcv2-tn"><b>{x.name}</b><span className="faint">{x.n} payment{x.n === 1 ? "" : "s"}{x.numbers.length ? ` · ${x.numbers.length} invoice${x.numbers.length === 1 ? "" : "s"}` : ""}</span></span>
+                      <span className="rcv2-m">{[...x.methods].map((m) => <span key={m} className="rcv2-chip">{m}</span>)}</span>
+                      <b className="nowrap">{money(x.amount)}</b>
+                    </button>
+                  ))}
+                  <div className="rcv2-tt"><b>Total</b><b className="nowrap">{money(r2(todayRows.reduce((a2, r) => a2 + r.amount, 0)))}</b></div>
+                </>;
+              })()}
+            </div>
+          </section>
+        </div>
 
+        <aside className="panel rcv rcv2-side">
+          <div className="panel-b rcv-b">
+          {!ctx && !cid && <>
+            <div className="rcv2-empty"><b>Pick a customer</b>Search on the left, or pick one waiting on payment.</div>
+            <div className="rcv2-lab">Waiting on payment{waiting ? <span className="faint"> · {money(waiting.owed)} owed</span> : null}</div>
+            {!waiting ? <div className="faint">Loading…</div> : !waiting.rows.length ? <div className="faint">Nobody owes anything right now.</div> : (
+              <div className="rcv2-wait">{waiting.rows.slice(0, 12).map((w) => (
+                <button key={w.id} type="button" className="rcv2-wr" onClick={() => { setFocusId(""); setCid(w.id); }}>
+                  <span><b>{w.name}</b><span className="faint">{w.open} invoice{w.open === 1 ? "" : "s"}{w.late > 0 ? ` · ${w.late} days late` : ""}</span></span>
+                  <b className={"nowrap" + (w.pastDue > 0 ? " rcv2-late" : "")}>{money(w.owed)}</b>
+                </button>
+              ))}</div>
+            )}
+          </>}
+          {cid && !ctx && !err && <p className="faint" style={{ margin: 0 }}>Loading…</p>}
+          {cid && !ctx && err && <div className="err">{err}</div>}
           {ctx && <>
-            <div className="rcv-who"><b>{ctx.customer.company || ctx.customer.name}</b>
+            <div className="rcv-who">
+              <div className="rcv2-cc"><span className="rcv2-av" aria-hidden>{initials(ctx.customer.company || ctx.customer.name)}</span><div><b>{ctx.customer.company || ctx.customer.name}</b>{ctx.customer.company && ctx.customer.name && ctx.customer.company !== ctx.customer.name ? <div className="faint">{ctx.customer.name}</div> : null}</div>
+                <span className="rcv2-sp" /><a className="btn sm" href={`/shop/customers/${ctx.customer.id}`}>Customer</a><button type="button" className="btn sm" onClick={() => { setCid(""); setCtx(null); setFocusId(""); setTimeout(() => searchRef.current?.focus(), 30); }}>Change</button></div>
               <div className="stats rcv-stats">
                 <button type="button" className="stat" onClick={() => quick("all")}><span className="v">{money(owed)}</span><span className="k">Balance</span></button>
                 <button type="button" className="stat" onClick={() => quick("late")}><span className={"v" + (pastDue > 0 ? " alert" : "")}>{money(pastDue)}</span><span className="k">Past due</span></button>
@@ -327,9 +396,12 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
               {how !== "card" ? <>
                 <div className="rcv-fields">
                   <label>Amount<MoneyField value={amount} onChange={(e) => { setAmount(e.target.value); }} placeholder="0.00" /></label>
-                  {how !== "cash" && <label>{how === "check" ? "Check #" : "Reference"}<input value={ref} onChange={(e) => setRef(e.target.value.slice(0, 40))} placeholder={how === "check" ? "" : "Optional"} /></label>}
+                  {how === "cardx" && <label>Paid through<input list="rcv-through" value={via} onChange={(e) => setVia(e.target.value.slice(0, 40))} placeholder="Stax link, Square…" /><datalist id="rcv-through">{THROUGH.map((t) => <option key={t} value={t} />)}</datalist></label>}
+                  {how === "app" && <label>Paid with<select value={app} onChange={(e) => setApp(e.target.value)}>{APPS.map((x) => <option key={x}>{x}</option>)}</select></label>}
+                  {how !== "cash" && <label>{how === "check" ? "Check #" : "Reference"}<input value={ref} onChange={(e) => setRef(e.target.value.slice(0, 40))} placeholder={how === "check" ? "" : how === "cardx" ? "Last 4 or receipt #" : "Optional"} /></label>}
                   <label>Received<input type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label>
                 </div>
+                {(how === "cardx" || how === "app") && <div className="faint rcv2-note">Recorded only: nothing is charged here.</div>}
                 <div className="rcv-go">
                   <span className="faint">{!chosen.length ? "Tick the invoices it pays." : prev?.error ? <span className="err-inline">{prev.error}</span> : prev?.applied ? `Pays ${prev.applied.filter((a) => a.full).length ? prev.applied.filter((a) => a.full).map((a) => `#${a.number}`).join(", ") + " in full" : ""}${partial ? `${prev.applied.some((a) => a.full) ? "; " : ""}#${partial.number} partly (${money(partial.amount)})` : ""}` : `${chosen.length} invoice${chosen.length === 1 ? "" : "s"} · ${money(pickedSum)}`}</span>
                   <button type="button" className="btn primary" disabled={busy || !chosen.length || !(amountN > 0) || !!prev?.error} onClick={() => void record()}>{busy ? "Recording…" : `Record ${amountN > 0 ? money(amountN) : ""}`}</button>
@@ -384,17 +456,9 @@ export default function ReceivePaymentTool({ customerId: c0 = "", orderId = "", 
               )}
             </> : <p className="faint" style={{ margin: 0 }}>Nothing is owed right now.</p>}
           </>}
-        </div>
-
-        {todayRows.length > 0 && (
-          <div className="rcv-today">
-            <div className="rcv-today-h"><span>Received today</span><span>{todayRows.length} · {money(r2(todayRows.reduce((a, r) => a + r.amount, 0)))}</span></div>
-            {todayRows.map((r) => (
-              <div key={r.key} className="rcv-today-r"><span><span className="rcv-ok">✓</span> {r.customer || "Customer"}{r.numbers.length ? ` · ${r.numbers.map((n) => `#${n}`).join(", ")}` : ""} <span className="faint">· {r.note || r.method}</span></span><b className="nowrap">{money(r.amount)}</b></div>
-            ))}
           </div>
-        )}
-      </section>
+        </aside>
+      </div>
 
       {pinAsk && ctx && (
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Enter your PIN" onClick={() => !busy && setPinAsk(false)}>

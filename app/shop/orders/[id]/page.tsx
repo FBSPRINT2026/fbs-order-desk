@@ -21,7 +21,7 @@ import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import ProductionHolder from "@/components/tools/ProductionHolder";
 import { SITE_URL } from "@/lib/config";
-import { type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import { openOrderCheck } from "@/components/tools/OrderReview";
 import Link from "next/link";
@@ -90,6 +90,8 @@ import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions"
 import { mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
 import type { DgzSewout } from "@/lib/digitizeStatus";
 import { garmentFor, sameBrand } from "@/lib/garmentMatch";
+import SampleRunTool, { SampleBar } from "@/components/tools/SampleRunTool";
+import type { SampleKind } from "@/lib/samples";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -140,6 +142,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [reprintAsk, setReprintAsk] = useState(false);
   // the Digitizer open for one embroidered print (Oct 27)
   const [digitize, setDigitize] = useState<string | null>(null);
+  // the Sample tool (components/tools/SampleRunTool.tsx): a new pre-production sample, or a sample group's Edit
+  const [sampleTool, setSampleTool] = useState<null | { kind: SampleKind; groupId?: string }>(null);
+  useEffect(() => { if (!o?.id) return; try { const k = "fbs:sampleAsk:" + o.id; if (localStorage.getItem(k) === "pre") { localStorage.removeItem(k); if (!o.groups.some((g) => g.sample)) setSampleTool({ kind: "pre" }); } } catch { /* */ } }, [o?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { try { const u = new URL(window.location.href); if (u.searchParams.get("reprint") === "1") { setReprintAsk(true); u.searchParams.delete("reprint"); window.history.replaceState(window.history.state, "", u.toString()); } } catch { /* */ } }, []);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const custOpts = useMemo(() => customers.map((c) => ({ id: c.id, label: custLabel(c), sub: c.company && c.name ? c.name : c.email || "" })), [customers]);
@@ -426,7 +431,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const startedAt = Date.now();
     const { data: savedRow, error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      price_type: d.price_type || "retail", order_type: d.order_type || null, sample: d.order_type === "sample" ? d.sample || null : null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", order_type: d.order_type || null, sample: d.order_type === "sample" ? d.sample || null : null, from_sample: d.from_sample || null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       bill_to: d.bill_to || null, ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
@@ -1623,6 +1628,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               <a href={`/print/${o.id}?work=1`} target="_blank" rel="noreferrer"><MenuItem icon="clipboard" tone="orange" title="Work order" sub="What the press crew runs from" /></a>
               <a href={`/print/${o.id}/labels`} target="_blank" rel="noreferrer"><MenuItem icon="label" tone="green" title="Box labels" sub="Print the labels for the boxes" /></a>
               <a href={`/j/${o.number}`} target="_blank" rel="noreferrer" title="The job's phone menu (what scanning the QR code opens)"><MenuItem icon="phone" tone="blue" title="Phone menu" sub="What scanning the QR code opens" /></a>
+              {/* a pre-production sample run inside this order (Nov 11, Nick; lib/samples.ts) */}
+              {/* a Sample order: start the real order from it, linked both ways (the sample's credited charges come off it) */}
+              {!o.draft && o.order_type === "sample" && <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={async (e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); await save(); const r = await fetch("/api/orders/from-sample", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: o.id, group: "all" }) }).then((x) => x.json()).catch(() => ({ error: "Couldn't reach the server." })); if (r.id) router.push(`/shop/orders/${r.id}`); else if (r.error) setFlash(r.error); }}><MenuItem icon="invoice" tone="green" title="Make the order" sub="The real order from this sample, linked to it" /></button>}
+              {!o.draft && o.order_type !== "sample" && <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={(e) => { (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open"); const ex = o.groups.find((g) => g.sample?.kind === "pre"); setSampleTool(ex ? { kind: "pre", groupId: ex.id } : { kind: "pre" }); }}><MenuItem icon="shirt" tone="violet" title={o.groups.some((g) => g.sample?.kind === "pre") ? "Sample run" : "Add a sample run"} sub="Pre-production samples, their charges" /></button>}
               {/* save press time for a quote before its art is in (Nov 10, Nick: "under production… say production holder") */}
               {!o.draft && ["quote", "quote_sent", "art"].includes(o.status) && o.type === "quote" && <ProductionHolder order={{ id: o.id, number: o.number, nickname: o.nickname || null, due_date: o.due_date || null, groups: o.groups, customer_id: o.customer_id }} customer={cust ? custLabel(cust) : ""} />}
             </div>
@@ -1960,7 +1969,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               }} />
           )}
           {isSimpleKind(o.product_kind) ? <SimpleLines orderId={o.id} kind={o.product_kind} groups={o.groups} hidePrices={!seesMoney || undefined} update={(fn) => patch((d) => fn(d.groups))} save={save} /> : <>
-          <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => (
+          <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => (<Fragment key={g.id}>
+            {g.sample && <SampleBar g={g} orderId={o.id} me={who.staffName || who.email || ""} patch={patch} onEdit={() => setSampleTool({ kind: g.sample?.kind || "only", groupId: g.id })} />}
             <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : undefined} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
@@ -1969,7 +1979,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })}
               moveTo={o.groups.flatMap((x, xi) => (x.id === g.id ? [] : [{ id: x.id, label: [x.name?.trim() || `Group ${xi + 1}`, x.lines.map((l) => l.style).filter(Boolean).slice(0, 2).join(", ")].filter(Boolean).join(" · ") }]))}
               onMoveLine={moveLine} />
-          ))}</OrderInkCtx.Provider>
+          </Fragment>))}</OrderInkCtx.Provider>
+          {sampleTool && <SampleRunTool o={o} patch={patch} kind={sampleTool.kind} groupId={sampleTool.groupId} onClose={() => setSampleTool(null)} />}
           <div className="row grp-add">
             <button className="btn" type="button" onClick={() => patch((d) => { const ng = newGroup(); if (!finPerGroup) { ng.finishing = (d.groups[0]?.finishing || []).filter(isFin); if (d.groups[0]?.customFin?.length) ng.customFin = [...d.groups[0].customFin]; } d.groups.push(ng); })}>+ Add line item group</button>
             <span className="faint grp-hint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
@@ -2060,7 +2071,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 </div>
                 {/* the job's type, standing out at the bottom: the dropdown, and what it means for this order under it */}
                 <div className="jd-typebox">
-                  <OrderTypeRow o={o} patch={patch} bare sampleRule={(cust as { sample_rule?: SampleRule | null } | undefined)?.sample_rule || null} me={who.staffName || who.email || ""} />
+                  <OrderTypeRow o={o} patch={patch} bare onSample={() => { const ex = o.groups.find((g) => g.sample?.kind === "pre"); setSampleTool(ex ? { kind: "pre", groupId: ex.id } : { kind: "pre" }); }} sampleRule={(cust as { sample_rule?: SampleRule | null } | undefined)?.sample_rule || null} me={who.staffName || who.email || ""} />
                 </div>
                 <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved${o.approved_name ? ` by ${o.approved_name}` : ""} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
               </div>

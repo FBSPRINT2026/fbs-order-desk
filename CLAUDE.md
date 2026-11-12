@@ -174,6 +174,18 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   wouldn't really lock"). Changing a group's mockup while its version is out and unanswered updates that same version
   (`refreshUnseenProofs` in `app/shop/proof-actions.ts`), opened or not; a new version only starts once they've approved
   or asked for changes. Anything that swaps a group's mockup pictures calls it.
+- **Samples** (Nick, Nov 11 2026: "two types of an order that has a pre-production sample… anything goes type of thing"):
+  one Sample tool, `components/tools/SampleRunTool.tsx` (`lib/samples.ts`), from Create order's card (+ Sample), the
+  order's Order type → New order with sample, Production ▾ → Sample run, and a sample group's Edit (Nick, Nov 11: like a
+  mixed job busted out by kind, the sample is busted out of the same job: a "Sample · …" and a "Production run · …" card). Order + sample: the sample is its own group at
+  the top (`Group.sample`, kind "pre": its pieces picked from the order's lines, `GLine.sampleOf`), its pieces off the top
+  (the run prints that many fewer, never ordered or counted twice: `runParts` / `goodsGroups`), extra from the customer,
+  or extra blanks; its own "Sample" card on the schedule (`production_slots.sample`), and the full run says "Waits for
+  sample OK" and runs no earlier than the day after it. Order type Sample (Create order's Sample only) is only the type: its own
+  pricing, a "Sample" tag for production, no sample groups; Production ▾ → Make the order
+  starts the real order from it, linked both ways (`orders.from_sample` / `GroupSample.made`). Charges are rows of a name
+  and an amount, never a rule; a charge ticked "Credit on the full run" comes off the real order (the same order for a
+  pre-production sample, a Sample credit fee on the order made from a sample only one). Planned → Pulled → Printed → Approved.
 - **Production holder** (Nick, Nov 10 2026; replaced Hold the spot): saving press time for a quote before its art is in
   is `components/tools/ProductionHolder.tsx`, opened from the order's Production ▾ menu; a held spot shows as a small
   dashed "Held · <day>" tag in the order's header (no big button). It reads the order (each garment's pieces, kind and
@@ -182,7 +194,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 - **Money in is one tool: Receive a Payment** (Nick, Nov 11 2026; it was Take a Payment): `components/tools/ReceivePaymentTool.tsx`
   at `/shop/receive-payment` (the old `/shop/take-payment` address opens it). One search (customer, invoice # or PO),
   the customer's invoices grouped by how late when there are many, quick picks and "Pay an amount" (oldest first),
-  then Card (cards they OK'd, a new card, fee, PIN) or Check / ACH / Cash recorded straight on (`recordLumpPayment`);
+  then Run a card (cards they OK'd, a new card, fee, PIN) or a payment made elsewhere recorded straight on with nothing
+  charged (`recordLumpPayment`): Card · already paid (a Stax link, Square), Check, ACH, Cash, Venmo / Zelle. Two panes
+  (Nick, Nov 11): today's numbers and Received today by customer on the left; the customer card, invoices and how they
+  paid on the right, or who's waiting on payment when nobody's picked (`waitingOnPayment`);
   old Printavo invoices can be paid by check here. Every "take / record a payment" button opens it.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
@@ -193,6 +208,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   includes fulfillment (`IN_WORK_STATUSES`).
   Canceled (an invoice called off) is stored like a Closed Quote: status `completed` with `declined_at`, type invoice
   (`isCanceled` / `statusKey` → "canceled"), so every finished-job filter skips it; it never goes to QuickBooks live.
+- **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
+  to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule
+  yet is Later; a goods problem stays on Today), under a full-width All / Screen print / Embroidery / Heat press switch, Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
+  the press starts it, then it drops off. Issues to work under the list; S&S and SanMar trucks (today / next day) on the right.
+  Its top: a Dashboard button (box icon) beside the Shipments tabs (Arriving & tracking, FBS orders, Customer supplied,
+  Ignored); Settings in the header. Two blocks: Counting (a Schedule | Due date switch for the days; All/SP/EMB/HP with the
+  search beside it; Today / Tomorrow / Next day / Later / ✓ Counted) and Receiving (trucks).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…
@@ -242,6 +264,15 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (`DAY_TAIL`): it starts the next morning. A hold (Production holder) runs no earlier than 3 working days before its
   in-hands date; it saves press time near its date, it never jumps the line (Nick, Nov 11).
   Right-click a job: Run next (first on its press after what's running), or lock it to its spot (fixed), its person (any
-  press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). Downtime is a solid gray block (no stripes); lunch and warm-up are a thin line with a small label (solid for lunch,
-  dotted for warm-up; no bubbles). Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
+  press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). A job locked to its spot
+  never moves: the other jobs flow around it, finishing before it or starting after it. Nothing new is booked into time
+  that's already past today, whatever the Live clock. Start over asks first: Keep my locks or Release all locks too. Downtime is a solid gray block (no stripes); lunch and warm-up are a lightly tinted band with the word centered
+  ("Lunch 30 min"; the warm-up after lunch is part of its band, no times); a lunch that falls inside a job is counted in
+  the job and drawn as the same tinted band across its card (Nick, Nov 11). Shift held before or after grabbing a job
+  pins it. Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
   everything else grays out while it's dragged.
+  **Live clock** (Nick, Nov 11 2026; `ProductionSettings.liveClock`, the switch in the schedule's Press & crew tools): off
+  (the default while the floor learns to clock in), the schedule is a plan made by hand like Printavo's: no time lost to
+  someone not clocked in, nothing not started is pushed up to now, unfinished days don't roll to today, punching onto a
+  job doesn't start it. On, all of that follows the time clock and press timers. Anything new that reacts to punches
+  goes behind it.

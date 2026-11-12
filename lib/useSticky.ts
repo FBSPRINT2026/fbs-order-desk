@@ -23,7 +23,7 @@ type Saved<T> = { v: T; t: number };
  * or when they come back to the page soon (e.g. the production calendar on Screen Print + My accounts).
  * Starts from the default on the server and the first render, then switches to the saved value right after.
  */
-export function useSticky<T>(key: string, initial: T): [T, Dispatch<SetStateAction<T>>] {
+export function useSticky<T>(key: string, initial: T, /** how long away before it's back to the default (default 2 hours) */ forMs = STICKY_FOR_MS): [T, Dispatch<SetStateAction<T>>] {
   const k = "fbs:" + key;
   const [v, setV] = useState<T>(initial);
   useEffect(() => {
@@ -34,7 +34,7 @@ export function useSticky<T>(key: string, initial: T): [T, Dispatch<SetStateActi
       const s = JSON.parse(raw) as Saved<T> | T;
       const wrapped = !!s && typeof s === "object" && "t" in (s as object) && "v" in (s as object);
       // saved before the clock (a bare value) or not touched for a while: the default, and the old one forgotten
-      if (!keeps(key) && (!wrapped || Date.now() - (s as Saved<T>).t > STICKY_FOR_MS)) { localStorage.removeItem(k); return; }
+      if (!keeps(key) && (!wrapped || Date.now() - (s as Saved<T>).t > forMs)) { localStorage.removeItem(k); return; }
       const val = wrapped ? (s as Saved<T>).v : (s as T);
       setV(val);
       localStorage.setItem(k, JSON.stringify({ v: val, t: Date.now() })); // this visit starts the clock again
