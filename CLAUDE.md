@@ -63,6 +63,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   mounted for every page, moves every `(max-width/min-width)` rule by the open panel's width (`.dla-bg.dock`), so the
   page lays out for the room it really has. Keep writing width rules as usual; a layout that lives in a box of its own
   (a list in a panel) uses a container query (`container: name / inline-size`, as `.pjr-list` does), never the window.
+- **Pop-ups never open off the page** (Nick, Nov 12: "if you're at the bottom of the browser and you right-click… it
+  doesn't pop up off the page"). `components/PopFit.tsx`, mounted for every page like TableFit, moves anything that floats
+  over the page (`position: fixed` placed by top/left: right-click menus, dropdowns, popovers) back inside the window, up
+  from the bottom and in from the right, and one taller than the window scrolls inside. Place a menu at the pointer as
+  usual; put `data-nopopfit` only on one that must stay exactly where it's put.
 - **Every feature's class names are its own** (Oct 31: the Assistant's to-do cards were squeezed and stacked because
   the Inbox's after-send pop-up and the Artwork shelf also defined `.as-card` / `.as-t` in the global stylesheet). Give a
   new feature its own prefix, grep `app/globals.css` for a name before using it, and run `node scripts/css-clashes.mjs`

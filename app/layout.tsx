@@ -5,6 +5,7 @@ import ToolbarFit from "@/components/ToolbarFit";
 import SwipeHint from "@/components/SwipeHint";
 import TableFit from "@/components/TableFit";
 import SquishFit from "@/components/SquishFit";
+import PopFit from "@/components/PopFit";
 import DockFit from "@/components/DockFit";
 import FileDrag from "@/components/FileDrag";
 
@@ -25,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap"
         />
       </head>
-      <body>{children}<ToolbarFit /><SwipeHint /><TableFit /><SquishFit /><DockFit /><FileDrag /><PageTitle /></body>
+      <body>{children}<ToolbarFit /><SwipeHint /><TableFit /><SquishFit /><DockFit /><PopFit /><FileDrag /><PageTitle /></body>
     </html>
   );
 }

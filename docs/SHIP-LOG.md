@@ -193,3 +193,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:58am · 1.3.397 · Nick · Schedule right-click: a Goods section (Not counted / Counted / Problem) with Count in, All here and Missing…, saved the same as Goods & Receiving
 - Nov 12 9:00am · 1.3.398 · Nick · Run times: 'sweatshirt', 'crewneck', plurals read as heavy garments, and a style-only line timed by its catalog name (#50036's sweatshirts were timed as tees). Scoreboard pace only from what's been marked (behind / ahead / on pace)
 - Nov 12 9:01am · 1.3.399 · Nick · Run times: 'Hooded Sweatshirt' and every hoodie name read as heavy (they were timed as tees)
+- Nov 12 9:02am · 1.3.400 · Nick · Pop-ups and right-click menus anywhere on the site are moved back inside the window (up from the bottom, in from the right; too tall scrolls inside)
