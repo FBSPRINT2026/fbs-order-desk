@@ -249,7 +249,20 @@ export type Step = { method: MachineType; location: string; colors: number; scre
 export type Need = { type: MachineType; steps: Step[]; needColors: number; qty: number; label: string; /** a hard or easy print: 0.7 = runs at 70% ("When can we print it?" speed) */ speed?: number };
 
 const LIGHT = /\b(white|natural|ash|cream|ivory|light|silver|heather\s*grey|sport\s*grey|pink|yellow|lime|sand|oatmeal|bone|vanilla|butter|mint|sky|baby)\b/i;
-export const garmentKind = (text: string): Step["garment"] => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hoodie|sweat|crew\s*neck|fleece|jacket|pullover|quarter|zip)\b/i.test(text) ? "heavy" : "tee");
+const kindOfWords = (text: string): Step["garment"] | null => (/\b(cap|hat|beanie|visor|trucker|snapback)\b/i.test(text) ? "cap" : /\b(tote|bag|backpack|apron)\b/i.test(text) ? "bag" : /\b(hood|hoodies?|sweat|sweatshirts?|sweatpants?|joggers?|crew\s*neck|crewneck|fleece|jackets?|pullovers?|quarter|zip)\b/i.test(text) ? "heavy" : null);
+/** what each catalog style is called ("562M" → "Jerzees - NuBlend Crewneck Sweatshirt"), seeded by the pages that time jobs
+ *  (`seedStyleTitles`), so a line that only says its style number is timed as what it really is (Nov 12, Nick: #50036's 228
+ *  Jerzees 562M sweatshirts were timed as tees) */
+const STYLE_TITLES = new Map<string, string>();
+const styleKey = (x: string) => x.trim().toUpperCase().replace(/\s+/g, "");
+export function seedStyleTitles(rows: Record<string, string>) { for (const [k, v] of Object.entries(rows)) if (k && v) STYLE_TITLES.set(styleKey(k), v); }
+export const garmentKind = (text: string): Step["garment"] => {
+  const w = kindOfWords(text);
+  if (w) return w;
+  // no garment words: any style number in it that the catalog knows
+  for (const tok of text.split(/[\s,/·|]+/)) { const t = tok && STYLE_TITLES.get(styleKey(tok)); const k = t ? kindOfWords(t) : null; if (k) return k; }
+  return "tee";
+};
 const smallLoc = (loc: string) => /\b(pocket|sleeve|neck|nape|leg|hip|cuff|hood)\b/i.test(loc);
 const methodType = (m: string): MachineType => (m === "embroidery" ? "embroidery" : m === "dtf" || m === "dtg" || m === "heat" ? "heat" : "screen");
 

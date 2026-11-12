@@ -9,10 +9,11 @@ import { createClient } from "@/lib/supabase/client";
 import { withPace, operatorOf, parseDuration, type RunLesson } from "@/lib/runLearn";
 import { setRunTime, learnRun } from "@/app/shop/run-time-actions";
 import { addTask } from "@/app/shop/myday-actions";
-import { mergeProduction, estimateRaw, locKey, artsOf, MIN_JOB_MIN, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { seedStyleTitles, mergeProduction, estimateRaw, locKey, artsOf, MIN_JOB_MIN, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, ST, type StatusKey, type Group, type AccountOwner } from "@/lib/pricing";
 import { orderStatusEmail } from "@/app/shop/customer-email-actions";
 import CheckinModal from "@/components/CheckinModal";
+import { styleTitles } from "@/app/shop/style-title-actions";
 import type { CheckJob, CheckLine } from "@/lib/checkinShared";
 import { useSticky } from "@/lib/useSticky";
 import PressLayout from "@/components/PressLayout";
@@ -547,6 +548,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       sb.from("production_extra_shifts").select("id, machine, crew_id, day, start_min, end_min, note").gte("day", addDay(today, -21)).lte("day", addDay(today, 120)),
       sb.from("production_holds").select("*").eq("status", "planned").order("due_date"),
     ]);
+    // what each style number is (a line that only says "562M" is timed as the sweatshirt it is; Nov 12, #50036)
+    const stys = new Set<string>();
+    for (const x of (o || []) as { groups?: Group[] | null }[]) for (const g of x.groups || []) for (const l of g.lines || []) if (l.style) stys.add(String(l.style));
+    if (stys.size) seedStyleTitles(await styleTitles([...stys]).catch(() => ({})));
     // Equipment Status: presses running with heads out, slow, or down
     const { data: eq0 } = await sb.from("production_equipment").select("*");
     // what runs taught about each press operator's pace (lib/runLearn.ts)
@@ -1986,19 +1991,26 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (notYet(g)) return <em className="mdy-st bad">Not started</em>;
     return null;
   };
-  /** each press's day so far: jobs done of today's, and how far behind it is (the running job against where it should be,
-   *  or a job whose start has gone by) */
+  /** each press's day so far: jobs done of today's, and how far off the plan it is, from what's actually been marked only
+   *  (Nov 12, Nick: "how are you figuring Ana is behind… she's actually ahead"): the last job marked done against its
+   *  planned finish, a printing job whose pieces were updated against where it should be by now, and, only with the live
+   *  clock on, a job whose start has gone by. Nothing marked: no pace is claimed. Negative = ahead. */
+  const minOfIso = (iso: string) => { const d = new Date(iso); const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "numeric", hourCycle: "h23" }).formatToParts(d); return (+(p.find((x) => x.type === "hour")?.value || 0)) * 60 + +(p.find((x) => x.type === "minute")?.value || 0); };
   const dayScore = (m: Machine) => {
     const seen = new Map<string, Seg>();
     for (const g of at(m, today)) if (g.c.job.kind !== "h" && !seen.has(g.c.key)) seen.set(g.c.key, g);
     const gs = [...seen.values()], done = gs.filter((g) => g.c.slot?.status === "done").length;
-    let behind = 0;
+    let off: number | null = null, lastFin = -1;
     for (const g of gs) {
-      const st = g.c.slot?.status;
-      if (st === "running") { const want = Math.min(1, Math.max(0, (now.min - g.start) / Math.max(1, g.end - g.start))), got = +(g.c.slot?.progress || 0); behind = Math.max(behind, Math.round((want - got) * (g.end - g.start))); }
-      else if (notYet(g)) behind = Math.max(behind, now.min - g.start);
+      const sl = g.c.slot, st = sl?.status;
+      if (st === "done" && sl?.finished_at && sl.finished_at.slice(0, 10) >= addDay(today, -1)) { const f = minOfIso(sl.finished_at); if (f > lastFin) { lastFin = f; off = f - g.end; } }
     }
-    return { n: gs.length, done, behind };
+    for (const g of gs) {
+      const sl = g.c.slot;
+      if (sl?.status === "running" && sl.progress_at && +(sl.progress || 0) > 0) { const want = Math.min(1, Math.max(0, (now.min - g.start) / Math.max(1, g.end - g.start))), got = +(sl.progress || 0); off = Math.round((want - got) * (g.end - g.start)); }
+      else if (s?.liveClock && notYet(g)) off = Math.max(off ?? 0, now.min - g.start);
+    }
+    return { n: gs.length, done, off };
   };
   /** the downtime entry a block on the board comes from (its press's or its crew's) */
   const offRow = (m: Machine, d: string, a: number) => offs.find((x) => x.day === d && (x.machine === m.id || (!!m.crew && x.crew_id === m.crew)) && (x.start_min ?? -1) === a) || offs.find((x) => x.day === d && (x.machine === m.id || (!!m.crew && x.crew_id === m.crew)) && x.start_min == null && a <= 0) || null;
@@ -2010,7 +2022,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             <span />
             {machines.map((m) => { const sc = dayScore(m); if (!sc.n) return <div key={m.id} className="mdy-sbc"><b>{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><small>Nothing today</small></div>; return (
               <div key={m.id} className="mdy-sbc"><b>{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}</b><i className="mdy-bar"><i style={{ width: `${Math.round((sc.done / sc.n) * 100)}%` }} /></i>
-                <small className={sc.behind >= 15 ? "bad" : ""}>{sc.done} of {sc.n} done · {sc.done === sc.n ? "all done" : sc.behind >= 15 ? `${fmtMin(sc.behind)} behind` : "on pace"}</small></div>
+                <small className={sc.off != null && sc.off >= 15 ? "bad" : ""}>{sc.done} of {sc.n} done{sc.done === sc.n ? " · all done" : sc.off == null ? "" : sc.off >= 15 ? ` · ${fmtMin(sc.off)} behind` : sc.off <= -15 ? ` · ${fmtMin(-sc.off)} ahead` : " · on pace"}</small></div>
             ); })}
           </div>
         )}

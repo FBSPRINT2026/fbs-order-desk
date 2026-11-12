@@ -168,6 +168,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
   those pale ones only. Underbase and print order go by the ink's real color (`printShade`), not the color the art is
   drawn in; one-color art prints as the one ink its print names.
+- **What a garment is, for timing** (Nick, Nov 12, #50036's sweatshirts timed as tees): `garmentKind` in `lib/production.ts`
+  reads the line's words (plurals and "sweatshirt"/"crewneck" included), and when they say nothing, the style number's
+  catalog name (our garments, then SanMar: `seedStyleTitles`, loaded by the schedule and Production settings).
 - **Headwear spots** (Nick, Nov 10 2026): beanies sew on the Front (never the cuff); caps on the Full Front (All My Sons'
   logo at 4.21" wide). `BEANIE_LOCATIONS` / `HAT_LOCATIONS` in `lib/pricing.ts`.
 - **A sent version isn't locked until the customer answers** (Nick, Nov 10 2026: "until it's approved or declined, it
@@ -252,7 +255,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
 - **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card, one color
   all round (no colored edge; Nick, Nov 11: "let the dots and stuff do the talking"); only late (bold red number, no tag; Nick, Nov 11) and holds (dashed, "Hold" tag) look different. Overtime
-  is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): a bar per press on top ("2 of 4 done · on pace" / "35m behind", `dayScore`), done jobs grayed and dashed with the number struck through and the time, the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits at the top
+  is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): a bar per press on top ("2 of 4 done · on pace" / "35m behind" / "20m ahead", `dayScore`: only from what's been marked, the last job marked done against its planned finish or a printing job's updated pieces; a start that went by counts only with the live clock on; nothing marked, no pace is claimed), done jobs grayed and dashed with the number struck through and the time, the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits at the top
   (`.ms-calm` / `.ms-key2` in `app/globals.css`). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
   tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).

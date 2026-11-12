@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import { createClient } from "@/lib/supabase/client";
-import { DEFAULT_PRODUCTION, estimate, fmtMin, mergeProduction, needsForOrder, needsForPrintavo, type Crew, type Machine, type MachineType, type ProductionSettings, type Shift } from "@/lib/production";
+import { seedStyleTitles, DEFAULT_PRODUCTION, estimate, fmtMin, mergeProduction, needsForOrder, needsForPrintavo, type Crew, type Machine, type MachineType, type ProductionSettings, type Shift } from "@/lib/production";
+import { styleTitles } from "@/app/shop/style-title-actions";
 import { jobKey, jobMinutes, type JobTime } from "@/lib/timeclock";
 import type { Group } from "@/lib/pricing";
 import { allRows } from "@/lib/readAll";
@@ -209,6 +210,7 @@ function Learning({ s, onApply }: { s: ProductionSettings; onApply: (t: MachineT
         const unfactored = estimate({ ...s, factor: { screen: 1, embroidery: 1, heat: 1 } }, need, mach).minutes;
         const a = (acc[need.type] ||= { est: 0, actual: 0, jobs: 0 }); a.est += unfactored; a.actual += actual; a.jobs++;
       };
+      { const stys = new Set<string>(); for (const o of (os || []) as { groups?: { lines?: { style?: string }[] }[] | null }[]) for (const g of o.groups || []) for (const l of g.lines || []) if (l.style) stys.add(l.style); if (stys.size) seedStyleTitles(await styleTitles([...stys]).catch(() => ({}))); }
       for (const o of (os || []) as { id: string }[]) add("o:" + o.id, needsForOrder(s, o as never));
       for (const o of (as || []) as { id: string; qty: number; status_name: string; nickname: string; pvgroups: unknown }[]) add("a:" + o.id, needsForPrintavo(s, { qty: o.qty, status_name: o.status_name, nickname: o.nickname, data: { groups: o.pvgroups as never } }));
       setRows(Object.entries(acc).map(([type, v]) => ({ type: type as MachineType, ...v })));

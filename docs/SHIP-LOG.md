@@ -191,3 +191,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:45am · 1.3.395 · Nick · Schedule scoreboard: dark blue cards lined up over each press (option A); the now line passes behind the jobs
 - Nov 12 8:54am · 1.3.396 · Nick · Goods & Receiving: a job the press started that was never counted stays on Today as 'On the press · not counted' instead of dropping off (#50036)
 - Nov 12 8:58am · 1.3.397 · Nick · Schedule right-click: a Goods section (Not counted / Counted / Problem) with Count in, All here and Missing…, saved the same as Goods & Receiving
+- Nov 12 9:00am · 1.3.398 · Nick · Run times: 'sweatshirt', 'crewneck', plurals read as heavy garments, and a style-only line timed by its catalog name (#50036's sweatshirts were timed as tees). Scoreboard pace only from what's been marked (behind / ahead / on pace)
