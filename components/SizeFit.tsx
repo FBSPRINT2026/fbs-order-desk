@@ -13,7 +13,7 @@ import { sizeRank } from "@/lib/sizeOrder";
  * everyone next time. A youth-only style in plain S/M/L may mean its youth sizes: always asked.
  */
 export type FitGuess = { style: string; brand: string; title: string; sizes: string[]; colorOk: boolean | null; covers: boolean; sure?: boolean; from: string };
-export type FitPick = { style: string; brand: string; title: string; how: "sure" | "staff" } | "leave" | null;
+export type FitPick = { style: string; brand: string; title: string; how: "sure" | "staff"; /** the sister style's real sizes, when known */ sizes?: string[] } | "leave" | null;
 export type FitMove = { kind: SizeKind; sizes: Record<string, number>; guesses: FitGuess[]; pick: FitPick };
 export type FitRow = { gi: number; li: number; style: string; brand: string; color: string; run: string[]; moves: FitMove[]; youth: Record<string, number> | null; asYouth: boolean | null };
 
@@ -31,7 +31,7 @@ export async function checkSizeFit(groups: Group[]): Promise<{ rows: FitRow[]; a
     const l = groups[gi]?.lines[li];
     return {
       gi, li, style: x.style, brand: x.brand, color: l?.color || "", run: x.run, youth: x.youth, asYouth: x.youth ? true : false, // a youth-only style: its youth sizes picked to start (the usual answer), one click to change
-      moves: x.moves.map((m) => { const s = m.guesses.find((g) => g.sure); return { ...m, pick: s && !x.youth ? { style: s.style, brand: s.brand, title: s.title, how: "sure" as const } : null }; }),
+      moves: x.moves.map((m) => { const s = m.guesses.find((g) => g.sure); return { ...m, pick: s && !x.youth ? { style: s.style, brand: s.brand, title: s.title, how: "sure" as const, sizes: s.sizes } : null }; }),
     };
   }).filter((x) => groups[x.gi]?.lines[x.li]);
   return { rows, ask: rows.filter((x) => x.youth || x.moves.some((m) => !m.pick)) };
@@ -60,7 +60,9 @@ export function applySizeFit(groups: Group[], rows: FitRow[]): { groups: Group[]
       else {
         const { sizeRun: _r, sizeUp: _u, sizeUpSet: _s, ...keep } = l as GLine & { sizeUpSet?: unknown };
         void _r; void _u; void _s;
-        g.lines.splice(g.lines.indexOf(l) + 1, 0, { ...keep, id: crypto.randomUUID(), style: p.style, brand: p.brand || l.brand, garment: p.title ? short(p.title) : "", cost: "", sizes: { ...m.sizes } as GLine["sizes"] });
+        g.lines.splice(g.lines.indexOf(l) + 1, 0, { ...keep, id: crypto.randomUUID(), style: p.style, brand: p.brand || l.brand, garment: p.title ? short(p.title) : "", cost: "", sizes: { ...m.sizes } as GLine["sizes"],
+          // its own sizes as its columns (a youth style shows youth sizes only)
+          ...(p.sizes?.length ? { sizeRun: [...p.sizes].sort((a, b) => sizeRank(a) - sizeRank(b)) as GLine["sizeRun"] } : {}) });
       }
       did.push(`${r.style} comes in ${kindsOf(r.run)}: ${sizesText(m.sizes)} (${pcsOf(m.sizes)} pcs) moved to ${p.style}${p.title ? ` ${short(p.title)}` : ""}${p.how === "sure" ? "" : " (remembered for next time)"}`);
       // kept for everyone: staff's pick, or the catalog's one clear match
@@ -101,7 +103,7 @@ export default function SizeFitAsk({ rows, onDone, onCancel, inline }: { rows: F
                 <div className="chips sf-opts" role="radiogroup" aria-label={`Style for the ${KIND_WORD[m.kind]} sizes`}>
                   {m.guesses.filter((g) => g.covers).map((g) => (
                     <button key={g.style} type="button" className={"chip" + (cur === g.style ? " on" : "")} aria-pressed={cur === g.style} title={g.title}
-                      onClick={() => setPick(i, k, { style: g.style, brand: g.brand, title: g.title, how: "staff" })}>
+                      onClick={() => setPick(i, k, { style: g.style, brand: g.brand, title: g.title, how: "staff", sizes: g.sizes })}>
                       <b>{g.style}</b> <small>{short(g.title)}{g.colorOk === false ? ` · no ${r.color}` : ""}</small>
                     </button>
                   ))}

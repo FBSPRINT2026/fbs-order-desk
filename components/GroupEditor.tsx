@@ -555,6 +555,9 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     if (has(WAIST_SIZES) && !has(ADULT_SIZES)) return WAIST_SIZES.filter((z) => (+z % 2 === 0 && +z <= 44) || l.sizes?.[z as keyof GLine["sizes"]]);
     // little ones only: no adult columns to scroll past
     if ((baby || tod) && !has(ADULT_SIZES)) return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : [])];
+    // a youth garment (its name says so, or it only has youth sizes and its style is a youth one: 64000B, PC54Y) shows
+    // youth columns only (Nov 12, Nick: 64000B "shows adult sizes for some reason")
+    if (has(YOUTH_SIZES) && !has(ADULT_SIZES) && (/\byouth\b|\bkids?\b/i.test(l.garment || "") || /[0-9](Y|B|YT)$/i.test((l.style || "").trim()))) return [...YOUTH_SIZES];
     return [...(baby ? BABY_SIZES : []), ...(tod ? TODDLER_SIZES : []), ...(youth ? YOUTH_SIZES : []), ...ADULT_SIZES, ...WAIST_SIZES.filter((z) => l.sizes?.[z as keyof GLine["sizes"]])];
   };
   // one set of size columns for the whole group, so S sits under S on every garment even when one style has no XS
