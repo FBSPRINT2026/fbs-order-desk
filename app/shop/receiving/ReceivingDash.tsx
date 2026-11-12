@@ -151,7 +151,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
           </div>
           {msg && <div className="banner" style={{ margin: "8px 12px 0" }}>{msg}</div>}
           {err ? <div className="empty">{err}</div> : !jobs ? <div className="empty">Loading…</div> : !shown.length && !grayed.length ? <div className="empty">{q.trim() ? "No order matches." : day === "counted" ? "Nothing counted is waiting for the press." : day === "today" ? "Nothing to count in today." : "Nothing to count in that day."}</div> : (
-            <div className="tbl-wrap"><table className="tbl">
+            <div className="tbl-wrap"><table className="tbl rvd-tbl">
               <thead><tr>{([["number", "Order #"], ["customer", "Customer"], ["due", "Due date"], ["supplier", "Supplier"], ["pcs", "Pieces"], ["status", "Status"]] as const).map(([k, l]) => (
                 <th key={k} className={"rvd-th" + (sortBy?.k === k ? " on" : "")} onClick={() => setSortBy((x) => (x?.k === k ? (x.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }))} title="Sort by this">{l}<span className="rvd-ar" aria-hidden>{sortBy?.k === k ? (sortBy.dir === 1 ? "▲" : "▼") : "↕"}</span></th>
               ))}<th /></tr></thead>
@@ -159,26 +159,26 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
                 const st = STATE[j.state], pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
                 return (
                   <tr key={j.ref} className={day === "today" && !q.trim() && j.state !== "way" && j.state !== "none" ? "rvd-urg" : ""}>
-                    <td className="nw"><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
-                    <td><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
-                    <td className="rvd-from">{j.due ? short(j.due) : "—"}</td>
-                    <td><span className="rvd-from">{supOf(j) || "No manifest"}</span>{j.lines ? <div className="sub">{`${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}`}</div> : null}</td>
-                    <td className="rvd-pcs">{j.shipped && j.lines ? <span className="rvd-bar2"><i style={{ width: `${Math.min(100, Math.round((j.arrived / Math.max(1, j.shipped)) * 100))}%` }} /></span> : null}<b>{pcs}</b> <span className="sub">pcs</span></td>
-                    <td><span className={"rvd-pill " + st.tone}>{st.label}</span></td>
-                    <td className="rvd-act">{woBtn(j)}<button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
+                    <td className="nw rvd-c-no" data-label=""><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
+                    <td className="rvd-c-cu" data-label=""><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
+                    <td className="rvd-from rvd-c-due" data-label=""><span className="rvd-ph">Due </span>{j.due ? short(j.due) : "—"}</td>
+                    <td className="rvd-c-sup" data-label=""><span className="rvd-from">{supOf(j) || "No manifest"}</span>{j.lines ? <div className="sub">{`${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}`}</div> : null}</td>
+                    <td className="rvd-pcs rvd-c-pcs" data-label="">{j.shipped && j.lines ? <span className="rvd-bar2"><i style={{ width: `${Math.min(100, Math.round((j.arrived / Math.max(1, j.shipped)) * 100))}%` }} /></span> : null}<b>{pcs}</b> <span className="sub">pcs</span></td>
+                    <td className="rvd-c-st" data-label=""><span className={"rvd-pill " + st.tone}>{st.label}</span></td>
+                    <td className="rvd-act" data-label="">{woBtn(j)}<button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
                   </tr>
                 );
               })}
               {grayed.length > 0 && day !== "counted" && <tr className="rvd-sub"><td colSpan={7}>Counted · waiting for the press to start <span className="rvd-n">{grayed.length}</span></td></tr>}
               {grayed.map((j) => { const pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0), last = j.checkins[0]; return (
                 <tr key={j.ref} className="rvd-done">
-                  <td className="nw"><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
-                  <td><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
-                  <td className="rvd-from">{j.due ? short(j.due) : "—"}</td>
-                  <td><span className="rvd-from">{supOf(j) || "No manifest"}</span></td>
-                  <td className="rvd-pcs"><b>{pcs}</b> <span className="sub">pcs</span></td>
-                  <td><span className="rvd-pill ok">✓ Counted{last ? ` · ${new Date(last.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</span></td>
-                  <td className="rvd-act">{woBtn(j)}<button type="button" className="btn sm ghost" onClick={() => setCount(j)}>Recount</button></td>
+                  <td className="nw rvd-c-no" data-label=""><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
+                  <td className="rvd-c-cu" data-label=""><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
+                  <td className="rvd-from rvd-c-due" data-label=""><span className="rvd-ph">Due </span>{j.due ? short(j.due) : "—"}</td>
+                  <td className="rvd-c-sup" data-label=""><span className="rvd-from">{supOf(j) || "No manifest"}</span></td>
+                  <td className="rvd-pcs rvd-c-pcs" data-label=""><b>{pcs}</b> <span className="sub">pcs</span></td>
+                  <td className="rvd-c-st" data-label=""><span className="rvd-pill ok">✓ Counted{last ? ` · ${new Date(last.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` : ""}</span></td>
+                  <td className="rvd-act" data-label="">{woBtn(j)}<button type="button" className="btn sm ghost" onClick={() => setCount(j)}>Recount</button></td>
                 </tr>
               ); })}</tbody>
             </table></div>

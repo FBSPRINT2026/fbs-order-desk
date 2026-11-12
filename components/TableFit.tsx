@@ -40,7 +40,9 @@ function label(t: HTMLTableElement) {
   const heads = [...t.querySelectorAll<HTMLElement>("thead tr:last-child > th, thead tr:last-child > td")];
   if (!heads.length) return;
   const names: string[] = [];
-  heads.forEach((h) => { const n = (h.innerText || h.getAttribute("aria-label") || "").trim(); for (let k = 0; k < (h as HTMLTableCellElement).colSpan; k++) names.push(n); });
+  // a header's name without its sort arrows or icons (anything aria-hidden), so a stacked row reads "Due date", not "Due date ↕"
+  const headName = (h: Element) => { const c = h.cloneNode(true) as HTMLElement; c.querySelectorAll("[aria-hidden=true], [aria-hidden=''], svg").forEach((x) => x.remove()); return (c.textContent || h.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim(); };
+  heads.forEach((h) => { const n = headName(h); for (let k = 0; k < (h as HTMLTableCellElement).colSpan; k++) names.push(n); });
   // a cell spanning rows (a customer's name beside all of its jobs) takes its column in the rows under it too
   // many columns (an order's lines with a column per size): stacked, its cells sit side by side in a grid of label-over-
   // value boxes, not one long column of rows (Nov 2, Nick: the old order's lines ran a screen tall beside Create reorder)

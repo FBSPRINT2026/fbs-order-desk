@@ -144,7 +144,7 @@ export function SampleBar({ g, orderId, me, patch, onEdit, onMade }: { g: Group;
   return (
     <div className="smr-bar">
       <div className="smr-bar-t">
-        <span className="smr-tag">{s.kind === "pre" ? "Sample" : "Sample only"}</span>
+        <span className="smr-tag">{s.kind === "pre" ? "Pre-production sample" : "Sample"}</span>
         <span className="smr-bar-s">{n} pc{n === 1 ? "" : "s"}{s.kind === "pre" ? ` · ${SOURCE_LABEL[s.source].toLowerCase()}` : ""}{s.runOn ? ` · runs ${new Date(s.runOn + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}` : ""} · {!s.charges.length && s.kind === "only" ? <span>priced by the customer&apos;s sample rule</span> : <><b className="nw">${(s.kind === "pre" ? charged - credit : charged).toFixed(2)}</b>{credit ? <span className="nw"> ({s.kind === "pre" ? `$${credit.toFixed(2)} credited` : `$${credit.toFixed(2)} credited on the full order`})</span> : null}</>}</span>
         <span className="smr-sp" />
         <span className="smr-steps" role="group" aria-label="Sample stage">{SAMPLE_STAGES.map((x, i) => (
