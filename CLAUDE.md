@@ -278,8 +278,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   once it's its last job on the schedule), Not started after all, Not done yet. All through `logAction`, the same booking
   fields and job log the press timer writes. Lock… opens a side panel with the four locks (`rcDo`, `lockSide`).
   A started job runs until it's marked complete: past its planned finish it stretches to now and the jobs after it move
-  down, live clock on or off (Nick, Nov 12). The dot before a job's number is its goods (green counted, amber here not
-  counted, red a problem or not counted and runs within a day, orange not here yet), from the latest count first, then the
+  down, live clock on or off (Nick, Nov 12). The tiny shirt before a job's number is its goods (`GoodsTee`, the digits' exact height on their baseline; green
+  counted, amber here not counted, red a problem or not counted and runs within a day, orange not here yet; in the key too), from the latest count first, then the
   order's goods status.
   Its Goods section (Nick, Nov 12) shows the job's count (Not counted / ✓ Counted / Problem) with Count in, All here
   (every size saved as received) and Missing… (the counter), saved the same as Goods & Receiving's counts.

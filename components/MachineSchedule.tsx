@@ -1848,7 +1848,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const soon = startAbs - (ord(now.day) * 1440 + now.min) < 24 * 60;
     return { k: soon ? "r" : "o", t: soon ? "Not counted yet, and it runs within a day" : st === "on_way" ? "Goods on the way" : "Goods not here yet" };
   };
-  const dotEl = (c: Card, g: Seg) => { const d = dotOf(c, ord(g.day) * 1440 + g.start); return d ? <i className={"msf-dot " + d.k} title={d.t} /> : null; };
+  // the goods mark: a tiny shirt in the goods color (Nov 12, Nick), exactly the height of the numbers beside it; it sits in
+  // one inline run with the number (`tn`) so it rests on the same baseline
+  const dotEl = (c: Card, g: Seg) => { const d = dotOf(c, ord(g.day) * 1440 + g.start); return d ? <GoodsTee k={d.k} t={d.t} /> : null; };
+  const tn = (mark: ReactNode, numb: ReactNode) => <span className="msf-tn">{mark}{numb}</span>;
   /** why it's where it is: locked, the only press it fits, a person put it there, or the schedule did */
   const onlyFits = (c: Card) => s.machines.filter((m) => m.active && fits(c.need, m)).length === 1;
   const whyOf = (c: Card): "lock" | "cap" | "me" | "ai" => (c.slot?.locked ? "lock" : onlyFits(c) ? "cap" : c.slot?.source === "manual" ? "me" : "ai");
@@ -1983,7 +1986,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         <span>#{g.c.job.number} was here</span><small>moving to {tm ? shortName(tm) : "another press"}</small>
       </div>
     ); }
-    const num = <b className={"msf-n" + (segLate(g) ? " late" : "")}>{whyEl(g.c)}{dotEl(g.c, g)}{numLink(g.c.job)}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
+    const num = <b className={"msf-n" + (segLate(g) ? " late" : "")}>{whyEl(g.c)}{tn(dotEl(g.c, g), numLink(g.c.job))}{st === "running" ? <em className="rn"> ●</em> : st === "done" ? <em className="ok"> ✓</em> : null}</b>;
     return (
       <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + (notYet(g) ? " mdy-ny" : "") + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
         onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(g.c); } }}
@@ -2166,7 +2169,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                           <div key={x.g.c.key + x.g.part} role="button" tabIndex={0} draggable data-k={x.g.c.key} data-d={x.g.day} className={"msf-run-r" + (isHit(x.g.c.job) ? " ms-hit" : "") + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
                             onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(x.g.c); } }}
                             onContextMenu={(e) => { e.preventDefault(); openRc(x.g.c, x.g, e.clientX, e.clientY); }}>
-                            {whyEl(x.g.c)}{dotEl(x.g.c, x.g)}<b>#{x.g.c.job.number}</b><span className="nm">{x.g.c.job.name || x.g.c.need.label}</span><small>{gl.colors} · {gl.units.toLocaleString()}</small>
+                            {whyEl(x.g.c)}{tn(dotEl(x.g.c, x.g), <b>#{x.g.c.job.number}</b>)}<span className="nm">{x.g.c.job.name || x.g.c.need.label}</span><small>{gl.colors} · {gl.units.toLocaleString()}</small>
                           </div>
                         ); })}
                         {show.length < r.length ? <button type="button" className="msf-run-more" onClick={() => setListOpen(id)}>+{r.length - show.length} more</button> : open ? <button type="button" className="msf-run-more" onClick={() => setListOpen("")}>Show less</button> : null}
@@ -2307,14 +2310,14 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   <Fragment key={x.g.c.key + x.g.part}>
                     <button type="button" className={"msf-up-r" + (x.g.c.job.kind === "h" ? " hold" : "")} onClick={() => (many ? setListOpen(open ? "" : id) : setOpen(x.g.c))} title={many ? `${g0.length} ${x.g.c.job.customer} jobs back to back` : tip(x.g)}>
                       <span className="t">{clock(x.start)}</span>
-                      <span className="b"><span className="l1">{dotEl(x.g.c, x.g)}{many ? <><b className="c">{abbrCo(x.g.c.job.customer)}</b><span className="msf-up-car">{open ? "▾" : "▸"}</span></> : <><b className={late ? "late" : ""}>#{x.g.c.job.number}</b><span className="c">{abbrCo(x.g.c.job.customer || x.g.c.job.name)}</span></>}</span>
+                      <span className="b"><span className="l1">{many ? <>{tn(dotEl(x.g.c, x.g), <b className="c">{abbrCo(x.g.c.job.customer)}</b>)}<span className="msf-up-car">{open ? "▾" : "▸"}</span></> : <>{tn(dotEl(x.g.c, x.g), <b className={late ? "late" : ""}>#{x.g.c.job.number}</b>)}<span className="c">{abbrCo(x.g.c.job.customer || x.g.c.job.name)}</span></>}</span>
                         <span className="l2">{many ? `${g0.length} jobs · ${g0.slice(0, 3).map((y) => y.g.c.job.name || "#" + y.g.c.job.number).join(", ")}${g0.length > 3 ? ` +${g0.length - 3}` : ""}` : `${x.g.c.job.customer && x.g.c.job.name ? x.g.c.job.name + " · " : ""}${gl.colors}`}</span></span>
                       <span className="q">{pcs.toLocaleString()}</span>
                     </button>
                     {many && open && g0.map((y) => (
                       <button key={y.g.c.key + y.g.part} type="button" className="msf-up-r sub" onClick={() => setOpen(y.g.c)} title={tip(y.g)}>
                         <span className="t">{clock(y.start)}</span>
-                        <span className="b"><span className="l1">{dotEl(y.g.c, y.g)}<b className={ord(d) * 1440 + y.end > dueAbs(y.g.c.job) ? "late" : ""}>#{y.g.c.job.number}</b><span className="c">{y.g.c.job.name || y.g.c.need.label}</span></span></span>
+                        <span className="b"><span className="l1">{tn(dotEl(y.g.c, y.g), <b className={ord(d) * 1440 + y.end > dueAbs(y.g.c.job) ? "late" : ""}>#{y.g.c.job.number}</b>)}<span className="c">{y.g.c.job.name || y.g.c.need.label}</span></span></span>
                         <span className="q">{y.g.c.need.qty.toLocaleString()}</span>
                       </button>
                     ))}
@@ -2824,7 +2827,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     const okM = machines.filter((m) => fits(t.need, m)), selM = pk?.m || t.sug?.machine.id || okM[0]?.id || "", selD = pk?.d || t.sug?.day || days[0];
                     return (
                     <li key={k} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"msr-c" + (t.job.kind === "h" ? " hold" : "") + (t.picked ? " picked" : "") + (open ? " open" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
-                      <div className="msr-1">{(() => { const d = dotOf({ job: t.job } as Card, Infinity); return d ? <i className={"msf-dot " + d.k} title={d.t} /> : null; })()}<Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link><b>{t.job.customer || t.job.name}</b></div>
+                      <div className="msr-1">{tn((() => { const d = dotOf({ job: t.job } as Card, Infinity); return d ? <GoodsTee k={d.k} t={d.t} /> : null; })(), <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}<b>{t.job.customer || t.job.name}</b></div>
                       <div className="msr-2">{t.job.customer ? t.job.name : t.need.label}</div>
                       <div className="msr-3"><b>{t.need.qty.toLocaleString()}</b><span className={late ? "late" : ""}>{t.job.due ? `due ${dayShort(t.job.due)}` : "no date"}</span><span className="spacer" />
                         {t.sug ? <button type="button" className={"msr-spot" + (t.picked ? " mine" : "")} onClick={() => setPickOpen(open ? "" : k)} title={t.picked ? "Your pick · click to change" : `Suggested: ${t.sug.reason} · click to put it somewhere else`}>{t.picked ? "✓" : "✦"} {who(t.sug.machine)} · {dayW(t.sug.day)}{t.picked ? "" : " ▾"}</button> : <button type="button" className="msr-spot none" onClick={() => setPickOpen(open ? "" : k)}>Pick a spot ▾</button>}
@@ -2850,7 +2853,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
       <div className="ms-main">
         {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
-        <div className="ms-key2"><span><b className="ms-key-late">#</b>Late (red number)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span></div>
+        <div className="ms-key2"><span className="msf-tn"><GoodsTee k="g" t="" />Counted in</span><span className="msf-tn"><GoodsTee k="a" t="" />Here, not counted</span><span className="msf-tn"><GoodsTee k="r" t="" />Problem, or not counted and runs within a day</span><span className="msf-tn"><GoodsTee k="o" t="" />Not here yet</span><span><b className="ms-key-late">#</b>Late (red number)</span><span><i className="k hold" />Hold (art not in yet)</span><span><i className="k ot" />Overtime</span><span><i className="k brk" />Warm-up / lunch</span></div>
         {view === "flow" ? flowView() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
       </div>
@@ -3857,4 +3860,10 @@ function RcIco({ k }: { k: "play" | "pause" | "check" | "next" | "undo" | "chev"
     warn: <><path d="M10 3l8 14H2z" fill="none" stroke="currentColor" strokeWidth="1.8" /><path d="M10 8v4M10 14v1.5" stroke="currentColor" strokeWidth="2" /></>,
   };
   return <svg className={"mrc-i " + k} viewBox="0 0 20 20" fill="currentColor" aria-hidden>{d[k]}</svg>;
+}
+
+/** the goods mark on a job: a tiny shirt, green counted, amber here not counted, red a problem or not counted and runs
+ *  within a day, orange not here yet; cut tight to the shirt so its height is the numbers' height */
+function GoodsTee({ k, t }: { k: string; t: string }) {
+  return <svg className={"msf-tee " + k} viewBox="1.6 2.1 16.8 15.8" role="img" aria-label={t || undefined}>{t ? <title>{t}</title> : null}<path d="M6 2.5l-4 2.2 1.6 3.3 1.6-.8V17.5h9.6V7.2l1.6.8 1.6-3.3-4-2.2c-.5 1.3-1.7 2-3 2s-2.5-.7-3-2z" /></svg>;
 }
