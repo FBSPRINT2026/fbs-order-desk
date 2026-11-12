@@ -435,7 +435,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const embOnly = useRole().role === "embroidery";
   // the menu's screen printing / embroidery switch (Oct 24): embroidery shows the embroidery machines (like Maria's
   // view); screen printing shows the screen presses, or the heat presses (heat press goes with screen printing)
-  const [side] = useProdSide();
+  const [side, setSide] = useProdSide();
   const embSide = embOnly || side === "embroidery";
   // the menu's SP / EMB / HP picks the machines (Oct 24): screen presses, embroidery heads, or the heat press
   const typeF: "" | "screen" | "embroidery" | "heat" = embSide ? "embroidery" : side === "heat" ? "heat" : "screen";
@@ -456,6 +456,11 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [trains, setTrains] = useState<{ id: string; customer_id: string; name: string; when_words: string }[]>([]);
   const [hideKinds, setHideKinds] = useSticky<string[]>("cal.hideKinds", []);
   const [kindsOpen, setKindsOpen] = useState(false);
+  // a phone sees what's on and whether it's done, nothing to plan (Nick, Nov 12, option B: "the whole point of the
+  // schedule view is to see if jobs are done or not… stay on a day"); opens on today
+  const [phone, setPhone] = useState(false);
+  useEffect(() => { const mq = window.matchMedia("(max-width: 700px)"); const f = () => setPhone(mq.matches); f(); mq.addEventListener("change", f); return () => mq.removeEventListener("change", f); }, []);
+  const [pDay, setPDay] = useState("");
   const [trayOpen, setTrayOpen] = useSticky("cal.trayOpen", true);
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
@@ -2399,6 +2404,64 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const shift = (dir: 1 | -1) => (view === "timeline" ? setWeek(addDay(week, 7 * dir)) : view === "flow" ? (setDay(nextVis(addDay(today, dir > 0 ? 1 : 0), dir)), setView("day")) : setDay(nextVis(addDay(day, dir), dir)));
   // test hook (off unless window.__MS_DEBUG is set): the scheduler's state and actions, for the automated stress test
   if (when || hold) return null;
+  if (phone && s) {
+    const d = pDay || today, isToday = d === today;
+    const days: string[] = []; for (let x = today; days.length < 5; x = addDay(x, 1)) { const wd = new Date(x + "T12:00:00").getDay(); if (wd !== 0 && wd !== 6) days.push(x); }
+    const nowMin = now.day === d ? now.min : now.day > d ? 1e9 : -1;
+    type PJ = { c: Card; start: number; end: number; st: "done" | "run" | "next" | "wait" | "late"; at?: string };
+    const presses = machines.map((m) => {
+      const byCard = new Map<string, { c: Card; start: number; end: number }>();
+      for (const g of at(m, d)) { const x = byCard.get(g.c.key); if (x) { x.start = Math.min(x.start, g.start); x.end = Math.max(x.end, g.end); } else byCard.set(g.c.key, { c: g.c, start: g.start, end: g.end }); }
+      const list = [...byCard.values()].sort((a, b) => a.start - b.start);
+      let nextSet = false;
+      const jobs: PJ[] = list.map((x) => {
+        const st0 = x.c.slot?.status;
+        if (st0 === "done") return { ...x, st: "done" as const, at: x.c.slot?.finished_at ? new Date(x.c.slot.finished_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "" };
+        if (st0 === "running") return { ...x, st: "run" as const };
+        if (isToday && x.start + 15 < nowMin) return { ...x, st: "late" as const };
+        if (!nextSet) { nextSet = true; return { ...x, st: "next" as const }; }
+        return { ...x, st: "wait" as const };
+      });
+      return { m, jobs };
+    }).filter((p) => p.jobs.length);
+    const all = presses.flatMap((p) => p.jobs);
+    const nDone = all.filter((j) => j.st === "done").length, nRun = all.filter((j) => j.st === "run").length;
+    const lbl: Record<PJ["st"], string> = { done: "✓ Done", run: "Running", next: "Next", wait: "Waiting", late: "Late start" };
+    return (
+      <div className="msp">
+        <div className="msp-menu">
+          {!embOnly && ([["screen", "Screen"], ["embroidery", "Embroidery"], ["heat", "Heat"]] as const).map(([k, l]) => <button key={k} type="button" className={(k === "embroidery" ? embSide : k === "heat" ? side === "heat" && !embSide : !embSide && side !== "heat") ? "on" : ""} onClick={() => setSide(k as never)}>{l}</button>)}
+          <button type="button" className={"msp-mine" + (mine ? " on" : "")} onClick={() => setMine(!mine)}>My jobs</button>
+        </div>
+        <div className="msp-days">{days.map((x) => (
+          <button key={x} type="button" className={x === d ? "on" : ""} onClick={() => setPDay(x === today ? "" : x)}><small>{x === today ? "Today" : new Date(x + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}</small><b>{+x.slice(8)}</b></button>
+        ))}</div>
+        <div className="msp-sum"><div><b className="ok">{nDone}</b><span className="ok">Done</span></div><div><b className="run">{nRun}</b><span className="run">Running</span></div><div><b>{all.length - nDone - nRun}</b><span>To go</span></div></div>
+        {!presses.length && <div className="msp-empty">Nothing on the {embSide ? "embroidery" : side === "heat" ? "heat press" : "screen print"} schedule {isToday ? "today" : "this day"}.</div>}
+        {presses.map(({ m, jobs }) => {
+          const done = jobs.filter((j) => j.st === "done").length, crew = (m.crew ? s.crews.find((c) => c.id === m.crew) : undefined)?.leader;
+          return (
+            <div key={m.id} className="msp-pr">
+              <div className="msp-ph"><span><b>{shortName(m)}</b>{crew ? <small> · {crew}</small> : null}</span><small>{done} of {jobs.length} done</small></div>
+              <i className="msp-bar"><b style={{ width: `${Math.round((done / jobs.length) * 100)}%` }} /></i>
+              {jobs.map((j) => {
+                const q = j.c.need.qty, pr = Math.round((+(j.c.slot?.progress || 0)) * q);
+                return (
+                  <a key={j.c.key} className={"msp-j " + j.st} href={j.c.job.href || undefined}>
+                    <span className="msp-t">{clock(j.start)}</span>
+                    <span className="msp-m"><span className="msp-n"><b>#{j.c.job.number}</b> {j.c.job.customer}</span>
+                      {j.c.job.name ? <span className="msp-jn" data-notranslate>{j.c.job.name}</span> : null}
+                      {j.st === "run" ? <span className="msp-run">{pr ? `${pr} of ${q} · ` : ""}done ~{clock(j.end)}</span> : null}</span>
+                    <span className={"msp-st " + j.st}>{lbl[j.st]}{j.st === "done" && j.at ? " " + j.at.replace(" AM", "").replace(" PM", "") : ""}</span>
+                  </a>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
   if (typeof window !== "undefined" && (window as unknown as { __MS_DEBUG?: boolean }).__MS_DEBUG) Object.assign(window, { __ms: { s, cards, segs, machines, today, now, tight, tray, slots, holds, planIt, applyPlan, whatIfs, whenCan, holdSpot, otReport, otOn, acceptAll, book, unbook, saveProgress, logAction, splitByLocation, saveHold, removeHold, cutOvertime, load } });
 
   return (
