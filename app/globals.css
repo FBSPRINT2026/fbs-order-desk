@@ -22686,3 +22686,25 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mky-sw.pz{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--ink) 6%,transparent) 0 4px,color-mix(in srgb,var(--ink) 16%,transparent) 4px 8px)}
 .mky-sw.hold{border:1.5px dashed var(--ink-3)}.mky-sw.ot{background:color-mix(in srgb,var(--warn) 18%,var(--surface,#fff))}.mky-sw.brk{background:color-mix(in srgb,var(--ink) 7%,transparent)}
 .mky-late{color:var(--danger);font-weight:800;width:16px;text-align:center}
+/* the job card, wider (Nov 12): every mockup in a grid of 4, run time and goods side by side, split / unite */
+.pp-sheet.mji{width:min(700px,100%)}
+.mji-l{display:flex;align-items:baseline}.mji-cnt{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.mji-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.mji-mk{position:relative;aspect-ratio:1/1;border:1px solid var(--line);border-radius:8px;background:var(--surface-2,#f7f8fa);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.mji-mk img{width:100%;height:100%;object-fit:contain;display:block}
+.mji-mk small{position:absolute;left:5px;bottom:4px;right:5px;font-size:10.5px;font-weight:700;color:var(--ink-2,#4b5563);background:color-mix(in srgb,var(--surface,#fff) 88%,transparent);border-radius:4px;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:fit-content;max-width:calc(100% - 10px)}
+.mji-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border-bottom:1px solid var(--line-2,#eef0f3)}.mji-two>.mji-sec{border-bottom:0}.mji-two>.mji-sec+.mji-sec{border-left:1px solid var(--line-2,#eef0f3)}
+.mji-spec{display:block;font-style:normal;font-weight:500;color:var(--ink-3);font-size:12.5px}
+.mji-gl{display:grid;grid-template-columns:auto auto;gap:2px 14px;justify-content:start}.mji-gl b{font-weight:600;color:var(--ink)}.mji-gl em{font-style:normal;color:var(--ink-3)}
+.mji-parts{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.mji-part{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;font-size:12.5px}.mji-part b{font-size:13px}.mji-part small{color:var(--ink-3)}.mji-part.me{border:2px solid var(--fbs-violet)}
+.mji-lk.sp .mji-i{color:var(--fbs-violet)}.mji-lk.sp.on{border-color:var(--fbs-violet);color:var(--fbs-violet);background:color-mix(in srgb,var(--fbs-violet) 6%,var(--surface,#fff))}
+.mji-spl{display:flex;flex-direction:column;gap:8px;padding:12px 16px;background:color-mix(in srgb,var(--fbs-violet) 4%,var(--surface,#fff));border-top:1px solid color-mix(in srgb,var(--fbs-violet) 18%,var(--surface,#fff))}
+.mji-spl>.faint{font-size:12.5px}
+.mji-locs{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px}
+.mji-locs button{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface,#fff);text-align:left;font:inherit;cursor:pointer;display:flex;flex-direction:column}.mji-locs button b{font-size:13px}.mji-locs button small{color:var(--ink-3);font-size:12px}
+.mji-locs button.on{border:2px solid var(--fbs-violet);background:color-mix(in srgb,var(--fbs-violet) 6%,var(--surface,#fff))}
+.mji-fld{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--ink-3);text-transform:uppercase;max-width:320px}.mji-fld select{height:36px;border:1px solid var(--line);border-radius:6px;font:14px var(--body);color:var(--ink);text-transform:none;padding:0 8px;background:var(--surface,#fff)}
+.mji-res{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mji-res>div{border:1px dashed color-mix(in srgb,var(--fbs-violet) 45%,var(--surface,#fff));border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;font-size:12.5px;background:var(--surface,#fff)}.mji-res b{font-size:13px}
+.mji-act{display:flex;gap:8px;justify-content:flex-end}.btn.mji-pv{background:var(--fbs-violet);border-color:var(--fbs-violet);color:#fff}
+@media (max-width:620px){.mji-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mji-two{grid-template-columns:1fr}.mji-two>.mji-sec+.mji-sec{border-left:0;border-top:1px solid var(--line-2,#eef0f3)}.mji-res{grid-template-columns:1fr}}

@@ -208,3 +208,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:48am · 1.3.412 · Nick · Schedule tools: Planning, Press & crew and Sales each on their own line
 - Nov 12 9:53am · 1.3.413 · Nick · Schedule: the press operator's clock-out and back in is that press's lunch or break: it pauses the printing job (which grows by it), shows striped inside the job with who and when, and replaces the planned lunch; live clock on or off
 - Nov 12 9:55am · 1.3.414 · Nick · Schedule: the key moves under the search on the right (Goods / Printing / On the board), with Hide to fold it to one line
+- Nov 12 10:06am · 1.3.415 · Nick · Job card: wider, every mockup in a grid of 4, run time and goods side by side, garments as style + color, inks without PMS, counted time with its day, PO hidden when it's the job name; Split (pick spots and the press) and Unite

@@ -277,8 +277,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   in-hands date; it saves press time near its date, it never jumps the line (Nick, Nov 11).
   **Left click is information, right click is doing** (Nick, Nov 12). Left click opens the job card (`CardPanel`):
   status, due, goods, lock; mockup pictures; run time (press, planned, started, so far); each print with its inks; the
-  garments and who counted them; Open job, Separations, Mockup, Work order; More details (in-hands date, run times,
-  labor, split, the log). Nothing on it starts, finishes or moves a job. Right click (option B): the run as three steps
+  garments by style number and color ("1717 Sage") and who counted them; every mockup on the order in a grid of four;
+  inks without "PMS"; Open job, Separations, Mockup, Work order, and Split (pick the print spots that run separately and
+  the press for them: `splitByLocation`) or, on a split job, Unite (`uniteJob`: back into one run on the first run's
+  press); More details (in-hands date, run times, labor, the log). Nothing on it starts, finishes or moves a job. Right click (option B): the run as three steps
   (Started → Printing → Done, each with its time) with one time box and Start / Pause (pick why) / Resume / Complete;
   then Goods tiles (Count in, All here, Missing), Schedule tiles (Run next, Move, Lock), Rush / Firm, and Take off the
   schedule (asks once).

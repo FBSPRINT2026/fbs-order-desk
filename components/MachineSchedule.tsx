@@ -1024,15 +1024,33 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   }
   async function setStatus(sl: Slot, status: Slot["status"]) { await logAction(sl, status === "done" ? "done" : status === "running" ? (sl.status === "paused" ? "resume" : "start") : status === "paused" ? "pause" : "not_started"); }
   /** Split the chosen print locations (say the 1-color sleeve) off into their own run; the rest stay together. */
-  async function splitByLocation(c: Card, off: string[]) {
+  /** Split a job by print location into two runs (Nov 12, Nick: "one person will run the sleeves and one person will run
+   *  the back"): what's picked becomes its own run on the press picked, after this run's part is off (the same shirts are
+   *  never on two presses at once). */
+  async function splitByLocation(c: Card, off: string[], toMach?: string) {
     if (!c.slot) return;
     const locs = locsOf(c.need), keep = locs.filter((l) => !off.includes(l));
     if (!off.length || !keep.length) return;
-    const sb = createClient(), mach = c.machine;
+    const sb = createClient(), mach = c.machine, to = (toMach && s!.machines.find((m) => m.id === toMach)) || mach;
     const a = subNeed(c.need, keep), b = subNeed(c.need, off);
     await sb.from("production_slots").update({ locations: keep, label: a.label, minutes: estimate(s!, a, mach).minutes, updated_at: new Date().toISOString() }).eq("id", c.slot.id);
-    await sb.from("production_slots").insert({ order_id: c.slot.order_id, archived_order_id: c.slot.archived_order_id, sample: !!c.slot.sample, machine: mach.id, day: c.day, minutes: estimate(s!, b, mach).minutes, start_min: null, position: c.slot.position + 1, kind: c.need.type, label: b.label, source: "split", status: "scheduled", locations: off });
-    setMsg(`#${c.job.number} split: ${a.label} | ${b.label}. Drag the ${b.label} run to another day or press; the two never run at the same time.`);
+    const pos = to.id === mach.id ? c.slot.position + 1 : cards.filter((x) => x.machine.id === to.id && x.day === c.day).length;
+    await sb.from("production_slots").insert({ order_id: c.slot.order_id, archived_order_id: c.slot.archived_order_id, sample: !!c.slot.sample, machine: to.id, day: c.day, minutes: estimate(s!, b, to).minutes, start_min: null, position: pos, kind: c.need.type, label: b.label, source: "split", status: "scheduled", locations: off });
+    setMsg(`#${c.job.number} split: ${a.label} on ${shortName(mach)} | ${b.label} on ${shortName(to)}. The second runs when the first is off.`);
+    setOpen(null); load();
+  }
+  /** the runs a job was split into (the same order and kind of work, not finished) */
+  const splitParts = (c: Card) => (c.slot ? cards.filter((x) => x.slot && x.job.key === c.job.key && x.need.type === c.need.type && !!x.slot.sample === !!c.slot!.sample && x.slot.status !== "done").sort((x, y) => x.day.localeCompare(y.day) || (segs.ofCard.get(x.key)?.[0]?.start ?? 0) - (segs.ofCard.get(y.key)?.[0]?.start ?? 0)) : []);
+  /** Unite: a split job's runs go back into one, on the first run's press; anything already printed stays printed */
+  async function uniteJob(c: Card) {
+    const parts = splitParts(c); if (parts.length < 2) return;
+    const first = parts[0], full = c.job.needs.find((n) => n.type === c.need.type) || c.need;
+    const rest = parts.slice(1).filter((x) => x.slot!.status === "scheduled");
+    const locs = [...new Set([first, ...rest].flatMap((x) => locsOf(x.need)))], all = locsOf(full);
+    const n2 = subNeed(full, locs), sb = createClient();
+    await sb.from("production_slots").update({ locations: locs.length >= all.length ? null : locs, label: n2.label, minutes: estimate(s!, n2, first.machine).minutes, updated_at: new Date().toISOString() }).eq("id", first.slot!.id);
+    if (rest.length) await sb.from("production_slots").delete().in("id", rest.map((x) => x.slot!.id));
+    setMsg(`#${c.job.number} is one run again on ${shortName(first.machine)}.`);
     setOpen(null); load();
   }
   async function unbook(sl: Slot) {
@@ -2960,7 +2978,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       ); })()}
       {downEdit && <DownPanel machines={machines} crews={s.crews} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
       {grpEdit && s && <RunGroupTime s={s} cards={grpEdit} onClose={() => setGrpEdit(null)} onSaved={() => { setGrpEdit(null); load(); }} />}
-      {open && <CardPanel s={s} c={open} cost={crewCost} otMin={(segs.ofCard.get(open.key) || []).reduce((t, g) => { const oa = otOn(g.c.machine, g.day); return t + (oa == null ? 0 : Math.max(0, g.end - Math.max(g.start, oa))); }, 0)} onFlags={async (x) => { const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", open.job.id); if (r.error) { setMsg(r.error.message); return; } const j = { ...open.job, ...(x.rush !== undefined ? { rush: x.rush } : {}), ...(x.firm !== undefined ? { firm: x.firm } : {}), ...(x.due_time !== undefined ? { dueTime: x.due_time } : {}), ...(x.due_date !== undefined ? { due: x.due_date } : {}) }; setOpen({ ...open, job: j }); load(); }} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => { setOpen(null); setOpenMove(false); }} onMove={(mach, d, st) => { setOpenMove(false); book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} startMove={openMove} onSplit={(off) => splitByLocation(open, off)} onRunTime={() => { setOpen(null); load(); }} />}
+      {open && <CardPanel s={s} c={open} cost={crewCost} otMin={(segs.ofCard.get(open.key) || []).reduce((t, g) => { const oa = otOn(g.c.machine, g.day); return t + (oa == null ? 0 : Math.max(0, g.end - Math.max(g.start, oa))); }, 0)} onFlags={async (x) => { const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", open.job.id); if (r.error) { setMsg(r.error.message); return; } const j = { ...open.job, ...(x.rush !== undefined ? { rush: x.rush } : {}), ...(x.firm !== undefined ? { firm: x.firm } : {}), ...(x.due_time !== undefined ? { dueTime: x.due_time } : {}), ...(x.due_date !== undefined ? { due: x.due_date } : {}) }; setOpen({ ...open, job: j }); load(); }} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => { setOpen(null); setOpenMove(false); }} onMove={(mach, d, st) => { setOpenMove(false); book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} startMove={openMove} onSplit={(off, to) => splitByLocation(open, off, to)} parts={splitParts(open).map((x) => { const g = segs.ofCard.get(x.key) || []; return { key: x.key, me: x.key === open.key, press: `${shortName(x.machine)}${crewOf(x.machine)?.leader ? ` · ${crewOf(x.machine)!.leader}` : ""}`, what: x.need.label, when: g.length ? `${wkd(g[0].day)} ${clock(g[0].start)} – ${clock(g[g.length - 1].end)}` : "" }; })} onUnite={() => uniteJob(open)} presses={machines.filter((m) => m.type === open.need.type && fits(open.need, m)).map((m) => ({ id: m.id, name: `${shortName(m)}${crewOf(m)?.leader ? ` · ${crewOf(m)!.leader}` : ""}` }))} onRunTime={() => { setOpen(null); load(); }} />}
     </div>
   );
 }
@@ -3067,7 +3085,7 @@ function RunGroupTime({ s, cards, onClose, onSaved }: { s: ProductionSettings; c
   );
 }
 
-function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMove, onSplit, onRunTime, startMove }: { startMove?: boolean; onRunTime: () => void; s: ProductionSettings; c: Card; cost: (m: Machine) => { perHour: number; who: string[] } | null; otMin: number; onFlags: (x: { rush?: boolean; firm?: boolean; due_time?: number | null; due_date?: string | null }) => void; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onSplit: (off: string[]) => void }) {
+function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMove, onSplit, onRunTime, startMove, parts, onUnite, presses }: { startMove?: boolean; parts: { key: string; me: boolean; press: string; what: string; when: string }[]; onUnite: () => void; presses: { id: string; name: string }[]; onRunTime: () => void; s: ProductionSettings; c: Card; cost: (m: Machine) => { perHour: number; who: string[] } | null; otMin: number; onFlags: (x: { rush?: boolean; firm?: boolean; due_time?: number | null; due_date?: string | null }) => void; segs: Seg[]; days: string[]; win: [number, number]; onClose: () => void; onMove: (m: Machine, d: string, startMin: number | null) => void; onSplit: (off: string[], to?: string) => void }) {
   const [splitting, setSplitting] = useState<string[] | null>(null);
   const [sepsOpen, setSepsOpen] = useState(false);
   const [log, setLog] = useState<{ id: string; action: string; progress: number | null; note: string; at: string; by: string }[]>([]);
@@ -3089,7 +3107,8 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
   const dW = (d: string) => dayLbl(d).split(",")[0];
   // what the job is (Nov 12, Nick, left click option A: "information. Open the job, run time… the separations"): its prints
   // and inks, garments, mockup pictures and goods, read when the card opens; doing things is the right click
-  const [info, setInfo] = useState<{ po: string; prints: { loc: string; inks: string; colors: number }[]; garments: string[]; pics: string[] } | null>(null);
+  const [info, setInfo] = useState<{ po: string; pcs: number; prints: { loc: string; inks: string; colors: number }[]; garments: [string, number][]; pics: { url: string; title: string }[] } | null>(null);
+  const [splitTo, setSplitTo] = useState(c.machine.id), [uniting, setUniting] = useState(false);
   const [gd, setGd] = useState<CheckJob | null>(null);
   const [wo, setWo] = useState(false);
   useEffect(() => {
@@ -3098,30 +3117,34 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
     void (async () => {
       const { data: o } = await sb.from("orders").select("po_number, groups").eq("id", c.job.id).maybeSingle();
       const gs = ((o as { groups?: Group[] } | null)?.groups || []) as Group[];
-      const seen = new Set<string>(), prints: { loc: string; inks: string; colors: number }[] = [], garments: string[] = [];
+      const seen = new Set<string>(), prints: { loc: string; inks: string; colors: number }[] = [], gm = new Map<string, number>();
+      let pcs = 0;
       for (const g of gs) {
         if (g.sample) continue;
         for (const i of g.imprints || []) { const k = `${i.location}|${i.inks}`; if (!i.location || seen.has(k)) continue; seen.add(k); prints.push({ loc: i.location, inks: i.inks || "", colors: i.colors || 0 }); }
-        for (const l of g.lines || []) { const n = Object.values(l.sizes || {}).reduce((t, x) => t + (+(x as number) || 0), 0); if (n) garments.push(`${[l.brand, l.style].filter(Boolean).join(" ")}${l.color ? ` · ${l.color}` : ""} · ${n}`); }
+        // the garment by its style number and color ("1717 Sage"; Nov 12, Nick)
+        for (const l of g.lines || []) { const n = Object.values(l.sizes || {}).reduce((t, x) => t + (+(x as number) || 0), 0); if (!n) continue; pcs += n; const k = [l.style, l.color].filter(Boolean).join(" ") || l.garment || "Garment"; gm.set(k, (gm.get(k) || 0) + n); }
       }
-      const { data: ms } = await sb.from("mockups").select("file_path").eq("order_id", c.job.id).is("archived_at", null).order("created_at", { ascending: false }).limit(3);
-      const paths = ((ms || []) as { file_path: string }[]).map((x) => x.file_path).filter(Boolean);
-      let pics: string[] = [];
-      if (paths.length) { const { data } = await sb.storage.from("proofs").createSignedUrls(paths, 3600); pics = (data || []).map((x) => x.signedUrl || "").filter(Boolean); }
-      setInfo({ po: (o as { po_number?: string } | null)?.po_number || "", prints, garments, pics });
+      // every current mockup on the order (Nov 12, Nick: "I should be able to see all the mock-ups")
+      const { data: ms } = await sb.from("mockups").select("file_path, title, created_at").eq("order_id", c.job.id).is("archived_at", null).order("created_at").limit(24);
+      const rows = ((ms || []) as { file_path: string; title: string | null }[]).filter((x) => x.file_path);
+      let pics: { url: string; title: string }[] = [];
+      if (rows.length) { const { data } = await sb.storage.from("proofs").createSignedUrls(rows.map((x) => x.file_path), 3600); pics = rows.map((x, i) => ({ url: data?.[i]?.signedUrl || "", title: x.title || "" })).filter((x) => x.url); }
+      setInfo({ po: (o as { po_number?: string } | null)?.po_number || "", pcs, prints, garments: [...gm.entries()], pics });
     })();
     void fetch(`/api/goods/checkin?ref=${encodeURIComponent(c.job.id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => setGd([...((j.jobs || []) as CheckJob[]), ...((j.problems || []) as CheckJob[])].find((x) => x.ref === c.job.id) || null)).catch(() => null);
   }, [c.job.id, c.job.kind]);
   const nowM = shopTime(new Date())!, started = sl?.started_at ? shopTime(sl.started_at) : null;
   const soFar = stt === "running" && started && started.day === nowM.day ? Math.max(0, nowM.min - started.min) : null;
   const ck = gd?.checkins?.[0];
-  const goodsPill = !gd ? null : gd.state === "issue" ? ["r", "Goods problem"] : gd.state === "checked" ? ["g", `Goods counted${ck ? " " + new Date(ck.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(" AM", "a").replace(" PM", "p") : ""}`] : gd.state === "ready" || gd.state === "partial" ? ["a", "Goods here, not counted"] : ["o", "Goods not here yet"];
+  const tmD = (iso: string) => { const t = shopTime(new Date(iso))!; const h = new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p"); return t.day === nowM.day ? h : `${dW(t.day)} ${h}`; };
+  const goodsPill = !gd ? null : gd.state === "issue" ? ["r", "Goods problem"] : gd.state === "checked" ? ["g", `Goods counted${ck ? " " + tmD(ck.created_at) : ""}`] : gd.state === "ready" || gd.state === "partial" ? ["a", "Goods here, not counted"] : ["o", "Goods not here yet"];
   return (
     <div className="pp-modal" onClick={onClose}>
       <div className="pp-sheet mji" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Scheduled job">
         <div className="mji-h">
           <div className="mji-n"><b className="mji-no">{c.job.hold ? "HOLD #" : "#"}{c.job.number}</b><b className="mji-co">{c.job.customer}</b><span className="spacer" /><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
-          <div className="mji-jn">{[c.job.name, info?.po ? `PO ${info.po}` : ""].filter(Boolean).join(" · ")}</div>
+          <div className="mji-jn">{[c.job.name, info?.po && info.po.trim().toLowerCase() !== (c.job.name || "").trim().toLowerCase() ? `PO ${info.po}` : ""].filter(Boolean).join(" · ")}</div>
           <div className="mji-pills">
             <span className={"mji-pill " + (stt === "running" ? "g" : stt === "done" ? "g" : stt === "paused" ? "a" : "gr")}>{stt === "scheduled" ? "Not started" : stt === "running" ? "Printing" : stt === "paused" ? "Paused" : "Done"}</span>
             {c.job.due && <span className="mji-pill o">Due {dW(c.job.due)} {dayShort(c.job.due)}{c.job.dueTime != null ? ` · ${clock(c.job.dueTime)}` : ""}</span>}
@@ -3130,12 +3153,17 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             {c.job.rush && <span className="mji-pill r">Rush</span>}{c.job.firm && <span className="mji-pill o">Firm · {firmLbl(c.job)}</span>}
           </div>
         </div>
-        <div className="mji-sec mji-top">
-          {info?.pics.length ? <div className="mji-pics">{info.pics.slice(0, 2).map((u) => <a key={u} href={u} target="_blank" rel="noreferrer"><img src={u} alt="" /></a>)}</div> : null}
-          <div className="mji-run">
+        {parts.length > 1 && <div className="mji-sec"><div className="mji-l">This job runs in {parts.length} parts</div>
+          <div className="mji-parts">{parts.map((x, i) => <div key={x.key} className={"mji-part" + (x.me ? " me" : "")}><b>Run {i + 1} · {x.press}{x.me ? " · this one" : ""}</b><span>{x.what}</span><small>{x.when}</small></div>)}</div>
+        </div>}
+        {info?.pics.length ? <div className="mji-sec"><div className="mji-l">Mockups<span className="mji-cnt">{info.pics.length}</span></div>
+          <div className="mji-grid">{info.pics.map((x) => <a key={x.url} className="mji-mk" href={x.url} target="_blank" rel="noreferrer" title={x.title ? `${x.title}: open full size` : "Open full size"}><img src={x.url} alt={x.title} />{x.title ? <small>{x.title}</small> : null}</a>)}</div>
+        </div> : null}
+        <div className="mji-two">
+          <div className="mji-sec">
             <div className="mji-l">Run time</div>
             <div className="mji-kv">
-              <span>Press</span><b>{shortName(c.machine)}{lead(c.machine) ? ` · ${lead(c.machine)}` : ""} · {pressSpec(c.machine)}</b>
+              <span>Press</span><b>{shortName(c.machine)}{lead(c.machine) ? ` · ${lead(c.machine)}` : ""}<em className="mji-spec">{pressSpec(c.machine)}</em></b>
               <span>Planned</span><b>{first && last ? `${first.day !== nowM.day ? dW(first.day) + " " : ""}${clock(first.start)} – ${last.day !== first.day ? dW(last.day) + " " : ""}${clock(last.end)}` : "—"} · {fmtMin(c.plan?.est ?? est.minutes)}</b>
               {started && <><span>Started</span><b>{started.day !== nowM.day ? dW(started.day) + " " : ""}{clock(started.min)}</b></>}
               {soFar != null && <><span>So far</span><b>{fmtMin(soFar)} of {fmtMin(c.plan?.est ?? est.minutes)} · {soFar - (c.plan?.est ?? est.minutes) > 0 ? `${fmtMin(soFar - (c.plan?.est ?? est.minutes))} over` : "on time"}</b></>}
@@ -3143,14 +3171,14 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             </div>
             {soFar != null && <i className="mdy-bar mji-bar"><i style={{ width: `${Math.min(100, Math.round((soFar / Math.max(1, c.plan?.est ?? est.minutes)) * 100))}%` }} /></i>}
           </div>
+          {(info?.garments.length || gd) ? <div className="mji-sec"><div className="mji-l">Goods</div><div className="mji-kv">
+            {info?.garments.length ? <><span>Garments</span><span className="mji-gl">{info.garments.map(([k, n]) => <Fragment key={k}><b>{k}</b><em>{n}</em></Fragment>)}</span></> : null}
+            {ck ? <><span>Counted</span><b>{ck.received} of {ck.expected}{ck.by ? ` · ${ck.by.split(" ")[0]}` : ""} · {tmD(ck.created_at)}</b></> : gd ? <><span>Counted</span><b className="faint">Not yet</b></> : null}
+          </div></div> : <div className="mji-sec" />}
         </div>
-        {info && info.prints.length > 0 && <div className="mji-sec"><div className="mji-l">Prints · {c.need.qty.toLocaleString()} pcs</div>
-          {info.prints.map((x) => <div key={x.loc + x.inks} className="mji-pr"><b>{x.loc}</b><span className="mji-inks">{(x.inks || "").split(/\s*[,/+]\s*/).filter(Boolean).map((ik) => <span key={ik} className="mji-ink"><i style={{ background: colorHex(ik) || "var(--line)" }} />{ik}</span>)}</span><span className="faint">{x.colors ? `${x.colors} color${x.colors === 1 ? "" : "s"}` : ""}</span></div>)}
+        {info && info.prints.length > 0 && <div className="mji-sec"><div className="mji-l">Prints · {(info.pcs || c.need.qty).toLocaleString()} pcs</div>
+          {info.prints.map((x) => <div key={x.loc + x.inks} className="mji-pr"><b>{x.loc}</b><span className="mji-inks">{(x.inks || "").split(/\s*[,/+]\s*/).filter(Boolean).map((ik0) => { const ik = ik0.replace(/^PMS\s*/i, ""); return <span key={ik0} className="mji-ink"><i style={{ background: colorHex(ik0) || "var(--line)" }} />{ik}</span>; })}</span><span className="faint">{x.colors ? `${x.colors} color${x.colors === 1 ? "" : "s"}` : ""}</span></div>)}
         </div>}
-        {(info?.garments.length || gd) ? <div className="mji-sec"><div className="mji-l">Goods</div><div className="mji-kv">
-          {info?.garments.length ? <><span>Garments</span><b className="mji-gl">{info.garments.map((x) => <span key={x}>{x}</span>)}</b></> : null}
-          {ck ? <><span>Counted</span><b>{ck.received} of {ck.expected}{ck.by ? ` · ${ck.by.split(" ")[0]}` : ""} · {new Date(ck.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</b></> : gd ? <><span>Counted</span><b className="faint">Not yet</b></> : null}
-        </div></div> : null}
         {moving && <div className="mjp-move">
           <div className="tmx-2 ms-3">
             <label>Machine<select value={mach} onChange={(e) => setMach(e.target.value)}>{options.map((x) => <option key={x.id} value={x.id} disabled={!fits(c.need, x)}>{x.name}{!fits(c.need, x) ? " (can't print it)" : ""}</option>)}</select></label>
@@ -3164,7 +3192,26 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
           {c.job.kind === "o" && c.need.type === "screen" && <button type="button" className={"mji-lk" + (sepsOpen ? " on" : "")} onClick={() => setSepsOpen(!sepsOpen)}><InfoIco k="layers" />Separations</button>}
           {c.job.kind === "o" && <Link className="mji-lk" href={c.job.href + (c.job.href.includes("?") ? "&" : "?") + "tab=prod"}><InfoIco k="img" />Mockup</Link>}
           {c.job.kind === "o" && <button type="button" className="mji-lk" onClick={() => setWo(true)}><InfoIco k="print" />Work order</button>}
+          {c.slot && stt !== "done" && (parts.length > 1
+            ? <button type="button" className={"mji-lk sp" + (uniting ? " on" : "")} onClick={() => { setUniting(!uniting); setSplitting(null); }}><InfoIco k="unite" />Unite</button>
+            : locsOf(c.need).length > 1 ? <button type="button" className={"mji-lk sp" + (splitting ? " on" : "")} onClick={() => { setSplitting(splitting ? null : []); setUniting(false); }}><InfoIco k="split" />Split</button> : null)}
         </div>
+        {splitting && <div className="mji-spl">
+          <b>Split #{c.job.number} into two runs</b>
+          <span className="faint">Pick what runs separately. The rest stays on {shortName(c.machine)}{lead(c.machine) ? ` with ${lead(c.machine)}` : ""}. The same shirts can&apos;t be on two presses at once, so the second run starts when the first is off.</span>
+          <div className="mji-locs">{locsOf(c.need).map((l) => { const on = splitting.includes(l), st0 = c.need.steps.find((x) => locKey(x) === l || x.location === l); return <button key={l} type="button" className={on ? "on" : ""} onClick={() => setSplitting(on ? splitting.filter((x) => x !== l) : [...splitting, l])}><b>{l}</b><small>{st0 ? `${st0.colors} color${st0.colors === 1 ? "" : "s"}` : ""}{on ? " · runs separately" : ""}</small></button>; })}</div>
+          <label className="mji-fld">Runs on<select value={splitTo} onChange={(e) => setSplitTo(e.target.value)}>{presses.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          {splitting.length > 0 && splitting.length < locsOf(c.need).length && <div className="mji-res">
+            <div><b>Run 1 · {shortName(c.machine)}{lead(c.machine) ? ` · ${lead(c.machine)}` : ""}</b><span>{subNeed(c.need, locsOf(c.need).filter((x) => !splitting.includes(x))).label} · {fmtMin(estimate(s, subNeed(c.need, locsOf(c.need).filter((x) => !splitting.includes(x))), c.machine).minutes)}</span></div>
+            <div><b>Run 2 · {presses.find((x) => x.id === splitTo)?.name || ""}</b><span>{subNeed(c.need, splitting).label} · {fmtMin(estimate(s, subNeed(c.need, splitting), s.machines.find((x) => x.id === splitTo) || c.machine).minutes)}</span></div>
+          </div>}
+          <div className="mji-act"><button type="button" className="btn sm" onClick={() => setSplitting(null)}>Cancel</button><button type="button" className="btn sm mji-pv" disabled={!splitting.length || splitting.length >= locsOf(c.need).length} onClick={() => onSplit(splitting, splitTo)}>Split into 2 runs</button></div>
+        </div>}
+        {uniting && <div className="mji-spl">
+          <b>Put #{c.job.number} back together?</b>
+          <span className="faint">The runs become one again on {parts[0]?.press.split(" · ")[0]}, where run 1 is. Anything already printed stays printed.</span>
+          <div className="mji-act"><button type="button" className="btn sm" onClick={() => setUniting(false)}>Cancel</button><button type="button" className="btn sm mji-pv" onClick={onUnite}>Unite into 1 run</button></div>
+        </div>}
         {sepsOpen && c.job.kind === "o" && <div className="ms-seps"><div className="ms-seps-h"><b>Separations</b><span className="faint">Approved art goes straight to the Separation Center.</span></div><SepRequest orderId={c.job.id} /></div>}
         <div className="mjp-foot"><button type="button" className="linkbtn" onClick={() => setMore(!more)} aria-expanded={more}>More details {more ? "▴" : "▾"}</button><span className="spacer" /><span className="faint mji-tip">Right-click the job to start, finish, count goods or move it</span></div>
         {more && <div className="mjp-more">
@@ -3179,13 +3226,6 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             const total = (reg / 60) * k.perHour + (ot / 60) * k.perHour * mult, rate = `$${k.perHour.toFixed(2).replace(/\.00$/, "")}/hr`;
             return <div className="ms-cost"><b>Labor ${Math.round(total).toLocaleString()}</b><span>{ot ? `${fmtMin(reg)} × ${rate} + ${fmtMin(ot)} overtime × ${mult} ` : `${fmtMin(est.minutes)} × ${rate} `}crew ({k.who.join(", ")})</span></div>;
           })()}
-          {c.slot && locsOf(c.need).length > 1 && stt !== "done" && !splitting && <button type="button" className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setSplitting([])}>Split by location…</button>}
-          {splitting && <div className="ms-ask">
-            <b>Which part would you like to split off?</b>
-            <span>Tick what should run separately. The rest stays together on this press. The two parts never run at the same time.</span>
-            <div className="ms-pick">{locsOf(c.need).map((l) => { const on = splitting.includes(l); return <button key={l} type="button" className={on ? "on" : ""} onClick={() => setSplitting(on ? splitting.filter((x) => x !== l) : [...splitting, l])}>{l}</button>; })}</div>
-            <div className="row" style={{ gap: 8 }}><button type="button" className="btn sm primary" disabled={!splitting.length || splitting.length >= locsOf(c.need).length} onClick={() => onSplit(splitting)}>Split</button><button type="button" className="btn sm" onClick={() => setSplitting(null)}>Cancel</button></div>
-          </div>}
           {log.length > 0 && <ul className="ms-log">{log.map((x) => <li key={x.id}><span>{when(x.at)}</span><span>{ACT[x.action] || x.action}{x.progress != null && x.action !== "done" && x.action !== "not_started" ? ` · ${Math.round(x.progress * 100)}%` : ""}{x.note ? ` · ${x.note}` : ""}</span><span className="faint">{x.by}</span></li>)}</ul>}
         </div>}
         {wo && c.job.kind === "o" && <WorkOrderView orderId={c.job.id} number={c.job.number} onClose={() => setWo(false)} />}
@@ -3195,12 +3235,14 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
 }
 
 /** the job card's link icons (no emoji) */
-function InfoIco({ k }: { k: "open" | "layers" | "img" | "print" }) {
+function InfoIco({ k }: { k: "open" | "layers" | "img" | "print" | "split" | "unite" }) {
   const d: Record<string, ReactNode> = {
     open: <path d="M8 4H4v12h12v-4M11 3h6v6M17 3l-8 8" fill="none" stroke="currentColor" strokeWidth="1.8" />,
     layers: <path d="M10 3l8 4-8 4-8-4zM2 11l8 4 8-4" fill="none" stroke="currentColor" strokeWidth="1.6" />,
     img: <><rect x="3" y="4" width="14" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M5 14l4-4 3 3 2-2 3 3" fill="none" stroke="currentColor" strokeWidth="1.6" /></>,
     print: <path d="M5 8V3h10v5M5 14H3V8h14v6h-2M6 12h8v5H6z" fill="none" stroke="currentColor" strokeWidth="1.6" />,
+    split: <path d="M10 3v5M10 8l-5 5v4M10 8l5 5v4" fill="none" stroke="currentColor" strokeWidth="1.8" />,
+    unite: <path d="M5 3v4l5 5v5M15 3v4l-5 5" fill="none" stroke="currentColor" strokeWidth="1.8" />,
   };
   return <svg className="mji-i" viewBox="0 0 20 20" aria-hidden>{d[k]}</svg>;
 }
