@@ -222,3 +222,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 1:07pm · 1.3.426 · Nick · Customer contacts: rows wrap instead of cutting off; Portal, its email button and remove stay together
 - Nov 12 1:21pm · 1.3.427 · Nick · Read another shop's Printavo order link (work order / invoice / quote): the order as their work order text (their prices left out), each line's pictures, their art files
 - Nov 12 1:25pm · 1.3.428 · Nick · Email link filter: follow the scanner's own 'looks safe' Open link
+- Nov 12 1:29pm · 1.3.429 · Nick · Email link filter: read the scanner's swapped-in 'looks safe' page for its Open link

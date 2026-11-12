@@ -95,9 +95,9 @@ async function emailProtection(pageUrl: string, html: string): Promise<string | 
   if (!info || !WS) return null;
   const host = new URL(pageUrl).host;
   for (let round = 0; round < 3 && info; round++) {
-    const got = await new Promise<{ url?: string; meta?: string } | null>((done) => {
+    const got = await new Promise<{ url?: string; meta?: string; text?: string } | null>((done) => {
       let settled = false;
-      const end = (v: { url?: string; meta?: string } | null) => { if (settled) return; settled = true; try { sock.close(); } catch { /* closed */ } done(v); };
+      const end = (v: { url?: string; meta?: string; text?: string } | null) => { if (settled) return; settled = true; try { sock.close(); } catch { /* closed */ } done(v); };
       // only the scanner's own all-clear is followed: its "continue anyway?" step (/scanning/force) is never pressed for you
       const sock = new WS(`wss://${host}/scanning`);
       const timer = setTimeout(() => end(null), 25_000);
@@ -105,13 +105,15 @@ async function emailProtection(pageUrl: string, html: string): Promise<string | 
       sock.onerror = () => { clearTimeout(timer); end(null); };
       sock.onmessage = (ev: MessageEvent) => {
         try {
-          const d = JSON.parse(String(ev.data)) as { redirect?: { url?: string }; refresh?: { meta?: string } };
+          const d = JSON.parse(String(ev.data)) as { redirect?: { url?: string }; refresh?: { meta?: string; text?: string } };
           if (d.redirect?.url) { clearTimeout(timer); end({ url: d.redirect.url }); }
-          else if (d.refresh?.meta) { clearTimeout(timer); end({ meta: d.refresh.meta }); }
+          else if (d.refresh?.meta || d.refresh?.text) { clearTimeout(timer); end({ meta: d.refresh.meta, text: d.refresh.text }); }
         } catch { /* keep waiting */ }
       };
     });
     if (got?.url) return new URL(got.url, pageUrl).toString();
+    // the verdict page it swaps in ("This site looks safe… Open"): its Open link
+    const ok = got?.text ? safeOpen(got.text) : null; if (ok) return ok;
     info = got?.meta;
   }
   return null;
