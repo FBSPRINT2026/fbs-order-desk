@@ -299,7 +299,8 @@ export async function previewSend(admin: SupabaseClient, orderId: string, pick: 
 /** the first names to greet: the people it goes to ("Michael", "Michael and Anna"), else the customer's main contact
  *  (Nov 3, Nick: sent to Michael, it said "Hi Stephanie", the main contact) */
 function firstOf(customer: { name?: string | null } | null, list: string[], people: { email: string; name: string }[] = []) {
-  const firsts = list.map((e) => (people.find((p) => p.email === e)?.name || "").trim().split(/\s+/)[0]).filter(Boolean);
+  // a name that's only an email address isn't a name to greet
+  const firsts = list.map((e) => (people.find((p) => p.email === e)?.name || "").trim().split(/\s+/)[0]).filter((x) => x && !x.includes("@"));
   if (firsts.length && firsts.length === list.length && firsts.length <= 3) return firsts.length === 1 ? firsts[0] : `${firsts.slice(0, -1).join(", ")} and ${firsts[firsts.length - 1]}`;
   return ((customer?.name || "").trim().split(/\s+/)[0]) || "there";
 }

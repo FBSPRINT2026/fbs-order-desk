@@ -82,7 +82,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
   // such and such, thank you for the quote request. Please see and review your quote below… please let me know if this
   // is approved. Thank you")
   const [typed, setTyped] = useState({ note: false, after: false });
-  const firsts = (opts?.people || []).filter((x) => (pick.to || []).includes(x.email)).map((x) => (x.name || "").trim().split(/\s+/)[0]).filter(Boolean);
+  const firsts = (opts?.people || []).filter((x) => (pick.to || []).includes(x.email)).map((x) => (x.name || "").trim().split(/\s+/)[0]).filter((x) => x && !x.includes("@"));
   const hiTo = firsts.length ? (firsts.length === 1 ? firsts[0] : `${firsts.slice(0, -1).join(", ")} and ${firsts[firsts.length - 1]}`) : "there";
   const invoice = opts?.quote?.kind === "invoice";
   const sendWhat = [pick.quote ? (invoice ? "final invoice" : "quote") : "", pick.proof ? "proof" : "", (pick.sewouts || []).length ? "sew-out" : ""].filter(Boolean);
