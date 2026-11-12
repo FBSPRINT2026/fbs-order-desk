@@ -216,3 +216,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 10:48am · 1.3.420 · Nick · Search: a customer's name shows the results instead of jumping to one customer (Armstrong matched Armstrong McCall); an order number still opens its order
 - Nov 12 10:58am · 1.3.421 · Nick · Work order: customer separations jobs skip the press sheets; their mockup big on page 2 with the ink lines
 - Nov 12 11:00am · 1.3.422 · Nick · Customer films print their art: spot plates in a PDF/.ai film go on every plate, so FilmMaker prints the art solid black, not just the crop marks
+- Nov 12 12:07pm · 1.3.423 · Nick · Schedule right click: Done on a job that never started; a mixed job's unbooked part keeps the order in production; phone Job done only finishes that kind of machine's bookings

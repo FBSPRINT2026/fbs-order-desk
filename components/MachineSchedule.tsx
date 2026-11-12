@@ -1027,7 +1027,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (action === "resume") Object.assign(patch, { status: "running", progress: p, progress_at: nowIso, started_at: sl.started_at || nowIso });
     if (action === "pause") Object.assign(patch, { status: "paused", progress: p, progress_at: nowIso });
     if (action === "progress") Object.assign(patch, { progress: p, progress_at: nowIso, ...(sl.status === "scheduled" && p > 0 ? { status: "running", started_at: sl.started_at || nowIso } : {}) });
-    if (action === "done") Object.assign(patch, { status: "done", finished_at: nowIso, progress: 1, progress_at: nowIso });
+    if (action === "done") Object.assign(patch, { status: "done", finished_at: nowIso, progress: 1, progress_at: nowIso,
+      // marked done without ever being started (Nov 12, Nick: "it just was done already"): it ran its planned time up to then
+      ...(sl.started_at ? {} : { started_at: new Date(new Date(nowIso).getTime() - Math.max(MIN_JOB_MIN, +(sl.minutes || 0)) * 60000).toISOString() }) });
     if (action === "not_started") Object.assign(patch, { status: "scheduled", started_at: null, finished_at: null, progress: 0, progress_at: null });
     if (action === "reopen") Object.assign(patch, { status: "running", finished_at: null, progress: Math.min(p, 0.9), progress_at: nowIso });
     const sb = createClient();
@@ -1968,6 +1970,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const p = tot ? got / tot : 0, est = c.plan?.est ?? estimate(s!, c.need, c.machine).minutes;
     return { p, left: Math.round(est * (1 - p)), marked: Object.values(rcDone).some((d) => d.s !== "n"), note: bits.join("; ") };
   };
+  const TYPE_WORD: Record<string, string> = { screen: "screen print", embroidery: "embroidery", heat: "heat press" };
   async function rcDo(c: Card, g: Seg, action: "start" | "pause" | "resume" | "progress" | "done" | "not_started" | "restart", why?: string) {
     const sl = await slotFor(c, g); if (!sl) return;
     const when = isoAt(rcF.t);
@@ -1995,7 +1998,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const { data: rest } = await sb.from("production_slots").select("id").eq("order_id", sl.order_id).neq("status", "done").neq("id", sl.id);
       const { data: o } = await sb.from("orders").select("status").eq("id", sl.order_id).maybeSingle();
       const cur = (o as { status?: string } | null)?.status || "";
-      if (!(rest || []).length && ["approved", "art", "blanks", "production", "fulfillment"].includes(cur) && cur !== rcF.next) {
+      // a mixed job's other part not booked yet (heat press, embroidery waiting in Ready To Schedule) holds the order too
+      const waits = tray.filter((t) => t.job.key === c.job.key).map((t) => TYPE_WORD[t.need.type] || t.need.type);
+      if (waits.length) moved = `; the order stays put: its ${[...new Set(waits)].join(" and ")} isn't scheduled yet`;
+      else if (!(rest || []).length && ["approved", "art", "blanks", "production", "fulfillment"].includes(cur) && cur !== rcF.next) {
         const k = rcF.next as StatusKey;
         const { error } = await sb.from("orders").update({ status: k, type: ST[k].type }).eq("id", sl.order_id);
         if (!error) {
@@ -2338,7 +2344,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 {step("p", st === "running" ? "cur" : st === "paused" ? "cur pz" : st === "done" ? "on" : "", st === "paused" ? "Paused" : "Printing", st === "running" ? (rs ? `${fmtMin(rs.used)} · ${rs.over > 0 ? fmtMin(rs.over) + " over" : "on time"}` : "now") : st === "paused" ? "since its pause" : st === "done" ? "" : "—", st === "paused" ? "pause" : "play")}
                 {step("d", st === "done" ? "on" : "", "Done", st === "done" ? tm(c.slot?.finished_at) : "—", "check")}
               </div>
-              {st === "scheduled" && <div className="mrb-row">{tIn}<button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "start")}><RcIco k="play" />Start</button></div>}
+              {st === "scheduled" && <div className="mrb-row">{tIn}<button type="button" className="mrc-act" onClick={() => void rcDo(c, g, "start")}><RcIco k="play" />Start</button><button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "done")}><RcIco k="check" />Done</button></div>}
               {st === "running" && <>
                 <div className="mrb-row">{tIn}<button type="button" className={"mrc-act" + (rcPause ? " on" : "")} onClick={() => setRcPause(!rcPause)}><RcIco k="pause" />Pause</button><button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "done")}><RcIco k="check" />Complete</button></div>
                 {rcPause && (() => { const pz = pauseDone(c); return <div className="mrb-pz">
@@ -2354,7 +2360,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 </div>; })()}
               </>}
               {st === "paused" && <div className="mrb-row">{tIn}<button type="button" className="mrc-act" onClick={() => void rcDo(c, g, "resume")}><RcIco k="play" />Resume</button><button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "done")}><RcIco k="check" />Complete</button></div>}
-              {(st === "running" || st === "paused") && c.slot?.order_id && <div className="mrb-dest"><div className="mrb-dl">When it&apos;s done, the order goes to</div>
+              {st !== "done" && c.slot?.order_id && <div className="mrb-dest"><div className="mrb-dl">When it&apos;s done, the order goes to</div>
                 <div className="mrb-seg">{([["fulfillment", "Fulfillment", "fold, bag, count"], ["ready", "Ready", "pickup / ship"], ["completed", "Completed", "picked up"]] as const).map(([k, l, sub]) => <button key={k} type="button" className={rcF.next === k ? "on" : ""} onClick={() => setRcF({ ...rcF, next: k })}>{l}<small>{sub}</small></button>)}</div>
                 {rcF.next !== "fulfillment" && <div className="mrb-note">Once it&apos;s the order&apos;s last job; the customer gets the usual status email.</div>}
               </div>}
