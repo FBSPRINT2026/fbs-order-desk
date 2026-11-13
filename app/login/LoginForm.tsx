@@ -127,8 +127,14 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
         </form>
       )}
       {/* a crew phone that landed here (an old Home Screen icon): their own sign-in is the employee number (Nov 13) */}
-      {onShop && <a className="muted" href="/crew" style={{ display: "block", textAlign: "center", marginTop: 14, fontSize: 13.5 }}>FBS employee? Sign in with your employee number</a>}
-      {onShop && stage !== "station" && <button type="button" className="linkbtn muted" onClick={() => { setStage("station"); setErr(""); }} style={{ display: "block", margin: "8px auto 0", fontSize: 13.5 }}>Shop computer? Sign in with its name and PIN</button>}
+      {/* the shop's own sign-ins, only on the shop's network (Nick, Nov 13 2026, option A): an "At the shop" line, two buttons */}
+      {onShop && stage !== "station" && <>
+        <div className="auth-shop-sep">At the shop</div>
+        <div className="auth-shop">
+          <a href="/crew"><svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="8" r="3.5" /><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" /></svg>Shop employee</a>
+          <button type="button" onClick={() => { setStage("station"); setErr(""); }}><svg viewBox="0 0 24 24" aria-hidden><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4" /></svg>Shop computer</button>
+        </div>
+      </>}
     </div>
   );
 }

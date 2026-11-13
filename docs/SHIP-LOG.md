@@ -324,3 +324,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 1:41pm · 1.3.566 · Nick · Work Orders: Tomorrow only for tomorrow
 - Nov 13 2:00pm · 1.3.567 · Nick · Shop computers: save the shop's network in one click on Settings → Shop computers
 - Nov 13 2:00pm · 1.3.568 · Nick · Sign-in page: employee and shop computer sign-ins show only on the shop's network
+- Nov 13 2:03pm · 1.3.569 · Nick · Sign-in page: At the shop · Shop employee / Shop computer buttons (shop network only)

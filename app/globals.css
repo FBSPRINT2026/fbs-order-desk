@@ -22871,3 +22871,10 @@ label.ckm-tile.over{border-color:var(--warn)}
 .wo-ok{color:var(--ok);font-weight:700;font-size:12.5px}
 .wo-no{color:var(--warn);font-weight:700;font-size:12.5px}
 tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
+/* sign-in page: the shop's own sign-ins, on the shop network only (Nov 13, option A) */
+.auth-shop-sep{display:flex;align-items:center;gap:10px;margin-top:18px;color:var(--ink-3);font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.auth-shop-sep::before,.auth-shop-sep::after{content:"";flex:1;height:1px;background:var(--line)}
+.auth-shop{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.auth-shop a,.auth-shop button{height:36px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:700 13px var(--body);display:flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;cursor:pointer;padding:0 8px;white-space:nowrap}
+.auth-shop a:hover,.auth-shop button:hover{border-color:var(--accent)}
+.auth-shop svg{width:15px;height:15px;fill:none;stroke:var(--ink-3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
