@@ -302,6 +302,14 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   list; change what one sees on User access like any person. Each starts with every permission off but its own
   pages (`STATION_PERMS` in `lib/roles.ts`, through `accessOf`; Nick, Nov 13: FBS-SHIP showed Employees, the Time Clock
   and pay): REC receiving, SHIP shipping, PRESS the schedule and Ink Room, PO the schedule (Work Orders).
+  Shop computers are widescreen monitors (Nick, Nov 13: "you don't need to make a phone version… they're actual
+  widescreen computers"): build their screens for a wide monitor; no phone layout for them.
+  **Outbound is FBS-SHIP's home, the computer by the door** (Nick, Nov 13): a "Who's picking up?" search on top (a
+  customer, job #, PO or an end client's name: `outboundLookup` in `app/shop/outbound/actions.ts`) lists their open jobs
+  and where each is, read off the status (Ready by delivery method → On the pickup shelf / Ready to ship / to deliver,
+  Fulfillment → Being packed, In Production → Still printing), with Picked up (`markPickedUp`: Ready → Completed, logged)
+  and Ship; Print box label and Start shipping open their panel under it; then the numbers, Pickup shelf / Deliver, and
+  the Shipping Center underneath (`components/shipping/ShippingCenter.tsx`, the one `/shop/shipping` shows too).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

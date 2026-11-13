@@ -3,7 +3,8 @@ import { shipmentShipped } from "@/app/shop/customer-email-actions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
-import { SHIP_METHODS, type ShipAddress, type ShipSettings } from "@/lib/pricing";
+import { SHIP_METHODS, matchShipMethod, type ShipAddress, type ShipSettings } from "@/lib/pricing";
+import { accountOfMethod, onAccountMethod, ON_ACCOUNT } from "@/lib/thirdParty";
 import { BILL_LABEL, addressReady, boxReady, carrierOf, estimateBoxes, newBoxes, type BillTo, type Box, type Rate, type Shipment } from "@/lib/shipping";
 
 export type ShipTarget = {
@@ -70,7 +71,9 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   useEffect(() => { fetch("/api/shipping/accounts").then((r) => r.json()).then((j) => setAccts(j.accounts || [])).catch(() => {}); }, []);
   const onAcct = accts.find((a) => a.id === shipOn) || null;
   const acctName = (a: { description: string; readable: string; account: string }) => `${a.description || a.readable}${a.account ? ` (${a.readable} ${a.account})` : ""}`;
-  const [service, setService] = useState(existing?.service || t.service || "");
+  // the service the order asked for, without the account it's on ("FedEx Ground · Nine18 FEDEX" → "FedEx Ground")
+  const asked = (t.service || "").split(ON_ACCOUNT)[0].trim();
+  const [service, setService] = useState(existing?.service || matchShipMethod(asked) || asked);
   const [note, setNote] = useState(existing?.note || "");
   const [rates, setRates] = useState<Rate[] | null>(existing?.rates || null);
   const [pick, setPick] = useState<string>(existing?.service ? `${existing.carrier}|${existing.service}` : "");
@@ -154,7 +157,13 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     return () => clearTimeout(h);
   }, [rateKey, canRate, rates, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   // start on the best choice (a saved pick stays unless it's one of the "no gain" options)
-  useEffect(() => { if (plan && (!pick || !plan.days.some((d) => d.opts.some((o) => o.k === pick)))) setPick(plan.pickDefault.k); }, [plan]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the order's own service first (it's what the customer asked for: #50036 FedEx Ground), else the recommendation
+  useEffect(() => {
+    if (!plan || (pick && plan.days.some((d) => d.opts.some((o) => o.k === pick)))) return;
+    const want = matchShipMethod(asked);
+    const theirs = want ? plan.days.flatMap((d) => d.opts).find((o) => matchShipMethod(`${o.r.carrier} ${o.r.service}`) === want) : null;
+    setPick((theirs || plan.pickDefault).k);
+  }, [plan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** A scanned box label ("34317-2") jumps to that box; the order number alone jumps to the next box without a weight. */
   function onScan(v: string) {
@@ -188,13 +197,20 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     await saveCustomer();
     if (status === "shipped" && t.kind === "order") {
       const nums = boxes.map((b) => (b.tracking || "").trim()).filter(Boolean);
-      await sb.from("orders").update({ tracking: nums.join(", "), ship_method: chosen?.service ? `${chosen.carrier} ${chosen.service}` : service }).eq("id", t.id);
+      await sb.from("orders").update({ tracking: nums.join(", "), ship_method: shippedMethod() }).eq("id", t.id);
       // the customer's Shipped email with tracking, if they get it (lib/customerEmailServer.ts)
       const sid = (saved as { id?: string } | null)?.id || existing?.id;
       if (sid) void shipmentShipped(sid).catch(() => null);
     }
     setBusy("");
     return true;
+  }
+
+  /** what the order's ship method becomes: the service shipped, still on the customer's own account when it was */
+  function shippedMethod() {
+    const svc = chosen?.service ? matchShipMethod(`${chosen.carrier} ${chosen.service}`) || `${chosen.carrier} ${chosen.service}` : service;
+    const acct = accountOfMethod(t.service);
+    return shipOn && acct ? onAccountMethod(svc, acct) : svc;
   }
 
   async function getRates() {

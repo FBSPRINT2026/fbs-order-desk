@@ -9,7 +9,7 @@ export type Station = { key: "rec" | "press" | "ship" | "po"; name: string; labe
 export const STATIONS: Station[] = [
   { key: "rec", name: "FBS-REC", label: "Receiving", role: "receiving", home: "/shop/receiving", note: "Goods & Receiving: count-in list and trucks" },
   { key: "press", name: "FBS-PRESS", label: "Press", role: "production", home: "/crew", note: "Each press's schedule; a job opens its mockup, inks, setup and work order" },
-  { key: "ship", name: "FBS-SHIP", label: "Shipping", role: "shipping", home: "/shop/shipping", note: "What's shipping, delivering and picking up; labels" },
+  { key: "ship", name: "FBS-SHIP", label: "Shipping", role: "shipping", home: "/shop/outbound", note: "The door: who's picking up, box labels, shipping" },
   { key: "po", name: "FBS-PO", label: "Work orders", role: "production", home: "/shop/work-orders", note: "The color printer: print today's work orders" },
 ];
 export const STATION_DOMAIN = "station.fbsprint.com";

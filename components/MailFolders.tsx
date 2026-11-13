@@ -175,13 +175,13 @@ export function SwipeRow({ children, onAct, onHold }: { children: React.ReactNod
   };
   const openIt = () => { setOff(-OPEN); closeOpenRow = shut; };
   return (
-    <div className={"sw" + (gone ? " gone" : "") + (off ? " open" : "")} ref={ref}>
-      <div className={"sw-acts" + (full ? " full" : "")} style={{ width: Math.max(0, -off) }} aria-hidden={!off}>
-        <button type="button" className="sw-later" tabIndex={off ? 0 : -1} onClick={() => void fire("news")}>{TbIcon.news}<span>News</span></button>
-        <button type="button" className="sw-bh" tabIndex={off ? 0 : -1} onClick={() => void fire("blackhole")}>{TbIcon.ban}<span>Black Hole</span></button>
-        <button type="button" className="sw-arch" tabIndex={off ? 0 : -1} onClick={() => void fire("archive")}>{TbIcon.archive}<span>Archive</span></button>
+    <div className={"msw" + (gone ? " gone" : "") + (off ? " open" : "")} ref={ref}>
+      <div className={"msw-acts" + (full ? " full" : "")} style={{ width: Math.max(0, -off) }} aria-hidden={!off}>
+        <button type="button" className="msw-later" tabIndex={off ? 0 : -1} onClick={() => void fire("news")}>{TbIcon.news}<span>News</span></button>
+        <button type="button" className="msw-bh" tabIndex={off ? 0 : -1} onClick={() => void fire("blackhole")}>{TbIcon.ban}<span>Black Hole</span></button>
+        <button type="button" className="msw-arch" tabIndex={off ? 0 : -1} onClick={() => void fire("archive")}>{TbIcon.archive}<span>Archive</span></button>
       </div>
-      <div className="sw-row" style={{ transform: off ? `translateX(${off}px)` : undefined, transition: drag ? "none" : undefined }}
+      <div className="msw-row" style={{ transform: off ? `translateX(${off}px)` : undefined, transition: drag ? "none" : undefined }}
         onPointerDown={(e) => {
           if (e.pointerType !== "touch" || gone) return;
           if (closeOpenRow && closeOpenRow !== shut) { closeOpenRow(); closeOpenRow = null; swallow.current = true; }
