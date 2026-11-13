@@ -299,7 +299,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   network only (the shop layout and `jobGate` turn one away elsewhere). Each opens on its own page: Receiving, the crew
   menu for the presses (`/crew`, then a job's phone menu), Shipping, and Work Orders (`/shop/work-orders`: the schedule's
   jobs by day, ticked and printed together, marked printed). Being real logins they keep the portal's search and Orders
-  list; change what one sees on User access like any person.
+  list; change what one sees on User access like any person. Each starts with every permission off but its own
+  pages (`STATION_PERMS` in `lib/roles.ts`, through `accessOf`; Nick, Nov 13: FBS-SHIP showed Employees, the Time Clock
+  and pay): REC receiving, SHIP shipping, PRESS the schedule and Ink Room, PO the schedule (Work Orders).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…
