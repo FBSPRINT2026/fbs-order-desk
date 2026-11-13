@@ -22552,10 +22552,11 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mdy-st{font-style:normal;font-size:11.5px;font-weight:700;margin-left:6px;white-space:nowrap}
 .mdy-st.ok{color:var(--ok)}.mdy-st.run{color:var(--ok)}.mdy-st.bad{color:var(--danger)}
 /* a finished job turns soft blue, like Printavo (Nick, Nov 12, option B): the number in blue, never crossed out, and a blue "Done 12:02p" pill */
-.ms-calm .msf-card.ms-blk.done:not(.bar){opacity:1;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface,#fff));border:1px solid color-mix(in srgb,var(--fbs-blue) 28%,var(--surface,#fff));box-shadow:none;color:var(--ink-2)}
+/* !important: the calm look's base card rule (white, !important) otherwise wins and every state looked white (Nick, Nov 12) */
+.ms-calm .msf-card.ms-blk.done:not(.bar){opacity:1!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface,#fff))!important;border:1px solid color-mix(in srgb,var(--fbs-blue) 28%,var(--surface,#fff))!important;box-shadow:none!important;color:var(--ink-2)!important}
 .ms-calm .msf-card.ms-blk.done .msf-n a,.ms-calm .msf-card.ms-blk.done .msf-n{text-decoration:none;color:var(--fbs-blue)}
 .ms-calm .msf-card.ms-blk.done .mdy-st.ok{background:var(--fbs-blue);color:#fff;border-radius:999px;padding:0 7px;line-height:17px;font-size:10.5px}
-.ms-calm .msf-card.ms-blk.run{border:2px solid var(--ok);background:color-mix(in srgb,var(--ok) 6%,var(--surface,#fff))}
+.ms-calm .msf-card.ms-blk.run{border:2px solid var(--ok)!important;background:color-mix(in srgb,var(--ok) 6%,var(--surface,#fff))!important}
 .ms-calm .msf-card.ms-blk.mdy-ny{border-color:color-mix(in srgb,var(--danger) 45%,var(--line))}
 
 /* Right-click on a job on the schedule (Nov 12, Nick): what the press timer does, by hand; Lock… opens a side panel */
@@ -22605,8 +22606,8 @@ label.ckm-tile.over{border-color:var(--warn)}
 .ms-key2 .msf-tn{display:inline-flex;align-items:baseline;gap:0}
 /* a printing job's strip (Nov 12, Nick, option A): green on time, yellow a little over the figured time, red well over;
    a job too short for a strip gets just "Printing" at the end of its line */
-.ms-calm .msf-card.ms-blk.mpr-c{border:2px solid var(--ok);background:var(--surface,#fff)}
-.ms-calm .msf-card.ms-blk.mpr-c.y{border-color:var(--warn)}.ms-calm .msf-card.ms-blk.mpr-c.r{border-color:var(--danger)}
+.ms-calm .msf-card.ms-blk.mpr-c{border:2px solid var(--ok)!important;background:var(--surface,#fff)!important}
+.ms-calm .msf-card.ms-blk.mpr-c.y{border-color:var(--warn)!important}.ms-calm .msf-card.ms-blk.mpr-c.r{border-color:var(--danger)!important}
 .ms-calm .msf-card.ms-blk.mpr-c.mpr-hasb{padding-bottom:20px}
 .mpr-band{position:absolute;left:0;right:0;bottom:0;height:18px;display:flex;justify-content:space-between;align-items:center;gap:6px;padding:0 7px;font-size:11.5px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;background:var(--ok)}
 .mpr-band .mpr-t{font-weight:600;opacity:.92}

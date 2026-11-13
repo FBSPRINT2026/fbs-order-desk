@@ -256,3 +256,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:51pm · 1.3.460 · Nick · Schedule: a paused run marked done (Complete, Issue, press timer) finishes at its pause, not stretched to now (#40478)
 - Nov 12 8:54pm · 1.3.461 · Nick · Schedule: finished jobs turn soft blue with a Done pill, number not crossed out (option B)
 - Nov 12 9:05pm · 1.3.462 · Nick · Mockup Creator: print areas can be dragged and sized by hand (front, back and each sleeve), saved per style and used every time
+- Nov 12 9:05pm · 1.3.463 · Nick · Schedule: done (blue), printing (green) and over-time (yellow/red) tints now show; the calm look's white base rule was overriding them
