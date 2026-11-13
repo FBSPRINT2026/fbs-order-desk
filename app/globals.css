@@ -16332,6 +16332,7 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .spt-reply{display:flex;flex-direction:column;gap:4px;margin-top:4px}
 .spt-reply select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;max-width:100%}
 .spt-guess{font-size:12px;color:var(--accent)}
+.spt-guess-b{border:0;background:none;padding:2px 0;font:inherit;font-size:12px;text-align:left;cursor:pointer;text-decoration:underline}
 .spt-note{display:flex;flex-direction:column;gap:4px}
 .spt-note textarea{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;font-size:14px}
 .spt-mail{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}

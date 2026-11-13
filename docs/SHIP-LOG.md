@@ -294,3 +294,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 11:19am · 1.3.531 · Nick · Time cards: an "in" during a break started that day is the return from the break, not a second clock-in (Jose Rodriguez's Nov 10 showed 1 to fix)
 - Nov 13 11:23am · 1.3.533 · Nick · Schedule assistant: books, takes jobs back to Ready To Schedule and adds downtime (someone out), shows the steps first (Do it), idea chips to tap; jobs go by short ids so none are dropped
 - Nov 13 11:26am · 1.3.535 · Nick · Schedule assistant: its note names jobs and crews, never internal ids
+- Nov 13 11:29am · 1.3.537 · Nick · Send: a new email by default, never a reply to the last email picked for you; the email it likely answers is offered (one tap). Fix: the schedule assistant's last change didn't build

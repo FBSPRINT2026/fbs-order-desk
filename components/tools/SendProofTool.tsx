@@ -68,8 +68,9 @@ export default function SendProofTool({ target, label = "Send to customer", mode
     const c = await sendFromChoices(target.orderId, (r.people || []).map((x) => x.email));
     if (c.ok && c.box) {
       setBox(c.box); setChoices(c.choices);
-      const g = c.choices.find((x) => x.likely);
-      if (g) answer(g, r);
+      // a new email by default, never a reply picked for them (Nick, Nov 13: Amanda's quote to Peter went out on the last
+      // email to him, about something else): the email it most likely answers is offered under Reply to, one tap
+      setPick((p) => ({ ...p, fromMe: true, reply: null }));
     }
   }
   /** reply to this email: from your mailbox, to the person who wrote it (added to the list if they're new) */
@@ -163,7 +164,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
                 {box && <div className="spt-row"><span className="spt-rl">From</span>
                   <div className="spt-seg" role="radiogroup" aria-label="Send from">
                     <button type="button" role="radio" aria-checked={!pick.fromMe} className={!pick.fromMe ? "on" : ""} onClick={() => setPick((p) => ({ ...p, fromMe: false }))}>FBS Print (portal@)</button>
-                    <button type="button" role="radio" aria-checked={!!pick.fromMe} className={pick.fromMe ? "on" : ""} onClick={() => { const g = pick.reply === undefined ? choices.find((x) => x.likely) : undefined; if (g) answer(g); else setPick((p) => ({ ...p, fromMe: true })); }} data-notranslate>My email ({box.split("@")[0]}@)</button>
+                    <button type="button" role="radio" aria-checked={!!pick.fromMe} className={pick.fromMe ? "on" : ""} onClick={() => setPick((p) => ({ ...p, fromMe: true, reply: p.reply ?? null }))} data-notranslate>My email ({box.split("@")[0]}@)</button>
                   </div></div>}
                 {/* who gets it this time; their email settings stay as they are (Nov 3, Nick: "override settings and just send to this person") */}
                 {(opts.people || []).length > 0 && <div className="spt-row"><span className="spt-rl">To</span>
@@ -177,6 +178,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
                     <option value="">A new email (not a reply)</option>
                     {choices.map((c) => <option key={c.messageId} value={c.messageId}>{c.thread ? `${c.from}'s message on this order` : c.subject}{c.thread ? "" : ` · ${c.from}`} · {new Date(c.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</option>)}
                   </select>
+                  {!pick.reply && (() => { const g = choices.find((x) => x.likely); return g ? <button type="button" className="spt-guess spt-guess-b" onClick={() => answer(g)} data-notranslate>Reply to {g.from.split(/\s+/)[0]}&apos;s {g.thread ? "message on this order" : `email "${g.subject}"`} from {new Date(g.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })} instead?</button> : null; })()}
                   {(() => { const g = choices.find((x) => x.messageId === pick.reply?.messageId && x.likely); return g ? <small className="spt-guess" data-notranslate>Looks like you&apos;re answering {g.from.split(/\s+/)[0]}&apos;s {g.thread ? "message on this order" : "email"} from {new Date(g.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small> : null; })()}</div></div>}
                 {/* the email itself: your words, the FBS card as a little bar, your closing, your signature */}
                 <div className="spt-body">
