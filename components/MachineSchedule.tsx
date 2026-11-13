@@ -482,6 +482,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [holdFor, setHoldFor] = useState<string | null>(null);
   // the schedule's assistant (Nick, Nov 13: "add all Dear Heart jobs to the schedule for Monday")
   const [askQ, setAskQ] = useState(""), [askBusy, setAskBusy] = useState(false), [askPlan, setAskPlan] = useState<AskPlan | null>(null);
+  // the ideas drop down under the box while it's clicked in and empty (Nick, Nov 13: one line, beside the tabs)
+  const [askFocus, setAskFocus] = useState(false);
   // kinds of order (Nov 11, Nick: "distinguish… what's a cart order from Cedar Promos, what's an All My Sons… order, and
   // what's a regular order… hide the cart orders and… All My Sons… so I can just see the regular"): a customer's Create
   // order trainings (their when-words in the job's name) are its kinds; a job none of them names is Regular. Hidden kinds
@@ -3108,13 +3110,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               })()}
               {trayOpen && trayV.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make The Schedule</button>}
             </div>
-            {/* the schedule's assistant, right under Start over / Make The Schedule (Nick, Nov 13): say it, check it, book it */}
-            {trayOpen && tray.length > 0 && <div className="msa">
-              <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
-                <span className="msa-ic" aria-hidden>✦</span>
-                <input value={askQ} onChange={(e) => setAskQ(e.target.value)} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press · Miguel is out Monday…" aria-label="Ask the schedule's assistant" />
-                <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
-              </form>
+            {/* the schedule's assistant's plan (Nick, Nov 13): say it in the AI assistant box on the tabs' line, check it here, book it */}
+            {trayOpen && tray.length > 0 && askPlan && <div className="msa">
               {askPlan && (() => { const n = askPlan.book.length + askPlan.unbook.length + askPlan.downtime.length, mn = (id: string) => { const m = machines.find((x) => x.id === id); return m ? crewOf(m)?.leader || shortName(m) : id; }, dl = (d: string) => dayLbl(d).split(",").slice(0, 2).join(","); return <div className="msa-plan">
                 {askPlan.note && <p>{askPlan.note}</p>}
                 {n > 0 && <ul>
@@ -3124,15 +3121,6 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 </ul>}
                 <div className="msa-a">{n > 0 ? <><button type="button" className="btn sm primary" onClick={() => void doPlan(askPlan)}>Do it</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></> : <button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button>}</div>
               </div>; })()}
-              {!askPlan && !askBusy && (() => {
-                // ideas to tap, from what's there now (Nick, Nov 13: "add all Dear Hearts… all jobs that are counted… clear Monday for Miguel, he's out")
-                const by = new Map<string, number>(); for (const t of trayV) if (t.job.customer && t.job.kind === "o") by.set(t.job.customer, (by.get(t.job.customer) || 0) + 1);
-                const top = [...by].sort((a, b) => b[1] - a[1])[0]?.[0];
-                const counted = trayV.filter((t) => t.job.kind === "o" && goodsSt.get(t.job.id) === "received").length;
-                const nx = (() => { let d = addDay(today, 1); for (let g = 0; g < 7 && !machines.some((m) => shiftOn(m, d)); g++) d = addDay(d, 1); return d; })(), lead = machines.map((m) => crewOf(m)?.leader).find(Boolean);
-                const ideas = [top && `Book all ${top} jobs`, counted && `Book every job that's counted`, lead && `${lead} is out ${dayLbl(nx).split(",")[0]}: clear the day`, "Book the late jobs first thing tomorrow"].filter(Boolean) as string[];
-                return <div className="msa-ideas">{ideas.map((x) => <button key={x} type="button" className="chip" onClick={() => void askSchedule(x)}>{x}</button>)}</div>;
-              })()}
             </div>}
             {trc && (() => { const t = tray.find((x) => x.job.key + x.need.type === trc.k); if (!t) return null; const okM = machines.filter((m) => fits(t.need, m)); return (
               <>
@@ -3212,6 +3200,23 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       </div>
                     );
                   })()}
+                  {/* the AI assistant on the tabs' line, to the right (Nick, Nov 13: "one line… on the same line as All, Late, Holds…") */}
+                  <div className="msa-box">
+                    <span className="msa-lbl" aria-hidden>✦ AI assistant</span>
+                    <form className="msa-f" onSubmit={(e) => { e.preventDefault(); setAskFocus(false); void askSchedule(); }}>
+                      <input value={askQ} onChange={(e) => setAskQ(e.target.value)} onFocus={() => setAskFocus(true)} onBlur={() => setAskFocus(false)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
+                      <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
+                    </form>
+                    {askFocus && !askQ.trim() && !askPlan && !askBusy && (() => {
+                      // ideas to tap, from what's there now (Nick, Nov 13: "add all Dear Hearts… all jobs that are counted… clear Monday for Miguel, he's out")
+                      const by = new Map<string, number>(); for (const t of trayV) if (t.job.customer && t.job.kind === "o") by.set(t.job.customer, (by.get(t.job.customer) || 0) + 1);
+                      const top = [...by].sort((a, b) => b[1] - a[1])[0]?.[0];
+                      const counted = trayV.filter((t) => t.job.kind === "o" && goodsSt.get(t.job.id) === "received").length;
+                      const nx = (() => { let d = addDay(today, 1); for (let g = 0; g < 7 && !machines.some((m) => shiftOn(m, d)); g++) d = addDay(d, 1); return d; })(), lead = machines.map((m) => crewOf(m)?.leader).find(Boolean);
+                      const ideas = [top && `Book all ${top} jobs`, counted && `Book every job that's counted`, lead && `${lead} is out ${dayLbl(nx).split(",")[0]}: clear the day`, "Book the late jobs first thing tomorrow"].filter(Boolean) as string[];
+                      return <div className="msa-drop" role="menu"><div className="msa-drop-h">Ideas</div>{ideas.map((x) => <button key={x} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setAskFocus(false); void askSchedule(x); }}>{x}</button>)}</div>;
+                    })()}
+                  </div>
                 </div>
                 <ul className="msr-l">{(() => {
                   // by due date, due today first (no date last); jobs that print together stay in their order

@@ -21844,6 +21844,17 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msr-q:focus-within{border-color:var(--accent)}
 /* Ready To Schedule: the assistant under Start over / Make The Schedule, and a job's right-click menu (Nov 13) */
 .msa{display:flex;flex-direction:column;gap:8px;margin:2px 0 8px}
+/* the AI assistant box on Ready To Schedule's tabs line (Nov 13): a bordered box labeled on its edge, the rest of the line */
+.msa-box{position:relative;flex:1 1 320px;min-width:min(280px,100%);margin-left:auto;border:1.5px solid var(--fbs-violet);border-radius:8px;padding:3px;background:color-mix(in srgb,var(--fbs-violet) 7%,var(--surface))}
+.msa-lbl{position:absolute;top:-8px;left:10px;padding:0 5px;background:var(--surface);color:var(--fbs-violet);font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;line-height:14px;border-radius:4px;white-space:nowrap}
+.msa-box .msa-f{height:32px;border-color:transparent}
+.msa-box .msa-f:focus-within{border-color:var(--fbs-violet)}
+.msa-box .msa-f .btn{background:var(--fbs-violet);border-color:var(--fbs-violet);color:#fff}
+.msa-box .msa-f .btn:disabled{opacity:.55}
+.msa-drop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.14);padding:5px;display:flex;flex-direction:column}
+.msa-drop-h{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);padding:3px 8px 4px}
+.msa-drop button{all:unset;cursor:pointer;padding:7px 8px;border-radius:5px;font-size:13.5px;color:var(--ink)}
+.msa-drop button:hover,.msa-drop button:focus-visible{background:color-mix(in srgb,var(--fbs-violet) 10%,var(--surface))}
 .msa-f{display:flex;align-items:center;gap:8px;height:36px;padding:0 4px 0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
 .msa-f:focus-within{border-color:var(--accent)}
 .msa-ic{color:var(--accent);font-size:13px}

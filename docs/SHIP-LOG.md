@@ -300,3 +300,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 11:47am · 1.3.542 · Nick · Payday time card check on the crew phone: approve hours or ask for a fix; Their check column on the Time Clock
 - Nov 13 11:48am · 1.3.543 · Nick · Work order: compact two-column garments for many products with a few pieces each (option B)
 - Nov 13 11:49am · 1.3.544 · Nick · Work order: no stray 0 under the garments when there are no notes
+- Nov 13 12:02pm · 1.3.545 · Nick · Schedule: AI assistant is one line in a labeled box on Ready To Schedule's tabs line; ideas drop down when you click in
