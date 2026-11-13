@@ -21836,6 +21836,11 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ms-rc.hold{background:var(--surface-2);border-style:dashed}
 .ms-rc.late{border-left-color:var(--danger)}
 .ms-rtabs{margin:4px 0 8px}
+/* Ready To Schedule's own search (Nov 13): the same words as the schedule's search, matches only */
+.msr-q{display:flex;align-items:center;gap:6px;height:36px;padding:0 8px 0 10px;background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--ink-3);min-width:min(240px,100%);flex:0 1 260px}
+.msr-q input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:14px;color:var(--ink)}
+.msr-q:focus-within{border-color:var(--accent)}
+.msr-c.ms-hit{border-color:var(--warn)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 25%,transparent)!important}
 .ms-rnone{padding:6px 2px}
 .ms-calm .ms-blk.msh-dim:not(.bar){background:repeating-linear-gradient(135deg,var(--surface-2) 0 6px,transparent 6px 12px)!important;border:1px dashed var(--line)!important;box-shadow:none!important}
 .ms-calm .ms-blk.done:not(.bar){opacity:.5}

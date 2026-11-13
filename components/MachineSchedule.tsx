@@ -2407,7 +2407,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               const i = (findI + (e.key === "ArrowUp" ? -1 : 1) + hits.length) % hits.length; setFindI(i);
               hits[i].scrollIntoView({ block: "center", behavior: "smooth" }); hits.forEach((h, k) => h.classList.toggle("ms-hit-on", k === i));
             }} />
-          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size; return <><span className={"msq-n" + (n ? "" : " none")}>{n ? `${n} found` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
+          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n} found${nt ? ` · ${nt} in Ready To Schedule` : ""}` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
         </div>
         {/* the key under the search (Nov 12, Nick): what the marks mean, folded to one line when hidden */}
         <div className={"mky" + (keyOpen ? "" : " shut")}>
@@ -3024,12 +3024,17 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               const isLate = (t: (typeof trayV)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
               const waitsG = (t: (typeof trayV)[number]) => !!t.job.issue?.waits;
               const kinds = { late: trayV.filter((t) => isLate(t) && !waitsG(t)), hold: trayV.filter((t) => t.job.kind === "h"), goods: trayV.filter(waitsG), ok: trayV.filter((t) => t.job.kind !== "h" && !isLate(t) && !waitsG(t)) };
-              const list = trayTab === "all" ? trayV : kinds[trayTab];
+              // the schedule's search finds jobs here too, and this box searches both (Nick, Nov 13): only the matches show
+              const list = (trayTab === "all" ? trayV : kinds[trayTab]).filter((t) => !findWords.length || isHit(t.job));
               return (
               <>
                 <div className="toolbar ms-rtabs"><div className="chips">
                   {([["all", "All", trayV.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ...(kinds.goods.length || trayTab === "goods" ? [["goods", "Waiting on goods", kinds.goods.length] as const] : []), ["ok", "On time", kinds.ok.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
                 </div>
+                  <label className="msr-q"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                    <input type="search" value={findQ} placeholder="Search jobs" aria-label="Search Ready To Schedule and the schedule" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }} onKeyDown={(e) => { if (e.key === "Escape") setFindQ(""); }} />
+                    {findWords.length > 0 && <span className={"msq-n" + (list.length ? "" : " none")}>{list.length ? `${list.length} here` : "none here"}</span>}
+                  </label>
                   {(() => {
                     // Job Filters (Nick, Nov 11): Regular Orders first, then each customer's kinds under its name
                     const all = new Map<string, { label: string; who: string; n: number }>();
@@ -3075,7 +3080,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     const from = t.job.prod && t.job.prod > today ? t.job.prod : today, days: string[] = []; for (let d = from, g = 0; days.length < 6 && g < 21; g++, d = addDay(d, 1)) if (machines.some((m) => shiftOn(m, d))) days.push(d);
                     const okM = machines.filter((m) => fits(t.need, m)), selM = pk?.m || t.sug?.machine.id || okM[0]?.id || "", selD = pk?.d || t.sug?.day || days[0];
                     return (
-                    <li key={k} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"msr-c" + (t.job.kind === "h" ? " hold" : "") + (t.picked ? " picked" : "") + (open ? " open" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
+                    <li key={k} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"msr-c" + (isHit(t.job) ? " ms-hit" : "") + (t.job.kind === "h" ? " hold" : "") + (t.picked ? " picked" : "") + (open ? " open" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
                       <div className="msr-1">{tn((() => { const d = dotOf({ job: t.job } as Card, Infinity); return d ? <GoodsTee k={d.k} t={d.t} /> : null; })(), <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}{t.job.issue || t.job.onHold ? flags(t.job) : null}<b>{t.job.customer || t.job.name}</b></div>
                       <div className="msr-2">{t.job.customer ? t.job.name : t.need.label}</div>
                       <div className="msr-3"><b>{t.need.qty.toLocaleString()}</b><span className={late ? "late" : ""}>{t.job.due ? `due ${dayShort(t.job.due)}` : "no date"}</span><span className="spacer" />

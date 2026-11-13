@@ -288,3 +288,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 10:54am · 1.3.519 · Nick · Order reader: a PDF's size grid is read by where each number stands under the size headers, so empty size boxes don't slide the sizes a column (Tiger Blue #50030 / #40382); Create order, the AI order helper and ClickUp files (READER_REV 2026-11-13a)
 - Nov 13 10:54am · 1.3.521 · Nick · File viewer: Print button (PDFs, .ai files that are PDFs, pictures), everywhere the viewer opens
 - Nov 13 10:58am · 1.3.523 · Nick · Size grid reader: a table carried onto the next page keeps its group heading
+- Nov 13 11:07am · 1.3.525 · Nick · Schedule: Ready To Schedule has its own search, the same words as the schedule's search: matches only, highlighted; the schedule's search counts what's in Ready To Schedule too
