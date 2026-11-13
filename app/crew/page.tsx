@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * time clock and fixes to your time card, your press's jobs today, what's to count in, and Scan a job. A scanned work
  * order opens the job's menu (/j/<number>), which has Main menu at the top to come back here.
  */
-export default async function CrewPage() {
+export default async function CrewPage({ searchParams }: { searchParams: Promise<{ day?: string }> }) {
   const gate = await jobGate();
   const who = gate.who;
   const admin = createAdminClient();
@@ -23,6 +23,6 @@ export default async function CrewPage() {
   if (!saved && who?.employeeId) { const { data: e } = await admin.from("employees").select("lang").eq("id", who.employeeId).maybeSingle(); if (e?.lang === "es") lang = "es"; }
   const wrap = (el: React.ReactNode) => <LangProvider initial={lang} employee={who?.kind === "employee"}>{el}</LangProvider>;
   if (!who) return wrap(<JobSignIn code="" offNetwork={gate.offNetwork} />);
-  const home = await crewHome(admin, who);
+  const home = await crewHome(admin, who, (await searchParams).day === "next");
   return wrap(<CrewMenu home={home} />);
 }
