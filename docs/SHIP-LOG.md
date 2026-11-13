@@ -327,3 +327,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 2:03pm · 1.3.569 · Nick · Sign-in page: At the shop · Shop employee / Shop computer buttons (shop network only)
 - Nov 13 2:08pm · 1.3.570 · Nick · Shop computers start with only their own pages: no Employees, Time Clock, payroll or anything else
 - Nov 13 2:41pm · 1.3.571 · Nick · Outbound is the shipping computer's home: who's picking up (customer lookup with where each job is, Picked up), Print box label, Start shipping, the Shipping Center underneath. Ship window no longer cut off (an email class clipped it); ship-to keeps the order's own company and ATTN (#50036 went to Nine18 / Mike); the order's service and own account are kept and preselected
+- Nov 13 3:00pm · 1.3.572 · Nick · Outbound: the job typed in the top box feeds Print box label (just how many boxes, Enter prints) and Start shipping (opens its ship window straight away); click a row to pick another job

@@ -109,6 +109,19 @@ export default function Outbound() {
   const sorted = useMemo(() => (found || []).slice().sort((a, b) => ORDER.indexOf(a.where) - ORDER.indexOf(b.where)), [found]);
   const onShelf = sorted.filter((j) => j.where === "shelf" && !j.printavo);
   const names = [...new Set(sorted.map((j) => j.customer))];
+  // the job the top box points at (Nick, Nov 13: "once you put 50000 in the top line, it should auto fill the job"):
+  // the one whose # was typed, the only one found, or the row clicked
+  const [rowPick, setRowPick] = useState("");
+  const typedNo = q.trim().replace(/^#/, "").match(/^\d{3,7}$/)?.[0] || "";
+  const picked = sorted.find((j) => j.key === rowPick) || sorted.find((j) => j.number === typedNo) || (sorted.length === 1 ? sorted[0] : null);
+  const jobNo = picked?.number || typedNo;
+  useEffect(() => { setRowPick(""); }, [q]);
+  function labels() { setMsg(null); setMode(mode === "label" ? "" : "label"); }
+  function ship() {
+    setMsg(null);
+    if (jobNo) return startShipping(jobNo);
+    setMode(mode === "ship" ? "" : "ship");
+  }
 
   return (
     <>
@@ -120,12 +133,12 @@ export default function Outbound() {
           <input ref={qRef} type="text" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Who's picking up? Customer, job # or PO" aria-label="Look up a customer, job # or PO" />
           {q && <button type="button" className="linkbtn" onClick={() => { setQ(""); qRef.current?.focus(); }}>Clear</button>}
         </label>
-        <button type="button" className={"ob-big" + (mode === "label" ? " on" : "")} onClick={() => { setMsg(null); setMode(mode === "label" ? "" : "label"); }}>{Ico.box}Print box label</button>
-        <button type="button" className={"ob-big primary" + (mode === "ship" ? " on" : "")} onClick={() => { setMsg(null); setMode(mode === "ship" ? "" : "ship"); }}>{Ico.truck}Start shipping</button>
+        <button type="button" className={"ob-big" + (mode === "label" ? " on" : "")} onClick={labels}>{Ico.box}Print box label{jobNo ? <small>#{jobNo}</small> : null}</button>
+        <button type="button" className={"ob-big primary" + (mode === "ship" ? " on" : "")} onClick={ship}>{Ico.truck}Start shipping{jobNo ? <small>#{jobNo}</small> : null}</button>
       </div>
       {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
 
-      {mode === "label" && <LabelPanel perBox={perBox} onClose={() => setMode("")} />}
+      {mode === "label" && <LabelPanel key={jobNo} start={jobNo} perBox={perBox} onClose={() => setMode("")} />}
       {mode === "ship" && <ShipPanel ready={of("ship")} onShip={startShipping} onClose={() => setMode("")} />}
 
       {q.trim().length >= 2 && (
@@ -140,8 +153,8 @@ export default function Outbound() {
             <table className="tbl">
               <thead><tr><th>Job</th>{names.length > 1 && <th>Customer</th>}<th>Where it is</th><th>Pieces</th><th>In-hands</th><th /></tr></thead>
               <tbody>{sorted.map((j) => (
-                <tr key={j.key}>
-                  <td><Link className="ordno" href={j.href}>#{j.number}</Link><div className="sub">{j.job}</div></td>
+                <tr key={j.key} className={sorted.length > 1 && picked?.key === j.key ? "ob-picked" : undefined} onClick={sorted.length > 1 ? () => setRowPick(j.key) : undefined} style={sorted.length > 1 ? { cursor: "pointer" } : undefined}>
+                  <td><Link className="ordno" href={j.href} onClick={(e) => e.stopPropagation()}>#{j.number}</Link><div className="sub">{j.job}</div></td>
                   {names.length > 1 && <td>{j.customer}</td>}
                   <td><span className={"ob-w " + WHERE[j.where][1]}>{WHERE[j.where][0]}</span>{j.note && <div className="sub">{j.note}</div>}</td>
                   <td>{j.qty.toLocaleString()}</td>
@@ -174,13 +187,19 @@ export default function Outbound() {
   );
 }
 
-/** Box labels for any job: scan the work order or type the #; boxes guessed from its pieces. */
-function LabelPanel({ perBox, onClose }: { perBox: number; onClose: () => void }) {
-  const [job, setJob] = useState(""), [card, setCard] = useState<{ kind: "o" | "a"; id: string; number: string; name: string; qty: number } | null>(null);
+/**
+ * Box labels for any job (Nick, Nov 13): the job typed in the top box comes in already found, so it's only "how many
+ * boxes?" and Print (Enter prints); with nothing typed up top, scan the work order or type the # here.
+ */
+function LabelPanel({ start, perBox, onClose }: { start: string; perBox: number; onClose: () => void }) {
+  const [job, setJob] = useState(start), [card, setCard] = useState<{ kind: "o" | "a"; id: string; number: string; name: string; qty: number } | null>(null);
+  const [looking, setLooking] = useState(!!start), [edit, setEdit] = useState(!start);
   const [boxes, setBoxes] = useState(1), [only, setOnly] = useState(""), [busy, setBusy] = useState(false), [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const boxRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const num = job.trim().match(/\/j\/#?(\d{3,7})/)?.[1] || job.trim().replace(/^#/, "").match(/^(\d{3,7})(?:-\d+)?$/)?.[1];
-    if (!num) { setCard(null); return; }
+    if (!num) { setCard(null); setLooking(false); return; }
+    setLooking(true);
     const h = setTimeout(async () => {
       const sb = createClient();
       const [{ data: o }, { data: a }] = await Promise.all([
@@ -192,32 +211,45 @@ function LabelPanel({ perBox, onClose }: { perBox: number; onClose: () => void }
       const { data: c } = cid ? await sb.from("customers").select("company, name").eq("id", cid).maybeSingle() : { data: null };
       const who = [custLabel(c as { company: string; name: string } | null) || "", (r || p)?.nickname || ""].filter(Boolean).join(" · ");
       const next = r ? { kind: "o" as const, id: r.id, number: String(r.number), name: who, qty: r.qty || 0 } : p ? { kind: "a" as const, id: p.id, number: p.visual_id, name: who, qty: p.qty || 0 } : null;
-      setCard(next);
-      if (next) setBoxes(estimateBoxes(next.qty, perBox));
-    }, 250);
+      setCard(next); setLooking(false);
+      if (next) { setBoxes(estimateBoxes(next.qty, perBox)); setEdit(false); setTimeout(() => { boxRef.current?.focus(); boxRef.current?.select(); }, 30); }
+      else setEdit(true);
+    }, start && job === start ? 0 : 250);
     return () => clearTimeout(h);
-  }, [job, perBox]);
+  }, [job, perBox]); // eslint-disable-line react-hooks/exhaustive-deps
   async function print() {
-    if (!card) return;
+    if (!card || busy) return;
     setBusy(true); setMsg(null);
     const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job: { kind: card.kind, id: card.id }, boxes, only: +only || undefined }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { message: "Offline. Try again." };
     setBusy(false); setMsg({ ok: !!r?.ok && j.ok !== false, text: j.message || j.error || "Sent." });
   }
-  const typed = job.trim().length >= 3;
+  const label = +only ? `Print box ${+only} of ${boxes}` : `Print ${boxes} label${boxes === 1 ? "" : "s"}`;
   return (
     <section className="panel ob-pane">
       <div className="panel-h"><h2>Print box label</h2><span className="faint">Goes to the label printer</span><span className="spacer" /><button type="button" className="linkbtn" onClick={onClose}>Close</button></div>
       <div className="panel-b">
-        <div className="ob-form">
-          <label className="ob-f ob-f-job"><span>Job</span><input type="text" autoFocus value={job} onChange={(e) => setJob(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && card) void print(); }} placeholder="Scan the work order or type the job #" /></label>
-          <label className="ob-f"><span>Boxes</span><input type="number" min={1} max={99} value={boxes} onChange={(e) => setBoxes(Math.max(1, Math.min(99, Math.round(+e.target.value) || 1)))} /></label>
-          <label className="ob-f"><span>Only box #</span><input type="number" min={1} max={99} value={only} onChange={(e) => setOnly(e.target.value)} placeholder="All" /></label>
-          <button type="button" className="btn primary" disabled={!card || busy} onClick={() => void print()}>{busy ? "Sending…" : +only ? `Print box ${+only} of ${boxes}` : `Print ${boxes} label${boxes === 1 ? "" : "s"}`}</button>
-        </div>
-        <div className="ob-found">
-          {card ? <><b>#{card.number}</b> {card.name}{card.qty ? ` · ${card.qty.toLocaleString()} pcs` : ""}{card.kind === "o" && <> · <a className="linkbtn" href={`/print/${card.id}/labels?boxes=${boxes}`} target="_blank" rel="noreferrer">Printable sheet instead</a></>}</> : typed ? <span className="faint">No job with that number.</span> : <span className="faint">Boxes are guessed from the pieces ({perBox} a box); change it if the count is different.</span>}
-        </div>
+        {card && !edit ? (
+          <div className="ob-lbl">
+            <div className="ob-lbl-job"><b>#{card.number}</b><span>{card.name}{card.qty ? ` · ${card.qty.toLocaleString()} pcs` : ""}</span><button type="button" className="linkbtn" onClick={() => { setEdit(true); setJob(""); setCard(null); }}>Another job</button></div>
+            <div className="ob-lbl-n">
+              <span className="ob-lbl-k">How many boxes?</span>
+              <button type="button" className="ob-step" aria-label="One fewer box" onClick={() => setBoxes(Math.max(1, boxes - 1))}>−</button>
+              <input ref={boxRef} type="number" min={1} max={99} value={boxes} onChange={(e) => setBoxes(Math.max(1, Math.min(99, Math.round(+e.target.value) || 1)))} onKeyDown={(e) => { if (e.key === "Enter") void print(); }} aria-label="Boxes" />
+              <button type="button" className="ob-step" aria-label="One more box" onClick={() => setBoxes(Math.min(99, boxes + 1))}>+</button>
+              <label className="ob-f"><span>Only box #</span><input type="number" min={1} max={99} value={only} onChange={(e) => setOnly(e.target.value)} placeholder="All" /></label>
+              <button type="button" className="btn primary ob-lbl-go" disabled={busy} onClick={() => void print()}>{busy ? "Sending…" : label}</button>
+            </div>
+            <div className="faint">Guessed from the pieces ({perBox} a box). {card.kind === "o" && <a className="linkbtn" href={`/print/${card.id}/labels?boxes=${boxes}`} target="_blank" rel="noreferrer">Printable sheet instead</a>}</div>
+          </div>
+        ) : (
+          <>
+            <div className="ob-form">
+              <label className="ob-f ob-f-job"><span>Job</span><input type="text" autoFocus value={job} onChange={(e) => setJob(e.target.value)} placeholder="Scan the work order or type the job #" /></label>
+            </div>
+            <div className="ob-found">{looking ? <span className="faint">Looking…</span> : job.trim().length >= 3 ? <span className="faint">No job with that number.</span> : <span className="faint">Or type the job in the box at the top.</span>}</div>
+          </>
+        )}
         {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
       </div>
     </section>
