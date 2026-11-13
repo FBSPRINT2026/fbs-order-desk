@@ -132,8 +132,8 @@ export default function Outbound() {
 
   return (
     <div className="ob-grid">
+      <div className="page-head ob-head"><div><h1>Outbound</h1><div className="eyebrow">What&apos;s here and ready to leave: who&apos;s picking up, what ships, what we deliver</div></div></div>
       <div className="ob-left">
-        <div className="page-head"><div><h1>Outbound</h1><div className="eyebrow">What&apos;s here and ready to leave: who&apos;s picking up, what ships, what we deliver</div></div></div>
         <label className="ob-q">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
           <input ref={qRef} type="text" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { const n = jobCode(q); if (n) { e.preventDefault(); setScanned(n); setQ(""); } } }} placeholder="Who's picking up? Customer, job # or PO, or scan a label" aria-label="Look up a customer, job # or PO" />
@@ -230,30 +230,56 @@ function ScanChoice({ n, onClose, onLabel, onShip }: { n: string; onClose: () =>
  */
 type LabelJob = { kind: "o" | "a"; id: string; number: string; name: string; customer: string; qty: number };
 function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; perBox: number }) {
-  const start = pick?.n || "";
-  const [job, setJob] = useState(start), [card, setCard] = useState<LabelJob | null>(null), [svg, setSvg] = useState("");
-  const [looking, setLooking] = useState(!!start), [missing, setMissing] = useState(false);
+  // typed into the box (q) vs the job picked from the list, scanned or sent here (num): nothing below the box shows
+  // until a job is picked (Nick, Nov 13: "start typing and you should select it from the list below… then it drops it down")
+  const [q, setQ] = useState(""), [num, setNum] = useState(pick?.n || ""), [hi, setHi] = useState(0);
+  const [card, setCard] = useState<LabelJob | null>(null), [svg, setSvg] = useState("");
+  const [looking, setLooking] = useState(!!pick?.n), [missing, setMissing] = useState("");
+  const [jobs, setJobs] = useState<{ number: string; customer: string; name: string }[]>([]);
   const [boxes, setBoxes] = useState(1), [show, setShow] = useState(1), [only, setOnly] = useState(""), [busy, setBusy] = useState(false), [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // most days the box count isn't known until packing is done: labels print "BOX ___ OF ___" unless this is ticked
   const [known, setKnown] = useState(false);
   const boxRef = useRef<HTMLInputElement>(null);
   const post = (body: Record<string, unknown>) => fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) })).catch(() => ({ ok: false, j: { error: "Offline. Try again." } as Record<string, string> }));
-  // a job sent here (Label on a row, or a scan)
-  useEffect(() => { if (pick) { setJob(pick.n); setMsg(null); } }, [pick?.at]); // eslint-disable-line react-hooks/exhaustive-deps
-  // find the job
+  // the jobs to pick from: everything open, newest first (approved through ready, and old Printavo jobs that are ready)
   useEffect(() => {
-    const num = job.trim().match(/\/j\/#?(\d{3,7})/)?.[1] || job.trim().replace(/^#/, "").match(/^(\d{3,7})(?:-\d+)?$/)?.[1];
-    if (!num) { setCard(null); setSvg(""); setLooking(false); setMissing(false); return; }
-    setLooking(true);
-    const h = setTimeout(async () => {
+    void (async () => {
+      const sb = createClient();
+      const [o, a] = await Promise.all([
+        sb.from("orders").select("number, nickname, customer_id").is("discarded_at", null).in("status", ["approved", "production", "fulfillment", "ready"]).order("number", { ascending: false }).limit(800),
+        sb.from("archived_orders").select("visual_id, nickname, customer_id").is("removed_at", null).ilike("status_name", "%ready%").limit(300),
+      ]);
+      type O = { number: number; nickname: string; customer_id: string | null }; type A = { visual_id: string; nickname: string; customer_id: string | null };
+      const os = (o.data || []) as O[], as = (a.data || []) as A[];
+      const ids = [...new Set([...os, ...as].map((x) => x.customer_id).filter(Boolean))] as string[];
+      const cust = new Map<string, string>();
+      for (let i = 0; i < ids.length; i += 200) { const { data } = await sb.from("customers").select("id, company, name").in("id", ids.slice(i, i + 200)); for (const c of (data || []) as { id: string; company: string; name: string }[]) cust.set(c.id, custLabel(c)); }
+      setJobs([...os.map((x) => ({ number: String(x.number), customer: cust.get(x.customer_id || "") || "", name: x.nickname || "" })), ...as.map((x) => ({ number: x.visual_id, customer: cust.get(x.customer_id || "") || "", name: x.nickname || "" }))]);
+    })();
+  }, []);
+  const t = q.trim().toLowerCase().replace(/^#/, "");
+  const matches = !t || jobCode(q).length && /\//.test(q) ? [] : jobs.filter((j) => (/^\d+$/.test(t) ? j.number.startsWith(t) : `${j.customer} ${j.name}`.toLowerCase().includes(t))).slice(0, 8);
+  function choose(n: string) { setNum(n); setQ(""); setHi(0); setMsg(null); }
+  function enter() {
+    const m = matches[Math.min(hi, matches.length - 1)];
+    if (m && !/\//.test(q)) return choose(m.number);
+    const code = jobCode(q);
+    if (code) choose(code);
+  }
+  // a job sent here (Label on a row, or a scan)
+  useEffect(() => { if (pick) choose(pick.n); }, [pick?.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the picked job
+  useEffect(() => {
+    if (!num) { setCard(null); setSvg(""); setLooking(false); return; }
+    setLooking(true); setMissing("");
+    void (async () => {
       const r = await post({ action: "preview", job: num, boxes: 1 });
       setLooking(false);
-      if (!r.ok || !r.j.job) { setCard(null); setSvg(""); setMissing(true); return; }
-      setMissing(false); setCard(r.j.job); setBoxes(estimateBoxes(r.j.job.qty, perBox)); setShow(1);
+      if (!r.ok || !r.j.job) { setCard(null); setSvg(""); setMissing(num); setNum(""); return; }
+      setCard(r.j.job); setBoxes(estimateBoxes(r.j.job.qty, perBox)); setShow(1); setKnown(false); setOnly("");
       setTimeout(() => { boxRef.current?.focus(); boxRef.current?.select(); }, 30);
-    }, pick && job === pick.n ? 0 : 300);
-    return () => clearTimeout(h);
-  }, [job, perBox]); // eslint-disable-line react-hooks/exhaustive-deps
+    })();
+  }, [num, perBox]); // eslint-disable-line react-hooks/exhaustive-deps
   // the picture, for the box being shown
   useEffect(() => {
     if (!card) return;
@@ -270,14 +296,22 @@ function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; 
   const label = known && +only ? `Print box ${+only} of ${boxes}` : `Print ${boxes} label${boxes === 1 ? "" : "s"}`;
   return (
     <section className="panel obl-panel">
-      <div className="panel-h"><h2>Box label</h2>{card && <><span className="spacer" /><button type="button" className="linkbtn" onClick={() => { setJob(""); setCard(null); setSvg(""); setMsg(null); }}>Another job</button></>}</div>
+      <div className="panel-h"><h2>Box label</h2>{card && <><span className="spacer" /><button type="button" className="linkbtn" onClick={() => { setNum(""); setCard(null); setSvg(""); setMsg(null); }}>Another job</button></>}</div>
       <div className="panel-b obl-side">
         {card ? (
           <div className="obl-job"><b>#{card.number}</b><span>{card.customer}</span>{card.name && <span className="faint">{card.name}</span>}</div>
         ) : (
-          <label className="ob-f ob-f-job"><span>Job</span><input type="text" value={job} onChange={(e) => setJob(e.target.value)} placeholder="Scan the label or work order, or type the #" />
-            {missing && <small className="obl-miss">No job with that number.</small>}</label>
+          <div className="obl-find">
+            <input type="text" value={q} autoComplete="off" onChange={(e) => { setQ(e.target.value); setHi(0); setMissing(""); }}
+              onKeyDown={(e) => { if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); } else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(0, h - 1)); } else if (e.key === "Enter") { e.preventDefault(); enter(); } }}
+              placeholder="Job #, customer or job name" aria-label="Find the job for the label" />
+            {matches.length > 0 && <ul className="obl-dd" role="listbox">{matches.map((m, i) => (
+              <li key={m.number} role="option" aria-selected={i === hi} className={i === hi ? "on" : undefined} onMouseDown={(e) => { e.preventDefault(); choose(m.number); }} onMouseEnter={() => setHi(i)}>
+                <b>#{m.number}</b><span>{m.customer}</span>{m.name && <small>{m.name}</small>}</li>))}</ul>}
+            {looking ? <small className="faint">Finding #{num}…</small> : missing ? <small className="obl-miss">No job #{missing}.</small> : t && !matches.length && !jobCode(q) ? <small className="faint">No open job matches. Type the whole # and press Enter for any job.</small> : null}
+          </div>
         )}
+        {card && <>
         <div className="obl-pic">
           {svg ? <div className="obl-label" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="obl-label obl-empty">{looking ? "Finding the job…" : "The label shows here"}</div>}
           {card && known && boxes > 1 && <div className="obl-flip"><button type="button" className="btn sm" disabled={n <= 1} onClick={() => setShow(n - 1)}>‹</button><span>Box {n} of {boxes}</span><button type="button" className="btn sm" disabled={n >= boxes} onClick={() => setShow(n + 1)}>›</button></div>}
@@ -298,6 +332,7 @@ function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; 
         <button type="button" className="btn primary obl-go" disabled={!card || busy} onClick={() => void print()}>{busy ? "Sending…" : label}</button>
         {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
         {card?.kind === "o" && <a className="linkbtn obl-sheet" href={`/print/${card.id}/labels?boxes=${boxes}`} target="_blank" rel="noreferrer">Print on paper instead</a>}
+        </>}
       </div>
     </section>
   );
