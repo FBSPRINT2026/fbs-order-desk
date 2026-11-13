@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   if (!st) return NextResponse.json({ error: `That isn't a shop computer. Try ${STATIONS.map((s) => s.name).join(", ")}.` }, { status: 400 });
   const admin = createAdminClient();
   const net = await shopNetwork(admin);
-  if (!net.configured) return NextResponse.json({ error: "The shop's network isn't saved yet. Ask the office." }, { status: 403 });
+  if (!net.configured) return NextResponse.json({ error: "The shop's network isn't saved yet: the owner presses \"I'm at the shop: save this network\" on Settings → People → Shop computers." }, { status: 403 });
   if (!net.on) return NextResponse.json({ error: "Shop computers only sign in on the shop's network." }, { status: 403 });
   const { data: srow } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const data = (srow?.data || {}) as Record<string, unknown>;

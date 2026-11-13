@@ -3,7 +3,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { shopNetwork } from "@/lib/shopNetwork";
 import { STATIONS, stationEmail } from "@/lib/stations";
-import StationPin from "./StationPin";
+import StationPin, { SaveNetwork } from "./StationPin";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ export default async function Page() {
         </section>
         <section className="panel">
           <div className="panel-h"><h2>Shop network</h2><span className="faint">Shop computers only sign in from here, wired or Wi-Fi</span></div>
-          <div className="panel-b"><p>{net.configured ? `Saved: ${net.ips.join(", ")}. This computer is ${net.on ? "on" : "not on"} the shop's network.` : "Not saved yet: shop computers can't sign in until it is (Time Clock → Settings)."}</p></div>
+          <div className="panel-b stack"><p>{net.configured ? `Saved: ${net.ips.join(", ")}. This computer (${net.ip || "unknown"}) is ${net.on ? "on" : "not on"} the shop's network.` : `Not saved yet: shop computers can't sign in until it is. This computer's internet address is ${net.ip || "unknown"}.`}</p>{v.role === "owner" && !net.on && <SaveNetwork />}<p className="faint" style={{ fontSize: 12.5 }}>Press it on a computer at the shop. A second internet line can be added the same way from a computer on it; remove one on Shipping Center → Settings.</p></div>
         </section>
       </div>
     </>

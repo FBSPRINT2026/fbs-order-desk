@@ -322,3 +322,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 1:20pm · 1.3.564 · Nick · Crew phone: View as (the owner sees any employee's phone, look only, from his own login; no shared PIN)
 - Nov 13 1:39pm · 1.3.565 · Nick · Shop computers: FBS-REC / FBS-PRESS / FBS-SHIP / FBS-PO sign in with a name and PIN on the shop network; Settings → Shop computers; Work Orders page
 - Nov 13 1:41pm · 1.3.566 · Nick · Work Orders: Tomorrow only for tomorrow
+- Nov 13 2:00pm · 1.3.567 · Nick · Shop computers: save the shop's network in one click on Settings → Shop computers
