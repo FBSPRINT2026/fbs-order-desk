@@ -21963,6 +21963,27 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ob-step{width:44px;height:44px;border:1px solid var(--line);border-radius:8px;background:var(--surface);font-size:22px;font-weight:700;cursor:pointer;color:var(--ink)}
 .ob-lbl-n>input{width:76px;height:44px;border:2px solid var(--accent);border-radius:8px;text-align:center;font:inherit;font-size:22px;font-weight:800;color:var(--ink)}
 .ob-lbl-go{height:44px;font-size:15px;padding:0 22px}
+/* Print box labels pop-up: the label as it prints, and how many */
+.pp-sheet.obl{width:min(860px,100%)}
+.obl-body{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;padding:20px 24px 24px;align-items:start}
+.obl-pic{display:flex;flex-direction:column;align-items:center;gap:10px;background:var(--surface-2);border-radius:12px;padding:18px}
+.obl-label{width:min(100%,400px);aspect-ratio:812/1218;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.18);border-radius:4px;overflow:hidden}
+.obl-label svg{display:block;width:100%;height:100%}
+.obl-empty{display:grid;place-items:center;color:var(--ink-3);font-weight:600}
+.obl-flip{display:flex;align-items:center;gap:10px;font-weight:700}
+.obl-side{display:flex;flex-direction:column;gap:12px}
+.obl-job{display:flex;flex-direction:column;gap:2px;font-size:14px}
+.obl-job b{font-size:24px;color:var(--accent)}
+.obl-job .linkbtn{align-self:flex-start;font-size:13px;margin-top:4px}
+.obl-k{font-weight:700;font-size:16px;margin-top:6px}
+.obl-n{display:flex;align-items:center;gap:8px}
+.obl-n>input{width:90px;height:52px;border:2px solid var(--accent);border-radius:8px;text-align:center;font:inherit;font-size:26px;font-weight:800;color:var(--ink)}
+.obl-n .ob-step{width:52px;height:52px}
+.obl-side .ob-f input{width:100%}
+.obl-go{height:52px;font-size:17px;width:100%;justify-content:center}
+.obl-sheet{font-size:13px;align-self:flex-start}
+.obl-miss{color:var(--danger);text-transform:none;letter-spacing:0;font-size:12.5px}
+@media (max-width:800px){.obl-body{grid-template-columns:1fr}}
 .ob-sc-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .ob-sc-head h2{font-family:var(--display);font-size:22px;margin:0}
 @media (max-width:900px){.ob-act{grid-template-columns:1fr}}

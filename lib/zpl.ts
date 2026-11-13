@@ -1,6 +1,8 @@
 import { SITE_URL } from "@/lib/config";
 import type { JobCard } from "@/lib/jobCard";
 import { bySize } from "@/lib/checkinShared";
+import { qrSvg } from "@/lib/qr";
+import { code128Modules } from "@/lib/barcode";
 
 /**
  * Zebra labels (ZPL) for the ZT231: 4×6 box labels and a test label. Laid out on a 203 dpi grid (812 × 1218 dots)
@@ -12,27 +14,60 @@ export const jobLink = (number: string | number, box?: number | null) => `${SITE
 /** text for a ^FD field: ^FH lets us hex-escape the characters ZPL uses itself */
 const fd = (s: string) => "^FH_^FD" + String(s ?? "").replace(/[_^~\\]/g, (c) => "_" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).replace(/[\r\n]+/g, " ") + "^FS";
 
+const esc = (s: string) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
+
+/**
+ * Draws a label once, two ways: the ZPL the Zebra prints, and an SVG picture of the same label (the Outbound pop-up's
+ * preview), so what's shown is always what prints. The SVG is on the 203 dpi grid (812 × 1218).
+ */
 class Z {
   out: string[] = [];
+  pic: string[] = [];
+  /** filled boxes so far: text drawn reversed (^FR) over one comes out white */
+  private fills: { x: number; y: number; w: number; h: number }[] = [];
   constructor(public k: number) {}
   n = (v: number) => Math.round(v * this.k);
   /** text at x,y (dots at 203 dpi), height h; w = width for wrapping (lines = max lines), align L/C/R */
   text(x: number, y: number, h: number, s: string, o: { w?: number; lines?: number; align?: "L" | "C" | "R"; reverse?: boolean; wide?: number } = {}) {
     const { n } = this;
     this.out.push(`^FO${n(x)},${n(y)}${o.reverse ? "^FR" : ""}^A0N,${n(h)},${n(o.wide ?? h)}${o.w ? `^FB${n(o.w)},${o.lines || 1},0,${o.align || "L"},0` : ""}${fd(s)}`);
+    const white = o.reverse && this.fills.some((f) => x >= f.x - 1 && x < f.x + f.w && y >= f.y - 1 && y < f.y + f.h);
+    const w = o.w || 812 - x, lines = o.lines || 1, al = o.align === "C" ? "center" : o.align === "R" ? "right" : "left";
+    this.pic.push(`<foreignObject x="${x}" y="${y}" width="${w}" height="${h * lines * 1.05}"><div xmlns="http://www.w3.org/1999/xhtml" style="font:700 ${h}px/${h * 1.02}px 'Arial Narrow','Roboto Condensed','Helvetica Neue',Arial,sans-serif;letter-spacing:-.02em;color:${white ? "#fff" : "#000"};text-align:${al};white-space:${lines > 1 ? "normal" : "nowrap"};overflow:hidden;max-height:${h * lines * 1.05}px;transform:scaleX(.92);transform-origin:${al} top">${esc(s)}</div></foreignObject>`);
   }
-  box(x: number, y: number, w: number, h: number, t = 2, fill = false) { const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^GB${n(w)},${n(h)},${fill ? n(Math.min(w, h)) : Math.max(1, n(t))}^FS`); }
+  box(x: number, y: number, w: number, h: number, t = 2, fill = false) {
+    const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^GB${n(w)},${n(h)},${fill ? n(Math.min(w, h)) : Math.max(1, n(t))}^FS`);
+    if (fill) { this.fills.push({ x, y, w, h }); this.pic.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#000"/>`); }
+    else { const tt = Math.max(1, t); this.pic.push(`<rect x="${x + tt / 2}" y="${y + tt / 2}" width="${Math.max(0, w - tt)}" height="${Math.max(0, h - tt)}" fill="none" stroke="#000" stroke-width="${tt}"/>`); }
+  }
   line(x: number, y: number, w: number, h: number) { this.box(x, y, Math.max(w, 2), Math.max(h, 2), Math.min(Math.max(w, 2), Math.max(h, 2)), true); }
-  qr(x: number, y: number, mag: number, data: string) { const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^BQN,2,${Math.max(2, Math.round(mag * this.k))}^FDMA,${data}^FS`); }
-  code128(x: number, y: number, h: number, data: string, module = 2) { const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^BY${Math.max(1, Math.round(module * this.k))},3,${n(h)}^BCN,${n(h)},N,N,N^FD${data}^FS`); }
+  qr(x: number, y: number, mag: number, data: string) {
+    const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^BQN,2,${Math.max(2, Math.round(mag * this.k))}^FDMA,${data}^FS`);
+    const q = qrSvg(data, 0), m = Math.max(2, Math.round(mag)), size = q.modules * m;
+    this.pic.push(q.svg.replace("<svg ", `<svg x="${x}" y="${y + 10}" width="${size}" height="${size}" `));
+  }
+  code128(x: number, y: number, h: number, data: string, module = 2) {
+    const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^BY${Math.max(1, Math.round(module * this.k))},3,${n(h)}^BCN,${n(h)},N,N,N^FD${data}^FS`);
+    let bx = x; const bars: string[] = [];
+    code128Modules(data).forEach((w, i) => { if (i % 2 === 0) bars.push(`<rect x="${bx}" y="${y}" width="${w * module}" height="${h}"/>`); bx += w * module; });
+    this.pic.push(`<g fill="#000">${bars.join("")}</g>`);
+  }
   zpl() { return `^XA^CI28^PW${this.n(812)}^LL${this.n(1218)}^LH0,0\n${this.out.join("\n")}\n^XZ`; }
+  svg() { return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 812 1218" shape-rendering="crispEdges"><rect width="812" height="1218" fill="#fff"/>${this.pic.join("")}</svg>`; }
 }
 
 const DATE = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "—");
 
 /** One 4×6 box label: box `box` of `of` (of = 0 → "BOX __ OF __" to write in). */
 export function boxLabelZpl(j: JobCard, box: number, of: number, dpi = 203): string {
-  const z = new Z(dpi / 203);
+  return drawBoxLabel(new Z(dpi / 203), j, box, of).zpl();
+}
+/** The same box label as a picture (SVG), for the preview before it prints. */
+export function boxLabelSvg(j: JobCard, box: number, of: number): string {
+  return drawBoxLabel(new Z(1), j, box, of).svg();
+}
+
+function drawBoxLabel(z: Z, j: JobCard, box: number, of: number): Z {
   const L = 22, W = 812 - 2 * L;
   // header: job number + who it's from, delivery tag, box count
   z.text(L, 18, 78, `#${j.number}`, { w: 330 });
@@ -101,7 +136,7 @@ export function boxLabelZpl(j: JobCard, box: number, of: number, dpi = 203): str
   z.text(L + 10, foot + 10, 22, "PACKED BY");
   z.line(L + 470, foot, 3, 70);
   z.text(L + 470, foot + 20, 34, "THANK YOU!", { w: W - 470, align: "C" });
-  return z.zpl();
+  return z;
 }
 
 /** A small label to check the printer, its darkness and that the QR scans. */

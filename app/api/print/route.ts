@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { jobActor } from "@/lib/jobAccess";
 import { loadJobCard, parseJobCode } from "@/lib/jobCard";
-import { boxLabelZpl, testLabelZpl } from "@/lib/zpl";
+import { boxLabelSvg, boxLabelZpl, testLabelZpl } from "@/lib/zpl";
 import { printSettings, queueLabels } from "@/lib/printQueue";
 import { shopNetwork } from "@/lib/shopNetwork";
 
@@ -22,6 +22,16 @@ export async function POST(req: Request) {
   if (b.action === "test") {
     const r = await queueLabels(admin, [{ title: "Test label", zpl: testLabelZpl(ps.dpi, who.name), kind: "test" }], who.name);
     return NextResponse.json(r, { status: r.ok ? 200 : 202 });
+  }
+  // the box label as a picture, before it prints (Outbound's Print box label pop-up)
+  if (b.action === "preview") {
+    const ref = typeof b.job === "object" && b.job && (b.job.kind === "o" || b.job.kind === "a") ? { kind: b.job.kind as "o" | "a", id: String(b.job.id) } : parseJobCode(String(b.job || ""));
+    if (!ref) return NextResponse.json({ error: "Which job?" }, { status: 400 });
+    const card = await loadJobCard(admin, ref);
+    if (!card) return NextResponse.json({ error: "No job with that number." }, { status: 404 });
+    const of = Math.max(0, Math.min(99, Math.round(+b.boxes || 0)));
+    const box = Math.max(1, Math.min(of || 1, Math.round(+b.box || 1)));
+    return NextResponse.json({ svg: boxLabelSvg(card, box, of), job: { kind: card.kind, id: card.id, number: card.number, name: card.name, customer: card.customer, qty: card.qty } });
   }
   if (b.action === "box") {
     const ref = typeof b.job === "object" && b.job && (b.job.kind === "o" || b.job.kind === "a") ? { kind: b.job.kind as "o" | "a", id: String(b.job.id) } : parseJobCode(String(b.job || ""));
