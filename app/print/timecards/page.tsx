@@ -53,7 +53,7 @@ function Cards() {
     const days = Array.from({ length: daysBetween(per.start, per.end) + 1 }, (_, i) => addDays(per.start, i));
     const worked = new Set([...punches.filter((p) => !p.voided).map((p) => p.employee_id), ...offs.filter((o) => o.status === "approved").map((o) => o.employee_id)]);
     const rank = (e: Employee) => { const i = DEPT_ORDER.indexOf(e.department); return i < 0 ? DEPT_ORDER.length : i; };
-    return emps.filter((e) => worked.has(e.id) && (who === "all" || !checked.has(e.id)))
+    return emps.filter((e) => !e.owner_only && worked.has(e.id) && (who === "all" || !checked.has(e.id)))
       .sort((a, b) => rank(a) - rank(b) || (a.department || "").localeCompare(b.department || "") || fullName(a).localeCompare(fullName(b)))
       .map((e) => {
         const c = timecard(s, e.id, punches, offs, per.start, per.end);

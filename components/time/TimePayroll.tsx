@@ -47,7 +47,8 @@ export default function TimePayroll({ d }: { d: TimeData }) {
     if (!punches) return [] as Row[];
     const worked = new Set([...punches.filter((p) => !p.voided).map((p) => p.employee_id), ...offs.filter((o) => o.status === "approved").map((o) => o.employee_id)]);
     return d.employees
-      .filter((e) => worked.has(e.id) || (e.active && e.pay_type === "salary"))
+      // the owners aren't on the payroll report, not even for the owner (Nick, Nov 13 2026: "Amanda and I… we should be off")
+      .filter((e) => !e.owner_only && (worked.has(e.id) || (e.active && e.pay_type === "salary")))
       .map((e) => { const c = timecard(d.settings, e.id, punches, offs, period.start, period.end); return { e, pay: payFor(d.settings, c, pay[e.id], e.pay_type), issues: c.issues.length }; })
       .filter((r) => r.pay.regHours + r.pay.otHours + r.pay.offHours > 0 || (r.e.pay_type === "salary" && r.e.active))
       .sort((a, b) => (a.e.last_name || a.e.first_name).localeCompare(b.e.last_name || b.e.first_name) || a.e.first_name.localeCompare(b.e.first_name));
