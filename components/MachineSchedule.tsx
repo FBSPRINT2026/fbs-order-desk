@@ -55,7 +55,7 @@ const numLink = (j: Job) => (j.href ? <a className="ms-numl" href={j.href} dragg
 // move [Firm] to the right side of the box")
 const flags0 = (j: Job) => (j.rush || j.firm ? <span className="mfl">{j.rush ? <em className="mfl-rush" title="Rush">Rush</em> : null}{j.firm ? <em className="mfl-firm" title={`Firm: needed ${firmLbl(j)}`}>Firm · {firmLbl(j)}</em> : null}</span> : null);
 /** a job's small tags: rush / firm, and a sample run or a full run waiting on its sample (Nov 11, Nick; lib/samples.ts) */
-const flags = (j: Job) => <>{j.issue ? <em className={"mjx-tag " + j.issue.why} title={`${ISSUE_WORD[j.issue.why]}: ${j.issue.pcs} pcs still to print${j.issue.waits ? " · waits for the goods" : ""}`}>{ISSUE_WORD[j.issue.why]}</em> : null}{flags0(j)}{j.sample ? <em className="ms-smp" title={j.sample === "run" ? "The order's pre-production sample run" : "A sample order"}>Sample</em> : null}{j.waits ? <em className="ms-smpw" title="The full run waits for the customer's OK on the sample">Waits for sample OK</em> : null}</>;
+const flags = (j: Job) => <>{j.issue ? <em className={"mjx-tag " + j.issue.why} title={`${ISSUE_WORD[j.issue.why]}: ${j.issue.pcs ? `${j.issue.pcs} pcs still to print` : "how many to be counted"}${j.issue.waits ? " · waits for the goods" : ""}`}>{ISSUE_WORD[j.issue.why]}</em> : null}{flags0(j)}{j.sample ? <em className="ms-smp" title={j.sample === "run" ? "The order's pre-production sample run" : "A sample order"}>Sample</em> : null}{j.waits ? <em className="ms-smpw" title="The full run waits for the customer's OK on the sample">Waits for sample OK</em> : null}</>;
 /** why a job is where it is (Nov 11 2026, Nick): the schedule put it there (sparkle), a person did, it's locked, or
  *  it only fits that press */
 function WhyIcon({ w, title }: { w: "lock" | "cap" | "me" | "ai"; title: string }) {
@@ -547,7 +547,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [keyOpen, setKeyOpen] = useSticky("cal.key", true);
   const [rcPause, setRcPause] = useState(false), [rcSure, setRcSure] = useState(false);
   // Issue on a run (Nick, Nov 12: "a red button that says issue, reprint, reject, or missing"): why, and how many still to print by size
-  const [rcIss, setRcIss] = useState<{ why: IssueRef["why"]; n: Record<string, string>; sizes: [string, number][] | null } | null>(null);
+  const [rcIss, setRcIss] = useState<{ why: IssueRef["why"]; n: Record<string, string>; sizes: [string, number][] | null; count?: boolean } | null>(null);
   useEffect(() => { setRcIss(null); }, [lockMenu?.c.key]); // eslint-disable-line react-hooks/exhaustive-deps
   // a pause says what's done so far, print spot by print spot (Nov 12, Nick: "the sleeves are done… half the fronts")
   const [rcDone, setRcDone] = useState<Record<string, { s: "d" | "p" | "n"; n: string }>>({});
@@ -727,7 +727,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           const n0 = needsForOrder(ps, x as never, parts.rest.length ? parts.rest : x.groups || []).find((n) => n.type === it.kind);
           if (!n0) continue;
           const sizes = it.sizes || {}, sz = Object.entries(sizes).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${v}`).join(" · ");
-          out.push({ ...base, key: "i:" + it.id, name: `${ISSUE_WORD[it.why]} · ${x.nickname || ""}${sz ? ` · ${sz}` : ""}`.trim(), qty: it.pcs, issue: { id: it.id, why: it.why, pcs: it.pcs, sizes, waits: it.status === "open" && it.why === "missing" && !it.goods_at, at: it.at }, needs: [partNeed(subNeed(n0, it.locations), it.pcs)] });
+          out.push({ ...base, key: "i:" + it.id, name: `${ISSUE_WORD[it.why]} · ${x.nickname || ""}${sz ? ` · ${sz}` : it.pcs ? "" : " · count to come"}`.trim(), qty: it.pcs || undefined, issue: { id: it.id, why: it.why, pcs: it.pcs, sizes, waits: it.status === "open" && it.why === "missing" && !it.goods_at, at: it.at }, needs: [it.pcs ? partNeed(subNeed(n0, it.locations), it.pcs) : subNeed(n0, it.locations)] });
         }
         if (rest.length) out.push({ ...base, key: "o:" + x.id, prod: [x.production_date, runOn ? addDay(runOn, 1) : null].filter(Boolean).sort().pop() || null, name: parts.sample.length ? `Production run · ${x.nickname || ""}`.trim() : x.nickname || "", qty: x.qty || 0, needs: withRunTimes(rest, x.run_times), ...(x.order_type === "sample" ? { sample: "only" as const } : {}), ...(parts.sample.length && waitsOnSample(x.groups || []) ? { waits: true } : {}) });
         return out;
@@ -2031,16 +2031,17 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (!rcIss || !c.slot?.order_id) return;
     const sizes = Object.fromEntries(Object.entries(rcIss.n).map(([k, v]) => [k, Math.max(0, Math.round(+v || 0))]).filter(([, v]) => (v as number) > 0)) as Record<string, number>;
     const pcs = Object.values(sizes).reduce((a, b) => a + b, 0);
-    if (!pcs) { setMsg("Put in how many still have to print."); return; }
+    // how many is optional (Nick, Nov 12 2026, #40478: "I need to be able to mark it just missing right now"): with no
+    // count, the pieces are counted later and the job is booked as the rest of the run
     const sl = await slotFor(c, g); if (!sl) return;
     const when = isoAt(rcF.t), sb = createClient();
     const { error } = await sb.from("production_issues").insert({ order_id: sl.order_id, kind: c.need.type, locations: sl.locations && sl.locations.length ? sl.locations : null, why: rcIss.why, sizes, pcs, from_slot: sl.id, at: when, by: me.name || me.email || "shop" });
     if (error) { setMsg(error.message); return; }
     setLockMenu(null); setRcIss(null);
     // the run itself is over: it stopped where the issue was raised
-    if (sl.status === "running" || sl.status === "paused") await logAction(sl, "done", 1, false, when, `Issue: ${ISSUE_WORD[rcIss.why]} · ${pcs} pcs still to print`);
-    else await sb.from("production_slot_log").insert({ slot_id: sl.id, order_id: sl.order_id, machine: sl.machine, action: "progress", progress: +(sl.progress || 0), by: me.name || me.email, note: `Issue: ${ISSUE_WORD[rcIss.why]} · ${pcs} pcs still to print`, at: when });
-    setMsg(`#${c.job.number}: ${pcs} pcs ${rcIss.why === "missing" ? "wait for the missing goods in Ready To Schedule" : "are ready to schedule"} (${ISSUE_WORD[rcIss.why]}).`);
+    if (sl.status === "running" || sl.status === "paused") await logAction(sl, "done", 1, false, when, `Issue: ${ISSUE_WORD[rcIss.why]} · ${pcs ? `${pcs} pcs still to print` : "how many to be counted"}`);
+    else await sb.from("production_slot_log").insert({ slot_id: sl.id, order_id: sl.order_id, machine: sl.machine, action: "progress", progress: +(sl.progress || 0), by: me.name || me.email, note: `Issue: ${ISSUE_WORD[rcIss.why]} · ${pcs ? `${pcs} pcs still to print` : "how many to be counted"}`, at: when });
+    setMsg(`#${c.job.number}: ${pcs ? `${pcs} pcs` : "marked, how many to be counted:"} ${rcIss.why === "missing" ? "wait for the missing goods in Ready To Schedule" : "are ready to schedule"} (${ISSUE_WORD[rcIss.why]}).`);
     load();
   }
   /** the missing goods for an Issue came in: its pieces are ready to schedule */
@@ -2453,10 +2454,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 {rcIss && (() => { const tot = Object.values(rcIss.n).reduce((a, v) => a + Math.max(0, Math.round(+v || 0)), 0); return <div className="mrb-pz mrb-isf">
                   <b>Why?</b>
                   <div className="mrb-why mrb-isw">{(["missing", "reject", "reprint"] as const).map((w) => <button key={w} type="button" className={rcIss.why === w ? "on" : ""} onClick={() => setRcIss({ ...rcIss, why: w })}>{ISSUE_WORD[w]}</button>)}</div>
-                  <b>How many still to print?</b>
+                  {!rcIss.count ? <button type="button" className="mrb-iscnt" onClick={() => setRcIss({ ...rcIss, count: true })}>+ How many (optional)</button> : <><b>How many still to print?</b>
                   {!rcIss.sizes ? <div className="faint">Loading sizes…</div> : rcIss.sizes.length ? <div className="mrb-isz">{rcIss.sizes.map(([k, q]) => <label key={k}><span>{k}</span><input className="mrc-t mrc-n" inputMode="numeric" placeholder="0" value={rcIss.n[k] || ""} onChange={(e) => setRcIss({ ...rcIss, n: { ...rcIss.n, [k]: e.target.value.replace(/\D/g, "") } })} /><small>of {q}</small></label>)}</div>
-                    : <div className="mrb-isz"><label><span>Pieces</span><input className="mrc-t mrc-n" inputMode="numeric" placeholder="0" value={rcIss.n.pcs || ""} onChange={(e) => setRcIss({ ...rcIss, n: { pcs: e.target.value.replace(/\D/g, "") } })} /><small>of {c.need.qty}</small></label></div>}
-                  <button type="button" className="mrb-pgo mrb-isgo" disabled={!tot} onClick={() => void raiseIssue(c, g)}>{tot ? `Add ${tot} pcs to print${rcIss.why === "missing" ? " · waits for goods" : ""}` : "Put in how many"}</button>
+                    : <div className="mrb-isz"><label><span>Pieces</span><input className="mrc-t mrc-n" inputMode="numeric" placeholder="0" value={rcIss.n.pcs || ""} onChange={(e) => setRcIss({ ...rcIss, n: { pcs: e.target.value.replace(/\D/g, "") } })} /><small>of {c.need.qty}</small></label></div>}</>}
+                  <button type="button" className="mrb-pgo mrb-isgo" onClick={() => void raiseIssue(c, g)}>{`Mark ${ISSUE_WORD[rcIss.why].toLowerCase()}${tot ? ` · ${tot} pcs` : ""}${rcIss.why === "missing" ? " · waits for goods" : ""}`}</button>
                 </div>; })()}
               </>}
               {st !== "done" && c.slot?.order_id && <div className="mrb-dest"><div className="mrb-dl">When it&apos;s done, the order goes to</div>

@@ -34,6 +34,6 @@ export function useOpenIssues(orders: { id: string }[]): Record<string, OpenIssu
 export function IssueTag({ issues }: { issues?: OpenIssue[] }) {
   if (!issues?.length) return null;
   return <>{issues.map((x, i) => (
-    <span key={i} className={"mjx-tag " + x.why} title={`${x.pcs} pcs still to print${x.why === "missing" && !x.goods_at ? ": waiting on the goods" : ""}`}>{WORD[x.why]} · {x.pcs} pcs</span>
+    <span key={i} className={"mjx-tag " + x.why} title={`${x.pcs ? `${x.pcs} pcs still to print` : "how many to be counted"}${x.why === "missing" && !x.goods_at ? ": waiting on the goods" : ""}`}>{WORD[x.why]}{x.pcs ? ` · ${x.pcs} pcs` : ""}</span>
   ))}</>;
 }
