@@ -24,9 +24,11 @@ function lines(items: GridItem[]) {
 
 export function sizeGrid(items: GridItem[]): GridRow[] {
   const ls = lines(items), rows: GridRow[] = [];
-  let cols: { size: string; c: number }[] | null = null, qtyC: number | null = null, gap = 0, heading = "", lastText = "";
+  let cols: { size: string; c: number }[] | null = null, qtyC: number | null = null, gap = 0, heading = "", lastText = "", page = 0;
   for (let i = 0; i < ls.length; i++) {
     const l = ls[i], words = l.map((x) => x.str.trim());
+    // a table that carries on to the next page keeps its heading (a "GROUP: …" doesn't repeat there)
+    if (l[0].page !== page) { page = l[0].page; lastText = ""; }
     const sz = l.filter((x) => SIZE.test(x.str.trim()));
     // a header row: four or more sizes side by side
     if (sz.length >= 4 && sz.length >= words.length * 0.4) {
@@ -35,7 +37,8 @@ export function sizeGrid(items: GridItem[]): GridRow[] {
       qtyC = q ? q.x + q.w / 2 : null;
       const cs = cols.map((c) => c.c).sort((a, b) => a - b);
       gap = Math.min(...cs.slice(1).map((c, k) => c - cs[k]).filter((d) => d > 0.5));
-      heading = lastText;
+      heading = lastText || heading;
+      lastText = "";
       continue;
     }
     const nums = l.filter((x) => /^\d{1,4}$/.test(x.str.trim()));
