@@ -79,7 +79,7 @@ function Cards() {
   if (err) return <div className="tcp-msg">{err}</div>;
   if (!data) return <div className="tcp-msg">Loading time cards…</div>;
   return (
-    <div className="tcp">
+    <div className="tcp print-page" data-nosquish>
       <title>{`Time cards ${pages[0] ? longDay(pages[0].per.start) + " – " + longDay(pages[0].per.end) : ""}`}</title>
       <div className="tcp-bar">
         <b>{pages.length} time card{pages.length === 1 ? "" : "s"}</b>
@@ -100,7 +100,7 @@ function Cards() {
             <div><span>DEPARTMENT</span><b>{e.department || "—"}</b></div>
             <div><span>PAID</span><b>{e.pay_type === "salary" ? "Salary" : "Hourly"} · {e.paid_by === "contract" ? "Contract" : "Payroll"}</b></div>
           </div>
-          <table className="tcp-t">
+          <table className="tcp-t" data-nofit>
             <thead><tr><th>Day</th><th>In</th><th>Lunch out</th><th>Lunch in</th><th>Out</th><th className="r">Hours</th></tr></thead>
             <tbody>{rows.map((r) => r.k === "w"
               ? <tr key={"w" + r.label} className="wk"><td colSpan={5}>{r.label}</td><td className="r">{h2(r.mins)}</td></tr>
