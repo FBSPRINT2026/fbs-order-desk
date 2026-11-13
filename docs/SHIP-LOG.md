@@ -262,3 +262,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:24pm · 1.3.469 · Nick · Schedule debug: finished runs never overlap on a press; a run left printing when its order moved on shows finished; Day and Week views use the calm card look
 - Nov 12 9:30pm · 1.3.470 · Nick · Rules: schedule finished-run overlap and moved-on runs (Nov 12 debug)
 - Nov 12 9:56pm · 1.3.472 · Nick · Backups: one round at a time per backup (two rounds together lost tables from the manifest)
+- Nov 13 7:29am · 1.3.474 · Nick · Crew phone views, first pass: /crew main menu (clock, time card fixes, press jobs today, to count in), job menu by view with Main menu, post count, proof, work order on the phone

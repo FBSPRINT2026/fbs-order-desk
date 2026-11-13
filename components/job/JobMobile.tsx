@@ -16,8 +16,11 @@ import PhoneInks from "./PhoneInks";
 import type { PhoneInks as PhoneInksData } from "@/lib/jobInksServer";
 import type { PressOption, PressSheet } from "@/lib/pressActual";
 import { LangToggle, useT } from "./lang";
+import PostCount from "./PostCount";
+import { OPENS_ON, TILES, type JobTile } from "@/lib/crewView";
 
-type View = "home" | "setup" | "notes" | "photos" | "labels" | "ship" | "checkin" | "timer" | "inks";
+type View = "home" | "setup" | "notes" | "photos" | "labels" | "ship" | "checkin" | "timer" | "inks" | "post" | "proof" | "wo";
+const VIEWS: View[] = ["setup", "notes", "photos", "labels", "ship", "checkin", "timer", "inks", "post", "proof", "wo"];
 
 const fmtDay = (d: string | null, loc = "en-US") => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString(loc, { weekday: "short", month: "short", day: "numeric" }) : "—");
 const when = (d: string, loc = "en-US") => new Date(d).toLocaleString(loc, { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -32,18 +35,31 @@ const I = {
   time: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7v5l3 3",
   ink: "M12 3c-3 4.5-6 7.6-6 11a6 6 0 0 0 12 0c0-3.4-3-6.5-6-11zM9.5 15a2.5 2.5 0 0 0 2.5 2.5",
   open: "M14 4h6v6M20 4l-9 9M18 14v6H4V6h6",
+  post: "M4 7h16v13H4zM4 7l2-3h12l2 3M9 12h6M9 16h4",
+  proof: "M3 5h18v14H3zM3 15l5-5 4 4 3-3 6 6M15 9h.01",
+  wo: "M7 3h10v4H7zM5 7h14v14H5zM9 12h6M9 16h6",
+  menu: "M4 6h16M4 12h16M4 18h16",
 };
 
 /** The phone menu for one job (opened by scanning its QR code). */
 export default function JobMobile(p: {
   who: JobActor; missing?: string; card?: JobCard; box?: number | null; designs?: Record<string, { number: number; name: string; url: string }>; press?: PressSheet[]; presses?: PressOption[]; inks?: PhoneInksData | null;
   ship?: { t: ShipTarget; existing: Shipment | null } | null; shipSettings?: ShipSettings; checkin?: CheckJob | null; printer?: { ready: boolean; dpi: number };
+  /** the groups' mockup pictures (signed links), for the Proof tool */ mockups?: { name: string; urls: string[] }[];
 }) {
   const { who, card } = p;
   const { t, locale } = useT();
   const [view, setView] = useState<View>("home");
   // ?v=photos (the "Add photos from your phone" QR on the production mockup) opens straight on Photos
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("v"); if (v === "photos") setView("photos"); }, []);
+  // ?v=<tool> opens straight on that tool (?v=photos from the production mockup's QR, the crew menu's rows); else the
+  // tool the person's phone view starts on (a catcher's scan opens the post count; lib/crewView.ts)
+  useEffect(() => {
+    const v = new URLSearchParams(window.location.search).get("v") as View | null;
+    const has = (x: View) => (x === "ship" ? !!p.ship : x === "checkin" ? !!p.checkin : x === "inks" ? !!p.inks?.inks.length : x === "timer" ? who.kind === "employee" : true);
+    const pick = v && VIEWS.includes(v) ? v : (OPENS_ON[who.view] as View | undefined);
+    const first = pick && has(pick) ? pick : null;
+    if (first) { history.replaceState({ jm: "home" }, ""); history.pushState({ jm: first }, ""); setView(first); }
+  }, [who.view]); // eslint-disable-line react-hooks/exhaustive-deps
   // each tool is its own history entry, so the phone's Back button returns to the menu
   const go = (v: View) => { if (v !== "home") history.pushState({ jm: v }, ""); setView(v); scrollTo(0, 0); };
   useEffect(() => { const on = (e: PopStateEvent) => setView(((e.state && e.state.jm) as View) || "home"); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
@@ -54,13 +70,16 @@ export default function JobMobile(p: {
       <main className="jm-main"><div className="jm-card"><h1 className="jm-h">{t("No job #{0}", p.missing || "")}</h1><p>{t("This code doesn't match a job in the portal or in Printavo. Check the number on the label.")}</p></div></main></div>
   );
   const job = { kind: card.kind, id: card.id };
-  const title: Record<View, string> = { home: "", setup: t("Press setup"), notes: t("Notes"), photos: t("Photos"), labels: t("Box labels"), ship: t("Ship"), checkin: t("Check in goods"), timer: t("Press timer"), inks: t("Inks") };
+  const title: Record<View, string> = { home: "", setup: t("Press setup"), notes: t("Notes"), photos: t("Photos"), labels: t("Box labels"), ship: t("Ship"), checkin: t("Check in goods"), timer: t("Press timer"), inks: t("Inks"), post: t("Post count"), proof: t("Proof"), wo: t("Work order") };
 
   return (
     <div className="jm">
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
       <section className={"jm-job" + (view === "checkin" ? " slim" : "")}>
-        {view !== "home" && <button type="button" className="jm-back" onClick={back}>{t("← Job menu")}</button>}
+        <div className="jm-navrow">
+          <a className="jm-menu" href="/crew"><Icon d={I.menu} />{t("Main menu")}</a>
+          {view !== "home" && <button type="button" className="jm-back" onClick={back}>{t("← Job menu")}</button>}
+        </div>
         <div className="jm-num"><b>#{card.number}</b>{card.rush && <span className="jm-rush">{t("RUSH")}</span>}{p.box ? <span className="jm-box">{t("Box {0}", p.box)}</span> : null}</div>
         <div className="jm-cust">{card.customer || "—"}</div>
         {card.name && <div className="jm-name">{card.name}</div>}
@@ -77,6 +96,9 @@ export default function JobMobile(p: {
         {view === "checkin" && p.checkin && <Checkin job={p.checkin} />}
         {view === "inks" && p.inks && <PhoneInks card={card} data={p.inks} />}
         {view === "timer" && <PressTimer card={card} presses={p.presses || []} />}
+        {view === "post" && <PostCount card={card} checkin={p.checkin} job={job} />}
+        {view === "proof" && <Proof mockups={p.mockups || []} card={card} designs={p.designs || {}} />}
+        {view === "wo" && (card.kind === "o" ? <iframe className="jm-wo" src={`/print/${card.id}?work=1&embed=1`} title={t("Work order")} /> : <div className="jm-card"><p className="jm-faint">{t("This job's work order is in Printavo.")}</p></div>)}
       </main>
     </div>
   );
@@ -103,15 +125,24 @@ function Home({ p, job, go }: { p: Parameters<typeof JobMobile>[0]; job: { kind:
       <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setShot(f); }} />
       {shot && <PhotoSave job={job} file={shot} onDone={() => { setShot(null); load(); }} />}
       <div className="jm-tiles">
-        {tile("setup", t("Press setup"), I.setup, prints ? (prints === 1 ? t("1 print") : t("{0} prints", prints)) + (p.press?.length ? ` · ${t("screens")}` : "") : "")}
-        {p.inks && p.inks.inks.length > 0 && tile("inks", t("Inks"), I.ink, p.inks.inks.length === 1 ? t("1 ink · how much") : t("{0} inks · how much", p.inks.inks.length))}
-        {tile("notes", t("Notes"), I.notes, items ? (nNotes === 1 ? t("1 shop note") : t("{0} shop notes", nNotes)) : "")}
-        {tile("photos", t("Photos"), I.photo, items ? ((n) => (n === 1 ? t("1 saved") : t("{0} saved", n)))((items || []).filter((x) => x.kind !== "note").length) : "")}
-        {tile("labels", t("Box labels"), I.label, p.printer?.ready ? t("Print to the Zebra") : t("Printer not set up"))}
-        {p.ship && tile("ship", t("Ship"), I.ship, t("Boxes, weights, rates"))}
-        {p.checkin && tile("checkin", t("Check in goods"), I.checkin, p.checkin.state === "checked" ? t("Counted") : p.checkin.state === "issue" ? t("Problem open") : t("{0} pcs expected", p.checkin.ordered), p.checkin.state === "ready")}
-        {p.who.kind === "employee" ? tile("timer", t("Press timer"), I.time, t("Setup · run · pause")) : tile("time", t("Log time"), I.time, t("Start / finish"))}
-        {p.who.can.open && tile("open", t("Full job"), I.open, t("Open in the shop"))}
+        {TILES[p.who.view].map((k: JobTile) => {
+          const nMock = (p.mockups || []).reduce((a, m) => a + m.urls.length, 0);
+          switch (k) {
+            case "post": return tile("post", t("Post count"), I.post, p.checkin?.checkins?.[0] ? t("From the count-in") : t("Count what's here"), p.who.view === "catcher");
+            case "timer": return p.who.kind === "employee" ? tile("timer", t("Press timer"), I.time, t("Start · pause · complete"), p.who.view === "press") : null;
+            case "time": return p.who.kind === "staff" ? tile("time", t("Log time"), I.time, t("Start / finish")) : null;
+            case "proof": return tile("proof", t("Proof"), I.proof, nMock ? (nMock === 1 ? t("1 picture") : t("{0} pictures", nMock)) : t("The prints"));
+            case "wo": return tile("wo", t("Work order"), I.wo, t("Sizes, prints, notes"));
+            case "setup": return tile("setup", t("Press setup"), I.setup, prints ? (prints === 1 ? t("1 print") : t("{0} prints", prints)) + (p.press?.length ? ` · ${t("screens")}` : "") : "");
+            case "inks": return p.inks && p.inks.inks.length > 0 ? tile("inks", t("Inks"), I.ink, p.inks.inks.length === 1 ? t("1 ink · how much") : t("{0} inks · how much", p.inks.inks.length)) : null;
+            case "notes": return tile("notes", t("Notes"), I.notes, items ? (nNotes === 1 ? t("1 shop note") : t("{0} shop notes", nNotes)) : "");
+            case "photos": return tile("photos", t("Photos"), I.photo, items ? ((n) => (n === 1 ? t("1 saved") : t("{0} saved", n)))((items || []).filter((x) => x.kind !== "note").length) : "");
+            case "labels": return tile("labels", t("Box labels"), I.label, p.printer?.ready ? t("Print to the Zebra") : t("Printer not set up"));
+            case "ship": return p.ship ? tile("ship", t("Ship"), I.ship, t("Boxes, weights, rates")) : null;
+            case "checkin": return p.checkin ? tile("checkin", t("Check in goods"), I.checkin, p.checkin.state === "checked" ? t("Counted") : p.checkin.state === "issue" ? t("Problem open") : t("{0} pcs expected", p.checkin.ordered), p.checkin.state === "ready" || p.who.view === "receiving") : null;
+            case "open": return p.who.can.open ? tile("open", t("Full job"), I.open, t("Open in the shop")) : null;
+          }
+        })}
       </div>
       {recent.length > 0 && (
         <div className="jm-card">
@@ -370,6 +401,25 @@ function Labels({ card, box, printer, perBox, staff }: { card: JobCard; box: num
       {box && box <= n && <button type="button" className="jm-ghost" disabled={busy} onClick={() => print(box)}>{t("Just box {0} of {1}", box, n)}</button>}
       {msg && <div className={msg.ok ? "jm-ok" : "jm-err"} role="status">{msg.text}</div>}
       {staff && card.kind === "o" && <a className="jm-alt" href={`/print/${card.id}/labels?boxes=${n}`}>{t("Open the printable labels instead")}</a>}
+    </div>
+  );
+}
+
+/** The proof, big: the groups' mockup pictures (tap one to see it full screen), else the prints' art. */
+function Proof({ mockups, card, designs }: { mockups: { name: string; urls: string[] }[]; card: JobCard; designs: Record<string, { number: number; name: string; url: string }> }) {
+  const { t } = useT();
+  const shots = mockups.filter((m) => m.urls.length);
+  const art = card.groups.flatMap((g) => g.prints.map((pr) => ({ label: [pr.location, pr.inks].filter(Boolean).join(" · "), url: (pr.designId && designs[pr.designId]?.url) || pr.image || "" }))).filter((x) => x.url);
+  if (!shots.length && !art.length) return <div className="jm-card"><p className="jm-faint">{t("No mockup saved on this job yet.")}</p></div>;
+  return (
+    <div className="jm-proof">
+      {shots.map((m, i) => (
+        <div key={i} className="jm-card">
+          {shots.length > 1 && <b>{m.name}</b>}
+          {m.urls.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer"><img src={u} alt={m.name} /></a>)}
+        </div>
+      ))}
+      {!shots.length && art.map((a, i) => <div key={i} className="jm-card"><b>{a.label}</b><img src={a.url} alt="" /></div>)}
     </div>
   );
 }

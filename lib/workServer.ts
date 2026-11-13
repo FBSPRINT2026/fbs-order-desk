@@ -31,8 +31,10 @@ export async function employeeFor(admin: SupabaseClient, token: string | undefin
   if (!s || s.revoked || Date.parse(s.expires_at as string) < Date.now()) return null;
   const { data: e } = await admin.from("employees").select("id, first_name, last_name, active, lang, code").eq("id", s.employee_id).maybeSingle();
   if (!e || !e.active) return null;
+  // their phone view (lib/crewView.ts), read on its own so a database without the column still signs people in
+  const { data: pv } = await admin.from("employees").select("phone_view").eq("id", s.employee_id).maybeSingle();
   await admin.from("employee_sessions").update({ last_seen_at: new Date().toISOString() }).eq("id", s.id);
-  return { sessionId: s.id as string, ...(e as { id: string; first_name: string; last_name: string; lang: string; code: number }) };
+  return { sessionId: s.id as string, ...(e as { id: string; first_name: string; last_name: string; lang: string; code: number }), phone_view: ((pv as { phone_view?: string | null } | null)?.phone_view || null) as string | null };
 }
 
 export type WorkJob = OpenJob & { spots: string[] };

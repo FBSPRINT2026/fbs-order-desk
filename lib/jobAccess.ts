@@ -6,6 +6,8 @@ import { viewerPerms } from "@/lib/access";
 import { EMP_COOKIE, employeeFor } from "@/lib/workServer";
 import type { Perms } from "@/lib/roles";
 import { shopNetwork } from "@/lib/shopNetwork";
+import { mergeProduction } from "@/lib/production";
+import { crewViewOf, type CrewView } from "@/lib/crewView";
 
 /**
  * Who's using the job's phone menu (after scanning a work order or box label): a staff member signed in to the portal,
@@ -13,7 +15,8 @@ import { shopNetwork } from "@/lib/shopNetwork";
  * notes and photos, print box labels, count goods in (check-in) and log time; shipping needs a staff login with that
  * permission.
  */
-export type JobActor = { kind: "staff" | "employee"; name: string; email: string; employeeId: string | null; perms: Perms | null; can: { ship: boolean; checkin: boolean; open: boolean } };
+export type JobActor = { kind: "staff" | "employee"; name: string; email: string; employeeId: string | null; perms: Perms | null; can: { ship: boolean; checkin: boolean; open: boolean };
+  /** what their phone shows first (lib/crewView.ts); staff portal logins are Office */ view: CrewView };
 
 export async function jobActor(): Promise<JobActor | null> {
   return (await jobGate()).who;
@@ -30,7 +33,10 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
   if (staff) return { who: staff, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: false };
   const e = await employeeFor(admin, (await cookies()).get(EMP_COOKIE)?.value).catch(() => null);
   if (e) {
-    const who: JobActor = { kind: "employee", name: `${e.first_name || ""} ${e.last_name || ""}`.trim() || `#${e.code}`, email: "", employeeId: e.id, perms: null, can: { ship: false, checkin: true, open: false } };
+    const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+    const view = crewViewOf(e.phone_view, e.id, mergeProduction((st?.data as { production?: unknown } | null)?.production).crews);
+    // shipping (rates, labels) is staff-only for now: a phone login sees where the job goes, not the Ship tool
+    const who: JobActor = { kind: "employee", name: `${e.first_name || ""} ${e.last_name || ""}`.trim() || `#${e.code}`, email: "", employeeId: e.id, perms: null, can: { ship: false, checkin: true, open: false }, view };
     if (net.configured && !net.on) return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false };
     return { who, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: false };
   }
@@ -40,7 +46,7 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
 async function staffActor(v: Awaited<ReturnType<typeof getViewer>> | null): Promise<JobActor | null> {
   if (v?.user && v.isStaff) {
     const [perms, { data }] = await Promise.all([viewerPerms(v.supabase, v.email, v.role), v.supabase.from("staff").select("name").eq("email", v.email).maybeSingle()]);
-    return { kind: "staff", name: (data?.name as string) || v.email.split("@")[0], email: v.email, employeeId: null, perms, can: { ship: !!perms.shipping, checkin: !!perms.receiving, open: true } };
+    return { kind: "staff", name: (data?.name as string) || v.email.split("@")[0], email: v.email, employeeId: null, perms, can: { ship: !!perms.shipping, checkin: !!perms.receiving, open: true }, view: "office" };
   }
   return null;
 }
