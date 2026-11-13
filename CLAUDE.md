@@ -292,6 +292,14 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   button held 3 seconds to count everything in, then Check In first on the review (Nick, Nov 13). Leaving a count halfway, on the phone or the desk's
   `CheckinModal`, always asks: save what's counted to finish later (anyone picks it up: `/api/jobs/checkin/draft`) or
   reset to uncounted. Receiving lists every open order of ours whatever its due date (#40382, due last week, was missing).
+- **Shop computers** (Nick, Nov 13 2026: "FBS-REC, FBS-SHIP, FBS-PO and FBS-PRESS… a simple PIN"): four logins in
+  `lib/stations.ts`, each a real staff login of its own (`<key>@station.fbsprint.com`, the role's permissions, no money),
+  signed in on the sign-in page's "Shop computer" with its name and one PIN (`/api/station/login`; the owner sets the PIN
+  on Settings → People → Shop computers, kept scrambled in `settings.data.stations`, never in the code), on the shop's
+  network only (the shop layout and `jobGate` turn one away elsewhere). Each opens on its own page: Receiving, the crew
+  menu for the presses (`/crew`, then a job's phone menu), Shipping, and Work Orders (`/shop/work-orders`: the schedule's
+  jobs by day, ticked and printed together, marked printed). Being real logins they keep the portal's search and Orders
+  list; change what one sees on User access like any person.
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

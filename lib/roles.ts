@@ -85,7 +85,7 @@ export const seesMoney = (role?: string | null, own?: Partial<Perms> | null) => 
 export const PAGE_PERMS: [string, PermKey][] = [
   ["/shop/customers", "customers"], ["/shop/inbox", "customers"], ["/shop/conversations", "customers"], ["/shop/incoming", "incoming"], ["/shop/printavo-sync", "quotes"], ["/shop/projects", "projects"], ["/shop/proofs", "projects"], ["/shop/jobs", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
   ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/details", "artwork"], ["/shop/separations", "separations"], ["/shop/inks", "inkRoom"], ["/shop/threads", "threadRoom"], ["/shop/digitizing", "digitizing"],
-  ["/shop/board", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"], ["/shop/outbound", "shipping"], ["/shop/fulfillment", "receiving"],
+  ["/shop/board", "schedule"], ["/shop/work-orders", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"], ["/shop/outbound", "shipping"], ["/shop/fulfillment", "receiving"],
   ["/shop/receiving", "receiving"], ["/shop/receive-payment", "takePayments"], ["/shop/take-payment", "takePayments"], ["/shop/order-goods", "receiving"], ["/shop/time", "timeclock"], ["/shop/payroll", "timeclock"], ["/shop/ai", "workbench"],
 ];
 export const permForPath = (path: string): PermKey | null => PAGE_PERMS.find(([p]) => path === p || path.startsWith(p + "/"))?.[1] ?? null;

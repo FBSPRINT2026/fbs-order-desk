@@ -320,3 +320,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 1:08pm · 1.3.562 · Nick · Phone Proof shows the customer's own or visual mockup too (one groupPictures for the work order, Proof and job card); tap a picture to pinch and zoom
 - Nov 13 1:10pm · 1.3.563 · Nick · Phone picture viewer opens fitted to the screen
 - Nov 13 1:20pm · 1.3.564 · Nick · Crew phone: View as (the owner sees any employee's phone, look only, from his own login; no shared PIN)
+- Nov 13 1:39pm · 1.3.565 · Nick · Shop computers: FBS-REC / FBS-PRESS / FBS-SHIP / FBS-PO sign in with a name and PIN on the shop network; Settings → Shop computers; Work Orders page

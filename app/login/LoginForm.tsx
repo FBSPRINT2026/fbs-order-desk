@@ -13,7 +13,17 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
   const [password, setPassword] = useState("");
   // staff can sign in with a password they set in the shop menu (Oct 22, Nick); customers keep the emailed code
   const staff = /@fbsprint\.com$/i.test(email.trim());
-  const [stage, setStage] = useState<"email" | "code">("email");
+  const [stage, setStage] = useState<"email" | "code" | "station">("email");
+  // a shop computer (lib/stations.ts; Nov 13): its name and the shop computer PIN
+  const [stName, setStName] = useState(""), [stPin, setStPin] = useState("");
+  async function stationIn(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true); setErr("");
+    const r = await fetch("/api/station/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: stName, pin: stPin }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Offline. Try again." };
+    setBusy(false);
+    if (!r?.ok) { setErr(j.error || "Couldn't sign in."); return; }
+    location.href = j.to || "/shop";
+  }
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(linkError ? "That sign-in link expired or was already used. Enter your email to get a new one." : "");
   const safeNext = next.startsWith("/") ? next : "/";
@@ -63,7 +73,26 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
       {/* the portal's own look at the door (Nov 2, launch day): its logo on the dark bar with the color line under it */}
       {sideLogoUrl ? <div className="auth-brand"><img src={sideLogoUrl} alt={shopName} /><span>Customer portal</span></div>
         : logoUrl ? <img src={logoUrl} alt={shopName} style={{ maxHeight: 48, width: "auto", alignSelf: "flex-start" }} /> : <div className="shopname">{shopName}</div>}
-      {stage === "email" ? (
+      {stage === "station" ? (
+        <form onSubmit={stationIn} className="stack">
+          <div>
+            <h1>Shop Computer</h1>
+            <p className="muted" style={{ margin: "6px 0 0" }}>The computer&apos;s name and the shop computer PIN. Works on the shop&apos;s network only.</p>
+          </div>
+          <div className="field">
+            <label htmlFor="stname">Computer</label>
+            <input id="stname" list="stnames" required autoComplete="username" value={stName} onChange={(e) => setStName(e.target.value)} placeholder="FBS-REC" />
+            <datalist id="stnames"><option value="FBS-REC" /><option value="FBS-PRESS" /><option value="FBS-SHIP" /><option value="FBS-PO" /></datalist>
+          </div>
+          <div className="field">
+            <label htmlFor="stpin">PIN</label>
+            <input id="stpin" type="password" inputMode="numeric" required autoComplete="current-password" value={stPin} onChange={(e) => setStPin(e.target.value.replace(/\D/g, "").slice(0, 8))} />
+          </div>
+          {err && <div className="err">{err}</div>}
+          <button className="btn primary" disabled={busy || stPin.length < 4 || !stName.trim()} type="submit">{busy ? "Signing in…" : "Sign in"}</button>
+          <button className="btn ghost" type="button" onClick={() => { setStage("email"); setErr(""); }}>Back to email sign-in</button>
+        </form>
+      ) : stage === "email" ? (
         <form onSubmit={sendCode} className="stack">
           <div>
             <h1>Sign In</h1>
@@ -99,6 +128,7 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
       )}
       {/* a crew phone that landed here (an old Home Screen icon): their own sign-in is the employee number (Nov 13) */}
       <a className="muted" href="/crew" style={{ display: "block", textAlign: "center", marginTop: 14, fontSize: 13.5 }}>FBS employee? Sign in with your employee number</a>
+      {stage !== "station" && <button type="button" className="linkbtn muted" onClick={() => { setStage("station"); setErr(""); }} style={{ display: "block", margin: "8px auto 0", fontSize: 13.5 }}>Shop computer? Sign in with its name and PIN</button>}
     </div>
   );
 }

@@ -22866,3 +22866,8 @@ label.ckm-tile.over{border-color:var(--warn)}
 .rtm-err{color:var(--danger)}
 .rtm-pace{font-size:12px}
 .rtm-same{font-size:12.5px;color:var(--ok);font-weight:600}
+/* Work Orders page (the color printer; Nov 13) */
+.wo-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.wo-ok{color:var(--ok);font-weight:700;font-size:12.5px}
+.wo-no{color:var(--warn);font-weight:700;font-size:12.5px}
+tr.wo-on td{background:var(--accent-soft,#e8f1fc)}

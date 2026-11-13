@@ -30,6 +30,8 @@ import TimeBubble from "@/components/time/TimeBubble";
 import { useSticky } from "@/lib/useSticky";
 
 const ICONS: Record<string, React.ReactNode> = {
+  // Work Orders (the color printer's page; Nov 13): a printer
+  print: <svg viewBox="0 0 24 24"><path d="M6 9V3h12v6" /><rect x="3" y="9" width="18" height="8" rx="2" /><path d="M7 14h10v7H7z" /></svg>,
   home: <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>,
   inbox: <svg viewBox="0 0 24 24"><path d="M4 13l2.5-7h11L20 13v6H4z" /><path d="M4 13h4.5l1 2h5l1-2H20" /></svg>,
   assistant: <svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18.5 9l-4.7 1.5L12 15l-1.8-4.5L5.5 9l4.7-1.4z" /><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z" /></svg>,
@@ -300,7 +302,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   // the menu, in groups — each group's items are kept in alphabetical order
   const GROUPS: { title: string; items: [string, string, string][] }[] = [
     { title: "Sales", items: [["/shop/customers", "customers", "Customers"], ["/shop/jobs", "proof", "Job Center"], ["/shop/stores", "stores", "Merch Stores"], ["/shop/orders", "orders", "Orders"], ["/shop/projects", "projects", "Projects"]] },
-    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Schedule"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Wall"], ["/shop/digitizing", "needle", "Digitizing"], ["/shop/gang-sheet", "gang", "Gang Sheets"]] },
+    { title: "Production", items: [["/shop/artwork", "artwork", "Artwork"], ["/shop/employees", "team", "Employees"], ["/shop/board", "board", "Schedule"], ["/shop/work-orders", "print", "Work Orders"], ["/shop/inks", "ink", "Ink Room"], ["/shop/details", "details", "Reorder Details"], ["/shop/separations", "seps", "Separations"], ["/shop/threads", "spool", "Thread Wall"], ["/shop/digitizing", "needle", "Digitizing"], ["/shop/gang-sheet", "gang", "Gang Sheets"]] },
     { title: "Shop Tools", items: [["/shop/ai", "ai", "AI Workbench"], ["/shop/order-goods", "cart", "Order Goods"], ["/shop/time", "clock", "Time Clock"], ["/shop/gang-sheet/builder", "gang", "Gang Sheet Builder"], ["/shop/art-builder", "artbuild", "Customer Artwork Builder"], ["/shop/receive-payment", "takepay", "Receive a Payment"], ["/shop/customers/contacts", "contacts", "Portal customers"]] },
   ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a[2].localeCompare(b[2])) as [string, string, string][] }));
   const active = (href: string) => (href === "/shop" ? path === "/shop" : href === "/shop/board" ? path.startsWith("/shop/board") || path.startsWith("/shop/calendar") : href === "/shop/settings" ? path.startsWith("/shop/settings") || path.startsWith("/shop/catalog") : path.startsWith(href));

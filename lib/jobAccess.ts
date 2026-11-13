@@ -6,6 +6,7 @@ import { viewerPerms } from "@/lib/access";
 import { EMP_COOKIE, employeeFor } from "@/lib/workServer";
 import type { Perms } from "@/lib/roles";
 import { shopNetwork } from "@/lib/shopNetwork";
+import { isStationEmail } from "@/lib/stations";
 import { mergeProduction } from "@/lib/production";
 import { crewViewOf, parseViews, phoneViewsOf, type CrewExtra, type CrewView } from "@/lib/crewView";
 
@@ -41,6 +42,8 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
   const admin = createAdminClient();
   const [v, net] = await Promise.all([getViewer().catch(() => null), shopNetwork(admin)]);
   const staff = await staffActor(v);
+  // a shop computer (lib/stations.ts) only on the shop's network, like a crew PIN
+  if (staff && isStationEmail(staff.email) && net.configured && !net.on) return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false };
   if (staff) {
     // the owner viewing as an employee: that employee's phone, look only
     const as = staff.canViewAs ? (await cookies()).get(VIEWAS_COOKIE)?.value : "";
