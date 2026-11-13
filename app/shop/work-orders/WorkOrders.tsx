@@ -15,7 +15,8 @@ export default function WorkOrders({ jobs, today }: { jobs: WoJob[]; today: stri
   const [pick, setPick] = useState<Set<string>>(new Set());
   const [printed, setPrinted] = useState<Record<string, string>>({});
   const isPrinted = (j: WoJob) => printed[j.id] || j.printed;
-  const label = (d: string, i: number) => (d === today ? "Today" : i === 0 ? dayName(d) : i === 1 && days[0] === today ? "Tomorrow" : dayName(d));
+  const tomorrow = new Date(Date.parse(today + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
+  const label = (d: string, _i: number) => (d === today ? "Today" : d === tomorrow ? "Tomorrow" : dayName(d));
   const cur = tab === "open" ? "open" : days.includes(tab) ? tab : days[0] || "open";
   const w = q.trim().toLowerCase();
   const list = useMemo(() => jobs.filter((j) => (cur === "open" ? !isPrinted(j) && !j.done : j.day === cur))
