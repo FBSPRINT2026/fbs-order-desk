@@ -70,11 +70,26 @@ public class FbsRawPrint {
   }
 }
 "@
+# the Zebra's name in Windows, found once (the local printer list: quick, never waits on network printers)
+$script:zebra = $null
 function Find-Zebra([string]$want) {
   if ($want) { return $want }
-  $p = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "zebra|zdesigner|ZD[0-9]|ZT[0-9]|GK4|GX4|GC4|LP ?28|TLP" } | Select-Object -First 1
-  if (-not $p) { throw "No Zebra printer found on this computer. Plug it in, or type its name in the Shipping Center." }
-  return $p.Name
+  if ($script:zebra) { return $script:zebra }
+  Add-Type -AssemblyName System.Drawing
+  $n = [System.Drawing.Printing.PrinterSettings]::InstalledPrinters | Where-Object { $_ -match "zebra|zdesigner|ZD[0-9]|ZT[0-9]|GK4|GX4|GC4|LP ?28|TLP" } | Select-Object -First 1
+  if (-not $n) { throw "No Zebra printer found on this computer. Plug it in, or type its name in the Shipping Center." }
+  $script:zebra = $n; Note "printer: $n"; return $n
+}
+# hand one label to Windows, at most 20 seconds: a printer that doesn't answer is an error, never a stuck relay
+function Send-Raw([string]$name, [string]$title, [byte[]]$bytes) {
+  $ps = [PowerShell]::Create()
+  try {
+    [void]$ps.AddScript({ param($n, $t, $b) [FbsRawPrint]::Send($n, $t, $b) }).AddArgument($name).AddArgument($title).AddArgument($bytes)
+    $a = $ps.BeginInvoke()
+    if (-not $a.AsyncWaitHandle.WaitOne(20000)) { throw "The printer didn't answer within 20 seconds. Check it's on, loaded and not paused in Windows." }
+    $ps.EndInvoke($a) | Out-Null
+    if ($ps.HadErrors) { throw "$($ps.Streams.Error[0])" }
+  } finally { if ($a -and $a.IsCompleted) { $ps.Dispose() } }
 }
 $h = @{ "x-relay-token" = $Token }
 [Net.ServicePointManager]::DefaultConnectionLimit = 8
@@ -93,7 +108,7 @@ while ($true) {
         try { Say @{ id = $j.id; step = "printing" } } catch {}
         if ($r.link -eq "usb") {
           $name = Find-Zebra $r.usbName
-          [FbsRawPrint]::Send($name, [string]$j.title, $b)
+          Send-Raw $name ([string]$j.title) $b
         } else {
           if (-not $r.host) { throw "The printer's IP address isn't set in the Shipping Center." }
           $c = New-Object System.Net.Sockets.TcpClient
