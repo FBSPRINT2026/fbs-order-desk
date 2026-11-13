@@ -22,6 +22,7 @@ export type CrewHome = {
   counting: CountJob[] | null; issues: { number: number; name: string; what: string }[];
   /** fulfillment: orders being finished; shipping: ready orders that ship */ queue: { number: number; name: string; customer: string; qty: number; due: string | null; delivery: string }[] | null;
   /** the day shown: today, or the next working day ("Tomorrow") */ day: string;
+  /** extras on this person's menu (Deliveries): a switch at the top between their view and each extra */ also: string[];
   /** Deliveries (an extra on someone's menu): orders ready to deliver */ deliveries: { number: number; name: string; customer: string; qty: number; due: string | null; address: string }[] | null;
 };
 
@@ -32,7 +33,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
   const day = next ? nextWorkDay(today) : today;
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const ps = mergeProduction((st?.data as { production?: unknown } | null)?.production);
-  const out: CrewHome = { name: who.name, view: who.view, staff: who.kind === "staff", today, clock: null, fixes: [], presses: [], mine: [], counting: null, issues: [], queue: null, day, deliveries: null };
+  const out: CrewHome = { name: who.name, view: who.view, staff: who.kind === "staff", today, clock: null, fixes: [], presses: [], mine: [], counting: null, issues: [], queue: null, day, deliveries: null, also: who.also || [] };
 
   if (who.employeeId) {
     const s = await timeSettings(admin);

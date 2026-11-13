@@ -12,6 +12,26 @@ export const dynamic = "force-dynamic";
  * for a fix to their own time card, which waits for a manager on the Time Clock (Nick, Nov 13 2026: "oh shoot I forgot
  * to clock out for lunch. I took a 30 minute lunch today… send to Jose").
  */
+/** Find (the crew menu's search; Nov 13): a job by its number, PO, name or customer, portal orders and Printavo's */
+export async function GET(req: Request) {
+  const who = await jobActor();
+  if (!who) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  const q = (new URL(req.url).searchParams.get("q") || "").trim().replace(/[%,()*]/g, " ").slice(0, 60);
+  if (q.length < 2) return NextResponse.json({ jobs: [] });
+  const admin = createAdminClient(), like = `%${q}%`, num = /^#?\d{3,7}$/.test(q) ? +q.replace("#", "") : null;
+  const { data: cs } = await admin.from("customers").select("id").or(`company.ilike.${like},name.ilike.${like}`).limit(30);
+  const cids = ((cs || []) as { id: string }[]).map((c) => c.id);
+  const ors = [`po_number.ilike.${like}`, `nickname.ilike.${like}`, ...(num ? [`number.eq.${num}`] : []), ...(cids.length ? [`customer_id.in.(${cids.join(",")})`] : [])].join(",");
+  const pors = [`po_number.ilike.${like}`, `nickname.ilike.${like}`, ...(num ? [`visual_id.eq.${num}`] : []), ...(cids.length ? [`customer_id.in.(${cids.join(",")})`] : [])].join(",");
+  const [{ data: os }, { data: pv }] = await Promise.all([
+    admin.from("orders").select("number, nickname, po_number, qty, status, due_date, customers(company, name)").is("discarded_at", null).not("status", "in", "(quote,quote_sent,request)").or(ors).order("number", { ascending: false }).limit(15),
+    admin.from("archived_orders").select("visual_id, nickname, po_number, qty, status_name, due_date, customers(company, name)").is("removed_at", null).or(pors).order("visual_id", { ascending: false }).limit(10),
+  ]);
+  type R = { number?: number; visual_id?: string; nickname: string; po_number: string | null; qty: number | null; status?: string; status_name?: string; due_date: string | null; customers: { company: string; name: string } | null };
+  const map = (r: R) => ({ number: String(r.number ?? r.visual_id), name: r.nickname || "", po: r.po_number || "", customer: r.customers?.company || r.customers?.name || "", qty: r.qty || 0, status: r.status || r.status_name || "", due: r.due_date });
+  return NextResponse.json({ jobs: [...((os || []) as unknown as R[]).map(map), ...((pv || []) as unknown as R[]).map(map)].slice(0, 20) });
+}
+
 export async function POST(req: Request) {
   const who = await jobActor();
   if (!who?.employeeId) return NextResponse.json({ error: "Sign in with your employee # and PIN first." }, { status: 401 });

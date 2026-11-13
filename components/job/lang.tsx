@@ -74,6 +74,16 @@ export function LangToggle() {
 
 const ES: Record<string, string> = {
   // the crew phone views (Nov 13)
+  "Or type the job number.": "O escribe el número del trabajo.",
+  "Search a PO, job # or customer": "Busca un PO, nº de trabajo o cliente",
+  "Search": "Buscar",
+  "Scan with the camera": "Escanear con la cámara",
+  "Scan": "Escanear",
+  "Point at the QR on the work order": "Apunta al código QR de la orden",
+  "Can't use the camera. Type the number instead.": "No se puede usar la cámara. Escribe el número.",
+  "Nothing found for \"{0}\".": "No se encontró nada para \"{0}\".",
+  "DELIVER NEXT": "ENTREGAR SIGUIENTE",
+  "View": "Vista",
   "No employee with that number.": "No hay empleado con ese número.",
   "The two PINs don't match. Make it again.": "Los dos PIN no son iguales. Hazlo otra vez.",
   "Type your employee number. You only do this once on this phone.": "Escribe tu número de empleado. Solo lo haces una vez en este teléfono.",

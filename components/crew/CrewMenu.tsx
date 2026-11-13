@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { CrewHome, CrewJob, CountJob } from "@/lib/crewHome";
 import { CREW_VIEWS } from "@/lib/crewView";
 import { LangToggle, useT } from "@/components/job/lang";
+import CamScan from "@/components/job/CamScan";
 
 /**
  * The crew phone's main menu (/crew; Nick, Nov 13 2026, look "A + B"): a light page with one dark card on top for the
@@ -27,6 +28,14 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
   const [screen, setScreen] = useState<"home" | "time" | "scan">("home");
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [msg, setMsg] = useState("");
   const view = CREW_VIEWS.find((v) => v.id === home.view);
+  // someone with an extra (Linda: Receiving, also Deliveries; Nov 13) switches between them at the top; the phone
+  // remembers the last one picked
+  const modes = home.also.length ? [home.view as string, ...home.also] : [];
+  const [mode, setMode0] = useState<string>(home.view);
+  useEffect(() => { try { const m = localStorage.getItem("fbs:crew.mode"); if (m && modes.includes(m)) setMode0(m); } catch { /* private mode */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const setMode = (m: string) => { setMode0(m); try { localStorage.setItem("fbs:crew.mode", m); } catch { /* private mode */ } };
+  const delivering = mode === "delivery";
+  const modeLabel = (m: string) => (m === "delivery" ? t("Deliveries") : t(CREW_VIEWS.find((v) => v.id === m)?.label || m));
   const tomorrow = home.day !== home.today;
   const open = (n: number | string, v = "") => { location.href = `/j/${n}${v ? `?v=${v}` : ""}`; };
   const go = (s: "home" | "time" | "scan") => { if (s !== "home") history.pushState({ cr: s }, ""); setScreen(s); setErr(""); scrollTo(0, 0); };
@@ -55,7 +64,24 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
         {err && <div className="jm-err" role="alert">{err}</div>}
         {msg && <div className="jm-ok" role="status">{msg}</div>}
 
-        {screen === "home" && <>
+        {screen === "home" && <Find open={open} />}
+        {screen === "home" && modes.length > 1 && (
+          <div className="cr-seg cr-modes" role="group" aria-label={t("View")} style={{ gridTemplateColumns: `repeat(${modes.length}, minmax(0, 1fr))` }}>
+            {modes.map((m) => <button key={m} type="button" className={mode === m ? "on" : ""} onClick={() => setMode(m)}>{modeLabel(m)}</button>)}
+          </div>
+        )}
+        {screen === "home" && delivering && <>
+          {home.deliveries?.[0] && (
+            <section className="cr-hero">
+              <div className="cr-k">{t("DELIVER NEXT")}</div>
+              <div className="cr-n"><b>#{home.deliveries[0].number}</b><span>{home.deliveries[0].customer}</span></div>
+              <div className="cr-s">{t("{0} pcs", home.deliveries[0].qty)}{home.deliveries[0].address ? ` · ${home.deliveries[0].address}` : ""}</div>
+              <button type="button" className="cr-go" onClick={() => open(home.deliveries![0].number)}>{t("Open the job")}</button>
+            </section>
+          )}
+          <Deliveries list={home.deliveries || []} open={open} />
+        </>}
+        {screen === "home" && !delivering && <>
           {tomorrow && <button type="button" className="jm-link" onClick={() => { location.href = "/crew"; }}>{t("← Back to today")}</button>}
           <Hero home={home} open={open} />
           {home.presses.map((p) => <PressDay key={p.id} name={home.presses.length > 1 ? p.name : t("{0} · {1}", p.name, tomorrow ? day(home.day, locale) : t("today"))} jobs={p.jobs} view={home.view} open={open} />)}
@@ -68,19 +94,9 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
             </div>
           )}
           {home.queue && <Queue home={home} open={open} />}
-          {home.deliveries && (home.deliveries.length > 0 || home.view !== "office") && (
-            <div className="jm-card cr-list">
-              <div className="jm-cardh"><b>{t("Deliveries")}</b><span className="jm-faint">{home.deliveries.length}</span></div>
-              {!home.deliveries.length && <p className="jm-faint">{t("Nothing ready to deliver.")}</p>}
-              {home.deliveries.map((j) => (
-                <button key={j.number} type="button" className="cr-li" onClick={() => open(j.number)}>
-                  <span className="cr-t">{j.due ? day(j.due, locale).replace(/,.*/, "") : ""}</span><b>#{j.number}</b>
-                  <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.address ? ` · ${j.address}` : ""}</small></span>
-                  <i className="cr-st ready">{t("Ready")}</i>
-                </button>
-              ))}
-            </div>
-          )}
+          {home.deliveries && !modes.length && home.deliveries.length > 0 && <Deliveries list={home.deliveries} open={open} />}
+        </>}
+        {screen === "home" && <>
           <div className="cr-tiles">
             <button type="button" onClick={() => go("scan")}><Svg d={IC.scan} />{t("Scan a job")}</button>
             {home.presses.length > 0 && <button type="button" onClick={() => { location.href = tomorrow ? "/crew" : "/crew?day=next"; }}><Svg d={IC.cal} />{tomorrow ? t("Today") : t("Tomorrow")}</button>}
@@ -254,10 +270,12 @@ function ScanJob({ open }: { open: (n: string) => void }) {
   const { t } = useT();
   const [num, setNum] = useState("");
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  // the camera opens right away (Nov 13, Nick: "when you click that button it's not opening the camera")
+  const scanned = (text: string) => { const m = text.match(/\/j\/(\d{3,7}(?:-\d{1,3})?)/) || text.match(/(\d{3,7})/); if (m) open(m[1]); };
   return (
     <div className="jm-card">
-      <p className="jm-faint">{t("Point your phone's camera at the QR on the work order or box label: it opens the job here. Or type the job number.")}</p>
+      <CamScan onCode={scanned} aim={t("Point at the QR on the work order")} noCam={t("Can't use the camera. Type the number instead.")} />
+      <p className="jm-faint">{t("Or type the job number.")}</p>
       <form className="cr-open" onSubmit={(e) => { e.preventDefault(); const m = num.match(/\d{3,7}/); if (m) open(m[0]); }}>
         <input ref={ref} inputMode="numeric" placeholder={t("Job #")} value={num} onChange={(e) => setNum(e.target.value)} aria-label={t("Job #")} />
         <button type="submit" className="jm-go" disabled={!/\d{3,7}/.test(num)}>{t("Open")}</button>
@@ -301,5 +319,59 @@ function TimeCard({ home, busy, post, done }: { home: CrewHome; busy: string; po
         </div>
       )}
     </>
+  );
+}
+
+function Deliveries({ list, open }: { list: NonNullable<CrewHome["deliveries"]>; open: (n: number, v?: string) => void }) {
+  const { t, locale } = useT();
+  return (
+    <div className="jm-card cr-list">
+      <div className="jm-cardh"><b>{t("Deliveries")}</b><span className="jm-faint">{list.length}</span></div>
+      {!list.length && <p className="jm-faint">{t("Nothing ready to deliver.")}</p>}
+      {list.map((j) => (
+        <button key={j.number} type="button" className="cr-li" onClick={() => open(j.number)}>
+          <span className="cr-t">{j.due ? day(j.due, locale).replace(/,.*/, "") : ""}</span><b>#{j.number}</b>
+          <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.address ? ` · ${j.address}` : ""}</small></span>
+          <i className="cr-st ready">{t("Ready")}</i>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Find, first thing on the menu (Nov 13, Nick: "a search button so that you can search a PO… or open the camera to scan
+ *  a work order"): type a PO, job #, job name or customer; or the camera reads the work order's QR and opens the job. */
+function Find({ open }: { open: (n: number | string, v?: string) => void }) {
+  const { t, locale } = useT();
+  const [q, setQ] = useState(""), [cam, setCam] = useState(false);
+  const [hits, setHits] = useState<{ number: string; name: string; po: string; customer: string; qty: number; status: string; due: string | null }[] | null>(null);
+  useEffect(() => {
+    const s = q.trim();
+    if (s.length < 2) { setHits(null); return; }
+    const c = new AbortController();
+    const tm = setTimeout(() => { fetch(`/api/crew?q=${encodeURIComponent(s)}`, { signal: c.signal }).then((r) => r.json()).then((j) => setHits(j.jobs || [])).catch(() => null); }, 250);
+    return () => { clearTimeout(tm); c.abort(); };
+  }, [q]);
+  const scanned = (text: string) => { setCam(false); const m = text.match(/\/j\/(\d{3,7}(?:-\d{1,3})?)/) || text.match(/(\d{3,7})/); if (m) open(m[1]); else setQ(text); };
+  return (
+    <div className="cr-findwrap">
+      <form className="cr-find" onSubmit={(e) => { e.preventDefault(); if (hits?.length === 1) open(hits[0].number); else if (/^#?\d{3,7}$/.test(q.trim())) open(q.trim().replace("#", "")); }}>
+        <input type="search" enterKeyHint="search" placeholder={t("Search a PO, job # or customer")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t("Search")} />
+        <button type="button" className="cr-camb" onClick={() => setCam(!cam)} aria-label={t("Scan with the camera")}><Svg d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />{cam ? t("Close") : t("Scan")}</button>
+      </form>
+      {cam && <CamScan onCode={scanned} aim={t("Point at the QR on the work order")} noCam={t("Can't use the camera. Type the number instead.")} />}
+      {hits && (
+        <div className="jm-card cr-list">
+          {!hits.length && <p className="jm-faint">{t("Nothing found for \"{0}\".", q.trim())}</p>}
+          {hits.map((h) => (
+            <button key={h.number} type="button" className="cr-li" onClick={() => open(h.number)}>
+              <span className="cr-t">{h.due ? day(h.due, locale).replace(/,.*/, "") : ""}</span><b>#{h.number}</b>
+              <span className="cr-who">{h.customer}<small>{[h.name, h.po ? `PO ${h.po}` : "", t("{0} pcs", h.qty)].filter(Boolean).join(" · ")}</small></span>
+              <i className="cr-st later">{h.status}</i>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
