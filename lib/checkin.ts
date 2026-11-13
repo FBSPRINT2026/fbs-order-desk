@@ -180,7 +180,10 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     if (ms.length) j.mixed = ms;
   }
   if (only) return { jobs, problems: [] };
-  const inRange = jobs.filter((j) => j.day >= from && j.day <= to).sort((a, b) => a.day.localeCompare(b.day) || a.number - b.number);
+  // every open order of ours, whatever its date (the dashboard and the crew phone; Nov 13, #40382: due last week, on the
+  // press today, and nowhere in Receiving or its search because its due date was outside the week asked for). Old
+  // Printavo jobs still go by the week: they have no "done" of ours to drop them.
+  const inRange = jobs.filter((j) => (allOpen && !j.ref.startsWith(PV)) || (j.day >= from && j.day <= to)).sort((a, b) => a.day.localeCompare(b.day) || a.number - b.number);
   const problems = jobs.filter((j) => j.state === "issue").sort((a, b) => (a.day || "").localeCompare(b.day || ""));
   return { jobs: inRange, problems };
 }
