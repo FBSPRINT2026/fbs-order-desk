@@ -33,7 +33,9 @@ class Z {
     this.out.push(`^FO${n(x)},${n(y)}${o.reverse ? "^FR" : ""}^A0N,${n(h)},${n(o.wide ?? h)}${o.w ? `^FB${n(o.w)},${o.lines || 1},0,${o.align || "L"},0` : ""}${fd(s)}`);
     const white = o.reverse && this.fills.some((f) => x >= f.x - 1 && x < f.x + f.w && y >= f.y - 1 && y < f.y + f.h);
     const w = o.w || 812 - x, lines = o.lines || 1, al = o.align === "C" ? "center" : o.align === "R" ? "right" : "left";
-    this.pic.push(`<foreignObject x="${x}" y="${y}" width="${w}" height="${h * lines * 1.05}"><div xmlns="http://www.w3.org/1999/xhtml" style="font:700 ${h}px/${h * 1.02}px 'Arial Narrow','Roboto Condensed','Helvetica Neue',Arial,sans-serif;letter-spacing:-.02em;color:${white ? "#fff" : "#000"};text-align:${al};white-space:${lines > 1 ? "normal" : "nowrap"};overflow:hidden;max-height:${h * lines * 1.05}px;transform:scaleX(.92);transform-origin:${al} top">${esc(s)}</div></foreignObject>`);
+    // the Zebra's font is narrow (about half its height per letter): draw Arial squeezed to match, wrapping at the same width
+    const sq = 0.74;
+    this.pic.push(`<foreignObject x="${x}" y="${y}" width="${w}" height="${h * lines * 1.05}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w / sq}px;font:700 ${h}px/${h * 1.02}px Arial,'Helvetica Neue',sans-serif;color:${white ? "#fff" : "#000"};text-align:${al};white-space:${lines > 1 ? "normal" : "nowrap"};overflow:hidden;max-height:${h * lines * 1.05}px;transform:scaleX(${sq});transform-origin:${al === "center" ? "center" : al} top;margin-left:${al === "center" ? (w - w / sq) / 2 : al === "right" ? w - w / sq : 0}px">${esc(s)}</div></foreignObject>`);
   }
   box(x: number, y: number, w: number, h: number, t = 2, fill = false) {
     const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^GB${n(w)},${n(h)},${fill ? n(Math.min(w, h)) : Math.max(1, n(t))}^FS`);

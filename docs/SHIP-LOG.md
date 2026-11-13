@@ -333,3 +333,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 3:13pm · 1.3.575 · Nick · Print relay: Run with PowerShell installs it and it runs in the background (no window to keep open), starts again after every restart without needing an administrator, and only one copy runs
 - Nov 13 3:16pm · 1.3.576 · Nick · Print relay: a fresh connection and a time limit on every call (a dropped connection hung it after the first labels), says when it starts each label, keeps a log
 - Nov 13 3:17pm · 1.3.577 · Nick · Print relay: finds the Zebra once from the local printer list, gives each label 20 seconds then reports an error instead of hanging
+- Nov 13 3:36pm · 1.3.578 · Nick · Box label preview: lettering squeezed to match the Zebra's narrow font, so the picture wraps where the printed label does
