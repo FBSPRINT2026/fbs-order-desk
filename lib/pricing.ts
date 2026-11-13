@@ -1,5 +1,5 @@
 import { dtfEach, dtfGridOn, dtfMinimum, dtfPress } from "@/lib/dtfGrid";
-import { colorHex } from "./inkColors";
+import { addStockInks, colorHex } from "./inkColors";
 
 // Shared pricing engine and order vocabulary.
 // Used by the shop editor (live totals), the customer portal (display)
@@ -704,6 +704,10 @@ export function isMe(owner: string, owners: AccountOwner[], me: { email: string;
   return !!me.name && first(owner) === first(me.name) || (!!me.email && first(owner) === first(me.email));
 }
 export type Settings = PriceList & {
+  /** the Ink Room's stocked inks (name, hex, line), kept in step by the database (migration 309) so every price worked
+   *  out anywhere (the order page, the QuickBooks sync, the portal, a server action) knows "Black Light Green" is a green
+   *  that needs an underbase, not a black (Nick, Nov 12, #40481) */
+  stockInks?: { name: string; hex: string; line?: string }[];
   /** people who own customer accounts ("My accounts" views use this) */
   accountOwners?: AccountOwner[];
   shop: { name: string; address: string; phone: string; email: string; terms: string; logoUrl: string;
@@ -862,6 +866,9 @@ function contractFinishing(w: PriceList): PriceList {
 /** Fill any missing keys in stored settings with defaults. */
 export function mergeSettings(data: unknown): Settings {
   const d = (data && typeof data === "object" ? data : {}) as Partial<Settings>;
+  // the shop's stocked inks: known wherever settings are read, so an ink's color (underbase, print order) never depends
+  // on which page or server worked the price out
+  if (Array.isArray(d.stockInks)) addStockInks(d.stockInks);
   return {
     ...DEFAULT_SETTINGS,
     ...d,
