@@ -336,7 +336,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
               </div>
               <h2>Garments <span>{gc?.allQty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - firstN} more garment${lines.length - firstN === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
               {counts(lines.slice(0, firstN))}
-              {(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
+              {!!(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
                 <h2>Notes {longNotes && <span>continued on page {notesPage ? pgNotes : pgMk}</span>}</h2>
                 <div className={"notes" + (longNotes ? " clip" : "")}>{notesBlock}</div>
               </>}
