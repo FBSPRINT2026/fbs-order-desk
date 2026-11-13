@@ -260,3 +260,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:11pm · 1.3.465 · Nick · Order page saves a total that doesn't match its lines once opened (orders made outside the page showed $0)
 - Nov 12 9:19pm · 1.3.467 · Nick · Color changes and their PMS match only for garment colors on the group; ask to take a removed garment off the mockup
 - Nov 12 9:24pm · 1.3.469 · Nick · Schedule debug: finished runs never overlap on a press; a run left printing when its order moved on shows finished; Day and Week views use the calm card look
+- Nov 12 9:30pm · 1.3.470 · Nick · Rules: schedule finished-run overlap and moved-on runs (Nov 12 debug)

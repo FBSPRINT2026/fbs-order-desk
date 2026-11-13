@@ -349,6 +349,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   the job and drawn as the same tinted band across its card (Nick, Nov 11). Shift held before or after grabbing a job
   pins it. Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
   everything else grays out while it's dragged.
+  Two finished runs on one press never overlap: one marked complete late (Complete pressed at the end of the day) ends
+  where the next finished run on that press began; a run left printing or paused when its order moved on (finished in
+  Printavo, a status changed by hand) shows finished where it last stood (Nov 12 debug, #40496 / #40313, #40365). The
+  Day and Week views use the same card look as the main view.
   **Lunch comes from the time clock** (Nick, Nov 12: "if the press operator clocks out… that marks their lunch"): when a
   press's operator clocks out and back in, that time is off the press (`Machine.away`, from `withClock`), live clock on or
   off: it pauses whatever was printing (the job grows by it) and shows as a striped band inside the job ("Lunch · Miguel
