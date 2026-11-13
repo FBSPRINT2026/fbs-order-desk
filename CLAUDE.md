@@ -108,7 +108,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
     color picked in the Mockup Creator, else the color the mockup drew it in (`shade`, saved with each mockup), else its name), passed to `guessHex` / `shirtBg` / LogoThumb (Nick, Oct 29: "the
     boxes… permanently fix this problem throughout the site");
   - an ink's screen color: `colorHex` from `lib/inkColors.ts` (the Ink Room's stocked inks are loaded for every shop page
-    by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`);
+    by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`; and everywhere a price is worked out, the QuickBooks sync and server actions included, through `mergeSettings`: the database keeps `settings.data.stockInks` in step with the Ink Room, migration 309; Nick, Nov 12, #40481's Black Light Green read as a black on the server, no underbase);
   - a group's saved mockup pictures: `lib/mockupFresh.ts` (`mockupHref` for every link into a group's mockup, so a logo
     mockup opens the logo builder; the save stamps `mockupArt`, and the order page redraws stale pictures by itself;
     anything that swaps a group's pictures for others clears `mockupArt`);
