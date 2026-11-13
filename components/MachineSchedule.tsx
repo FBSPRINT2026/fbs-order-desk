@@ -16,6 +16,7 @@ import { partNeed, seedStyleTitles, mergeProduction, estimateRaw, locKey, artsOf
 import { mergeSettings, isMe, ST, type StatusKey, type Group, type AccountOwner } from "@/lib/pricing";
 import { orderStatusEmail } from "@/app/shop/customer-email-actions";
 import CheckinModal from "@/components/CheckinModal";
+import HoldDialog from "@/components/HoldDialog";
 import { styleTitles } from "@/app/shop/style-title-actions";
 import { bySize, type CheckJob, type CheckLine } from "@/lib/checkinShared";
 import { useSticky } from "@/lib/useSticky";
@@ -474,6 +475,12 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [trayTab, setTrayTab] = useSticky<"all" | "late" | "hold" | "goods" | "ok">("cal.trayTab", "all");
   // Ready To Schedule by goods (Nick, Nov 13: "show me what's counted… that makes it easier to drop"), in Job Filters
   const [trayGoods, setTrayGoods] = useSticky<"all" | "counted" | "not">("cal.trayGoods", "all");
+  // right-click a job waiting in Ready To Schedule (Nick, Nov 13): add it to a press's next open time, mark it printed
+  // already, put it on hold, open it
+  const [trc, setTrc] = useState<{ k: string; x: number; y: number; sub?: "printed" } | null>(null);
+  const [holdFor, setHoldFor] = useState<string | null>(null);
+  // the schedule's assistant (Nick, Nov 13: "add all Dear Heart jobs to the schedule for Monday")
+  const [askQ, setAskQ] = useState(""), [askBusy, setAskBusy] = useState(false), [askPlan, setAskPlan] = useState<{ note: string; rows: { k: string; machine: string; day: string }[] } | null>(null);
   // kinds of order (Nov 11, Nick: "distinguish… what's a cart order from Cedar Promos, what's an All My Sons… order, and
   // what's a regular order… hide the cart orders and… All My Sons… so I can just see the regular"): a customer's Create
   // order trainings (their when-words in the job's name) are its kinds; a job none of them names is Regular. Hidden kinds
@@ -1078,6 +1085,59 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     setMsg(r.error ? r.error.message : `Scheduled ${rows.length} job${rows.length === 1 ? "" : "s"}${nPick ? ` (${nPick} where you picked)` : ""}${nLate ? `; ${nLate} late or past due went first on their day` : ""}.`);
     if (!r.error) setPicks({});
     load();
+  }
+  /** the first working day from `from` with room left on a press (an hour, or the whole job if it's shorter) */
+  const nextOpenDay = (m: Machine, minutes: number, from: string) => {
+    let d = from;
+    for (let g = 0; g < 45; g++, d = addDay(d, 1)) {
+      const sh = shiftOn(m, d); if (!sh) continue;
+      const gone = d === today && now.day === today ? Math.max(0, Math.min(sh[1], now.min) - sh[0]) : 0;
+      if (sh[1] - sh[0] - 30 - gone - used(m, d) >= Math.min(60, minutes)) return d;
+    }
+    return from;
+  };
+  /** Ready To Schedule's right click: on a press at its next open time */
+  async function toPressNext(t: (typeof tray)[number], m: Machine) {
+    const from = t.job.prod && t.job.prod > today ? t.job.prod : today;
+    await book(t.job, t.need, m, nextOpenDay(m, estimate(s!, t.need, m).minutes, from), "manual");
+  }
+  /** Ready To Schedule's right click: it was printed already (off the schedule's books); the order moves on */
+  async function markPrinted(t: (typeof tray)[number], next: "fulfillment" | "ready" | "completed") {
+    if (t.job.kind !== "o") return;
+    const sb = createClient();
+    const { error } = await sb.from("orders").update({ status: next, type: ST[next as StatusKey].type }).eq("id", t.job.id);
+    if (error) { setMsg(error.message); return; }
+    await sb.from("order_events").insert({ order_id: t.job.id, kind: "status", detail: next, actor: me.name || me.email || "shop" });
+    if (next === "ready" || next === "completed") void orderStatusEmail(t.job.id, next).catch(() => null);
+    setMsg(`#${t.job.number} marked printed: the order is now ${ST[next as StatusKey].label}.`);
+    load();
+  }
+  /** the assistant's plan, booked like Make The Schedule (late jobs first on their day; today from now on) */
+  async function bookPlan(rows: { k: string; machine: string; day: string }[]) {
+    const pos: Record<string, number> = {};
+    const ins = rows.map((r) => { const t = tray.find((x) => x.job.key + x.need.type === r.k), m = s!.machines.find((x) => x.id === r.machine); if (!t || !m || !fits(t.need, m)) return null;
+      const k = m.id + r.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === m.id && c.day === r.day).length;
+      return { ...ownerCols(t.job), machine: m.id, day: r.day, minutes: estimate(s!, t.need, m).minutes, position: pos[k]++, start_min: notBefore(r.day, null), kind: t.need.type, label: t.need.label, source: "assistant", locations: locsFor(t.job, t.need) }; }).filter(Boolean);
+    if (!ins.length) { setMsg("Nothing to book."); return; }
+    const r = await createClient().from("production_slots").insert(ins);
+    setMsg(r.error ? r.error.message : `Booked ${ins.length} job${ins.length === 1 ? "" : "s"}.`);
+    setAskPlan(null); setAskQ(""); load();
+  }
+  async function askSchedule() {
+    const q = askQ.trim(); if (!q || !s) return;
+    setAskBusy(true); setAskPlan(null);
+    const days: string[] = []; for (let d = today, g = 0; days.length < 15 && g < 40; g++, d = addDay(d, 1)) if (machines.some((m) => shiftOn(m, d))) days.push(d);
+    const body = {
+      say: q, today,
+      days: days.map((d) => ({ day: d, name: dayLbl(d) })),
+      presses: machines.map((m) => ({ id: m.id, name: m.name, crew: crewOf(m)?.leader || "", type: m.type, load: Object.fromEntries(days.slice(0, 10).map((d) => [d, Math.round(used(m, d))])), shift: Object.fromEntries(days.slice(0, 10).map((d) => { const sh = shiftOn(m, d); return [d, sh ? sh[1] - sh[0] : 0]; })) })),
+      jobs: trayV.map((t) => ({ k: t.job.key + t.need.type, number: t.job.number, customer: t.job.customer, name: t.job.name, due: t.job.due, prod: t.job.prod || null, type: t.need.type, what: t.need.label, minutes: Math.round(t.sug?.minutes || 0), hold: t.job.onHold || null, counted: t.job.kind === "o" && goodsSt.get(t.job.id) === "received", fits: machines.filter((m) => fits(t.need, m)).map((m) => m.id) })),
+    };
+    const r = await fetch("/api/schedule/assist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
+    setAskBusy(false);
+    if (!r?.ok || j.error) { setMsg(j.error || "The assistant couldn't answer."); return; }
+    setAskPlan({ note: j.note || "", rows: j.rows || [] });
   }
   /** jobs dragged off the calendar back to Ready To Schedule (not started ones only): their bookings go, the jobs wait again */
   async function unbookMany(cs: Card[]) {
@@ -3033,6 +3093,44 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               })()}
               {trayOpen && trayV.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make The Schedule</button>}
             </div>
+            {/* the schedule's assistant, right under Start over / Make The Schedule (Nick, Nov 13): say it, check it, book it */}
+            {trayOpen && tray.length > 0 && <div className="msa">
+              <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
+                <span className="msa-ic" aria-hidden>✦</span>
+                <input value={askQ} onChange={(e) => setAskQ(e.target.value)} placeholder="Ask the schedule: put all Dear Heart jobs on Monday, Kelsey's press…" aria-label="Ask the schedule's assistant" />
+                <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
+              </form>
+              {askPlan && <div className="msa-plan">
+                {askPlan.note && <p>{askPlan.note}</p>}
+                {askPlan.rows.length > 0 ? <>
+                  <ul>{askPlan.rows.map((r) => { const t = tray.find((x) => x.job.key + x.need.type === r.k), m = machines.find((x) => x.id === r.machine); return t && m ? <li key={r.k}><b>#{t.job.number}</b> <span data-notranslate>{t.job.customer}{t.job.name ? ` · ${t.job.name}` : ""}</span> → {crewOf(m)?.leader || shortName(m)} · {dayLbl(r.day).split(",").slice(0, 2).join(",")}</li> : null; })}</ul>
+                  <div className="msa-a"><button type="button" className="btn sm primary" onClick={() => void bookPlan(askPlan.rows)}>Book {askPlan.rows.length} job{askPlan.rows.length === 1 ? "" : "s"}</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></div>
+                </> : <div className="msa-a"><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button></div>}
+              </div>}
+            </div>}
+            {trc && (() => { const t = tray.find((x) => x.job.key + x.need.type === trc.k); if (!t) return null; const okM = machines.filter((m) => fits(t.need, m)); return (
+              <>
+                <div className="msr-rc-bg" onClick={() => setTrc(null)} onContextMenu={(e) => { e.preventDefault(); setTrc(null); }} />
+                <div className="msr-rc" role="menu" style={{ left: trc.x, top: trc.y }}>
+                  <div className="msr-rc-h"><b>#{t.job.number}</b> <span data-notranslate>{t.job.customer}</span></div>
+                  {trc.sub === "printed" ? <>
+                    <div className="msr-rc-l">Printed already · the order goes to</div>
+                    {([["fulfillment", "Fulfillment"], ["ready", "Ready"], ["completed", "Completed"]] as const).map(([k, l]) => <button key={k} type="button" onClick={() => { setTrc(null); void markPrinted(t, k); }}>{l}</button>)}
+                    <button type="button" className="msr-rc-back" onClick={() => setTrc({ ...trc, sub: undefined })}>← Back</button>
+                  </> : <>
+                    <div className="msr-rc-l">Add at the next open time on</div>
+                    {okM.map((m) => <button key={m.id} type="button" onClick={() => { setTrc(null); void toPressNext(t, m); }}>{crewOf(m)?.leader ? <><b>{crewOf(m)!.leader}</b> · {shortName(m)}</> : <b>{shortName(m)}</b>}<small>{dayLbl(nextOpenDay(m, estimate(s!, t.need, m).minutes, t.job.prod && t.job.prod > today ? t.job.prod : today)).split(",")[0]}</small></button>)}
+                    {!okM.length && <div className="msr-rc-l">No press can run it right now</div>}
+                    {t.sug && <button type="button" onClick={() => { setTrc(null); void book(t.job, t.need, t.sug!.machine, t.sug!.day, "suggested"); }}>Book where suggested <small>{crewOf(t.sug.machine)?.leader || shortName(t.sug.machine)} · {dayLbl(t.sug.day).split(",")[0]}</small></button>}
+                    <hr />
+                    {t.job.kind === "o" && <button type="button" onClick={() => setTrc({ ...trc, sub: "printed" })}>Printed already… <small>moves the order on</small></button>}
+                    {t.job.kind === "o" && !t.job.onHold && <button type="button" onClick={() => { setTrc(null); setHoldFor(t.job.id); }}>Put on hold…</button>}
+                    <Link href={t.job.href} onClick={() => setTrc(null)}>Open the order</Link>
+                  </>}
+                </div>
+              </>
+            ); })()}
+            {holdFor && <HoldDialog orderId={holdFor} onClose={() => setHoldFor(null)} onDone={() => { setHoldFor(null); load(); }} />}
             {trayOpen && tray.length > 0 && (() => {
               const isLate = (t: (typeof trayV)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
               const waitsG = (t: (typeof trayV)[number]) => !!t.job.issue?.waits;
@@ -3097,7 +3195,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     const from = t.job.prod && t.job.prod > today ? t.job.prod : today, days: string[] = []; for (let d = from, g = 0; days.length < 6 && g < 21; g++, d = addDay(d, 1)) if (machines.some((m) => shiftOn(m, d))) days.push(d);
                     const okM = machines.filter((m) => fits(t.need, m)), selM = pk?.m || t.sug?.machine.id || okM[0]?.id || "", selD = pk?.d || t.sug?.day || days[0];
                     return (
-                    <li key={k} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"msr-c" + (isHit(t.job) ? " ms-hit" : "") + (t.job.kind === "h" ? " hold" : "") + (t.picked ? " picked" : "") + (open ? " open" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
+                    <li key={k} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} onContextMenu={(e) => { e.preventDefault(); setTrc({ k, x: e.clientX, y: e.clientY }); }} className={"msr-c" + (isHit(t.job) ? " ms-hit" : "") + (t.job.kind === "h" ? " hold" : "") + (t.picked ? " picked" : "") + (open ? " open" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
                       <div className="msr-1">{tn((() => { const d = dotOf({ job: t.job } as Card, Infinity); return d ? <GoodsTee k={d.k} t={d.t} /> : null; })(), <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}{t.job.issue || t.job.onHold ? flags(t.job) : null}<b>{t.job.customer || t.job.name}</b></div>
                       <div className="msr-2">{t.job.customer ? t.job.name : t.need.label}</div>
                       <div className="msr-3"><b>{t.need.qty.toLocaleString()}</b><span className={late ? "late" : ""}>{t.job.due ? `due ${dayShort(t.job.due)}` : "no date"}</span><span className="spacer" />
