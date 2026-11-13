@@ -1817,19 +1817,23 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
    * The photo itself isn't moved: only where the prints sit on it.
    */
   type FitAdj = { dx: number; dy: number; k: number };
-  const [adjs, setAdjs] = useState<Record<string, Partial<Record<View, FitAdj | null>>>>({});
-  const adjOf = (l: Line | undefined, v: View): FitAdj | null => {
+  const [adjs, setAdjs] = useState<Record<string, Record<string, FitAdj | null>>>({});
+  const adjOf = (l: Line | undefined, v: string): FitAdj | null => {
     if (!l) return null;
     const g = garmentFor(l); if (!g) return null;
     const mine = adjs[g.id];
     if (mine && v in mine) return mine[v] || null;
-    const saved = (g as Garment & { mockup_fit?: Partial<Record<View, FitAdj>> | null }).mockup_fit?.[v];
+    // saved as "area:<side>" (Nov 12): the October hand moves were made against an older fit and are left unused
+    const saved = (g as Garment & { mockup_fit?: Record<string, FitAdj> | null }).mockup_fit?.[`area:${v}`];
     return saved && (saved.dx || saved.dy || (saved.k && saved.k !== 1)) ? saved : null;
   };
   /** the photo's fit with this style's hand adjustment (for placing prints; the photo's zoom uses the plain fit) */
-  /** print areas set by hand are kept on the garment (mockup_fit) but not used for now (Oct 22, Nick: start from the
-   *  supplier's photos; a drag lines the logo up on the picture instead) */
-  const USE_HAND_AREAS = false;
+  /** print areas set by hand (Print areas ticked: drag the dashed box, or its corner to size it) are kept on the garment
+   *  (mockup_fit) and used every time that style is shown, for every order (Nick, Nov 12 2026, #50051: "that's one of the
+   *  things she needs to be able to do the most… this print area is messed up"); a hoodie's back with the hood standing
+   *  up, a sleeve that sits wrong, fixed once and it's right from then on. Sleeves are kept per sleeve ("front:Left
+   *  Sleeve"). (Oct 22 they were switched off to start from the supplier's photos.) */
+  const USE_HAND_AREAS = true;
   const adjusted = (fit: Fit | null | undefined, l: Line | undefined, v: View): Fit | null | undefined => {
     const a = USE_HAND_AREAS && fit && !fit.flat ? adjOf(l, v) : null;
     if (!a || !fit) return fit;
@@ -1838,20 +1842,21 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** move / resize one style's print areas on one side (photo pixels; k = how much bigger), and save it for next time */
-  const nudgeArea = (l: Line | undefined, v: View, dxPx: number, dyPx: number, kMul = 1) => {
+  const nudgeArea = (l: Line | undefined, v: View, dxPx: number, dyPx: number, kMul = 1, key: string = v) => {
     const fit = l && fitFor(l, v);
     l = settingsLine(l, v); // a color laid over the template moves the template's print area (it's the one it follows)
     const g = l && garmentFor(l);
     if (!g || !fit || fit.flat) return;
-    const cur = adjOf(l, v) || { dx: 0, dy: 0, k: 1 };
+    const cur = adjOf(l, key) || { dx: 0, dy: 0, k: 1 };
     const s0 = fit.zs || fit.s || 1;
     const next: FitAdj = { dx: cur.dx + dxPx / s0, dy: cur.dy + dyPx / s0, k: Math.max(0.6, Math.min(1.6, (cur.k || 1) * kMul)) };
-    setAdjs((m) => ({ ...m, [g.id]: { ...(m[g.id] || {}), [v]: next } }));
-    queueSave(g.id, v, next);
+    setAdjs((m) => ({ ...m, [g.id]: { ...(m[g.id] || {}), [key]: next } }));
+    queueSave(g.id, `area:${key}`, next);
   };
-  const resetArea = (l: Line | undefined, v: View) => { const g = l && garmentFor(l); if (!g) return; setAdjs((m) => ({ ...m, [g.id]: { ...(m[g.id] || {}), [v]: null } })); queueSave(g.id, v, null); };
-  const pendingFit = useRef<Record<string, Partial<Record<View, FitAdj | null>>>>({});
-  const queueSave = (gid: string, v: View, a: FitAdj | null) => {
+  /** this style's hand print areas on one side back to the photo's own, its sleeves' boxes included */
+  const resetArea = (l: Line | undefined, v: View) => { const g = l && garmentFor(l); if (!g) return; const gid = (g as unknown as { id: string }).id; const savedKeys = Object.keys((g as Garment & { mockup_fit?: Record<string, unknown> | null }).mockup_fit || {}).filter((k) => k.startsWith(`area:${v}:`)).map((k) => k.slice(5)); const keys = [...new Set([v as string, ...savedKeys, ...Object.keys(adjs[gid] || {}).filter((k) => k.startsWith(`${v}:`))])]; setAdjs((m) => ({ ...m, [gid]: { ...(m[gid] || {}), ...Object.fromEntries(keys.map((k) => [k, null])) } })); for (const k of keys) queueSave(gid, `area:${k}`, null); };
+  const pendingFit = useRef<Record<string, Record<string, FitAdj | null>>>({});
+  const queueSave = (gid: string, v: string, a: FitAdj | null) => {
     pendingFit.current[gid] = { ...(pendingFit.current[gid] || {}), [v]: a };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
@@ -2203,6 +2208,15 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const og = (youthOn && kidOf(on || line) ? offsets[`youth:${im.id}`] : offsets[im.id]) || NO_OFF, ol = offsets[`${(on || line)?.id}:${im.id}`] || NO_OFF;
     const cs = b.clip ? { x: 0, y: 0 } : centerShift(im);
     const o0 = { dx: og.dx + ol.dx, dy: og.dy + ol.dy }, o = { dx: o0.dx * b.k + cs.x * b.w, dy: o0.dy * b.k + (vCentered(im) ? cs.y * b.h : 0) };
+    // a sleeve's print area set by hand for this style (its own box per sleeve): moved and sized with the print in it
+    const sa = b.clip && USE_HAND_AREAS ? adjOf(settingsLine(on || line, vv), `${vv}:${im.location}`) : null;
+    if (sa) {
+      const f0 = fit === undefined ? fitFor(on || line, vv) : fit, zs = f0?.zs || f0?.s || 1, k = sa.k || 1;
+      const sx = sa.dx * zs, sy = sa.dy * zs, ar = b.area;
+      const nw = b.w * k, nh = b.h * k, aw = ar.w * k, ah = ar.h * k;
+      Object.assign(b, { x: b.x + sx - (nw - b.w) / 2, y: b.y + sy - (nh - b.h) / 2, w: nw, h: nh, k: b.k * k,
+        area: { ...ar, x: ar.x + sx - (aw - ar.w) / 2, y: ar.y + sy - (ah - ar.h) / 2, w: aw, h: ah } });
+    }
     if (b.clip) {
       // sleeves: moves are along the sleeve (dx = across the fold, dy = toward the hem), turned to the sleeve's angle on each photo
       const a = (b.rot * Math.PI) / 180;
@@ -4473,9 +4487,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
             {(single ? [shownView] : (["front", "back"] as View[]).filter((v) => v === "front" || !isBag(line) || imprints.some((im) => viewsFor(im.location).includes("back")))).map((v) => (
               <Stage key={v} grid={grid || imprints.some((x) => x.area && isCustomSpot(x.location))} norm={frameOf(line, v)}
                 neckLine={USE_HAND_AREAS && v === "front" && line && fitFor(line, v)?.neck != null && !fitFor(line, v)?.flat ? { y: fitFor(line, v)!.neck!, tag: neckTag(line), onSet: (y) => { const a = settingsLine(line, "front"); const r = a && a !== line ? regs[`${photo(a, "front")}>${photo(line, "front")}`] : null; if (a && r) setNeck(a, r.a * y + r.by); else setNeck(line, y); } } : undefined} cx={fitFor(line, v)?.cx}
-                areaEdit={false}
-                onArea={(dx, dy, kMul) => nudgeArea(line, v, dx, dy, kMul)}
-                areaNote={undefined}
+                areaEdit={grid}
+                onArea={(dx, dy, kMul, id) => { const im = imprints.find((x) => x.id === id); nudgeArea(line, v, dx, dy, kMul, im && sideOf(im.location) === "sleeve" ? `${v}:${im.location}` : v); }}
+                areaNote={grid ? <>Drag a dashed box to line it up on this shirt, its corner to size it: kept for {line?.style || "this style"} from now on. {(() => { const a = settingsLine(line, v); return a && (adjOf(a, v) || imprints.some((im) => adjOf(a, `${v}:${im.location}`))) ? <button type="button" className="mk-pill" onClick={() => resetArea(a, v)}>Reset this side</button> : null; })()}</> : undefined}
                 corner={<>
                   {(v === "front" || single) && (
                     <div className="mk-corner l">
@@ -5366,7 +5380,7 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
   /** the bottom of the sewn neckline on this photo (shown with the print areas; drag it to fix it, saved for this photo) */
   neckLine?: { y: number; tag: string; onSet: (y: number) => void };
   /** the dashed print areas can be dragged (moves this style's prints) and resized from the corner */ areaEdit?: boolean;
-  onArea?: (dx: number, dy: number, kMul: number) => void; areaNote?: ReactNode;
+  onArea?: (dx: number, dy: number, kMul: number, itemId: string) => void; areaNote?: ReactNode;
   /** drawn over the photo (the measured view) */ overlay?: ReactNode;
   /** zoom and shift that make this photo's shirt fill the frame like the reference tee (normOf) */ norm?: { z: number; tx: number; ty: number };
   src: string; label: string; /** the shirt's center on this photo, so the label sits under the shirt */ cx?: number; corner?: ReactNode; onEnd?: (id: string) => void; grid?: boolean; /** shirt-shaped mask: art never shows past the edge of the shirt */ mask?: string;
@@ -5435,8 +5449,8 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
           if (d.mode === "neck") { setNeckDy((e.clientY - d.sy) / f); return; }
           if (d.mode === "cArea") { onMove(d.id, (e.clientX - d.x) / f, (e.clientY - d.y) / f); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
           if (d.mode === "cCorner") { onCustomArea?.(d.id, d.c || "se", (e.clientX - d.x) / f, (e.clientY - d.y) / f); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
-          if (d.mode === "area") { onArea?.((e.clientX - d.x) / f, (e.clientY - d.y) / f, 1); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
-          if (d.mode === "areaSize") { const dw = (e.clientX - d.x) / f; if (d.w + dw > 40) { onArea?.(0, 0, (d.w + dw) / d.w); d.w += dw; } drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
+          if (d.mode === "area") { onArea?.((e.clientX - d.x) / f, (e.clientY - d.y) / f, 1, d.c || ""); drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
+          if (d.mode === "areaSize") { const dw = (e.clientX - d.x) / f; if (d.w + dw > 12) { onArea?.(0, 0, (d.w + dw) / d.w, d.c || ""); d.w += dw; } drag.current = { ...d, x: e.clientX, y: e.clientY }; return; }
           if (d.mode === "move") onMove(d.id, (e.clientX - d.x) / f, (e.clientY - d.y) / f);
           else { const dw = (e.clientX - d.x) / f; if (d.w + dw > 12) { onResize(d.id, d.w + dw); d.w += dw; } }
           drag.current = { ...d, x: e.clientX, y: e.clientY };
@@ -5463,10 +5477,10 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
             {!it.locked && ["nw", "ne", "sw", "se"].map((c) => <span key={c} className={"mk-area-c " + c} onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: it.id, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "cCorner", w: 0, c }; }} />)}
           </div>
         ))}
-        {grid && items.filter((it) => !it.custom || it.p.clip).map((it) => <div key={"a" + it.id} className={"mk-area" + (areaEdit && !it.p.clip ? " edit" : "")} style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }}
-          title={areaEdit && !it.p.clip ? "Drag to line the print area up on this shirt (saved for this style). Drag the corner to size it." : undefined}
-          onPointerDown={areaEdit && !it.p.clip ? (e) => { if ((e.target as HTMLElement).closest(".mk-art")) return; e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "area", w: 0 }; } : undefined}>
-          {areaEdit && !it.p.clip && <span className="mk-area-h" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "areaSize", w: it.p.area.w }; }} />}
+        {grid && items.filter((it) => !it.custom || it.p.clip).map((it) => <div key={"a" + it.id} className={"mk-area" + (areaEdit ? " edit" : "")} style={{ left: `${it.p.area.x * s}%`, top: `${it.p.area.y * sy}%`, width: `${it.p.area.w * s}%`, height: `${it.p.area.h * sy}%`, transform: it.p.rot ? `rotate(${it.p.rot}deg)` : undefined }}
+          title={areaEdit ? "Drag to line the print area up on this shirt (saved for this style, used every time). Drag the corner to size it." : undefined}
+          onPointerDown={areaEdit ? (e) => { if ((e.target as HTMLElement).closest(".mk-art")) return; e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "area", w: 0, c: it.id }; } : undefined}>
+          {areaEdit && <span className="mk-area-h" onPointerDown={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); drag.current = { id: "area", x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, mode: "areaSize", w: it.p.area.w, c: it.id }; }} />}
         </div>)}
         {grid && neckLine && (
           <div className="mk-neck" style={{ top: `${(neckLine.y + neckDy) * sy}%` }} title="The bottom of the sewn neckline: every drop is measured from here. Drag it onto the seam if it's off (saved for this photo)."

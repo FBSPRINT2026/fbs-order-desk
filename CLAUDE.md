@@ -183,6 +183,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
   those pale ones only. Underbase and print order go by the ink's real color (`printShade`), not the color the art is
   drawn in; one-color art prints as the one ink its print names.
+- **Print areas are fixed by hand, once per style** (Nick, Nov 12 2026, #50051: Amanda "needs to be able to do the most"): in the
+  Mockup Creator, with Print areas ticked, drag a dashed box (front, back or a sleeve) to line it up on that shirt and its
+  corner to size it (a hoodie's back with the hood up, a sleeve that sits wrong). Saved on the garment
+  (`garments.mockup_fit`, "area:<side>" / "area:<side>:<location>") and used for that style on every order from then on;
+  Reset this side clears it. Never tell staff the print areas can't be changed.
 - **Spot color films are solid** (Nick, Nov 12, #50013's camo: "they should all be solid. No halftones and crisp lines"):
   in the Separation Studio's spot color every color prints as its nearest picked ink, solid, and no plate (underbase
   included) is halftoned; only an ink at an end of a fade picked in the art is (`spotMixer` / `tonalOf` in
