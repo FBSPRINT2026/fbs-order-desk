@@ -768,18 +768,23 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const need = subNeed(need0, sl.locations);
       // live estimate: follows the press crew's speed sliders and the time standards as they change
       const est = estimate(s, need, mach).minutes || sl.minutes, prog = Math.max(0, Math.min(1, +(sl.progress || 0)));
-      let minutes = est, startMin = sl.start_min, ran = false;
+      let minutes = est, startMin = sl.start_min, ran = false, dayShown = sl.day;
       // started: it sits where it really started; what's left is the estimate less the share already done
       const st0 = sl.started_at ? shopTime(sl.started_at) : null, pa = sl.progress_at ? shopTime(sl.progress_at) : null;
       if (sl.status === "running" && st0 && st0.day === sl.day) { startMin = st0.min; minutes = (pa && pa.day === sl.day && pa.min > st0.min ? pa.min - st0.min : 0) + est * (1 - prog); }
       // finished: it sits where it really ran, from its start to its finish (Nov 12, Nick: "from when she started to when
       // she finished it… so we can still see it there, but grayed out")
       else if (sl.status === "done" && sl.finished_at) {
+        // finished work shows on the day it was really done, whatever day it was booked for (Nick, Nov 12, #40313 booked
+        // Friday, done Thursday, drawn over Friday's warm-up)
         const fi = shopTime(sl.finished_at);
-        if (fi && st0 && st0.day === sl.day && fi.day === st0.day && fi.min > st0.min) { startMin = st0.min; minutes = fi.min - st0.min; }
-        // marked complete with no start of its own (Nick, Nov 12, #40493 drawn over the morning warm-up): it ran the
-        // time it was figured to take, up to when it was marked done
-        else if (fi && fi.day === sl.day) { minutes = est; startMin = Math.max(0, fi.min - est); }
+        if (fi) {
+          dayShown = fi.day;
+          if (st0 && st0.day === fi.day && fi.min - st0.min >= 5) { startMin = st0.min; minutes = fi.min - st0.min; }
+          // marked complete with no real start (none, or started and done in the same minute: #40493, #40313): it ran the
+          // time it was figured to take, up to when it was marked done
+          else { minutes = est; startMin = Math.max(0, fi.min - est); }
+        }
       }
       // paused after it ran (Nick, Nov 12, #40478: "it ran… paused with the lunch in the middle", drawn as Not started
       // before lunch): it sits where it really ran, from its start to its pause, lunch inside it
@@ -792,7 +797,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       // marked completed"): past its planned finish it stretches to now and a little beyond, and the jobs after it move down
       // with it, live clock on or off
       if (sl.status === "running" && startMin != null && sl.day === nowTick.day && startMin + minutes < nowTick.min + 10) minutes = nowTick.min + 10 - startMin;
-      out.push({ key: sl.id, job, need, machine: mach, day: sl.day, minutes: Math.max(15, minutes), startMin, slot: sl, fromPv: false, carried: sl.rolled_from, ...(ran ? { ran } : {}), ...(sl.status === "running" && st0 && st0.day === sl.day ? { plan: { start: st0.min, est } } : {}) });
+      out.push({ key: sl.id, job, need, machine: mach, day: dayShown, minutes: Math.max(15, minutes), startMin, slot: sl, fromPv: false, carried: sl.rolled_from, ...(ran ? { ran } : {}), ...(sl.status === "running" && st0 && st0.day === sl.day ? { plan: { start: st0.min, est } } : {}) });
     }
     for (const p of pvLane) {
       const need = p.job.needs.find((n) => n.type === p.machine.type) || p.job.needs[0];

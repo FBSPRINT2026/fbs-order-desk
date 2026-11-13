@@ -313,7 +313,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   no dot after a printing job's number.
   A job marked complete sits where it really ran, from its start to its finish, and later work stays after it; it
   stays on the schedule grayed, even after its order moves to Fulfillment, Ready or Completed (Nick,
-  Nov 12: "it doesn't go away… we still want to see it there"); only bookings not yet done leave when the order moves on. One marked complete with no start of its own ends at its finish, as long as it was figured to
+  Nov 12: "it doesn't go away… we still want to see it there"); only bookings not yet done leave when the order moves on. Finished work shows on the day it was really done, whatever day it was booked for; one marked complete with no real start (none, or started and done in the same few minutes) ends at its finish, as long as it was figured to
   take (never drawn at the top of the day over the warm-up); one paused after it ran sits where it ran, start to pause,
   lunch inside it (Nick, Nov 12, #40493 / #40478).
   A started job runs until it's marked complete: past its planned finish it stretches to now and the jobs after it move

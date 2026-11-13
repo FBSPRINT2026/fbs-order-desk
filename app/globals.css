@@ -22591,7 +22591,8 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mrc-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.mrc-g3 .mrc-act{justify-content:center;padding:0 6px;font-size:12.5px;gap:5px}.mrc-g3 .s2{grid-column:span 2}
 .mrc-act.warn{color:var(--danger)}.mrc-act.warn .mrc-i{color:var(--danger)}.mrc-act .mrc-i.box{color:var(--accent)}
 /* the schedule's goods shirt (Nov 12): the digits' height (cap height), resting on the number's baseline */
-.msf-tn{display:inline;white-space:nowrap;min-width:0}
+/* a job number (and its goods shirt) never shrinks under the name beside it (Nick, Nov 12: "#40456Nine18" in Ready To Schedule) */
+.msf-tn{display:inline;white-space:nowrap;flex:none}
 .msf-tee{display:inline-block;height:0.72em;width:auto;aspect-ratio:16.8/15.8;vertical-align:baseline;margin-right:4px;fill:var(--surface,#fff);stroke:var(--ink-3);stroke-width:1.4;stroke-linejoin:round;overflow:visible}
 .msf-tee.g{fill:var(--ok);stroke:var(--ok)}.msf-tee.a{fill:var(--warn);stroke:var(--warn)}.msf-tee.r{fill:var(--danger);stroke:var(--danger)}.msf-tee.o{fill:var(--fbs-orange);stroke:var(--fbs-orange)}
 .ms-key2 .msf-tn{display:inline-flex;align-items:baseline;gap:0}
