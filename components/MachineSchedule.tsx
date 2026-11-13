@@ -877,6 +877,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   // Live clock off: jobs keep their planned times; nothing not started is pushed up to "now"
   const liveNow = s?.liveClock ? ord(now.day) * 1440 + now.min : (ord(now.day) - 60) * 1440; // off: a finite floor far back (a date math on -Infinity crashed the page)
   const segs = useMemo(() => (s ? layoutAll(cards, liveNow) : { by: new Map<string, Seg[]>(), ofCard: new Map<string, Seg[]>(), lunch: new Map<string, number>() }), [cards, s, liveNow]);
+  // the open job card follows the schedule as it reloads (a run time set on it, a status changed): it stays open with the
+  // new numbers (Nov 13, Nick: setting 1h 30m "just clicks off and goes… doesn't stay in the screen")
+  useEffect(() => { setOpen((o) => { if (!o) return o; const f = segs.ofCard.get(o.key)?.[0]?.c; return f && f !== o ? f : o; }); }, [segs]);
   const at = (m: Machine, d: string) => segs.by.get(m.id + "|" + d) || [];
   /** a day's pieces with a job that runs through lunch (or a warm-up) drawn as one card over it (Nov 9, Nick: "when
    *  lunch falls within a job it shouldn't split it up… if lunch falls between jobs it should split between the job") */
@@ -3309,7 +3312,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       {downEdit && <DownPanel machines={machines} crews={s.crews} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
       {grpEdit && s && <RunGroupTime s={s} cards={grpEdit} onClose={() => setGrpEdit(null)} onSaved={() => { setGrpEdit(null); load(); }} />}
       {woMany && <WorkOrderView orderId={woMany.ids[0]} ids={woMany.ids} number={`${woMany.ids.length} jobs`} title={woMany.title} onClose={() => setWoMany(null)} />}
-      {open && <CardPanel s={s} c={open} cost={crewCost} otMin={(segs.ofCard.get(open.key) || []).reduce((t, g) => { const oa = otOn(g.c.machine, g.day); return t + (oa == null ? 0 : Math.max(0, g.end - Math.max(g.start, oa))); }, 0)} onFlags={async (x) => { const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", open.job.id); if (r.error) { setMsg(r.error.message); return; } const j = { ...open.job, ...(x.rush !== undefined ? { rush: x.rush } : {}), ...(x.firm !== undefined ? { firm: x.firm } : {}), ...(x.due_time !== undefined ? { dueTime: x.due_time } : {}), ...(x.due_date !== undefined ? { due: x.due_date } : {}) }; setOpen({ ...open, job: j }); load(); }} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => { setOpen(null); setOpenMove(false); }} onMove={(mach, d, st) => { setOpenMove(false); book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} startMove={openMove} onSplit={(off, to) => splitByLocation(open, off, to)} parts={splitParts(open).map((x) => { const g = segs.ofCard.get(x.key) || []; return { key: x.key, me: x.key === open.key, press: `${shortName(x.machine)}${crewOf(x.machine)?.leader ? ` · ${crewOf(x.machine)!.leader}` : ""}`, what: x.need.label, when: g.length ? `${wkd(g[0].day)} ${clock(g[0].start)} – ${clock(g[g.length - 1].end)}` : "" }; })} onUnite={() => uniteJob(open)} presses={machines.filter((m) => m.type === open.need.type && fits(open.need, m)).map((m) => ({ id: m.id, name: `${shortName(m)}${crewOf(m)?.leader ? ` · ${crewOf(m)!.leader}` : ""}` }))} onRunTime={() => { setOpen(null); load(); }} />}
+      {open && <CardPanel s={s} c={open} cost={crewCost} otMin={(segs.ofCard.get(open.key) || []).reduce((t, g) => { const oa = otOn(g.c.machine, g.day); return t + (oa == null ? 0 : Math.max(0, g.end - Math.max(g.start, oa))); }, 0)} onFlags={async (x) => { const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", open.job.id); if (r.error) { setMsg(r.error.message); return; } const j = { ...open.job, ...(x.rush !== undefined ? { rush: x.rush } : {}), ...(x.firm !== undefined ? { firm: x.firm } : {}), ...(x.due_time !== undefined ? { dueTime: x.due_time } : {}), ...(x.due_date !== undefined ? { due: x.due_date } : {}) }; setOpen({ ...open, job: j }); load(); }} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => { setOpen(null); setOpenMove(false); }} onMove={(mach, d, st) => { setOpenMove(false); book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} startMove={openMove} onSplit={(off, to) => splitByLocation(open, off, to)} parts={splitParts(open).map((x) => { const g = segs.ofCard.get(x.key) || []; return { key: x.key, me: x.key === open.key, press: `${shortName(x.machine)}${crewOf(x.machine)?.leader ? ` · ${crewOf(x.machine)!.leader}` : ""}`, what: x.need.label, when: g.length ? `${wkd(g[0].day)} ${clock(g[0].start)} – ${clock(g[g.length - 1].end)}` : "" }; })} onUnite={() => uniteJob(open)} presses={machines.filter((m) => m.type === open.need.type && fits(open.need, m)).map((m) => ({ id: m.id, name: `${shortName(m)}${crewOf(m)?.leader ? ` · ${crewOf(m)!.leader}` : ""}` }))} onRunTime={() => load()} />}
     </div>
   );
 }
@@ -3321,41 +3324,55 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
  * A time set here is the location's time on every press; it's also kept as a lesson about the operator's pace.
  */
 function RunTimes({ s, c, m, est, onSaved }: { s: ProductionSettings; c: Card; m: Machine; est: ReturnType<typeof estimate>; onSaved: () => void }) {
-  const [edit, setEdit] = useState<string | null>(null), [txt, setTxt] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState(false);
+  const [edit, setEdit] = useState<string | null>(null), [txt, setTxt] = useState(""), [err, setErr] = useState(""), [busy, setBusy] = useState(false), [saved, setSaved] = useState("");
   const locs = [...new Set(est.parts.map((p) => p.loc || ""))];
   const canEdit = c.job.kind === "o";
   const raw = (loc: string) => { const n = subNeed(c.need, [loc]); return estimateRaw(s, { ...n, steps: n.steps.map((st) => ({ ...st, over: undefined })) }, { ...m, pace: undefined }).minutes; };
   async function save(loc: string, minutes: number | null) {
-    if (minutes !== null && !(minutes > 0)) { setErr("Type a time like 3h 30m, 3:30 or 3.5"); return; }
+    if (minutes !== null && !(minutes > 0)) { setErr("Type a time like 1h 30m, 1:30 or 1.5"); return; }
     setBusy(true); setErr("");
     const op = operatorOf(s, m);
     const r = await setRunTime({ orderId: c.job.id, loc, minutes, estMin: raw(loc), qty: c.need.steps.filter((st) => locKey(st) === loc).reduce((t, st) => t + st.qty, 0), machine: m.id, crewId: op.crew, operator: op.id });
     setBusy(false);
     if (!r.ok) { setErr(r.error || "Couldn't save."); return; }
-    setEdit(null); onSaved();
+    setEdit(null); setSaved(loc); setTimeout(() => setSaved((x) => (x === loc ? "" : x)), 2500); onSaved();
   }
   const op = operatorOf(s, m);
+  const typed = parseDuration(txt);
+  const QUICK = [30, 45, 60, 90, 120, 180, 240];
   return (
     <div className="rtm">
-      <ul className="ms-parts">
+      <div className="rtm-h"><b>Time on the press</b><span className="faint">{canEdit ? "Change a print spot's time; it's kept for this job and learned from" : "Worked out from the settings"}</span></div>
+      <div className="rtm-rows">
         {locs.map((loc) => {
           const ps = est.parts.filter((p) => (p.loc || "") === loc), tot = ps.reduce((t, p) => t + p.minutes, 0), by = ps.find((p) => p.by)?.by;
-          const name = c.need.steps.find((st) => locKey(st) === loc)?.location || loc;
-          return [
-            ...ps.map((p, i) => <li key={loc + i}><span>{p.label}</span>{ps.length === 1 ? null : <b className="rtm-sub">{fmtMin(p.minutes)}</b>}{ps.length === 1 && edit !== loc ? <b className="rtm-t">{fmtMin(p.minutes)}{canEdit && loc ? <button type="button" className="rtm-pen" title={`Set how long ${name} takes`} aria-label={`Edit ${name} time`} onClick={() => { setEdit(loc); setTxt(fmtMin(tot)); setErr(""); }}>✎</button> : null}</b> : null}</li>),
-            ps.length > 1 && edit !== loc ? <li key={loc + "t"} className="rtm-loc"><span>{name}{by ? "" : " total"}</span><b className="rtm-t">{fmtMin(tot)}{canEdit && loc ? <button type="button" className="rtm-pen" title={`Set how long ${name} takes`} aria-label={`Edit ${name} time`} onClick={() => { setEdit(loc); setTxt(fmtMin(tot)); setErr(""); }}>✎</button> : null}</b></li> : null,
-            edit === loc ? <li key={loc + "e"} className="rtm-ed">
-              <span className="rtm-q">{name} takes</span>
-              <input className="input" autoFocus value={txt} onChange={(e) => setTxt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") save(loc, parseDuration(txt) ?? 0); if (e.key === "Escape") setEdit(null); }} aria-label={`${name} time`} placeholder="3h 30m" />
-              <button type="button" className="btn sm primary" disabled={busy} onClick={() => save(loc, parseDuration(txt) ?? 0)}>Save</button>
-              {by ? <button type="button" className="btn sm" disabled={busy} onClick={() => save(loc, null)}>Use the estimate</button> : null}
-              <button type="button" className="btn sm ghost" onClick={() => setEdit(null)}>Cancel</button>
-              <span className="faint rtm-n">Worked out: {fmtMin(raw(loc))} at the standard pace{err ? <b className="rtm-err"> · {err}</b> : null}</span>
-            </li> : null,
-          ];
+          const name = c.need.steps.find((st) => locKey(st) === loc)?.location || ps[0]?.label.split(/:\s*/)[0] || loc || "Setup";
+          const open = edit === loc;
+          return (
+            <div key={loc || "x"} className={"rtm-row" + (open ? " open" : "")}>
+              <div className="rtm-line">
+                <span className="rtm-nm"><b>{name}</b><small>{by ? `set by ${by}` : ps.length > 1 ? ps.map((p) => `${p.label.split(/:\s*/).slice(-1)[0]} ${fmtMin(p.minutes)}`).join(" · ") : "worked out"}{saved === loc ? <em className="rtm-ok"> · Saved</em> : null}</small></span>
+                <b className="rtm-t">{fmtMin(tot)}</b>
+                {canEdit && loc && !open ? <button type="button" className="btn sm" onClick={() => { setEdit(loc); setTxt(fmtMin(tot)); setErr(""); }}>Change</button> : <span className="rtm-gap" />}
+              </div>
+              {open && <form className="rtm-ed" onSubmit={(e) => { e.preventDefault(); void save(loc, typed ?? 0); }}>
+                <div className="rtm-q">How long does {name} take?</div>
+                <div className="rtm-quick">{QUICK.map((q) => <button key={q} type="button" className={"chip" + (typed === q ? " on" : "")} onClick={() => setTxt(fmtMin(q))}>{fmtMin(q)}</button>)}</div>
+                <div className="rtm-in">
+                  <input className="input" autoFocus value={txt} onChange={(e) => setTxt(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); setEdit(null); } }} aria-label={`${name} time`} placeholder="1h 30m" />
+                  <span className="rtm-is">{txt.trim() ? (typed ? `= ${fmtMin(typed)}` : "Type a time like 1h 30m, 1:30 or 1.5") : ""}</span>
+                  <span className="spacer" />
+                  <button type="button" className="btn sm ghost" onClick={() => setEdit(null)}>Cancel</button>
+                  {by ? <button type="button" className="btn sm" disabled={busy} onClick={() => void save(loc, null)}>Use worked out ({fmtMin(raw(loc))})</button> : null}
+                  <button type="submit" className="btn sm primary" disabled={busy || !typed}>{busy ? "Saving…" : "Save"}</button>
+                </div>
+                <div className="faint rtm-n">Worked out: {fmtMin(raw(loc))} at the standard pace{err ? <b className="rtm-err"> · {err}</b> : null}</div>
+              </form>}
+            </div>
+          );
         })}
-        <li className="tot"><span>Setup {fmtMin(est.setup)} · run {fmtMin(est.run)}{est.teardown ? ` · teardown ${fmtMin(est.teardown)}` : ""}</span><b>{fmtMin(est.minutes)}</b></li>
-      </ul>
+        <div className="rtm-row tot"><div className="rtm-line"><span className="rtm-nm"><b>Total</b><small>Setup {fmtMin(est.setup)} · run {fmtMin(est.run)}{est.teardown ? ` · teardown ${fmtMin(est.teardown)}` : ""}</small></span><b className="rtm-t">{fmtMin(est.minutes)}</b><span className="rtm-gap" /></div></div>
+      </div>
       {c.sameArt ? <div className="rtm-same">Runs right after #{c.sameArt.with} with the same screens: {fmtMin(c.sameArt.saved)} less setup and teardown.</div> : null}
       {op.who ? <div className="faint rtm-pace">{m.pace ? `${op.who}'s crew runs ${m.pace < 1 ? `${Math.round((1 - m.pace) * 100)}% faster` : m.pace > 1 ? `${Math.round((m.pace - 1) * 100)}% slower` : "at"} than the standard${m.pace === 1 ? " pace" : ""}, learned from ${m.paceN} job${m.paceN === 1 ? "" : "s"}; worked-out times include it.` : `Learning ${op.who}'s pace from finished runs and times set here (${m.paceN || 0} of 2 so far).`}</div> : null}
     </div>
@@ -3549,11 +3566,12 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
         </div>}
         {sepsOpen && c.job.kind === "o" && <div className="ms-seps"><div className="ms-seps-h"><b>Separations</b><span className="faint">Approved art goes straight to the Separation Center.</span></div><SepRequest orderId={c.job.id} /></div>}
         <div className="mjp-foot"><button type="button" className="linkbtn" onClick={() => setMore(!more)} aria-expanded={more}>More details {more ? "▴" : "▾"}</button><span className="spacer" /><span className="faint mji-tip">Right-click the job to start, finish, count goods or move it</span></div>
+        {/* More details (Nov 13, Nick: "no border around it… doesn't even belong in there"): the same sections as the card */}
         {more && <div className="mjp-more">
-          {c.job.kind === "o" && <div className="ms-flagrow">
-            <span className="ms-due"><span className="faint">In-hands</span><input type="date" aria-label="In-hands date" value={c.job.due || ""} onChange={(e) => onFlags({ due_date: e.target.value || null })} /></span>
-          </div>}
-          {segs.length > 1 && <ul className="mjp-segs">{segs.map((g) => <li key={g.part}>{dayLbl(g.day)}, {clockLong(g.start)} – {clockLong(g.end)}</li>)}</ul>}
+          <div className="mjm-when">
+            {c.job.kind === "o" && <label className="mjm-f"><span>In-hands date</span><input type="date" className="input" aria-label="In-hands date" value={c.job.due || ""} onChange={(e) => onFlags({ due_date: e.target.value || null })} /></label>}
+            {segs.length > 0 && <div className="mjm-f"><span>On the schedule</span><div className="mjm-segs">{segs.map((g) => <div key={g.part}>{dayLbl(g.day).split(",").slice(0, 2).join(",")} · {clockLong(g.start)} – {clockLong(g.end)}</div>)}</div></div>}
+          </div>
           <RunTimes s={s} c={c} m={m} est={est} onSaved={onRunTime} />
           {(() => {
             const k = cost(m); if (!k) return null;

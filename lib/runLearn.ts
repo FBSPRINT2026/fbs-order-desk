@@ -50,13 +50,20 @@ export function withPace(ps: ProductionSettings, lessons: RunLesson[]): Producti
   };
 }
 
-/** "3h 30m", "3:30", "3.5", "3.5h", "210", "210m" → minutes (null if it can't tell) */
+/**
+ * How long, as people type or say it → minutes (null if it can't tell): "3h 30m", "3:30", "3.5", "3.5h", "1h30", "1 hr 30",
+ * "90 min", "210", "1 1/2", "1½", "1,5", "an hour and a half", "10 hours and a half", "half an hour" (Nov 13, Nick:
+ * "1.5 hours… it doesn't save half the time").
+ */
 export function parseDuration(t: string): number | null {
-  const x = t.trim().toLowerCase();
+  let x = t.trim().toLowerCase().replace(/,/g, ".").replace(/½/g, ".5").replace(/\s+1\/2\b/g, ".5").replace(/\s+/g, " ");
   if (!x) return null;
+  x = x.replace(/^half (an )?hour$/, "30m").replace(/\ban? hour\b/g, "1 hour")
+    .replace(/(\d+(?:\.\d+)?) ?(?:h|hrs?|hours?)? and a half(?: ?(?:h|hrs?|hours?))?/g, (_, n) => `${+n + 0.5}h`);
   let m: RegExpMatchArray | null;
   if ((m = x.match(/^(\d{1,2}):(\d{1,2})$/))) return +m[1] * 60 + +m[2];
-  if ((m = x.match(/^(?:(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?)?\s*(?:(\d+)\s*m(?:in(?:utes?)?)?)?$/)) && (m[1] || m[2])) return Math.round((+(m[1] || 0)) * 60 + +(m[2] || 0));
+  // a bare number: hours up to 24 ("1.5", "3"), minutes past that ("210")
   if ((m = x.match(/^(\d+(?:\.\d+)?)$/))) { const n = +m[1]; return n <= 24 ? Math.round(n * 60) : Math.round(n); }
+  if ((m = x.match(/^(?:(\d+(?:\.\d+)?) ?(?:h|hrs?|hours?)\.?)? ?(?:(\d+) ?(?:m|mins?|minutes?)?\.?)?$/)) && (m[1] || m[2])) return Math.round(+(m[1] || 0) * 60 + +(m[2] || 0));
   return null;
 }
