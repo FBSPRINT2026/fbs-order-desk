@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { emailOnFile } from "@/app/login/actions";
 
-export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, linkError }: { shopName: string; logoUrl: string; /** the light logo for a dark bar, the same as the portal's top bar */ sideLogoUrl?: string; next: string; linkError: boolean }) {
+export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, linkError, onShop = false }: { shopName: string; logoUrl: string; /** the light logo for a dark bar, the same as the portal's top bar */ sideLogoUrl?: string; next: string; linkError: boolean; /** on the shop's network: the employee and shop computer sign-ins show */ onShop?: boolean }) {
   const supabase = createClient();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -127,8 +127,8 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
         </form>
       )}
       {/* a crew phone that landed here (an old Home Screen icon): their own sign-in is the employee number (Nov 13) */}
-      <a className="muted" href="/crew" style={{ display: "block", textAlign: "center", marginTop: 14, fontSize: 13.5 }}>FBS employee? Sign in with your employee number</a>
-      {stage !== "station" && <button type="button" className="linkbtn muted" onClick={() => { setStage("station"); setErr(""); }} style={{ display: "block", margin: "8px auto 0", fontSize: 13.5 }}>Shop computer? Sign in with its name and PIN</button>}
+      {onShop && <a className="muted" href="/crew" style={{ display: "block", textAlign: "center", marginTop: 14, fontSize: 13.5 }}>FBS employee? Sign in with your employee number</a>}
+      {onShop && stage !== "station" && <button type="button" className="linkbtn muted" onClick={() => { setStage("station"); setErr(""); }} style={{ display: "block", margin: "8px auto 0", fontSize: 13.5 }}>Shop computer? Sign in with its name and PIN</button>}
     </div>
   );
 }
