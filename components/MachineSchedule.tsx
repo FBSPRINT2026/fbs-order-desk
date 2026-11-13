@@ -310,6 +310,11 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
     busy.set(c.job.key, [...(busy.get(c.job.key) || []), ...pieces.map((p): [number, number, number] => [ord(p.day) * 1440 + p.start, ord(p.day) * 1440 + p.end, order.get(c.key) ?? 0])]);
     pieces.forEach((p, i) => out.push({ c, day: p.day, start: p.start, end: p.end, part: i + 1, parts: pieces.length, pushed: pushed && i === 0, work: p.work, slow: p.slow < 1 ? p.slow : undefined }));
   }
+  // two finished runs on one press can't overlap: one marked complete late (Complete pressed at the end of the day with
+  // the time left at now) ends where the next finished run on the press began (Nov 12 debug, #40496 drawn 8a–4:30p over
+  // #40313 done at 12:02p)
+  const fin = out.filter((g) => g.c.slot?.status === "done" || g.c.ran).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.start - b.start));
+  for (let i = 0; i + 1 < fin.length; i++) { const a = fin[i], b = fin[i + 1]; if (a.day === b.day && a.start < b.start && a.end > b.start) { a.end = Math.max(a.start + 15, b.start); a.work = a.end - a.start; } }
   if (lunchOut) for (const [d, at] of lunch) lunchOut.set(d, at);
   return out;
 }
@@ -590,6 +595,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     }
     {
       const have = new Set(o.map((x) => x.id as string));
+      // a run left printing or paused when its order moved on (finished in Printavo, the status changed by hand: #40365,
+      // Nov 12 debug) ran too: it shows finished where it last stood, never a job still printing on the press
+      for (const x of (sl0 || []) as Slot[]) if ((x.status === "running" || x.status === "paused") && x.order_id && !have.has(x.order_id) && x.started_at) { x.status = "done"; x.finished_at = x.finished_at || x.progress_at || x.started_at; }
       const doneIds = [...new Set([...((sl0 || []) as Slot[]).filter((x) => x.status === "done" && x.order_id && !have.has(x.order_id)).map((x) => x.order_id!), ...issues.map((x) => x.order_id).filter((id) => !have.has(id))])];
       for (let i = 0; i < doneIds.length; i += 150) {
         const { data: more } = await sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times, order_type").in("id", doneIds.slice(i, i + 150)).is("discarded_at", null);

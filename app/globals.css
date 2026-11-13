@@ -22775,3 +22775,11 @@ label.ckm-tile.over{border-color:var(--warn)}
 /* a garment taken off a group that its mockup still shows (order page, Nov 12) */
 .mk-gone { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2, var(--surface)); font-size: 12.5px; color: var(--ink-2, var(--ink)); }
 .mk-gone-b { display: flex; gap: 6px; flex-wrap: wrap; }
+/* the Day and Week views' jobs look like the main view's (Nov 12 debug: they still had the old colored left edge and
+   no done tint): one color all round, done soft blue, printing a green border */
+.ms-calm .ms-dv .ms-blk:not(.bar),.ms-calm .ms-weeks .ms-blk:not(.bar){border-left:1px solid var(--line)!important}
+.ms-calm .ms-dv .ms-blk.late .ms-l1 b,.ms-calm .ms-weeks .ms-blk.late .ms-l1 b{color:var(--danger)}
+.ms-calm .ms-dv .ms-blk.hold:not(.bar),.ms-calm .ms-weeks .ms-blk.hold:not(.bar){border:1.5px dashed color-mix(in srgb,var(--ink) 35%,transparent)!important}
+.ms-calm .ms-dv .ms-blk.done:not(.bar),.ms-calm .ms-weeks .ms-blk.done:not(.bar){opacity:1!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface,#fff))!important;border:1px solid color-mix(in srgb,var(--fbs-blue) 28%,var(--surface,#fff))!important;box-shadow:none!important}
+.ms-calm .ms-dv .ms-blk.done .ms-l1 b,.ms-calm .ms-weeks .ms-blk.done .ms-l1 b{text-decoration:none;color:var(--fbs-blue)}
+.ms-calm .ms-dv .ms-blk.run:not(.bar),.ms-calm .ms-weeks .ms-blk.run:not(.bar){border:2px solid var(--ok)!important}
