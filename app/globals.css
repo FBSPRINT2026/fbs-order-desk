@@ -21910,6 +21910,11 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msf-run.embroidery{border-left-color:#7C5CD6}.msf-run.heat{border-left-color:var(--fbs-orange)}
 .msf-run.open{z-index:6;overflow:visible;box-shadow:0 8px 20px rgba(0,0,0,.15)}
 .msf-run-h{display:flex;align-items:baseline;gap:6px;font-size:12.5px;white-space:nowrap;line-height:18px;min-width:0}.msf-run-h b{overflow:hidden;text-overflow:ellipsis}.msf-run-h span{color:var(--ink-3);font-size:11.5px}
+/* a group's name is a button: Print all its work orders (Nov 13) */
+.msf-run-nm{border:0;background:none;padding:0;font:inherit;font-weight:700;color:var(--ink);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;text-align:left}
+.msf-run-nm:hover,.msf-run-nm[aria-expanded="true"]{color:var(--accent);text-decoration:underline}
+.msf-run.menu{overflow:visible;z-index:30}
+.msf-run-menu{position:absolute;left:6px;top:22px;z-index:30;display:flex;gap:6px;align-items:center;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 18px rgba(20,29,43,.18);white-space:nowrap}
 .msf-run-r{all:unset;box-sizing:border-box;cursor:grab;display:flex;align-items:center;gap:0;height:19px;font-size:12px;white-space:nowrap;border-top:1px solid var(--line-2,#f1f3f6);min-width:0}
 .msf-run-r b{margin-right:6px}.msf-run-r .nm{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;color:var(--ink-2)}.msf-run-r small{color:var(--ink-3);font-size:11px;margin-left:6px}
 .msf-run-r.late b{color:var(--danger)}.msf-run-r.done{opacity:.5}.msf-run-r:hover{background:var(--surface-2)}
@@ -22024,7 +22029,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ms-key-late{color:var(--danger);font-weight:700;margin-right:4px}
 /* a group: the customer and what the jobs share on top, the numbers on their own line under it (Nov 11, Nick) */
 .msf-run-h{flex-direction:column;align-items:flex-start;gap:0;line-height:16px;padding:1px 0 2px}
-.msf-run-h b{font-size:13px;max-width:100%}.msf-run-h span{display:block}
+.msf-run-h b,.msf-run-nm{font-size:13px;max-width:100%}.msf-run-h span{display:block}
 .ms-calm .msf-n.late,.ms-calm .msf-run-r.late b{color:var(--danger)!important;font-weight:800}
 /* Ready To Schedule: small cards by due date, a suggested spot staff can change, then Make The Schedule (Nov 11, Nick) */
 .msr-l{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px}

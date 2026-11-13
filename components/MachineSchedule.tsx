@@ -6,7 +6,7 @@ import { trainingSaid } from "@/lib/orderTrainings";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
-import WorkOrderView from "@/components/WorkOrderView";
+import WorkOrderView, { PrinterIcon } from "@/components/WorkOrderView";
 import { colorHex } from "@/lib/inkColors";
 import { createClient } from "@/lib/supabase/client";
 import { withPace, operatorOf, parseDuration, type RunLesson } from "@/lib/runLearn";
@@ -522,6 +522,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [tipI, setTipI] = useState(0), [tipHold, setTipHold] = useState(false);
   useEffect(() => { if (tipHold) return; const t = setInterval(() => setTipI((i) => i + 1), 8000); return () => clearInterval(t); }, [tipHold]);
   const [listOpen, setListOpen] = useState(""); // a same-art list opened to show all its jobs
+  // a group's name opens a little menu: Print all its work orders (Nick, Nov 13: "click on the group name… print all
+  // work orders… yes"), one print with each job's work order on its own sheets (/print/work)
+  const [runMenu, setRunMenu] = useState(""), [woMany, setWoMany] = useState<{ ids: string[]; title: string } | null>(null);
   const [grpEdit, setGrpEdit] = useState<Card[] | null>(null); // a same-art run's time being edited
   const [standOpen, setStandOpen] = useState(false); // Where things stand: set every job's real state at once
   const [restart, setRestart] = useState(false); // asking: take every not-started job off the calendar?
@@ -2357,8 +2360,14 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     const fit = Math.max(1, Math.floor((H - 22) / 19)), show = open || r.length <= fit ? r : r.slice(0, Math.max(1, fit - 1));
                     const pcs = r.reduce((t, x) => t + x.g.c.need.qty, 0), mins = r.reduce((t, x) => t + x.g.c.minutes, 0);
                     return (
-                      <div key={id} className={"msf-run " + r[0].g.c.need.type + (open ? " open" : "")} style={{ top: top + 1, ...(open ? { minHeight: H } : { height: H }) }}>
-                        <div className="msf-run-h"><b>{runTitle(r.map((x) => x.g.c.job))}</b><span>{r.length} jobs · same art · {pcs.toLocaleString()} pcs · {fmtMin(mins)}</span></div>
+                      <div key={id} className={"msf-run " + r[0].g.c.need.type + (open ? " open" : "") + (runMenu === id ? " menu" : "")} style={{ top: top + 1, ...(open ? { minHeight: H } : { height: H }) }}>
+                        <div className="msf-run-h"><button type="button" className="msf-run-nm" title="Print all this group's work orders" aria-expanded={runMenu === id} onClick={(e) => { e.stopPropagation(); setRunMenu(runMenu === id ? "" : id); }}>{runTitle(r.map((x) => x.g.c.job))}</button><span>{r.length} jobs · same art · {pcs.toLocaleString()} pcs · {fmtMin(mins)}</span></div>
+                        {runMenu === id && (() => { const ids = [...new Set(r.filter((x) => x.g.c.job.kind === "o").map((x) => x.g.c.job.id))]; return (
+                          <div className="msf-run-menu" onClick={(e) => e.stopPropagation()}>
+                            <button type="button" className="btn sm primary" disabled={!ids.length} onClick={() => { setRunMenu(""); setWoMany({ ids, title: `${runTitle(r.map((x) => x.g.c.job))} · ${ids.length} jobs` }); }}><PrinterIcon />Print all {ids.length} work orders</button>
+                            <button type="button" className="btn sm ghost" onClick={() => setRunMenu("")}>Cancel</button>
+                          </div>
+                        ); })()}
                         {show.map((x) => { const gl = glance(x.g.c.need, x.g.c.minutes); return (
                           <div key={x.g.c.key + x.g.part} role="button" tabIndex={0} draggable data-k={x.g.c.key} data-d={x.g.day} className={"msf-run-r" + (isHit(x.g.c.job) ? " ms-hit" : "") + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
                             onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(x.g.c); } }}
@@ -3143,6 +3152,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       ); })()}
       {downEdit && <DownPanel machines={machines} crews={s.crews} init={downEdit} offs={offs} today={today} win={[vStart, vEnd]} me={me.email} onClose={() => setDownEdit(null)} onSaved={(m) => { setDownEdit(null); setMsg(m); load(); }} />}
       {grpEdit && s && <RunGroupTime s={s} cards={grpEdit} onClose={() => setGrpEdit(null)} onSaved={() => { setGrpEdit(null); load(); }} />}
+      {woMany && <WorkOrderView orderId={woMany.ids[0]} ids={woMany.ids} number={`${woMany.ids.length} jobs`} title={woMany.title} onClose={() => setWoMany(null)} />}
       {open && <CardPanel s={s} c={open} cost={crewCost} otMin={(segs.ofCard.get(open.key) || []).reduce((t, g) => { const oa = otOn(g.c.machine, g.day); return t + (oa == null ? 0 : Math.max(0, g.end - Math.max(g.start, oa))); }, 0)} onFlags={async (x) => { const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", open.job.id); if (r.error) { setMsg(r.error.message); return; } const j = { ...open.job, ...(x.rush !== undefined ? { rush: x.rush } : {}), ...(x.firm !== undefined ? { firm: x.firm } : {}), ...(x.due_time !== undefined ? { dueTime: x.due_time } : {}), ...(x.due_date !== undefined ? { due: x.due_date } : {}) }; setOpen({ ...open, job: j }); load(); }} segs={segs.ofCard.get(open.key) || []} days={[...new Set([...allDays, ...hourly.map((h) => h.d), ...restDays])].filter(visible).sort()} win={[vStart, vEnd]} onClose={() => { setOpen(null); setOpenMove(false); }} onMove={(mach, d, st) => { setOpenMove(false); book(open.job, open.need, mach, d, "manual", open.slot, st); setOpen(null); }} startMove={openMove} onSplit={(off, to) => splitByLocation(open, off, to)} parts={splitParts(open).map((x) => { const g = segs.ofCard.get(x.key) || []; return { key: x.key, me: x.key === open.key, press: `${shortName(x.machine)}${crewOf(x.machine)?.leader ? ` · ${crewOf(x.machine)!.leader}` : ""}`, what: x.need.label, when: g.length ? `${wkd(g[0].day)} ${clock(g[0].start)} – ${clock(g[g.length - 1].end)}` : "" }; })} onUnite={() => uniteJob(open)} presses={machines.filter((m) => m.type === open.need.type && fits(open.need, m)).map((m) => ({ id: m.id, name: `${shortName(m)}${crewOf(m)?.leader ? ` · ${crewOf(m)!.leader}` : ""}` }))} onRunTime={() => { setOpen(null); load(); }} />}
     </div>
   );
