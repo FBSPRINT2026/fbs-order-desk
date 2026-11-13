@@ -103,13 +103,13 @@ function Cards() {
           <table className="tcp-t" data-nofit>
             <thead><tr><th>Day</th><th>In</th><th>Lunch out</th><th>Lunch in</th><th>Out</th><th className="r">Hours</th></tr></thead>
             <tbody>{rows.map((r) => r.k === "w"
-              ? <tr key={"w" + r.label} className="wk"><td colSpan={5}>{r.label}</td><td className="r">{h2(r.mins)}</td></tr>
-              : <tr key={r.day} className={r.inn || r.out || r.mins ? "" : "off"}>
+              ? <tr key={"w" + r.label} className="tcp-wk"><td colSpan={5}>{r.label}</td><td className="r">{h2(r.mins)}</td></tr>
+              : <tr key={r.day} className={r.inn || r.out || r.mins ? "" : "tcp-off"}>
                   <td>{dayRow(r.day)}</td>
-                  <td>{r.inn ? clock(r.inn) : r.miss ? <i className="miss">missed</i> : "—"}</td>
+                  <td>{r.inn ? clock(r.inn) : r.miss ? <i className="tcp-miss">missed</i> : "—"}</td>
                   <td>{r.lo ? clock(r.lo) : "—"}</td>
-                  <td>{r.li ? clock(r.li) : r.lo ? <i className="miss">missed</i> : "—"}</td>
-                  <td>{r.out ? clock(r.out) : r.inn ? <i className="miss">missed</i> : "—"}{r.fix && <span className="fx">fixed</span>}{r.more > 0 && <span className="fx gray">+{r.more} in/out</span>}</td>
+                  <td>{r.li ? clock(r.li) : r.lo ? <i className="tcp-miss">missed</i> : "—"}</td>
+                  <td>{r.out ? clock(r.out) : r.inn ? <i className="tcp-miss">missed</i> : "—"}{r.fix && <span className="tcp-fx">fixed</span>}{r.more > 0 && <span className="tcp-fx gray">+{r.more} in/out</span>}</td>
                   <td className="r">{r.mins ? h2(r.mins) : "—"}</td>
                 </tr>)}</tbody>
           </table>
@@ -151,11 +151,11 @@ body{background:#e6e9ee}
 .tcp-t th{font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#5f6b80;text-align:left;border-bottom:1.5px solid #141d2b;padding:4px 5px;text-transform:uppercase}
 .tcp-t td{border-bottom:1px solid #e3e7ec;padding:5px;white-space:nowrap;font-size:12.5px}
 .tcp-t .r{text-align:right}
-.tcp-t tr.wk td{background:#f2f4f7;font-weight:800}
-.tcp-t tr.off td{color:#9aa3b1}
-.tcp-t .miss{color:#c9372c;font-style:normal;font-weight:700;font-size:11px;border-bottom:1px solid #c9372c;padding:0 12px 0 0}
-.tcp-t .fx{font-size:9.5px;font-weight:800;color:#1d6fd8;margin-left:6px}
-.tcp-t .fx.gray{color:#5f6b80}
+.tcp-t tr.tcp-wk td{background:#f2f4f7;font-weight:800}
+.tcp-t tr.tcp-off td{color:#9aa3b1}
+.tcp-t .tcp-miss{color:#c9372c;font-style:normal;font-weight:700;font-size:11px;border-bottom:1px solid #c9372c;padding:0 12px 0 0}
+.tcp-t .tcp-fx{font-size:9.5px;font-weight:800;color:#1d6fd8;margin-left:6px}
+.tcp-t .tcp-fx.gray{color:#5f6b80}
 .tcp-tot{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}
 .tcp-tot div{border:1.5px solid #141d2b;border-radius:5px;padding:6px}
 .tcp-tot span{display:block;font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#5f6b80}
