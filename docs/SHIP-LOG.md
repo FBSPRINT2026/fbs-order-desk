@@ -295,3 +295,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 11:23am · 1.3.533 · Nick · Schedule assistant: books, takes jobs back to Ready To Schedule and adds downtime (someone out), shows the steps first (Do it), idea chips to tap; jobs go by short ids so none are dropped
 - Nov 13 11:26am · 1.3.535 · Nick · Schedule assistant: its note names jobs and crews, never internal ids
 - Nov 13 11:29am · 1.3.537 · Nick · Send: a new email by default, never a reply to the last email picked for you; the email it likely answers is offered (one tap). Fix: the schedule assistant's last change didn't build
+- Nov 13 11:32am · 1.3.538 · Nick · Rules: Send starts as a new email
