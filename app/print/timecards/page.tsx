@@ -135,6 +135,7 @@ function Cards() {
 
 const CSS = `
 body{background:#e6e9ee}
+.tcp,.tcp *{box-sizing:border-box}
 .tcp{font-family:var(--body,"Public Sans",system-ui,sans-serif);color:#141d2b;display:flex;flex-direction:column;align-items:center;gap:18px;padding:0 12px 40px}
 .tcp-bar{position:sticky;top:0;z-index:5;width:100%;max-width:8.5in;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #d5dbe3;border-radius:0 0 10px 10px;padding:10px 14px;font-size:14px}
 .tcp-bar span{color:#4b5568}.tcp-sp{flex:1}
@@ -169,12 +170,12 @@ body{background:#e6e9ee}
 .tcp-sl div span{position:absolute;bottom:-15px;left:0;font-size:9.5px;color:#5f6b80;font-weight:700}
 .tcp-f{display:flex;justify-content:space-between;gap:10px;font-size:9.5px;color:#7a8597;margin-top:10px}
 .tcp-f b{color:#141d2b}
+@page{size:letter;margin:0}
 @media print{
-  @page{size:letter;margin:.4in}
-  body{background:#fff}
-  .tcp{padding:0;gap:0}
+  html,body{background:#fff!important;margin:0!important;padding:0!important;width:8.5in!important;min-width:0!important}
+  .tcp{padding:0;gap:0;display:block}
   .tcp-bar{display:none}
-  .tcp-sheet{box-shadow:none;width:auto;max-width:none;height:10.1in;min-height:0;padding:0;overflow:hidden;break-after:page;page-break-after:always}
+  .tcp-sheet{box-shadow:none;width:8.5in;max-width:none;height:10.9in;min-height:0;margin:0;padding:.45in .5in;overflow:hidden;zoom:1!important;break-after:page;page-break-after:always}
   .tcp-sheet:last-child{break-after:auto;page-break-after:auto}
 }
 `;
