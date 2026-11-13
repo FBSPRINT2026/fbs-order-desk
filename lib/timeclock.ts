@@ -106,9 +106,11 @@ export type Card = {
 };
 
 /**
- * Lunch from four punches (Oct 16, Nick: "if someone has 4 punches in a day it records the middle two as lunch"): a
- * day whose punches are exactly in, out, in, out reads as in, lunch out, lunch in, out. Nothing stored changes; every
- * timecard, the payroll export and the Today list read punches through this, whatever clock they came from.
+ * Lunch from four punches (Oct 16, Nick: "if someone has 4 punches in a day it records the middle two as lunch"): any
+ * day with exactly four punches reads as in, lunch out, lunch in, out, whichever buttons were pressed (Nov 13, Nick:
+ * "we don't need to specify those"; Azucena's in, lunch, out, out). Three punches pressed in, out, in read as in, lunch
+ * out, lunch in (back from lunch, not out yet). Nothing stored changes; every timecard, the payroll export and the Today
+ * list read punches through this, whatever clock they came from.
  */
 export type LunchPunch<T> = T & { lunch?: boolean };
 export function withLunch<T extends { kind: Punch["kind"]; at: string; voided?: boolean; employee_id?: string }>(ps: T[]): LunchPunch<T>[] {
@@ -116,11 +118,11 @@ export function withLunch<T extends { kind: Punch["kind"]; at: string; voided?: 
   for (const p of ps) { if (p.voided) continue; const k = `${p.employee_id || ""}|${localDay(p.at)}`; (groups.get(k) || groups.set(k, []).get(k)!).push(p); }
   const swap = new Map<T, LunchPunch<T>>();
   for (const g of groups.values()) {
-    if (g.length !== 4) continue;
     const day = [...g].sort((a, b) => a.at.localeCompare(b.at));
-    if (day.map((p) => p.kind).join(",") !== "in,out,in,out") continue;
-    swap.set(day[1], { ...day[1], kind: "break_start", lunch: true });
-    swap.set(day[2], { ...day[2], kind: "break_end", lunch: true });
+    const want: Punch["kind"][] | null = day.length === 4 ? ["in", "break_start", "break_end", "out"]
+      : day.length === 3 && day.map((p) => p.kind).join(",") === "in,out,in" ? ["in", "break_start", "break_end"] : null;
+    if (!want) continue;
+    day.forEach((p, i) => { if (p.kind !== want[i]) swap.set(p, { ...p, kind: want[i], lunch: want[i] === "break_start" || want[i] === "break_end" }); });
   }
   return ps.map((p) => swap.get(p) || p);
 }

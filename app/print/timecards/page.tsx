@@ -14,7 +14,8 @@ import { addDays, cardPunches, daysBetween, fullName, localToIso, mergeTime, per
  * off, and signature lines. /print/timecards?start=<period start>&who=all|open ("open": only who hasn't approved their
  * hours on the phone). Opened from Time Clock → Payroll Report → Print time cards.
  */
-const DEPT_ORDER = ["Screen Printing", "Embroidery", "Screen Cleaning & Prep", "Receiving", "Fulfillment", "Shipping", "Office"];
+// printed by department, then by first name (Nick, Nov 13: "screen printing, embroidery and fulfillment… Ana Guzman first")
+const DEPT_ORDER = ["Screen Printing", "Embroidery", "Fulfillment", "Screen Cleaning & Prep", "Receiving", "Shipping", "Office"];
 const h2 = (m: number) => (m / 60).toFixed(2);
 const clock = (t: string) => timeLabel(t).replace(/\s?([AP])M/i, (_, x) => x.toLowerCase());
 const dayRow = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "numeric", day: "numeric" });
