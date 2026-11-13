@@ -8,7 +8,7 @@ import { SHOP_CONTEXT } from "@/lib/ai/tasks";
 import { fileB64, imgType, orderBrief } from "@/lib/ai/reorderCheck";
 import { loadMemories, loadShopRules, shopRulesText } from "@/lib/ai/orderMemory";
 import { colorHex } from "@/lib/inkColors";
-import { pdfTextServer } from "@/lib/pdfTextServer";
+import { pdfTextServer, pdfSizeGridServer } from "@/lib/pdfTextServer";
 import { checkOrderSource } from "@/lib/ai/sourceCheckRun";
 import type { SrcFinding } from "@/lib/sourceCheck";
 import { persFromNames, splitNames } from "@/lib/persNames";
@@ -139,6 +139,9 @@ export async function orderFix(admin: SupabaseClient, s: Settings, orderId: stri
     if (!blob) continue;
     const buf = Buffer.from(await blob.arrayBuffer());
     if (!buf.subarray(0, 5).toString().startsWith("%PDF")) continue;
+    // its size grid read by position (lib/sizeGrid.ts): an empty size box doesn't make the sizes slide a column (Nov 13)
+    const gr = await pdfSizeGridServer(buf).catch(() => "");
+    if (gr) pdfText.push(`${who}: ${f.name}: its size grid, read by code from where each number stands under the size headers (exact; an empty box is 0, never shift a number to the next size):\n${gr}`);
     if (documents.length < 4 && buf.length <= 15 * 1024 * 1024 && buf.length <= budget) { budget -= buf.length; documents.push({ data: buf.toString("base64"), label: `${who}: ${f.name}` }); continue; }
     const tx = await pdfTextServer(buf).catch(() => "");
     if (tx) pdfText.push(`${who}: ${f.name} (too big to show; its text):\n${tx.slice(0, 12000)}`);

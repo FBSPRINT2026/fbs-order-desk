@@ -13,7 +13,7 @@ import { persFromNames, splitNames } from "@/lib/persNames";
 import { normSize, proposalToGroups, type ProposedOrder } from "@/lib/ai/normalize";
 import { applySheetSizes, sheetBreakdown } from "@/lib/sheetSizes";
 import { confirmMeta, supplierConfirms } from "@/lib/supplierConfirm";
-import { pdfTextServer } from "@/lib/pdfTextServer";
+import { pdfTextServer, pdfSizeGridServer } from "@/lib/pdfTextServer";
 import { applyLocationFixes, sourceCheck } from "@/lib/sourceCheck";
 import { applyColorwayFixes, applyLogoFixes, applyMethodFixes, sourceCtx } from "@/lib/ai/sourceCheckRun";
 import { refetchAttachments } from "@/lib/mail/imap";
@@ -304,7 +304,8 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
         const { data: big } = await admin.storage.from("proofs").download(a.path).catch(() => ({ data: null }));
         const tx = big ? await pdfTextServer(new Uint8Array(await big.arrayBuffer())).catch(() => "") : "";
         if (tx.trim()) words.push(tx);
-        if (tx.trim()) { listing.push(`${tag} (too big to look at here; its words, read by code):\n"""\n${tx.slice(0, 6000)}\n"""`); continue; }
+        const gr = big ? await pdfSizeGridServer(new Uint8Array(await big.arrayBuffer())).catch(() => "") : "";
+        if (tx.trim()) { listing.push(`${tag} (too big to look at here; its words, read by code):\n"""\n${tx.slice(0, 6000)}\n"""${gr ? `\nAnd the size grid read by code from where each number stands under the size headers (exact; an empty size box is 0, and the PDF's text runs those boxes together, so never shift a number to the next size):\n"""\n${gr}\n"""\nUse these sizes exactly for these rows.` : ""}`); continue; }
       }
       listing.push(`${tag} (too big to look at here)`); continue;
     }
@@ -330,7 +331,12 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
       } else if (cf?.rows) {
         confirms.push(tx);
         listing.push(`${tag} (PDF, shown above). Read by code, exactly: a supplier order confirmation, ${cf.pieces} pieces: ${cf.lines.map((l) => `${l.product.split(" - ").pop()} ${l.color} ${Object.entries(l.sizes).map(([z, q]) => `${z} ${q}`).join(", ")}`).join("; ")}. Use these quantities as they are.`);
-      } else listing.push(`${tag} (PDF, shown above)`);
+      } else {
+        // a size grid (an order form, a size breakdown): each number under its size header, read by position (Nov 13,
+        // Tiger Blue's #50030 / #40382: empty boxes made the sizes slide a column)
+        const gr = await pdfSizeGridServer(buf).catch(() => "");
+        listing.push(gr ? `${tag} (PDF, shown above). Its size grid, read by code from where each number stands under the size headers (exact; an empty size box is 0, and the PDF's text runs those boxes together, so never shift a number to the next size):\n"""\n${gr}\n"""\nUse these sizes exactly for these rows.` : `${tag} (PDF, shown above)`);
+      }
     } else {
       const t = officeText(a.name, a.type, buf);
       if (t) words.push(t);
@@ -463,7 +469,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-12a";
+export const READER_REV = "2026-11-13a";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
