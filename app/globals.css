@@ -21851,6 +21851,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msa-box .msa-f:focus-within{border-color:var(--fbs-violet)}
 .msa-box .msa-f .btn{background:var(--fbs-violet);border-color:var(--fbs-violet);color:#fff}
 .msa-box .msa-f .btn:disabled{opacity:.55}
+.msa-box .mic.msa-mic{position:static;transform:none;flex:none;width:30px;height:30px;color:var(--fbs-violet)}
 .msa-drop{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.14);padding:5px;display:flex;flex-direction:column}
 .msa-drop-h{font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);padding:3px 8px 4px}
 .msa-drop button{all:unset;cursor:pointer;padding:7px 8px;border-radius:5px;font-size:13.5px;color:var(--ink)}

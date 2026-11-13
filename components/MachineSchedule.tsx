@@ -4,6 +4,7 @@ import { useProdSide } from "@/lib/prodSide";
 import { runParts, sampleRunOn, samplePieces, waitsOnSample } from "@/lib/samples";
 import { trainingSaid } from "@/lib/orderTrainings";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { MicButton } from "@/components/SearchInput";
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
 import WorkOrderView, { PrinterIcon } from "@/components/WorkOrderView";
@@ -484,6 +485,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [askQ, setAskQ] = useState(""), [askBusy, setAskBusy] = useState(false), [askPlan, setAskPlan] = useState<AskPlan | null>(null);
   // the ideas drop down under the box while it's clicked in and empty (Nick, Nov 13: one line, beside the tabs)
   const [askFocus, setAskFocus] = useState(false);
+  const askIn = useRef<HTMLInputElement>(null);
   // kinds of order (Nov 11, Nick: "distinguish… what's a cart order from Cedar Promos, what's an All My Sons… order, and
   // what's a regular order… hide the cart orders and… All My Sons… so I can just see the regular"): a customer's Create
   // order trainings (their when-words in the job's name) are its kinds; a job none of them names is Regular. Hidden kinds
@@ -3204,7 +3206,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   <div className="msa-box">
                     <span className="msa-lbl" aria-hidden>✦ AI assistant</span>
                     <form className="msa-f" onSubmit={(e) => { e.preventDefault(); setAskFocus(false); void askSchedule(); }}>
-                      <input value={askQ} onChange={(e) => setAskQ(e.target.value)} onFocus={() => setAskFocus(true)} onBlur={() => setAskFocus(false)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
+                      <input ref={askIn} value={askQ} onChange={(e) => setAskQ(e.target.value)} onFocus={() => setAskFocus(true)} onBlur={() => setAskFocus(false)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
+                      {/* say it instead of typing it (Nick, Nov 13): the shop's one microphone button, asked when they stop talking */}
+                      <MicButton target={() => askIn.current} append keepListening label="Tell the schedule out loud (microphone)" className="msa-mic" onDone={(t) => { if (t.trim()) void askSchedule(t.trim()); }} />
                       <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
                     </form>
                     {askFocus && !askQ.trim() && !askPlan && !askBusy && (() => {
