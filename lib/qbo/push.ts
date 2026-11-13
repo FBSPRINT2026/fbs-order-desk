@@ -257,6 +257,16 @@ export class Pusher {
         else return { status: "needs_review", reason: `QuickBooks already has an invoice numbered #${n} (QuickBooks #${e.Id}, for ${e.CustomerRef?.name || "another customer"}, ${r2(+(e.TotalAmt || 0)).toFixed(2)})${ours ? "" : " that wasn't made by the portal"}. Not sent, so it isn't duplicated: check it in QuickBooks.`, preview };
       }
     }
+    // Printavo's invoice at the same total as our saved order, and we've never sent it anything: it stays as it is, just
+    // linked, with our order's version noted. The first time the order changes here (a quantity, a fee, shipping), the
+    // invoice is replaced with ours whole (Nick, Nov 12 2026: "if we change something in our system… you have to
+    // completely override the invoice. But if it stays the same, it stays the same").
+    const asIs = !!adopted && !!lk && !(lk.last_sent as { fingerprint?: string } | null)?.fingerprint && !lk.last_pushed_hash && qboTotal === r2(build.storedTotal) && !res.force;
+    if (asIs && lk) {
+      if (!this.live) return { status: "pending", reason: `Preview: Printavo's QuickBooks invoice #${n} is ${qboTotal!.toFixed(2)}, the same as ours: linked and left as it is until the order changes here.`, preview };
+      await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: lk.qbo_id, source: lk.source, rec: adopted, last_sent: { fingerprint: invoiceFingerprint(adopted) }, hash: hashOf(build.body), note: "as Printavo made it" });
+      return { status: "done", reason: `Printavo's QuickBooks invoice #${n} matches ours (${qboTotal!.toFixed(2)}): linked and left as it is. It's replaced with ours the first time the order changes here.`, qboId: lk.qbo_id, preview };
+    }
     if (!this.live) {
       if (adopted) return { status: "pending", reason: qboTotal === build.total ? `Preview: Printavo's QuickBooks invoice #${n} is ${qboTotal!.toFixed(2)}, the same as ours: lines brought to ours, total unchanged.` : `Preview: would change Printavo's QuickBooks invoice #${n} from ${qboTotal!.toFixed(2)} to ours, ${build.total.toFixed(2)}.`, preview };
       return { status: "pending", reason: `Preview: would ${lk ? "update" : "create"} QuickBooks invoice #${n} for ${build.total.toFixed(2)}.`, preview };
