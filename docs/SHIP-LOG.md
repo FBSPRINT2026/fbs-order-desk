@@ -250,3 +250,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:37pm · 1.3.454 · Nick · Embroidered prints say Threads, not Inks: customer portal, printed papers, phone job view (one helper, inkWord)
 - Nov 12 8:38pm · 1.3.455 · Nick · Schedule: the Issue button's small words are white, readable on the red
 - Nov 12 8:43pm · 1.3.456 · Nick · Schedule Issue: mark Missing / Reject / Reprint with one click; how many is optional (counted later)
+- Nov 12 8:43pm · 1.3.457 · Nick · Rules: Issue count optional
