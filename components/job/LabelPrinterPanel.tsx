@@ -20,23 +20,32 @@ const ago = (d: string | null) => { if (!d) return "never"; const s = (Date.now(
 
 export function relayScript(token: string, server = SITE_URL) {
   return `# FBS Print relay: sends labels from the portal to the Zebra label printer (USB on this computer, or on the network).
-# Install (once): right-click this file > Run with PowerShell, or in PowerShell:
-#   powershell -ExecutionPolicy Bypass -File "$HOME\\Downloads\\fbs-print-relay.ps1" -Install
-# It then starts by itself whenever someone signs in to this computer. Keep this computer on during work hours.
+# Install (once): right-click this file > Run with PowerShell. It copies itself to this computer, starts in the
+# background (no window to keep open), and starts again every time someone signs in. Keep this computer on during work.
 param([switch]$Install)
 $Server = "${server}"
 $Token = "${token}"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-if ($Install) {
-  $dir = Join-Path $env:LOCALAPPDATA "FBSPrintRelay"; New-Item -ItemType Directory -Force -Path $dir | Out-Null
-  $dest = Join-Path $dir "fbs-print-relay.ps1"; Copy-Item -Force $PSCommandPath $dest
-  $act = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$dest\`""
-  $trg = New-ScheduledTaskTrigger -AtLogOn
-  $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
-  Register-ScheduledTask -TaskName "FBS Print Relay" -Action $act -Trigger $trg -Settings $set -Force | Out-Null
-  Start-ScheduledTask -TaskName "FBS Print Relay"
-  Write-Host "FBS Print Relay is installed and running. You can close this window."; exit
+$dir = Join-Path $env:LOCALAPPDATA "FBSPrintRelay"
+$dest = Join-Path $dir "fbs-print-relay.ps1"
+# run from anywhere but its own folder (Downloads, Run with PowerShell): install, start in the background, and close
+if ($Install -or ($PSCommandPath -ne $dest)) {
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+  Copy-Item -Force $PSCommandPath $dest
+  # an older copy still running stops first
+  Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like "*fbs-print-relay.ps1*" -and $_.ProcessId -ne $PID } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  Unregister-ScheduledTask -TaskName "FBS Print Relay" -Confirm:$false -ErrorAction SilentlyContinue
+  # starts with Windows: a shortcut in this user's Startup folder (needs no administrator)
+  $lnk = Join-Path ([Environment]::GetFolderPath("Startup")) "FBS Print Relay.lnk"
+  $ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut($lnk)
+  $sc.TargetPath = "powershell.exe"; $sc.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$dest\`""; $sc.WindowStyle = 7; $sc.Save()
+  Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \`"$dest\`""
+  Write-Host "FBS Print Relay is installed and running in the background. You can close this window."
+  Start-Sleep -Seconds 4; exit
 }
+# only one copy prints
+$one = New-Object System.Threading.Mutex($false, "Local\\FBSPrintRelay")
+if (-not $one.WaitOne(0)) { exit }
 # a USB printer: the label goes to it raw (ZPL) through Windows' print spooler
 Add-Type -TypeDefinition @"
 using System; using System.Runtime.InteropServices;
@@ -201,8 +210,8 @@ export default function LabelPrinterPanel() {
                   <b>Install it on a Windows computer at the shop (the WorldShip computer works):</b>
                   <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
                     <li>On that computer, open this page and click <b>Download the relay</b>.</li>
-                    <li>Open PowerShell and run: <code>powershell -ExecutionPolicy Bypass -File &quot;$HOME\Downloads\fbs-print-relay.ps1&quot; -Install</code></li>
-                    <li>It starts itself after every sign-in. This page shows <b>connected</b> within a few seconds.</li>
+                    <li>In Downloads, right-click <b>fbs-print-relay.ps1</b> → <b>Run with PowerShell</b> (or in PowerShell: <code>powershell -ExecutionPolicy Bypass -File &quot;$HOME\Downloads\fbs-print-relay.ps1&quot;</code>).</li>
+                    <li>It installs itself and runs in the background: no window to keep open, and it starts again after every restart. This page shows <b>connected</b> within a few seconds.</li>
                   </ol>
                   <div className="row" style={{ gap: 8 }}><button type="button" className="btn primary" onClick={download}>Download the relay</button><button type="button" className="btn" onClick={() => setToken("")}>Done</button></div>
                   <span className="faint" style={{ fontSize: 12 }}>The download has this computer&apos;s key in it; it isn&apos;t shown again. Lost it? Remove the computer and set it up again.</span>

@@ -330,3 +330,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 3:00pm · 1.3.572 · Nick · Outbound: the job typed in the top box feeds Print box label (just how many boxes, Enter prints) and Start shipping (opens its ship window straight away); click a row to pick another job
 - Nov 13 3:04pm · 1.3.573 · Nick · Label printer: a USB Zebra works (Settings → Label printer → plugged in by USB); the print relay on that computer prints to it through Windows and finds the Zebra by itself
 - Nov 13 3:08pm · 1.3.574 · Nick · Outbound: Print box label opens a pop-up showing the label exactly as it prints (drawn from the same layout as the Zebra's), how many boxes, flip through boxes, Print
+- Nov 13 3:13pm · 1.3.575 · Nick · Print relay: Run with PowerShell installs it and it runs in the background (no window to keep open), starts again after every restart without needing an administrator, and only one copy runs
