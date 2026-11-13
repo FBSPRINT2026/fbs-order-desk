@@ -207,6 +207,8 @@ export async function saveCheckin(admin: SupabaseClient, by: string, b: { ref: s
   const row = { order_id: pv ? null : id, archived_order_id: pv ? id : null, lines, expected, received, boxes: b.boxes ?? null, source: b.source || "", status, note: String(b.note || "").slice(0, 2000), photos: (b.photos || []).slice(0, 12), by };
   const ins = await admin.from("goods_checkins").insert(row).select("*").single();
   if (ins.error) throw new Error(ins.error.message);
+  // a count left halfway (app/api/jobs/checkin/draft) is done with now
+  await admin.storage.from("proofs").remove([`checkins/${b.ref.replace(/[^\w-]/g, "_")}/draft.json`]).catch(() => null);
   // the job's manifest packages count as here now (the local truck and freight never report delivery themselves)
   const now = new Date().toISOString();
   await admin.from("supplier_manifest_lines").update({ track_status: "delivered", delivered_at: now, track_detail: `Counted in by ${by}` }).eq(pv ? "archived_order_id" : "order_id", id).is("delivered_at", null);

@@ -9,7 +9,7 @@ import type { CheckJob } from "@/lib/checkinShared";
 import type { ShipTarget } from "@/components/ShipWindow";
 import { addNote, addPhoto, NOTE_TAGS, useJobFiles, type JobFile } from "./JobFiles";
 import MobileShip from "./MobileShip";
-import PhoneCheckin from "./PhoneCheckin";
+import PhoneCheckin, { countGuard } from "./PhoneCheckin";
 import PressSheetCard from "./PressSheetCard";
 import PressTimer from "./PressTimer";
 import PhoneInks from "./PhoneInks";
@@ -62,8 +62,16 @@ export default function JobMobile(p: {
   }, [who.view]); // eslint-disable-line react-hooks/exhaustive-deps
   // each tool is its own history entry, so the phone's Back button returns to the menu
   const go = (v: View) => { if (v !== "home") history.pushState({ jm: v }, ""); setView(v); scrollTo(0, 0); };
-  useEffect(() => { const on = (e: PopStateEvent) => setView(((e.state && e.state.jm) as View) || "home"); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
-  const back = () => (history.state?.jm ? history.back() : setView("home"));
+  // a count in left halfway asks first (save to finish later, or reset to uncounted), the phone's Back button too
+  useEffect(() => {
+    const on = (e: PopStateEvent) => {
+      const to = ((e.state && e.state.jm) as View) || "home";
+      if (countGuard.busy()) { history.pushState({ jm: "checkin" }, ""); countGuard.ask(() => { history.back(); }); return; }
+      setView(to);
+    };
+    addEventListener("popstate", on); return () => removeEventListener("popstate", on);
+  }, []);
+  const back = () => countGuard.ask(() => (history.state?.jm ? history.back() : setView("home")));
 
   if (!card) return (
     <div className="jm"><header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
@@ -77,7 +85,7 @@ export default function JobMobile(p: {
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
       <section className={"jm-job" + (view === "checkin" ? " slim" : "")}>
         <div className="jm-navrow">
-          <a className="jm-menu" href="/crew"><Icon d={I.menu} />{t("Main menu")}</a>
+          <a className="jm-menu" href="/crew" onClick={(e) => { if (countGuard.busy()) { e.preventDefault(); countGuard.ask(() => { location.href = "/crew"; }); } }}><Icon d={I.menu} />{t("Main menu")}</a>
           {view !== "home" && <button type="button" className="jm-back" onClick={back}>{t("← Job menu")}</button>}
         </div>
         <div className="jm-num"><b>#{card.number}</b>{card.rush && <span className="jm-rush">{t("RUSH")}</span>}{p.box ? <span className="jm-box">{t("Box {0}", p.box)}</span> : null}</div>
@@ -93,7 +101,7 @@ export default function JobMobile(p: {
         {view === "photos" && <Photos job={job} />}
         {view === "labels" && <Labels card={card} box={p.box || null} printer={p.printer} perBox={p.shipSettings?.perBox || 72} staff={who.kind === "staff"} />}
         {view === "ship" && p.ship && p.shipSettings && <MobileShip t={p.ship.t} existing={p.ship.existing} settings={p.shipSettings} box={p.box || null} />}
-        {view === "checkin" && p.checkin && <Checkin job={p.checkin} />}
+        {view === "checkin" && p.checkin && <Checkin job={p.checkin} onLeave={back} />}
         {view === "inks" && p.inks && <PhoneInks card={card} data={p.inks} />}
         {view === "timer" && <PressTimer card={card} presses={p.presses || []} />}
         {view === "post" && <PostCount card={card} checkin={p.checkin} job={job} />}
@@ -357,7 +365,7 @@ function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
 }
 
 /** Count the goods in: what was counted before (if anything), else the size-by-size counter. */
-function Checkin({ job }: { job: CheckJob }) {
+function Checkin({ job, onLeave }: { job: CheckJob; onLeave: () => void }) {
   const { t, locale } = useT();
   const [done, setDone] = useState(job.checkins[0] || null), [again, setAgain] = useState(false), [fresh, setFresh] = useState(false);
   if (done && !again) {
@@ -373,7 +381,7 @@ function Checkin({ job }: { job: CheckJob }) {
       </div>
     );
   }
-  return <PhoneCheckin job={job} onDone={(c) => { setDone(c); setAgain(false); setFresh(true); scrollTo(0, 0); }} />;
+  return <PhoneCheckin job={job} onLeave={onLeave} onDone={(c) => { setDone(c); setAgain(false); setFresh(true); scrollTo(0, 0); }} />;
 }
 
 /** Print box labels on the Zebra: how many boxes, all of them or just this one. */

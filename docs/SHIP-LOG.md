@@ -274,3 +274,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 9:14am · 1.3.492 · Nick · Employee app: first time with no PIN points to /crew to make one
 - Nov 13 9:23am · 1.3.494 · Nick · Crew menu: Find at the top (search PO / job # / customer, or Scan with the camera); Scan a job opens the camera; a switch for someone with Deliveries (Receiving | Deliveries)
 - Nov 13 9:30am · 1.3.496 · Nick · Receiving: every open job shows and is searchable, not just this week's (late jobs like #40382 were missing)
+- Nov 13 9:40am · 1.3.498 · Nick · Count in v2 on the phone: pick a style, type its sizes, hold 1 second to count all in; leaving halfway asks to save for later or reset to uncounted (phone and desk)

@@ -370,3 +370,41 @@
 .cr-cam span{position:absolute;left:0;right:0;bottom:10px;text-align:center;color:#fff;font-weight:700;font-size:14px}
 .cr-modes{margin-bottom:2px}
 .cr-findwrap{display:flex;flex-direction:column;gap:8px}
+
+/* Count in v2 (Nov 13, Nick): pick a style at the top, type its sizes, or hold the green button a second to count all in */
+.ci2{display:flex;flex-direction:column;gap:12px}
+.ci2-tot{font-size:14px;font-weight:700;color:#5B6678;font-variant-numeric:tabular-nums}
+.ci2-tot b{color:var(--ink);font-size:16px}
+.ci2-resumed{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;justify-content:space-between;background:#e9f5fb;border:1px solid #b9dcee;border-radius:12px;padding:10px 12px;font-size:13.5px;font-weight:600}
+.ci2-hold{position:relative;overflow:hidden;min-height:66px;border:0;border-radius:14px;background:#0a6b5c;color:#fff;font:inherit;text-align:center;padding:0 12px;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
+.ci2-fill{position:absolute;inset:0 auto 0 0;width:0;background:#0F8C78}
+.ci2-hold.go .ci2-fill{width:100%;transition:width 1s linear}
+.ci2-ht{position:relative;display:flex;flex-direction:column;align-items:center;line-height:1.25;pointer-events:none}
+.ci2-ht b{font-size:17px}.ci2-ht small{font-size:12.5px;opacity:.92}
+.ci2-lbl{font-size:12px;font-weight:800;letter-spacing:.06em;color:#7A8599;text-transform:uppercase}
+.ci2-items{display:flex;flex-direction:column;gap:8px}
+.ci2-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;min-height:60px;padding:8px 12px;border:1.5px solid var(--line);background:#fff;border-radius:12px;font:inherit;color:var(--ink);text-align:left;cursor:pointer}
+.ci2-item[aria-pressed="true"]{border:2px solid #0b6fa0;background:#e9f5fb}
+.ci2-it{display:flex;flex-direction:column;min-width:0}
+.ci2-it small{font-size:12.5px;color:#5f6b80}
+.ci2-ct{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;display:flex;flex-direction:column}
+.ci2-ct small{font-size:12px;font-weight:800;color:#7A8599}
+.ci2-ct small.on{color:#0b6fa0}.ci2-ct small.ok{color:#0F8C78}.ci2-ct small.short{color:#9a5d00}
+.ci2-sizes{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.ci2-sh{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:space-between;align-items:center}
+.ci2-sh b{font-size:16px}
+.ci2-allthese{border:0;background:none;color:#0F8C78;font:inherit;font-weight:800;font-size:14px;padding:6px 0;cursor:pointer}
+.ci2-grid{display:grid;grid-template-columns:52px minmax(0,1fr) 76px;gap:8px;align-items:center}
+.ci2-sz{font-size:18px;font-weight:800}
+.ci2-of{font-size:13px;color:#5f6b80;font-variant-numeric:tabular-nums}
+.ci2-of.short,.ci2-of.bad{color:#9a5d00;font-weight:800}.ci2-of.over{color:#0b6fa0;font-weight:800}
+.ci2-grid input{min-height:48px;width:100%;min-width:0;border:1.5px solid var(--line);border-radius:10px;text-align:center;font:inherit;font-size:18px;font-weight:800;background:#fff;color:var(--ink);font-variant-numeric:tabular-nums}
+.ci2-grid input.short,.ci2-grid input.bad{border:2px solid #C27C00;background:#fff6e6}
+.ci2-grid input.ok{border-color:#0F8C78}
+.jm-go.ci2-done{background:#0F8C78}
+.ci2-stop{border:0;background:none;color:#5B6678;font:inherit;font-weight:700;font-size:14px;padding:10px;cursor:pointer;text-decoration:underline}
+.ci2-veil{position:fixed;inset:0;z-index:50;background:rgba(18,25,37,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom,0px))}
+.ci2-ask{background:#fff;border-radius:18px;padding:18px 16px;width:100%;max-width:440px;display:flex;flex-direction:column;gap:10px}
+.ci2-ask b{font-size:18px}.ci2-ask p{margin:0;color:#5B6678}
+.ci2-reset{min-height:50px;border:1.5px solid #c0352b;border-radius:14px;background:#fff;color:#c0352b;font:inherit;font-weight:800;cursor:pointer;width:100%}
+@media (prefers-reduced-motion:reduce){.ci2-hold.go .ci2-fill{transition:none}}

@@ -5157,6 +5157,9 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ck-note{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;min-width:240px}
 .ck-note textarea{width:100%;box-sizing:border-box}
 .ck-foot{display:flex;gap:8px;align-items:center;padding:12px 20px;border-top:1px solid var(--line-2)}
+/* the count in left halfway: picked up again, and closing halfway asks (Nov 13) */
+.ck-foot.ck-ask{flex-wrap:wrap;background:var(--surface-2,#f6f8fa)}
+.ck-resumed{margin:0 20px;padding:8px 12px;border-radius:var(--r);background:var(--accent-soft,#e9f5fb);font-size:13px;color:var(--ink)}
 .ck-sum{font-size:13.5px;font-weight:600;color:var(--ink-3)}
 .ck-sum.ok{color:#1E9E5A}.ck-sum.off{color:#C2352B}
 .btn.warn{background:#C2352B;border-color:#C2352B;color:#fff}

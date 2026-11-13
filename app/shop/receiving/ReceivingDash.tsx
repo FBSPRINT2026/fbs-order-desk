@@ -152,7 +152,8 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         <div className="rvm-meta">{j.due ? <span>Due {short(j.due)}</span> : null}<span>{pcsOf(j)} pcs</span>{sup ? <span>{sup}{j.lines ? ` · ${j.arrived} of ${j.shipped} here` : ""}</span> : <span>No manifest</span>}</div>
         <div className="rvm-acts">
           {!j.ref.startsWith("pv:") && <button type="button" className="btn rvm-pr" aria-label="Work order" title="Work order" onClick={() => setWo(j)}><PrinterIcon /></button>}
-          <button type="button" className={"btn rvm-go" + (done ? "" : " primary")} onClick={() => setCount(j)}>{done || j.state === "issue" ? "Recount" : "Count in"}</button>
+          {/* on a phone, the one phone count in (pick a style, hold to count all, stop halfway and finish later; Nov 13) */}
+          <a className={"btn rvm-go" + (done ? "" : " primary")} href={`/j/${j.number}?v=checkin`}>{done || j.state === "issue" ? "Recount" : "Count in"}</a>
         </div>
       </div>
     );
