@@ -79,7 +79,7 @@ function Cards() {
   if (err) return <div className="tcp-msg">{err}</div>;
   if (!data) return <div className="tcp-msg">Loading time cards…</div>;
   return (
-    <div className="tcp print-page" data-nosquish>
+    <div className="tcp" data-nosquish>
       <title>{`Time cards ${pages[0] ? longDay(pages[0].per.start) + " – " + longDay(pages[0].per.end) : ""}`}</title>
       <div className="tcp-bar">
         <b>{pages.length} time card{pages.length === 1 ? "" : "s"}</b>
