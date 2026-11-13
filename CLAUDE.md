@@ -176,6 +176,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (that read #50030's front as 1 white color and put the PSD on the back).
   Their work order (Nick, Nov 12, #40382): page 1 as always, then their mockup as big as the page goes with each print's
   inks as a line under it, and no press sheets (nothing to show but black boxes): `theirSeps` in `WorkOrderDoc`.
+  Many products, a few pieces each (Nick, Nov 13, option B, #50021's 13 one-piece garments on 3 pages): a group with more
+  than 8 garments averaging 3 pieces or fewer lists them in two columns, one line each ("XL 1", "S 2 · M 1", a box for
+  the count), about 30 on the job page (`compactLines` / `CompactLine` in `app/print/[id]/Docs.tsx`).
   Their films print as one plate (Nick, Nov 12: only the crop marks came out): every spot color in a PDF/.ai film is put
   on every plate (`filmAsOnePlate` in `lib/filmFix.ts`, run by Print in Their separations), so the art prints solid black.
 - **Underbase** (Nick, Nov 11 2026: "that's the rule"): every shirt gets a white underbase under the colors except a white
@@ -229,6 +232,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.
+  It starts as a new email, never a reply picked for them (Nick, Nov 13: a quote went out on the last email to Peter,
+  about something else); the email it most likely answers is offered under Reply to, one tap.
 - **Order statuses** (Nick, Nov 11 2026): … Approved → In Production → Fulfillment (printed; finishing, counting, packing) →
   Ready → Completed. Ready is worded by the order's delivery method: Ready for Pickup / Ready to Ship / Ready to Deliver
   (`readyLabel` / `statusText` in `lib/pricing.ts`; `<Pill ship={o.delivery_method}>`). Any "open work" status list
@@ -266,8 +271,19 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   they're on now (`lib/crewHome.ts`), and a scanned job opens on their view's first tool (`OPENS_ON`: receiving → count
   in, operator → press timer, catcher → post count with where it goes, shipping → Ship) with its tiles in their order
   (`TILES`). The look is "A + B" (light page, one dark card on top, the list with times, tiles, clock buttons). Their
-  time card fixes wait for a manager on the Time Clock (`time_fix_requests`, `timeFixDecide`). New crew tools go
+  time card fixes wait for a manager on the Time Clock (`time_fix_requests`, `timeFixDecide`). **Payday check** (Nick, Nov 13 2026: uAttend's
+  printed sheets, now on the phone): the pay period that just ended is first on their menu for five days after it
+  ends until they answer; "My hours are right" approves it, "Something's wrong" opens a time card fix on the day they
+  tap (`hours` in `lib/crewHome.ts`, `time_card_checks`; the Time Clock's Their check column shows Approved / Fix asked
+  / Not yet). Approving the period on the Payroll Report takes the card off everyone's phone; My time cards lists
+  the period now running and the six before it (`periodHours`, `/api/crew/cards`). Paper time cards to sign: Payroll
+  Report → Print time cards (`/print/timecards`, one page each; everyone, or only who hasn't checked on the phone). New crew tools go
   through these, never a page of their own; every word has its Spanish in `components/job/lang.tsx`.
+  Counting goods in on a phone is one tool, `components/job/PhoneCheckin.tsx` (the shop's phone receiving dashboard opens it
+  too, `/j/<number>?v=checkin`): every style on the job listed at the top, the picked one's sizes typed in, and a green
+  button held 3 seconds to count everything in, then Check In first on the review (Nick, Nov 13). Leaving a count halfway, on the phone or the desk's
+  `CheckinModal`, always asks: save what's counted to finish later (anyone picks it up: `/api/jobs/checkin/draft`) or
+  reset to uncounted. Receiving lists every open order of ours whatever its due date (#40382, due last week, was missing).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…
@@ -307,7 +323,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): one dark header card per press (name, crew, clock-in, the press, then a bar: "2 of 4 done · on pace" / "35m behind" / "20m ahead", `dayScore`: only from what's been marked, the last job marked done against its planned finish or a printing job's updated pieces; a start that went by counts only with the live clock on; nothing marked, no pace is claimed), done jobs soft blue like Printavo, the number in blue (never crossed out) and a blue "Done 12:02p" pill (Nick, Nov 12, option B), the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits under the schedule's search on the
   right (Goods / Printing / On the board; Hide folds it to one line, remembered: `.mky`, Nick Nov 12). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
-  tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
+  tabs: All / Late / Holds / Goods here / Not here, with the search and Job Filters at the right of that line and the AI
+  assistant (ask box with a microphone, ideas under it) right below it; Nick, Nov 13) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
   An order On hold (art, receiving, the customer, QC; a payment hold keeps it off the schedule entirely) still shows in
   Ready To Schedule and on the press with an "On hold · <reason>" tag, isn't counted as tight or late, and Make The
   Schedule never books it; drag it onto a press to book it anyway (Nick, Nov 12, #50013).
@@ -354,7 +371,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Right-click a job: Run next (first on its press after what's running), or lock it to its spot (fixed), its person (any
   press they run), its press, or its day; Re-plan moves a job only within its lock (Nick, Nov 11). A job locked to its spot
   never moves: the other jobs flow around it, finishing before it or starting after it. Nothing new is booked into time
-  that's already past today, whatever the Live clock. Start over asks first: Keep my locks or Release all locks too. Downtime is a solid gray block (no stripes); lunch and warm-up are a lightly tinted band with the word centered
+  that's already past today, whatever the Live clock: Make The Schedule, a booking, Re-plan and a hold put on today start
+  from now at the earliest (`notBefore`; Nick, Nov 13). Start over asks first: Keep my locks or Release all locks too. Downtime is a solid gray block (no stripes); lunch and warm-up are a lightly tinted band with the word centered
   ("Lunch 30 min"; the warm-up after lunch is part of its band, no times); a lunch that falls inside a job is counted in
   the job and drawn as the same tinted band across its card (Nick, Nov 11). Shift held before or after grabbing a job
   pins it. Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
@@ -380,7 +398,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   ("+ How many"; Nick, Nov 12, #40478: "I need to be able to mark it just missing right now"), and with no count the job
   is booked as the rest of the run, "count to come" (`production_issues`, pcs 0). The run so far is finished where it stopped; the pieces become their own job, the same order
   number with the reason as a tag and only those pieces (`partNeed` in `lib/production.ts`; `production_slots.issue_id`,
-  job key `i:<id>`). Missing waits under Ready To Schedule's Waiting on goods until a count is saved for the order after
+  job key `i:<id>`). Missing waits under Ready To Schedule's Not here until a count is saved for the order after
   the issue (or "Here now"); Reject and Reprint are ready at once. An open issue holds the order In Production; its tag
   shows beside the status on the Orders list and the order's header (`IssueTag`), never in the customer's portal.
 - **A mixed job's parts show under its status** (Nick, Nov 12, option B): an order printing on more than one kind of

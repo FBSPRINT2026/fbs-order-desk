@@ -1,14 +1,19 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { bySize, type CheckJob, type CheckLine, type CheckinRow, type Issue } from "@/lib/checkinShared";
 import { shrinkPhoto } from "./JobFiles";
 import { useT } from "./lang";
 import PhotoButtons from "@/components/PhotoButtons";
 
 /**
- * Counting a job's goods in on a phone: one size at a time, smallest first (each style / color in turn), on a big
- * keypad. "All 24 here" takes the full amount and moves on; type a different number and Next. A short count is a
- * problem on its own; damaged or wrong items get a reason and how many. Then a review: boxes, a note, photos, Check In.
+ * Counting a job's goods in on a phone (Count in v2; Nick, Nov 13 2026: "a selector up at the top… all the different line
+ * items… select and then count in… a master button on top… hold it on your phone for a second… I don't wanna
+ * accidentally count in jobs"). Every style / color on the job is listed at the top; pick one and type each size, or
+ * "All 150 of these here". Holding the green button 3 seconds counts everything in (letting go early does nothing).
+ * A short count is a problem on its own; damaged or wrong items get a reason and how many. Then a review: boxes, a note,
+ * photos, Check In.
+ * Leaving halfway asks first (Nick, Nov 13, #40382): save what's counted to finish later (anyone picks it up, on any
+ * phone or the desk: /api/jobs/checkin/draft) or reset the job to uncounted.
  * Saves the same check-in as Goods & Receiving (same problems, same manifest update), through /api/jobs/checkin so the
  * crew can do it with their PIN on the shop's Wi-Fi.
  */
@@ -16,32 +21,95 @@ type Cell = { k: string; item: CheckJob["items"][number]; size: string; expected
 type Bad = { issue: Issue; bad: number };
 const sz = (s: string) => (s === "OTHER" ? "Other" : s);
 
-export default function PhoneCheckin({ job, onDone }: { job: CheckJob; onDone: (c: CheckinRow) => void }) {
+/** A count in progress: the job menu asks it before leaving the count (Main menu, ← Job menu, the phone's Back). */
+export const countGuard: { busy: () => boolean; ask: (then: () => void) => void } = { busy: () => false, ask: (then) => then() };
+
+const HOLD_MS = 3000;
+const ago = (iso: string) => { const d = new Date(iso); return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
+
+export default function PhoneCheckin({ job, onDone, onLeave }: { job: CheckJob; onDone: (c: CheckinRow) => void; onLeave?: () => void }) {
   const { t } = useT();
   const cells: Cell[] = useMemo(() => job.items.flatMap((item) => Object.entries(item.sizes).filter(([, q]) => q > 0).sort(([a], [b]) => bySize(a, b)).map(([size, expected]) => ({ k: `${item.key}|${size}`, item, size, expected }))), [job]);
+  const items = useMemo(() => job.items.filter((it) => cells.some((c) => c.item === it)), [job, cells]);
   const [got, setGot] = useState<Record<string, number>>({});
   const [bad, setBad] = useState<Record<string, Bad>>({});
-  const [i, setI] = useState(0), [typed, setTyped] = useState("");
-  const [review, setReview] = useState(false), [asking, setAsking] = useState(false);
+  const [pick, setPick] = useState(items[0]?.key || "");
+  const [review, setReview] = useState(false), [asking, setAsking] = useState(false), [badK, setBadK] = useState("");
   const [boxes, setBoxes] = useState<number | "">(job.boxes || ""), [note, setNote] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const [resumed, setResumed] = useState<{ by: string; at: string } | null>(null);
+  const [leave, setLeave] = useState<(() => void) | null>(null);
 
-  const c = cells[i];
   const counted = Object.keys(got).length, pcs = cells.reduce((s, x) => s + (got[x.k] ?? 0), 0), expected = cells.reduce((s, x) => s + x.expected, 0);
   const problems = cells.filter((x) => got[x.k] !== undefined && (got[x.k] !== x.expected || bad[x.k]?.bad));
-  const name = (x: Cell) => [x.item.style, x.item.color].filter(Boolean).join(" · ") || t("Item");
+  const name = (x: { item: Cell["item"] }) => [x.item.style, x.item.color].filter(Boolean).join(" · ") || t("Item");
+  const it = items.find((x) => x.key === pick) || items[0];
+  const itCells = cells.filter((x) => x.item === it);
+  const itGot = (i: Cell["item"]) => cells.filter((x) => x.item === i).reduce((s, x) => s + (got[x.k] ?? 0), 0);
+  const itExp = (i: Cell["item"]) => cells.filter((x) => x.item === i).reduce((s, x) => s + x.expected, 0);
+  const itTyped = (i: Cell["item"]) => cells.some((x) => x.item === i && got[x.k] !== undefined);
+  const itAll = (i: Cell["item"]) => cells.every((x) => x.item !== i || got[x.k] !== undefined);
 
-  function go(n: number) { const j = Math.max(0, Math.min(cells.length - 1, n)); setI(j); setTyped(got[cells[j].k] !== undefined ? String(got[cells[j].k]) : ""); setAsking(false); }
-  function take(v: number) {
-    const ng = { ...got, [c.k]: v }; setGot(ng); setErr("");
-    // on to the next size not counted yet (or the review when they're all done)
-    const next = cells.findIndex((x, j) => j > i && ng[x.k] === undefined);
-    const any = next >= 0 ? next : cells.findIndex((x) => ng[x.k] === undefined);
-    if (any < 0) { setReview(true); return; }
-    go(any);
+  // a count left halfway: pick it up where it stopped
+  useEffect(() => {
+    let off = false;
+    void fetch(`/api/jobs/checkin/draft?ref=${encodeURIComponent(job.ref)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      const d = j?.draft; if (off || !d || !Object.keys(d.got || {}).length) return;
+      const keys = new Set(cells.map((c) => c.k));
+      setGot(Object.fromEntries(Object.entries(d.got as Record<string, number>).filter(([k]) => keys.has(k))));
+      setBad(Object.fromEntries(Object.entries((d.bad || {}) as Record<string, Bad>).filter(([k]) => keys.has(k))));
+      setResumed({ by: d.by || "", at: d.at || "" });
+      const first = items.find((i) => !cells.every((c) => c.item !== i || d.got[c.k] !== undefined));
+      if (first) setPick(first.key);
+    }).catch(() => {});
+    return () => { off = true; };
+  }, [job.ref]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // leaving halfway asks first
+  const dirty = !review ? counted > 0 || Object.keys(bad).length > 0 : true;
+  // once saved for later (or checked in), leaving no longer asks
+  const released = useRef(false);
+  const dirtyRef = useRef(dirty); dirtyRef.current = dirty && !busy && !released.current;
+  useEffect(() => {
+    countGuard.busy = () => dirtyRef.current;
+    countGuard.ask = (then) => (dirtyRef.current ? setLeave(() => then) : then());
+    return () => { countGuard.busy = () => false; countGuard.ask = (then) => then(); };
+  }, []);
+
+  async function saveDraft(then: () => void) {
+    setBusy(true); setErr("");
+    const r = await fetch("/api/jobs/checkin/draft", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: job.ref, got, bad, counted: pcs, expected }) }).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) { setErr(t("Couldn't save the count. Try again.")); setLeave(null); return; }
+    released.current = true; dirtyRef.current = false; setLeave(null); then();
   }
-  const key = (d: string) => setTyped((s) => (d === "⌫" ? s.slice(0, -1) : (s + d).replace(/^0+(?=\d)/, "").slice(0, 4)));
+  async function reset(then: () => void) {
+    setBusy(true);
+    await fetch(`/api/jobs/checkin/draft?ref=${encodeURIComponent(job.ref)}`, { method: "DELETE" }).catch(() => null);
+    setBusy(false); setGot({}); setBad({}); setResumed(null); setReview(false); dirtyRef.current = false; setLeave(null); then();
+  }
+
+  const setOne = (k: string, v: string) => { released.current = false; const d = v.replace(/\D/g, "").slice(0, 5); setErr(""); setGot((g) => { const n = { ...g }; if (d === "") delete n[k]; else n[k] = +d; return n; }); };
+  const fillItem = (i: Cell["item"]) => setGot((g) => ({ ...g, ...Object.fromEntries(cells.filter((x) => x.item === i).map((x) => [x.k, x.expected])) }));
+  function next() {
+    const after = items.slice(items.indexOf(it) + 1).find((i) => !itAll(i)) || items.find((i) => i !== it && !itAll(i));
+    if (after) { setPick(after.key); setAsking(false); scrollTo(0, 0); } else setReview(true);
+  }
+
+  // press and hold 3 seconds: everything (or the rest) is here (Nick, Nov 13: one second was too quick)
+  const [holding, setHolding] = useState(false); const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdStart = (e?: { preventDefault: () => void }) => {
+    e?.preventDefault(); if (timer.current) return;
+    setHolding(true);
+    timer.current = setTimeout(() => {
+      timer.current = null; setHolding(false);
+      setGot((g) => ({ ...Object.fromEntries(cells.map((x) => [x.k, x.expected])), ...g }));
+      try { navigator.vibrate?.(40); } catch { /* not on every phone */ }
+      setReview(true); scrollTo(0, 0);
+    }, HOLD_MS);
+  };
+  const holdStop = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; setHolding(false); setErr(t("Hold it the full 3 seconds to count all in.")); } };
 
   async function save() {
     if (counted < cells.length) { setErr(t("Count every size first: {0} left (tap a number to take the full amount).", cells.length - counted)); return; }
@@ -58,21 +126,39 @@ export default function PhoneCheckin({ job, onDone }: { job: CheckJob; onDone: (
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     setBusy(false);
     if (!r?.ok || j.error) { setErr(t(j.error || "Couldn't save.")); return; }
+    released.current = true; dirtyRef.current = false;
     onDone(j.checkin);
   }
 
   if (!cells.length) return <div className="jm-card"><p>{t("No sizes to count on this job.")}</p></div>;
 
+  const leaving = leave && (
+    <div className="ci2-veil" role="dialog" aria-modal="true" aria-label={t("Stop counting?")}>
+      <div className="ci2-ask">
+        <b>{t("You're halfway through counting this")}</b>
+        <p>{t("{0} of {1} counted so far.", pcs, expected)}</p>
+        <button type="button" className="jm-go" disabled={busy} onClick={() => void saveDraft(leave)}>{busy ? t("Saving…") : t("Save what I counted · finish later")}</button>
+        <button type="button" className="ci2-reset" disabled={busy} onClick={() => void reset(leave)}>{t("Reset to uncounted")}</button>
+        <button type="button" className="jm-ghost" disabled={busy} onClick={() => setLeave(null)}>{t("Keep counting")}</button>
+      </div>
+    </div>
+  );
+  const stop = <button type="button" className="ci2-stop" onClick={() => countGuard.ask(() => onLeave?.())}>{t("Stop counting")}</button>;
+
   if (review) return (
     <>
+      {leaving}
+      {/* the Check In button first, right where the hold left them (Nick, Nov 13: "check-in should be at the very top") */}
+      {err && <div className="jm-err">{err}</div>}
+      <button type="button" className={"jm-go" + (problems.length ? " warn" : "")} disabled={busy} onClick={save}>{busy ? t("Saving…") : problems.length ? (problems.length === 1 ? t("Check In with 1 Problem") : t("Check In with {0} Problems", problems.length)) : t("Check In")}</button>
       <div className="jm-card">
         <div className="jm-cardh"><b>{t("Check what you counted")}</b><span className={"jm-ck-tot" + (pcs === expected && !problems.length ? " ok" : " off")}>{pcs} / {expected}</span></div>
-        {job.items.map((it) => {
-          const cs = cells.filter((x) => x.item === it);
+        {items.map((i) => {
+          const cs = cells.filter((x) => x.item === i);
           return (
-            <div key={it.key} className="jm-ck-rev">
-              <b>{[it.style, it.color].filter(Boolean).join(" · ")}</b>
-              <div className="jm-ck-revs">{cs.map((x) => { const v = got[x.k]; const tone = v === undefined ? "" : bad[x.k]?.bad ? " bad" : v === x.expected ? " ok" : v < x.expected ? " short" : " over"; return <button key={x.k} type="button" className={"jm-ck-chip" + tone} onClick={() => { setReview(false); go(cells.indexOf(x)); }}><span>{sz(x.size)}</span><b>{v ?? "—"}</b><small>/{x.expected}</small></button>; })}</div>
+            <div key={i.key} className="jm-ck-rev">
+              <b data-notranslate>{[i.style, i.color].filter(Boolean).join(" · ")}</b>
+              <div className="jm-ck-revs">{cs.map((x) => { const v = got[x.k]; const tone = v === undefined ? "" : bad[x.k]?.bad ? " bad" : v === x.expected ? " ok" : v < x.expected ? " short" : " over"; return <button key={x.k} type="button" className={"jm-ck-chip" + tone} onClick={() => { setReview(false); setPick(i.key); }}><span>{sz(x.size)}</span><b>{v ?? "—"}</b><small>/{x.expected}</small></button>; })}</div>
             </div>
           );
         })}
@@ -91,51 +177,68 @@ export default function PhoneCheckin({ job, onDone }: { job: CheckJob; onDone: (
         <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("Anything about this delivery (boxes crushed, came on the S&S truck…)")} />
         {photos.length > 0 && <div className="jm-faint">{photos.length === 1 ? t("1 photo added") : t("{0} photos added", photos.length)}</div>}
         <div className="row" style={{ gap: 8 }}><PhotoButtons multiple className="jm-ghost" take={t("📷 Take photos")} choose={t("Choose photos")} onFiles={(fs) => setPhotos((p) => [...p, ...fs].slice(0, 8))} /></div>
-        {err && <div className="jm-err">{err}</div>}
         <button type="button" className={"jm-go" + (problems.length ? " warn" : "")} disabled={busy} onClick={save}>{busy ? t("Saving…") : problems.length ? (problems.length === 1 ? t("Check In with 1 Problem") : t("Check In with {0} Problems", problems.length)) : t("Check In")}</button>
       </div>
+      {stop}
     </>
   );
 
-  const val = typed === "" ? null : +typed;
-  const itemCells = cells.filter((x) => x.item === c.item);
+  const rest = cells.filter((x) => got[x.k] === undefined).reduce((s, x) => s + x.expected, 0);
+  const nextIt = items.slice(items.indexOf(it) + 1).find((i) => !itAll(i)) || items.find((i) => i !== it && !itAll(i));
+  const last = !nextIt;
+  const bk = badK && itCells.some((x) => x.k === badK) ? badK : itCells[0]?.k || "";
   return (
-    <>
-      <div className="jm-ck-top">
-        <span>{t("Size {0} of {1}", i + 1, cells.length)}</span>
-        <span>{t("{0} of {1} counted", pcs, expected)}</span>
-        {counted === 0 && <button type="button" className="jm-link" onClick={() => { setGot(Object.fromEntries(cells.map((x) => [x.k, x.expected]))); setReview(true); }}>{t("✓ Everything's here ({0})", expected)}</button>}
-      </div>
-      <div className="jm-card jm-ck">
-        <div className="jm-ck-item">{name(c)}{c.item.desc ? <small>{c.item.desc}</small> : null}</div>
-        <div className="jm-ck-sizes" role="tablist">{itemCells.map((x) => { const v = got[x.k]; const tone = v === undefined ? "" : bad[x.k]?.bad ? " bad" : v === x.expected ? " ok" : " off"; return <button key={x.k} type="button" role="tab" aria-selected={x === c} className={(x === c ? "on" : "") + tone} onClick={() => go(cells.indexOf(x))}>{sz(x.size)}</button>; })}</div>
-        <div className="jm-ck-now">
-          <div className="jm-ck-size">{sz(c.size)}</div>
-          <div className="jm-ck-num"><b className={val === null ? "empty" : val === c.expected ? "ok" : "off"}>{val ?? "—"}</b><span>{t("of {0}", c.expected)}</span></div>
-        </div>
-        <button type="button" className="jm-ck-all" onClick={() => take(c.expected)}>✓ {t("All {0} here", c.expected)}</button>
-        <div className="jm-ck-pad">{["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "next"].map((d) => (
-          d === "next" ? <button key={d} type="button" className="go" disabled={val === null} onClick={() => val !== null && take(val)}>{t("Next")} →</button>
-            : <button key={d} type="button" className={d === "⌫" ? "fn" : ""} aria-label={d === "⌫" ? t("Delete") : d} onClick={() => key(d)}>{d}</button>
-        ))}</div>
-        {val !== null && val < c.expected && <div className="jm-ck-short">{t("{0} short", c.expected - val)}</div>}
-        <div className="jm-row">
-          <button type="button" className="jm-ghost" disabled={i === 0} onClick={() => go(i - 1)}>← {t("Back|nav")}</button>
-          <button type="button" className={"jm-ghost" + (bad[c.k]?.bad ? " on" : "")} onClick={() => setAsking(!asking)}>{bad[c.k]?.bad ? t(bad[c.k].issue === "mispick" ? "{0} wrong" : "{0} damaged", bad[c.k].bad) : t("Damaged / wrong")}</button>
-        </div>
+    <div className="ci2">
+      {leaving}
+      {resumed && <div className="ci2-resumed"><span>{t("Picked up where {0} stopped ({1}): {2} of {3} counted.", resumed.by || t("someone"), ago(resumed.at), pcs, expected)}</span>
+        <button type="button" className="jm-link" onClick={() => setLeave(() => () => {})}>{t("Start over")}</button></div>}
+      <div className="ci2-tot"><b>{pcs}</b> {t("of {0} counted", expected)}</div>
+      {rest > 0 && <button type="button" className={"ci2-hold" + (holding ? " go" : "")} onPointerDown={holdStart} onPointerUp={holdStop} onPointerLeave={holdStop} onPointerCancel={holdStop} onContextMenu={(e) => e.preventDefault()}
+        onKeyDown={(e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) holdStart(e); }} onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") holdStop(); }}>
+        <span className="ci2-fill" />
+        <span className="ci2-ht"><b>{holding ? t("Keep holding…") : counted ? t("The rest are here?") : t("Everything's here?")}</b>
+          <small>{counted ? t("Hold 3 seconds to count the other {0} in", rest) : t("Hold 3 seconds to count all {0} in", expected)}</small></span>
+      </button>}
+      <div className="ci2-lbl">{t("Items on this job · {0}", items.length)}</div>
+      <div className="ci2-items">{items.map((i) => {
+        const c = itGot(i), e = itExp(i), typed = itTyped(i), all = itAll(i);
+        const st = !typed ? (i === it ? t("Counting") : t("Not yet")) : !all ? t("Counting") : c === e && !cells.some((x) => x.item === i && bad[x.k]?.bad) ? t("✓ All here") : c < e ? t("{0} short", e - c) : c > e ? t("{0} over", c - e) : t("Problem");
+        const tone = !typed ? (i === it ? "on" : "") : !all ? "on" : c === e ? "ok" : "short";
+        return (
+          <button key={i.key} type="button" className="ci2-item" aria-pressed={i === it} onClick={() => { setPick(i.key); setAsking(false); }}>
+            <span className="ci2-it"><b data-notranslate>{[i.style, i.color].filter(Boolean).join(" ") || t("Item")}</b><small data-notranslate>{[i.desc, cells.filter((x) => x.item === i).map((x) => sz(x.size)).join(" ")].filter(Boolean).join(" · ")}</small></span>
+            <span className="ci2-ct"><b>{c} / {e}</b><small className={tone}>{st}</small></span>
+          </button>
+        );
+      })}</div>
+      <div className="ci2-sizes">
+        <div className="ci2-sh"><b data-notranslate>{name({ item: it })}</b><button type="button" className="ci2-allthese" onClick={() => fillItem(it)}>✓ {t("All {0} of these here", itExp(it))}</button></div>
+        <div className="ci2-grid">{itCells.map((x) => {
+          const v = got[x.k]; const has = v !== undefined;
+          const tone = !has ? "" : bad[x.k]?.bad ? "bad" : v === x.expected ? "ok" : v < x.expected ? "short" : "over";
+          return [
+            <span key={x.k + "s"} className="ci2-sz">{sz(x.size)}</span>,
+            <span key={x.k + "o"} className={"ci2-of " + tone}>{t("of {0}", x.expected)}{has && v < x.expected ? ` · ${t("{0} short", x.expected - v)}` : has && v > x.expected ? ` · ${t("{0} over", v - x.expected)}` : ""}{bad[x.k]?.bad ? ` · ${t(bad[x.k].issue === "mispick" ? "{0} wrong" : "{0} damaged", bad[x.k].bad)}` : ""}</span>,
+            <input key={x.k + "i"} className={tone} inputMode="numeric" pattern="[0-9]*" placeholder="–" value={has ? String(v) : ""} aria-label={`${name(x)} ${sz(x.size)}`} onChange={(e) => setOne(x.k, e.target.value)} />,
+          ];
+        })}</div>
+        <button type="button" className={"jm-ghost" + (itCells.some((x) => bad[x.k]?.bad) ? " on" : "")} onClick={() => setAsking(!asking)}>{asking ? t("Close") : t("Damaged / wrong item")}</button>
         {asking && (
           <div className="jm-ck-bad">
-            <div className="jm-chips">{(["damaged", "mispick"] as Issue[]).map((k) => <button key={k} type="button" className={"jm-chip" + ((bad[c.k]?.issue || "damaged") === k ? " on" : "")} onClick={() => setBad({ ...bad, [c.k]: { issue: k, bad: bad[c.k]?.bad || 1 } })}>{t(k === "damaged" ? "Damaged" : "Wrong item")}</button>)}</div>
+            <div className="jm-chips">{itCells.map((x) => <button key={x.k} type="button" className={"jm-chip" + (x.k === bk ? " on" : "")} onClick={() => setBadK(x.k)}>{sz(x.size)}</button>)}</div>
+            <div className="jm-chips">{(["damaged", "mispick"] as Issue[]).map((k) => <button key={k} type="button" className={"jm-chip" + ((bad[bk]?.issue || "damaged") === k ? " on" : "")} onClick={() => setBad({ ...bad, [bk]: { issue: k, bad: bad[bk]?.bad || 1 } })}>{t(k === "damaged" ? "Damaged" : "Wrong item")}</button>)}</div>
             <div className="jm-count">
-              <button type="button" aria-label="−" onClick={() => setBad({ ...bad, [c.k]: { issue: bad[c.k]?.issue || "damaged", bad: Math.max(0, (bad[c.k]?.bad || 0) - 1) } })}>−</button>
-              <input inputMode="numeric" value={bad[c.k]?.bad || 0} aria-label={t("How many")} onChange={(e) => setBad({ ...bad, [c.k]: { issue: bad[c.k]?.issue || "damaged", bad: +e.target.value.replace(/\D/g, "") || 0 } })} />
-              <button type="button" aria-label="+" onClick={() => setBad({ ...bad, [c.k]: { issue: bad[c.k]?.issue || "damaged", bad: (bad[c.k]?.bad || 0) + 1 } })}>+</button>
+              <button type="button" aria-label="−" onClick={() => setBad({ ...bad, [bk]: { issue: bad[bk]?.issue || "damaged", bad: Math.max(0, (bad[bk]?.bad || 0) - 1) } })}>−</button>
+              <input inputMode="numeric" value={bad[bk]?.bad || 0} aria-label={t("How many")} onChange={(e) => setBad({ ...bad, [bk]: { issue: bad[bk]?.issue || "damaged", bad: +e.target.value.replace(/\D/g, "") || 0 } })} />
+              <button type="button" aria-label="+" onClick={() => setBad({ ...bad, [bk]: { issue: bad[bk]?.issue || "damaged", bad: (bad[bk]?.bad || 0) + 1 } })}>+</button>
             </div>
             <small className="jm-faint">{t("Count them in the number above too; this says how many of them are no good.")}</small>
           </div>
         )}
       </div>
-      {counted > 0 && <button type="button" className="jm-ghost" onClick={() => setReview(true)}>{counted < cells.length ? t("Review ({0} sizes left)", cells.length - counted) : t("Review and check in")}</button>}
-    </>
+      {err && <div className="jm-err">{err}</div>}
+      <button type="button" className={"jm-go" + (last ? " ci2-done" : "")} onClick={next}>{last ? t("Review and check in") : t("Next: {0} →", name({ item: nextIt || it }))}</button>
+      {stop}
+    </div>
   );
 }

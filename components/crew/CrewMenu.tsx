@@ -1,9 +1,11 @@
 "use client";
+import { countSections } from "@/lib/checkinShared";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CrewHome, CrewJob, CountJob } from "@/lib/crewHome";
+import type { CrewHome, CrewJob, CountJob, PeriodHours } from "@/lib/crewHome";
 import { CREW_VIEWS } from "@/lib/crewView";
 import { LangToggle, useT } from "@/components/job/lang";
+import CamScan from "@/components/job/CamScan";
 
 /**
  * The crew phone's main menu (/crew; Nick, Nov 13 2026, look "A + B"): a light page with one dark card on top for the
@@ -24,13 +26,25 @@ const IC = { scan: "M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M7 12h10", cal: "M4 5h
 export default function CrewMenu({ home }: { home: CrewHome }) {
   const { t, locale } = useT();
   const router = useRouter();
-  const [screen, setScreen] = useState<"home" | "time" | "scan">("home");
+  const [screen, setScreen] = useState<"home" | "time" | "scan" | "hours" | "cards">("home");
+  // My time cards (Nov 13): every recent pay period; the one tapped opens on the hours screen
+  const [cards, setCards] = useState<PeriodHours[] | null>(null), [card, setCard] = useState<PeriodHours | null>(null);
+  const loadCards = () => fetch("/api/crew/cards").then((r) => r.json()).then((j) => setCards(j.cards || [])).catch(() => setCards([]));
+  const [fixDay, setFixDay] = useState<string | null>(null);
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [msg, setMsg] = useState("");
   const view = CREW_VIEWS.find((v) => v.id === home.view);
+  // someone with an extra (Linda: Receiving, also Deliveries; Nov 13) switches between them at the top; the phone
+  // remembers the last one picked
+  const modes = home.also.length ? [home.view as string, ...home.also] : [];
+  const [mode, setMode0] = useState<string>(home.view);
+  useEffect(() => { try { const m = localStorage.getItem("fbs:crew.mode"); if (m && modes.includes(m)) setMode0(m); } catch { /* private mode */ } }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const setMode = (m: string) => { setMode0(m); try { localStorage.setItem("fbs:crew.mode", m); } catch { /* private mode */ } };
+  const delivering = mode === "delivery";
+  const modeLabel = (m: string) => (m === "delivery" ? t("Deliveries") : t(CREW_VIEWS.find((v) => v.id === m)?.label || m));
   const tomorrow = home.day !== home.today;
   const open = (n: number | string, v = "") => { location.href = `/j/${n}${v ? `?v=${v}` : ""}`; };
-  const go = (s: "home" | "time" | "scan") => { if (s !== "home") history.pushState({ cr: s }, ""); setScreen(s); setErr(""); scrollTo(0, 0); };
-  useEffect(() => { const on = (e: PopStateEvent) => setScreen((e.state?.cr as "time" | "scan") || "home"); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
+  const go = (s: "home" | "time" | "scan" | "hours" | "cards") => { if (s === "cards") void loadCards(); if (s !== "home") history.pushState({ cr: s }, ""); setScreen(s); setErr(""); scrollTo(0, 0); };
+  useEffect(() => { const on = (e: PopStateEvent) => setScreen((e.state?.cr as "time" | "scan" | "hours" | "cards") || "home"); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
 
   async function post(body: Record<string, unknown>) {
     setBusy(String(body.kind || body.action)); setErr(""); setMsg("");
@@ -49,13 +63,39 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
       <main className="jm-main cr-main">
         {screen !== "home" && <button type="button" className="cr-backbtn" onClick={() => history.back()}><Svg d={IC.menu} size={18} />{t("Main menu")}</button>}
         <div className="cr-hello">
-          <span className="cr-hi">{screen === "time" ? t("Time card") : screen === "scan" ? t("Open a job") : tomorrow ? t("Tomorrow") : t("Hi, {0}", home.name.split(" ")[0])}</span>
+          <span className="cr-hi">{screen === "time" ? t("Time card") : screen === "hours" ? t("My time card") : screen === "cards" ? t("My time cards") : screen === "scan" ? t("Open a job") : tomorrow ? t("Tomorrow") : t("Hi, {0}", home.name.split(" ")[0])}</span>
           {c && <span className={"cr-in " + c.state}><i />{c.state === "in" ? t("In {0} · {1}", clock(c.since, locale), hm(c.minutes)) : c.state === "break" ? t("On lunch since {0}", clock(c.since, locale)) : t("Clocked out")}</span>}
         </div>
         {err && <div className="jm-err" role="alert">{err}</div>}
         {msg && <div className="jm-ok" role="status">{msg}</div>}
 
-        {screen === "home" && <>
+        {/* payday: check your hours, first thing on the menu until they answer (Nick, Nov 13) */}
+        {screen === "home" && home.hours?.ask && (
+          <section className="cr-hero cr-pay">
+            <div className="cr-k">{t("PAYDAY")}</div>
+            <div className="cr-n"><b>{t("Check your hours")}</b></div>
+            <div className="cr-s">{t("{0} – {1} · {2} hours", day(home.hours.start, locale).replace(/,.*/, ""), day(home.hours.end, locale).replace(/,.*/, ""), (home.hours.worked / 60).toFixed(1))}{home.hours.check?.status === "fix_asked" ? ` · ${t("fix sent")}` : ""}</div>
+            <button type="button" className="cr-go" onClick={() => { setCard(home.hours); go("hours"); }}>{t("Look at my time card")}</button>
+          </section>
+        )}
+        {screen === "home" && <Find open={open} />}
+        {screen === "home" && modes.length > 1 && (
+          <div className="cr-seg cr-modes" role="group" aria-label={t("View")} style={{ gridTemplateColumns: `repeat(${modes.length}, minmax(0, 1fr))` }}>
+            {modes.map((m) => <button key={m} type="button" className={mode === m ? "on" : ""} onClick={() => setMode(m)}>{modeLabel(m)}</button>)}
+          </div>
+        )}
+        {screen === "home" && delivering && <>
+          {home.deliveries?.[0] && (
+            <section className="cr-hero">
+              <div className="cr-k">{t("DELIVER NEXT")}</div>
+              <div className="cr-n"><b>#{home.deliveries[0].number}</b><span>{home.deliveries[0].customer}</span></div>
+              <div className="cr-s">{t("{0} pcs", home.deliveries[0].qty)}{home.deliveries[0].address ? ` · ${home.deliveries[0].address}` : ""}</div>
+              <button type="button" className="cr-go" onClick={() => open(home.deliveries![0].number)}>{t("Open the job")}</button>
+            </section>
+          )}
+          <Deliveries list={home.deliveries || []} open={open} />
+        </>}
+        {screen === "home" && !delivering && <>
           {tomorrow && <button type="button" className="jm-link" onClick={() => { location.href = "/crew"; }}>{t("← Back to today")}</button>}
           <Hero home={home} open={open} />
           {home.presses.map((p) => <PressDay key={p.id} name={home.presses.length > 1 ? p.name : t("{0} · {1}", p.name, tomorrow ? day(home.day, locale) : t("today"))} jobs={p.jobs} view={home.view} open={open} />)}
@@ -68,17 +108,23 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
             </div>
           )}
           {home.queue && <Queue home={home} open={open} />}
+          {home.deliveries && !modes.length && home.deliveries.length > 0 && <Deliveries list={home.deliveries} open={open} />}
+        </>}
+        {screen === "home" && <>
           <div className="cr-tiles">
             <button type="button" onClick={() => go("scan")}><Svg d={IC.scan} />{t("Scan a job")}</button>
             {home.presses.length > 0 && <button type="button" onClick={() => { location.href = tomorrow ? "/crew" : "/crew?day=next"; }}><Svg d={IC.cal} />{tomorrow ? t("Today") : t("Tomorrow")}</button>}
             {c && <button type="button" onClick={() => go("time")}><Svg d={IC.time} />{t("Time card")}{home.fixes.some((f) => f.status === "pending") && <small>{t("Fix waiting")}</small>}</button>}
+            {c && <button type="button" onClick={() => go("cards")}><Svg d={IC.cal} />{t("My time cards")}{home.hours?.ask ? <small>{t("Check them")}</small> : home.hours?.office || home.hours?.check?.status === "approved" ? <small>{t("Approved ✓")}</small> : null}</button>}
           </div>
           {c && <Punch next={c.next} busy={busy} onPunch={(k) => post({ action: "punch", kind: k })} />}
           {home.staff && <a className="jm-alt" href="/shop">{t("Open the shop")}</a>}
         </>}
 
         {screen === "scan" && <ScanJob open={open} />}
-        {screen === "time" && c && <TimeCard home={home} busy={busy} post={post} done={(m) => { setMsg(m); }} />}
+        {screen === "time" && c && <TimeCard home={home} busy={busy} post={post} day0={fixDay} done={(m) => { setMsg(m); }} />}
+        {screen === "cards" && <TimeCardList cards={cards} pick={(k) => { setCard(k); go("hours"); }} />}
+        {screen === "hours" && (card || home.hours) && (() => { const h = card || home.hours!; return <Hours h={h} busy={busy} onOk={async () => { if (await post({ action: "hours_ok", start: h.start, hours: +(h.worked / 60).toFixed(2) })) { setMsg(t("Hours approved. Thanks!")); setCard({ ...h, ask: false, check: { status: "approved", at: new Date().toISOString() } }); void loadCards(); } }} onFix={(d) => { setFixDay(d); history.replaceState({ cr: "time" }, ""); setScreen("time"); scrollTo(0, 0); }} />; })()}
       </main>
     </div>
   );
@@ -199,12 +245,18 @@ function Counting({ jobs, open }: { jobs: CountJob[]; open: (n: number, v?: stri
         return (
           <div key={w} className="cr-part">
             <div className="jm-label">{t(l)} · {list.length}</div>
-            {list.map((j) => (
-              <button key={j.number} type="button" className="cr-li" onClick={() => open(j.number, "checkin")}>
-                <span className="cr-t">{j.day ? day(j.day, locale).replace(/,.*/, "") : ""}</span><b>#{j.number}</b>
-                <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.name ? ` · ${j.name}` : ""}</small></span>
-                <i className={"cr-st " + j.state}>{t(j.state === "issue" ? "Problem" : j.state === "partial" ? "Part here" : j.state === "ready" ? "Here" : j.state === "way" ? "On the way" : "Not here")}</i>
-              </button>
+            {/* what's surely here first (Nick, Nov 13): Here · ready to count, Part here, Problem, Not sure, On the way */}
+            {countSections(list).map((sec) => (
+              <div key={sec.key} className="cr-sec">
+                <div className="cr-sec-h">{t(sec.label)} · {sec.jobs.length}</div>
+                {sec.jobs.map((j) => (
+                  <button key={j.number} type="button" className="cr-li" onClick={() => open(j.number, "checkin")}>
+                    <span className="cr-t">{j.day ? day(j.day, locale).replace(/,.*/, "") : ""}</span><b>#{j.number}</b>
+                    <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.name ? ` · ${j.name}` : ""}</small></span>
+                    <i className={"cr-st " + j.state}>{t(j.state === "issue" ? "Problem" : j.state === "partial" ? "Part here" : j.state === "ready" ? "Here" : j.state === "way" ? "On the way" : "Not sure")}</i>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         );
@@ -237,14 +289,17 @@ function Punch({ next, busy, onPunch }: { next: string[]; busy: string; onPunch:
 }
 
 /** open a job by its number; the phone's camera app reads the work order's QR straight to the job */
-function ScanJob({ open }: { open: (n: string) => void }) {
+/** Scan a work order QR or type its number (the main menu, and "Count in another job" after a count in) */
+export function ScanJob({ open }: { open: (n: string) => void }) {
   const { t } = useT();
   const [num, setNum] = useState("");
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  // the camera opens right away (Nov 13, Nick: "when you click that button it's not opening the camera")
+  const scanned = (text: string) => { const m = text.match(/\/j\/(\d{3,7}(?:-\d{1,3})?)/) || text.match(/(\d{3,7})/); if (m) open(m[1]); };
   return (
     <div className="jm-card">
-      <p className="jm-faint">{t("Point your phone's camera at the QR on the work order or box label: it opens the job here. Or type the job number.")}</p>
+      <CamScan onCode={scanned} aim={t("Point at the QR on the work order")} noCam={t("Can't use the camera. Type the number instead.")} />
+      <p className="jm-faint">{t("Or type the job number.")}</p>
       <form className="cr-open" onSubmit={(e) => { e.preventDefault(); const m = num.match(/\d{3,7}/); if (m) open(m[0]); }}>
         <input ref={ref} inputMode="numeric" placeholder={t("Job #")} value={num} onChange={(e) => setNum(e.target.value)} aria-label={t("Job #")} />
         <button type="submit" className="jm-go" disabled={!/\d{3,7}/.test(num)}>{t("Open")}</button>
@@ -253,9 +308,9 @@ function ScanJob({ open }: { open: (n: string) => void }) {
   );
 }
 
-function TimeCard({ home, busy, post, done }: { home: CrewHome; busy: string; post: (b: Record<string, unknown>) => Promise<boolean>; done: (m: string) => void }) {
+function TimeCard({ home, busy, post, done, day0 }: { home: CrewHome; busy: string; post: (b: Record<string, unknown>) => Promise<boolean>; done: (m: string) => void; /** opened from My hours on a day */ day0?: string | null }) {
   const { t, locale } = useT();
-  const [fix, setFix] = useState({ day: home.today, kind: "lunch", time: "12:00", minutes: "30", note: "" });
+  const [fix, setFix] = useState({ day: day0 || home.today, kind: "lunch", time: "12:00", minutes: "30", note: "" });
   const c = home.clock!;
   async function send() {
     const at = fix.time && fix.kind !== "other" ? new Date(`${fix.day}T${fix.time}:00`).toISOString() : null;
@@ -288,5 +343,116 @@ function TimeCard({ home, busy, post, done }: { home: CrewHome; busy: string; po
         </div>
       )}
     </>
+  );
+}
+
+/** My time cards (Nick, Nov 13 2026: "see your time cards from the past"): the period now running and the ones before it */
+function TimeCardList({ cards, pick }: { cards: PeriodHours[] | null; pick: (c: PeriodHours) => void }) {
+  const { t, locale } = useT();
+  if (!cards) return <div className="jm-card"><p className="jm-faint">{t("Loading…")}</p></div>;
+  if (!cards.length) return <div className="jm-card"><p className="jm-faint">{t("No time cards yet.")}</p></div>;
+  return (
+    <div className="jm-card cr-tcl">
+      {cards.map((k) => (
+        <button key={k.start} type="button" className="cr-tc" onClick={() => pick(k)}>
+          <span className="cr-tcn"><b>{day(k.start, locale).replace(/^[^,]*,\s*/, "")} – {day(k.end, locale).replace(/^[^,]*,\s*/, "")}</b>
+            <small className={k.open || (!k.office && k.check?.status !== "approved") ? "wait" : ""}>{k.open ? t("This period · so far") : k.office && k.check?.status === "approved" ? t("You approved · office approved") : k.office ? t("Approved by the office") : k.check?.status === "approved" ? t("You approved") : k.check?.status === "fix_asked" ? t("Fix sent") : t("Check them")}</small></span>
+          <span className="cr-tch">{(k.worked / 60).toFixed(1)} h <i aria-hidden>›</i></span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Payday (Nick, Nov 13 2026: uAttend's printed time card sheets, on the phone): the pay period's days, in and out, lunch,
+ * hours, the days a manager fixed; "My hours are right" approves them, "Something's wrong" opens the time card fix on
+ * that day, which goes to the manager like any fix.
+ */
+function Hours({ h, busy, onOk, onFix }: { h: PeriodHours; busy: string; onOk: () => void; onFix: (day: string) => void }) {
+  const { t, locale } = useT();
+  const [wrong, setWrong] = useState(false);
+  const ok = h.check?.status === "approved";
+  return (
+    <>
+      <div className="jm-card">
+        <div className="jm-cardh"><b>{t("Pay period")}</b><span className="jm-faint">{day(h.start, locale).replace(/,.*/, "")} – {day(h.end, locale).replace(/,.*/, "")}</span></div>
+        <div className="cr-htot"><div><b>{(h.worked / 60).toFixed(1)}</b><span>{t("Hours")}</span></div><div><b>{(h.overtime / 60).toFixed(1)}</b><span>{t("Overtime")}</span></div><div><b>{(h.breaks / 60).toFixed(1)}</b><span>{t("Lunches")}</span></div></div>
+      </div>
+      <div className="jm-card cr-hdays">
+        {!h.days.length && <p className="jm-faint">{t("No punches in this pay period.")}</p>}
+        {h.days.map((d) => (
+          <button key={d.day} type="button" className={"cr-hday" + (wrong ? " pick" : "")} disabled={!wrong} onClick={() => onFix(d.day)}>
+            <span className="cr-hd">{day(d.day, locale).split(",")[0]}<small>{day(d.day, locale).split(",").slice(1).join(",").trim()}</small></span>
+            <span className="cr-hp">{d.first ? clock(d.first, locale) : "—"} – {d.last ? clock(d.last, locale) : "—"}{d.breaks ? <small>{t("lunch {0} min", d.breaks)}</small> : <small>{t("no lunch")}</small>}{d.fixed ? <small className="cr-hfix">{t("fixed by the office")}</small> : null}{d.issues ? <small className="cr-hbad">{t("needs a fix")}</small> : null}</span>
+            <b className="cr-hh">{(d.worked / 60).toFixed(1)}</b>
+          </button>
+        ))}
+      </div>
+      {h.office ? <div className="jm-ok">{ok ? t("You and the office approved these hours.") : t("The office approved these hours.")}</div> : ok ? <div className="jm-ok">{t("You approved these hours. Thanks!")}</div> : h.open && !wrong ? <>
+        <div className="jm-faint cr-hopen">{t("This pay period isn't over yet: these are your hours so far.")}</div>
+        <button type="button" className="jm-ghost" onClick={() => setWrong(true)}>{t("Something's wrong")}</button>
+      </> : wrong ? <>
+        <div className="jm-warn">{t("Tap the day that's wrong.")}</div>
+        <button type="button" className="jm-ghost" onClick={() => setWrong(false)}>{t("Cancel")}</button>
+      </> : <>
+        <button type="button" className="jm-go cr-hok" disabled={!!busy || !h.days.length} onClick={onOk}>✓ {t("My hours are right · Approve")}</button>
+        <button type="button" className="jm-ghost" onClick={() => setWrong(true)}>{t("Something's wrong")}</button>
+      </>}
+    </>
+  );
+}
+
+function Deliveries({ list, open }: { list: NonNullable<CrewHome["deliveries"]>; open: (n: number, v?: string) => void }) {
+  const { t, locale } = useT();
+  return (
+    <div className="jm-card cr-list">
+      <div className="jm-cardh"><b>{t("Deliveries")}</b><span className="jm-faint">{list.length}</span></div>
+      {!list.length && <p className="jm-faint">{t("Nothing ready to deliver.")}</p>}
+      {list.map((j) => (
+        <button key={j.number} type="button" className="cr-li" onClick={() => open(j.number)}>
+          <span className="cr-t">{j.due ? day(j.due, locale).replace(/,.*/, "") : ""}</span><b>#{j.number}</b>
+          <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.address ? ` · ${j.address}` : ""}</small></span>
+          <i className="cr-st ready">{t("Ready")}</i>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Find, first thing on the menu (Nov 13, Nick: "a search button so that you can search a PO… or open the camera to scan
+ *  a work order"): type a PO, job #, job name or customer; or the camera reads the work order's QR and opens the job. */
+function Find({ open }: { open: (n: number | string, v?: string) => void }) {
+  const { t, locale } = useT();
+  const [q, setQ] = useState(""), [cam, setCam] = useState(false);
+  const [hits, setHits] = useState<{ number: string; name: string; po: string; customer: string; qty: number; status: string; due: string | null }[] | null>(null);
+  useEffect(() => {
+    const s = q.trim();
+    if (s.length < 2) { setHits(null); return; }
+    const c = new AbortController();
+    const tm = setTimeout(() => { fetch(`/api/crew?q=${encodeURIComponent(s)}`, { signal: c.signal }).then((r) => r.json()).then((j) => setHits(j.jobs || [])).catch(() => null); }, 250);
+    return () => { clearTimeout(tm); c.abort(); };
+  }, [q]);
+  const scanned = (text: string) => { setCam(false); const m = text.match(/\/j\/(\d{3,7}(?:-\d{1,3})?)/) || text.match(/(\d{3,7})/); if (m) open(m[1]); else setQ(text); };
+  return (
+    <div className="cr-findwrap">
+      <form className="cr-find" onSubmit={(e) => { e.preventDefault(); if (hits?.length === 1) open(hits[0].number); else if (/^#?\d{3,7}$/.test(q.trim())) open(q.trim().replace("#", "")); }}>
+        <input type="search" enterKeyHint="search" placeholder={t("Search a PO, job # or customer")} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t("Search")} />
+        <button type="button" className="cr-camb" onClick={() => setCam(!cam)} aria-label={t("Scan with the camera")}><Svg d="M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />{cam ? t("Close") : t("Scan")}</button>
+      </form>
+      {cam && <CamScan onCode={scanned} aim={t("Point at the QR on the work order")} noCam={t("Can't use the camera. Type the number instead.")} />}
+      {hits && (
+        <div className="jm-card cr-list">
+          {!hits.length && <p className="jm-faint">{t("Nothing found for \"{0}\".", q.trim())}</p>}
+          {hits.map((h) => (
+            <button key={h.number} type="button" className="cr-li" onClick={() => open(h.number)}>
+              <span className="cr-t">{h.due ? day(h.due, locale).replace(/,.*/, "") : ""}</span><b>#{h.number}</b>
+              <span className="cr-who">{h.customer}<small>{[h.name, h.po ? `PO ${h.po}` : "", t("{0} pcs", h.qty)].filter(Boolean).join(" · ")}</small></span>
+              <i className="cr-st later">{h.status}</i>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

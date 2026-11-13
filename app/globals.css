@@ -3096,6 +3096,7 @@ a.as-ai{text-decoration:none}
 .tmx-tbl .tmx-emp.on td{background:var(--accent-soft)}
 .tmx-ot{color:var(--warn);font-weight:700}
 .tmx-flag{background:var(--danger-soft);color:var(--danger);font-weight:700;font-size:12px;border-radius:99px;padding:2px 9px}
+.tmx-ck.ok{background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok);font-weight:700;font-size:12px;border-radius:99px;padding:2px 9px;white-space:nowrap}
 .tmx-detail>td{background:var(--surface-2);padding:10px!important}
 .tmx-days{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .tmx-day{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:4px}
@@ -5157,6 +5158,9 @@ html[data-nomoney] .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ck-note{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;min-width:240px}
 .ck-note textarea{width:100%;box-sizing:border-box}
 .ck-foot{display:flex;gap:8px;align-items:center;padding:12px 20px;border-top:1px solid var(--line-2)}
+/* the count in left halfway: picked up again, and closing halfway asks (Nov 13) */
+.ck-foot.ck-ask{flex-wrap:wrap;background:var(--surface-2,#f6f8fa)}
+.ck-resumed{margin:0 20px;padding:8px 12px;border-radius:var(--r);background:var(--accent-soft,#e9f5fb);font-size:13px;color:var(--ink)}
 .ck-sum{font-size:13.5px;font-weight:600;color:var(--ink-3)}
 .ck-sum.ok{color:#1E9E5A}.ck-sum.off{color:#C2352B}
 .btn.warn{background:#C2352B;border-color:#C2352B;color:#fff}
@@ -16329,6 +16333,7 @@ table.tbl.dgz,table.tbl.dgz-vt{min-width:0}
 .spt-reply{display:flex;flex-direction:column;gap:4px;margin-top:4px}
 .spt-reply select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;max-width:100%}
 .spt-guess{font-size:12px;color:var(--accent)}
+.spt-guess-b{border:0;background:none;padding:2px 0;font:inherit;font-size:12px;text-align:left;cursor:pointer;text-decoration:underline}
 .spt-note{display:flex;flex-direction:column;gap:4px}
 .spt-note textarea{border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;font-size:14px}
 .spt-mail{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
@@ -21461,19 +21466,6 @@ html body .ord .gl > .gl-thr{grid-column:1/-1;flex-wrap:wrap}
 .ms-rc-nm{font-size:13px;color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* Schedule job panel: run times staff can set, per print location (rtm-, Nov 9) */
-.rtm .ms-parts li{align-items:center}
-.rtm-t{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.rtm-sub{color:var(--ink-3);font-weight:500;white-space:nowrap}
-.rtm-loc span{font-weight:700;color:var(--ink)}
-.rtm-pen{border:1px solid var(--line);background:var(--surface);border-radius:6px;width:26px;height:26px;padding:0;cursor:pointer;color:var(--accent);font-size:13px;line-height:1}
-.rtm-pen:hover{border-color:var(--accent)}
-.rtm .ms-parts li.rtm-ed{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-start}
-.rtm-ed .input{width:110px;height:36px}
-.rtm-q{font-weight:700;white-space:nowrap}
-.rtm-n{flex-basis:100%;font-size:12px}
-.rtm-err{color:var(--danger)}
-.rtm-pace{font-size:12px;margin-top:4px}
-.rtm-same{font-size:12.5px;color:var(--ok);font-weight:600;margin-top:4px}
 
 /* a job that runs through lunch: one card over the lunch row, see-through there with dotted edges (option F, Nov 9) */
 .ms-blk.ms-thru{z-index:3}
@@ -21833,6 +21825,42 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ms-rc.hold{background:var(--surface-2);border-style:dashed}
 .ms-rc.late{border-left-color:var(--danger)}
 .ms-rtabs{margin:4px 0 8px}
+/* Ready To Schedule's own search (Nov 13): the same words as the schedule's search, matches only */
+.msr-q{display:flex;align-items:center;gap:6px;height:36px;padding:0 8px 0 10px;background:var(--surface);border:1px solid var(--line);border-radius:6px;color:var(--ink-3);min-width:min(240px,100%);flex:0 1 260px}
+.msr-q input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:14px;color:var(--ink)}
+.msr-q:focus-within{border-color:var(--accent)}
+/* Ready To Schedule: the assistant under Start over / Make The Schedule, and a job's right-click menu (Nov 13) */
+.msa{display:flex;flex-direction:column;gap:8px;margin:2px 0 8px}
+/* the AI assistant box (Nov 13): two lines under Ready To Schedule's tabs line, a bordered box labeled on its edge */
+.msa-box{position:relative;margin:10px 0;border:1.5px solid var(--fbs-violet);border-radius:8px;padding:8px 4px 6px;background:color-mix(in srgb,var(--fbs-violet) 7%,var(--surface))}
+.msa-lbl{position:absolute;top:-8px;left:10px;padding:0 5px;background:var(--surface);color:var(--fbs-violet);font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;line-height:14px;border-radius:4px;white-space:nowrap}
+.msa-box .msa-f{height:32px;border-color:transparent}
+.msa-box .msa-f:focus-within{border-color:var(--fbs-violet)}
+.msa-box .msa-f .btn{background:var(--fbs-violet);border-color:var(--fbs-violet);color:#fff}
+.msa-box .msa-f .btn:disabled{opacity:.55}
+.msa-box .mic.msa-mic{position:static;transform:none;flex:none;width:30px;height:30px;color:var(--fbs-violet)}
+.msa-box .msa-ideas{margin-top:6px;padding:0 4px}
+.ms-rtabs .msr-q{margin-left:auto}
+.msa-f{display:flex;align-items:center;gap:8px;height:36px;padding:0 4px 0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.msa-f:focus-within{border-color:var(--accent)}
+.msa-ic{color:var(--accent);font-size:13px}
+.msa-f input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:14px;color:var(--ink)}
+.msa-plan{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;background:var(--surface);padding:8px 12px;font-size:13.5px}
+.msa-plan p{margin:0 0 6px;color:var(--ink)}
+.msa-plan ul{margin:0 0 8px;padding-left:18px;display:flex;flex-direction:column;gap:2px}
+.msa-a{display:flex;gap:6px;flex-wrap:wrap}
+.msa-ideas{display:flex;gap:6px;flex-wrap:wrap}
+.msa-ideas .chip{font-size:12.5px}
+.msr-rc-bg{position:fixed;inset:0;z-index:60}
+.msr-rc{position:fixed;z-index:61;min-width:240px;max-width:320px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 8px 24px rgba(20,29,43,.2);padding:6px;display:flex;flex-direction:column}
+.msr-rc-h{padding:6px 8px;font-size:13.5px;border-bottom:1px solid var(--line-2);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msr-rc-l{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);padding:6px 8px 2px}
+.msr-rc button,.msr-rc a{display:flex;justify-content:space-between;align-items:baseline;gap:10px;border:0;background:none;text-align:left;font:inherit;font-size:13.5px;color:var(--ink);padding:7px 8px;border-radius:6px;cursor:pointer;text-decoration:none}
+.msr-rc button:hover,.msr-rc a:hover{background:var(--surface-2)}
+.msr-rc small{color:var(--ink-3);font-size:12px;white-space:nowrap}
+.msr-rc hr{border:0;border-top:1px solid var(--line-2);margin:4px 0}
+.msr-rc .msr-rc-back{color:var(--ink-3)}
+.msr-c.ms-hit{border-color:var(--warn)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 25%,transparent)!important}
 .ms-rnone{padding:6px 2px}
 .ms-calm .ms-blk.msh-dim:not(.bar){background:repeating-linear-gradient(135deg,var(--surface-2) 0 6px,transparent 6px 12px)!important;border:1px dashed var(--line)!important;box-shadow:none!important}
 .ms-calm .ms-blk.done:not(.bar){opacity:.5}
@@ -21907,6 +21935,12 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msf-run.embroidery{border-left-color:#7C5CD6}.msf-run.heat{border-left-color:var(--fbs-orange)}
 .msf-run.open{z-index:6;overflow:visible;box-shadow:0 8px 20px rgba(0,0,0,.15)}
 .msf-run-h{display:flex;align-items:baseline;gap:6px;font-size:12.5px;white-space:nowrap;line-height:18px;min-width:0}.msf-run-h b{overflow:hidden;text-overflow:ellipsis}.msf-run-h span{color:var(--ink-3);font-size:11.5px}
+/* a group's name is a button: Print all its work orders (Nov 13) */
+.msf-run-nm{border:0;background:none;padding:0;font:inherit;font-weight:700;color:var(--ink);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;text-align:left}
+.msf-run-nm:hover,.msf-run-nm[aria-expanded="true"]{color:var(--accent);text-decoration:underline}
+.msf-run.menu{overflow:visible;z-index:30}
+.msf-up-print{margin:4px 0 6px 8px}
+.msf-run-menu{position:absolute;left:6px;top:22px;z-index:30;display:flex;gap:6px;align-items:center;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 18px rgba(20,29,43,.18);white-space:nowrap}
 .msf-run-r{all:unset;box-sizing:border-box;cursor:grab;display:flex;align-items:center;gap:0;height:19px;font-size:12px;white-space:nowrap;border-top:1px solid var(--line-2,#f1f3f6);min-width:0}
 .msf-run-r b{margin-right:6px}.msf-run-r .nm{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;color:var(--ink-2)}.msf-run-r small{color:var(--ink-3);font-size:11px;margin-left:6px}
 .msf-run-r.late b{color:var(--danger)}.msf-run-r.done{opacity:.5}.msf-run-r:hover{background:var(--surface-2)}
@@ -22021,7 +22055,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .ms-key-late{color:var(--danger);font-weight:700;margin-right:4px}
 /* a group: the customer and what the jobs share on top, the numbers on their own line under it (Nov 11, Nick) */
 .msf-run-h{flex-direction:column;align-items:flex-start;gap:0;line-height:16px;padding:1px 0 2px}
-.msf-run-h b{font-size:13px;max-width:100%}.msf-run-h span{display:block}
+.msf-run-h b,.msf-run-nm{font-size:13px;max-width:100%}.msf-run-h span{display:block}
 .ms-calm .msf-n.late,.ms-calm .msf-run-r.late b{color:var(--danger)!important;font-weight:800}
 /* Ready To Schedule: small cards by due date, a suggested spot staff can change, then Make The Schedule (Nov 11, Nick) */
 .msr-l{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px}
@@ -22065,7 +22099,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .mjp-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mjp-off{color:var(--danger)!important}
 .mjp-sure{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--danger);flex-wrap:wrap}
-.mjp-more{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px}
+.mjp-more{display:flex;flex-direction:column;gap:12px}
 .mjp-segs{margin:0;padding-left:18px;font-size:12.5px;color:var(--ink-2)}
 .msk-row{gap:10px 14px}
 .msk-g{display:inline-flex;align-items:center;flex-wrap:wrap;gap:6px;padding-left:10px;border-left:3px solid var(--line)}
@@ -22203,6 +22237,8 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rvd-urg td:first-child{box-shadow:inset 4px 0 var(--danger)}
 .rvd-urg{background:color-mix(in srgb,var(--danger) 4%,var(--surface))}
 .rvd-sub td{background:var(--surface-2);color:var(--ink-3);font-size:12.5px;font-weight:700}
+/* the jobs to count, here-first (Nov 13) */
+.rvd-sec td{color:var(--ink);text-transform:uppercase;letter-spacing:.04em;font-size:12px}
 .rvd-done td{opacity:.55}
 .rvd-done td.rvd-act{opacity:1}
 .rvd-kind{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:12px 12px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -22396,6 +22432,10 @@ table.rvd-tbl:not(.tbl-stack) td.rvd-act .btn{display:inline-flex;align-items:ce
 .msk-kinds-r>b{flex:1;font-weight:700}
 .msk-kinds-g .msk-kinds-r>b{font-weight:600}
 .msk-kinds-h{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);padding:10px 8px 2px}
+/* Ready To Schedule by goods: All / Counted / Not counted (Nov 13) */
+.msk-goods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:4px 0 6px}
+.msk-goods button{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.msk-goods button.on{border-color:var(--accent);background:var(--accent-soft,#e7efff);color:var(--accent)}
 .ms-numl{color:inherit;text-decoration:none;cursor:pointer}
 .ms-numl:hover{text-decoration:underline;color:var(--accent)}
 
@@ -22783,3 +22823,46 @@ label.ckm-tile.over{border-color:var(--warn)}
 .ms-calm .ms-dv .ms-blk.done:not(.bar),.ms-calm .ms-weeks .ms-blk.done:not(.bar){opacity:1!important;background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface,#fff))!important;border:1px solid color-mix(in srgb,var(--fbs-blue) 28%,var(--surface,#fff))!important;box-shadow:none!important}
 .ms-calm .ms-dv .ms-blk.done .ms-l1 b,.ms-calm .ms-weeks .ms-blk.done .ms-l1 b{text-decoration:none;color:var(--fbs-blue)}
 .ms-calm .ms-dv .ms-blk.run:not(.bar),.ms-calm .ms-weeks .ms-blk.run:not(.bar){border:2px solid var(--ok)!important}
+
+/* Payroll Report → Print time cards (Nov 13 2026) */
+.tk-prt{position:relative}
+.tk-prt-bg{position:fixed;inset:0;z-index:40}
+.tk-prt-m{position:absolute;right:0;top:calc(100% + 4px);z-index:41;width:min(320px,90vw);background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.14);padding:5px;display:flex;flex-direction:column}
+.tk-prt-m a,.tk-prt-m button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:1px;padding:8px 10px;border-radius:6px;font-size:14px;color:var(--ink)}
+.tk-prt-m small{font-size:12px;color:var(--ink-3)}
+.tk-prt-m a:hover,.tk-prt-m button:hover,.tk-prt-m a:focus-visible,.tk-prt-m button:focus-visible{background:var(--surface-2)}
+
+/* the job card's More details (Nov 13): its own section like the card's others; Time on the press as a bordered list */
+.mjp-more{margin:0 14px 14px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.mjm-when{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-start}
+.mjm-f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mjm-f>span{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.mjm-f .input{height:36px;width:170px}
+.mjm-segs{font-size:13.5px;line-height:1.6;color:var(--ink)}
+.rtm{display:flex;flex-direction:column;gap:6px}
+.rtm-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.rtm-h b{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.rtm-h .faint{font-size:12px}
+.rtm-rows{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.rtm-row{border-bottom:1px solid var(--line)}
+.rtm-row:last-child{border-bottom:0}
+.rtm-row.open{background:var(--surface-2)}
+.rtm-row.tot{background:var(--surface-2)}
+.rtm-line{display:grid;grid-template-columns:minmax(0,1fr) auto 76px;gap:10px;align-items:center;padding:8px 10px}
+.rtm-nm{display:flex;flex-direction:column;min-width:0}
+.rtm-nm b{font-size:14px}
+.rtm-nm small{font-size:12px;color:var(--ink-3)}
+.rtm-ok{color:var(--ok);font-style:normal;font-weight:700}
+.rtm-t{font-size:15px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rtm-line .btn{justify-self:end}
+.rtm-gap{display:block}
+.rtm-ed{display:flex;flex-direction:column;gap:8px;padding:0 10px 10px}
+.rtm-q{font-weight:700;font-size:13.5px}
+.rtm-quick{display:flex;flex-wrap:wrap;gap:6px}
+.rtm-in{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.rtm-in .input{width:130px;height:36px}
+.rtm-is{font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+.rtm-n{font-size:12px}
+.rtm-err{color:var(--danger)}
+.rtm-pace{font-size:12px}
+.rtm-same{font-size:12.5px;color:var(--ok);font-weight:600}

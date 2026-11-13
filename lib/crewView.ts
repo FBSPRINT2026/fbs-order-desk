@@ -1,7 +1,8 @@
 /**
  * What each person sees on their phone (Nick, Nov 13 2026: "depending on whose code is put in… you have different views").
- * Set per employee on Employees → Phone logins (`employees.phone_view`); when it isn't set, their place on a press crew
- * says it (Production settings: operator, assistant, catcher), else Office (everything a phone login can do).
+ * Set per employee on Employees → Phone Logins, kept in the shop's settings (`settings.data.phoneViews`, by employee id:
+ * the main view plus any extras, "receiving+delivery"); when it isn't set, their place on a press crew says it
+ * (Production settings: operator, assistant, catcher), else their department, else Office (everything a phone login can do).
  * Browser-safe: the job menu and the crew home both read it.
  */
 export type CrewView = "receiving" | "press" | "assist" | "catcher" | "fulfillment" | "shipping" | "office";
@@ -17,18 +18,45 @@ export const CREW_VIEWS: { id: CrewView; label: string; short: string; does: str
 ];
 export const isCrewView = (v: unknown): v is CrewView => CREW_VIEWS.some((x) => x.id === v);
 
+/** extras a person's main menu can carry on top of their view (Nov 13: Linda opens to Receiving and also delivers) */
+export type CrewExtra = "delivery";
+export const CREW_EXTRAS: { id: CrewExtra; label: string; does: string }[] = [
+  { id: "delivery", label: "Deliveries", does: "Orders ready to deliver, with their addresses" },
+];
+/** "receiving+delivery" → the main view and the extras */
+export function parseViews(v: string | null | undefined): { main: CrewView | null; also: CrewExtra[] } {
+  const parts = String(v || "").split("+").map((x) => x.trim()).filter(Boolean);
+  return { main: isCrewView(parts[0]) ? parts[0] : null, also: parts.slice(1).filter((x): x is CrewExtra => CREW_EXTRAS.some((e) => e.id === x)) };
+}
+export const joinViews = (main: CrewView | null, also: CrewExtra[]) => (main ? [main, ...also].join("+") : "");
+/** the phone views set by hand (settings.data.phoneViews) */
+export const phoneViewsOf = (settingsData: unknown): Record<string, string> => { const v = (settingsData as { phoneViews?: unknown } | null)?.phoneViews; return v && typeof v === "object" ? (v as Record<string, string>) : {}; };
+
 type CrewLike = { id: string; members?: { operator?: string | null; assistant?: string | null; catcher?: string | null } };
 type MachineLike = { id: string; name: string; crew?: string | null };
 
-/** the view set by hand, else the person's place on a press crew, else Office */
-export function crewViewOf(set: string | null | undefined, employeeId: string, crews: CrewLike[]): CrewView {
-  if (isCrewView(set)) return set;
+/**
+ * The view set by hand, else the person's place on a press crew, else their department on the Time Clock (Nick, Nov 13
+ * 2026: Julissa in Receiving scanned #40380 and got every tile, the Office view, because nobody had picked her view by
+ * hand), else Office.
+ */
+export function viewOfDepartment(dept: string | null | undefined): CrewView | null {
+  const d = String(dept || "").toLowerCase();
+  if (/receiv/.test(d)) return "receiving";
+  if (/fulfil/.test(d)) return "fulfillment";
+  if (/ship/.test(d)) return "shipping";
+  if (/office|admin|sales|account/.test(d)) return "office";
+  return null;
+}
+export function crewViewOf(set: string | null | undefined, employeeId: string, crews: CrewLike[], dept?: string | null): CrewView {
+  const main = parseViews(set).main;
+  if (main) return main;
   for (const c of crews) {
     if (c.members?.operator === employeeId) return "press";
     if (c.members?.assistant === employeeId) return "assist";
     if (c.members?.catcher === employeeId) return "catcher";
   }
-  return "office";
+  return viewOfDepartment(dept) || "office";
 }
 
 /** the presses this person works on (their crew's machines) */

@@ -9,7 +9,8 @@ import type { CheckJob } from "@/lib/checkinShared";
 import type { ShipTarget } from "@/components/ShipWindow";
 import { addNote, addPhoto, NOTE_TAGS, useJobFiles, type JobFile } from "./JobFiles";
 import MobileShip from "./MobileShip";
-import PhoneCheckin from "./PhoneCheckin";
+import PhoneCheckin, { countGuard } from "./PhoneCheckin";
+import { ScanJob } from "@/components/crew/CrewMenu";
 import PressSheetCard from "./PressSheetCard";
 import PressTimer from "./PressTimer";
 import PhoneInks from "./PhoneInks";
@@ -50,20 +51,38 @@ export default function JobMobile(p: {
   const { who, card } = p;
   const { t, locale } = useT();
   const [view, setView] = useState<View>("home");
-  // ?v=photos (the "Add photos from your phone" QR on the production mockup) opens straight on Photos
-  // ?v=<tool> opens straight on that tool (?v=photos from the production mockup's QR, the crew menu's rows); else the
-  // tool the person's phone view starts on (a catcher's scan opens the post count; lib/crewView.ts)
+  // Every view is in the address (?v=checkin, ?v=menu for the job menu), so going back, a reload or the page being drawn
+  // again lands on the same screen (Nov 13, Linda's video: ← Job menu after a count in flashed the menu, then the
+  // page came back on Check in goods, because the arrival rule "a receiving scan opens Count in" ran again).
+  // ?v=<tool> opens straight on that tool (?v=photos from the production mockup's QR, the crew menu's rows, the
+  // receiving dashboard's Count in); a plain scan opens the tool the person's phone view starts on (lib/crewView.ts),
+  // once, with the job menu under it.
+  const urlView = (): View | null => { const v = new URLSearchParams(location.search).get("v"); return v === "menu" ? "home" : v && VIEWS.includes(v as View) ? (v as View) : null; };
+  const urlFor = (v: View) => { const u = new URL(location.href); u.searchParams.set("v", v === "home" ? "menu" : v); return u.pathname + u.search; };
   useEffect(() => {
-    const v = new URLSearchParams(window.location.search).get("v") as View | null;
     const has = (x: View) => (x === "ship" ? !!p.ship : x === "checkin" ? !!p.checkin : x === "inks" ? !!p.inks?.inks.length : x === "timer" ? who.kind === "employee" : true);
-    const pick = v && VIEWS.includes(v) ? v : (OPENS_ON[who.view] as View | undefined);
-    const first = pick && has(pick) ? pick : null;
-    if (first) { history.replaceState({ jm: "home" }, ""); history.pushState({ jm: first }, ""); setView(first); }
+    const v = urlView();
+    if (v === "home") { setView("home"); return; }
+    const start = OPENS_ON[who.view] as View | undefined;
+    const first = v && has(v) ? v : !v && start && has(start) ? start : null;
+    if (!first) { history.replaceState({ jm: "home" }, "", urlFor("home")); return; }
+    // already here (drawn again, or back from another screen): just show it
+    if (history.state?.jm === first) { setView(first); return; }
+    history.replaceState({ jm: "home" }, "", urlFor("home")); history.pushState({ jm: first }, "", urlFor(first)); setView(first);
   }, [who.view]); // eslint-disable-line react-hooks/exhaustive-deps
   // each tool is its own history entry, so the phone's Back button returns to the menu
-  const go = (v: View) => { if (v !== "home") history.pushState({ jm: v }, ""); setView(v); scrollTo(0, 0); };
-  useEffect(() => { const on = (e: PopStateEvent) => setView(((e.state && e.state.jm) as View) || "home"); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
-  const back = () => (history.state?.jm ? history.back() : setView("home"));
+  const go = (v: View) => { if (v !== "home") history.pushState({ jm: v }, "", urlFor(v)); setView(v); scrollTo(0, 0); };
+  // a count in left halfway asks first (save to finish later, or reset to uncounted), the phone's Back button too
+  useEffect(() => {
+    const on = () => {
+      if (countGuard.busy()) { history.pushState({ jm: "checkin" }, "", urlFor("checkin")); countGuard.ask(() => { history.back(); }); return; }
+      setView(urlView() || "home");
+    };
+    addEventListener("popstate", on); return () => removeEventListener("popstate", on);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // ← Job menu swaps this screen for the menu in place: no trip back through history, which reloads the page
+  const back = () => countGuard.ask(() => { history.replaceState({ jm: "home" }, "", urlFor("home")); setView("home"); scrollTo(0, 0); });
+
 
   if (!card) return (
     <div className="jm"><header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
@@ -77,7 +96,7 @@ export default function JobMobile(p: {
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
       <section className={"jm-job" + (view === "checkin" ? " slim" : "")}>
         <div className="jm-navrow">
-          <a className="jm-menu" href="/crew"><Icon d={I.menu} />{t("Main menu")}</a>
+          <a className="jm-menu" href="/crew" onClick={(e) => { if (countGuard.busy()) { e.preventDefault(); countGuard.ask(() => { location.href = "/crew"; }); } }}><Icon d={I.menu} />{t("Main menu")}</a>
           {view !== "home" && <button type="button" className="jm-back" onClick={back}>{t("← Job menu")}</button>}
         </div>
         <div className="jm-num"><b>#{card.number}</b>{card.rush && <span className="jm-rush">{t("RUSH")}</span>}{p.box ? <span className="jm-box">{t("Box {0}", p.box)}</span> : null}</div>
@@ -93,7 +112,7 @@ export default function JobMobile(p: {
         {view === "photos" && <Photos job={job} />}
         {view === "labels" && <Labels card={card} box={p.box || null} printer={p.printer} perBox={p.shipSettings?.perBox || 72} staff={who.kind === "staff"} />}
         {view === "ship" && p.ship && p.shipSettings && <MobileShip t={p.ship.t} existing={p.ship.existing} settings={p.shipSettings} box={p.box || null} />}
-        {view === "checkin" && p.checkin && <Checkin job={p.checkin} />}
+        {view === "checkin" && p.checkin && <Checkin job={p.checkin} onLeave={back} />}
         {view === "inks" && p.inks && <PhoneInks card={card} data={p.inks} />}
         {view === "timer" && <PressTimer card={card} presses={p.presses || []} />}
         {view === "post" && <PostCount card={card} checkin={p.checkin} job={job} />}
@@ -357,14 +376,20 @@ function Photos({ job }: { job: { kind: "o" | "a"; id: string } }) {
 }
 
 /** Count the goods in: what was counted before (if anything), else the size-by-size counter. */
-function Checkin({ job }: { job: CheckJob }) {
+function Checkin({ job, onLeave }: { job: CheckJob; onLeave: () => void }) {
   const { t, locale } = useT();
-  const [done, setDone] = useState(job.checkins[0] || null), [again, setAgain] = useState(false), [fresh, setFresh] = useState(false);
+  const [done, setDone] = useState(job.checkins[0] || null), [again, setAgain] = useState(false), [fresh, setFresh] = useState(false), [next, setNext] = useState(false);
   if (done && !again) {
     const issues = done.lines.filter((l) => l.issue);
     return (
       <div className="jm-card">
         {fresh && <div className="jm-ok" role="status">{t("Checked in. Thanks!")}</div>}
+        {/* what's next, right away (Nick, Nov 13: "they're just gonna keep going") */}
+        {fresh && !next && <div className="jm-ck-next">
+          <button type="button" className="jm-go" onClick={() => setNext(true)}>{t("Count in another job")}</button>
+          <a className="jm-ghost jm-ck-menu" href="/crew">{t("Main menu")}</a>
+        </div>}
+        {fresh && next && <ScanJob open={(n) => { location.href = `/j/${n}?v=checkin`; }} />}
         <div className="jm-cardh"><b>{t("Counted in")}</b><span className="jm-faint">{done.by} · {when(done.created_at, locale)}</span></div>
         <p style={{ margin: 0 }}>{t("{0} of {1} counted", done.received, done.expected)}{done.boxes ? ` · ${t(done.boxes === 1 ? "in 1 box" : "in {0} boxes", done.boxes)}` : ""}</p>
         {issues.length > 0 && <ul className="jm-ck-plist">{issues.map((l, k) => <li key={k}>{l.item} · {l.size}: {t("got {0} of {1}", l.received, l.expected)}{l.bad ? ` · ${t(l.issue === "mispick" ? "{0} wrong" : "{0} damaged", l.bad)}` : ""}</li>)}</ul>}
@@ -373,7 +398,7 @@ function Checkin({ job }: { job: CheckJob }) {
       </div>
     );
   }
-  return <PhoneCheckin job={job} onDone={(c) => { setDone(c); setAgain(false); setFresh(true); scrollTo(0, 0); }} />;
+  return <PhoneCheckin job={job} onLeave={onLeave} onDone={(c) => { setDone(c); setAgain(false); setFresh(true); scrollTo(0, 0); }} />;
 }
 
 /** Print box labels on the Zebra: how many boxes, all of them or just this one. */

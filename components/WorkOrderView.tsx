@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
  * it just pulls up the work order for that job, and then we can just hit print right from there"). It is the same
  * work order the order page prints (/print/<id>?work=1), shown in a frame; Print prints that frame.
  */
-export default function WorkOrderView({ orderId, number, title, onClose }: { orderId: string; number: string | number; title?: string; onClose: () => void }) {
+export default function WorkOrderView({ orderId, number, title, onClose, ids }: { orderId: string; number: string | number; title?: string; onClose: () => void; /** several orders' work orders in one print (a schedule group's Print all; /print/work) */ ids?: string[] }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -24,15 +24,15 @@ export default function WorkOrderView({ orderId, number, title, onClose }: { ord
     <div className="wov-bg" onClick={onClose}>
       <div className="wov" role="dialog" aria-label={`Work order #${number}`} onClick={(e) => e.stopPropagation()}>
         <div className="wov-h">
-          <b className="wov-t">Work order · <span data-notranslate>#{number}</span></b>
+          <b className="wov-t">{ids && ids.length > 1 ? <>Work orders · <span data-notranslate>{number}</span></> : <>Work order · <span data-notranslate>#{number}</span></>}</b>
           {title ? <span className="wov-s" data-notranslate>{title}</span> : null}
           <span className="wov-sp" />
           <button type="button" className="btn primary" onClick={print} disabled={!ready}><PrinterIcon />Print</button>
           <button type="button" className="btn" onClick={onClose}>Close</button>
         </div>
         <div className="wov-b">
-          {!ready && <div className="wov-wait faint">Loading the work order…</div>}
-          <iframe ref={frame} src={`/print/${orderId}?work=1`} title={`Work order #${number}`} onLoad={loaded} />
+          {!ready && <div className="wov-wait faint">{ids && ids.length > 1 ? `Loading ${ids.length} work orders…` : "Loading the work order…"}</div>}
+          <iframe ref={frame} src={ids && ids.length > 1 ? `/print/work?ids=${ids.join(",")}` : `/print/${orderId}?work=1`} title={`Work order #${number}`} onLoad={loaded} />
         </div>
       </div>
     </div>

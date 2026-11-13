@@ -265,3 +265,47 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 7:29am · 1.3.474 · Nick · Crew phone views, first pass: /crew main menu (clock, time card fixes, press jobs today, to count in), job menu by view with Main menu, post count, proof, work order on the phone
 - Nov 13 7:37am · 1.3.476 · Nick · Crew main menu in the A + B look: dark card for what you're on now, your list with times, Scan / Tomorrow / Time card, clock buttons; Time card screen; fulfillment and shipping queues; Spanish
 - Nov 13 7:39am · 1.3.478 · Nick · Phone Logins: set each person's phone view on Employees, print the wall sign (/crew/sign); Time Clock: approve fixes from phones
+- Nov 13 8:48am · 1.3.480 · Nick · Press timer on the phone: Start job / Pause / Complete job move the job on the schedule (live clock on or off); the last job done moves the order to Fulfillment
+- Nov 13 8:51am · 1.3.482 · Nick · Phone count-in: a scanned job's Check in goods works again (one job's count-in crashed on a blank date); Main menu icon
+- Nov 13 9:02am · 1.3.484 · Nick · Crew phone sign-in stays signed in for good while used (10-year session pushed on each use, cookie re-sent every visit)
+- Nov 13 9:09am · 1.3.486 · Nick · Phone views kept in the shop settings (work without a database change), with extras: Also Deliveries (ready-to-deliver list on the crew menu)
+- Nov 13 9:10am · 1.3.488 · Nick · Time Clock → Employees: the owner can change someone's employee # (More details)
+- Nov 13 9:11am · 1.3.490 · Nick · Crew sign-in: employee # first (says hi by name); the first time ever they make their own PIN (twice), no manager needed
+- Nov 13 9:14am · 1.3.492 · Nick · Employee app: first time with no PIN points to /crew to make one
+- Nov 13 9:23am · 1.3.494 · Nick · Crew menu: Find at the top (search PO / job # / customer, or Scan with the camera); Scan a job opens the camera; a switch for someone with Deliveries (Receiving | Deliveries)
+- Nov 13 9:30am · 1.3.496 · Nick · Receiving: every open job shows and is searchable, not just this week's (late jobs like #40382 were missing)
+- Nov 13 9:40am · 1.3.498 · Nick · Count in v2 on the phone: pick a style, type its sizes, hold 1 second to count all in; leaving halfway asks to save for later or reset to uncounted (phone and desk)
+- Nov 13 9:43am · 1.3.499 · Nick · Rules: the phone count in and the halfway question
+- Nov 13 9:49am · 1.3.501 · Nick · Crew phones: the view comes from the department when nobody picked one (Receiving opens count in); count in reads right in dark mode; stronger gray for second lines
+- Nov 13 9:52am · 1.3.503 · Nick · Count in: hold 3 seconds to count all in; Check In at the top of the review
+- Nov 13 9:59am · 1.3.505 · Nick · Job phone menu: each screen is in the address so Job menu / Back never bounces back to the first tool; after a count in: Count in another job (scan or type) or Main menu
+- Nov 13 10:13am · 1.3.507 · Nick · Job phone menu: Job menu swaps to the menu in place (no trip back through history, which reloaded the page)
+- Nov 13 10:15am · 1.3.509 · Nick · Crew Home Screen app: saving the crew pages to an iPhone's Home Screen makes an FBS Crew icon that opens the crew main menu (its own manifest), not the portal; a crew phone that lands on the portal goes to /crew
+- Nov 13 10:19am · 1.3.511 · Nick · Home Screen apps: the portal's manifest is a named route so /crew links the crew app's own (it still showed the portal's)
+- Nov 13 10:24am · 1.3.513 · Nick · Schedule: click a group's name (an All My Sons run) → Print all its work orders, one print (/print/work)
+- Nov 13 10:27am · 1.3.515 · Nick · Receiving: the jobs to count are split here-first (Here · ready to count, Part here, Problem, Not sure, On the way) on the dashboard (desk and phone) and the crew phone
+- Nov 13 10:31am · 1.3.517 · Nick · Schedule: Print all work orders also on an opened group in Coming up
+- Nov 13 10:54am · 1.3.519 · Nick · Order reader: a PDF's size grid is read by where each number stands under the size headers, so empty size boxes don't slide the sizes a column (Tiger Blue #50030 / #40382); Create order, the AI order helper and ClickUp files (READER_REV 2026-11-13a)
+- Nov 13 10:54am · 1.3.521 · Nick · File viewer: Print button (PDFs, .ai files that are PDFs, pictures), everywhere the viewer opens
+- Nov 13 10:58am · 1.3.523 · Nick · Size grid reader: a table carried onto the next page keeps its group heading
+- Nov 13 11:07am · 1.3.525 · Nick · Schedule: Ready To Schedule has its own search, the same words as the schedule's search: matches only, highlighted; the schedule's search counts what's in Ready To Schedule too
+- Nov 13 11:11am · 1.3.527 · Nick · Schedule: Make The Schedule, bookings, Re-plan and holds put on today start from now, never this morning (live clock off too); Ready To Schedule's Job Filters: Goods All / Counted / Not counted
+- Nov 13 11:17am · 1.3.529 · Nick · Ready To Schedule: right-click a job (add at a press's next open time, book where suggested, printed already → Fulfillment/Ready/Completed, put on hold, open); the schedule's assistant under Make The Schedule (say it, check the plan, Book)
+- Nov 13 11:19am · 1.3.531 · Nick · Time cards: an "in" during a break started that day is the return from the break, not a second clock-in (Jose Rodriguez's Nov 10 showed 1 to fix)
+- Nov 13 11:23am · 1.3.533 · Nick · Schedule assistant: books, takes jobs back to Ready To Schedule and adds downtime (someone out), shows the steps first (Do it), idea chips to tap; jobs go by short ids so none are dropped
+- Nov 13 11:26am · 1.3.535 · Nick · Schedule assistant: its note names jobs and crews, never internal ids
+- Nov 13 11:29am · 1.3.537 · Nick · Send: a new email by default, never a reply to the last email picked for you; the email it likely answers is offered (one tap). Fix: the schedule assistant's last change didn't build
+- Nov 13 11:32am · 1.3.538 · Nick · Rules: Send starts as a new email
+- Nov 13 11:37am · 1.3.540 · Nick · portal.fbsprint.com/employee (and /employees) opens the crew's phone menu
+- Nov 13 11:47am · 1.3.542 · Nick · Payday time card check on the crew phone: approve hours or ask for a fix; Their check column on the Time Clock
+- Nov 13 11:48am · 1.3.543 · Nick · Work order: compact two-column garments for many products with a few pieces each (option B)
+- Nov 13 11:49am · 1.3.544 · Nick · Work order: no stray 0 under the garments when there are no notes
+- Nov 13 12:02pm · 1.3.545 · Nick · Schedule: AI assistant is one line in a labeled box on Ready To Schedule's tabs line; ideas drop down when you click in
+- Nov 13 12:15pm · 1.3.546 · Nick · Migration 314 (owner-only employees) saved, not applied yet: waits for Nick's OK
+- Nov 13 12:25pm · 1.3.547 · Nick · Schedule AI assistant: microphone button; say it, tap the mic to stop, and it asks
+- Nov 13 12:27pm · 1.3.548 · Nick · Ready To Schedule: tabs All / Late / Holds / Goods here / Not here, search and Job Filters at the right, AI assistant two lines under the tabs
+- Nov 13 12:32pm · 1.3.549 · Nick · Payroll Report: Print time cards, one signable time card per person (everyone, or only who hasn't checked on the phone)
+- Nov 13 12:34pm · 1.3.550 · Nick · Job card: Time on the press rebuilt (Change, quick picks, stays open after saving, reads 1.5 / 1h30 / an hour and a half); More details in its own bordered section
+- Nov 13 12:35pm · 1.3.551 · Nick · Crew phone: My time cards (this period and the six before); approving a period on the Payroll Report takes the payday card off phones
+- Nov 13 12:37pm · 1.3.552 · Nick · Time cards print page: read the punches right (it stopped on Loading)
+- Nov 13 12:40pm · 1.3.553 · Nick · Time cards print page: tables stay as tables (no restacking)

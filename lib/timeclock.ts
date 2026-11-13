@@ -146,7 +146,8 @@ const ORDER: Record<string, number> = { in: 0, break_end: 1, break_start: 2, out
  *  - back from a break with the wrong button: an "out" while on a break, with another "out" later that day, is the
  *    return from the break (Carmen, Ana: lunch, then "out" at 1:07, then out at 3:26);
  *  - a second return a few minutes after the first (a fix added "break end" too) counts once;
- *  - two outs the same day with no in between: the later one is when they left.
+ *  - two outs the same day with no in between: the later one is when they left;
+ *  - an "in" while on a break started that day is the return from the break.
  */
 function tidyPunches<P extends { kind: string; at: string }>(ps: P[]): P[] {
   const out: P[] = [];
@@ -155,6 +156,9 @@ function tidyPunches<P extends { kind: string; at: string }>(ps: P[]): P[] {
     let p = ps[i]; const t = Date.parse(p.at), q = out[out.length - 1];
     if (q && q.kind === p.kind && t - Date.parse(q.at) < 15 * 60000) continue;
     if (p.kind === "out" && onBreak && ps.slice(i + 1).some((x) => x.kind === "out" && localDay(x.at) === localDay(p.at))) p = { ...p, kind: "break_end" };
+    // back from a break with "in" (a fix or the clock's In button, the same day the break started) is the return from the
+    // break (Nov 13, Jose Rodriguez's Nov 10: 1:00 break, "in" at 1:30 showed "Clocked in again without clocking out")
+    else if (p.kind === "in" && onBreak && q && q.kind === "break_start" && localDay(q.at) === localDay(p.at)) p = { ...p, kind: "break_end" };
     // two outs in a row the same day with no in between: the last one is when they left (a fix added an early out)
     else if (p.kind === "out" && !onBreak) { const nx = ps.slice(i + 1).find((x) => localDay(x.at) === localDay(p.at) && x.kind !== "break_end"); if (nx && nx.kind === "out") continue; }
     if ((p.kind === "break_end" || p.kind === "in") && !onBreak && t - lastBack < 15 * 60000) continue;
@@ -166,6 +170,20 @@ function tidyPunches<P extends { kind: string; at: string }>(ps: P[]): P[] {
   }
   return out;
 }
+/** a punch the office put in or changed (a fix, a time typed by hand): "fixed by the office" on the time card */
+export const punchFixed = (p: { source?: string | null; original_at?: string | null; edited_by?: string | null }) => /manual|fix/i.test(String(p.source || "")) || !!p.original_at || !!p.edited_by;
+
+/**
+ * Each day's punches the way the time card counts them (rounded, doubles dropped, a four-punch day's middle two as lunch):
+ * the printed time card's In / Lunch out / Lunch in / Out (Nick, Nov 13 2026: a time card for everyone to sign).
+ */
+export function cardPunches(s: TimeSettings, employeeId: string, punchesIn: Punch[]): Record<string, Punch[]> {
+  const ps = tidyPunches(withLunch(punchesIn.filter((p) => !p.voided && p.employee_id === employeeId)).map((p) => ({ ...p, at: round(p.at, s.rounding) })).sort((a, b) => a.at.localeCompare(b.at) || ORDER[a.kind] - ORDER[b.kind]));
+  const out: Record<string, Punch[]> = {};
+  for (const p of ps) (out[localDay(p.at)] ||= []).push(p);
+  return out;
+}
+
 export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[], offs: TimeOff[], start: string, end: string, now = new Date().toISOString()): Card {
   // the same punch twice (the clock sends a double, or a fix adds one that's already there: Sonia's Nov 9 had three
   // 6:12 PM outs, so "out with no in" never went away however it was fixed; Nov 11, Jose): one punch

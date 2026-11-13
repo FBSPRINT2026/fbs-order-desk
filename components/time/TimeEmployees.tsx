@@ -66,8 +66,13 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
     const sb = createClient();
     if (!v.id && boss && v.pay_type !== "salary" && rate === "") return setErr("Enter their hourly rate (or pick Salary).");
     const row = { first_name: v.first_name?.trim(), last_name: (v.last_name || "").trim(), email: v.email || "", phone: v.phone || "", staff_email: v.staff_email || null, department: v.department || "", title: v.title || "", pay_type: v.pay_type || "hourly", paid_by: v.paid_by === "contract" ? "contract" : "payroll", takes_lunch: v.takes_lunch !== false, color: v.color || "", active: v.active !== false, hire_date: v.hire_date || null, end_date: v.active === false ? v.end_date || new Date().toISOString().slice(0, 10) : null, notes: v.notes || "", updated_at: new Date().toISOString() };
+    // the employee # they sign in with (the clock, their phone); the owner can change it (Nov 13: Linda is 1959)
+    if (boss && v.code != null && v.code !== e.code) {
+      if (!Number.isInteger(+v.code) || +v.code < 1 || +v.code > 999999) { setBusy(false); return setErr("The employee # is 1 to 6 digits."); }
+      Object.assign(row, { code: +v.code });
+    }
     const r = v.id ? await sb.from("employees").update(row).eq("id", v.id).select("id, code").single() : await sb.from("employees").insert(row).select("id, code").single();
-    if (r.error) { setBusy(false); return setErr(r.error.message); }
+    if (r.error) { setBusy(false); return setErr(/employees_code|duplicate key/.test(r.error.message) ? `Employee #${v.code} is already someone else's.` : r.error.message); }
     const id = r.data.id as string;
     if (pin && boss) {
       const pr = await fetch("/api/time/pin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employee_id: id, pin }) });
@@ -136,6 +141,7 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
             {boss && payType === "hourly" && rate && +rate > 0 && <div className="faint" style={{ fontSize: 12.5 }}>Overtime: ${(+rate * (d.settings.otRate || 1.5)).toFixed(2)} an hour past {d.settings.otWeekly} hours a week</div>}
           </div>
           {!more ? <button type="button" className="linkbtn" style={{ alignSelf: "flex-start" }} onClick={() => setMore(true)}>+ More details (phone, email, hire date, login, PIN…)</button> : <>
+          {boss && v.id && <label>Employee # (they sign in with it)<input inputMode="numeric" value={v.code ?? ""} onChange={(ev) => set("code", ev.target.value.replace(/\D/g, "") === "" ? null : +ev.target.value.replace(/\D/g, ""))} /></label>}
           <div className="tmx-2">{f("email", "Email", "email")}{f("phone", "Phone", "tel")}</div>
           <div className="tmx-2">
             {f("title", "Job title")}

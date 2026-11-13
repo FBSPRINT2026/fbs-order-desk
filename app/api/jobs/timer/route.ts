@@ -58,15 +58,38 @@ export async function POST(req: Request) {
   const run = await runningJob(admin, me);
   const here = run && (job.kind === "o" ? run.order_id : run.archived_order_id) === job.id ? run : null;
 
-  if (b.action === "setup") err = await start(`Setup · ${loc}`, press);
-  else if (b.action === "run") err = await start(`Run · ${loc}`, press);
+  // Start / Pause / Resume on the phone move the job on the schedule too, live clock on or off (Nick, Nov 13: "being able to
+  // start and stop a job for the press operators so that it keeps the schedule going"): the same booking fields the
+  // schedule's right-click writes (Mark started, Pause, Resume), on this job's booking for the press picked
+  const { data: stRow0 } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const machs0 = (((stRow0?.data as { production?: { machines?: { id: string; name: string; type: string }[] } } | null)?.production?.machines) || []);
+  const pressM = machs0.find((m) => m.name === press || m.id === press);
+  async function slotMove(to: "start" | "pause" | "resume") {
+    if (job!.kind !== "o") return;
+    const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, day, status, started_at, progress, minutes").eq("order_id", job!.id).neq("status", "done").order("day");
+    const list = (sl || []) as { id: string; order_id: string; machine: string; day: string; status: string; started_at: string | null; progress: number | null }[];
+    const typeOf = (x: string) => machs0.find((m) => m.id === x)?.type || "";
+    const pick = list.find((x) => pressM && x.machine === pressM.id && (to === "start" ? x.status !== "done" : x.status !== "scheduled"))
+      || list.find((x) => (!pressM || typeOf(x.machine) === pressM.type) && (to === "start" ? true : x.status !== "scheduled"));
+    if (!pick) return;
+    const now = new Date().toISOString(), p = +(pick.progress || 0);
+    const patch = to === "pause" ? { status: "paused", progress: p, progress_at: now } : { status: "running", started_at: pick.started_at || now, progress: p, progress_at: now };
+    if (to === "pause" ? pick.status !== "running" : pick.status === "running") return;
+    // started on another press than it was booked on: it runs there
+    const move = to === "start" && pressM && pick.machine !== pressM.id && typeOf(pick.machine) === pressM.type ? { machine: pressM.id } : {};
+    await admin.from("production_slots").update({ ...patch, ...move, ends_at: null, updated_at: now }).eq("id", pick.id);
+    await admin.from("production_slot_log").insert({ slot_id: pick.id, order_id: pick.order_id, machine: (move as { machine?: string }).machine || pick.machine, action: to, progress: p, note: "On the phone", by: who!.name });
+  }
+
+  if (b.action === "setup") { err = await start(`Setup · ${loc}`, press); if (!err) await slotMove("start"); }
+  else if (b.action === "run") { err = await start(`Run · ${loc}`, press); if (!err) await slotMove("start"); }
   else if (b.action === "pause") {
     if (!here) err = "Nothing is running on this job.";
-    else await stopJob(admin, me, { note: `Paused: ${String(b.reason || "Paused").slice(0, 60)}` });
+    else { await stopJob(admin, me, { note: `Paused: ${String(b.reason || "Paused").slice(0, 60)}` }); await slotMove("pause"); }
   } else if (b.action === "resume") {
     const st = await state(admin, me, job);
     if (!st.paused) err = "Nothing is paused on this job.";
-    else err = await start(st.paused.task, st.paused.station);
+    else { err = await start(st.paused.task, st.paused.station); if (!err) await slotMove("resume"); }
   } else if (b.action === "finish" || b.action === "done") {
     if (here) await stopJob(admin, me, { pieces: b.pieces != null && isFinite(+b.pieces) ? +b.pieces : null, note: b.action === "done" ? "Job done" : "" });
     else if (b.action === "finish") err = "Nothing is running on this job.";
@@ -87,6 +110,18 @@ export async function POST(req: Request) {
         // an Issue's pieces printed (missing goods, rejects, a reprint): the issue is closed
         if ((s as { issue_id?: string | null }).issue_id) await admin.from("production_issues").update({ status: "done", done_at: now }).eq("id", (s as { issue_id?: string | null }).issue_id!);
         await admin.from("production_slot_log").insert({ slot_id: s.id, order_id: s.order_id, machine: s.machine, action: "done", progress: 1, note: "Finished on the phone", by: who.name });
+      }
+      // its last job on the schedule: the order goes on to Fulfillment (as the schedule's Complete does), unless pieces are
+      // still to print (an open Issue) or another part (embroidery, heat press) isn't done
+      const [{ data: rest }, { data: oi }, { data: o }] = await Promise.all([
+        admin.from("production_slots").select("id").eq("order_id", job.id).neq("status", "done").limit(1),
+        admin.from("production_issues").select("id").eq("order_id", job.id).eq("status", "open").limit(1),
+        admin.from("orders").select("status").eq("id", job.id).maybeSingle(),
+      ]);
+      const cur = (o?.status as string) || "";
+      if (!(rest || []).length && !(oi || []).length && ["approved", "art", "blanks", "production"].includes(cur)) {
+        const up = await admin.from("orders").update({ status: "fulfillment", type: "invoice" }).eq("id", job.id);
+        if (!up.error) await admin.from("order_events").insert({ order_id: job.id, kind: "status", detail: "fulfillment", actor: who.name });
       }
     }
   } else err = "Pick what you're doing.";

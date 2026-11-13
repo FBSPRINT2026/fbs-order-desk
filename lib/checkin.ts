@@ -81,7 +81,9 @@ const total = (items: CheckItem[]) => items.reduce((s, it) => s + Object.values(
 
 /** Monday of the week a day falls in */
 export const weekOf = (d: string) => { const x = new Date(d + "T12:00"); const k = (x.getDay() + 6) % 7; x.setDate(x.getDate() - k); return x.toISOString().slice(0, 10); };
-const addDays = (d: string, n: number) => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+// a blank day (one job's count-in, Check-In by job) is today: "T12:00" alone isn't a date and threw, so the phone's
+// Check in goods never showed (Nov 13)
+const addDays = (d: string, n: number) => { const x = new Date((/^\d{4}-\d{2}-\d{2}$/.test(d) ? d : new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" })) + "T12:00"); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
 const CLOSED = /job\s*completed|quote|cancel|closed/i;
 
 /**
@@ -178,7 +180,10 @@ export async function checkinJobs(admin: SupabaseClient, from: string, to: strin
     if (ms.length) j.mixed = ms;
   }
   if (only) return { jobs, problems: [] };
-  const inRange = jobs.filter((j) => j.day >= from && j.day <= to).sort((a, b) => a.day.localeCompare(b.day) || a.number - b.number);
+  // every open order of ours, whatever its date (the dashboard and the crew phone; Nov 13, #40382: due last week, on the
+  // press today, and nowhere in Receiving or its search because its due date was outside the week asked for). Old
+  // Printavo jobs still go by the week: they have no "done" of ours to drop them.
+  const inRange = jobs.filter((j) => (allOpen && !j.ref.startsWith(PV)) || (j.day >= from && j.day <= to)).sort((a, b) => a.day.localeCompare(b.day) || a.number - b.number);
   const problems = jobs.filter((j) => j.state === "issue").sort((a, b) => (a.day || "").localeCompare(b.day || ""));
   return { jobs: inRange, problems };
 }
@@ -202,6 +207,8 @@ export async function saveCheckin(admin: SupabaseClient, by: string, b: { ref: s
   const row = { order_id: pv ? null : id, archived_order_id: pv ? id : null, lines, expected, received, boxes: b.boxes ?? null, source: b.source || "", status, note: String(b.note || "").slice(0, 2000), photos: (b.photos || []).slice(0, 12), by };
   const ins = await admin.from("goods_checkins").insert(row).select("*").single();
   if (ins.error) throw new Error(ins.error.message);
+  // a count left halfway (app/api/jobs/checkin/draft) is done with now
+  await admin.storage.from("proofs").remove([`checkins/${b.ref.replace(/[^\w-]/g, "_")}/draft.json`]).catch(() => null);
   // the job's manifest packages count as here now (the local truck and freight never report delivery themselves)
   const now = new Date().toISOString();
   await admin.from("supplier_manifest_lines").update({ track_status: "delivered", delivered_at: now, track_detail: `Counted in by ${by}` }).eq(pv ? "archived_order_id" : "order_id", id).is("delivered_at", null);

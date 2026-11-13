@@ -33,6 +33,36 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
   // who works the problems (Nov 2, Nick): our own blank orders the shop, the customer's own goods the customer
   const [owner, setOwner] = useState<"customer" | "shop">(job.owner || "customer");
 
+  // a count left halfway (the phone's or this one's) picks up where it stopped; closing halfway asks first: save what's
+  // counted to finish later, or reset to uncounted (Nick, Nov 13 2026, #40382; app/api/jobs/checkin/draft)
+  const [resumed, setResumed] = useState<{ by: string; at: string } | null>(null), [asking, setAsking] = useState(false);
+  useEffect(() => {
+    let off = false;
+    void fetch(`/api/jobs/checkin/draft?ref=${encodeURIComponent(job.ref)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      const d = j?.draft; if (off || !d || !Object.keys(d.got || {}).length) return;
+      const keys = new Set(cells.map((c) => c.k));
+      setGot(Object.fromEntries(Object.entries(d.got as Record<string, number>).filter(([k]) => keys.has(k)).map(([k, v]) => [k, String(v)])));
+      setExtra(Object.fromEntries(Object.entries((d.bad || {}) as Record<string, { issue: Issue; bad: number }>).filter(([k]) => keys.has(k)).map(([k, v]) => [k, { issue: v.issue, bad: v.bad, note: "" }])));
+      setResumed({ by: d.by || "", at: d.at || "" });
+    }).catch(() => {});
+    return () => { off = true; };
+  }, [job.ref]); // eslint-disable-line react-hooks/exhaustive-deps
+  const halfway = Object.values(got).some((v) => v !== "") || Object.values(extra).some((x) => x.bad > 0);
+  const close = () => (halfway ? setAsking(true) : onClose());
+  async function later() {
+    setBusy(t("Saving…"));
+    const g = Object.fromEntries(Object.entries(got).filter(([, v]) => v !== "").map(([k, v]) => [k, Math.max(0, Math.round(+v || 0))]));
+    const r = await fetch("/api/jobs/checkin/draft", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: job.ref, got: g, bad: extra, counted: Object.values(g).reduce((a, b) => a + b, 0), expected: cells.reduce((s, c) => s + c.expected, 0) }) }).catch(() => null);
+    setBusy("");
+    if (!r?.ok) { setErr(t("Couldn't save the count. Try again.")); setAsking(false); return; }
+    onClose();
+  }
+  async function resetCount() {
+    setBusy(t("Saving…"));
+    await fetch(`/api/jobs/checkin/draft?ref=${encodeURIComponent(job.ref)}`, { method: "DELETE" }).catch(() => null);
+    setBusy(""); onClose();
+  }
+
   const n = (k: string) => (got[k] === undefined || got[k] === "" ? null : Math.max(0, Math.round(+got[k] || 0)));
   const left = cells.filter((c) => n(c.k) === null).length;
   const expected = cells.reduce((s, c) => s + c.expected, 0), counted = cells.reduce((s, c) => s + (n(c.k) ?? 0), 0);
@@ -107,7 +137,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
     );
   };
   return (
-    <div className="mk-modal-back ck-back" role="dialog" aria-modal="true" aria-labelledby="ck-t" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}>
+    <div className="mk-modal-back ck-back" role="dialog" aria-modal="true" aria-labelledby="ck-t" onKeyDown={(e) => { if (e.key === "Escape") close(); }}>
       <div className="ck-modal">
         <div className="ck-head">
           <div>
@@ -118,7 +148,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
               : <>{t("From the job's line items (no manifest):")} <b>{t("{0} pcs", expected)}</b>.</>}</div>
             {job.mixed?.map((m) => <div key={m.tracking} className="ck-mix">📦 <b>{t("Mixed box …{0}", m.tracking.slice(-4))}</b>{m.box && m.box !== m.tracking ? " " + t("(box {0})", m.box) : ""}{t(": count only this job's part. The rest is for")} {m.jobs.filter((x) => x.number !== job.number).map((x) => `${x.number ? `#${x.number}` : t("a shipment not linked yet")}: ${x.items}`).join("; ")}.</div>)}
           </div>
-          <button type="button" className="btn icon ghost" aria-label={t("Close")} onClick={onClose}>×</button>
+          <button type="button" className="btn icon ghost" aria-label={t("Close")} onClick={close}>×</button>
         </div>
 
         <div className="ck-tools">
@@ -224,12 +254,19 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
         </div>
 
         {err && <div className="pv-err">{err}</div>}
-        <div className="ck-foot">
+        {resumed && !asking && <div className="ck-resumed">{t("Picked up where {0} stopped ({1}): {2} of {3} counted.", resumed.by || t("someone"), new Date(resumed.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), counted, expected)}</div>}
+        {asking ? <div className="ck-foot ck-ask">
+          <span className="ck-sum off">{t("You're halfway through counting this")} · {t("{0} of {1} counted so far.", counted, expected)}</span>
+          <span className="spacer" />
+          <button type="button" className="btn" disabled={!!busy} onClick={() => setAsking(false)}>{t("Keep counting")}</button>
+          <button type="button" className="btn danger" disabled={!!busy} onClick={() => void resetCount()}>{t("Reset to uncounted")}</button>
+          <button type="button" className="btn primary" disabled={!!busy} onClick={() => void later()}>{busy || t("Save what I counted · finish later")}</button>
+        </div> : <div className="ck-foot">
           <span className={"ck-sum" + (left ? "" : counted === expected && !problems.length ? " ok" : " off")}>{left ? (left === 1 ? t("1 size left to count · {0} so far", counted) : t("{0} sizes left to count · {1} so far", left, counted)) : t("{0} of {1} counted", counted, expected) + (problems.length ? " · " + (problems.length === 1 ? t("1 problem") : t("{0} problems", problems.length)) : t(" · all here"))}</span>
           <span className="spacer" />
-          <button type="button" className="btn" onClick={onClose}>{t("Cancel")}</button>
+          <button type="button" className="btn" onClick={close}>{t("Cancel")}</button>
           <button type="button" className={"btn ck-go " + (problems.length ? "warn" : "primary")} disabled={!!busy} onClick={save}>{busy || (problems.length ? (problems.length === 1 ? t("Check In with 1 Problem") : t("Check In with {0} Problems", problems.length)) : t("Check In"))}</button>
-        </div>
+        </div>}
       </div>
     </div>
   );

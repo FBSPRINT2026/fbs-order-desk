@@ -1,12 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import CheckinModal from "@/components/CheckinModal";
 import GoodsIssues from "@/components/GoodsIssues";
 import WorkOrderView, { PrinterIcon } from "@/components/WorkOrderView";
 import { useSticky } from "@/lib/useSticky";
 import { createClient } from "@/lib/supabase/client";
-import type { CheckJob, JobKind, JobState } from "@/lib/checkinShared";
+import { countSections, type CheckJob, type JobKind, type JobState } from "@/lib/checkinShared";
 
 /**
  * Goods & Receiving's dashboard (Nov 11 2026, Nick, option E: "the first thing you should see… is what needs to be
@@ -152,7 +152,8 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         <div className="rvm-meta">{j.due ? <span>Due {short(j.due)}</span> : null}<span>{pcsOf(j)} pcs</span>{sup ? <span>{sup}{j.lines ? ` · ${j.arrived} of ${j.shipped} here` : ""}</span> : <span>No manifest</span>}</div>
         <div className="rvm-acts">
           {!j.ref.startsWith("pv:") && <button type="button" className="btn rvm-pr" aria-label="Work order" title="Work order" onClick={() => setWo(j)}><PrinterIcon /></button>}
-          <button type="button" className={"btn rvm-go" + (done ? "" : " primary")} onClick={() => setCount(j)}>{done || j.state === "issue" ? "Recount" : "Count in"}</button>
+          {/* on a phone, the one phone count in (pick a style, hold to count all, stop halfway and finish later; Nov 13) */}
+          <a className={"btn rvm-go" + (done ? "" : " primary")} href={`/j/${j.number}?v=checkin`}>{done || j.state === "issue" ? "Recount" : "Count in"}</a>
         </div>
       </div>
     );
@@ -171,7 +172,8 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         {msg && <div className="banner rvm-msg">{msg}</div>}
         <div className="rvm-list">
           {err ? <div className="empty">{err}</div> : !jobs ? <div className="empty">Loading…</div> : !shown.length && !grayed.length ? <div className="empty">{q.trim() ? "No order matches." : day === "counted" ? "Nothing counted is waiting for the press." : "Nothing to count in."}</div> : <>
-            {shown.map((j) => pcard(j, false))}
+            {/* what's surely here first (Nick, Nov 13): Here · ready to count, Part here, Problem, Not sure, On the way */}
+            {countSections<CheckJob>(shown).map((sec) => <Fragment key={sec.key}><div className="rvm-sec">{sec.label} · {sec.jobs.length}</div>{sec.jobs.map((j) => pcard(j, false))}</Fragment>)}
             {grayed.length > 0 && day !== "counted" && <div className="rvm-sec">Counted · waiting for the press · {grayed.length}</div>}
             {grayed.map((j) => pcard(j, true))}
           </>}
@@ -220,7 +222,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
               <thead><tr>{([["number", "Order #"], ["customer", "Customer"], ["due", "Due date"], ["supplier", "Supplier"], ["pcs", "Pieces"], ["status", "Status"]] as const).map(([k, l]) => (
                 <th key={k} className={"rvd-th" + (sortBy?.k === k ? " on" : "")} onClick={() => setSortBy((x) => (x?.k === k ? (x.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }))} title="Sort by this">{l}<span className="rvd-ar" aria-hidden>{sortBy?.k === k ? (sortBy.dir === 1 ? "▲" : "▼") : "↕"}</span></th>
               ))}<th /></tr></thead>
-              <tbody>{shown.map((j) => {
+              <tbody>{(sortBy ? [{ key: "all", label: "", jobs: shown }] : countSections<CheckJob>(shown)).map((sec) => <Fragment key={sec.key}>{sec.label && <tr className="rvd-sub rvd-sec"><td colSpan={7}>{sec.label} <span className="rvd-n">{sec.jobs.length}</span></td></tr>}{sec.jobs.map((j) => {
                 const st = stOf(j), pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
                 return (
                   <tr key={j.ref} className={day === "today" && !q.trim() && j.state !== "way" && j.state !== "none" ? "rvd-urg" : ""}>
@@ -233,7 +235,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
                     <td className="rvd-act" data-label="">{woBtn(j)}<button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
                   </tr>
                 );
-              })}
+              })}</Fragment>)}
               {grayed.length > 0 && day !== "counted" && <tr className="rvd-sub"><td colSpan={7}>Counted · waiting for the press to start <span className="rvd-n">{grayed.length}</span></td></tr>}
               {grayed.map((j) => { const pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0), last = j.checkins[0]; return (
                 <tr key={j.ref} className="rvd-done">

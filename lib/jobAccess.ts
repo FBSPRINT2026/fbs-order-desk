@@ -7,7 +7,7 @@ import { EMP_COOKIE, employeeFor } from "@/lib/workServer";
 import type { Perms } from "@/lib/roles";
 import { shopNetwork } from "@/lib/shopNetwork";
 import { mergeProduction } from "@/lib/production";
-import { crewViewOf, type CrewView } from "@/lib/crewView";
+import { crewViewOf, parseViews, phoneViewsOf, type CrewExtra, type CrewView } from "@/lib/crewView";
 
 /**
  * Who's using the job's phone menu (after scanning a work order or box label): a staff member signed in to the portal,
@@ -16,7 +16,8 @@ import { crewViewOf, type CrewView } from "@/lib/crewView";
  * permission.
  */
 export type JobActor = { kind: "staff" | "employee"; name: string; email: string; employeeId: string | null; perms: Perms | null; can: { ship: boolean; checkin: boolean; open: boolean };
-  /** what their phone shows first (lib/crewView.ts); staff portal logins are Office */ view: CrewView };
+  /** what their phone shows first (lib/crewView.ts); staff portal logins are Office */ view: CrewView;
+  /** extras on their main menu (Deliveries) */ also?: CrewExtra[] };
 
 export async function jobActor(): Promise<JobActor | null> {
   return (await jobGate()).who;
@@ -34,9 +35,10 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
   const e = await employeeFor(admin, (await cookies()).get(EMP_COOKIE)?.value).catch(() => null);
   if (e) {
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
-    const view = crewViewOf(e.phone_view, e.id, mergeProduction((st?.data as { production?: unknown } | null)?.production).crews);
+    const set = phoneViewsOf(st?.data)[e.id] || e.phone_view;
+    const view = crewViewOf(set, e.id, mergeProduction((st?.data as { production?: unknown } | null)?.production).crews, e.department);
     // shipping (rates, labels) is staff-only for now: a phone login sees where the job goes, not the Ship tool
-    const who: JobActor = { kind: "employee", name: `${e.first_name || ""} ${e.last_name || ""}`.trim() || `#${e.code}`, email: "", employeeId: e.id, perms: null, can: { ship: false, checkin: true, open: false }, view };
+    const who: JobActor = { kind: "employee", name: `${e.first_name || ""} ${e.last_name || ""}`.trim() || `#${e.code}`, email: "", employeeId: e.id, perms: null, can: { ship: false, checkin: true, open: false }, view, also: parseViews(set).also };
     if (net.configured && !net.on) return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false };
     return { who, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: false };
   }

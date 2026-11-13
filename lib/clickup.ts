@@ -815,7 +815,13 @@ export async function readClickUpFileTexts(admin: SupabaseClient, o: { team?: st
         let text = "";
         if (ext === "pdf" && Date.now() < o.deadline) {
           const buf = await grab(a.url!, tok);
-          if (buf) { text = (await pdfTextServer(new Uint8Array(buf), 6)).slice(0, 20000); files++; }
+          if (buf) {
+            text = (await pdfTextServer(new Uint8Array(buf), 6)).slice(0, 20000); files++;
+            // its size grid by position (lib/sizeGrid.ts), so the sizes don't slide across empty boxes (Nov 13)
+            const { pdfSizeGridServer } = await import("@/lib/pdfTextServer");
+            const gr = await pdfSizeGridServer(new Uint8Array(buf), 6).catch(() => "");
+            if (gr) text += `\n\nSize grid, read by where each number stands under the size headers (exact):\n${gr}`;
+          }
         }
         out.push({ id: a.id, name, url: a.url!, text });
       }

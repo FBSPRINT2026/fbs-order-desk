@@ -27,7 +27,7 @@ export default function PressTimer({ card, presses }: { card: JobCard; presses: 
   const taskT = (task: string) => { const x = parse(task); return x.phase === "setup" ? t("Setup · {0}", t(x.loc)) : x.phase === "run" ? t("Run · {0}", t(x.loc)) : t(task); };
   const noteT = (n: string) => (/^Paused: /.test(n) ? t("Paused: {0}", t(n.slice(8))) : t(n));
   const [st, setSt] = useState<State | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState("");
-  const [loc, setLoc] = useState(locs[0] || "Whole job"), [press, setPress] = useState("");
+  const [loc, setLoc] = useState("Whole job"), [press, setPress] = useState("");
   const [pausing, setPausing] = useState(false), [finishing, setFinishing] = useState<number | null>(null), [now, setNow] = useState(Date.now());
   const [awake, setAwake] = useState(false);
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
@@ -65,7 +65,6 @@ export default function PressTimer({ card, presses }: { card: JobCard; presses: 
   const run = st.running, onThis = run && (card.kind === "o" ? run.order_id : run.archived_order_id) === card.id ? run : null;
   const cur = onThis ? parse(onThis.task) : null;
   const doneRuns = new Set(st.log.filter((r) => r.ended_at && parse(r.task).phase === "run").map((r) => parse(r.task).loc));
-  const left = locs.filter((l) => !doneRuns.has(l));
 
   return (
     <>
@@ -97,10 +96,12 @@ export default function PressTimer({ card, presses }: { card: JobCard; presses: 
           ) : (
             <div className="jm-tm-btns">
               {cur!.phase === "setup" && <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("run", { location: cur!.loc })}>{t("Setup done · start running")}</button>}
-              {cur!.phase === "run" && <button type="button" className="jm-go" disabled={!!busy} onClick={() => setFinishing(qtyOf(cur!.loc))}>{t("Finish run")}</button>}
+              {/* the one button that matters (Nov 13): the job is printed, the schedule moves on */}
+              {cur!.phase !== "setup" && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>}
               <div className="jm-row">
                 <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => setPausing(true)}>{t("Pause")}</button>
                 {cur!.phase === "setup" && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => act("finish")}>{t("Stop setup")}</button>}
+                {cur!.phase === "run" && locs.length > 1 && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => setFinishing(qtyOf(cur!.loc))}>{t("Finish this spot only")}</button>}
               </div>
             </div>
           )}
@@ -119,13 +120,10 @@ export default function PressTimer({ card, presses }: { card: JobCard; presses: 
           <div className="jm-label">{doneRuns.size ? t("What's next?") : t("What are you working on?")}</div>
           <div className="jm-chips">{[...locs, "Whole job"].map((l) => <button key={l} type="button" className={"jm-chip" + (loc === l ? " on" : "") + (doneRuns.has(l) ? " done" : "")} onClick={() => setLoc(l)}>{doneRuns.has(l) ? "✓ " : ""}{t(l)}</button>)}</div>
           {presses.length > 0 && <><div className="jm-label">{t("Press")}</div><div className="jm-chips">{presses.map((p) => <button key={p.id} type="button" className={"jm-chip" + (press === p.name ? " on" : "")} onClick={() => setPress(p.name)}>{p.name}</button>)}</div></>}
-          <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("setup")}>{t("Start setup · {0}", t(loc))}</button>
-          <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => act("run")}>{t("Already set up · start running")}</button>
-          {doneRuns.size > 0 && !left.length && <button type="button" className="jm-ghost done" disabled={!!busy} onClick={() => act("done")}>✓ {t("Whole job done")}</button>}
+          <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("run")}>▶ {t("Start job")}{loc !== "Whole job" ? ` · ${t(loc)}` : ""}</button>
+          <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => act("setup")}>{t("Start with setup")}</button>
+          <button type="button" className="jm-ghost done" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>
         </div>
-      )}
-      {onThis && cur?.phase === "run" && finishing === null && !pausing && left.filter((l) => l !== cur.loc).length === 0 && (
-        <button type="button" className="jm-ghost done" disabled={!!busy} onClick={() => act("done", { pieces: qtyOf(cur.loc) })}>✓ {t("Last run · whole job done")}</button>
       )}
       {err && <div className="jm-err">{err}</div>}
 
