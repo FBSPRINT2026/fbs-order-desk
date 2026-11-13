@@ -311,3 +311,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 12:40pm · 1.3.553 · Nick · Time cards print page: tables stay as tables (no restacking)
 - Nov 13 12:42pm · 1.3.554 · Nick · Time cards print page: full letter width
 - Nov 13 12:44pm · 1.3.555 · Nick · Time cards print page: its own class names (a shop style was stacking the week rows)
+- Nov 13 12:50pm · 1.3.556 · Nick · Time cards print: the name and pay period print at the top (shop print styles were hiding them); fits the printer's margins

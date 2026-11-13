@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { allRows } from "@/lib/readAll";
 import { addDays, cardPunches, daysBetween, fullName, localToIso, mergeTime, periodOf, punchFixed, timecard, timeLabel, weekOf, type Employee, type Punch, type TimeOff, type TimeSettings } from "@/lib/timeclock";
 
+// divs, not <header>/<footer>: the shop's print styles hide every header and footer tag when printing (Nov 13: the
+// printed cards came out without the person's name)
 /**
  * Time cards to sign (Nick, Nov 13 2026: "print a time card for every employee to physically sign, that's the way we've
  * been doing it… we haven't got everybody in the system yet"). One letter page per person for a pay period: every day
@@ -91,10 +93,10 @@ function Cards() {
       {!pages.length && <div className="tcp-msg">Nobody to print: {who === "open" ? "everyone has approved their hours on their phone." : "no hours in this pay period."}</div>}
       {pages.map(({ e, c, rows, per, phone }, i) => (
         <section className="tcp-sheet" key={e.id}>
-          <header className="tcp-h">
+          <div className="tcp-h">
             <div><div className="tcp-k">FBS PRINT · TIME CARD</div><div className="tcp-name">{fullName(e)}</div></div>
             <div className="tcp-per"><div className="tcp-k">PAY PERIOD</div><b>{longDay(per.start)} – {longDay(per.end)}, {per.end.slice(0, 4)}</b></div>
-          </header>
+          </div>
           <div className="tcp-who">
             <div><span>EMPLOYEE #</span><b>{e.code ?? "—"}</b></div>
             <div><span>DEPARTMENT</span><b>{e.department || "—"}</b></div>
@@ -124,7 +126,7 @@ function Cards() {
             <div className="tcp-sl"><div><span>Employee signature / Firma</span></div><div><span>Date / Fecha</span></div></div>
             <div className="tcp-sl"><div><span>Approved by</span></div><div><span>Date</span></div></div>
           </div>
-          <footer className="tcp-f"><span><b>fixed</b> = changed by the office · <b>missed</b> = no punch, write the time in</span><span>Page {i + 1} of {pages.length} · printed {printed}</span></footer>
+          <div className="tcp-f"><span><b>fixed</b> = changed by the office · <b>missed</b> = no punch, write the time in</span><span>Page {i + 1} of {pages.length} · printed {printed}</span></div>
         </section>
       ))}
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
@@ -168,11 +170,11 @@ body{background:#e6e9ee}
 .tcp-f{display:flex;justify-content:space-between;gap:10px;font-size:9.5px;color:#7a8597;margin-top:10px}
 .tcp-f b{color:#141d2b}
 @media print{
-  @page{size:letter;margin:0}
+  @page{size:letter;margin:.4in}
   body{background:#fff}
   .tcp{padding:0;gap:0}
   .tcp-bar{display:none}
-  .tcp-sheet{box-shadow:none;width:8.5in;height:11in;min-height:0;break-after:page;page-break-after:always}
+  .tcp-sheet{box-shadow:none;width:auto;max-width:none;height:10.1in;min-height:0;padding:0;overflow:hidden;break-after:page;page-break-after:always}
   .tcp-sheet:last-child{break-after:auto;page-break-after:auto}
 }
 `;
