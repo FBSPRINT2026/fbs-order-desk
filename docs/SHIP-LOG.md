@@ -264,3 +264,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:56pm · 1.3.472 · Nick · Backups: one round at a time per backup (two rounds together lost tables from the manifest)
 - Nov 13 7:29am · 1.3.474 · Nick · Crew phone views, first pass: /crew main menu (clock, time card fixes, press jobs today, to count in), job menu by view with Main menu, post count, proof, work order on the phone
 - Nov 13 7:37am · 1.3.476 · Nick · Crew main menu in the A + B look: dark card for what you're on now, your list with times, Scan / Tomorrow / Time card, clock buttons; Time card screen; fulfillment and shipping queues; Spanish
+- Nov 13 7:39am · 1.3.478 · Nick · Phone Logins: set each person's phone view on Employees, print the wall sign (/crew/sign); Time Clock: approve fixes from phones

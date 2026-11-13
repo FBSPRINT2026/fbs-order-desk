@@ -17,7 +17,7 @@ import { useCan } from "@/components/RoleContext";
  * every job's logged time (fixable), and efficiency by job, person and task. Time is logged in the employee app
  * (portal.fbsprint.com/work): scan the job ticket, pick Front / Back / Setup…, Start, Finish. Separate from pay time.
  */
-const TABS = [["people", "People & Teams"], ["plan", "Today's Plan"], ["floor", "On The Floor"], ["times", "Job Times"], ["eff", "Efficiency"], ["app", "Employee App"]] as const;
+const TABS = [["people", "People & Teams"], ["plan", "Today's Plan"], ["floor", "On The Floor"], ["times", "Job Times"], ["eff", "Efficiency"], ["app", "Phone Logins"]] as const;
 type Tab = (typeof TABS)[number][0];
 
 export default function EmployeesPage() {

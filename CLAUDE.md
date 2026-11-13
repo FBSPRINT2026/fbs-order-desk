@@ -258,6 +258,16 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Its top: a Dashboard button (box icon) beside the Shipments tabs (Arriving & tracking, FBS orders, Customer supplied,
   Ignored); Settings in the header. Two blocks: Counting (a Schedule | Due date switch for the days; All/SP/EMB/HP with the
   search beside it; Today / Tomorrow / Next day / Later / ✓ Counted) and Receiving (trucks).
+- **The crew's phones** (Nick, Nov 13 2026: "this is how most people at my company are going to get in the site… 30 of
+  them are going to use only this view"). One way in: the QR on the wall or on any work order → `/crew` (the main menu)
+  or `/j/<number>` (a job's menu, with Main menu at its top), employee # and PIN once, on the shop's Wi-Fi. What a phone
+  shows is the person's phone view (`lib/crewView.ts`: Receiving, Press operator, Assistant, Catcher, Fulfillment,
+  Shipping, Office; set on Employees → Phone Logins, else their place on a press crew): the main menu's dark card is what
+  they're on now (`lib/crewHome.ts`), and a scanned job opens on their view's first tool (`OPENS_ON`: receiving → count
+  in, operator → press timer, catcher → post count with where it goes, shipping → Ship) with its tiles in their order
+  (`TILES`). The look is "A + B" (light page, one dark card on top, the list with times, tiles, clock buttons). Their
+  time card fixes wait for a manager on the Time Clock (`time_fix_requests`, `timeFixDecide`). New crew tools go
+  through these, never a page of their own; every word has its Spanish in `components/job/lang.tsx`.
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

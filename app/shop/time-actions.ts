@@ -248,3 +248,41 @@ export async function sendToFaceClock(): Promise<{ ok: boolean; message: string 
     return { ok: true, message: sent ? `Sent to the face clock: it picks them up within a minute. Then add their face at the clock (Menu → User Mgt → All Users → their ID → Face).` : asking ? "Checking who's on the face clock; it'll add them on the next try." : "They're already on the face clock." };
   } catch (e) { return { ok: false, message: e instanceof Error ? e.message : String(e) }; }
 }
+
+/**
+ * Fixes to a time card asked for from a phone (/crew → Time card; Nick, Nov 13 2026: "I forgot to clock out for lunch. I
+ * took a 30 minute lunch today… send to Jose"). The managers see them on the Time Clock; approved, the fix becomes the
+ * punches it asks for (a lunch: out and back; a missed punch: that punch), marked as from the phone and who approved.
+ * "Something else" is approved after the card is fixed by hand.
+ */
+export type TimeFix = { id: string; employee_id: string; day: string; kind: "lunch" | "missed_in" | "missed_out" | "other"; at: string | null; minutes: number | null; note: string; status: string; created_at: string };
+export async function timeFixesOpen(): Promise<{ ok: true; fixes: TimeFix[] } | { ok: false; error: string }> {
+  try {
+    await manager();
+    const { data, error } = await createAdminClient().from("time_fix_requests").select("id, employee_id, day, kind, at, minutes, note, status, created_at").eq("status", "pending").order("day").limit(200);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, fixes: (data || []) as TimeFix[] };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+export async function timeFixDecide(id: string, approve: boolean, why = ""): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const v = await manager();
+    const admin = createAdminClient();
+    const { data: f } = await admin.from("time_fix_requests").select("*").eq("id", id).maybeSingle();
+    if (!f || f.status !== "pending") return { ok: false, error: "That fix was already handled." };
+    const now = new Date().toISOString();
+    if (approve && f.kind !== "other") {
+      const at = f.at as string;
+      const note = `From their phone${f.note ? `: "${String(f.note).slice(0, 150)}"` : ""} · approved by ${v.staff?.name || v.email}`;
+      const rows = f.kind === "lunch"
+        ? [{ kind: "break_start", at }, { kind: "break_end", at: new Date(Date.parse(at) + (+f.minutes || 30) * 60000).toISOString() }]
+        : [{ kind: f.kind === "missed_in" ? "in" : "out", at }];
+      for (const r of rows) {
+        const { error } = await admin.from("time_punches").insert({ employee_id: f.employee_id, kind: r.kind, at: r.at, source: "phone fix", note, edited_by: v.email, edited_at: now });
+        if (error) return { ok: false, error: error.message };
+      }
+    }
+    const { error } = await admin.from("time_fix_requests").update({ status: approve ? "approved" : "denied", decided_by: v.staff?.name || v.email, decided_at: now, decision_note: why.slice(0, 300) }).eq("id", id);
+    return error ? { ok: false, error: error.message } : { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}

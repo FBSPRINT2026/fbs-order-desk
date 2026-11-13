@@ -12,6 +12,7 @@ import TimeOffPanel from "@/components/time/TimeOffPanel";
 import TimeSettingsPanel from "@/components/time/TimeSettingsPanel";
 import TimeImport from "@/components/time/TimeImport";
 import TimePayroll from "@/components/time/TimePayroll";
+import TimeFixes from "@/components/time/TimeFixes";
 import type { TimeData } from "@/components/time/types";
 
 /**
@@ -59,6 +60,7 @@ export default function TimePage() {
       <div className="aa-sub tm-tabs" role="tablist" data-toolbar>
         {TABS.filter(([k]) => (k === "import" ? role === "owner" || role === "admin" : boss || (k !== "settings" && k !== "payroll"))).map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => go(k)}>{l}</button>)}
       </div>
+      {d && boss && (tab === "today" || tab === "cards") && <TimeFixes employees={d.employees} />}
       {!d ? <div className="empty">Loading…</div>
         : tab === "cards" ? <TimeCards d={d} />
         : tab === "payroll" && boss ? <TimePayroll d={d} />
