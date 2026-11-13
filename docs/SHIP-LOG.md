@@ -297,3 +297,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 11:29am · 1.3.537 · Nick · Send: a new email by default, never a reply to the last email picked for you; the email it likely answers is offered (one tap). Fix: the schedule assistant's last change didn't build
 - Nov 13 11:32am · 1.3.538 · Nick · Rules: Send starts as a new email
 - Nov 13 11:37am · 1.3.540 · Nick · portal.fbsprint.com/employee (and /employees) opens the crew's phone menu
+- Nov 13 11:47am · 1.3.542 · Nick · Payday time card check on the crew phone: approve hours or ask for a fix; Their check column on the Time Clock

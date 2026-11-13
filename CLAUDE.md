@@ -268,7 +268,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   they're on now (`lib/crewHome.ts`), and a scanned job opens on their view's first tool (`OPENS_ON`: receiving → count
   in, operator → press timer, catcher → post count with where it goes, shipping → Ship) with its tiles in their order
   (`TILES`). The look is "A + B" (light page, one dark card on top, the list with times, tiles, clock buttons). Their
-  time card fixes wait for a manager on the Time Clock (`time_fix_requests`, `timeFixDecide`). New crew tools go
+  time card fixes wait for a manager on the Time Clock (`time_fix_requests`, `timeFixDecide`). **Payday check** (Nick, Nov 13 2026: uAttend's
+  printed sheets, now on the phone): the pay period that just ended is first on their menu for five days after it
+  ends until they answer; "My hours are right" approves it, "Something's wrong" opens a time card fix on the day they
+  tap (`hours` in `lib/crewHome.ts`, `time_card_checks`; the Time Clock's Their check column shows Approved / Fix asked
+  / Not yet). New crew tools go
   through these, never a page of their own; every word has its Spanish in `components/job/lang.tsx`.
   Counting goods in on a phone is one tool, `components/job/PhoneCheckin.tsx` (the shop's phone receiving dashboard opens it
   too, `/j/<number>?v=checkin`): every style on the job listed at the top, the picked one's sizes typed in, and a green

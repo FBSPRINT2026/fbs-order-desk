@@ -421,3 +421,19 @@
 .cr-sec{display:flex;flex-direction:column;gap:6px}
 .cr-sec+.cr-sec{margin-top:6px}
 .cr-sec-h{font-size:12px;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.05em;padding:4px 2px 2px;border-bottom:1px solid var(--line)}
+/* payday: check your hours (Nov 13) */
+.cr-pay{background:var(--ok)!important}
+.cr-htot{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;text-align:center}
+.cr-htot div{background:var(--bg);border-radius:10px;padding:8px 4px}
+.cr-htot b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.cr-htot span{font-size:12px;color:var(--ink-2)}
+.cr-hdays{gap:0;padding-top:4px;padding-bottom:4px}
+.cr-hday{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px 4px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:inherit;text-align:left;width:100%}
+.cr-hday:last-child{border-bottom:0}
+.cr-hday:disabled{opacity:1;cursor:default}
+.cr-hday.pick{cursor:pointer;border-radius:10px}
+.cr-hday.pick:hover,.cr-hday.pick:active{background:color-mix(in srgb,var(--fbs-blue) 10%,var(--surface))}
+.cr-hd{font-weight:800;font-size:14px;line-height:1.2}.cr-hd small{display:block;font-weight:600;color:var(--ink-3);font-size:12px}
+.cr-hp{font-size:14px;color:var(--ink-2);font-variant-numeric:tabular-nums;line-height:1.35}.cr-hp small{display:block;font-size:12.5px}
+.cr-hfix{color:var(--fbs-blue);font-weight:700}.cr-hbad{color:var(--danger);font-weight:700}
+.cr-hh{font-variant-numeric:tabular-nums;font-size:16px}
+.jm-go.cr-hok{background:var(--ok)}

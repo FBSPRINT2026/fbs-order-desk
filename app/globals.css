@@ -3096,6 +3096,7 @@ a.as-ai{text-decoration:none}
 .tmx-tbl .tmx-emp.on td{background:var(--accent-soft)}
 .tmx-ot{color:var(--warn);font-weight:700}
 .tmx-flag{background:var(--danger-soft);color:var(--danger);font-weight:700;font-size:12px;border-radius:99px;padding:2px 9px}
+.tmx-ck.ok{background:color-mix(in srgb,var(--ok) 14%,var(--surface));color:var(--ok);font-weight:700;font-size:12px;border-radius:99px;padding:2px 9px;white-space:nowrap}
 .tmx-detail>td{background:var(--surface-2);padding:10px!important}
 .tmx-days{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 .tmx-day{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:4px}

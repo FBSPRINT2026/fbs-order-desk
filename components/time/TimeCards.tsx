@@ -19,6 +19,8 @@ export default function TimeCards({ d }: { d: TimeData }) {
   const [offs, setOffs] = useState<TimeOff[]>([]);
   const [pay, setPay] = useState<Record<string, { rate: number | null; salary: number | null }>>({});
   const [approved, setApproved] = useState<{ approved_at: string | null; approved_by: string | null } | null>(null);
+  // what each person said about their own hours on their phone (payday check, Nov 13 2026)
+  const [checks, setChecks] = useState<Record<string, { status: string; decided_at: string }>>({});
   // ?who=<employee> (from the issue bubble's "Time card"): opens that person, on the period with today in it
   const who = useSearchParams().get("who");
   const [open, setOpen] = useState<string | null>(who);
@@ -40,6 +42,8 @@ export default function TimeCards({ d }: { d: TimeData }) {
       seePay ? sb.from("employee_pay").select("employee_id, rate, salary") : Promise.resolve({ data: [] }),
     ]);
     setPunches((p || []) as Punch[]); setOffs((o || []) as TimeOff[]); setApproved(ap || null);
+    const ck = await sb.from("time_card_checks").select("employee_id, status, decided_at").eq("period_start", period.start);
+    setChecks(Object.fromEntries(((ck.data || []) as { employee_id: string; status: string; decided_at: string }[]).map((x) => [x.employee_id, x])));
     setPay(Object.fromEntries(((pr.data || []) as { employee_id: string; rate: number | null; salary: number | null }[]).map((x) => [x.employee_id, { rate: x.rate, salary: x.salary }])));
   }, [period.start, period.end, seePay]);
   useEffect(() => { load(); }, [load]);
@@ -107,7 +111,7 @@ export default function TimeCards({ d }: { d: TimeData }) {
       <section className="db-card db-blue">
         {punches === null ? <div className="db-empty">Loading…</div> : !cards.length ? <div className="db-empty">No hours in this period.</div> : (
           <table className="rv-tbl tmx-tbl">
-            <thead><tr><th>Employee</th><th className="r">Regular</th><th className="r">Overtime</th><th className="r">Breaks</th><th className="r">Time Off</th><th className="r">Total Paid</th><th>Flags</th></tr></thead>
+            <thead><tr><th>Employee</th><th className="r">Regular</th><th className="r">Overtime</th><th className="r">Breaks</th><th className="r">Time Off</th><th className="r">Total Paid</th><th>Their check</th><th>Flags</th></tr></thead>
             <tbody>{cards.map(({ e, c }) => (
               <Fragment key={e.id}>
                 <tr className={"tmx-emp" + (open === e.id ? " on" : "")} onClick={() => setOpen(open === e.id ? null : e.id)}>
@@ -117,10 +121,11 @@ export default function TimeCards({ d }: { d: TimeData }) {
                   <td className="r num">{hm(c.breaks)}</td>
                   <td className="r num">{dec(c.pto + c.sick + c.holiday)}</td>
                   <td className="r num"><b>{dec(c.regular + c.overtime + c.pto + c.sick + c.holiday)}</b></td>
+                  <td>{checks[e.id]?.status === "approved" ? <span className="tmx-ck ok">Approved</span> : checks[e.id]?.status === "fix_asked" ? <span className="tmx-flag">Fix asked</span> : <span className="faint">Not yet</span>}</td>
                   <td>{c.issues.length ? <span className="tmx-flag">{c.issues.length} to fix</span> : <span className="faint">—</span>}</td>
                 </tr>
                 {open === e.id && (
-                  <tr className="tmx-detail"><td colSpan={7}>
+                  <tr className="tmx-detail"><td colSpan={8}>
                     <PunchList e={e} c={c} days={days} punches={punches || []} otWeekly={d.settings.otWeekly} bare onEdit={(punch, day, kind) => setEdit({ emp: e.id, punch, day, kind })} />
                   </td></tr>
                 )}

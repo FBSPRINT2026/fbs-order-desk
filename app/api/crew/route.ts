@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { jobActor } from "@/lib/jobAccess";
-import { recordPunch } from "@/lib/timeclockServer";
+import { recordPunch, timeSettings } from "@/lib/timeclockServer";
+import { periodOf } from "@/lib/timeclock";
 import type { Punch } from "@/lib/timeclock";
 
 export const runtime = "nodejs";
@@ -55,6 +56,19 @@ export async function POST(req: Request) {
     if (kind === "other" && !note.trim()) return NextResponse.json({ error: "Say what needs fixing." }, { status: 400 });
     const { error } = await admin.from("time_fix_requests").insert({ employee_id: who.employeeId, day, kind, at, minutes, note });
     if (error) return NextResponse.json({ error: /time_fix_requests/.test(error.message) ? "Time card fixes aren't set up in the database yet. Tell the office." : error.message }, { status: 500 });
+    // a fix asked on a day of a pay period: that period's check says so until the fix is decided (payday, Nov 13)
+    const per = periodOf(await timeSettings(admin), day);
+    await admin.from("time_card_checks").upsert({ employee_id: who.employeeId, period_start: per.start, period_end: per.end, status: "fix_asked", decided_at: new Date().toISOString() }, { onConflict: "employee_id,period_start" });
+    return NextResponse.json({ ok: true });
+  }
+  // payday: "My hours are right" for a pay period (Nick, Nov 13 2026: uAttend's printed time card sheets, on the phone)
+  if (b.action === "hours_ok") {
+    const start = /^\d{4}-\d{2}-\d{2}$/.test(String(b.start || "")) ? String(b.start) : "";
+    if (!start) return NextResponse.json({ error: "Which pay period?" }, { status: 400 });
+    const per = periodOf(await timeSettings(admin), start);
+    if (per.start !== start) return NextResponse.json({ error: "That isn't a pay period." }, { status: 400 });
+    const { error } = await admin.from("time_card_checks").upsert({ employee_id: who.employeeId, period_start: per.start, period_end: per.end, status: "approved", hours: Math.round((+b.hours || 0) * 100) / 100, decided_at: new Date().toISOString() }, { onConflict: "employee_id,period_start" });
+    if (error) return NextResponse.json({ error: /time_card_checks/.test(error.message) ? "Approving hours isn't set up in the database yet. Tell the office." : error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
   return NextResponse.json({ error: "Unknown action." }, { status: 400 });

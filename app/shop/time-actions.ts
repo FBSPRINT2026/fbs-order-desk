@@ -283,6 +283,13 @@ export async function timeFixDecide(id: string, approve: boolean, why = ""): Pro
       }
     }
     const { error } = await admin.from("time_fix_requests").update({ status: approve ? "approved" : "denied", decided_by: v.staff?.name || v.email, decided_at: now, decision_note: why.slice(0, 300) }).eq("id", id);
-    return error ? { ok: false, error: error.message } : { ok: true };
+    if (error) return { ok: false, error: error.message };
+    // the fix decided, their payday check for that period waits for them again: they look at the hours now and approve
+    // (Nick, Nov 13: the time card check on the phone), once nothing else is waiting on that period
+    const [{ periodOf }, { timeSettings }] = await Promise.all([import("@/lib/timeclock"), import("@/lib/timeclockServer")]);
+    const per = periodOf(await timeSettings(admin), String(f.day));
+    const { data: more } = await admin.from("time_fix_requests").select("id").eq("employee_id", f.employee_id).eq("status", "pending").gte("day", per.start).lte("day", per.end).limit(1);
+    if (!(more || []).length) await admin.from("time_card_checks").delete().eq("employee_id", f.employee_id).eq("period_start", per.start).eq("status", "fix_asked");
+    return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
