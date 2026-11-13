@@ -286,6 +286,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   right (Goods / Printing / On the board; Hide folds it to one line, remembered: `.mky`, Nick Nov 12). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
   tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
+  An order On hold (art, receiving, the customer, QC; a payment hold keeps it off the schedule entirely) still shows in
+  Ready To Schedule and on the press with an "On hold · <reason>" tag, isn't counted as tight or late, and Make The
+  Schedule never books it; drag it onto a press to book it anyway (Nick, Nov 12, #50013).
   Jobs back to back show as one group only when they're one run: the same artwork and the same in-hands date (`oneRun`;
   Nick, Nov 11: same customer alone is never a group).
   An order's production date is the day it runs (Nine18's weekly AMS run; Nick, Nov 11): Re-plan and Ready To Schedule

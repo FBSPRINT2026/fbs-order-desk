@@ -251,3 +251,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:38pm · 1.3.455 · Nick · Schedule: the Issue button's small words are white, readable on the red
 - Nov 12 8:43pm · 1.3.456 · Nick · Schedule Issue: mark Missing / Reject / Reprint with one click; how many is optional (counted later)
 - Nov 12 8:43pm · 1.3.457 · Nick · Rules: Issue count optional
+- Nov 12 8:45pm · 1.3.458 · Nick · Schedule: an order On hold shows an On hold tag in Ready To Schedule and on the press, isn't counted late, and Make The Schedule skips it

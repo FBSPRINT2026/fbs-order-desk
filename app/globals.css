@@ -22753,6 +22753,7 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mjx-tag{display:inline-block;margin:0 4px;padding:0 6px;border-radius:999px;font:700 10.5px var(--body);line-height:16px;white-space:nowrap;vertical-align:1px;border:1px solid}
 .mjx-tag.missing{background:color-mix(in srgb,var(--warn) 14%,var(--surface,#fff));color:color-mix(in srgb,var(--warn) 70%,var(--ink));border-color:color-mix(in srgb,var(--warn) 40%,var(--surface,#fff))}
 .mjx-tag.reject,.mjx-tag.reprint{background:color-mix(in srgb,var(--danger) 10%,var(--surface,#fff));color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--surface,#fff))}
+.mjx-tag.hold{background:color-mix(in srgb,var(--ink-3) 12%,var(--surface,#fff));color:var(--ink-2);border-color:color-mix(in srgb,var(--ink-3) 40%,var(--surface,#fff))}
 .mrb-iss{width:100%;margin-top:6px;height:36px;border:0;border-radius:6px;background:var(--danger);color:#fff;font:800 13.5px var(--body);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
 .mrb-iss small{font-weight:600;font-size:12px;color:#fff;margin-left:4px}.mrb-iss .mrc-i{width:15px;height:15px}
 .mrb-iss.on{box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 25%,transparent)}
