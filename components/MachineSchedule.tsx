@@ -111,6 +111,7 @@ type Hold = { id: string; name: string; customer: string; spec: QuickJob | Recor
 /** Hold the spot from a quote: what the order page asks the hidden schedule to place */
 export type HoldAsk = { orderId: string; number: number; name: string; customer: string; spec: QuickJob; due: string; art: string; onDone: (r: { ok: boolean; msg: string }) => void };
 type Extra = { id: string; machine: string; crew_id: string | null; day: string; start_min: number; end_min: number; note: string };
+type AskPlan = { note: string; book: { job: string; machine: string; day: string }[]; unbook: { slot: string }[]; downtime: { machine: string; day: string; from?: number | null; to?: number | null; note?: string }[] };
 type DayOff = { id: string; crew_id: string | null; machine: string | null; day: string; note: string; start_min: number | null; end_min: number | null; capacity: number | null; employee: string };
 
 const TZ = "America/Chicago";
@@ -480,7 +481,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [trc, setTrc] = useState<{ k: string; x: number; y: number; sub?: "printed" } | null>(null);
   const [holdFor, setHoldFor] = useState<string | null>(null);
   // the schedule's assistant (Nick, Nov 13: "add all Dear Heart jobs to the schedule for Monday")
-  const [askQ, setAskQ] = useState(""), [askBusy, setAskBusy] = useState(false), [askPlan, setAskPlan] = useState<{ note: string; rows: { k: string; machine: string; day: string }[] } | null>(null);
+  const [askQ, setAskQ] = useState(""), [askBusy, setAskBusy] = useState(false), [askPlan, setAskPlan] = useState<AskPlan | null>(null);
   // kinds of order (Nov 11, Nick: "distinguish… what's a cart order from Cedar Promos, what's an All My Sons… order, and
   // what's a regular order… hide the cart orders and… All My Sons… so I can just see the regular"): a customer's Create
   // order trainings (their when-words in the job's name) are its kinds; a job none of them names is Regular. Hidden kinds
@@ -1112,32 +1113,46 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     setMsg(`#${t.job.number} marked printed: the order is now ${ST[next as StatusKey].label}.`);
     load();
   }
-  /** the assistant's plan, booked like Make The Schedule (late jobs first on their day; today from now on) */
-  async function bookPlan(rows: { k: string; machine: string; day: string }[]) {
-    const pos: Record<string, number> = {};
-    const ins = rows.map((r) => { const t = tray.find((x) => x.job.key + x.need.type === r.k), m = s!.machines.find((x) => x.id === r.machine); if (!t || !m || !fits(t.need, m)) return null;
+  /**
+   * The schedule's assistant (Nick, Nov 13: "a little schedule system that he talks to"): what was asked becomes a plan
+   * of book / take off / downtime steps (app/api/schedule/assist), shown first and done only on Do it. Jobs and bookings
+   * go by short ids (j1, s1) so nothing is misread; the server keeps only steps on real jobs, presses and days.
+   */
+  const askRefs = useRef<{ jobs: Map<string, (typeof tray)[number]>; slots: Map<string, Card> }>({ jobs: new Map(), slots: new Map() });
+  async function doPlan(p: AskPlan) {
+    const sb = createClient(), pos: Record<string, number> = {}, done: string[] = [];
+    const ins = p.book.map((r) => { const t = askRefs.current.jobs.get(r.job), m = s!.machines.find((x) => x.id === r.machine); if (!t || !m || !fits(t.need, m)) return null;
       const k = m.id + r.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === m.id && c.day === r.day).length;
       return { ...ownerCols(t.job), machine: m.id, day: r.day, minutes: estimate(s!, t.need, m).minutes, position: pos[k]++, start_min: notBefore(r.day, null), kind: t.need.type, label: t.need.label, source: "assistant", locations: locsFor(t.job, t.need) }; }).filter(Boolean);
-    if (!ins.length) { setMsg("Nothing to book."); return; }
-    const r = await createClient().from("production_slots").insert(ins);
-    setMsg(r.error ? r.error.message : `Booked ${ins.length} job${ins.length === 1 ? "" : "s"}.`);
+    if (ins.length) { const r = await sb.from("production_slots").insert(ins); if (r.error) { setMsg(r.error.message); return; } done.push(`booked ${ins.length}`); }
+    const off = p.unbook.map((r) => askRefs.current.slots.get(r.slot)).filter((c): c is Card => !!c && !!c.slot && c.slot.status === "scheduled").map((c) => c.slot!.id);
+    if (off.length) { const r = await sb.from("production_slots").delete().in("id", off); if (r.error) { setMsg(r.error.message); return; } done.push(`took ${off.length} back to Ready To Schedule`); }
+    const dn = p.downtime.map((d) => ({ machine: d.machine, crew_id: null, day: d.day, start_min: d.from ?? null, end_min: d.to ?? null, capacity: 0, employee: "", note: d.note || "Out", created_by: me.email }));
+    if (dn.length) { const r = await sb.from("production_days_off").insert(dn); if (r.error) { setMsg(r.error.message); return; } done.push(`${dn.length} downtime${dn.length === 1 ? "" : "s"} added`); }
+    setMsg(done.length ? `Done: ${done.join(", ")}.` : "Nothing to do.");
     setAskPlan(null); setAskQ(""); load();
   }
-  async function askSchedule() {
-    const q = askQ.trim(); if (!q || !s) return;
+  async function askSchedule(q0?: string) {
+    const q = (q0 ?? askQ).trim(); if (!q || !s) return;
+    if (q0) setAskQ(q0);
     setAskBusy(true); setAskPlan(null);
     const days: string[] = []; for (let d = today, g = 0; days.length < 15 && g < 40; g++, d = addDay(d, 1)) if (machines.some((m) => shiftOn(m, d))) days.push(d);
+    const jm = new Map<string, (typeof tray)[number]>(), sm = new Map<string, Card>();
+    trayV.forEach((t, i) => jm.set("j" + (i + 1), t));
+    cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && c.day <= days[days.length - 1]).forEach((c, i) => sm.set("s" + (i + 1), c));
+    askRefs.current = { jobs: jm, slots: sm };
     const body = {
-      say: q, today,
+      say: q, today, now: clockLong(now.min),
       days: days.map((d) => ({ day: d, name: dayLbl(d) })),
-      presses: machines.map((m) => ({ id: m.id, name: m.name, crew: crewOf(m)?.leader || "", type: m.type, load: Object.fromEntries(days.slice(0, 10).map((d) => [d, Math.round(used(m, d))])), shift: Object.fromEntries(days.slice(0, 10).map((d) => { const sh = shiftOn(m, d); return [d, sh ? sh[1] - sh[0] : 0]; })) })),
-      jobs: trayV.map((t) => ({ k: t.job.key + t.need.type, number: t.job.number, customer: t.job.customer, name: t.job.name, due: t.job.due, prod: t.job.prod || null, type: t.need.type, what: t.need.label, minutes: Math.round(t.sug?.minutes || 0), hold: t.job.onHold || null, counted: t.job.kind === "o" && goodsSt.get(t.job.id) === "received", fits: machines.filter((m) => fits(t.need, m)).map((m) => m.id) })),
+      presses: machines.map((m) => ({ id: m.id, name: m.name, crew: crewOf(m)?.leader || "", type: m.type, load: Object.fromEntries(days.slice(0, 10).map((d) => [d, Math.round(used(m, d))])), shift: Object.fromEntries(days.slice(0, 10).map((d) => { const sh = shiftOn(m, d); return [d, sh ? `${clock(sh[0])}-${clock(sh[1])} (${sh[1] - sh[0]} min)` : "off"]; })) })),
+      jobs: [...jm].map(([id, t]) => ({ id, number: t.job.number, customer: t.job.customer, name: t.job.name, due: t.job.due, prod: t.job.prod || null, type: t.need.type, what: t.need.label, minutes: Math.round(t.sug?.minutes || 0), hold: t.job.onHold || null, counted: t.job.kind === "o" && goodsSt.get(t.job.id) === "received", fits: machines.filter((m) => fits(t.need, m)).map((m) => m.id) })),
+      booked: [...sm].map(([id, c]) => ({ id, number: c.job.number, customer: c.job.customer, name: c.job.name, machine: c.machine.id, day: c.day, locked: c.slot?.locked || null })),
     };
     const r = await fetch("/api/schedule/assist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: "Couldn't reach the server." };
     setAskBusy(false);
     if (!r?.ok || j.error) { setMsg(j.error || "The assistant couldn't answer."); return; }
-    setAskPlan({ note: j.note || "", rows: j.rows || [] });
+    setAskPlan({ note: j.note || "", book: j.book || [], unbook: j.unbook || [], downtime: j.downtime || [] });
   }
   /** jobs dragged off the calendar back to Ready To Schedule (not started ones only): their bookings go, the jobs wait again */
   async function unbookMany(cs: Card[]) {
@@ -3097,16 +3112,27 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             {trayOpen && tray.length > 0 && <div className="msa">
               <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
                 <span className="msa-ic" aria-hidden>✦</span>
-                <input value={askQ} onChange={(e) => setAskQ(e.target.value)} placeholder="Ask the schedule: put all Dear Heart jobs on Monday, Kelsey's press…" aria-label="Ask the schedule's assistant" />
+                <input value={askQ} onChange={(e) => setAskQ(e.target.value)} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press · Miguel is out Monday…" aria-label="Ask the schedule's assistant" />
                 <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
               </form>
-              {askPlan && <div className="msa-plan">
+              {askPlan && (() => { const n = askPlan.book.length + askPlan.unbook.length + askPlan.downtime.length, mn = (id: string) => { const m = machines.find((x) => x.id === id); return m ? crewOf(m)?.leader || shortName(m) : id; }, dl = (d: string) => dayLbl(d).split(",").slice(0, 2).join(","); return <div className="msa-plan">
                 {askPlan.note && <p>{askPlan.note}</p>}
-                {askPlan.rows.length > 0 ? <>
-                  <ul>{askPlan.rows.map((r) => { const t = tray.find((x) => x.job.key + x.need.type === r.k), m = machines.find((x) => x.id === r.machine); return t && m ? <li key={r.k}><b>#{t.job.number}</b> <span data-notranslate>{t.job.customer}{t.job.name ? ` · ${t.job.name}` : ""}</span> → {crewOf(m)?.leader || shortName(m)} · {dayLbl(r.day).split(",").slice(0, 2).join(",")}</li> : null; })}</ul>
-                  <div className="msa-a"><button type="button" className="btn sm primary" onClick={() => void bookPlan(askPlan.rows)}>Book {askPlan.rows.length} job{askPlan.rows.length === 1 ? "" : "s"}</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></div>
-                </> : <div className="msa-a"><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button></div>}
-              </div>}
+                {n > 0 && <ul>
+                  {askPlan.book.map((r) => { const t = askRefs.current.jobs.get(r.job); return t ? <li key={"b" + r.job}>Book <b>#{t.job.number}</b> <span data-notranslate>{t.job.customer}{t.job.name ? ` · ${t.job.name}` : ""}</span> → {mn(r.machine)} · {dl(r.day)}</li> : null; })}
+                  {askPlan.unbook.map((r) => { const c = askRefs.current.slots.get(r.slot); return c ? <li key={"u" + r.slot}>Take <b>#{c.job.number}</b> <span data-notranslate>{c.job.customer}</span> off {mn(c.machine.id)} · {dl(c.day)}, back to Ready To Schedule</li> : null; })}
+                  {askPlan.downtime.map((d, i) => <li key={"d" + i}>Downtime on {mn(d.machine)} · {dl(d.day)}{d.from != null && d.to != null ? ` ${clock(d.from)}–${clock(d.to)}` : " (all day)"}{d.note ? ` · ${d.note}` : ""}</li>)}
+                </ul>}
+                <div className="msa-a">{n > 0 ? <><button type="button" className="btn sm primary" onClick={() => void doPlan(askPlan)}>Do it</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></> : <button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button>}</div>
+              </div>; })()}
+              {!askPlan && !askBusy && (() => {
+                // ideas to tap, from what's there now (Nick, Nov 13: "add all Dear Hearts… all jobs that are counted… clear Monday for Miguel, he's out")
+                const by = new Map<string, number>(); for (const t of trayV) if (t.job.customer && t.job.kind === "o") by.set(t.job.customer, (by.get(t.job.customer) || 0) + 1);
+                const top = [...by].sort((a, b) => b[1] - a[1])[0]?.[0];
+                const counted = trayV.filter((t) => t.job.kind === "o" && goodsSt.get(t.job.id) === "received").length;
+                const nx = (() => { let d = addDay(today, 1); for (let g = 0; g < 7 && !machines.some((m) => shiftOn(m, d)); g++) d = addDay(d, 1); return d; })(), lead = machines.map((m) => crewOf(m)?.leader).find(Boolean);
+                const ideas = [top && `Book all ${top} jobs`, counted && `Book every job that's counted`, lead && `${lead} is out ${dayLbl(nx).split(",")[0]}: clear the day`, "Book the late jobs first thing tomorrow"].filter(Boolean) as string[];
+                return <div className="msa-ideas">{ideas.map((x) => <button key={x} type="button" className="chip" onClick={() => void askSchedule(x)}>{x}</button>)}</div>;
+              })()}
             </div>}
             {trc && (() => { const t = tray.find((x) => x.job.key + x.need.type === trc.k); if (!t) return null; const okM = machines.filter((m) => fits(t.need, m)); return (
               <>

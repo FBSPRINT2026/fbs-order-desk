@@ -21850,6 +21850,8 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msa-plan p{margin:0 0 6px;color:var(--ink)}
 .msa-plan ul{margin:0 0 8px;padding-left:18px;display:flex;flex-direction:column;gap:2px}
 .msa-a{display:flex;gap:6px;flex-wrap:wrap}
+.msa-ideas{display:flex;gap:6px;flex-wrap:wrap}
+.msa-ideas .chip{font-size:12.5px}
 .msr-rc-bg{position:fixed;inset:0;z-index:60}
 .msr-rc{position:fixed;z-index:61;min-width:240px;max-width:320px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 8px 24px rgba(20,29,43,.2);padding:6px;display:flex;flex-direction:column}
 .msr-rc-h{padding:6px 8px;font-size:13.5px;border-bottom:1px solid var(--line-2);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
