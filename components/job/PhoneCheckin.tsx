@@ -9,7 +9,7 @@ import PhotoButtons from "@/components/PhotoButtons";
  * Counting a job's goods in on a phone (Count in v2; Nick, Nov 13 2026: "a selector up at the top… all the different line
  * items… select and then count in… a master button on top… hold it on your phone for a second… I don't wanna
  * accidentally count in jobs"). Every style / color on the job is listed at the top; pick one and type each size, or
- * "All 150 of these here". Holding the green button a full second counts everything in (letting go early does nothing).
+ * "All 150 of these here". Holding the green button 3 seconds counts everything in (letting go early does nothing).
  * A short count is a problem on its own; damaged or wrong items get a reason and how many. Then a review: boxes, a note,
  * photos, Check In.
  * Leaving halfway asks first (Nick, Nov 13, #40382): save what's counted to finish later (anyone picks it up, on any
@@ -24,6 +24,7 @@ const sz = (s: string) => (s === "OTHER" ? "Other" : s);
 /** A count in progress: the job menu asks it before leaving the count (Main menu, ← Job menu, the phone's Back). */
 export const countGuard: { busy: () => boolean; ask: (then: () => void) => void } = { busy: () => false, ask: (then) => then() };
 
+const HOLD_MS = 3000;
 const ago = (iso: string) => { const d = new Date(iso); return isNaN(+d) ? "" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
 
 export default function PhoneCheckin({ job, onDone, onLeave }: { job: CheckJob; onDone: (c: CheckinRow) => void; onLeave?: () => void }) {
@@ -96,7 +97,7 @@ export default function PhoneCheckin({ job, onDone, onLeave }: { job: CheckJob; 
     if (after) { setPick(after.key); setAsking(false); scrollTo(0, 0); } else setReview(true);
   }
 
-  // press and hold a full second: everything (or the rest) is here
+  // press and hold 3 seconds: everything (or the rest) is here (Nick, Nov 13: one second was too quick)
   const [holding, setHolding] = useState(false); const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const holdStart = (e?: { preventDefault: () => void }) => {
     e?.preventDefault(); if (timer.current) return;
@@ -106,9 +107,9 @@ export default function PhoneCheckin({ job, onDone, onLeave }: { job: CheckJob; 
       setGot((g) => ({ ...Object.fromEntries(cells.map((x) => [x.k, x.expected])), ...g }));
       try { navigator.vibrate?.(40); } catch { /* not on every phone */ }
       setReview(true); scrollTo(0, 0);
-    }, 1000);
+    }, HOLD_MS);
   };
-  const holdStop = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; setHolding(false); setErr(t("Hold it a full second to count all in.")); } };
+  const holdStop = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; setHolding(false); setErr(t("Hold it the full 3 seconds to count all in.")); } };
 
   async function save() {
     if (counted < cells.length) { setErr(t("Count every size first: {0} left (tap a number to take the full amount).", cells.length - counted)); return; }
@@ -147,6 +148,9 @@ export default function PhoneCheckin({ job, onDone, onLeave }: { job: CheckJob; 
   if (review) return (
     <>
       {leaving}
+      {/* the Check In button first, right where the hold left them (Nick, Nov 13: "check-in should be at the very top") */}
+      {err && <div className="jm-err">{err}</div>}
+      <button type="button" className={"jm-go" + (problems.length ? " warn" : "")} disabled={busy} onClick={save}>{busy ? t("Saving…") : problems.length ? (problems.length === 1 ? t("Check In with 1 Problem") : t("Check In with {0} Problems", problems.length)) : t("Check In")}</button>
       <div className="jm-card">
         <div className="jm-cardh"><b>{t("Check what you counted")}</b><span className={"jm-ck-tot" + (pcs === expected && !problems.length ? " ok" : " off")}>{pcs} / {expected}</span></div>
         {items.map((i) => {
@@ -173,7 +177,6 @@ export default function PhoneCheckin({ job, onDone, onLeave }: { job: CheckJob; 
         <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("Anything about this delivery (boxes crushed, came on the S&S truck…)")} />
         {photos.length > 0 && <div className="jm-faint">{photos.length === 1 ? t("1 photo added") : t("{0} photos added", photos.length)}</div>}
         <div className="row" style={{ gap: 8 }}><PhotoButtons multiple className="jm-ghost" take={t("📷 Take photos")} choose={t("Choose photos")} onFiles={(fs) => setPhotos((p) => [...p, ...fs].slice(0, 8))} /></div>
-        {err && <div className="jm-err">{err}</div>}
         <button type="button" className={"jm-go" + (problems.length ? " warn" : "")} disabled={busy} onClick={save}>{busy ? t("Saving…") : problems.length ? (problems.length === 1 ? t("Check In with 1 Problem") : t("Check In with {0} Problems", problems.length)) : t("Check In")}</button>
       </div>
       {stop}
@@ -194,7 +197,7 @@ export default function PhoneCheckin({ job, onDone, onLeave }: { job: CheckJob; 
         onKeyDown={(e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) holdStart(e); }} onKeyUp={(e) => { if (e.key === " " || e.key === "Enter") holdStop(); }}>
         <span className="ci2-fill" />
         <span className="ci2-ht"><b>{holding ? t("Keep holding…") : counted ? t("The rest are here?") : t("Everything's here?")}</b>
-          <small>{counted ? t("Hold 1 second to count the other {0} in", rest) : t("Hold 1 second to count all {0} in", expected)}</small></span>
+          <small>{counted ? t("Hold 3 seconds to count the other {0} in", rest) : t("Hold 3 seconds to count all {0} in", expected)}</small></span>
       </button>}
       <div className="ci2-lbl">{t("Items on this job · {0}", items.length)}</div>
       <div className="ci2-items">{items.map((i) => {

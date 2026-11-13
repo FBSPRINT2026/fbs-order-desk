@@ -270,7 +270,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   through these, never a page of their own; every word has its Spanish in `components/job/lang.tsx`.
   Counting goods in on a phone is one tool, `components/job/PhoneCheckin.tsx` (the shop's phone receiving dashboard opens it
   too, `/j/<number>?v=checkin`): every style on the job listed at the top, the picked one's sizes typed in, and a green
-  button held a full second to count everything in (Nick, Nov 13). Leaving a count halfway, on the phone or the desk's
+  button held 3 seconds to count everything in, then Check In first on the review (Nick, Nov 13). Leaving a count halfway, on the phone or the desk's
   `CheckinModal`, always asks: save what's counted to finish later (anyone picks it up: `/api/jobs/checkin/draft`) or
   reset to uncounted. Receiving lists every open order of ours whatever its due date (#40382, due last week, was missing).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
