@@ -276,3 +276,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 9:30am · 1.3.496 · Nick · Receiving: every open job shows and is searchable, not just this week's (late jobs like #40382 were missing)
 - Nov 13 9:40am · 1.3.498 · Nick · Count in v2 on the phone: pick a style, type its sizes, hold 1 second to count all in; leaving halfway asks to save for later or reset to uncounted (phone and desk)
 - Nov 13 9:43am · 1.3.499 · Nick · Rules: the phone count in and the halfway question
+- Nov 13 9:49am · 1.3.501 · Nick · Crew phones: the view comes from the department when nobody picked one (Receiving opens count in); count in reads right in dark mode; stronger gray for second lines

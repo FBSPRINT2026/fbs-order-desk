@@ -2,7 +2,7 @@
  * What each person sees on their phone (Nick, Nov 13 2026: "depending on whose code is put in… you have different views").
  * Set per employee on Employees → Phone Logins, kept in the shop's settings (`settings.data.phoneViews`, by employee id:
  * the main view plus any extras, "receiving+delivery"); when it isn't set, their place on a press crew says it
- * (Production settings: operator, assistant, catcher), else Office (everything a phone login can do).
+ * (Production settings: operator, assistant, catcher), else their department, else Office (everything a phone login can do).
  * Browser-safe: the job menu and the crew home both read it.
  */
 export type CrewView = "receiving" | "press" | "assist" | "catcher" | "fulfillment" | "shipping" | "office";
@@ -35,8 +35,20 @@ export const phoneViewsOf = (settingsData: unknown): Record<string, string> => {
 type CrewLike = { id: string; members?: { operator?: string | null; assistant?: string | null; catcher?: string | null } };
 type MachineLike = { id: string; name: string; crew?: string | null };
 
-/** the view set by hand, else the person's place on a press crew, else Office */
-export function crewViewOf(set: string | null | undefined, employeeId: string, crews: CrewLike[]): CrewView {
+/**
+ * The view set by hand, else the person's place on a press crew, else their department on the Time Clock (Nick, Nov 13
+ * 2026: Julissa in Receiving scanned #40380 and got every tile, the Office view, because nobody had picked her view by
+ * hand), else Office.
+ */
+export function viewOfDepartment(dept: string | null | undefined): CrewView | null {
+  const d = String(dept || "").toLowerCase();
+  if (/receiv/.test(d)) return "receiving";
+  if (/fulfil/.test(d)) return "fulfillment";
+  if (/ship/.test(d)) return "shipping";
+  if (/office|admin|sales|account/.test(d)) return "office";
+  return null;
+}
+export function crewViewOf(set: string | null | undefined, employeeId: string, crews: CrewLike[], dept?: string | null): CrewView {
   const main = parseViews(set).main;
   if (main) return main;
   for (const c of crews) {
@@ -44,7 +56,7 @@ export function crewViewOf(set: string | null | undefined, employeeId: string, c
     if (c.members?.assistant === employeeId) return "assist";
     if (c.members?.catcher === employeeId) return "catcher";
   }
-  return "office";
+  return viewOfDepartment(dept) || "office";
 }
 
 /** the presses this person works on (their crew's machines) */

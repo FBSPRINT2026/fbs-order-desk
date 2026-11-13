@@ -48,7 +48,7 @@ export default function TeamApp({ d }: { d: TeamData }) {
           <div className="tbl-wrap"><table className="tbl">
             <thead><tr><th>#</th><th>Name</th><th>Phone view</th><th>Sign in</th></tr></thead>
             <tbody>{list.map((e) => {
-              const auto = crewViewOf(null, e.id, crews);
+              const auto = crewViewOf(null, e.id, crews, e.department);
               const label = (v: CrewView) => CREW_VIEWS.find((x) => x.id === v)?.label || v;
               return (
                 <tr key={e.id}>
@@ -56,7 +56,7 @@ export default function TeamApp({ d }: { d: TeamData }) {
                   <td><b>{fullName(e)}</b><div className="sub">{e.department || "—"}{e.lang === "es" ? " · Español" : ""}</div></td>
                   <td>{(() => { const pv = parseViews(views[e.id]); const save = (main: CrewView | null, also: CrewExtra[]) => setView(e.id, joinViews(main, also)); return <>
                     <select value={pv.main || ""} disabled={saving === e.id} onChange={(x) => save((x.target.value || null) as CrewView | null, pv.also)} aria-label={`Phone view for ${fullName(e)}`}>
-                      <option value="">From their press crew ({label(auto)})</option>
+                      <option value="">From their crew or department ({label(auto)})</option>
                       {CREW_VIEWS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                     </select>
                     {pv.main && <div className="sub" style={{ display: "flex", gap: 10, marginTop: 4 }}>{CREW_EXTRAS.map((x) => <label key={x.id} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={pv.also.includes(x.id)} onChange={(ev) => save(pv.main, ev.target.checked ? [...pv.also, x.id] : pv.also.filter((y) => y !== x.id))} />Also {x.label}</label>)}</div>}

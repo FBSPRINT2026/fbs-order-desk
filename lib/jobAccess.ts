@@ -36,7 +36,7 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
   if (e) {
     const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
     const set = phoneViewsOf(st?.data)[e.id] || e.phone_view;
-    const view = crewViewOf(set, e.id, mergeProduction((st?.data as { production?: unknown } | null)?.production).crews);
+    const view = crewViewOf(set, e.id, mergeProduction((st?.data as { production?: unknown } | null)?.production).crews, e.department);
     // shipping (rates, labels) is staff-only for now: a phone login sees where the job goes, not the Ship tool
     const who: JobActor = { kind: "employee", name: `${e.first_name || ""} ${e.last_name || ""}`.trim() || `#${e.code}`, email: "", employeeId: e.id, perms: null, can: { ship: false, checkin: true, open: false }, view, also: parseViews(set).also };
     if (net.configured && !net.on) return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false };
