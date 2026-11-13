@@ -170,6 +170,20 @@ function tidyPunches<P extends { kind: string; at: string }>(ps: P[]): P[] {
   }
   return out;
 }
+/** a punch the office put in or changed (a fix, a time typed by hand): "fixed by the office" on the time card */
+export const punchFixed = (p: { source?: string | null; original_at?: string | null; edited_by?: string | null }) => /manual|fix/i.test(String(p.source || "")) || !!p.original_at || !!p.edited_by;
+
+/**
+ * Each day's punches the way the time card counts them (rounded, doubles dropped, a four-punch day's middle two as lunch):
+ * the printed time card's In / Lunch out / Lunch in / Out (Nick, Nov 13 2026: a time card for everyone to sign).
+ */
+export function cardPunches(s: TimeSettings, employeeId: string, punchesIn: Punch[]): Record<string, Punch[]> {
+  const ps = tidyPunches(withLunch(punchesIn.filter((p) => !p.voided && p.employee_id === employeeId)).map((p) => ({ ...p, at: round(p.at, s.rounding) })).sort((a, b) => a.at.localeCompare(b.at) || ORDER[a.kind] - ORDER[b.kind]));
+  const out: Record<string, Punch[]> = {};
+  for (const p of ps) (out[localDay(p.at)] ||= []).push(p);
+  return out;
+}
+
 export function timecard(s: TimeSettings, employeeId: string, punchesIn: Punch[], offs: TimeOff[], start: string, end: string, now = new Date().toISOString()): Card {
   // the same punch twice (the clock sends a double, or a fix adds one that's already there: Sonia's Nov 9 had three
   // 6:12 PM outs, so "out with no in" never went away however it was fixed; Nov 11, Jose): one punch

@@ -304,3 +304,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 12:15pm · 1.3.546 · Nick · Migration 314 (owner-only employees) saved, not applied yet: waits for Nick's OK
 - Nov 13 12:25pm · 1.3.547 · Nick · Schedule AI assistant: microphone button; say it, tap the mic to stop, and it asks
 - Nov 13 12:27pm · 1.3.548 · Nick · Ready To Schedule: tabs All / Late / Holds / Goods here / Not here, search and Job Filters at the right, AI assistant two lines under the tabs
+- Nov 13 12:32pm · 1.3.549 · Nick · Payroll Report: Print time cards, one signable time card per person (everyone, or only who hasn't checked on the phone)

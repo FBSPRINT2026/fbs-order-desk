@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { mergeProduction } from "@/lib/production";
 import { crewMachines, type CrewView } from "@/lib/crewView";
-import { localDay, periodOf, addDays, timecard, type Punch } from "@/lib/timeclock";
+import { localDay, periodOf, addDays, timecard, punchFixed, type Punch } from "@/lib/timeclock";
 import { statusOf, timeSettings } from "@/lib/timeclockServer";
 import { checkinJobs } from "@/lib/checkin";
 import type { JobActor } from "@/lib/jobAccess";
@@ -27,10 +27,15 @@ export type CrewHome = {
    * Payday: their hours for the pay period just ended, to approve or ask a fix on (Nick, Nov 13 2026; uAttend's printed
    * time card sheets, on the phone). `ask`: put it first on the menu (the days after the period ends, until they answer).
    */
-  hours: { start: string; end: string; worked: number; overtime: number; breaks: number; ask: boolean; check: { status: "approved" | "fix_asked"; at: string } | null;
-    days: { day: string; first: string | null; last: string | null; worked: number; breaks: number; fixed: boolean; issues: number }[] } | null;
+  hours: PeriodHours | null;
   /** Deliveries (an extra on someone's menu): orders ready to deliver */ deliveries: { number: number; name: string; customer: string; qty: number; due: string | null; address: string }[] | null;
 };
+
+/** one pay period on someone's phone: its days and hours, what they said about it, and whether the office approved it */
+export type PeriodHours = { start: string; end: string; worked: number; overtime: number; breaks: number; ask: boolean; check: { status: "approved" | "fix_asked"; at: string } | null;
+  /** the office approved the period (Time Clock → Payroll Report): nothing left for them to do */ office: boolean;
+  /** the period isn't over yet: hours so far */ open: boolean;
+  days: { day: string; first: string | null; last: string | null; worked: number; breaks: number; fixed: boolean; issues: number }[] };
 
 const nextWorkDay = (d: string) => { const x = new Date(d + "T12:00:00Z"); do x.setUTCDate(x.getUTCDate() + 1); while ([0, 6].includes(x.getUTCDay())); return x.toISOString().slice(0, 10); };
 
@@ -101,21 +106,32 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
   return out;
 }
 
-/** the pay period that ended most recently, its days and hours, and whether they've checked it (time_card_checks) */
+/** the pay period that ended most recently, for the payday card (its own pay period, as My time cards shows it) */
 async function payPeriodHours(admin: SupabaseClient, s: Awaited<ReturnType<typeof timeSettings>>, employeeId: string, today: string): Promise<CrewHome["hours"]> {
-  const cur = periodOf(s, today), per = periodOf(s, addDays(cur.start, -1));
+  return periodHours(admin, s, employeeId, periodOf(s, addDays(periodOf(s, today).start, -1)).start, today);
+}
+
+/**
+ * One pay period's time card on the phone (payday card and My time cards; Nick, Nov 13 2026). `ask` (put it first on the
+ * menu): the five days after it ends, until they approve it or the office approves the period, whichever comes first.
+ */
+export async function periodHours(admin: SupabaseClient, s: Awaited<ReturnType<typeof timeSettings>>, employeeId: string, start: string, today: string): Promise<PeriodHours> {
+  const per = periodOf(s, start);
   const from = new Date(Date.parse(per.start + "T00:00:00Z") - 2 * 86400000).toISOString(), to = new Date(Date.parse(per.end + "T23:59:59Z") + 2 * 86400000).toISOString();
-  const [{ data: ps }, { data: ck }] = await Promise.all([
-    admin.from("time_punches").select("id, employee_id, kind, at, source, voided").eq("employee_id", employeeId).eq("voided", false).gte("at", from).lte("at", to).order("at"),
+  const [{ data: ps }, ck, { data: ap }] = await Promise.all([
+    admin.from("time_punches").select("id, employee_id, kind, at, source, voided, original_at, edited_by").eq("employee_id", employeeId).eq("voided", false).gte("at", from).lte("at", to).order("at"),
     admin.from("time_card_checks").select("status, decided_at").eq("employee_id", employeeId).eq("period_start", per.start).maybeSingle(),
+    admin.from("time_periods").select("approved_at").eq("starts_on", per.start).maybeSingle(),
   ]);
   const punches = (ps || []) as (Punch & { source?: string })[];
-  const card = timecard(s, employeeId, punches, [], per.start, per.end, new Date(Date.parse(per.end + "T23:59:59Z") + 6 * 3600000).toISOString());
-  const fixedDays = new Set(punches.filter((p) => /manual|fix/i.test(String(p.source || ""))).map((p) => localDay(p.at)));
+  const open = per.end >= today;
+  const card = timecard(s, employeeId, punches, [], per.start, per.end, open ? new Date().toISOString() : new Date(Date.parse(per.end + "T23:59:59Z") + 6 * 3600000).toISOString());
+  const fixedDays = new Set(punches.filter(punchFixed).map((p) => localDay(p.at)));
   const days = Object.values(card.days).filter((d) => d.worked > 0 || d.first).sort((a, b) => a.day.localeCompare(b.day))
     .map((d) => ({ day: d.day, first: d.first, last: d.last, worked: Math.round(d.worked), breaks: Math.round(d.breaks), fixed: fixedDays.has(d.day), issues: d.issues.length }));
-  const check = ck ? { status: (ck as { status: "approved" | "fix_asked" }).status, at: (ck as { decided_at: string }).decided_at } : null;
-  // asked first thing from the day after the period ends (payday) for five days, until they've approved
-  const ask = check?.status !== "approved" && today > per.end && today <= addDays(per.end, 5) && days.length > 0;
-  return { start: per.start, end: per.end, worked: Math.round(card.worked), overtime: Math.round(card.overtime), breaks: Math.round(card.breaks), ask, check, days };
+  const c = ck.data as { status: "approved" | "fix_asked"; decided_at: string } | null;
+  const check = c ? { status: c.status, at: c.decided_at } : null;
+  const office = !!(ap as { approved_at: string | null } | null)?.approved_at;
+  const ask = !office && check?.status !== "approved" && today > per.end && today <= addDays(per.end, 5) && days.length > 0;
+  return { start: per.start, end: per.end, worked: Math.round(card.worked), overtime: Math.round(card.overtime), breaks: Math.round(card.breaks), ask, check, office, open, days };
 }

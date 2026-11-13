@@ -27,6 +27,7 @@ export default function TimePayroll({ d }: { d: TimeData }) {
   const [pay, setPay] = useState<Record<string, { rate: number | null; salary: number | null }>>({});
   const [approved, setApproved] = useState<{ approved_at: string | null; approved_by: string | null } | null>(null);
   const [err, setErr] = useState("");
+  const [prtOpen, setPrtOpen] = useState(false);
   const boss = isBoss(d);
 
   const load = useCallback(async () => {
@@ -94,7 +95,19 @@ export default function TimePayroll({ d }: { d: TimeData }) {
         <span className="spacer" />
         {approved?.approved_at ? <span className="tmx-ok">✓ Approved by {approved.approved_by} {new Date(approved.approved_at).toLocaleDateString()}{boss && <button type="button" className="linkbtn" onClick={() => approve(false)}> Undo</button>}</span>
           : boss && !running && <button type="button" className="btn" disabled={toFix.length > 0} title={toFix.length ? "Fix the missed punches first" : ""} onClick={() => approve(true)}>Approve Period</button>}
-        <button type="button" className="btn" onClick={() => window.print()} disabled={!rows.length}>Print</button>
+        {/* Print time cards (Nick, Nov 13 2026: "a time card for every employee to physically sign"): one page each to sign,
+            only those who haven't approved theirs on the phone, or this report as before */}
+        <div className="tk-prt">
+          <button type="button" className="btn" onClick={() => setPrtOpen(!prtOpen)} disabled={!rows.length} aria-expanded={prtOpen}>Print time cards ▾</button>
+          {prtOpen && <>
+            <div className="tk-prt-bg" onClick={() => setPrtOpen(false)} />
+            <div className="tk-prt-m" role="menu">
+              <a href={`/print/timecards?start=${period.start}`} target="_blank" rel="noopener" onClick={() => setPrtOpen(false)}><b>Everyone</b><small>One time card per person to sign ({rows.filter((r) => r.pay.regHours + r.pay.otHours + r.pay.offHours > 0).length} pages)</small></a>
+              <a href={`/print/timecards?start=${period.start}&who=open`} target="_blank" rel="noopener" onClick={() => setPrtOpen(false)}><b>Only who hasn&apos;t checked on their phone</b><small>The ones still on paper</small></a>
+              <button type="button" onClick={() => { setPrtOpen(false); setTimeout(() => window.print(), 50); }}><b>The report itself</b><small>This one-page summary</small></button>
+            </div>
+          </>}
+        </div>
         <button type="button" className="btn primary" onClick={download} disabled={!rows.length}>Download for Excel</button>
       </div>
       {running && <div className="tmx-note tk-noprint">This pay period isn&apos;t over yet ({dayLabel(period.end)} is the last day). The hours below are so far.</div>}
