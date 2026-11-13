@@ -316,3 +316,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 12:55pm · 1.3.558 · Nick · Payroll Report and printed time cards leave out owner-only people (works once migration 314 is in)
 - Nov 13 12:55pm · 1.3.559 · Nick · Time cards print: full page, not shrunk (the page was wider than the paper)
 - Nov 13 1:01pm · 1.3.560 · Nick · Time clock: any four-punch day reads as in, lunch out, lunch in, out whatever buttons were pressed; printed time cards by Screen Printing, Embroidery, Fulfillment, then first name
+- Nov 13 1:01pm · 1.3.561 · Nick · Rules: printed time card order and the four-punch day

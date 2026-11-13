@@ -277,7 +277,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   tap (`hours` in `lib/crewHome.ts`, `time_card_checks`; the Time Clock's Their check column shows Approved / Fix asked
   / Not yet). Approving the period on the Payroll Report takes the card off everyone's phone; My time cards lists
   the period now running and the six before it (`periodHours`, `/api/crew/cards`). Paper time cards to sign: Payroll
-  Report → Print time cards (`/print/timecards`, one page each; everyone, or only who hasn't checked on the phone). New crew tools go
+  Report → Print time cards (`/print/timecards`, one page each; everyone, or only who hasn't checked on the phone), by Screen
+  Printing, Embroidery, Fulfillment, then the rest, each by first name). A day's punches say what they are by their order,
+  not the button pressed: any four punches are in, lunch out, lunch in, out; three pressed in, out, in are back from lunch
+  (`withLunch` in `lib/timeclock.ts`; Nick, Nov 13). New crew tools go
   through these, never a page of their own; every word has its Spanish in `components/job/lang.tsx`.
   Counting goods in on a phone is one tool, `components/job/PhoneCheckin.tsx` (the shop's phone receiving dashboard opens it
   too, `/j/<number>?v=checkin`): every style on the job listed at the top, the picked one's sizes typed in, and a green
