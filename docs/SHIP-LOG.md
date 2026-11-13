@@ -281,3 +281,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 9:59am · 1.3.505 · Nick · Job phone menu: each screen is in the address so Job menu / Back never bounces back to the first tool; after a count in: Count in another job (scan or type) or Main menu
 - Nov 13 10:13am · 1.3.507 · Nick · Job phone menu: Job menu swaps to the menu in place (no trip back through history, which reloaded the page)
 - Nov 13 10:15am · 1.3.509 · Nick · Crew Home Screen app: saving the crew pages to an iPhone's Home Screen makes an FBS Crew icon that opens the crew main menu (its own manifest), not the portal; a crew phone that lands on the portal goes to /crew
+- Nov 13 10:19am · 1.3.511 · Nick · Home Screen apps: the portal's manifest is a named route so /crew links the crew app's own (it still showed the portal's)
