@@ -7,7 +7,7 @@ import { threadByName } from "@/lib/embroidery";
 import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksOnColor } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, changeWord, inkWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -427,7 +427,7 @@ function PrintCard({ d, des, all, allLight, page, ways = [], lines = [] }: { d: 
       <div className="h"><b className="disp">{sideOf(d, all)}</b><span>close-up p. {page}</span></div>
       <div className="kv">
         <i>Method</i><span>{methodLabel(d)} · <b>{colorsLabel(d)}</b>{d.printStyle === "fashion" ? " · fashion hit" : ""}{d.softHand ? " · soft hand" : ""}</span>
-        {inks.length > 0 && <><i>{d.method === "embroidery" ? (inks.length === 1 ? "Thread" : "Threads") : inks.length === 1 ? "Ink" : "Inks"}</i>
+        {inks.length > 0 && <><i>{inkWord(d.method, inks.length)}</i>
           {/* one line each (Oct 31, Nick: "the number is the most important"): a thread's maker short, its number and name */}
           <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && d.method !== "embroidery" && <b>{n + 1} </b>}<b>{d.method === "embroidery" ? threadShort(k) : k}</b></span>)}</div></>}
         {ways.map((w) => <span key={w.name} style={{ display: "contents" }}><i>{des ? cwLetter(des, { name: w.name }) || "Colorway" : "Colorway"}</i>

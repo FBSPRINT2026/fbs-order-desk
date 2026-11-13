@@ -1078,6 +1078,16 @@ export function pmsInks(d: Pick<Imprint, "inks" | "pmsCharge">): { name: string;
 /** what a color change is called (Oct 26, Nick: "on embroidery orders, you'd call it thread change and not color
  * change… It should operate exactly the same as color change") */
 export const changeWord = (method?: string | null) => (method === "embroidery" ? "Thread change" : "Color change");
+/** what a print's colors are called (Nick, Nov 12 2026, #40461: "the inks should be changed to threads for an embroidery
+ *  order"): an embroidered print's are threads, anything else's inks; several prints of both kinds, "Inks / threads".
+ *  Takes the methods ("embroidery", or a label like "Embroidery") and how many colors (1 = singular). */
+export function inkWord(methods: (string | null | undefined)[] | string | null | undefined, n = 2): string {
+  const ms = (Array.isArray(methods) ? methods : [methods]).map((m) => (m || "").toLowerCase()).filter(Boolean);
+  const emb = ms.filter((m) => /embroid/.test(m)).length;
+  if (ms.length && emb === ms.length) return n === 1 ? "Thread" : "Threads";
+  if (emb) return "Inks / threads";
+  return n === 1 ? "Ink" : "Inks";
+}
 const changed = (m: Record<string, string> | undefined) => Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase()).length;
 const inkColorKey = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9~]/g, "");
 export const colorChanges = (d: Pick<Imprint, "inkBy"> & { changeOf?: Imprint["changeOf"] }) => Object.values(d.inkBy || {}).reduce((n, m) => n + changed(m), 0) + changed(d.changeOf?.inks);

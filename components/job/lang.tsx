@@ -150,6 +150,8 @@ const ES: Record<string, string> = {
   "Empty": "Vacío",
   "No press setup saved yet. Screens in print order:": "Aún no hay configuración de prensa guardada. Pantallas en orden de impresión:",
   "Inks": "Tintas",
+  "Threads": "Hilos",
+  "Inks / threads": "Tintas / hilos",
   "Size": "Tamaño",
   "Drop": "Bajada",
   "No imprints entered.": "No hay impresiones capturadas.",

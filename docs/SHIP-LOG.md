@@ -247,3 +247,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:08pm · 1.3.451 · Nick · Rules: missing fees go under Printavo's lines
 - Nov 12 8:15pm · 1.3.452 · Nick · QuickBooks: any difference from Printavo's invoice is replaced with ours whole (rule)
 - Nov 12 8:35pm · 1.3.453 · Nick · Portal: a long ink name wraps in its column instead of running past the card (#40461)
+- Nov 12 8:37pm · 1.3.454 · Nick · Embroidered prints say Threads, not Inks: customer portal, printed papers, phone job view (one helper, inkWord)

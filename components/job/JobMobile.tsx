@@ -3,7 +3,7 @@ import PhotoEdit, { type PhotoEditApi } from "@/components/job/PhotoEdit";
 import { useEffect, useRef, useState } from "react";
 import type { JobCard } from "@/lib/jobCard";
 import type { JobActor } from "@/lib/jobAccess";
-import type { ShipSettings } from "@/lib/pricing";
+import { inkWord, type ShipSettings } from "@/lib/pricing";
 import type { Shipment } from "@/lib/shipping";
 import type { CheckJob } from "@/lib/checkinShared";
 import type { ShipTarget } from "@/components/ShipWindow";
@@ -154,7 +154,7 @@ function Setup({ card, job, designs, press, presses }: { card: JobCard; job: { k
                   {d && <small>D-{d.number} {d.name}</small>}
                   <ul>
                     {pr.colors && <li>{t(pr.colors)}</li>}
-                    {pr.inks && <li><span>{t("Inks")}</span> {pr.inks}</li>}
+                    {pr.inks && <li><span>{t(inkWord(pr.method))}</span> {pr.inks}</li>}
                     {pr.size && <li><span>{t("Size")}</span> {pr.size}</li>}
                     {pr.drop && <li><span>{t("Drop")}</span> {pr.drop}</li>}
                   </ul>
