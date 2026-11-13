@@ -69,6 +69,9 @@ export async function middleware(request: NextRequest) {
   if (slow && hasCookie) return response;
   if (!user && needsLogin) {
     const url = request.nextUrl.clone();
+    // a crew phone (signed in with an employee number, not a portal account) that opened the portal, an old Home Screen
+    // icon whose start page is /shop: their own main menu instead of the portal's sign-in (Nov 13)
+    if (request.cookies.get("fbs_emp")?.value && (path === "/shop" || path === "/portal")) { url.pathname = "/crew"; url.search = ""; return NextResponse.redirect(url); }
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(path + request.nextUrl.search)}`;
     return NextResponse.redirect(url);

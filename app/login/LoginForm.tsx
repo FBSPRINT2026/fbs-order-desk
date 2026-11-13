@@ -97,6 +97,8 @@ export default function LoginForm({ shopName, logoUrl, sideLogoUrl = "", next, l
           <button className="btn ghost" type="button" onClick={() => { setStage("email"); setCode(""); }}>Use a different email</button>
         </form>
       )}
+      {/* a crew phone that landed here (an old Home Screen icon): their own sign-in is the employee number (Nov 13) */}
+      <a className="muted" href="/crew" style={{ display: "block", textAlign: "center", marginTop: 14, fontSize: 13.5 }}>FBS employee? Sign in with your employee number</a>
     </div>
   );
 }
