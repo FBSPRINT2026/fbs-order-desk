@@ -306,3 +306,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 12:27pm · 1.3.548 · Nick · Ready To Schedule: tabs All / Late / Holds / Goods here / Not here, search and Job Filters at the right, AI assistant two lines under the tabs
 - Nov 13 12:32pm · 1.3.549 · Nick · Payroll Report: Print time cards, one signable time card per person (everyone, or only who hasn't checked on the phone)
 - Nov 13 12:34pm · 1.3.550 · Nick · Job card: Time on the press rebuilt (Change, quick picks, stays open after saving, reads 1.5 / 1h30 / an hour and a half); More details in its own bordered section
+- Nov 13 12:35pm · 1.3.551 · Nick · Crew phone: My time cards (this period and the six before); approving a period on the Payroll Report takes the payday card off phones

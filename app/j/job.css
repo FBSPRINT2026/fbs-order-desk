@@ -437,3 +437,14 @@
 .cr-hfix{color:var(--fbs-blue);font-weight:700}.cr-hbad{color:var(--danger);font-weight:700}
 .cr-hh{font-variant-numeric:tabular-nums;font-size:16px}
 .jm-go.cr-hok{background:var(--ok)}
+/* My time cards (Nov 13) */
+.cr-tcl{padding-top:2px;padding-bottom:2px;gap:0}
+.cr-tc{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;padding:12px 2px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+.cr-tc:last-child{border-bottom:0}
+.cr-tcn{display:flex;flex-direction:column;gap:2px;min-width:0}
+.cr-tcn b{font-size:15px}
+.cr-tcn small{font-size:12.5px;font-weight:700;color:var(--ok)}
+.cr-tcn small.wait{color:var(--warn)}
+.cr-tch{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cr-tch i{font-style:normal;color:var(--ink-3);margin-left:4px}
+.cr-hopen{font-size:13px;text-align:center}
