@@ -22,6 +22,7 @@ export type CrewHome = {
   counting: CountJob[] | null; issues: { number: number; name: string; what: string }[];
   /** fulfillment: orders being finished; shipping: ready orders that ship */ queue: { number: number; name: string; customer: string; qty: number; due: string | null; delivery: string }[] | null;
   /** the day shown: today, or the next working day ("Tomorrow") */ day: string;
+  /** Deliveries (an extra on someone's menu): orders ready to deliver */ deliveries: { number: number; name: string; customer: string; qty: number; due: string | null; address: string }[] | null;
 };
 
 const nextWorkDay = (d: string) => { const x = new Date(d + "T12:00:00Z"); do x.setUTCDate(x.getUTCDate() + 1); while ([0, 6].includes(x.getUTCDay())); return x.toISOString().slice(0, 10); };
@@ -31,7 +32,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
   const day = next ? nextWorkDay(today) : today;
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const ps = mergeProduction((st?.data as { production?: unknown } | null)?.production);
-  const out: CrewHome = { name: who.name, view: who.view, staff: who.kind === "staff", today, clock: null, fixes: [], presses: [], mine: [], counting: null, issues: [], queue: null, day };
+  const out: CrewHome = { name: who.name, view: who.view, staff: who.kind === "staff", today, clock: null, fixes: [], presses: [], mine: [], counting: null, issues: [], queue: null, day, deliveries: null };
 
   if (who.employeeId) {
     const s = await timeSettings(admin);
@@ -83,6 +84,11 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
     const { data } = who.view === "fulfillment" ? await q.eq("status", "fulfillment").order("due_date").limit(60) : await q.eq("status", "ready").eq("delivery_method", "ship").order("due_date").limit(60);
     type Q = { number: number; nickname: string; qty: number; due_date: string | null; delivery_method: string; customers: { company: string; name: string } | null };
     out.queue = ((data || []) as unknown as Q[]).map((o) => ({ number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, due: o.due_date, delivery: o.delivery_method || "pickup" }));
+  }
+  if (who.also?.includes("delivery") || who.view === "office") {
+    const { data } = await admin.from("orders").select("number, nickname, qty, due_date, ship_to, customers(company, name, address)").is("discarded_at", null).eq("status", "ready").eq("delivery_method", "deliver").order("due_date").limit(40);
+    type D = { number: number; nickname: string; qty: number; due_date: string | null; ship_to: string | null; customers: { company: string; name: string; address: string } | null };
+    out.deliveries = ((data || []) as unknown as D[]).map((o) => ({ number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, due: o.due_date, address: (o.ship_to || o.customers?.address || "").split(/\n/).filter(Boolean).slice(0, 2).join(", ") }));
   }
   return out;
 }

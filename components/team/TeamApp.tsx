@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fullName } from "@/lib/timeclock";
 import { mergeProduction } from "@/lib/production";
-import { CREW_VIEWS, crewViewOf, type CrewView } from "@/lib/crewView";
+import { CREW_EXTRAS, CREW_VIEWS, crewViewOf, joinViews, parseViews, phoneViewsOf, type CrewExtra, type CrewView } from "@/lib/crewView";
 import type { TeamData } from "./types";
 
 /**
@@ -15,14 +15,19 @@ import type { TeamData } from "./types";
 export default function TeamApp({ d }: { d: TeamData }) {
   const list = d.employees.filter((e) => e.active);
   const [crews, setCrews] = useState<ReturnType<typeof mergeProduction>["crews"]>([]);
+  const [views, setViews] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(""), [err, setErr] = useState("");
-  useEffect(() => { createClient().from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => setCrews(mergeProduction((data?.data as { production?: unknown } | null)?.production).crews)); }, []);
+  useEffect(() => { createClient().from("settings").select("data").eq("id", 1).maybeSingle().then(({ data }) => { setCrews(mergeProduction((data?.data as { production?: unknown } | null)?.production).crews); setViews(phoneViewsOf(data?.data)); }); }, []);
+  // kept in the shop's settings (settings.data.phoneViews), read fresh and merged so two people saving don't undo each other
   async function setView(id: string, v: string) {
     setSaving(id); setErr("");
-    const { error } = await createClient().from("employees").update({ phone_view: v || null }).eq("id", id);
+    const sb = createClient();
+    const { data } = await sb.from("settings").select("data").eq("id", 1).maybeSingle();
+    const cur = (data?.data || {}) as Record<string, unknown>, pv = { ...phoneViewsOf(cur) };
+    if (v) pv[id] = v; else delete pv[id];
+    const { error } = await sb.from("settings").update({ data: { ...cur, phoneViews: pv } }).eq("id", 1);
     setSaving("");
-    if (error) setErr(/phone_view/.test(error.message) ? "Phone views aren't set up in the database yet (migration 312)." : error.message);
-    else await d.reload();
+    if (error) setErr(error.message); else setViews(pv);
   }
   return (
     <div className="tmx">
@@ -49,10 +54,13 @@ export default function TeamApp({ d }: { d: TeamData }) {
                 <tr key={e.id}>
                   <td className="ordno">#{e.code ?? "—"}</td>
                   <td><b>{fullName(e)}</b><div className="sub">{e.department || "—"}{e.lang === "es" ? " · Español" : ""}</div></td>
-                  <td><select value={e.phone_view || ""} disabled={saving === e.id} onChange={(x) => setView(e.id, x.target.value)} aria-label={`Phone view for ${fullName(e)}`}>
-                    <option value="">From their press crew ({label(auto)})</option>
-                    {CREW_VIEWS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                  </select></td>
+                  <td>{(() => { const pv = parseViews(views[e.id]); const save = (main: CrewView | null, also: CrewExtra[]) => setView(e.id, joinViews(main, also)); return <>
+                    <select value={pv.main || ""} disabled={saving === e.id} onChange={(x) => save((x.target.value || null) as CrewView | null, pv.also)} aria-label={`Phone view for ${fullName(e)}`}>
+                      <option value="">From their press crew ({label(auto)})</option>
+                      {CREW_VIEWS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                    </select>
+                    {pv.main && <div className="sub" style={{ display: "flex", gap: 10, marginTop: 4 }}>{CREW_EXTRAS.map((x) => <label key={x.id} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><input type="checkbox" checked={pv.also.includes(x.id)} onChange={(ev) => save(pv.main, ev.target.checked ? [...pv.also, x.id] : pv.also.filter((y) => y !== x.id))} />Also {x.label}</label>)}</div>}
+                  </>; })()}</td>
                   <td>{e.has_pin ? <span className="tmx-tag ok">Can sign in</span> : <a className="tmx-tag warn" href="/shop/time?tab=employees">Needs a PIN</a>}</td>
                 </tr>
               );

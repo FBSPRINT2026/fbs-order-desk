@@ -68,6 +68,19 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
             </div>
           )}
           {home.queue && <Queue home={home} open={open} />}
+          {home.deliveries && (home.deliveries.length > 0 || home.view !== "office") && (
+            <div className="jm-card cr-list">
+              <div className="jm-cardh"><b>{t("Deliveries")}</b><span className="jm-faint">{home.deliveries.length}</span></div>
+              {!home.deliveries.length && <p className="jm-faint">{t("Nothing ready to deliver.")}</p>}
+              {home.deliveries.map((j) => (
+                <button key={j.number} type="button" className="cr-li" onClick={() => open(j.number)}>
+                  <span className="cr-t">{j.due ? day(j.due, locale).replace(/,.*/, "") : ""}</span><b>#{j.number}</b>
+                  <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.address ? ` · ${j.address}` : ""}</small></span>
+                  <i className="cr-st ready">{t("Ready")}</i>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="cr-tiles">
             <button type="button" onClick={() => go("scan")}><Svg d={IC.scan} />{t("Scan a job")}</button>
             {home.presses.length > 0 && <button type="button" onClick={() => { location.href = tomorrow ? "/crew" : "/crew?day=next"; }}><Svg d={IC.cal} />{tomorrow ? t("Today") : t("Tomorrow")}</button>}
