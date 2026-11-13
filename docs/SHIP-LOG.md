@@ -240,3 +240,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 6:41pm · 1.3.444 · Nick · Schedule: Issue on a run (Missing / Reject / Reprint): the pieces still to print become their own job; Missing waits for goods; the order stays In Production
 - Nov 12 6:44pm · 1.3.445 · Nick · Schedule: clicking a downtime opens it to change (never a second one); a press or crew off all day shows Off all day; Goods & Receiving row buttons line up
 - Nov 12 6:49pm · 1.3.446 · Nick · QuickBooks: Printavo's invoice that already matches our order stays as it is, just linked; replaced with ours whole the first time the order changes
+- Nov 12 7:09pm · 1.3.447 · Nick · QuickBooks: a customer with a 40000s invoice can be linked to the QuickBooks customer of the same name (Link to it no longer skipped as 'no invoice yet')

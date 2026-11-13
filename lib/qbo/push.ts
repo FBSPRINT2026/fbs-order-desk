@@ -97,7 +97,7 @@ export class Pusher {
     return (data as OurCustomer) || null;
   }
   private async needsQboCustomer(customerId: string) {
-    const { data } = await this.admin.from("orders").select("status, type, declined_at").eq("customer_id", customerId).gte("number", this.qs.live_from_number).limit(200);
+    const { data } = await this.admin.from("orders").select("status, type, declined_at").eq("customer_id", customerId).gte("number", Math.min(this.qs.adopt_from_number || this.qs.live_from_number, this.qs.live_from_number)).limit(200);
     return (data || []).some((o) => qboInvoiceable(o));
   }
 
