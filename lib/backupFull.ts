@@ -56,7 +56,7 @@ export async function loadBackup(admin: SupabaseClient, id: string) {
 }
 
 /** one round of saving tables; returns where it got to */
-export async function backupRound(admin: SupabaseClient, id: string, who: string) {
+async function backupRound0(admin: SupabaseClient, id: string, who: string) {
   const t0 = Date.now();
   const row = await loadBackup(admin, id);
   if (!row) throw new Error("That backup wasn't found.");
@@ -149,7 +149,7 @@ export async function backupRound(admin: SupabaseClient, id: string, who: string
 }
 
 /** one round of copying a finished backup's files to Dropbox (only what isn't there yet) */
-export async function dropboxRound(admin: SupabaseClient, id: string) {
+async function dropboxRound0(admin: SupabaseClient, id: string) {
   const t0 = Date.now();
   const row = await loadBackup(admin, id);
   if (!row || row.status !== "done") return { copied: 0, left: -1, done: false };
@@ -178,4 +178,23 @@ export async function dropboxRound(admin: SupabaseClient, id: string) {
     await admin.from("data_backups").update({ dropbox: { copied: [...copied], root, error: msg.slice(0, 300) } }).eq("id", id);
     return { copied: n, left: want.length - copied.size, done: false, error: msg };
   }
+}
+
+/** One round at a time per backup (Nov 12 night: two rounds of one backup ran together, a cron and a page, or a page
+ *  twice, and the second saved its manifest over the first's, losing tables). A round claims the backup for a bit over
+ *  its time budget (data_backups.round_until, migration 311); another call meanwhile does nothing and says so. */
+async function withLease<T>(admin: SupabaseClient, id: string, busy: T, fn: () => Promise<T>): Promise<T> {
+  const now = new Date().toISOString();
+  const { data, error } = await admin.from("data_backups").update({ round_until: new Date(Date.now() + BUDGET_MS + 90_000).toISOString() }).eq("id", id).or(`round_until.is.null,round_until.lt.${now}`).select("id");
+  if (error) throw new Error(error.message);
+  if (!data?.length) return busy;
+  try { return await fn(); } finally { await admin.from("data_backups").update({ round_until: null }).eq("id", id); }
+}
+export async function backupRound(admin: SupabaseClient, id: string, who: string) {
+  const busy = { id, status: "building" as const, busy: true, done: 0, total: 0 } as unknown as Awaited<ReturnType<typeof backupRound0>>;
+  return withLease(admin, id, busy, () => backupRound0(admin, id, who));
+}
+export async function dropboxRound(admin: SupabaseClient, id: string) {
+  const busy = { copied: 0, left: 1, done: false, busy: true } as unknown as Awaited<ReturnType<typeof dropboxRound0>>;
+  return withLease(admin, id, busy, () => dropboxRound0(admin, id));
 }
