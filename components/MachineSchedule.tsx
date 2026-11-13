@@ -474,17 +474,16 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [owners, setOwners] = useState<AccountOwner[]>([]);
   const [trayAll, setTrayAll] = useState(false);
   // Ready To Schedule's tabs (Nov 11, Nick: "late jobs, holders, and… jobs that are on time")
-  const [trayTab, setTrayTab] = useSticky<"all" | "late" | "hold" | "goods" | "ok">("cal.trayTab", "all");
+  // Ready To Schedule's tabs (Nick, Nov 13: "all, late, holds, goods here and then not here… take that off the filter")
+  const [trayTab0, setTrayTab] = useSticky<"all" | "late" | "hold" | "here" | "away">("cal.trayTab2", "all");
+  const trayTab = (["all", "late", "hold", "here", "away"] as const).includes(trayTab0) ? trayTab0 : "all";
   // Ready To Schedule by goods (Nick, Nov 13: "show me what's counted… that makes it easier to drop"), in Job Filters
-  const [trayGoods, setTrayGoods] = useSticky<"all" | "counted" | "not">("cal.trayGoods", "all");
   // right-click a job waiting in Ready To Schedule (Nick, Nov 13): add it to a press's next open time, mark it printed
   // already, put it on hold, open it
   const [trc, setTrc] = useState<{ k: string; x: number; y: number; sub?: "printed" } | null>(null);
   const [holdFor, setHoldFor] = useState<string | null>(null);
   // the schedule's assistant (Nick, Nov 13: "add all Dear Heart jobs to the schedule for Monday")
   const [askQ, setAskQ] = useState(""), [askBusy, setAskBusy] = useState(false), [askPlan, setAskPlan] = useState<AskPlan | null>(null);
-  // the ideas drop down under the box while it's clicked in and empty (Nick, Nov 13: one line, beside the tabs)
-  const [askFocus, setAskFocus] = useState(false);
   const askIn = useRef<HTMLInputElement>(null);
   // kinds of order (Nov 11, Nick: "distinguish… what's a cart order from Cedar Promos, what's an All My Sons… order, and
   // what's a regular order… hide the cart orders and… All My Sons… so I can just see the regular"): a customer's Create
@@ -3112,18 +3111,6 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               })()}
               {trayOpen && trayV.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make The Schedule</button>}
             </div>
-            {/* the schedule's assistant's plan (Nick, Nov 13): say it in the AI assistant box on the tabs' line, check it here, book it */}
-            {trayOpen && tray.length > 0 && askPlan && <div className="msa">
-              {askPlan && (() => { const n = askPlan.book.length + askPlan.unbook.length + askPlan.downtime.length, mn = (id: string) => { const m = machines.find((x) => x.id === id); return m ? crewOf(m)?.leader || shortName(m) : id; }, dl = (d: string) => dayLbl(d).split(",").slice(0, 2).join(","); return <div className="msa-plan">
-                {askPlan.note && <p>{askPlan.note}</p>}
-                {n > 0 && <ul>
-                  {askPlan.book.map((r) => { const t = askRefs.current.jobs.get(r.job); return t ? <li key={"b" + r.job}>Book <b>#{t.job.number}</b> <span data-notranslate>{t.job.customer}{t.job.name ? ` · ${t.job.name}` : ""}</span> → {mn(r.machine)} · {dl(r.day)}</li> : null; })}
-                  {askPlan.unbook.map((r) => { const c = askRefs.current.slots.get(r.slot); return c ? <li key={"u" + r.slot}>Take <b>#{c.job.number}</b> <span data-notranslate>{c.job.customer}</span> off {mn(c.machine.id)} · {dl(c.day)}, back to Ready To Schedule</li> : null; })}
-                  {askPlan.downtime.map((d, i) => <li key={"d" + i}>Downtime on {mn(d.machine)} · {dl(d.day)}{d.from != null && d.to != null ? ` ${clock(d.from)}–${clock(d.to)}` : " (all day)"}{d.note ? ` · ${d.note}` : ""}</li>)}
-                </ul>}
-                <div className="msa-a">{n > 0 ? <><button type="button" className="btn sm primary" onClick={() => void doPlan(askPlan)}>Do it</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></> : <button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button>}</div>
-              </div>; })()}
-            </div>}
             {trc && (() => { const t = tray.find((x) => x.job.key + x.need.type === trc.k); if (!t) return null; const okM = machines.filter((m) => fits(t.need, m)); return (
               <>
                 <div className="msr-rc-bg" onClick={() => setTrc(null)} onContextMenu={(e) => { e.preventDefault(); setTrc(null); }} />
@@ -3150,15 +3137,16 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             {trayOpen && tray.length > 0 && (() => {
               const isLate = (t: (typeof trayV)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
               const waitsG = (t: (typeof trayV)[number]) => !!t.job.issue?.waits;
-              const kinds = { late: trayV.filter((t) => isLate(t) && !waitsG(t)), hold: trayV.filter((t) => t.job.kind === "h"), goods: trayV.filter(waitsG), ok: trayV.filter((t) => t.job.kind !== "h" && !isLate(t) && !waitsG(t)) };
+              // goods here: counted, or in the building not counted yet (a Printavo job is ready to print); not here: on the
+              // way, not in yet, short or waiting on missing goods. Holds have no goods yet: in neither.
+              const gHere = (t: (typeof trayV)[number]) => !waitsG(t) && (t.job.kind === "a" || (t.job.kind === "o" && ["received", "arrived", "partial"].includes(goodsSt.get(t.job.id) || "")));
+              const kinds = { late: trayV.filter((t) => isLate(t) && !waitsG(t)), hold: trayV.filter((t) => t.job.kind === "h"), here: trayV.filter(gHere), away: trayV.filter((t) => t.job.kind === "o" && !gHere(t)) };
               // the schedule's search finds jobs here too, and this box searches both (Nick, Nov 13): only the matches show
-              const counted = (t: (typeof trayV)[number]) => t.job.kind === "a" || (t.job.kind === "o" && goodsSt.get(t.job.id) === "received");
-              const list = (trayTab === "all" ? trayV : kinds[trayTab]).filter((t) => !findWords.length || isHit(t.job))
-                .filter((t) => trayGoods === "all" || (trayGoods === "counted" ? counted(t) : t.job.kind === "o" && !counted(t)));
+              const list = (trayTab === "all" ? trayV : kinds[trayTab]).filter((t) => !findWords.length || isHit(t.job));
               return (
               <>
                 <div className="toolbar ms-rtabs"><div className="chips">
-                  {([["all", "All", trayV.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ...(kinds.goods.length || trayTab === "goods" ? [["goods", "Waiting on goods", kinds.goods.length] as const] : []), ["ok", "On time", kinds.ok.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
+                  {([["all", "All", trayV.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ["here", "Goods here", kinds.here.length], ["away", "Not here", kinds.away.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
                 </div>
                   <label className="msr-q"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
                     <input type="search" value={findQ} placeholder="Search jobs" aria-label="Search Ready To Schedule and the schedule" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }} onKeyDown={(e) => { if (e.key === "Escape") setFindQ(""); }} />
@@ -3182,12 +3170,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     return (
                       <div className="msk-kinds">
                         <button type="button" className={"btn sm" + (hidden.length ? " on" : "")} aria-expanded={kindsOpen} onClick={() => setKindsOpen(!kindsOpen)} title="Show or hide kinds of jobs: a customer's carts, a program like All My Sons, regular orders">
-                          Job Filters{trayGoods === "counted" ? " · Counted" : trayGoods === "not" ? " · Not counted" : ""}{onlyReg ? " · Regular Orders only" : hidden.length ? ` · Hiding ${hidden.length}` : ""} ▾</button>
+                          Job Filters{onlyReg ? " · Regular Orders only" : hidden.length ? ` · Hiding ${hidden.length}` : ""} ▾</button>
                         {kindsOpen && <>
                           <div className="msk-kinds-bg" onClick={() => setKindsOpen(false)} />
                           <div className="msk-kinds-m" role="menu">
-                            <div className="msk-kinds-g"><div className="msk-kinds-h">Goods</div>
-                              <div className="msk-goods">{([["all", "All"], ["counted", "Counted"], ["not", "Not counted"]] as const).map(([k, l]) => <button key={k} type="button" className={trayGoods === k ? "on" : ""} onClick={() => setTrayGoods(k)}>{l}</button>)}</div></div>
                             {kindsToo && all.has("regular") && row("regular", all.get("regular")!)}
                             {kindsToo && whos.map(([who, es]) => (
                               <div key={who} className="msk-kinds-g"><div className="msk-kinds-h" data-notranslate>{who}</div>
@@ -3202,26 +3188,38 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       </div>
                     );
                   })()}
-                  {/* the AI assistant on the tabs' line, to the right (Nick, Nov 13: "one line… on the same line as All, Late, Holds…") */}
+                </div>
+                  {/* the AI assistant: two lines right under the tabs line (Nick, Nov 13), the ask box and ideas to tap */}
                   <div className="msa-box">
                     <span className="msa-lbl" aria-hidden>✦ AI assistant</span>
-                    <form className="msa-f" onSubmit={(e) => { e.preventDefault(); setAskFocus(false); void askSchedule(); }}>
-                      <input ref={askIn} value={askQ} onChange={(e) => setAskQ(e.target.value)} onFocus={() => setAskFocus(true)} onBlur={() => setAskFocus(false)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
+                    <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
+                      <input ref={askIn} value={askQ} onChange={(e) => setAskQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
                       {/* say it instead of typing it (Nick, Nov 13): the shop's one microphone button, asked when they stop talking */}
                       <MicButton target={() => askIn.current} append keepListening label="Tell the schedule out loud (microphone)" className="msa-mic" onDone={(t) => { if (t.trim()) void askSchedule(t.trim()); }} />
                       <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
                     </form>
-                    {askFocus && !askQ.trim() && !askPlan && !askBusy && (() => {
+                    {!askPlan && !askBusy && (() => {
                       // ideas to tap, from what's there now (Nick, Nov 13: "add all Dear Hearts… all jobs that are counted… clear Monday for Miguel, he's out")
                       const by = new Map<string, number>(); for (const t of trayV) if (t.job.customer && t.job.kind === "o") by.set(t.job.customer, (by.get(t.job.customer) || 0) + 1);
                       const top = [...by].sort((a, b) => b[1] - a[1])[0]?.[0];
                       const counted = trayV.filter((t) => t.job.kind === "o" && goodsSt.get(t.job.id) === "received").length;
                       const nx = (() => { let d = addDay(today, 1); for (let g = 0; g < 7 && !machines.some((m) => shiftOn(m, d)); g++) d = addDay(d, 1); return d; })(), lead = machines.map((m) => crewOf(m)?.leader).find(Boolean);
                       const ideas = [top && `Book all ${top} jobs`, counted && `Book every job that's counted`, lead && `${lead} is out ${dayLbl(nx).split(",")[0]}: clear the day`, "Book the late jobs first thing tomorrow"].filter(Boolean) as string[];
-                      return <div className="msa-drop" role="menu"><div className="msa-drop-h">Ideas</div>{ideas.map((x) => <button key={x} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setAskFocus(false); void askSchedule(x); }}>{x}</button>)}</div>;
+                      return <div className="msa-ideas">{ideas.map((x) => <button key={x} type="button" className="chip" onClick={() => void askSchedule(x)}>{x}</button>)}</div>;
                     })()}
                   </div>
-                </div>
+              {/* the assistant's plan, under its box: check it, book it */}
+              {askPlan && <div className="msa">
+                {askPlan && (() => { const n = askPlan.book.length + askPlan.unbook.length + askPlan.downtime.length, mn = (id: string) => { const m = machines.find((x) => x.id === id); return m ? crewOf(m)?.leader || shortName(m) : id; }, dl = (d: string) => dayLbl(d).split(",").slice(0, 2).join(","); return <div className="msa-plan">
+                  {askPlan.note && <p>{askPlan.note}</p>}
+                  {n > 0 && <ul>
+                    {askPlan.book.map((r) => { const t = askRefs.current.jobs.get(r.job); return t ? <li key={"b" + r.job}>Book <b>#{t.job.number}</b> <span data-notranslate>{t.job.customer}{t.job.name ? ` · ${t.job.name}` : ""}</span> → {mn(r.machine)} · {dl(r.day)}</li> : null; })}
+                    {askPlan.unbook.map((r) => { const c = askRefs.current.slots.get(r.slot); return c ? <li key={"u" + r.slot}>Take <b>#{c.job.number}</b> <span data-notranslate>{c.job.customer}</span> off {mn(c.machine.id)} · {dl(c.day)}, back to Ready To Schedule</li> : null; })}
+                    {askPlan.downtime.map((d, i) => <li key={"d" + i}>Downtime on {mn(d.machine)} · {dl(d.day)}{d.from != null && d.to != null ? ` ${clock(d.from)}–${clock(d.to)}` : " (all day)"}{d.note ? ` · ${d.note}` : ""}</li>)}
+                  </ul>}
+                  <div className="msa-a">{n > 0 ? <><button type="button" className="btn sm primary" onClick={() => void doPlan(askPlan)}>Do it</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></> : <button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button>}</div>
+                </div>; })()}
+              </div>}
                 <ul className="msr-l">{(() => {
                   // by due date, due today first (no date last); jobs that print together stay in their order
                   const byDue = list.map((t, i) => ({ t, i })).sort((x, y) => (x.t.job.due || "9999").localeCompare(y.t.job.due || "9999") || x.i - y.i).map((x) => x.t);

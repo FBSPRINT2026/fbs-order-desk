@@ -321,7 +321,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): one dark header card per press (name, crew, clock-in, the press, then a bar: "2 of 4 done · on pace" / "35m behind" / "20m ahead", `dayScore`: only from what's been marked, the last job marked done against its planned finish or a printing job's updated pieces; a start that went by counts only with the live clock on; nothing marked, no pace is claimed), done jobs soft blue like Printavo, the number in blue (never crossed out) and a blue "Done 12:02p" pill (Nick, Nov 12, option B), the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits under the schedule's search on the
   right (Goods / Printing / On the board; Hide folds it to one line, remembered: `.mky`, Nick Nov 12). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
-  tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
+  tabs: All / Late / Holds / Goods here / Not here, with the search and Job Filters at the right of that line and the AI
+  assistant (ask box with a microphone, ideas under it) right below it; Nick, Nov 13) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
   An order On hold (art, receiving, the customer, QC; a payment hold keeps it off the schedule entirely) still shows in
   Ready To Schedule and on the press with an "On hold · <reason>" tag, isn't counted as tight or late, and Make The
   Schedule never books it; drag it onto a press to book it anyway (Nick, Nov 12, #50013).
@@ -395,7 +396,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   ("+ How many"; Nick, Nov 12, #40478: "I need to be able to mark it just missing right now"), and with no count the job
   is booked as the rest of the run, "count to come" (`production_issues`, pcs 0). The run so far is finished where it stopped; the pieces become their own job, the same order
   number with the reason as a tag and only those pieces (`partNeed` in `lib/production.ts`; `production_slots.issue_id`,
-  job key `i:<id>`). Missing waits under Ready To Schedule's Waiting on goods until a count is saved for the order after
+  job key `i:<id>`). Missing waits under Ready To Schedule's Not here until a count is saved for the order after
   the issue (or "Here now"); Reject and Reprint are ready at once. An open issue holds the order In Production; its tag
   shows beside the status on the Orders list and the order's header (`IssueTag`), never in the customer's portal.
 - **A mixed job's parts show under its status** (Nick, Nov 12, option B): an order printing on more than one kind of
