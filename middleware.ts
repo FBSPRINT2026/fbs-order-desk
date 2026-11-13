@@ -87,6 +87,11 @@ export async function middleware(request: NextRequest) {
     response.cookies.getAll().forEach((c) => go.cookies.set(c));
     return go;
   }
+  // the crew's phone sign-in (employee # and PIN) stays signed in for good while it's used (Nov 13, Nick: "a person only
+  // has to login once ever"): each visit to the crew pages sends the cookie again for the longest a browser keeps one
+  // (400 days), so it only ends on a new phone, cleared browser data, or Sign out
+  const emp = request.cookies.get("fbs_emp")?.value;
+  if (emp && /^\/(crew|j|work)(\/|$)/.test(path)) response.cookies.set("fbs_emp", emp, { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 400 * 86400 });
   return response;
 }
 

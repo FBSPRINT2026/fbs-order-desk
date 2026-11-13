@@ -3,9 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { checkPin, newDeviceToken, sha } from "@/lib/timeclockServer";
 import { localDay, localToIso, type OpenJob } from "@/lib/timeclock";
 
-/** The employee app (/work): employee number + PIN on their own phone, signed in for 120 days. */
+/** The employee app (/work, /crew, a job's phone menu): employee number + PIN once on their own phone; it stays signed in
+ *  while it's used (Nov 13, Nick: "login once ever"): the session runs 10 years and each use pushes it on. */
 export const EMP_COOKIE = "fbs_emp";
-const DAYS = 120;
+const DAYS = 3650;
 
 export async function employeeLogin(admin: SupabaseClient, code: number, pin: string): Promise<{ token?: string; error?: string }> {
   const { data: e } = await admin.from("employees").select("id, active").eq("code", code).maybeSingle();
@@ -23,7 +24,8 @@ export async function employeeLogin(admin: SupabaseClient, code: number, pin: st
   await admin.from("employee_sessions").insert({ employee_id: e.id, token_hash: sha(token), expires_at: new Date(Date.now() + DAYS * 86400000).toISOString() });
   return { token };
 }
-export const sessionMaxAge = DAYS * 86400;
+// a browser keeps a cookie 400 days at most; middleware.ts sends it again on every visit
+export const sessionMaxAge = 400 * 86400;
 
 export async function employeeFor(admin: SupabaseClient, token: string | undefined) {
   if (!token) return null;
@@ -33,7 +35,7 @@ export async function employeeFor(admin: SupabaseClient, token: string | undefin
   if (!e || !e.active) return null;
   // their phone view (lib/crewView.ts), read on its own so a database without the column still signs people in
   const { data: pv } = await admin.from("employees").select("phone_view").eq("id", s.employee_id).maybeSingle();
-  await admin.from("employee_sessions").update({ last_seen_at: new Date().toISOString() }).eq("id", s.id);
+  await admin.from("employee_sessions").update({ last_seen_at: new Date().toISOString(), expires_at: new Date(Date.now() + DAYS * 86400000).toISOString() }).eq("id", s.id);
   return { sessionId: s.id as string, ...(e as { id: string; first_name: string; last_name: string; lang: string; code: number }), phone_view: ((pv as { phone_view?: string | null } | null)?.phone_view || null) as string | null };
 }
 

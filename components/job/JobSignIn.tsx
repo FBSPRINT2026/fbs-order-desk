@@ -5,7 +5,7 @@ import { LangToggle, useT } from "./lang";
 
 /**
  * Scanned a job's QR code but not signed in on this phone yet: the crew signs in with their employee number and PIN
- * (the same as the employee app, and it stays signed in for 120 days); office staff can use their portal login.
+ * (the same as the employee app; it stays signed in for good while it's used); office staff can use their portal login.
  */
 export default function JobSignIn({ code, offNetwork = false }: { code: string; offNetwork?: boolean }) {
   const router = useRouter();
