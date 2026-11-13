@@ -269,3 +269,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 8:51am · 1.3.482 · Nick · Phone count-in: a scanned job's Check in goods works again (one job's count-in crashed on a blank date); Main menu icon
 - Nov 13 9:02am · 1.3.484 · Nick · Crew phone sign-in stays signed in for good while used (10-year session pushed on each use, cookie re-sent every visit)
 - Nov 13 9:09am · 1.3.486 · Nick · Phone views kept in the shop settings (work without a database change), with extras: Also Deliveries (ready-to-deliver list on the crew menu)
+- Nov 13 9:10am · 1.3.488 · Nick · Time Clock → Employees: the owner can change someone's employee # (More details)
