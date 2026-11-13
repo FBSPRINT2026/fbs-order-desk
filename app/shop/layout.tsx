@@ -1,4 +1,7 @@
 import { redirect } from "next/navigation";
+import { isStationEmail } from "@/lib/stations";
+import { shopNetwork } from "@/lib/shopNetwork";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { cookies } from "next/headers";
 import { createClient, getViewer } from "@/lib/supabase/server";
 import { mergeSettings } from "@/lib/pricing";
@@ -33,6 +36,11 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const { user, isStaff, email, supabase, role: realRole, staff: me } = await getViewer(", name, shortcuts, cheer, sanebox");
   if (!user) redirect("/login?next=/shop");
   if (!isStaff) redirect("/portal");
+  // a shop computer (lib/stations.ts) works on the shop's network only (Nick, Nov 13 2026)
+  if (isStationEmail(email)) {
+    const net = await shopNetwork(createAdminClient());
+    if (net.configured && !net.on) return <div className="auth-card" style={{ margin: "60px auto", maxWidth: 420 }}><h1>Shop computer</h1><p className="muted">This login works on the shop&apos;s network only, wired or Wi-Fi.</p><form action="/auth/signout" method="post"><button className="btn" type="submit">Sign out</button></form></div>;
+  }
   const [{ data: st }, { data: team }, { data: stockInks }] = await Promise.all([
     settingsQ,
     realRole === "owner" ? supabase.from("staff").select("email, name, role").order("name") : Promise.resolve({ data: [] as { email: string; name: string; role: string }[] }),

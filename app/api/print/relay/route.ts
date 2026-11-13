@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     const { data, error } = await r.admin.rpc("claim_print_jobs", { p_relay: r.id, p_max: 10 });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const jobs = (data || []) as { id: string; title: string; zpl: string }[];
-    if (jobs.length || Date.now() > until) return NextResponse.json({ host: ps.host, port: ps.port, jobs: jobs.map((j) => ({ id: j.id, title: j.title, zpl: j.zpl })) });
+    if (jobs.length || Date.now() > until) return NextResponse.json({ link: ps.link, usbName: ps.usbName, host: ps.host, port: ps.port, jobs: jobs.map((j) => ({ id: j.id, title: j.title, zpl: j.zpl })) });
     await new Promise((res) => setTimeout(res, 1200));
   }
 }
@@ -39,6 +39,8 @@ export async function POST(req: Request) {
   if (!r) return NextResponse.json({ error: "Unknown print computer." }, { status: 401 });
   const b = await req.json().catch(() => ({}));
   if (typeof b.id !== "string") return NextResponse.json({ error: "Which label?" }, { status: 400 });
+  // "printing": the relay has the label and is handing it to the printer (if it stops there, the printer hung)
+  if (b.step) { await r.admin.from("print_jobs").update({ error: `relay: ${String(b.step).slice(0, 40)}` }).eq("id", b.id).eq("relay_id", r.id).eq("status", "sent"); return NextResponse.json({ ok: true }); }
   await r.admin.from("print_jobs").update(b.ok ? { status: "printed", done_at: new Date().toISOString(), error: "" } : { status: "error", error: String(b.error || "Couldn't reach the printer").slice(0, 300) }).eq("id", b.id).eq("relay_id", r.id);
   return NextResponse.json({ ok: true });
 }

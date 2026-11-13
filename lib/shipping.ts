@@ -30,19 +30,47 @@ export const boxReady = (b: Box) => [b.length, b.width, b.height, b.weight].ever
  * Best-effort split of a typed address ("Shag Carpet\n3184 Quebec Street\nDallas, TX 75204") into fields.
  * Staff check and correct it in the ship window; the carrier validates it before labels are made.
  */
+/**
+ * A typed ship-to ("Armstrong Relocation Chattanooga / ATTN Stacy / 6059 Relocation Way / Ooltewah, TN 37363") as an
+ * address. The name and company come from the text's own lines (an "ATTN" / "Attn:" / "Attention" / "c/o" line is the
+ * person); the customer's own name and company are only the fallback when the text names nobody, so a reseller's order
+ * shipped to their end client never goes out addressed to the reseller (Nick, Nov 13, #50036: Nine18 · Mike Howard on
+ * Armstrong's address).
+ */
 export function addressFromText(text: string, name = "", company = ""): ShipAddress {
   const a = emptyAddress();
-  a.name = name; a.company = company;
-  const lines = (text || "").split(/\n|;/).map((x) => x.trim()).filter(Boolean);
+  const tidy = (l: string) => l.trim().replace(/[,;\s]+$/, "").trim();
+  let lines = (text || "").split(/\n|;/).map(tidy).filter(Boolean);
+  // one line with commas: "ALL MY SONS TUCSON, 5131 E CANADA STREET, TUCSON, AZ 85706, ATTN OPERATIONS MGR"
+  if (lines.length === 1 && lines[0].includes(",")) lines = lines[0].split(",").map(tidy).filter(Boolean);
+  const attnRe = /^(attn|attention|c\/o|care of)\b[:.\s-]*/i;
+  lines = lines
+    // "MEI ATTN: Kristopher Gibson": the company, then the person
+    .flatMap((l) => { const m = l.match(/^(.+?)\s+((?:attn|attention|c\/o)\b.*)$/i); return m && !attnRe.test(l) ? [tidy(m[1]), m[2].trim()] : [l]; })
+    // "5900 Blackwelder Street, Culver City, CA 90232": the street, then the city line
+    .flatMap((l) => { const m = l.match(/^(.*\d.*?),\s*([^,]+,?\s*[A-Za-z]{2}[\s,]+\d{5}(?:-\d{4})?)$/); return m ? [tidy(m[1]), m[2].trim()] : [l]; });
+  // "TUCSON" then "AZ 85706" (split on commas): one city line
+  lines = lines.reduce<string[]>((acc, l) => { if (/^[A-Za-z]{2}\s+\d{5}(-\d{4})?$/.test(l) && acc.length) acc[acc.length - 1] += `, ${l}`; else acc.push(l); return acc; }, []);
   const cszAt = lines.findIndex((l) => /\b[A-Z]{2}\b[\s,]*\d{5}(-\d{4})?\s*$/i.test(l));
+  const same = (x: string, y: string) => !!x && !!y && x.toLowerCase().replace(/[^a-z0-9]/g, "") === y.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (cszAt >= 0) {
     const m = lines[cszAt].match(/^(.*?)[\s,]+([A-Za-z]{2})[\s,]+(\d{5}(?:-\d{4})?)\s*$/);
     if (m) { a.city = m[1].replace(/,$/, "").trim(); a.state = m[2].toUpperCase(); a.zip = m[3]; }
-    const street = lines.slice(0, cszAt).filter((l) => /\d/.test(l) || /\b(suite|ste|unit|po box|#)\b/i.test(l));
-    const other = lines.slice(0, cszAt).filter((l) => !street.includes(l));
+    const attn = lines.find((l, i) => i !== cszAt && attnRe.test(l));
+    const head = lines.slice(0, cszAt).filter((l) => l !== attn);
+    const street = head.filter((l) => /\d/.test(l) || /\b(suite|ste|unit|po box|#)\b/i.test(l));
+    const other = head.filter((l) => !street.includes(l));
     a.street1 = street[0] || ""; a.street2 = street.slice(1).join(", ");
-    if (!a.company && other[0] && other[0] !== name) a.company = other[0];
+    // the person: an ATTN line, else a line that's the customer's own contact or a role ("OPS MANAGER")
+    const role = (l: string) => /\b(mgr|manager|operations|ops|receiving|dept|department|front desk)\b/i.test(l) && !/\b(inc|llc|co|corp|company)\b/i.test(l);
+    const person = attn ? attn.replace(attnRe, "").trim() : other.find((l) => same(l, name)) || (other.length > 1 ? other.find(role) : "") || "";
+    const firm = other.find((l) => l !== person && !same(l, name) && !(attn ? false : l === person)) || "";
+    if (person || firm) {
+      a.name = person || (same(firm, company) ? name : "");
+      a.company = firm || (same(person, name) ? company : "");
+    } else { a.name = name; a.company = company; }
   } else {
+    a.name = name; a.company = company;
     a.street1 = lines[0] || ""; a.street2 = lines.slice(1).join(", ");
   }
   return a;

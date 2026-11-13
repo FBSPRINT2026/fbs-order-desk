@@ -6,6 +6,7 @@ import type { CrewHome, CrewJob, CountJob, PeriodHours } from "@/lib/crewHome";
 import { CREW_VIEWS } from "@/lib/crewView";
 import { LangToggle, useT } from "@/components/job/lang";
 import CamScan from "@/components/job/CamScan";
+import { ViewAsBar, ViewAsPick } from "@/components/crew/ViewAs";
 
 /**
  * The crew phone's main menu (/crew; Nick, Nov 13 2026, look "A + B"): a light page with one dark card on top for the
@@ -60,6 +61,7 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
   return (
     <div className="jm cr">
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="cr-where">{where}</span><LangToggle /></header>
+      {home.viewAs && <ViewAsBar name={home.name} />}
       <main className="jm-main cr-main">
         {screen !== "home" && <button type="button" className="cr-backbtn" onClick={() => history.back()}><Svg d={IC.menu} size={18} />{t("Main menu")}</button>}
         <div className="cr-hello">
@@ -125,6 +127,7 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
         {screen === "time" && c && <TimeCard home={home} busy={busy} post={post} day0={fixDay} done={(m) => { setMsg(m); }} />}
         {screen === "cards" && <TimeCardList cards={cards} pick={(k) => { setCard(k); go("hours"); }} />}
         {screen === "hours" && (card || home.hours) && (() => { const h = card || home.hours!; return <Hours h={h} busy={busy} onOk={async () => { if (await post({ action: "hours_ok", start: h.start, hours: +(h.worked / 60).toFixed(2) })) { setMsg(t("Hours approved. Thanks!")); setCard({ ...h, ask: false, check: { status: "approved", at: new Date().toISOString() } }); void loadCards(); } }} onFix={(d) => { setFixDay(d); history.replaceState({ cr: "time" }, ""); setScreen("time"); scrollTo(0, 0); }} />; })()}
+        {screen === "home" && home.canViewAs && <ViewAsPick />}
       </main>
     </div>
   );

@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { allRows } from "@/lib/readAll";
 import { addDays, cardPunches, daysBetween, fullName, localToIso, mergeTime, periodOf, punchFixed, timecard, timeLabel, weekOf, type Employee, type Punch, type TimeOff, type TimeSettings } from "@/lib/timeclock";
 
+// divs, not <header>/<footer>: the shop's print styles hide every header and footer tag when printing (Nov 13: the
+// printed cards came out without the person's name)
 /**
  * Time cards to sign (Nick, Nov 13 2026: "print a time card for every employee to physically sign, that's the way we've
  * been doing it… we haven't got everybody in the system yet"). One letter page per person for a pay period: every day
@@ -12,7 +14,8 @@ import { addDays, cardPunches, daysBetween, fullName, localToIso, mergeTime, per
  * off, and signature lines. /print/timecards?start=<period start>&who=all|open ("open": only who hasn't approved their
  * hours on the phone). Opened from Time Clock → Payroll Report → Print time cards.
  */
-const DEPT_ORDER = ["Screen Printing", "Embroidery", "Screen Cleaning & Prep", "Receiving", "Fulfillment", "Shipping", "Office"];
+// printed by department, then by first name (Nick, Nov 13: "screen printing, embroidery and fulfillment… Ana Guzman first")
+const DEPT_ORDER = ["Screen Printing", "Embroidery", "Fulfillment", "Screen Cleaning & Prep", "Receiving", "Shipping", "Office"];
 const h2 = (m: number) => (m / 60).toFixed(2);
 const clock = (t: string) => timeLabel(t).replace(/\s?([AP])M/i, (_, x) => x.toLowerCase());
 const dayRow = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { timeZone: "UTC", weekday: "short", month: "numeric", day: "numeric" });
@@ -51,7 +54,7 @@ function Cards() {
     const days = Array.from({ length: daysBetween(per.start, per.end) + 1 }, (_, i) => addDays(per.start, i));
     const worked = new Set([...punches.filter((p) => !p.voided).map((p) => p.employee_id), ...offs.filter((o) => o.status === "approved").map((o) => o.employee_id)]);
     const rank = (e: Employee) => { const i = DEPT_ORDER.indexOf(e.department); return i < 0 ? DEPT_ORDER.length : i; };
-    return emps.filter((e) => worked.has(e.id) && (who === "all" || !checked.has(e.id)))
+    return emps.filter((e) => !e.owner_only && worked.has(e.id) && (who === "all" || !checked.has(e.id)))
       .sort((a, b) => rank(a) - rank(b) || (a.department || "").localeCompare(b.department || "") || fullName(a).localeCompare(fullName(b)))
       .map((e) => {
         const c = timecard(s, e.id, punches, offs, per.start, per.end);
@@ -79,7 +82,7 @@ function Cards() {
   if (err) return <div className="tcp-msg">{err}</div>;
   if (!data) return <div className="tcp-msg">Loading time cards…</div>;
   return (
-    <div className="tcp print-page" data-nosquish>
+    <div className="tcp" data-nosquish>
       <title>{`Time cards ${pages[0] ? longDay(pages[0].per.start) + " – " + longDay(pages[0].per.end) : ""}`}</title>
       <div className="tcp-bar">
         <b>{pages.length} time card{pages.length === 1 ? "" : "s"}</b>
@@ -91,10 +94,10 @@ function Cards() {
       {!pages.length && <div className="tcp-msg">Nobody to print: {who === "open" ? "everyone has approved their hours on their phone." : "no hours in this pay period."}</div>}
       {pages.map(({ e, c, rows, per, phone }, i) => (
         <section className="tcp-sheet" key={e.id}>
-          <header className="tcp-h">
+          <div className="tcp-h">
             <div><div className="tcp-k">FBS PRINT · TIME CARD</div><div className="tcp-name">{fullName(e)}</div></div>
             <div className="tcp-per"><div className="tcp-k">PAY PERIOD</div><b>{longDay(per.start)} – {longDay(per.end)}, {per.end.slice(0, 4)}</b></div>
-          </header>
+          </div>
           <div className="tcp-who">
             <div><span>EMPLOYEE #</span><b>{e.code ?? "—"}</b></div>
             <div><span>DEPARTMENT</span><b>{e.department || "—"}</b></div>
@@ -103,28 +106,27 @@ function Cards() {
           <table className="tcp-t" data-nofit>
             <thead><tr><th>Day</th><th>In</th><th>Lunch out</th><th>Lunch in</th><th>Out</th><th className="r">Hours</th></tr></thead>
             <tbody>{rows.map((r) => r.k === "w"
-              ? <tr key={"w" + r.label} className="wk"><td colSpan={5}>{r.label}</td><td className="r">{h2(r.mins)}</td></tr>
-              : <tr key={r.day} className={r.inn || r.out || r.mins ? "" : "off"}>
+              ? <tr key={"w" + r.label} className="tcp-wk"><td colSpan={5}>{r.label}</td><td className="r">{h2(r.mins)}</td></tr>
+              : <tr key={r.day} className={r.inn || r.out || r.mins ? "" : "tcp-off"}>
                   <td>{dayRow(r.day)}</td>
-                  <td>{r.inn ? clock(r.inn) : r.miss ? <i className="miss">missed</i> : "—"}</td>
+                  <td>{r.inn ? clock(r.inn) : r.miss ? <i className="tcp-miss">missed</i> : "—"}</td>
                   <td>{r.lo ? clock(r.lo) : "—"}</td>
-                  <td>{r.li ? clock(r.li) : r.lo ? <i className="miss">missed</i> : "—"}</td>
-                  <td>{r.out ? clock(r.out) : r.inn ? <i className="miss">missed</i> : "—"}{r.fix && <span className="fx">fixed</span>}{r.more > 0 && <span className="fx gray">+{r.more} in/out</span>}</td>
+                  <td>{r.li ? clock(r.li) : r.lo ? <i className="tcp-miss">missed</i> : "—"}</td>
+                  <td>{r.out ? clock(r.out) : r.inn ? <i className="tcp-miss">missed</i> : "—"}{r.fix && <span className="tcp-fx">fixed</span>}{r.more > 0 && <span className="tcp-fx gray">+{r.more} in/out</span>}</td>
                   <td className="r">{r.mins ? h2(r.mins) : "—"}</td>
                 </tr>)}</tbody>
           </table>
           <div className="tcp-tot">
             <div><span>REGULAR</span><b>{h2(c.regular)}</b></div>
             <div><span>OVERTIME</span><b>{h2(c.overtime)}</b></div>
-            <div><span>TIME OFF</span><b>{h2(c.pto + c.sick + c.holiday)}</b></div>
-            <div><span>TOTAL</span><b>{h2(c.regular + c.overtime + c.pto + c.sick + c.holiday)}</b></div>
+            <div><span>TOTAL</span><b>{h2(c.regular + c.overtime + c.pto + c.sick + c.holiday)}</b>{c.pto + c.sick + c.holiday > 0 && <small>incl. {h2(c.pto + c.sick + c.holiday)} time off</small>}</div>
           </div>
           <div className="tcp-sign">
             <p>I have checked these hours and they are correct. <i>Revisé estas horas y están correctas.</i>{phone && <span className="tcp-ph"> · Approved on their phone</span>}</p>
             <div className="tcp-sl"><div><span>Employee signature / Firma</span></div><div><span>Date / Fecha</span></div></div>
             <div className="tcp-sl"><div><span>Approved by</span></div><div><span>Date</span></div></div>
           </div>
-          <footer className="tcp-f"><span><b>fixed</b> = changed by the office · <b>missed</b> = no punch, write the time in</span><span>Page {i + 1} of {pages.length} · printed {printed}</span></footer>
+          <div className="tcp-f"><span><b>fixed</b> = changed by the office · <b>missed</b> = no punch, write the time in</span><span>Page {i + 1} of {pages.length} · printed {printed}</span></div>
         </section>
       ))}
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
@@ -134,6 +136,7 @@ function Cards() {
 
 const CSS = `
 body{background:#e6e9ee}
+.tcp,.tcp *{box-sizing:border-box}
 .tcp{font-family:var(--body,"Public Sans",system-ui,sans-serif);color:#141d2b;display:flex;flex-direction:column;align-items:center;gap:18px;padding:0 12px 40px}
 .tcp-bar{position:sticky;top:0;z-index:5;width:100%;max-width:8.5in;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #d5dbe3;border-radius:0 0 10px 10px;padding:10px 14px;font-size:14px}
 .tcp-bar span{color:#4b5568}.tcp-sp{flex:1}
@@ -151,12 +154,13 @@ body{background:#e6e9ee}
 .tcp-t th{font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#5f6b80;text-align:left;border-bottom:1.5px solid #141d2b;padding:4px 5px;text-transform:uppercase}
 .tcp-t td{border-bottom:1px solid #e3e7ec;padding:5px;white-space:nowrap;font-size:12.5px}
 .tcp-t .r{text-align:right}
-.tcp-t tr.wk td{background:#f2f4f7;font-weight:800}
-.tcp-t tr.off td{color:#9aa3b1}
-.tcp-t .miss{color:#c9372c;font-style:normal;font-weight:700;font-size:11px;border-bottom:1px solid #c9372c;padding:0 12px 0 0}
-.tcp-t .fx{font-size:9.5px;font-weight:800;color:#1d6fd8;margin-left:6px}
-.tcp-t .fx.gray{color:#5f6b80}
-.tcp-tot{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}
+.tcp-t tr.tcp-wk td{background:#f2f4f7;font-weight:800}
+.tcp-t tr.tcp-off td{color:#9aa3b1}
+.tcp-t .tcp-miss{color:#c9372c;font-style:normal;font-weight:700;font-size:11px;border-bottom:1px solid #c9372c;padding:0 12px 0 0}
+.tcp-t .tcp-fx{font-size:9.5px;font-weight:800;color:#1d6fd8;margin-left:6px}
+.tcp-t .tcp-fx.gray{color:#5f6b80}
+.tcp-tot{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
+.tcp-tot small{display:block;font-size:9.5px;color:#5f6b80}
 .tcp-tot div{border:1.5px solid #141d2b;border-radius:5px;padding:6px}
 .tcp-tot span{display:block;font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#5f6b80}
 .tcp-tot b{font-size:17px;font-variant-numeric:tabular-nums}
@@ -167,12 +171,12 @@ body{background:#e6e9ee}
 .tcp-sl div span{position:absolute;bottom:-15px;left:0;font-size:9.5px;color:#5f6b80;font-weight:700}
 .tcp-f{display:flex;justify-content:space-between;gap:10px;font-size:9.5px;color:#7a8597;margin-top:10px}
 .tcp-f b{color:#141d2b}
+@page{size:letter;margin:0}
 @media print{
-  @page{size:letter;margin:0}
-  body{background:#fff}
-  .tcp{padding:0;gap:0}
+  html,body{background:#fff!important;margin:0!important;padding:0!important;width:8.5in!important;min-width:0!important}
+  .tcp{padding:0;gap:0;display:block}
   .tcp-bar{display:none}
-  .tcp-sheet{box-shadow:none;width:8.5in;height:11in;min-height:0;break-after:page;page-break-after:always}
+  .tcp-sheet{box-shadow:none;width:8.5in;max-width:none;height:10.9in;min-height:0;margin:0;padding:.45in .5in;overflow:hidden;zoom:1!important;break-after:page;page-break-after:always}
   .tcp-sheet:last-child{break-after:auto;page-break-after:auto}
 }
 `;

@@ -28,6 +28,7 @@ export type CrewHome = {
    * time card sheets, on the phone). `ask`: put it first on the menu (the days after the period ends, until they answer).
    */
   hours: PeriodHours | null;
+  /** View as: the owner looking at this person's phone (their name), or the owner's own menu (may pick someone) */ viewAs?: string; canViewAs?: boolean;
   /** Deliveries (an extra on someone's menu): orders ready to deliver */ deliveries: { number: number; name: string; customer: string; qty: number; due: string | null; address: string }[] | null;
 };
 
@@ -44,7 +45,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
   const day = next ? nextWorkDay(today) : today;
   const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const ps = mergeProduction((st?.data as { production?: unknown } | null)?.production);
-  const out: CrewHome = { name: who.name, view: who.view, staff: who.kind === "staff", today, clock: null, fixes: [], presses: [], mine: [], counting: null, issues: [], queue: null, day, deliveries: null, also: who.also || [], hours: null };
+  const out: CrewHome = { name: who.name, view: who.view, staff: who.kind === "staff", today, clock: null, fixes: [], presses: [], mine: [], counting: null, issues: [], queue: null, day, deliveries: null, also: who.also || [], hours: null, viewAs: who.viewAs, canViewAs: !!who.canViewAs && !who.viewAs };
 
   if (who.employeeId) {
     const s = await timeSettings(admin);

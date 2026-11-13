@@ -17,7 +17,7 @@ import { needsDetails } from "@/lib/productionDetails";
 import PortalArtView from "@/components/PortalArtView";
 import OrderRail from "@/components/OrderRail";
 import { jobFor } from "@/lib/portalJobs";
-import { calcOrder, FULL_COLOR, inkNames, inkWord, methodLabel, methodShort, ONE_SIZE, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
+import { setupWords, calcOrder, FULL_COLOR, inkNames, inkWord, methodLabel, methodShort, ONE_SIZE, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, money } from "@/lib/format";
 import { pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
@@ -151,7 +151,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
     : "";
   const delivery = o.delivery_method === "ship" ? `Shipping${o.ship_method ? ` (${o.ship_method.trim()})` : ""}` : o.delivery_method === "deliver" ? "Delivery" : o.delivery_method === "pickup" ? "Pickup" : "";
   const extras = isReq ? [] : [
-    ...(c.setup > 0 ? [{ k: "Setup (screens / digitizing)", v: money(c.setup) }] : []),
+    ...(c.setup > 0 ? [{ k: setupWords(c) ? `Setup (${setupWords(c)})` : "Setup", v: money(c.setup) }] : []),
     ...(c.materials > 0 ? [{ k: "2XL+ materials charge", v: money(c.materials) }] : []),
     ...o.fees.filter((f) => +f.amount || (f as { free?: boolean }).free).map((f) => ({ k: f.label || "Fee", v: (f as { free?: boolean }).free ? "Free" : money(+f.amount) })),
   ];

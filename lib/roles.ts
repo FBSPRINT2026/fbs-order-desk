@@ -1,3 +1,5 @@
+import { stationEmail } from "@/lib/stations";
+
 /**
  * Who sees what. Each staff member has a role (owner, admin, production, receiving, shipping) that sets their
  * starting permissions; Settings → User Access turns single permissions on or off per person (like Printavo's user
@@ -74,10 +76,25 @@ export const roleDefaults = (role?: string | null): Perms => {
 };
 /** a person's permissions: their role's defaults with their own changes (owners: everything, always) */
 export const permsFor = (role?: string | null, own?: Partial<Perms> | null): Perms => (role === "owner" ? { ...ALL } : { ...roleDefaults(role), ...(own || {}) });
-/** the per-person changes kept in settings.data.access, by email */
+/**
+ * Shop computers (lib/stations.ts) start with nothing but their own pages (Nick, Nov 13 2026: FBS-SHIP showed the whole
+ * menu, Employees, the Time Clock and pay included): every permission off except what that computer is for. Orders and
+ * search open to every login, so they can still look up any customer or job. Settings → User Access can add more later.
+ */
+const NONE = Object.fromEntries(PERMS.map((p) => [p.k, false])) as Perms;
+const STATION_PERMS: Record<string, Perms> = {
+  [stationEmail({ key: "rec" })]: { ...NONE, receiving: true },
+  [stationEmail({ key: "ship" })]: { ...NONE, shipping: true },
+  [stationEmail({ key: "press" })]: { ...NONE, schedule: true, inkRoom: true },
+  [stationEmail({ key: "po" })]: { ...NONE, schedule: true },
+};
+/** the per-person changes kept in settings.data.access, by email (a shop computer's start from its own pages only) */
 export const accessOf = (settingsData: unknown): AccessOverrides => {
   const a = (settingsData as { access?: unknown } | null)?.access;
-  return a && typeof a === "object" ? (a as AccessOverrides) : {};
+  const own = a && typeof a === "object" ? (a as AccessOverrides) : {};
+  const out: AccessOverrides = { ...own };
+  for (const [email, perms] of Object.entries(STATION_PERMS)) out[email] = { ...perms, ...(own[email] || {}) };
+  return out;
 };
 export const seesMoney = (role?: string | null, own?: Partial<Perms> | null) => permsFor(role, own).money;
 
@@ -85,7 +102,7 @@ export const seesMoney = (role?: string | null, own?: Partial<Perms> | null) => 
 export const PAGE_PERMS: [string, PermKey][] = [
   ["/shop/customers", "customers"], ["/shop/inbox", "customers"], ["/shop/conversations", "customers"], ["/shop/incoming", "incoming"], ["/shop/printavo-sync", "quotes"], ["/shop/projects", "projects"], ["/shop/proofs", "projects"], ["/shop/jobs", "projects"], ["/shop/stores", "stores"], ["/shop/assistant", "assistant"],
   ["/shop/settings", "settings"], ["/shop/catalog", "settings"], ["/shop/artwork", "artwork"], ["/shop/details", "artwork"], ["/shop/separations", "separations"], ["/shop/inks", "inkRoom"], ["/shop/threads", "threadRoom"], ["/shop/digitizing", "digitizing"],
-  ["/shop/board", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"], ["/shop/outbound", "shipping"], ["/shop/fulfillment", "receiving"],
+  ["/shop/board", "schedule"], ["/shop/work-orders", "schedule"], ["/shop/calendar", "schedule"], ["/shop/employees", "employees"], ["/shop/shipping", "shipping"], ["/shop/outbound", "shipping"], ["/shop/fulfillment", "receiving"],
   ["/shop/receiving", "receiving"], ["/shop/receive-payment", "takePayments"], ["/shop/take-payment", "takePayments"], ["/shop/order-goods", "receiving"], ["/shop/time", "timeclock"], ["/shop/payroll", "timeclock"], ["/shop/ai", "workbench"],
 ];
 export const permForPath = (path: string): PermKey | null => PAGE_PERMS.find(([p]) => path === p || path.startsWith(p + "/"))?.[1] ?? null;

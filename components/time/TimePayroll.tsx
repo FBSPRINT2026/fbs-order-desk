@@ -47,7 +47,8 @@ export default function TimePayroll({ d }: { d: TimeData }) {
     if (!punches) return [] as Row[];
     const worked = new Set([...punches.filter((p) => !p.voided).map((p) => p.employee_id), ...offs.filter((o) => o.status === "approved").map((o) => o.employee_id)]);
     return d.employees
-      .filter((e) => worked.has(e.id) || (e.active && e.pay_type === "salary"))
+      // the owners aren't on the payroll report, not even for the owner (Nick, Nov 13 2026: "Amanda and I… we should be off")
+      .filter((e) => !e.owner_only && (worked.has(e.id) || (e.active && e.pay_type === "salary")))
       .map((e) => { const c = timecard(d.settings, e.id, punches, offs, period.start, period.end); return { e, pay: payFor(d.settings, c, pay[e.id], e.pay_type), issues: c.issues.length }; })
       .filter((r) => r.pay.regHours + r.pay.otHours + r.pay.offHours > 0 || (r.e.pay_type === "salary" && r.e.active))
       .sort((a, b) => (a.e.last_name || a.e.first_name).localeCompare(b.e.last_name || b.e.first_name) || a.e.first_name.localeCompare(b.e.first_name));
@@ -115,14 +116,14 @@ export default function TimePayroll({ d }: { d: TimeData }) {
       {noRate.length > 0 && <div className="tk-warn soft tk-noprint"><b>No pay rate:</b> {noRate.map((r) => fullName(r.e)).join(", ")}. Add it on Employees and their pay fills in.</div>}
       {err && <div className="pv-err">{err}</div>}
       <section className="tk-report">
-        <header className="tk-report-h">
+        <div className="tk-report-h">
           <div><h2>Payroll Report</h2><p>Pay period {dayLabel(period.start)} – {dayLabel(period.end)}, {period.start.slice(0, 4)}{running ? " · so far" : ""}</p></div>
           <div className="tk-report-k">
             <span><small>Regular</small><b className="num">{h2(all.reg)}</b><em>hours</em></span>
             <span className={all.ot ? "ot" : ""}><small>Overtime</small><b className="num">{h2(all.ot)}</b><em>hours</em></span>
             <span className="tot"><small>Total pay</small><b className="num">{$(r2(all.total))}</b><em>{rows.length} people</em></span>
           </div>
-        </header>
+        </div>
         {punches === null ? <div className="db-empty">Loading…</div> : !rows.length ? <div className="db-empty">No hours in this pay period.</div> : groups.map((g) => g.rows.length > 0 && (
           <div key={g.k} className={"tk-rgrp " + g.k}>
             <h3>{g.l} <span>{g.rows.length} {g.rows.length === 1 ? "person" : "people"}</span></h3>

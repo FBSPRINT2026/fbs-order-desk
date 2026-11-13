@@ -109,6 +109,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
     boxes… permanently fix this problem throughout the site");
   - an ink's screen color: `colorHex` from `lib/inkColors.ts` (the Ink Room's stocked inks are loaded for every shop page
     by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`; and everywhere a price is worked out, the QuickBooks sync and server actions included, through `mergeSettings`: the database keeps `settings.data.stockInks` in step with the Ink Room, migration 309; Nick, Nov 12, #40481's Black Light Green read as a black on the server, no underbase);
+  - what a group's mockup picture is, wherever it came from (ours, a placement picture, a visual mockup, the customer's
+    own): `groupPictures` in `lib/mockupFresh.ts` (the work order, the phone's Proof, the schedule's job card; Nick, Nov 13,
+    #40380's Proof was empty); on a phone a picture opens full screen to pinch and zoom (`components/job/PinchView.tsx`);
   - a group's saved mockup pictures: `lib/mockupFresh.ts` (`mockupHref` for every link into a group's mockup, so a logo
     mockup opens the logo builder; the save stamps `mockupArt`, and the order page redraws stale pictures by itself;
     anything that swaps a group's pictures for others clears `mockupArt`);
@@ -277,13 +280,43 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   tap (`hours` in `lib/crewHome.ts`, `time_card_checks`; the Time Clock's Their check column shows Approved / Fix asked
   / Not yet). Approving the period on the Payroll Report takes the card off everyone's phone; My time cards lists
   the period now running and the six before it (`periodHours`, `/api/crew/cards`). Paper time cards to sign: Payroll
-  Report → Print time cards (`/print/timecards`, one page each; everyone, or only who hasn't checked on the phone). New crew tools go
+  Report → Print time cards (`/print/timecards`, one page each; everyone, or only who hasn't checked on the phone), by Screen
+  Printing, Embroidery, Fulfillment, then the rest, each by first name). A day's punches say what they are by their order,
+  not the button pressed: any four punches are in, lunch out, lunch in, out; three pressed in, out, in are back from lunch
+  (`withLunch` in `lib/timeclock.ts`; Nick, Nov 13). **View as** (Nick, Nov 13): the owner, on his own portal login, picks
+  anyone at the bottom of his /crew menu and sees their phone exactly (`VIEWAS_COOKIE` in `lib/jobAccess.ts`, `/api/viewas`);
+  no shared PIN; look only (middleware refuses the phone tools' changes), a bar on top with Stop, ends after 2 hours. New crew tools go
   through these, never a page of their own; every word has its Spanish in `components/job/lang.tsx`.
   Counting goods in on a phone is one tool, `components/job/PhoneCheckin.tsx` (the shop's phone receiving dashboard opens it
   too, `/j/<number>?v=checkin`): every style on the job listed at the top, the picked one's sizes typed in, and a green
   button held 3 seconds to count everything in, then Check In first on the review (Nick, Nov 13). Leaving a count halfway, on the phone or the desk's
   `CheckinModal`, always asks: save what's counted to finish later (anyone picks it up: `/api/jobs/checkin/draft`) or
   reset to uncounted. Receiving lists every open order of ours whatever its due date (#40382, due last week, was missing).
+- **Shop computers** (Nick, Nov 13 2026: "FBS-REC, FBS-SHIP, FBS-PO and FBS-PRESS… a simple PIN"): four logins in
+  `lib/stations.ts`, each a real staff login of its own (`<key>@station.fbsprint.com`, the role's permissions, no money),
+  signed in on the sign-in page's "Shop computer" with its name and one PIN (`/api/station/login`; the owner sets the PIN
+  on Settings → People → Shop computers, kept scrambled in `settings.data.stations`, never in the code), on the shop's
+  network only (the shop layout and `jobGate` turn one away elsewhere). Each opens on its own page: Receiving, the crew
+  menu for the presses (`/crew`, then a job's phone menu), Shipping, and Work Orders (`/shop/work-orders`: the schedule's
+  jobs by day, ticked and printed together, marked printed). Being real logins they keep the portal's search and Orders
+  list; change what one sees on User access like any person. Each starts with every permission off but its own
+  pages (`STATION_PERMS` in `lib/roles.ts`, through `accessOf`; Nick, Nov 13: FBS-SHIP showed Employees, the Time Clock
+  and pay): REC receiving, SHIP shipping, PRESS the schedule and Ink Room, PO the schedule (Work Orders).
+  Shop computers are widescreen monitors (Nick, Nov 13: "you don't need to make a phone version… they're actual
+  widescreen computers"): build their screens for a wide monitor; no phone layout for them.
+  **Outbound is FBS-SHIP's home, the computer by the door** (Nick, Nov 13). Left: a "Who's picking up?" search (a
+  customer, job #, PO or an end client's name: `outboundLookup` in `app/shop/outbound/actions.ts`) lists their open jobs
+  and where each is, read off the status (Ready by delivery method → On the pickup shelf / Ready to ship / to deliver,
+  Fulfillment → Being packed, In Production → Still printing), with Label, Picked up (`markPickedUp`: Ready → Completed,
+  logged) and Ship; then the tabs Ship (the Shipping Center, `components/shipping/ShippingCenter.tsx`, the one
+  `/shop/shipping` shows too), Pickup shelf, Delivery. Right: the box label tool, always open (`LabelPanel`). A label or
+  work order scanned anywhere on the page (or its link / # typed in the search and Enter) pops up "Print box label /
+  Start shipping" for that job (`ScanChoice`); nothing has to be clicked first.
+  **Box labels** (Nick, Nov 13 2026): the job #, SHIP / PICKUP / DELIVERY and the box count on top; then the customer, the
+  whole job name and the PO, with the QR (the scanner reads it; no barcode); then the fill-in grid. No ship-to, dates or
+  ship method: the QR opens all of that. Labels print BOX ___ OF ___ to write in unless "I know my box count" is ticked
+  (`known` on `/api/print`). Printed text is plain letters (`plain` in `lib/zpl.ts`). One layout draws both the ZPL and
+  the preview picture (`drawBoxLabel` → `boxLabelZpl` / `boxLabelSvg`).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

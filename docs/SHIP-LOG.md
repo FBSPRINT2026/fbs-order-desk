@@ -309,3 +309,32 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 12:35pm · 1.3.551 · Nick · Crew phone: My time cards (this period and the six before); approving a period on the Payroll Report takes the payday card off phones
 - Nov 13 12:37pm · 1.3.552 · Nick · Time cards print page: read the punches right (it stopped on Loading)
 - Nov 13 12:40pm · 1.3.553 · Nick · Time cards print page: tables stay as tables (no restacking)
+- Nov 13 12:42pm · 1.3.554 · Nick · Time cards print page: full letter width
+- Nov 13 12:44pm · 1.3.555 · Nick · Time cards print page: its own class names (a shop style was stacking the week rows)
+- Nov 13 12:50pm · 1.3.556 · Nick · Time cards print: the name and pay period print at the top (shop print styles were hiding them); fits the printer's margins
+- Nov 13 12:50pm · 1.3.557 · Nick · Time cards print: Regular, Overtime, Total only; Payroll Report's printed title shows (header tags hidden by shop print styles)
+- Nov 13 12:55pm · 1.3.558 · Nick · Payroll Report and printed time cards leave out owner-only people (works once migration 314 is in)
+- Nov 13 12:55pm · 1.3.559 · Nick · Time cards print: full page, not shrunk (the page was wider than the paper)
+- Nov 13 1:01pm · 1.3.560 · Nick · Time clock: any four-punch day reads as in, lunch out, lunch in, out whatever buttons were pressed; printed time cards by Screen Printing, Embroidery, Fulfillment, then first name
+- Nov 13 1:01pm · 1.3.561 · Nick · Rules: printed time card order and the four-punch day
+- Nov 13 1:08pm · 1.3.562 · Nick · Phone Proof shows the customer's own or visual mockup too (one groupPictures for the work order, Proof and job card); tap a picture to pinch and zoom
+- Nov 13 1:10pm · 1.3.563 · Nick · Phone picture viewer opens fitted to the screen
+- Nov 13 1:20pm · 1.3.564 · Nick · Crew phone: View as (the owner sees any employee's phone, look only, from his own login; no shared PIN)
+- Nov 13 1:39pm · 1.3.565 · Nick · Shop computers: FBS-REC / FBS-PRESS / FBS-SHIP / FBS-PO sign in with a name and PIN on the shop network; Settings → Shop computers; Work Orders page
+- Nov 13 1:41pm · 1.3.566 · Nick · Work Orders: Tomorrow only for tomorrow
+- Nov 13 2:00pm · 1.3.567 · Nick · Shop computers: save the shop's network in one click on Settings → Shop computers
+- Nov 13 2:00pm · 1.3.568 · Nick · Sign-in page: employee and shop computer sign-ins show only on the shop's network
+- Nov 13 2:03pm · 1.3.569 · Nick · Sign-in page: At the shop · Shop employee / Shop computer buttons (shop network only)
+- Nov 13 2:08pm · 1.3.570 · Nick · Shop computers start with only their own pages: no Employees, Time Clock, payroll or anything else
+- Nov 13 2:41pm · 1.3.571 · Nick · Outbound is the shipping computer's home: who's picking up (customer lookup with where each job is, Picked up), Print box label, Start shipping, the Shipping Center underneath. Ship window no longer cut off (an email class clipped it); ship-to keeps the order's own company and ATTN (#50036 went to Nine18 / Mike); the order's service and own account are kept and preselected
+- Nov 13 3:00pm · 1.3.572 · Nick · Outbound: the job typed in the top box feeds Print box label (just how many boxes, Enter prints) and Start shipping (opens its ship window straight away); click a row to pick another job
+- Nov 13 3:04pm · 1.3.573 · Nick · Label printer: a USB Zebra works (Settings → Label printer → plugged in by USB); the print relay on that computer prints to it through Windows and finds the Zebra by itself
+- Nov 13 3:08pm · 1.3.574 · Nick · Outbound: Print box label opens a pop-up showing the label exactly as it prints (drawn from the same layout as the Zebra's), how many boxes, flip through boxes, Print
+- Nov 13 3:13pm · 1.3.575 · Nick · Print relay: Run with PowerShell installs it and it runs in the background (no window to keep open), starts again after every restart without needing an administrator, and only one copy runs
+- Nov 13 3:16pm · 1.3.576 · Nick · Print relay: a fresh connection and a time limit on every call (a dropped connection hung it after the first labels), says when it starts each label, keeps a log
+- Nov 13 3:17pm · 1.3.577 · Nick · Print relay: finds the Zebra once from the local printer list, gives each label 20 seconds then reports an error instead of hanging
+- Nov 13 3:36pm · 1.3.578 · Nick · Box label preview: lettering squeezed to match the Zebra's narrow font, so the picture wraps where the printed label does
+- Nov 13 3:41pm · 1.3.579 · Nick · Box label: number on top, then customer, the whole job name and a bigger PO beside the QR; no barcode or ship-to, so the fill-in grid gets the room. Labels print BOX ___ OF ___ unless 'I know my box count' is ticked (Outbound pop-up and the phone). Plain letters only (no more 'Â')
+- Nov 13 3:43pm · 1.3.580 · Nick · Outbound: lists on the left (who's picking up, then Ship / Pickup shelf / Delivery tabs), the box label tool always open on the right with little 1/2, 2/2 boxes showing what each label says; scanning a label anywhere on the page asks Print box label or Start shipping
+- Nov 13 3:55pm · 1.3.581 · Nick · Outbound: the Box label panel lines up with the search; it starts as just a job box: type and pick from the drop-down (job #, customer or name), then the label, count and Print open
+- Nov 13 3:57pm · 1.3.582 · Nick · Setup is named by what's in it (screens, digitizing, PMS matching, color changes, minimum) on the order page and the customer's portal; a print's screens show at what's charged: $0 and why when a sample order, waived setup or program price doesn't charge them (#50025)

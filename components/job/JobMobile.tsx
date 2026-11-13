@@ -1,4 +1,6 @@
 "use client";
+import { ViewAsBar } from "@/components/crew/ViewAs";
+import PinchView from "@/components/job/PinchView";
 import PhotoEdit, { type PhotoEditApi } from "@/components/job/PhotoEdit";
 import { useEffect, useRef, useState } from "react";
 import type { JobCard } from "@/lib/jobCard";
@@ -94,6 +96,7 @@ export default function JobMobile(p: {
   return (
     <div className="jm">
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
+      {who.viewAs && <ViewAsBar name={who.name} />}
       <section className={"jm-job" + (view === "checkin" ? " slim" : "")}>
         <div className="jm-navrow">
           <a className="jm-menu" href="/crew" onClick={(e) => { if (countGuard.busy()) { e.preventDefault(); countGuard.ask(() => { location.href = "/crew"; }); } }}><Icon d={I.menu} />{t("Main menu")}</a>
@@ -406,24 +409,27 @@ function Labels({ card, box, printer, perBox, staff }: { card: JobCard; box: num
   const { t } = useT();
   const [n, setN] = useState(Math.max(box || 0, Math.max(1, Math.ceil((card.qty || 0) / Math.max(1, perBox)))));
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // box count not known yet (most days): labels print BOX ___ OF ___ to write in (Nick, Nov 13)
+  const [known, setKnown] = useState(!!box);
   async function print(only?: number) {
     setBusy(true); setMsg(null);
-    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job: { kind: card.kind, id: card.id }, boxes: n, only }) }).catch(() => null);
+    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job: { kind: card.kind, id: card.id }, boxes: n, known, only: known ? only : undefined }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { message: "Offline. Try again." };
     setBusy(false); setMsg({ ok: !!r?.ok && j.ok !== false, text: t(j.message || j.error || "Done.") });
   }
   return (
     <div className="jm-card">
       {!printer?.ready && <div className="jm-warn">{t("The label printer isn't set up yet (Shipping Center → Settings → Label printer).")}</div>}
-      <div className="jm-label">{t("How many boxes?")}</div>
+      <div className="jm-label">{t("How many labels?")}</div>
       <div className="jm-count">
         <button type="button" aria-label={t("One fewer box")} onClick={() => setN(Math.max(1, n - 1))}>−</button>
         <input inputMode="numeric" value={n} onChange={(e) => setN(Math.max(1, Math.min(99, +e.target.value.replace(/\D/g, "") || 1)))} aria-label={t("Boxes")} />
         <button type="button" aria-label={t("One more box")} onClick={() => setN(Math.min(99, n + 1))}>+</button>
       </div>
-      <p className="jm-faint">{t("{0} pcs · about {1} per box. Each label says box 1 of {2}, 2 of {2}…", card.qty, perBox, n)}</p>
+      <label className="jm-check"><input type="checkbox" checked={known} onChange={(e) => setKnown(e.target.checked)} /> {t("I know my box count")}</label>
+      <p className="jm-faint">{known ? t("{0} pcs · about {1} per box. Each label says box 1 of {2}, 2 of {2}…", card.qty, perBox, n) : t("Each label says BOX ___ OF ___ to write in.")}</p>
       <button type="button" className="jm-go" disabled={busy} onClick={() => print()}>{busy ? t("Sending…") : n === 1 ? t("Print 1 label") : t("Print {0} labels", n)}</button>
-      {box && box <= n && <button type="button" className="jm-ghost" disabled={busy} onClick={() => print(box)}>{t("Just box {0} of {1}", box, n)}</button>}
+      {known && box && box <= n && <button type="button" className="jm-ghost" disabled={busy} onClick={() => print(box)}>{t("Just box {0} of {1}", box, n)}</button>}
       {msg && <div className={msg.ok ? "jm-ok" : "jm-err"} role="status">{msg.text}</div>}
       {staff && card.kind === "o" && <a className="jm-alt" href={`/print/${card.id}/labels?boxes=${n}`}>{t("Open the printable labels instead")}</a>}
     </div>
@@ -435,16 +441,21 @@ function Proof({ mockups, card, designs }: { mockups: { name: string; urls: stri
   const { t } = useT();
   const shots = mockups.filter((m) => m.urls.length);
   const art = card.groups.flatMap((g) => g.prints.map((pr) => ({ label: [pr.location, pr.inks].filter(Boolean).join(" · "), url: (pr.designId && designs[pr.designId]?.url) || pr.image || "" }))).filter((x) => x.url);
-  if (!shots.length && !art.length) return <div className="jm-card"><p className="jm-faint">{t("No mockup saved on this job yet.")}</p></div>;
+  // every picture in one row to swipe through, opened full screen to pinch and zoom (Nick, Nov 13 2026)
+  const all = shots.length ? shots.flatMap((m) => m.urls.map((u) => ({ url: u, title: shots.length > 1 ? m.name : "" }))) : art.map((a) => ({ url: a.url, title: a.label }));
+  const [zoom, setZoom] = useState<number | null>(null);
+  if (!all.length) return <div className="jm-card"><p className="jm-faint">{t("No mockup saved on this job yet.")}</p></div>;
+  let k = 0;
   return (
     <div className="jm-proof">
-      {shots.map((m, i) => (
+      <p className="jm-faint jm-proof-tip">{t("Tap a picture to zoom in with two fingers.")}</p>
+      {shots.length ? shots.map((m, i) => (
         <div key={i} className="jm-card">
           {shots.length > 1 && <b>{m.name}</b>}
-          {m.urls.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer"><img src={u} alt={m.name} /></a>)}
+          {m.urls.map((u) => { const n = k++; return <button key={n} type="button" className="jm-proof-pic" onClick={() => setZoom(n)} aria-label={t("Zoom in")}><img src={u} alt={m.name} /></button>; })}
         </div>
-      ))}
-      {!shots.length && art.map((a, i) => <div key={i} className="jm-card"><b>{a.label}</b><img src={a.url} alt="" /></div>)}
+      )) : art.map((a, i) => <div key={i} className="jm-card"><b>{a.label}</b><button type="button" className="jm-proof-pic" onClick={() => setZoom(i)} aria-label={t("Zoom in")}><img src={a.url} alt="" /></button></div>)}
+      {zoom != null && <PinchView urls={all.map((x) => x.url)} titles={all.map((x) => x.title)} start={zoom} onClose={() => setZoom(null)} />}
     </div>
   );
 }

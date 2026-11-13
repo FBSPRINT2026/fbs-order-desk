@@ -105,3 +105,20 @@ export function mockupContentKey(snap: unknown): string {
   const clean = (v: unknown): unknown => Array.isArray(v) ? v.map(clean) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([k]) => !drop.has(k)).sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, clean(x)])) : v;
   return JSON.stringify(clean(snap ?? null));
 }
+
+/**
+ * A group's mockup pictures, wherever they came from (storage paths in the "proofs" bucket), for anything that shows
+ * "the mockup": ours (`mockupThumbs`) first; else the customer's placement picture for supplied transfers; else the visual
+ * mockup added by hand; else the customer's own mockups (Tiger Blue's, printed from their films). Pictures only: a PDF
+ * cart or an .ai can't be drawn. (Nick, Nov 13 2026, #40380: the phone's Proof said there was no mockup; it only looked
+ * at ours.) `full` swaps our small "-thumb.png" for the full picture where one was kept.
+ */
+export function groupPictures(g: Pick<Group, "mockupThumbs" | "imprints" | "customerMockups" | "visualMockup">, full = false): string[] {
+  const pic = (x: string) => /\.(png|jpe?g|webp|gif|svg)$/i.test(x);
+  const ours = [...new Set((g.mockupThumbs || []).filter(Boolean))];
+  if (ours.length) return full ? ours.map((x) => x.replace(/-thumb\.png$/, ".png")) : ours;
+  const placed = (g.imprints || []).map((d) => d.supplied?.picture?.path || d.placeRef?.path || "").filter((x) => x && pic(x));
+  if (placed.length) return placed;
+  const theirs = [g.visualMockup?.path || "", ...(g.customerMockups || []).map((m) => m.path)].filter((x) => x && pic(x));
+  return [...new Set(theirs)];
+}

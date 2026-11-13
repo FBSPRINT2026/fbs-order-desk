@@ -9,13 +9,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *  - PrintNode (if PRINTNODE_API_KEY is set and a PrintNode printer is chosen) gets it right away.
  * Phones can't talk to a printer on the shop network from a secure web page, so something on the network has to.
  */
-export type PrintSettings = { mode: "relay" | "printnode"; host: string; port: number; dpi: 203 | 300; printnodeId: string };
-export const DEFAULT_PRINT: PrintSettings = { mode: "relay", host: "", port: 9100, dpi: 203, printnodeId: "" };
+/** link: how the Zebra is plugged in. "usb": a USB cable into the print computer (the relay prints to it through Windows,
+ *  by name, or finds the Zebra itself when usbName is blank); "network": it has its own IP address (Nov 13, Nick: "it's just a USB printer"). */
+export type PrintSettings = { mode: "relay" | "printnode"; link: "usb" | "network"; usbName: string; host: string; port: number; dpi: 203 | 300; printnodeId: string };
+export const DEFAULT_PRINT: PrintSettings = { mode: "relay", link: "network", usbName: "", host: "", port: 9100, dpi: 203, printnodeId: "" };
 
 export async function printSettings(admin: SupabaseClient): Promise<PrintSettings> {
   const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const p = ((data?.data as Record<string, unknown>)?.printing || {}) as Partial<PrintSettings>;
-  return { ...DEFAULT_PRINT, ...p, port: +(p.port || 9100) || 9100, dpi: +(p.dpi || 203) === 300 ? 300 : 203 };
+  return { ...DEFAULT_PRINT, ...p, link: p.link === "usb" ? "usb" : "network", usbName: String(p.usbName || "").trim(), port: +(p.port || 9100) || 9100, dpi: +(p.dpi || 203) === 300 ? 300 : 203 };
 }
 
 export const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -44,6 +46,7 @@ export async function queueLabels(admin: SupabaseClient, labels: { title: string
   const { data: rl } = await admin.from("print_relays").select("last_seen_at").eq("revoked", false).order("last_seen_at", { ascending: false, nullsFirst: false }).limit(1);
   const seen = (rl || [])[0]?.last_seen_at as string | undefined;
   const live = !!seen && Date.now() - Date.parse(seen) < 90000;
-  if (!ps.host) return { ok: false, message: "Set the printer's IP address first (Shipping Center → Settings → Label printer).", ids };
+  if (ps.link !== "usb" && !ps.host) return { ok: false, message: "Set up the label printer first: Shipping Center → Settings → Label printer (USB or its IP address).", ids };
+  if (!seen) return { ok: false, message: "No print computer yet: Shipping Center → Settings → Label printer → Set up a print computer (the one the printer plugs into).", ids };
   return { ok: live, message: live ? `Sent ${labels.length} label${labels.length === 1 ? "" : "s"} to the printer.` : `Queued ${labels.length} label${labels.length === 1 ? "" : "s"}, but the print computer isn't connected. They'll print if it's back within 15 minutes.`, ids };
 }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { jobActor } from "@/lib/jobAccess";
 import { loadJobCard, parseJobCode } from "@/lib/jobCard";
-import { boxLabelZpl, testLabelZpl } from "@/lib/zpl";
+import { boxLabelSvg, boxLabelZpl, testLabelZpl } from "@/lib/zpl";
 import { printSettings, queueLabels } from "@/lib/printQueue";
 import { shopNetwork } from "@/lib/shopNetwork";
 
@@ -23,15 +23,27 @@ export async function POST(req: Request) {
     const r = await queueLabels(admin, [{ title: "Test label", zpl: testLabelZpl(ps.dpi, who.name), kind: "test" }], who.name);
     return NextResponse.json(r, { status: r.ok ? 200 : 202 });
   }
+  // the box label as a picture, before it prints (Outbound's Print box label pop-up)
+  if (b.action === "preview") {
+    const ref = typeof b.job === "object" && b.job && (b.job.kind === "o" || b.job.kind === "a") ? { kind: b.job.kind as "o" | "a", id: String(b.job.id) } : parseJobCode(String(b.job || ""));
+    if (!ref) return NextResponse.json({ error: "Which job?" }, { status: 400 });
+    const card = await loadJobCard(admin, ref);
+    if (!card) return NextResponse.json({ error: "No job with that number." }, { status: 404 });
+    const n = Math.max(0, Math.min(99, Math.round(+b.boxes || 0))), of = b.known === false ? 0 : n;
+    const box = of ? Math.max(1, Math.min(of, Math.round(+b.box || 1))) : 0;
+    return NextResponse.json({ svg: boxLabelSvg(card, box, of), job: { kind: card.kind, id: card.id, number: card.number, name: card.name, customer: card.customer, qty: card.qty } });
+  }
   if (b.action === "box") {
     const ref = typeof b.job === "object" && b.job && (b.job.kind === "o" || b.job.kind === "a") ? { kind: b.job.kind as "o" | "a", id: String(b.job.id) } : parseJobCode(String(b.job || ""));
     if (!ref) return NextResponse.json({ error: "Which job?" }, { status: 400 });
     const card = await loadJobCard(admin, ref);
     if (!card) return NextResponse.json({ error: "No job with that number." }, { status: 404 });
-    const of = Math.max(0, Math.min(99, Math.round(+b.boxes || 0)));
-    const only = Math.round(+b.only || 0);
-    const list = only ? [only] : Array.from({ length: Math.max(1, of) }, (_, i) => i + 1);
-    const r = await queueLabels(admin, list.map((n) => ({ title: `#${card.number} box ${n}${of ? ` of ${of}` : ""}`, zpl: boxLabelZpl(card, n, of, ps.dpi), kind: "box", order_id: card.kind === "o" ? card.id : null, archived_order_id: card.kind === "a" ? card.id : null })), who.name);
+    // boxes = how many labels; known: false = the box count isn't known yet, so each prints "BOX ___ OF ___" to write
+    // in (Nick, Nov 13: "I'm going to print 10 labels because I think I'll probably need 8")
+    const count = Math.max(1, Math.min(99, Math.round(+b.boxes || 0))), of = b.known === false ? 0 : count;
+    const only = of ? Math.round(+b.only || 0) : 0;
+    const list = only ? [only] : Array.from({ length: count }, (_, i) => i + 1);
+    const r = await queueLabels(admin, list.map((n) => ({ title: `#${card.number} ${of ? `box ${n} of ${of}` : `label ${n} of ${count} (box count to write in)`}`, zpl: boxLabelZpl(card, of ? n : 0, of, ps.dpi), kind: "box", order_id: card.kind === "o" ? card.id : null, archived_order_id: card.kind === "a" ? card.id : null })), who.name);
     return NextResponse.json(r, { status: r.ok ? 200 : 202 });
   }
   return NextResponse.json({ error: "Print what?" }, { status: 400 });
