@@ -293,3 +293,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 11:17am · 1.3.529 · Nick · Ready To Schedule: right-click a job (add at a press's next open time, book where suggested, printed already → Fulfillment/Ready/Completed, put on hold, open); the schedule's assistant under Make The Schedule (say it, check the plan, Book)
 - Nov 13 11:19am · 1.3.531 · Nick · Time cards: an "in" during a break started that day is the return from the break, not a second clock-in (Jose Rodriguez's Nov 10 showed 1 to fix)
 - Nov 13 11:23am · 1.3.533 · Nick · Schedule assistant: books, takes jobs back to Ready To Schedule and adds downtime (someone out), shows the steps first (Do it), idea chips to tap; jobs go by short ids so none are dropped
+- Nov 13 11:26am · 1.3.535 · Nick · Schedule assistant: its note names jobs and crews, never internal ids
