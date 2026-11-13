@@ -1224,7 +1224,9 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (d.method !== "screen") return d;
     const inkBy = Object.fromEntries(Object.entries(d.inkBy || {}).filter(([c]) => here.has(inkColorKey(c))));
     const n = colorChanges({ inkBy, changeOf: d.changeOf }) + (seen?.autoChange?.get(d.id)?.swaps.length || 0);
-    return n === num(d.inkChanges) ? d : { ...d, inkChanges: n };
+    // and its PMS matches (a change to a PMS) only for those colors too (Nov 12, #50061: lib/inkBy.ts liveInkBy)
+    const same = Object.keys(inkBy).length === Object.keys(d.inkBy || {}).length;
+    return n === num(d.inkChanges) && same ? d : { ...d, inkChanges: n, ...(same ? {} : { inkBy }) };
   }) };
   const smp = (o as { order_type?: string | null; sample?: SampleRule | null }).order_type === "sample" ? (o as { sample?: SampleRule | null }).sample || SAMPLE_DEFAULT : null;
   // a sample run (Group.sample) is priced by its own charges, not by its pieces, screens or PMS (lib/samples.ts)

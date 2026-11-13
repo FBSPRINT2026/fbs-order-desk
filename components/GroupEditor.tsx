@@ -22,8 +22,8 @@ import type { Imprint } from "@/lib/pricing";
 import { confirmTitle, isNewOrderConfirm } from "@/components/OrderTypeRow";
 import { plainlyMeans, rankColors } from "@/lib/colorMatch";
 import DesignSearch from "@/components/DesignSearch";
-import ColorChange, { versionOfColor, versionsOf } from "@/components/ColorChange";
-import { baseColor, inkKeyOf, inksOnColor } from "@/lib/inkBy";
+import ColorChange, { versionOfColor, versionsOf as versionsOfAll } from "@/components/ColorChange";
+import { baseColor, inkKeyOf, inksOnColor, liveInkBy, livePrint } from "@/lib/inkBy";
 import LocationChange from "@/components/LocationChange";
 import { hasSpotChange, spotKey, spotLines, spotOf, spotsOf, needsSettle, settleSpots } from "@/lib/spotChange";
 import { colorChanges } from "@/lib/pricing";
@@ -325,6 +325,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     }).filter((x) => Object.keys(x.swap).length);
   };
   // color changes across the group's prints: each garment color's version (A as printed, B… a change), for grouping lines
+  // a print's color changes on this group's own garment colors only (lib/inkBy.ts liveInkBy)
+  const versionsOf = (x: Imprint) => versionsOfAll(livePrint(x, g.lines));
   const ccImps = g.imprints.filter((x) => versionsOf(x).length > 0);
   // a colorway split's sections go by the colorway's letter (A, then B), whichever is the print's own (Oct 31, Nick: "it's
   // grouping the items out of order… B, A, A, B. So the top should always go A and B, and then the bottom… A and B")
@@ -905,8 +907,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     const ck = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     // shown on the ink itself (Oct 26, Nick): "White · change to Maroon · on Mauve", only on the inks that change
     const changes: Record<string, { to: string; on: string }[]> = {};
-    for (const [k, m] of Object.entries(d.inkBy || {})) {
-      const l = g.lines.find((x) => ck(x.color) === ck(k));
+    for (const [k, m] of Object.entries(liveInkBy(d, g.lines) || {})) {
+      const l = g.lines.find((x) => ck(inkKeyOf(x)) === ck(k) || ck(x.color) === ck(k));
       for (const [a, b] of Object.entries(m || {})) if (b && b.trim().toLowerCase() !== a.trim().toLowerCase()) (changes[a.trim().toLowerCase()] ||= []).push({ to: b.trim(), on: l?.color || k });
     }
     const sharedNote = shared.length ? <NoCharge title={`No charge: ${shared.map((k) => `${k} matched for the ${firstOn(k) || "another print"}`).join("; ")} (one matching fee per order)`} /> : null;

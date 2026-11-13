@@ -243,6 +243,12 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   time the order changes here, the invoice is replaced with ours whole (Nick, Nov 12: "if it stays the same, it stays the same").
   One Printavo sent at a different total (shipping or a fee it never had, other prices) is replaced with ours whole (Nick,
   Nov 12, after #40193: "anytime you see a difference, you should write what's in our system").
+- **A color change only for the garment colors on the group** (Nick, Nov 12, #50061: a Blue Spruce-only reorder kept
+  the last job's "White → 7640 on Mauve", its $15 PMS match and a mauve sweatshirt on the mockup). A print's `inkBy` for a
+  color no longer on its group stays saved but never shows, charges or prints: `liveInkBy` / `livePrint` in
+  `lib/inkBy.ts` (used by `calcGroup`, the order page's inks and versions, `changeVersions`, the work order). A garment
+  taken off a group that its mockup still shows is asked about: "Take it off the mockup?" (`mockupGone` in
+  `lib/mockupFresh.ts`, from the stamp's garment list `mockupArt.gn`).
 - **An order's saved total is what its lines work out to** (Nick, Nov 12 2026: Dear Heart's reorders showed $0 on the customer's orders). The lists, the portal and QuickBooks read `orders.total`; anything that makes or changes an order outside the order page saves `calcOrder(...).total` with it, and the order page saves a total that doesn't match once it's opened (not a completed job).
 - **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
   to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule

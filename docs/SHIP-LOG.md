@@ -258,3 +258,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 9:05pm · 1.3.462 · Nick · Mockup Creator: print areas can be dragged and sized by hand (front, back and each sleeve), saved per style and used every time
 - Nov 12 9:05pm · 1.3.463 · Nick · Schedule: done (blue), printing (green) and over-time (yellow/red) tints now show; the calm look's white base rule was overriding them
 - Nov 12 9:11pm · 1.3.465 · Nick · Order page saves a total that doesn't match its lines once opened (orders made outside the page showed $0)
+- Nov 12 9:19pm · 1.3.467 · Nick · Color changes and their PMS match only for garment colors on the group; ask to take a removed garment off the mockup
