@@ -433,6 +433,16 @@ export function subNeed(need: Need, locs: string[] | null | undefined): Need {
   const st = need.steps.filter((x) => locs.includes(locKey(x)));
   return st.length ? needOf(need.type, st) : need;
 }
+/**
+ * Just some of a run's pieces (an Issue: missing goods that came in late, rejects, a reprint; Nov 12): every print spot
+ * runs that many pieces, shared between its garments as the full run was, with setup as usual. A time staff set for a
+ * spot was for the whole run, so it's dropped.
+ */
+export function partNeed(need: Need, pcs: number): Need {
+  const all = Math.max(1, need.qty || 1), f = Math.min(1, Math.max(0, pcs) / all);
+  const st = need.steps.map((x) => { const { over: _o, ...rest } = x; void _o; return { ...rest, qty: Math.max(1, Math.round(x.qty * f)) }; });
+  return needOf(need.type, st);
+}
 /** What's left of a need once some locations are booked (null = nothing left). */
 export function restNeed(need: Need, booked: string[] | "all"): Need | null {
   if (booked === "all") return null;

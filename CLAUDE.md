@@ -342,6 +342,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   its right end ("In 6:12a", "In 7:21a · late", "Not in yet"; display only), and the press under its name ("Gauntlet III ·
   12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.
+- **Issue on a run** (Nick, Nov 12 2026: "missing goods or rejects. Or reprint"): the right-click's red **Issue** button
+  (printing, paused or done, after the fact too) asks why (Missing / Reject / Reprint) and how many still to print by size
+  (`production_issues`). The run so far is finished where it stopped; the pieces become their own job, the same order
+  number with the reason as a tag and only those pieces (`partNeed` in `lib/production.ts`; `production_slots.issue_id`,
+  job key `i:<id>`). Missing waits under Ready To Schedule's Waiting on goods until a count is saved for the order after
+  the issue (or "Here now"); Reject and Reprint are ready at once. An open issue holds the order In Production; its tag
+  shows beside the status on the Orders list and the order's header (`IssueTag`), never in the customer's portal.
 - **A mixed job's parts show under its status** (Nick, Nov 12, option B): an order printing on more than one kind of
   machine shows SP / EMB / HP blocks (green done, blue printing, gray booked, amber dashed not on the schedule; hover
   for when and where) on the Orders list, the order's header and the schedule's job card: `MixStrip` / `useMixParts`

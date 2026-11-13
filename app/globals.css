@@ -22743,3 +22743,19 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mxs-h{display:inline-flex;align-items:center}.mxs-h .mxs{margin-top:0}
 /* paying from the emailed link: sign in for a saved card (components/PayPanel.tsx guest) */
 .pp-saved-in{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2);font-size:13.5px;color:var(--ink-2)}.pp-saved-in svg{flex:none;color:var(--accent)}.pp-saved-in a{color:var(--accent);font-weight:700}
+
+/* Issue on a run (Nick, Nov 12 2026): the red Issue button in the right-click, its form, and the job's reason tag */
+.mjx-tag{display:inline-block;margin:0 4px;padding:0 6px;border-radius:999px;font:700 10.5px var(--body);line-height:16px;white-space:nowrap;vertical-align:1px;border:1px solid}
+.mjx-tag.missing{background:color-mix(in srgb,var(--warn) 14%,var(--surface,#fff));color:color-mix(in srgb,var(--warn) 70%,var(--ink));border-color:color-mix(in srgb,var(--warn) 40%,var(--surface,#fff))}
+.mjx-tag.reject,.mjx-tag.reprint{background:color-mix(in srgb,var(--danger) 10%,var(--surface,#fff));color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--surface,#fff))}
+.mrb-iss{width:100%;margin-top:6px;height:36px;border:0;border-radius:6px;background:var(--danger);color:#fff;font:800 13.5px var(--body);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+.mrb-iss small{font-weight:500;font-size:12px;opacity:.85;margin-left:4px}.mrb-iss .mrc-i{width:15px;height:15px}
+.mrb-iss.on{box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 25%,transparent)}
+.mrb-pz.mrb-isf{border-color:color-mix(in srgb,var(--danger) 35%,var(--surface,#fff));background:color-mix(in srgb,var(--danger) 5%,var(--surface,#fff))}
+.mrb-pz .mrb-why.mrb-isw{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mrb-pz .mrb-why.mrb-isw button.on{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,var(--surface,#fff))}
+.mrb-isz{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px}
+.mrb-isz label{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px}.mrb-isz label span{font-weight:700}
+.mrb-isz input{width:100%;text-align:center}.mrb-isz small{color:var(--ink-3);font-size:11px;white-space:nowrap}
+.mrb-pgo.mrb-isgo{background:var(--danger)}.mrb-pgo.mrb-isgo:disabled{opacity:.5;cursor:default}
+.msr-spot.iss-wait{border-style:solid;border-color:color-mix(in srgb,var(--warn) 45%,var(--surface,#fff));color:color-mix(in srgb,var(--warn) 70%,var(--ink));background:color-mix(in srgb,var(--warn) 8%,var(--surface,#fff))}
