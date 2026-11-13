@@ -238,3 +238,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 6:13pm · 1.3.442 · Nick · Schedule: a job marked done with no start ends at its finish (not over the warm-up); a paused job sits where it ran, start to pause
 - Nov 12 6:26pm · 1.3.443 · Nick · Schedule: finished work shows on the day it was done (not over the booked day's warm-up); a job number never shrinks under the name beside it
 - Nov 12 6:41pm · 1.3.444 · Nick · Schedule: Issue on a run (Missing / Reject / Reprint): the pieces still to print become their own job; Missing waits for goods; the order stays In Production
+- Nov 12 6:44pm · 1.3.445 · Nick · Schedule: clicking a downtime opens it to change (never a second one); a press or crew off all day shows Off all day; Goods & Receiving row buttons line up

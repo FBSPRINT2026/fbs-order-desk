@@ -22265,7 +22265,9 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .wov-b iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .wov-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 .rvd-wo{margin-right:6px}
-.rvd-wo svg{margin-right:5px;vertical-align:-2px}
+.rvd-wo svg{margin-right:5px;flex:none}
+/* the row's two buttons the same height, side by side (Nick, Nov 12: "buttons dont line up") */
+table.rvd-tbl:not(.tbl-stack) td.rvd-act .btn{display:inline-flex;align-items:center;justify-content:center;height:30px;vertical-align:middle;box-sizing:border-box}
 @media (max-width:640px){.wov-bg{padding:0}.wov{border-radius:0}}
 
 /* Schedule breaks, option D (Nov 11, Nick): a tinted band with the word centered; lunch inside a job is a line through the card */
@@ -22759,3 +22761,6 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mrb-isz input{width:100%;text-align:center}.mrb-isz small{color:var(--ink-3);font-size:11px;white-space:nowrap}
 .mrb-pgo.mrb-isgo{background:var(--danger)}.mrb-pgo.mrb-isgo:disabled{opacity:.5;cursor:default}
 .msr-spot.iss-wait{border-style:solid;border-color:color-mix(in srgb,var(--warn) 45%,var(--surface,#fff));color:color-mix(in srgb,var(--warn) 70%,var(--ink));background:color-mix(in srgb,var(--warn) 8%,var(--surface,#fff))}
+/* a press or crew off all day: one labeled gray block down its day (Nov 12) */
+.ms-down.msf-offday{background:var(--surface-2);color:var(--ink-3);border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;z-index:1}
+.ms-down.msf-offday b{color:var(--ink);margin-right:4px}
