@@ -81,7 +81,9 @@ const total = (items: CheckItem[]) => items.reduce((s, it) => s + Object.values(
 
 /** Monday of the week a day falls in */
 export const weekOf = (d: string) => { const x = new Date(d + "T12:00"); const k = (x.getDay() + 6) % 7; x.setDate(x.getDate() - k); return x.toISOString().slice(0, 10); };
-const addDays = (d: string, n: number) => { const x = new Date(d + "T12:00"); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+// a blank day (one job's count-in, Check-In by job) is today: "T12:00" alone isn't a date and threw, so the phone's
+// Check in goods never showed (Nov 13)
+const addDays = (d: string, n: number) => { const x = new Date((/^\d{4}-\d{2}-\d{2}$/.test(d) ? d : new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" })) + "T12:00"); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
 const CLOSED = /job\s*completed|quote|cancel|closed/i;
 
 /**

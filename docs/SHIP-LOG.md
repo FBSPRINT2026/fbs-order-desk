@@ -266,3 +266,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 7:37am · 1.3.476 · Nick · Crew main menu in the A + B look: dark card for what you're on now, your list with times, Scan / Tomorrow / Time card, clock buttons; Time card screen; fulfillment and shipping queues; Spanish
 - Nov 13 7:39am · 1.3.478 · Nick · Phone Logins: set each person's phone view on Employees, print the wall sign (/crew/sign); Time Clock: approve fixes from phones
 - Nov 13 8:48am · 1.3.480 · Nick · Press timer on the phone: Start job / Pause / Complete job move the job on the schedule (live clock on or off); the last job done moves the order to Fulfillment
+- Nov 13 8:51am · 1.3.482 · Nick · Phone count-in: a scanned job's Check in goods works again (one job's count-in crashed on a blank date); Main menu icon
