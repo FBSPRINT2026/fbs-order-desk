@@ -304,12 +304,14 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   and pay): REC receiving, SHIP shipping, PRESS the schedule and Ink Room, PO the schedule (Work Orders).
   Shop computers are widescreen monitors (Nick, Nov 13: "you don't need to make a phone version… they're actual
   widescreen computers"): build their screens for a wide monitor; no phone layout for them.
-  **Outbound is FBS-SHIP's home, the computer by the door** (Nick, Nov 13): a "Who's picking up?" search on top (a
+  **Outbound is FBS-SHIP's home, the computer by the door** (Nick, Nov 13). Left: a "Who's picking up?" search (a
   customer, job #, PO or an end client's name: `outboundLookup` in `app/shop/outbound/actions.ts`) lists their open jobs
   and where each is, read off the status (Ready by delivery method → On the pickup shelf / Ready to ship / to deliver,
-  Fulfillment → Being packed, In Production → Still printing), with Picked up (`markPickedUp`: Ready → Completed, logged)
-  and Ship; Print box label and Start shipping open their panel under it; then the numbers, Pickup shelf / Deliver, and
-  the Shipping Center underneath (`components/shipping/ShippingCenter.tsx`, the one `/shop/shipping` shows too).
+  Fulfillment → Being packed, In Production → Still printing), with Label, Picked up (`markPickedUp`: Ready → Completed,
+  logged) and Ship; then the tabs Ship (the Shipping Center, `components/shipping/ShippingCenter.tsx`, the one
+  `/shop/shipping` shows too), Pickup shelf, Delivery. Right: the box label tool, always open (`LabelPanel`). A label or
+  work order scanned anywhere on the page (or its link / # typed in the search and Enter) pops up "Print box label /
+  Start shipping" for that job (`ScanChoice`); nothing has to be clicked first.
   **Box labels** (Nick, Nov 13 2026): the job #, SHIP / PICKUP / DELIVERY and the box count on top; then the customer, the
   whole job name and the PO, with the QR (the scanner reads it; no barcode); then the fill-in grid. No ship-to, dates or
   ship method: the QR opens all of that. Labels print BOX ___ OF ___ to write in unless "I know my box count" is ticked
