@@ -82,11 +82,22 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     };
   }
 
+  // the proof: each group's saved mockup pictures, big (the full picture where it was kept, else the small one)
+  let mockups: { name: string; urls: string[] }[] = [];
+  if (card.kind === "o") {
+    const { data: og } = await admin.from("orders").select("groups").eq("id", card.id).maybeSingle();
+    const gs = ((og?.groups || []) as { name?: string; mockupThumbs?: string[] }[]).map((g, i) => ({ name: g.name?.trim() || `Group ${i + 1}`, paths: [...new Set((g.mockupThumbs || []).filter(Boolean))] }));
+    const all = gs.flatMap((g) => g.paths.flatMap((x) => [x.replace(/-thumb\.png$/, ".png"), x]));
+    const signed = all.length ? (await admin.storage.from("proofs").createSignedUrls(all, 3600)).data || [] : [];
+    const url = new Map(signed.filter((x) => x.signedUrl && !x.error).map((x) => [x.path, x.signedUrl]));
+    mockups = gs.map((g) => ({ name: g.name, urls: g.paths.map((x) => url.get(x.replace(/-thumb\.png$/, ".png")) || url.get(x) || "").filter(Boolean) }));
+  }
+
   // check-in (staff with Goods & Receiving)
   const checkin = who.can.checkin ? await checkinJobFor(admin, { kind: card.kind, id: card.id }).catch(() => null) : null;
 
   return wrap(
-    <JobMobile who={who} card={card} box={ref?.box || null} designs={designs} press={press} presses={presses} inks={inks} ship={ship} shipSettings={settings.ship} checkin={checkin}
+    <JobMobile who={who} card={card} mockups={mockups} box={ref?.box || null} designs={designs} press={press} presses={presses} inks={inks} ship={ship} shipSettings={settings.ship} checkin={checkin}
       printer={{ ready: ps.mode === "printnode" ? !!ps.printnodeId : !!ps.host, dpi: ps.dpi }} />
   );
 }

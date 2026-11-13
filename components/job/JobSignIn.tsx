@@ -24,20 +24,20 @@ export default function JobSignIn({ code, offNetwork = false }: { code: string; 
   const val = field === "emp" ? emp : pin, set = field === "emp" ? setEmp : setPin;
   if (offNetwork) return (
     <div className="jm">
-      <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-job">{t("Job #{0}", code.replace(/-.*/, ""))}</span><LangToggle /></header>
+      <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" />{code ? <span className="jm-top-job">{t("Job #{0}", code.replace(/-.*/, ""))}</span> : <span className="jm-top-job">{t("Crew")}</span>}<LangToggle /></header>
       <main className="jm-main jm-signin">
         <h1>{t("Shop tools work on the FBS Wi-Fi")}</h1>
         <p>{t("You're signed in with your employee PIN, but this phone isn't on the shop's network. Connect to the FBS Wi-Fi and scan again.")}</p>
-        <a className="jm-alt" href={`/login?next=${encodeURIComponent(`/j/${code}`)}`}>{t("Office staff: sign in with your portal login")}</a>
-        <a className="jm-alt" href={`/j/${code}?customer=1`}>{t("Customer? See your order")}</a>
+        <a className="jm-alt" href={`/login?next=${encodeURIComponent(code ? `/j/${code}` : "/crew")}`}>{t("Office staff: sign in with your portal login")}</a>
+        {code && <a className="jm-alt" href={`/j/${code}?customer=1`}>{t("Customer? See your order")}</a>}
       </main>
     </div>
   );
   return (
     <div className="jm">
-      <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-job">{t("Job #{0}", code.replace(/-.*/, ""))}</span><LangToggle /></header>
+      <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" />{code ? <span className="jm-top-job">{t("Job #{0}", code.replace(/-.*/, ""))}</span> : <span className="jm-top-job">{t("Crew")}</span>}<LangToggle /></header>
       <main className="jm-main jm-signin">
-        <h1>{t("Sign in to open this job")}</h1>
+        <h1>{code ? t("Sign in to open this job") : t("Sign in")}</h1>
         <p>{t("Use your employee number and PIN, like the time app. This phone stays signed in.")}</p>
         <div className="jm-fields">
           <button type="button" className={"jm-field" + (field === "emp" ? " on" : "")} onClick={() => setField("emp")}><span>{t("Employee #")}</span><b>{emp || "—"}</b></button>
@@ -52,8 +52,8 @@ export default function JobSignIn({ code, offNetwork = false }: { code: string; 
           }} aria-label={k === "back" ? t("Delete") : k === "next" ? t("Next") : k}>{k === "back" ? "⌫" : k === "next" ? (field === "emp" ? "→" : "✓") : k}</button>
         ))}</div>
         <button type="button" className="jm-go" disabled={!emp || pin.length < 4 || busy} onClick={go}>{busy ? t("Signing in…") : t("Sign in")}</button>
-        <a className="jm-alt" href={`/login?next=${encodeURIComponent(`/j/${code}`)}`}>{t("Office staff: sign in with your portal login")}</a>
-        <a className="jm-alt" href={`/j/${code}?customer=1`}>{t("Customer? See your order")}</a>
+        <a className="jm-alt" href={`/login?next=${encodeURIComponent(code ? `/j/${code}` : "/crew")}`}>{t("Office staff: sign in with your portal login")}</a>
+        {code && <a className="jm-alt" href={`/j/${code}?customer=1`}>{t("Customer? See your order")}</a>}
       </main>
     </div>
   );

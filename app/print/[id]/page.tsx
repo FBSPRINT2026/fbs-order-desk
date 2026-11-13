@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { linePic } from "@/lib/simpleOrders";
 import { getViewer } from "@/lib/supabase/server";
+import { jobActor } from "@/lib/jobAccess";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calcOrder, withoutShopPieces, mergeSettings, orderGroups, type Customer, type Order, type Payment } from "@/lib/pricing";
 import { loadGroupLook } from "@/lib/groupLook";
@@ -26,8 +27,11 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   // an order's page link (lib/customerSend.ts) opens that order's proof, its sew-outs and its quote or invoice
   const swOk = lk?.kind === "order" && !!sewout ? !!(await createAdminClient().from("sewouts").select("id").eq("id", sewout).eq("order_id", id).maybeSingle()).data : false;
   const byLink = !!lk && lk.order_id === id && !work && ((lk.kind === "sewout" && !!sewout && sewout === lk.sewout_id) || (lk.kind === "art" && !!proof && !sewout) || (lk.kind === "order" && (!sewout || swOk)));
-  if (!viewer.user && !byLink) redirect(`/login?next=/print/${id}`);
-  const isStaff = byLink ? false : viewer.isStaff;
+  // the crew signed in on their phone (employee # and PIN, on the shop's Wi-Fi) open a job's work order from its phone
+  // menu (Nov 13, the crew phone views): the work order only
+  const crew = !viewer.isStaff && !byLink && !!work ? await jobActor() : null;
+  if (!viewer.user && !byLink && !crew) redirect(`/login?next=/print/${id}`);
+  const isStaff = byLink ? false : viewer.isStaff || !!crew;
   const db = isStaff || byLink ? createAdminClient() : viewer.supabase; // customers read through row security
   // inside the proof page: no buttons, and the pages fit the frame's width
   // framed in the customer's page: the approval stamp on the top row (StampSlot), right side
