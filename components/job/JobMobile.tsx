@@ -80,10 +80,8 @@ export default function JobMobile(p: {
     };
     addEventListener("popstate", on); return () => removeEventListener("popstate", on);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const back = () => countGuard.ask(() => {
-    if (history.state?.jm && history.state.jm !== "home") history.back();
-    else { history.replaceState({ jm: "home" }, "", urlFor("home")); setView("home"); scrollTo(0, 0); }
-  });
+  // ← Job menu swaps this screen for the menu in place: no trip back through history, which reloads the page
+  const back = () => countGuard.ask(() => { history.replaceState({ jm: "home" }, "", urlFor("home")); setView("home"); scrollTo(0, 0); });
 
 
   if (!card) return (

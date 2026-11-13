@@ -279,3 +279,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 9:49am · 1.3.501 · Nick · Crew phones: the view comes from the department when nobody picked one (Receiving opens count in); count in reads right in dark mode; stronger gray for second lines
 - Nov 13 9:52am · 1.3.503 · Nick · Count in: hold 3 seconds to count all in; Check In at the top of the review
 - Nov 13 9:59am · 1.3.505 · Nick · Job phone menu: each screen is in the address so Job menu / Back never bounces back to the first tool; after a count in: Count in another job (scan or type) or Main menu
+- Nov 13 10:13am · 1.3.507 · Nick · Job phone menu: Job menu swaps to the menu in place (no trip back through history, which reloaded the page)
