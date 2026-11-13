@@ -1402,6 +1402,8 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     return { ...y, shared: false };
   });
   const noSetup = !!o.waive_setup || !!g.allIn || !!gs || smp?.screens === "free";
+  // why nothing is charged for screens / digitizing, so the order page shows $0 and says why instead of a price
+  const setupWaived = !noSetup ? "" : o.waive_setup ? "Setup waived on this order" : g.allIn ? "Program price: setup is included" : gs ? "Sample run: no setup" : "Sample order: screens at no charge";
   const screens = noSetup ? 0 : setups.reduce((a, d) => a + d.setup, 0) + youthSetups.reduce((a, d) => a + (d?.setup || 0), 0);
   const noInk = !!g.allIn || !!gs || smp?.pms === "free";
   const inkFees = noInk ? 0 : imprints.reduce((a, d) => a + d.inkFee, 0);
@@ -1445,10 +1447,27 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     if (ic && num(pl.inkChangeFee)) setupItems.push({ kind: "inkchange", qty: ic, unit: num(pl.inkChangeFee), amount: r2(ic * num(pl.inkChangeFee)), ...(im.method === "embroidery" ? { thread: true } : {}) });
   });
   if (minCharge) setupItems.push({ kind: "min", qty: 1, unit: minCharge, amount: minCharge });
-  return { id: g.id, /** a sample run's charges (Group.sample), inside sub */ sampleCharges, /** each print's color changes as charged (its own plus the inks it changes from the same print in an earlier group) */ imprintInkChanges: (g.imprints || []).map((d) => num(d.inkChanges)), /** the same print in an earlier group in other inks: which group and the inks it swaps */ imprintAutoChange: (g.imprints || []).map((d) => seen?.autoChange?.get(d.id) || null), /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: printedLines(g.lines).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
+  return { id: g.id, /** why no setup is charged on this group ("" when it is) */ setupWaived, /** a sample run's charges (Group.sample), inside sub */ sampleCharges, /** each print's color changes as charged (its own plus the inks it changes from the same print in an earlier group) */ imprintInkChanges: (g.imprints || []).map((d) => num(d.inkChanges)), /** the same print in an earlier group in other inks: which group and the inks it swaps */ imprintAutoChange: (g.imprints || []).map((d) => seen?.autoChange?.get(d.id) || null), /** each print's setup as charged (light shirts: no underbase screen; a screen shared with another print: 0) */ imprintSetups: setups.map((d) => (noSetup ? 0 : d.setup)), /** a print printing from another print's screens: that print's group ("Group 2"), else "" */ imprintShared: setups.map((d) => (d as { sharedWith?: string }).sharedWith ?? ((d as { shared?: boolean }).shared ? "another print" : "")), qty, /** the youth and adult pieces, when a print has its own youth screens */ youthQty: anySplit ? yQty : 0, adultQty: anySplit ? aQty : 0, /** every piece printed, the shop's own included (the work order) */ allQty: printedLines(g.lines).reduce((a, l) => a + lineQty(l), 0), ti, eti, tierMin: pl.tiers[ti], setupItems, materials: r2(lines.reduce((a, l) => a + l.upTotal, 0)), imprints, printEach: r2(printEach), finishEach, finishing, lines, sub, persItems, persTotal, /** names & numbers charged per print (in persItems, by line) */ rosters, setup, inkFees: r2(inkFees), minCharge, belowMin: qty > 0 && qty < (pl.minQty || pl.tiers[0]), wholesale: !pl.useGarment, custom: imprints.some((d) => (d as { custom?: boolean }).custom) };
 }
 
 export type OrderCalc = ReturnType<typeof calcOrder>;
+/**
+ * What an order's setup charge is made of, in words, from what's really in it (Nick, Nov 13: Amanda's sample order said
+ * "Setup (screens, digitizing)" while it was all PMS matching, and no screens were charged): "screens, PMS matching".
+ */
+export function setupWords(c: { groups: { setupItems?: { kind: string }[] }[]; dtfMin?: number }): string {
+  const kinds = new Set(c.groups.flatMap((g) => (g.setupItems || []).map((x) => x.kind)));
+  const words = [
+    (kinds.has("screens") || kinds.has("remake")) && "screens",
+    (kinds.has("digitize") || kinds.has("sewout")) && "digitizing",
+    kinds.has("pms") && "PMS matching",
+    kinds.has("inkchange") && "color changes",
+    kinds.has("min") && "small-order minimum",
+    c.dtfMin ? `DTF minimum` : "",
+  ].filter(Boolean) as string[];
+  return words.join(", ");
+}
+
 export function calcOrder(
   o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup"> & { price_type?: PriceType; discount_amt?: number; discount_type?: "pct" | "amt"; order_type?: Order["order_type"]; sample?: SampleRule | null },
   s: Settings,

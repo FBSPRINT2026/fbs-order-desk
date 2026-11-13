@@ -28,7 +28,7 @@ import Link from "next/link";
 import RequestAsk from "@/components/RequestAsk";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import {
+import { setupWords,
   calcOrder, designLabel, ALL_LOCATIONS, mergeSettings, newGroup, orderGroups, PAY_METHODS, priceList, finishingList, persOf, SHIP_METHODS, matchShipMethod, ST, STATUSES, statusText, CLOSED_QUOTE, CANCELED, isCanceled, REVISION, type SampleRule, isClosedQuote, statusKey, uid,
   type ArtFile, type Customer, type Delivery, type Design, type Garment, type GLine, type Group, type Message, type Order, type OrderEvent, type Payment, type PriceType, type Proof, type Settings, type StatusKey,
 } from "@/lib/pricing";
@@ -2118,7 +2118,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="panel-b">
               <div className="totals">
                 <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
-                <div className="tr"><span title={adjFee ? `Includes ${money(adjFee)} setup adjustment from Printavo` : undefined}>Setup (screens, digitizing{calc.dtfMin ? `, DTF minimum ${money(calc.dtfMin)}` : ""})</span><span>{money(calc.setup + adjFee)}</span></div>
+                <div className="tr"><span title={adjFee ? `Includes ${money(adjFee)} setup adjustment from Printavo` : undefined}>{setupWords(calc) ? `Setup (${setupWords(calc)})` : "Setup"}</span><span>{money(calc.setup + adjFee)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
                 {calc.fees - calc.shipping - adjFee ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping - adjFee)}</span></div> : null}
                 {(calc.hasShipping || o.delivery_method === "ship") && (
@@ -2396,7 +2396,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="panel-b">
               <div className="totals">
                 <div className="tr"><span>Line items</span><span>{money(calc.items)}</span></div>
-                <div className="tr"><span title={adjFee ? `Includes ${money(adjFee)} setup adjustment from Printavo` : undefined}>Setup (screens, digitizing{calc.dtfMin ? `, DTF minimum ${money(calc.dtfMin)}` : ""})</span><span>{money(calc.setup + adjFee)}</span></div>
+                <div className="tr"><span title={adjFee ? `Includes ${money(adjFee)} setup adjustment from Printavo` : undefined}>{setupWords(calc) ? `Setup (${setupWords(calc)})` : "Setup"}</span><span>{money(calc.setup + adjFee)}</span></div>
                 {calc.materials ? <div className="tr"><span>2XL+ Materials Charge</span><span>{money(calc.materials)}</span></div> : null}
                 {calc.fees - calc.shipping - adjFee ? <div className="tr"><span>Fees</span><span>{money(calc.fees - calc.shipping - adjFee)}</span></div> : null}
                 {calc.hasShipping ? <div className="tr"><span>Shipping</span><span>{calc.freeShipping ? "Free" : money(calc.shipping)}</span></div> : null}

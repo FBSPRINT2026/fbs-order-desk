@@ -8499,6 +8499,7 @@ dl.pf .pf-full dd{font-size:13px;color:var(--ink-2)}
 /* the screens line: read, with a pencil to change underbase / remake (Oct 15, Nick) */
 .pr-scr-v{display:inline-flex;align-items:center;gap:6px}
 .pr-scr-tag{font-size:11.5px;font-weight:600;color:var(--ink-2);background:var(--surface-2);border-radius:999px;padding:1px 8px}
+.pr-waived{margin-left:6px;font-size:12px}
 .pr-scr-ed{display:inline-grid;place-items:center;min-width:24px;height:24px;border:0;border-radius:6px;background:none;color:var(--ink-3);cursor:pointer;padding:0 4px;font:inherit;font-size:12.5px;font-weight:600}
 .pr-scr-ed:hover{background:var(--surface-2);color:var(--accent)}
 .pr-scr-ed.on{color:var(--accent)}
