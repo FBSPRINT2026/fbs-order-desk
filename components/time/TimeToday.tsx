@@ -80,7 +80,7 @@ export default function TimeToday({ d }: { d: TimeData }) {
   return (
     <div className="tmx tk">
       <MyPunch />
-      <header className="tk-hi">
+      <div className="tk-hi">
         <div>
           <h2>{greet()}, {myName}</h2>
           <p>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "America/Chicago" })} · Pay period {dayLabel(period.start)} – {dayLabel(period.end)} <span className="faint">({daysBetween(today, period.end) === 0 ? "ends today" : `${daysBetween(today, period.end)} day${daysBetween(today, period.end) === 1 ? "" : "s"} left`})</span></p>
@@ -92,7 +92,7 @@ export default function TimeToday({ d }: { d: TimeData }) {
           <span className={"tk-stat " + (count("late") ? "late" : "off")}><b>{count("late") + count("off")}</b>{count("late") ? "late / not in" : "not in"}</span>
           <span className="tk-stat hrs"><b>{hm(rows.reduce((a, r) => a + r.card.worked, 0))}</b>hours today</span>
         </div>
-      </header>
+      </div>
       {boss && <TimeAsk onChanged={changed} />}
       {boss && <IssuesByPeriod d={d} current={period} onFixed={changed} />}
       <div className="tk-sec-h tk-board-h">

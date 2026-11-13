@@ -118,8 +118,7 @@ function Cards() {
           <div className="tcp-tot">
             <div><span>REGULAR</span><b>{h2(c.regular)}</b></div>
             <div><span>OVERTIME</span><b>{h2(c.overtime)}</b></div>
-            <div><span>TIME OFF</span><b>{h2(c.pto + c.sick + c.holiday)}</b></div>
-            <div><span>TOTAL</span><b>{h2(c.regular + c.overtime + c.pto + c.sick + c.holiday)}</b></div>
+            <div><span>TOTAL</span><b>{h2(c.regular + c.overtime + c.pto + c.sick + c.holiday)}</b>{c.pto + c.sick + c.holiday > 0 && <small>incl. {h2(c.pto + c.sick + c.holiday)} time off</small>}</div>
           </div>
           <div className="tcp-sign">
             <p>I have checked these hours and they are correct. <i>Revisé estas horas y están correctas.</i>{phone && <span className="tcp-ph"> · Approved on their phone</span>}</p>
@@ -158,7 +157,8 @@ body{background:#e6e9ee}
 .tcp-t .tcp-miss{color:#c9372c;font-style:normal;font-weight:700;font-size:11px;border-bottom:1px solid #c9372c;padding:0 12px 0 0}
 .tcp-t .tcp-fx{font-size:9.5px;font-weight:800;color:#1d6fd8;margin-left:6px}
 .tcp-t .tcp-fx.gray{color:#5f6b80}
-.tcp-tot{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;text-align:center}
+.tcp-tot{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center}
+.tcp-tot small{display:block;font-size:9.5px;color:#5f6b80}
 .tcp-tot div{border:1.5px solid #141d2b;border-radius:5px;padding:6px}
 .tcp-tot span{display:block;font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#5f6b80}
 .tcp-tot b{font-size:17px;font-variant-numeric:tabular-nums}

@@ -115,14 +115,14 @@ export default function TimePayroll({ d }: { d: TimeData }) {
       {noRate.length > 0 && <div className="tk-warn soft tk-noprint"><b>No pay rate:</b> {noRate.map((r) => fullName(r.e)).join(", ")}. Add it on Employees and their pay fills in.</div>}
       {err && <div className="pv-err">{err}</div>}
       <section className="tk-report">
-        <header className="tk-report-h">
+        <div className="tk-report-h">
           <div><h2>Payroll Report</h2><p>Pay period {dayLabel(period.start)} – {dayLabel(period.end)}, {period.start.slice(0, 4)}{running ? " · so far" : ""}</p></div>
           <div className="tk-report-k">
             <span><small>Regular</small><b className="num">{h2(all.reg)}</b><em>hours</em></span>
             <span className={all.ot ? "ot" : ""}><small>Overtime</small><b className="num">{h2(all.ot)}</b><em>hours</em></span>
             <span className="tot"><small>Total pay</small><b className="num">{$(r2(all.total))}</b><em>{rows.length} people</em></span>
           </div>
-        </header>
+        </div>
         {punches === null ? <div className="db-empty">Loading…</div> : !rows.length ? <div className="db-empty">No hours in this pay period.</div> : groups.map((g) => g.rows.length > 0 && (
           <div key={g.k} className={"tk-rgrp " + g.k}>
             <h3>{g.l} <span>{g.rows.length} {g.rows.length === 1 ? "person" : "people"}</span></h3>

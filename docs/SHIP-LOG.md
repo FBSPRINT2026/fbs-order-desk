@@ -312,3 +312,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 12:42pm · 1.3.554 · Nick · Time cards print page: full letter width
 - Nov 13 12:44pm · 1.3.555 · Nick · Time cards print page: its own class names (a shop style was stacking the week rows)
 - Nov 13 12:50pm · 1.3.556 · Nick · Time cards print: the name and pay period print at the top (shop print styles were hiding them); fits the printer's margins
+- Nov 13 12:50pm · 1.3.557 · Nick · Time cards print: Regular, Overtime, Total only; Payroll Report's printed title shows (header tags hidden by shop print styles)
