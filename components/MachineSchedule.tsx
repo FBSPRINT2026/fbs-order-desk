@@ -5,6 +5,7 @@ import { runParts, sampleRunOn, samplePieces, waitsOnSample } from "@/lib/sample
 import { trainingSaid } from "@/lib/orderTrainings";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { MicButton } from "@/components/SearchInput";
+import { groupPictures } from "@/lib/mockupFresh";
 import Link from "next/link";
 import SepRequest from "@/components/SepRequest";
 import WorkOrderView, { PrinterIcon } from "@/components/WorkOrderView";
@@ -3479,6 +3480,8 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
       // every current mockup on the order (Nov 12, Nick: "I should be able to see all the mock-ups")
       const { data: ms } = await sb.from("mockups").select("file_path, title, created_at").eq("order_id", c.job.id).is("archived_at", null).order("created_at").limit(24);
       const rows = ((ms || []) as { file_path: string; title: string | null }[]).filter((x) => x.file_path);
+      // no mockup made here: the group's own pictures (a visual mockup, the customer's: groupPictures; Nov 13, #40380)
+      if (!rows.length) for (const g of gs) for (const p of groupPictures(g)) rows.push({ file_path: p, title: g.name || "" });
       let pics: { url: string; title: string }[] = [];
       if (rows.length) { const { data } = await sb.storage.from("proofs").createSignedUrls(rows.map((x) => x.file_path), 3600); pics = rows.map((x, i) => ({ url: data?.[i]?.signedUrl || "", title: x.title || "" })).filter((x) => x.url); }
       setInfo({ po: (o as { po_number?: string } | null)?.po_number || "", pcs, prints, garments: [...gm.entries()], pics });

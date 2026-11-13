@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { groupPictures } from "@/lib/mockupFresh";
 import { linePic } from "@/lib/simpleOrders";
 import { getViewer } from "@/lib/supabase/server";
 import { jobActor } from "@/lib/jobAccess";
@@ -71,10 +72,8 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
     // ours first; the customer's own mockup only when we haven't made one
     // customer supplied transfers: their placement reference is the mockup (Oct 27, Nick: "that's what they should see on
     // top of the work order")
-    const placed = g.imprints.map((d) => d.supplied?.picture?.path || d.placeRef?.path || "").filter(Boolean);
     // (a picture only: a customer's PDF cart or .ai file can't be drawn on a page, Oct 31, #40334 showed two broken boxes)
-    const pic = (x: string) => /\.(png|jpe?g|webp|gif|svg)$/i.test(x);
-    const all = g.mockupThumbs?.length ? g.mockupThumbs : placed.filter(pic).length ? placed.filter(pic) : (g.customerMockups || []).map((m) => m.path).filter(pic);
+    const all = groupPictures(g);
     // the quote / invoice: each garment line's own picture (Oct 30, Nick: a thumbnail on every garment)
     return proof0 ? all.slice(0, 12) : work0 ? all.slice(0, 5) : all.slice(0, Math.max(1, g.lines.length));
   });

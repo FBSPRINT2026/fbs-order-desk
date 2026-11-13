@@ -1,4 +1,5 @@
 "use client";
+import PinchView from "@/components/job/PinchView";
 import PhotoEdit, { type PhotoEditApi } from "@/components/job/PhotoEdit";
 import { useEffect, useRef, useState } from "react";
 import type { JobCard } from "@/lib/jobCard";
@@ -435,16 +436,21 @@ function Proof({ mockups, card, designs }: { mockups: { name: string; urls: stri
   const { t } = useT();
   const shots = mockups.filter((m) => m.urls.length);
   const art = card.groups.flatMap((g) => g.prints.map((pr) => ({ label: [pr.location, pr.inks].filter(Boolean).join(" · "), url: (pr.designId && designs[pr.designId]?.url) || pr.image || "" }))).filter((x) => x.url);
-  if (!shots.length && !art.length) return <div className="jm-card"><p className="jm-faint">{t("No mockup saved on this job yet.")}</p></div>;
+  // every picture in one row to swipe through, opened full screen to pinch and zoom (Nick, Nov 13 2026)
+  const all = shots.length ? shots.flatMap((m) => m.urls.map((u) => ({ url: u, title: shots.length > 1 ? m.name : "" }))) : art.map((a) => ({ url: a.url, title: a.label }));
+  const [zoom, setZoom] = useState<number | null>(null);
+  if (!all.length) return <div className="jm-card"><p className="jm-faint">{t("No mockup saved on this job yet.")}</p></div>;
+  let k = 0;
   return (
     <div className="jm-proof">
-      {shots.map((m, i) => (
+      <p className="jm-faint jm-proof-tip">{t("Tap a picture to zoom in with two fingers.")}</p>
+      {shots.length ? shots.map((m, i) => (
         <div key={i} className="jm-card">
           {shots.length > 1 && <b>{m.name}</b>}
-          {m.urls.map((u, j) => <a key={j} href={u} target="_blank" rel="noreferrer"><img src={u} alt={m.name} /></a>)}
+          {m.urls.map((u) => { const n = k++; return <button key={n} type="button" className="jm-proof-pic" onClick={() => setZoom(n)} aria-label={t("Zoom in")}><img src={u} alt={m.name} /></button>; })}
         </div>
-      ))}
-      {!shots.length && art.map((a, i) => <div key={i} className="jm-card"><b>{a.label}</b><img src={a.url} alt="" /></div>)}
+      )) : art.map((a, i) => <div key={i} className="jm-card"><b>{a.label}</b><button type="button" className="jm-proof-pic" onClick={() => setZoom(i)} aria-label={t("Zoom in")}><img src={a.url} alt="" /></button></div>)}
+      {zoom != null && <PinchView urls={all.map((x) => x.url)} titles={all.map((x) => x.title)} start={zoom} onClose={() => setZoom(null)} />}
     </div>
   );
 }
