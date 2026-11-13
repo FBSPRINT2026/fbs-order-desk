@@ -2566,6 +2566,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                         <span className="q">{y.g.c.need.qty.toLocaleString()}</span>
                       </button>
                     ))}
+                    {many && open && (() => { const ids = [...new Set(g0.filter((y) => y.g.c.job.kind === "o").map((y) => y.g.c.job.id))]; return ids.length ? (
+                      <button type="button" className="btn sm msf-up-print" onClick={() => setWoMany({ ids, title: `${runTitle(g0.map((y) => y.g.c.job))} · ${ids.length} jobs` })}><PrinterIcon />Print all {ids.length} work orders</button>
+                    ) : null; })()}
                   </Fragment>
                 );
               })}

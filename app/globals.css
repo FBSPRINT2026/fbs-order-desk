@@ -21914,6 +21914,7 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .msf-run-nm{border:0;background:none;padding:0;font:inherit;font-weight:700;color:var(--ink);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;text-align:left}
 .msf-run-nm:hover,.msf-run-nm[aria-expanded="true"]{color:var(--accent);text-decoration:underline}
 .msf-run.menu{overflow:visible;z-index:30}
+.msf-up-print{margin:4px 0 6px 8px}
 .msf-run-menu{position:absolute;left:6px;top:22px;z-index:30;display:flex;gap:6px;align-items:center;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 6px 18px rgba(20,29,43,.18);white-space:nowrap}
 .msf-run-r{all:unset;box-sizing:border-box;cursor:grab;display:flex;align-items:center;gap:0;height:19px;font-size:12px;white-space:nowrap;border-top:1px solid var(--line-2,#f1f3f6);min-width:0}
 .msf-run-r b{margin-right:6px}.msf-run-r .nm{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;color:var(--ink-2)}.msf-run-r small{color:var(--ink-3);font-size:11px;margin-left:6px}
