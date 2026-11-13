@@ -718,20 +718,21 @@ export function separate(px: Px, inks: SepInk[], s: SepSettings, pre?: SepCover)
   // highlight white (a top white): simulated process only. Spot color never has one (shop rule, as Separo does it):
   // the art's white is a White ink like any color, printed after the other colors and before black.
   const sim = s.method !== "spot";
-  const body = colorPlates.filter(({ k }) => !(sim && dark && s.highlight && isWhite(k.hex)));
+  const body = colorPlates.filter(({ k }) => !(sim && dark && s.highlight && isWhite(printShade(k))));
   // highlight white: the art's white plus the white left over after the inks
   let hw: Uint8Array | null = null;
   if (sim && dark && s.highlight) {
     hw = new Uint8Array(n);
-    for (const { k, a } of colorPlates) if (isWhite(k.hex)) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + a[i]);
+    for (const { k, a } of colorPlates) if (isWhite(printShade(k))) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + a[i]);
     if (white) for (let i = 0; i < n; i++) hw[i] = Math.min(255, hw[i] + white[i]);
   }
   // print order after the base: colors light → dark (black, the darkest, last of them), then the highlight white on
   // top: the usual order for spot color and simulated process on dark shirts (T-Biz: "light to dark… black next to
   // last… highlight white last")
-  body.sort((x, y) => lightness(y.k.hex) - lightness(x.k.hex));
+  // by the ink that prints (black art printed in White or orange is that ink, not black)
+  body.sort((x, y) => lightness(printShade(y.k)) - lightness(printShade(x.k)));
   // spot: White goes after the colors, just before black (Separo's order: …, White, Black)
-  if (!sim) { const w = body.filter(({ k }) => isWhite(k.hex)), rest = body.filter(({ k }) => !isWhite(k.hex)); const b0 = rest.findIndex(({ k }) => neverBase(printShade(k))); body.splice(0, body.length, ...(b0 < 0 ? [...rest, ...w] : [...rest.slice(0, b0), ...w, ...rest.slice(b0)])); }
+  if (!sim) { const w = body.filter(({ k }) => isWhite(printShade(k))), rest = body.filter(({ k }) => !isWhite(printShade(k))); const b0 = rest.findIndex(({ k }) => neverBase(printShade(k))); body.splice(0, body.length, ...(b0 < 0 ? [...rest, ...w] : [...rest.slice(0, b0), ...w, ...rest.slice(b0)])); }
   type Step = { key: string; name: string; hex: string; kind: PlateKind; a: Uint8Array; base: boolean };
   const seq: Step[] = [
     ...body.map(({ k, a }) => ({ key: "c" + k.hex.slice(1), name: k.name, hex: k.hex, kind: "color" as PlateKind, a, base: dark && based(k) })),

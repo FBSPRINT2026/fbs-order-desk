@@ -179,7 +179,7 @@ function vectorCover(v: VArt, px: Px, inks: SepInk[], s: SepSettings, blackOver:
   // black inks, and the shapes that print (mostly) black
   const blackInk = inks.map((k) => neverBase(printShade(k)));
   const isBlack = shares.map((sh, j) => { if (gshares[j]) return false; let b = 0; for (let c = 0; c < m; c++) if (blackInk[c]) b += sh[c]; return b > 0.9; });
-  const whiteInk = inks.map((k) => { const [r, g, b] = rgb(k.hex); return r > 235 && g > 235 && b > 235; });
+  const whiteInk = inks.map((k) => { const [r, g, b] = rgb(printShade(k)); return r > 235 && g > 235 && b > 235; });
   const c = document.createElement("canvas"); c.width = w; c.height = h;
   const x = c.getContext("2d", { willReadFrequently: true })!;
   const k = w / v.w;
@@ -616,7 +616,10 @@ export default function SeparationStudio({ id }: { id: string }) {
     print_width_in: st.widthIn,
     settings: { colors: st.maxColors, underbase: st.underbase, highlight: st.highlight, chokePt: st.chokePt ?? CHOKE_PT, trapPt: st.trapPt ?? TRAP_PT, finePt: st.finePt ?? FINE_PT, fineChokePt: st.fineChokePt ?? FINE_CHOKE_PT, bumpPt: st.bumpPt ?? BUMP_PT, blackOver: st.blackOver ?? true, lpi: st.lpi, angle: st.angle, dot: st.dot || "ellipse", pressGain: st.pressGain ?? PRESS_GAIN, dpi: st.dpi },
     inks: inks.map((k) => ({ name: k.name, art_color: k.hex, ...(k.also?.length ? { combined_with: k.also } : {}), ...(k.fadeTo?.length ? { fades_to: k.fadeTo.map((h) => inks.find((q) => q.hex === h)?.name || h) } : {}) })),
-    plates: plates.map((p, i) => ({ order: i + 1, name: p.name, kind: p.kind, coverage: `${(p.coverage * 100).toFixed(1)}%`, mesh: p.mesh, halftone: st.method === "sim" || !!p.tonal })),
+    plates: plates.map((p, i) => ({ order: i + 1, name: p.name, kind: p.kind, coverage: `${(p.coverage * 100).toFixed(1)}%`, mesh: p.mesh, halftone: st.method === "sim" || !!p.tonal,
+      // whether white base really prints under it (the coach read underbase "on" as done while no base printed: S-93, Nov 10)
+      ...(p.kind === "color" && res?.underbase ? (() => { const sh = printShade({ hex: "#" + p.key.slice(1), name: p.name }); return { on_underbase: neverBase(sh) ? "never (black)" : (st.baseFor?.[p.key] ?? baseByDefault(sh)) ? "yes" : "no (straight on the shirt)" }; })() : {}) })),
+    underbase_prints: plates.some((p) => p.kind === "underbase"),
     fades: fadeRows.map((f) => ({ from: f.a.name, to: f.b.name, middle: f.midWord, muddy_middle_risk: !!f.risky })),
     shading_between_colors: hint ? `${Math.round(hint * 100)}%` : undefined,
   });
