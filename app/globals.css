@@ -18378,7 +18378,10 @@ table.tbl-stack.tbl-stack-many > tbody > tr > td[data-label]:not([data-label=""]
 .pod-prints td{vertical-align:top}
 .pod-nw{white-space:nowrap}
 .pod-inks{display:flex;flex-direction:column;gap:3px}
-.pod-ink{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pod-ink{display:inline-flex;align-items:flex-start;gap:6px;white-space:normal;min-width:0}
+.pod-ink i{margin-top:3px}
+/* the ink names wrap inside their column: a long name (Madeira 1944 Blueberry Smash) never runs past the card (Nick, Nov 12, #40461) */
+.pod-prints td:last-child{width:100%;min-width:0}
 .pod-ink i{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);flex:none}
 .pod-fin{font-size:13px;display:flex;gap:8px;align-items:baseline}
 .pod-fin .lbl{margin:0}
