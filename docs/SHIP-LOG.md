@@ -271,3 +271,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 9:09am · 1.3.486 · Nick · Phone views kept in the shop settings (work without a database change), with extras: Also Deliveries (ready-to-deliver list on the crew menu)
 - Nov 13 9:10am · 1.3.488 · Nick · Time Clock → Employees: the owner can change someone's employee # (More details)
 - Nov 13 9:11am · 1.3.490 · Nick · Crew sign-in: employee # first (says hi by name); the first time ever they make their own PIN (twice), no manager needed
+- Nov 13 9:14am · 1.3.492 · Nick · Employee app: first time with no PIN points to /crew to make one

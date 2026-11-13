@@ -16,14 +16,14 @@ const T = {
   en: {
     signIn: "Sign In", empNo: "Employee #", pin: "PIN", hi: "Hi", today: "Today", myJobs: "My Jobs Today", shift: "Your shift", noPlan: "No jobs assigned yet. Scan a job ticket to start one.", allDone: "The whole job is done", doneTag: "Done", logged: "logged", other: "Scan A Job Ticket", notOnJob: "Not on a job right now.", total: "total", running: "now", scan: "Scan Job", type: "Type the order #", find: "Find", onJob: "Working on",
     finish: "Finish", switch: "Scan Another Job", whatStart: "What are you starting?", start: "Start", pieces: "How many pieces did you finish?", skip: "Skip",
-    cancel: "Cancel", notFound: "No order with that number.", nojob: "You're not on a job.", bad: "Wrong employee # or PIN.", locked: "Too many tries. Wait 5 minutes.", nopin: "You don't have a PIN yet. Ask a manager.",
+    cancel: "Cancel", notFound: "No order with that number.", nojob: "You're not on a job.", bad: "Wrong employee # or PIN.", locked: "Too many tries. Wait 5 minutes.", nopin: "First time? Open portal.fbsprint.com/crew to make your PIN.",
     aim: "Point the camera at the barcode", noCam: "Can't use the camera. Type the number instead.",
     started: "Started", finished: "Finished", signOut: "Sign out", pcs: "pcs", due: "due", thanks: "Nice work!", saved: "Saved",
   },
   es: {
     signIn: "Entrar", empNo: "Nº de empleado", pin: "PIN", hi: "Hola", today: "Hoy", myJobs: "Mis Trabajos de Hoy", shift: "Tu turno", noPlan: "Aún no tienes trabajos asignados. Escanea una orden para empezar.", allDone: "El trabajo completo está terminado", doneTag: "Listo", logged: "registrado", other: "Escanear Una Orden", notOnJob: "No estás en un trabajo ahora.", total: "total", running: "ahora", scan: "Escanear Trabajo", type: "Escribe el nº de orden", find: "Buscar", onJob: "Trabajando en",
     finish: "Terminar", switch: "Escanear Otro Trabajo", whatStart: "¿Qué vas a empezar?", start: "Empezar", pieces: "¿Cuántas piezas terminaste?", skip: "Omitir",
-    cancel: "Cancelar", notFound: "No hay orden con ese número.", nojob: "No estás en un trabajo.", bad: "Nº de empleado o PIN incorrecto.", locked: "Demasiados intentos. Espera 5 minutos.", nopin: "Todavía no tienes PIN. Pídelo a un gerente.",
+    cancel: "Cancelar", notFound: "No hay orden con ese número.", nojob: "No estás en un trabajo.", bad: "Nº de empleado o PIN incorrecto.", locked: "Demasiados intentos. Espera 5 minutos.", nopin: "¿Primera vez? Abre portal.fbsprint.com/crew para crear tu PIN.",
     aim: "Apunta la cámara al código de barras", noCam: "No se puede usar la cámara. Escribe el número.",
     started: "Empezaste", finished: "Terminaste", signOut: "Salir", pcs: "pzs", due: "entrega", thanks: "¡Buen trabajo!", saved: "Guardado",
   },
