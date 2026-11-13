@@ -246,3 +246,19 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:04pm · 1.3.450 · Nick · QuickBooks: a Printavo invoice short of ours keeps Printavo's lines and gets our missing fees (shipping, setup, card fee) added underneath, the way Printavo did it
 - Nov 12 8:08pm · 1.3.451 · Nick · Rules: missing fees go under Printavo's lines
 - Nov 12 8:15pm · 1.3.452 · Nick · QuickBooks: any difference from Printavo's invoice is replaced with ours whole (rule)
+- Nov 12 8:35pm · 1.3.453 · Nick · Portal: a long ink name wraps in its column instead of running past the card (#40461)
+- Nov 12 8:37pm · 1.3.454 · Nick · Embroidered prints say Threads, not Inks: customer portal, printed papers, phone job view (one helper, inkWord)
+- Nov 12 8:38pm · 1.3.455 · Nick · Schedule: the Issue button's small words are white, readable on the red
+- Nov 12 8:43pm · 1.3.456 · Nick · Schedule Issue: mark Missing / Reject / Reprint with one click; how many is optional (counted later)
+- Nov 12 8:43pm · 1.3.457 · Nick · Rules: Issue count optional
+- Nov 12 8:45pm · 1.3.458 · Nick · Schedule: an order On hold shows an On hold tag in Ready To Schedule and on the press, isn't counted late, and Make The Schedule skips it
+- Nov 12 8:48pm · 1.3.459 · Nick · Schedule: Issue button's small words forced white
+- Nov 12 8:51pm · 1.3.460 · Nick · Schedule: a paused run marked done (Complete, Issue, press timer) finishes at its pause, not stretched to now (#40478)
+- Nov 12 8:54pm · 1.3.461 · Nick · Schedule: finished jobs turn soft blue with a Done pill, number not crossed out (option B)
+- Nov 12 9:05pm · 1.3.462 · Nick · Mockup Creator: print areas can be dragged and sized by hand (front, back and each sleeve), saved per style and used every time
+- Nov 12 9:05pm · 1.3.463 · Nick · Schedule: done (blue), printing (green) and over-time (yellow/red) tints now show; the calm look's white base rule was overriding them
+- Nov 12 9:11pm · 1.3.465 · Nick · Order page saves a total that doesn't match its lines once opened (orders made outside the page showed $0)
+- Nov 12 9:19pm · 1.3.467 · Nick · Color changes and their PMS match only for garment colors on the group; ask to take a removed garment off the mockup
+- Nov 12 9:24pm · 1.3.469 · Nick · Schedule debug: finished runs never overlap on a press; a run left printing when its order moved on shows finished; Day and Week views use the calm card look
+- Nov 12 9:30pm · 1.3.470 · Nick · Rules: schedule finished-run overlap and moved-on runs (Nov 12 debug)
+- Nov 12 9:56pm · 1.3.472 · Nick · Backups: one round at a time per backup (two rounds together lost tables from the manifest)

@@ -1,4 +1,5 @@
 "use client";
+import { holdOf } from "@/lib/holds";
 import { useProdSide } from "@/lib/prodSide";
 import { runParts, sampleRunOn, samplePieces, waitsOnSample } from "@/lib/samples";
 import { trainingSaid } from "@/lib/orderTrainings";
@@ -37,7 +38,7 @@ import { MixStrip, useMixParts } from "@/components/MixStrip";
 /** an Issue on a run (Nov 12, Nick): pieces still to print after it, and why */
 type IssueRef = { id: string; why: "missing" | "reject" | "reprint"; pcs: number; sizes: Record<string, number>; waits: boolean; at: string };
 const ISSUE_WORD: Record<IssueRef["why"], string> = { missing: "Missing", reject: "Reject", reprint: "Reprint" };
-type Job = { /** an Issue: just the pieces still to print */ issue?: IssueRef; /** the customer (orders only): which of their kinds of order it is (their Create order trainings) */ cid?: string; /** a pre-production sample run of the order (its own card), or the order's full run waiting on one (lib/samples.ts) */ sample?: "run" | "only"; waits?: boolean; key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; /** the order's production date: it runs that day, never earlier (Nine18's weekly run; Nov 11) */ prod?: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null;
+type Job = { /** an Issue: just the pieces still to print */ issue?: IssueRef; /** the order is On hold (lib/holds.ts: art, receiving, the customer, QC; a payment hold keeps it off the schedule): why */ onHold?: string; /** the customer (orders only): which of their kinds of order it is (their Create order trainings) */ cid?: string; /** a pre-production sample run of the order (its own card), or the order's full run waiting on one (lib/samples.ts) */ sample?: "run" | "only"; waits?: boolean; key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; /** the order's production date: it runs that day, never earlier (Nine18's weekly run; Nov 11) */ prod?: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null;
   /** a hold from a quote (Hold the spot): its order, when its details are due, who held it */ hold?: { orderId: string | null; detailsDue: string | null; by: string; art: string } };
 /** when a job has to be done (absolute minutes): end of its in-hands day, or the set time on a firm date */
 const dueAbs = (j: Job) => (j.due ? ord(j.due) * 1440 + (j.dueTime != null ? j.dueTime : 1440) : Infinity);
@@ -55,7 +56,7 @@ const numLink = (j: Job) => (j.href ? <a className="ms-numl" href={j.href} dragg
 // move [Firm] to the right side of the box")
 const flags0 = (j: Job) => (j.rush || j.firm ? <span className="mfl">{j.rush ? <em className="mfl-rush" title="Rush">Rush</em> : null}{j.firm ? <em className="mfl-firm" title={`Firm: needed ${firmLbl(j)}`}>Firm · {firmLbl(j)}</em> : null}</span> : null);
 /** a job's small tags: rush / firm, and a sample run or a full run waiting on its sample (Nov 11, Nick; lib/samples.ts) */
-const flags = (j: Job) => <>{j.issue ? <em className={"mjx-tag " + j.issue.why} title={`${ISSUE_WORD[j.issue.why]}: ${j.issue.pcs} pcs still to print${j.issue.waits ? " · waits for the goods" : ""}`}>{ISSUE_WORD[j.issue.why]}</em> : null}{flags0(j)}{j.sample ? <em className="ms-smp" title={j.sample === "run" ? "The order's pre-production sample run" : "A sample order"}>Sample</em> : null}{j.waits ? <em className="ms-smpw" title="The full run waits for the customer's OK on the sample">Waits for sample OK</em> : null}</>;
+const flags = (j: Job) => <>{j.onHold ? <em className="mjx-tag hold" title={`On hold · ${j.onHold}: not scheduled by Make The Schedule until the hold comes off`}>On hold · {j.onHold}</em> : null}{j.issue ? <em className={"mjx-tag " + j.issue.why} title={`${ISSUE_WORD[j.issue.why]}: ${j.issue.pcs ? `${j.issue.pcs} pcs still to print` : "how many to be counted"}${j.issue.waits ? " · waits for the goods" : ""}`}>{ISSUE_WORD[j.issue.why]}</em> : null}{flags0(j)}{j.sample ? <em className="ms-smp" title={j.sample === "run" ? "The order's pre-production sample run" : "A sample order"}>Sample</em> : null}{j.waits ? <em className="ms-smpw" title="The full run waits for the customer's OK on the sample">Waits for sample OK</em> : null}</>;
 /** why a job is where it is (Nov 11 2026, Nick): the schedule put it there (sparkle), a person did, it's locked, or
  *  it only fits that press */
 function WhyIcon({ w, title }: { w: "lock" | "cap" | "me" | "ai"; title: string }) {
@@ -309,6 +310,11 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
     busy.set(c.job.key, [...(busy.get(c.job.key) || []), ...pieces.map((p): [number, number, number] => [ord(p.day) * 1440 + p.start, ord(p.day) * 1440 + p.end, order.get(c.key) ?? 0])]);
     pieces.forEach((p, i) => out.push({ c, day: p.day, start: p.start, end: p.end, part: i + 1, parts: pieces.length, pushed: pushed && i === 0, work: p.work, slow: p.slow < 1 ? p.slow : undefined }));
   }
+  // two finished runs on one press can't overlap: one marked complete late (Complete pressed at the end of the day with
+  // the time left at now) ends where the next finished run on the press began (Nov 12 debug, #40496 drawn 8a–4:30p over
+  // #40313 done at 12:02p)
+  const fin = out.filter((g) => g.c.slot?.status === "done" || g.c.ran).sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.start - b.start));
+  for (let i = 0; i + 1 < fin.length; i++) { const a = fin[i], b = fin[i + 1]; if (a.day === b.day && a.start < b.start && a.end > b.start) { a.end = Math.max(a.start + 15, b.start); a.work = a.end - a.start; } }
   if (lunchOut) for (const [d, at] of lunch) lunchOut.set(d, at);
   return out;
 }
@@ -547,7 +553,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [keyOpen, setKeyOpen] = useSticky("cal.key", true);
   const [rcPause, setRcPause] = useState(false), [rcSure, setRcSure] = useState(false);
   // Issue on a run (Nick, Nov 12: "a red button that says issue, reprint, reject, or missing"): why, and how many still to print by size
-  const [rcIss, setRcIss] = useState<{ why: IssueRef["why"]; n: Record<string, string>; sizes: [string, number][] | null } | null>(null);
+  const [rcIss, setRcIss] = useState<{ why: IssueRef["why"]; n: Record<string, string>; sizes: [string, number][] | null; count?: boolean } | null>(null);
   useEffect(() => { setRcIss(null); }, [lockMenu?.c.key]); // eslint-disable-line react-hooks/exhaustive-deps
   // a pause says what's done so far, print spot by print spot (Nov 12, Nick: "the sleeves are done… half the fronts")
   const [rcDone, setRcDone] = useState<Record<string, { s: "d" | "p" | "n"; n: string }>>({});
@@ -562,7 +568,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const [{ data: st }, { data: o0 }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }, { data: ho0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       // not a job on hold for payment: production gets it once it's paid (lib/holds.ts)
-      sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times, order_type").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production", "fulfillment"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
+      sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times, order_type, flags").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production", "fulfillment"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
       sb.from("production_slots").select("*").or("order_id.not.is.null,hold_id.not.is.null").gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
@@ -589,6 +595,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     }
     {
       const have = new Set(o.map((x) => x.id as string));
+      // a run left printing or paused when its order moved on (finished in Printavo, the status changed by hand: #40365,
+      // Nov 12 debug) ran too: it shows finished where it last stood, never a job still printing on the press
+      for (const x of (sl0 || []) as Slot[]) if ((x.status === "running" || x.status === "paused") && x.order_id && !have.has(x.order_id) && x.started_at) { x.status = "done"; x.finished_at = x.finished_at || x.progress_at || x.started_at; }
       const doneIds = [...new Set([...((sl0 || []) as Slot[]).filter((x) => x.status === "done" && x.order_id && !have.has(x.order_id)).map((x) => x.order_id!), ...issues.map((x) => x.order_id).filter((id) => !have.has(id))])];
       for (let i = 0; i < doneIds.length; i += 150) {
         const { data: more } = await sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times, order_type").in("id", doneIds.slice(i, i + 150)).is("discarded_at", null);
@@ -719,7 +728,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null; production_date?: string | null; order_type?: string | null; run_times?: Record<string, { min: number; by: string }> | null }[]).flatMap((x) => {
         // a pre-production sample is its own card, and the full run (less the pieces taken off the top) waits on it (Nov 11, Nick; lib/samples.ts)
         const parts = runParts(x.groups || []), runOn = sampleRunOn(x.groups || []);
-        const base = { cid: x.customer_id || "", rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", due: x.due_date, status: x.status, href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" };
+        const base = { onHold: holdOf((x as { flags?: unknown }).flags)?.reason, cid: x.customer_id || "", rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", due: x.due_date, status: x.status, href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" };
         const out: Job[] = [];
         if (parts.sample.length) out.push({ ...base, key: "o:" + x.id + ":s", sample: "run", prod: runOn, due: runOn || x.due_date, name: `Sample · ${x.nickname || ""}`.trim(), qty: parts.sample.reduce((a, g) => a + samplePieces(g), 0), needs: withRunTimes(needsForOrder(ps, x as never, parts.sample), undefined) });
         const rest = needsForOrder(ps, x as never, parts.rest);
@@ -727,7 +736,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           const n0 = needsForOrder(ps, x as never, parts.rest.length ? parts.rest : x.groups || []).find((n) => n.type === it.kind);
           if (!n0) continue;
           const sizes = it.sizes || {}, sz = Object.entries(sizes).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${v}`).join(" · ");
-          out.push({ ...base, key: "i:" + it.id, name: `${ISSUE_WORD[it.why]} · ${x.nickname || ""}${sz ? ` · ${sz}` : ""}`.trim(), qty: it.pcs, issue: { id: it.id, why: it.why, pcs: it.pcs, sizes, waits: it.status === "open" && it.why === "missing" && !it.goods_at, at: it.at }, needs: [partNeed(subNeed(n0, it.locations), it.pcs)] });
+          out.push({ ...base, key: "i:" + it.id, name: `${ISSUE_WORD[it.why]} · ${x.nickname || ""}${sz ? ` · ${sz}` : it.pcs ? "" : " · count to come"}`.trim(), qty: it.pcs || undefined, issue: { id: it.id, why: it.why, pcs: it.pcs, sizes, waits: it.status === "open" && it.why === "missing" && !it.goods_at, at: it.at }, needs: [it.pcs ? partNeed(subNeed(n0, it.locations), it.pcs) : subNeed(n0, it.locations)] });
         }
         if (rest.length) out.push({ ...base, key: "o:" + x.id, prod: [x.production_date, runOn ? addDay(runOn, 1) : null].filter(Boolean).sort().pop() || null, name: parts.sample.length ? `Production run · ${x.nickname || ""}`.trim() : x.nickname || "", qty: x.qty || 0, needs: withRunTimes(rest, x.run_times), ...(x.order_type === "sample" ? { sample: "only" as const } : {}), ...(parts.sample.length && waitsOnSample(x.groups || []) ? { waits: true } : {}) });
         return out;
@@ -960,7 +969,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const bk = onCal.get(j.key + ":" + n0.type), n = bk ? restNeed(n0, bk) : n0;
       if (!n) continue;
       // missing goods not in yet: it waits here, with nowhere suggested, until they're counted in
-      if (j.issue?.waits) { out.push({ job: j, need: n, sug: null }); continue; }
+      // waiting on goods, or On hold (art, receiving, the customer, QC): listed, never booked by Make The Schedule
+      if (j.issue?.waits || j.onHold) { out.push({ job: j, need: n, sug: null }); continue; }
       const near = [...artsOf(n)].flatMap((a) => artAt.get(a) || []);
       // a production date is the day it runs: suggested from that day on, never before
       let sug = suggest(s, n, j.due, j.prod && j.prod > today ? j.prod : today, ld, 30, near);
@@ -1070,7 +1080,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (action === "resume") Object.assign(patch, { status: "running", progress: p, progress_at: nowIso, started_at: sl.started_at || nowIso });
     if (action === "pause") Object.assign(patch, { status: "paused", progress: p, progress_at: nowIso });
     if (action === "progress") Object.assign(patch, { progress: p, progress_at: nowIso, ...(sl.status === "scheduled" && p > 0 ? { status: "running", started_at: sl.started_at || nowIso } : {}) });
-    if (action === "done") Object.assign(patch, { status: "done", finished_at: nowIso, progress: 1, progress_at: nowIso,
+    // a paused run marked done (Complete, or an Issue raised on it) stopped when it was paused: nothing ran after that, so it
+    // finishes at the pause, never stretched to now (Nick, Nov 12, #40478: paused 5:23p, marked Missing at 8:47p)
+    const pausedAt = action === "done" && sl.status === "paused" && sl.progress_at && new Date(sl.progress_at).getTime() < new Date(nowIso).getTime() ? sl.progress_at : null;
+    if (action === "done") Object.assign(patch, { status: "done", finished_at: pausedAt || nowIso, progress: 1, progress_at: pausedAt || nowIso,
       // marked done without ever being started (Nov 12, Nick: "it just was done already"): it ran its planned time up to then
       ...(sl.started_at ? {} : { started_at: new Date(new Date(nowIso).getTime() - Math.max(MIN_JOB_MIN, +(sl.minutes || 0)) * 60000).toISOString() }) });
     if (action === "not_started") Object.assign(patch, { status: "scheduled", started_at: null, finished_at: null, progress: 0, progress_at: null });
@@ -1302,7 +1315,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const artK = (n: Need) => [...artsOf(n)].sort().join(",");
     const items: Item[] = [
       ...movable.map((c) => ({ key: c.key, job: c.job, need: c.need, slot: c.slot, cur: c.machine.id, curDay: c.day, left: 1 - Math.max(0, Math.min(1, +(c.slot?.progress || 0))), lock: c.slot?.locked ? { kind: c.slot.locked, m: c.machine.id, crew: c.machine.crew || "", day: c.day } : undefined })),
-      ...(replanTray ? tray.filter((t) => !t.job.issue?.waits).map((t) => ({ key: "t:" + t.job.key + t.need.type, job: t.job, need: t.need, slot: null, cur: "", curDay: "", left: 1 })) : []),
+      ...(replanTray ? tray.filter((t) => !t.job.issue?.waits && !t.job.onHold).map((t) => ({ key: "t:" + t.job.key + t.need.type, job: t.job, need: t.need, slot: null, cur: "", curDay: "", left: 1 })) : []),
     ].sort((a, b) => dueAbs(a.job) - dueAbs(b.job) || artK(a.need).localeCompare(artK(b.need)) || +!!b.job.firm - +!!a.job.firm || +!!b.job.rush - +!!a.job.rush || (a.curDay || "9999").localeCompare(b.curDay || "9999"));
     const lateOld = new Set(tight.map((t) => t.job.key));
     type Out = { it: Item; mach: Machine; day: string; startAbs: number; endAbs: number; end: string; minutes: number; late: boolean; locs: string[] | null; part: number; parts: number };
@@ -2031,16 +2044,17 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (!rcIss || !c.slot?.order_id) return;
     const sizes = Object.fromEntries(Object.entries(rcIss.n).map(([k, v]) => [k, Math.max(0, Math.round(+v || 0))]).filter(([, v]) => (v as number) > 0)) as Record<string, number>;
     const pcs = Object.values(sizes).reduce((a, b) => a + b, 0);
-    if (!pcs) { setMsg("Put in how many still have to print."); return; }
+    // how many is optional (Nick, Nov 12 2026, #40478: "I need to be able to mark it just missing right now"): with no
+    // count, the pieces are counted later and the job is booked as the rest of the run
     const sl = await slotFor(c, g); if (!sl) return;
     const when = isoAt(rcF.t), sb = createClient();
     const { error } = await sb.from("production_issues").insert({ order_id: sl.order_id, kind: c.need.type, locations: sl.locations && sl.locations.length ? sl.locations : null, why: rcIss.why, sizes, pcs, from_slot: sl.id, at: when, by: me.name || me.email || "shop" });
     if (error) { setMsg(error.message); return; }
     setLockMenu(null); setRcIss(null);
     // the run itself is over: it stopped where the issue was raised
-    if (sl.status === "running" || sl.status === "paused") await logAction(sl, "done", 1, false, when, `Issue: ${ISSUE_WORD[rcIss.why]} · ${pcs} pcs still to print`);
-    else await sb.from("production_slot_log").insert({ slot_id: sl.id, order_id: sl.order_id, machine: sl.machine, action: "progress", progress: +(sl.progress || 0), by: me.name || me.email, note: `Issue: ${ISSUE_WORD[rcIss.why]} · ${pcs} pcs still to print`, at: when });
-    setMsg(`#${c.job.number}: ${pcs} pcs ${rcIss.why === "missing" ? "wait for the missing goods in Ready To Schedule" : "are ready to schedule"} (${ISSUE_WORD[rcIss.why]}).`);
+    if (sl.status === "running" || sl.status === "paused") await logAction(sl, "done", 1, false, when, `Issue: ${ISSUE_WORD[rcIss.why]} · ${pcs ? `${pcs} pcs still to print` : "how many to be counted"}`);
+    else await sb.from("production_slot_log").insert({ slot_id: sl.id, order_id: sl.order_id, machine: sl.machine, action: "progress", progress: +(sl.progress || 0), by: me.name || me.email, note: `Issue: ${ISSUE_WORD[rcIss.why]} · ${pcs ? `${pcs} pcs still to print` : "how many to be counted"}`, at: when });
+    setMsg(`#${c.job.number}: ${pcs ? `${pcs} pcs` : "marked, how many to be counted:"} ${rcIss.why === "missing" ? "wait for the missing goods in Ready To Schedule" : "are ready to schedule"} (${ISSUE_WORD[rcIss.why]}).`);
     load();
   }
   /** the missing goods for an Issue came in: its pieces are ready to schedule */
@@ -2156,7 +2170,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         <span>#{g.c.job.number} was here</span><small>moving to {tm ? shortName(tm) : "another press"}</small>
       </div>
     ); }
-    const num = <b className={"msf-n" + (segLate(g) ? " late" : "")}>{whyEl(g.c)}{tn(dotEl(g.c, g), numLink(g.c.job))}{st === "done" ? <em className="ok"> ✓</em> : null}</b>;
+    const num = <b className={"msf-n" + (segLate(g) ? " late" : "")}>{whyEl(g.c)}{tn(dotEl(g.c, g), numLink(g.c.job))}</b>;
     return (
       <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + (notYet(g) ? " mdy-ny" : "") + (rs ? " mpr-c " + rs.k + (band ? " mpr-hasb" : "") : "") + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
         onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(g.c); } }}
@@ -2176,7 +2190,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const notYet = (g: Seg) => g.day === today && g.part === 1 && g.c.job.kind !== "h" && (!g.c.slot || g.c.slot.status === "scheduled" || (g.c.slot.status === "paused" && !g.c.slot.started_at)) && g.start + 15 < now.min;
   const dayState = (g: Seg) => {
     const st = g.c.slot?.status;
-    if (st === "done") { const f = g.c.slot?.finished_at; return <em className="mdy-st ok">{f ? "✓ " + new Date(f).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p") : "✓ Done"}</em>; }
+    if (st === "done") { const f = g.c.slot?.finished_at; return <em className="mdy-st ok">{f ? "Done " + new Date(f).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p") : "Done"}</em>; }
     if (st === "running" && runState(g.c)) return null;
     if (st === "running") return <em className="mdy-st run">Printing{g.c.slot?.progress ? ` · ${Math.round(+g.c.slot.progress * 100)}%` : ""}</em>;
     if (notYet(g)) return <em className="mdy-st bad">Not started</em>;
@@ -2453,10 +2467,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 {rcIss && (() => { const tot = Object.values(rcIss.n).reduce((a, v) => a + Math.max(0, Math.round(+v || 0)), 0); return <div className="mrb-pz mrb-isf">
                   <b>Why?</b>
                   <div className="mrb-why mrb-isw">{(["missing", "reject", "reprint"] as const).map((w) => <button key={w} type="button" className={rcIss.why === w ? "on" : ""} onClick={() => setRcIss({ ...rcIss, why: w })}>{ISSUE_WORD[w]}</button>)}</div>
-                  <b>How many still to print?</b>
+                  {!rcIss.count ? <button type="button" className="mrb-iscnt" onClick={() => setRcIss({ ...rcIss, count: true })}>+ How many (optional)</button> : <><b>How many still to print?</b>
                   {!rcIss.sizes ? <div className="faint">Loading sizes…</div> : rcIss.sizes.length ? <div className="mrb-isz">{rcIss.sizes.map(([k, q]) => <label key={k}><span>{k}</span><input className="mrc-t mrc-n" inputMode="numeric" placeholder="0" value={rcIss.n[k] || ""} onChange={(e) => setRcIss({ ...rcIss, n: { ...rcIss.n, [k]: e.target.value.replace(/\D/g, "") } })} /><small>of {q}</small></label>)}</div>
-                    : <div className="mrb-isz"><label><span>Pieces</span><input className="mrc-t mrc-n" inputMode="numeric" placeholder="0" value={rcIss.n.pcs || ""} onChange={(e) => setRcIss({ ...rcIss, n: { pcs: e.target.value.replace(/\D/g, "") } })} /><small>of {c.need.qty}</small></label></div>}
-                  <button type="button" className="mrb-pgo mrb-isgo" disabled={!tot} onClick={() => void raiseIssue(c, g)}>{tot ? `Add ${tot} pcs to print${rcIss.why === "missing" ? " · waits for goods" : ""}` : "Put in how many"}</button>
+                    : <div className="mrb-isz"><label><span>Pieces</span><input className="mrc-t mrc-n" inputMode="numeric" placeholder="0" value={rcIss.n.pcs || ""} onChange={(e) => setRcIss({ ...rcIss, n: { pcs: e.target.value.replace(/\D/g, "") } })} /><small>of {c.need.qty}</small></label></div>}</>}
+                  <button type="button" className="mrb-pgo mrb-isgo" onClick={() => void raiseIssue(c, g)}>{`Mark ${ISSUE_WORD[rcIss.why].toLowerCase()}${tot ? ` · ${tot} pcs` : ""}${rcIss.why === "missing" ? " · waits for goods" : ""}`}</button>
                 </div>; })()}
               </>}
               {st !== "done" && c.slot?.order_id && <div className="mrb-dest"><div className="mrb-dl">When it&apos;s done, the order goes to</div>
@@ -2965,7 +2979,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             onDrop={(e) => { e.preventDefault(); setOver(""); if (drag?.card?.slot) unbookMany(drag.group || [drag.card]); setDrag(null); }}>
             <div className="ms-ready-h">
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{trayV.length}</span></button>
-              <span className="faint ms-band-sub">{trayV.filter((t) => t.sug?.late).length ? <span className="ms-late">{trayV.filter((t) => t.sug?.late).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{trayV.length ? (Object.keys(picks).length ? `${trayV.filter((t) => t.picked).length} picked by you · ` : "") + "by due date · click a spot to change it, then Make The Schedule" : "nothing waiting"}</span>
+              <span className="faint ms-band-sub">{trayV.filter((t) => t.sug?.late && !t.job.onHold).length ? <span className="ms-late">{trayV.filter((t) => t.sug?.late && !t.job.onHold).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{trayV.length ? (Object.keys(picks).length ? `${trayV.filter((t) => t.picked).length} picked by you · ` : "") + "by due date · click a spot to change it, then Make The Schedule" : "nothing waiting"}</span>
               <span className="spacer" />
               {(() => {
                 // Start over asks first, and what to do with the locks (Nov 11, Nick: "yes, start over… release all locks or leave locks there")
@@ -3050,10 +3064,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     const okM = machines.filter((m) => fits(t.need, m)), selM = pk?.m || t.sug?.machine.id || okM[0]?.id || "", selD = pk?.d || t.sug?.day || days[0];
                     return (
                     <li key={k} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} className={"msr-c" + (t.job.kind === "h" ? " hold" : "") + (t.picked ? " picked" : "") + (open ? " open" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
-                      <div className="msr-1">{tn((() => { const d = dotOf({ job: t.job } as Card, Infinity); return d ? <GoodsTee k={d.k} t={d.t} /> : null; })(), <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}{t.job.issue ? flags(t.job) : null}<b>{t.job.customer || t.job.name}</b></div>
+                      <div className="msr-1">{tn((() => { const d = dotOf({ job: t.job } as Card, Infinity); return d ? <GoodsTee k={d.k} t={d.t} /> : null; })(), <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}{t.job.issue || t.job.onHold ? flags(t.job) : null}<b>{t.job.customer || t.job.name}</b></div>
                       <div className="msr-2">{t.job.customer ? t.job.name : t.need.label}</div>
                       <div className="msr-3"><b>{t.need.qty.toLocaleString()}</b><span className={late ? "late" : ""}>{t.job.due ? `due ${dayShort(t.job.due)}` : "no date"}</span><span className="spacer" />
-                        {t.job.issue?.waits ? <button type="button" className="msr-spot iss-wait" onClick={() => void goodsHere(t.job.issue!.id)} title="The missing goods came in: ready to schedule">Waiting on goods · Here now</button> : t.sug ? <button type="button" className={"msr-spot" + (t.picked ? " mine" : "")} onClick={() => setPickOpen(open ? "" : k)} title={t.picked ? "Your pick · click to change" : `Suggested: ${t.sug.reason} · click to put it somewhere else`}>{t.picked ? "✓" : "✦"} {who(t.sug.machine)} · {dayW(t.sug.day)}{t.picked ? "" : " ▾"}</button> : <button type="button" className="msr-spot none" onClick={() => setPickOpen(open ? "" : k)}>Pick a spot ▾</button>}
+                        {t.job.issue?.waits ? <button type="button" className="msr-spot iss-wait" onClick={() => void goodsHere(t.job.issue!.id)} title="The missing goods came in: ready to schedule">Waiting on goods · Here now</button> : t.job.onHold ? <span className="msr-spot iss-wait" title="Make The Schedule skips it until the hold comes off; drag it onto a press to book it anyway">On hold · not booked</span> : t.sug ? <button type="button" className={"msr-spot" + (t.picked ? " mine" : "")} onClick={() => setPickOpen(open ? "" : k)} title={t.picked ? "Your pick · click to change" : `Suggested: ${t.sug.reason} · click to put it somewhere else`}>{t.picked ? "✓" : "✦"} {who(t.sug.machine)} · {dayW(t.sug.day)}{t.picked ? "" : " ▾"}</button> : <button type="button" className="msr-spot none" onClick={() => setPickOpen(open ? "" : k)}>Pick a spot ▾</button>}
                       </div>
                       {open && <div className="msr-pop" onClick={(e) => e.stopPropagation()}>
                         {t.auto && <><div className="msr-ph">Suggested</div><div className="msr-sug">✦ <b>{who(t.auto.machine)} · {shortName(t.auto.machine)} · {dayW(t.auto.day)}</b> <span className="faint">{t.auto.reason}</span></div></>}

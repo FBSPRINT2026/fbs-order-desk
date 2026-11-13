@@ -39,11 +39,22 @@ export function mockupGarmentKey(g: Pick<Group, "lines">): string {
 }
 
 export type MockupArt = { k: string; /** the garments drawn (mockupGarmentKey) */ gk?: string; /** each logo's picture (designs.preview_path) when it was drawn */ d: Record<string, string>;
-  /** saved since the garment's color as drawn is kept on its lines (GLine.shade, Oct 29): one made before is drawn again once */ s?: 1 };
+  /** saved since the garment's color as drawn is kept on its lines (GLine.shade, Oct 29): one made before is drawn again once */ s?: 1;
+  /** the garments drawn, "style|color" as the lines name them (Nov 12): one taken off the group is asked about (mockupGone) */ gn?: string[] };
 
 export function mockupArtStamp(g: Pick<Group, "imprints" | "lines" | "mockupBg" | "mockupKind">, designs: { id: string; preview_path?: string | null; file_path?: string | null }[]): MockupArt {
   const ids = [...new Set((g.imprints || []).map((im) => im.design_id).filter(Boolean))] as string[];
-  return { k: mockupArtKey(g), gk: mockupGarmentKey(g), d: Object.fromEntries(ids.map((id) => { const x = designs.find((y) => y.id === id); return [id, String(x?.preview_path || x?.file_path || "")]; }).filter(([, p]) => p)), s: 1 };
+  return { k: mockupArtKey(g), gk: mockupGarmentKey(g), gn: garmentNames(g), d: Object.fromEntries(ids.map((id) => { const x = designs.find((y) => y.id === id); return [id, String(x?.preview_path || x?.file_path || "")]; }).filter(([, p]) => p)), s: 1 };
+}
+
+const garmentNames = (g: Pick<Group, "lines">) => [...new Set((g.lines || []).filter((l) => (l.style || l.color || "").trim()).map((l) => `${(l.style || "").trim()}|${(l.color || "").trim()}`))];
+/** the garments the group's mockup shows that are no longer on the group ("1717 Mauve"), to ask whether to take them off
+ *  it (Nick, Nov 12: "if you have a mock-up that has a garment on it, and you remove the garment, you should ask") */
+export function mockupGone(g: Pick<Group, "lines" | "mockupThumbs" | "mockupArt">): string[] {
+  if (!(g.mockupThumbs || []).some(Boolean) || !g.mockupArt?.gn?.length) return [];
+  const k = (x: string) => x.toLowerCase().replace(/[^a-z0-9|]/g, "");
+  const now = new Set(garmentNames(g).map(k));
+  return g.mockupArt.gn.filter((x) => !now.has(k(x))).map((x) => x.split("|").filter(Boolean).join(" "));
 }
 
 /** the group's saved pictures no longer match its prints or logos */

@@ -89,7 +89,7 @@ import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-orde
 import { resetToRequest, printavoDeleteCheck } from "@/app/shop/orders/delete-actions";
 import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
-import { mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
+import { mockupGone, mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
 import type { DgzSewout } from "@/lib/digitizeStatus";
 import { garmentFor, sameBrand } from "@/lib/garmentMatch";
 import SampleRunTool, { SampleBar } from "@/components/tools/SampleRunTool";
@@ -468,6 +468,30 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [save]);
 
   useEffect(() => () => { if (timer.current) save(); }, [save]);
+  // a garment taken off a group that its mockup still shows: asked whether to take it off the mockup too (Nick, Nov 12)
+  const [goneKept, setGoneKept] = useState<string[]>([]);
+  const goneAsk = (g: Group) => {
+    const gone = mockupGone(g), key = `${g.id}:${gone.join(",")}`;
+    if (!gone.length || goneKept.includes(key)) return undefined;
+    return <div className="mk-gone"><span>The mockup still shows {gone.join(", ")}, not on this group now. Take {gone.length > 1 ? "them" : "it"} off the mockup?</span>
+      <span className="mk-gone-b"><button type="button" className="btn sm primary" onClick={() => window.dispatchEvent(new CustomEvent("fbs:redraw-mockup", { detail: { groupId: g.id } }))}>Take off the mockup</button>
+      <button type="button" className="btn sm" onClick={() => setGoneKept((k) => [...k, key])}>Keep</button></span></div>;
+  };
+  // an order made or changed outside this page (a tool, the server, by hand) can carry a total that isn't what its
+  // lines work out to: the lists, the portal and QuickBooks read the saved total, so it's saved here once it's open
+  // (Nick, Nov 12: Dear Heart's six reorders showed $0 on the customer's orders). Not a finished job.
+  const totalChecked = useRef("");
+  useEffect(() => {
+    if (!o || saveState !== "Saved" || totalChecked.current === o.id || o.status === "completed") return;
+    const t = setTimeout(() => {
+      const d = latest.current;
+      if (!d || d.id !== o.id || timer.current) return;
+      totalChecked.current = o.id;
+      if (Math.abs(calcOrder(d, settings).total - (+d.total || 0)) > 0.005) void save();
+    }, 3000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o?.id, saveState, settings, save]);
   // the order check on the right (components/tools/OrderReview.tsx, Oct 23): what's typed here is saved before it changes
   // the order, and the order shows its changes as soon as they're made (no reload, no lost typing)
   useEffect(() => {
@@ -1980,7 +2004,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             {g.sample && <SampleBar g={g} orderId={o.id} me={who.staffName || who.email || ""} patch={patch} onEdit={() => setSampleTool({ kind: g.sample?.kind || "only", groupId: g.id })} />}
             <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
-              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : undefined} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
+              armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : goneAsk(g)} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })}

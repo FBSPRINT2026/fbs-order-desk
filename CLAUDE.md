@@ -183,6 +183,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   order's underbase switch, `Imprint.underbase === false`, or a fashion hit). A coach lesson about "light shirts" means
   those pale ones only. Underbase and print order go by the ink's real color (`printShade`), not the color the art is
   drawn in; one-color art prints as the one ink its print names.
+- **Print areas are fixed by hand, once per style** (Nick, Nov 12 2026, #50051: Amanda "needs to be able to do the most"): in the
+  Mockup Creator, with Print areas ticked, drag a dashed box (front, back or a sleeve) to line it up on that shirt and its
+  corner to size it (a hoodie's back with the hood up, a sleeve that sits wrong). Saved on the garment
+  (`garments.mockup_fit`, "area:<side>" / "area:<side>:<location>") and used for that style on every order from then on;
+  Reset this side clears it. Never tell staff the print areas can't be changed.
 - **Spot color films are solid** (Nick, Nov 12, #50013's camo: "they should all be solid. No halftones and crisp lines"):
   in the Separation Studio's spot color every color prints as its nearest picked ink, solid, and no plate (underbase
   included) is halftoned; only an ink at an end of a fade picked in the art is (`spotMixer` / `tonalOf` in
@@ -238,6 +243,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   time the order changes here, the invoice is replaced with ours whole (Nick, Nov 12: "if it stays the same, it stays the same").
   One Printavo sent at a different total (shipping or a fee it never had, other prices) is replaced with ours whole (Nick,
   Nov 12, after #40193: "anytime you see a difference, you should write what's in our system").
+- **A color change only for the garment colors on the group** (Nick, Nov 12, #50061: a Blue Spruce-only reorder kept
+  the last job's "White → 7640 on Mauve", its $15 PMS match and a mauve sweatshirt on the mockup). A print's `inkBy` for a
+  color no longer on its group stays saved but never shows, charges or prints: `liveInkBy` / `livePrint` in
+  `lib/inkBy.ts` (used by `calcGroup`, the order page's inks and versions, `changeVersions`, the work order). A garment
+  taken off a group that its mockup still shows is asked about: "Take it off the mockup?" (`mockupGone` in
+  `lib/mockupFresh.ts`, from the stamp's garment list `mockupArt.gn`).
+- **An order's saved total is what its lines work out to** (Nick, Nov 12 2026: Dear Heart's reorders showed $0 on the customer's orders). The lists, the portal and QuickBooks read `orders.total`; anything that makes or changes an order outside the order page saves `calcOrder(...).total` with it, and the order page saves a total that doesn't match once it's opened (not a completed job).
 - **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
   to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule
   yet is Later; a goods problem stays on Today), under a full-width All / Screen print / Embroidery / Heat press switch, Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
@@ -282,10 +294,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
     in `app/globals.css` (the "One look across the shop" block) and use it everywhere.
 - **The schedule's look** (Nick, Nov 11 2026: "too busy… a key at the top"): every job on a press is a white card, one color
   all round (no colored edge; Nick, Nov 11: "let the dots and stuff do the talking"); only late (bold red number, no tag; Nick, Nov 11) and holds (dashed, "Hold" tag) look different. Overtime
-  is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): one dark header card per press (name, crew, clock-in, the press, then a bar: "2 of 4 done · on pace" / "35m behind" / "20m ahead", `dayScore`: only from what's been marked, the last job marked done against its planned finish or a printing job's updated pieces; a start that went by counts only with the live clock on; nothing marked, no pace is claimed), done jobs grayed and dashed with the number struck through and the time, the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits under the schedule's search on the
+  is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): one dark header card per press (name, crew, clock-in, the press, then a bar: "2 of 4 done · on pace" / "35m behind" / "20m ahead", `dayScore`: only from what's been marked, the last job marked done against its planned finish or a printing job's updated pieces; a start that went by counts only with the live clock on; nothing marked, no pace is claimed), done jobs soft blue like Printavo, the number in blue (never crossed out) and a blue "Done 12:02p" pill (Nick, Nov 12, option B), the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits under the schedule's search on the
   right (Goods / Printing / On the board; Hide folds it to one line, remembered: `.mky`, Nick Nov 12). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
   tabs: All / Late / Holds / On time) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
+  An order On hold (art, receiving, the customer, QC; a payment hold keeps it off the schedule entirely) still shows in
+  Ready To Schedule and on the press with an "On hold · <reason>" tag, isn't counted as tight or late, and Make The
+  Schedule never books it; drag it onto a press to book it anyway (Nick, Nov 12, #50013).
   Jobs back to back show as one group only when they're one run: the same artwork and the same in-hands date (`oneRun`;
   Nick, Nov 11: same customer alone is never a group).
   An order's production date is the day it runs (Nine18's weekly AMS run; Nick, Nov 11): Re-plan and Ready To Schedule
@@ -316,7 +331,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Rush and Firm are small words at the right end of a job's first line, never emoji or a second-line tag (Nick, Nov 12);
   no dot after a printing job's number.
   A job marked complete sits where it really ran, from its start to its finish, and later work stays after it; it
-  stays on the schedule grayed, even after its order moves to Fulfillment, Ready or Completed (Nick,
+  stays on the schedule (blue), even after its order moves to Fulfillment, Ready or Completed (Nick,
   Nov 12: "it doesn't go away… we still want to see it there"); only bookings not yet done leave when the order moves on. Finished work shows on the day it was really done, whatever day it was booked for; one marked complete with no real start (none, or started and done in the same few minutes) ends at its finish, as long as it was figured to
   take (never drawn at the top of the day over the warm-up); one paused after it ran sits where it ran, start to pause,
   lunch inside it (Nick, Nov 12, #40493 / #40478).
@@ -334,6 +349,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   the job and drawn as the same tinted band across its card (Nick, Nov 11). Shift held before or after grabbing a job
   pins it. Shift + drag pins a job to the exact quarter hour it's dropped at (locked to its spot);
   everything else grays out while it's dragged.
+  Two finished runs on one press never overlap: one marked complete late (Complete pressed at the end of the day) ends
+  where the next finished run on that press began; a run left printing or paused when its order moved on (finished in
+  Printavo, a status changed by hand) shows finished where it last stood (Nov 12 debug, #40496 / #40313, #40365). The
+  Day and Week views use the same card look as the main view.
   **Lunch comes from the time clock** (Nick, Nov 12: "if the press operator clocks out… that marks their lunch"): when a
   press's operator clocks out and back in, that time is off the press (`Machine.away`, from `withClock`), live clock on or
   off: it pauses whatever was printing (the job grows by it) and shows as a striped band inside the job ("Lunch · Miguel
@@ -347,8 +366,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.
 - **Issue on a run** (Nick, Nov 12 2026: "missing goods or rejects. Or reprint"): the right-click's red **Issue** button
-  (printing, paused or done, after the fact too) asks why (Missing / Reject / Reprint) and how many still to print by size
-  (`production_issues`). The run so far is finished where it stopped; the pieces become their own job, the same order
+  (printing, paused or done, after the fact too) asks why (Missing / Reject / Reprint) and marks it in one click; how many still to print by size is optional
+  ("+ How many"; Nick, Nov 12, #40478: "I need to be able to mark it just missing right now"), and with no count the job
+  is booked as the rest of the run, "count to come" (`production_issues`, pcs 0). The run so far is finished where it stopped; the pieces become their own job, the same order
   number with the reason as a tag and only those pieces (`partNeed` in `lib/production.ts`; `production_slots.issue_id`,
   job key `i:<id>`). Missing waits under Ready To Schedule's Waiting on goods until a count is saved for the order after
   the issue (or "Here now"); Reject and Reprint are ready at once. An open issue holds the order In Production; its tag

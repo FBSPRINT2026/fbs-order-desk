@@ -4,10 +4,10 @@ import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, w
 import { persOf, PERS_SHOW, printedLines } from "@/lib/pricing";
 import { isThirdParty, thirdPartyLabel } from "@/lib/thirdParty";
 import { threadByName } from "@/lib/embroidery";
-import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksOnColor } from "@/lib/inkBy";
+import { changeVersions, inkChanges, baseColor, inkChangesText, inkKeyOf, inksOnColor, livePrint, liveInkBy } from "@/lib/inkBy";
 import { needleThreads, stopColors } from "@/lib/needleThreads";
 import { colorHex, WILFLEX_HEX } from "@/lib/inkColors";
-import { calcOrder, changeWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
+import { calcOrder, changeWord, inkWord, shopNotes, printHow, termsText, inkNames, isLightColor, isPmsInk, lineQty, needsUnderbase, sizeLabel, youthSplit, kidLine, FULL_COLOR, METHODS, methodLabel, SIZES, YOUTH_SIZES, ADULT_SIZES, type Customer, type Design, type Group, type Imprint, type Order, type Payment, type Settings } from "@/lib/pricing";
 import { money, parseDate } from "@/lib/format";
 import { qrSvg } from "@/lib/qr";
 import { jobLink } from "@/lib/zpl";
@@ -404,7 +404,7 @@ function PrintCard({ d, des, all, allLight, page, ways = [], lines = [] }: { d: 
   // each change's version letter, the same as on the garment lines and the close-up page
   const vers = lines.length ? changeVersions(d, lines) : [];
   const verOf = (k: string) => { const t = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, ""); return vers.length > 1 ? vers.find((v) => v.colors.some((c) => t(c) === t(baseColor(k))))?.letter || "" : ""; };
-  const changes = d.visualOnly || ways.length ? [] : Object.entries(d.inkBy || {}).map(([k, m]) => [k, Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())] as const).filter(([, ch]) => ch.length);
+  const changes = d.visualOnly || ways.length ? [] : Object.entries(liveInkBy(d, lines) || {}).map(([k, m]) => [k, Object.entries(m || {}).filter(([a, b]) => b && b.trim().toLowerCase() !== a.trim().toLowerCase())] as const).filter(([, ch]) => ch.length);
   const warns = [
     d.visualOnly ? "VISUAL MOCKUP ONLY: RUN IT LIKE LAST TIME, THEN CONFIRM THE SPECS" : "",
     d.method === "embroidery" && !d.digitized && !d.emb?.file ? "NEEDS DIGITIZING: STITCHES AND SIZE CONFIRMED AFTER THE SEW-OUT" : "",
@@ -427,7 +427,7 @@ function PrintCard({ d, des, all, allLight, page, ways = [], lines = [] }: { d: 
       <div className="h"><b className="disp">{sideOf(d, all)}</b><span>close-up p. {page}</span></div>
       <div className="kv">
         <i>Method</i><span>{methodLabel(d)} · <b>{colorsLabel(d)}</b>{d.printStyle === "fashion" ? " · fashion hit" : ""}{d.softHand ? " · soft hand" : ""}</span>
-        {inks.length > 0 && <><i>{d.method === "embroidery" ? (inks.length === 1 ? "Thread" : "Threads") : inks.length === 1 ? "Ink" : "Inks"}</i>
+        {inks.length > 0 && <><i>{inkWord(d.method, inks.length)}</i>
           {/* one line each (Oct 31, Nick: "the number is the most important"): a thread's maker short, its number and name */}
           <div className={"inks" + (inks.length > 2 ? " two" : "")}>{inks.map((k, n) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{inks.length > 1 && d.method !== "embroidery" && <b>{n + 1} </b>}<b>{d.method === "embroidery" ? threadShort(k) : k}</b></span>)}</div></>}
         {ways.map((w) => <span key={w.name} style={{ display: "contents" }}><i>{des ? cwLetter(des, { name: w.name }) || "Colorway" : "Colorway"}</i>
@@ -601,7 +601,7 @@ function CloseUp({ d, di, n, p, gi, allLight, colors, qty, page, total, footL, v
       {d.method === "screen" && d.puff && <div className="n2 hit"><span className="flag">PUFF INK</span> Puff print. {needsUnderbase(d) ? "Underbase set on this print." : "No underbase."}</div>}
       {d.oversize && <div className="n2 hit"><span className="flag">OVERSIZED</span> {d.size || "Past the normal max"}: harder to run. Check the platen and registration.</div>}
       {/* a color change (Oct 24): this print in another ink on a garment color */}
-      {inkChanges(d).length > 0 && <div className="n2"><b>{changeWord(d.method).toUpperCase()}:</b> {inkChangesText(d)}</div>}
+      {inkChanges(livePrint(d, o.groups[gi]?.lines)).length > 0 && <div className="n2"><b>{changeWord(d.method).toUpperCase()}:</b> {inkChangesText(livePrint(d, o.groups[gi]?.lines))}</div>}
       {/* a color change across variations (Oct 27): the same screens as a print in another group */}
       {!d.visualOnly && d.changeOf && (() => {
         const g = p.groups.find((x) => (x.imprints || []).some((y) => y.id === d.changeOf!.imprint));

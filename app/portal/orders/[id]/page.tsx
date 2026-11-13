@@ -17,7 +17,7 @@ import { needsDetails } from "@/lib/productionDetails";
 import PortalArtView from "@/components/PortalArtView";
 import OrderRail from "@/components/OrderRail";
 import { jobFor } from "@/lib/portalJobs";
-import { calcOrder, FULL_COLOR, inkNames, methodLabel, methodShort, ONE_SIZE, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
+import { calcOrder, FULL_COLOR, inkNames, inkWord, methodLabel, methodShort, ONE_SIZE, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, money } from "@/lib/format";
 import { pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
@@ -274,7 +274,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
                     <div className="pod-spec">
                       {g.imprints.length > 0 ? (
                         <table className="tbl pod-prints" data-nofit>
-                          <thead><tr><th>Print</th><th>Method</th><th>Size</th><th>Inks</th></tr></thead>
+                          <thead><tr><th>Print</th><th>Method</th><th>Size</th><th>{inkWord(g.imprints.map((x) => x.method))}</th></tr></thead>
                           <tbody>{g.imprints.map((d, k) => {
                             const reorder = needsDetails(d);
                             const inks = inkNames(d.inks || "");
