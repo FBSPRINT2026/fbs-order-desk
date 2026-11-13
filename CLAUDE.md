@@ -236,6 +236,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   is made like a new invoice (`adoptFind` in `lib/qbo/push.ts`). Printavo stopped sending to QuickBooks on Nov 4.
   One at the same total as our saved order stays as Printavo made it, only linked (our order's version noted); the first
   time the order changes here, the invoice is replaced with ours whole (Nick, Nov 12: "if it stays the same, it stays the same").
+  One Printavo sent at a different total (fees it never had: shipping, a setup fee, a card fee) keeps Printavo's lines and
+  gets ours that it's missing added underneath as their own lines (`missingLines` in `lib/qbo/push.ts`; Nick, Nov 12, #40193:
+  "just add those as a line item underneath. That's how Printavo did it"); when Printavo has a line ours doesn't, a person decides.
 - **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
   to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule
   yet is Later; a goods problem stays on Today), under a full-width All / Screen print / Embroidery / Heat press switch, Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
