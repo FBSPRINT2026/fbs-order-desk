@@ -1072,7 +1072,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (action === "resume") Object.assign(patch, { status: "running", progress: p, progress_at: nowIso, started_at: sl.started_at || nowIso });
     if (action === "pause") Object.assign(patch, { status: "paused", progress: p, progress_at: nowIso });
     if (action === "progress") Object.assign(patch, { progress: p, progress_at: nowIso, ...(sl.status === "scheduled" && p > 0 ? { status: "running", started_at: sl.started_at || nowIso } : {}) });
-    if (action === "done") Object.assign(patch, { status: "done", finished_at: nowIso, progress: 1, progress_at: nowIso,
+    // a paused run marked done (Complete, or an Issue raised on it) stopped when it was paused: nothing ran after that, so it
+    // finishes at the pause, never stretched to now (Nick, Nov 12, #40478: paused 5:23p, marked Missing at 8:47p)
+    const pausedAt = action === "done" && sl.status === "paused" && sl.progress_at && new Date(sl.progress_at).getTime() < new Date(nowIso).getTime() ? sl.progress_at : null;
+    if (action === "done") Object.assign(patch, { status: "done", finished_at: pausedAt || nowIso, progress: 1, progress_at: pausedAt || nowIso,
       // marked done without ever being started (Nov 12, Nick: "it just was done already"): it ran its planned time up to then
       ...(sl.started_at ? {} : { started_at: new Date(new Date(nowIso).getTime() - Math.max(MIN_JOB_MIN, +(sl.minutes || 0)) * 60000).toISOString() }) });
     if (action === "not_started") Object.assign(patch, { status: "scheduled", started_at: null, finished_at: null, progress: 0, progress_at: null });

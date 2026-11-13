@@ -253,3 +253,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 8:43pm · 1.3.457 · Nick · Rules: Issue count optional
 - Nov 12 8:45pm · 1.3.458 · Nick · Schedule: an order On hold shows an On hold tag in Ready To Schedule and on the press, isn't counted late, and Make The Schedule skips it
 - Nov 12 8:48pm · 1.3.459 · Nick · Schedule: Issue button's small words forced white
+- Nov 12 8:51pm · 1.3.460 · Nick · Schedule: a paused run marked done (Complete, Issue, press timer) finishes at its pause, not stretched to now (#40478)
