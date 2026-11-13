@@ -39,6 +39,8 @@ export async function POST(req: Request) {
   if (!r) return NextResponse.json({ error: "Unknown print computer." }, { status: 401 });
   const b = await req.json().catch(() => ({}));
   if (typeof b.id !== "string") return NextResponse.json({ error: "Which label?" }, { status: 400 });
+  // "printing": the relay has the label and is handing it to the printer (if it stops there, the printer hung)
+  if (b.step) { await r.admin.from("print_jobs").update({ error: `relay: ${String(b.step).slice(0, 40)}` }).eq("id", b.id).eq("relay_id", r.id).eq("status", "sent"); return NextResponse.json({ ok: true }); }
   await r.admin.from("print_jobs").update(b.ok ? { status: "printed", done_at: new Date().toISOString(), error: "" } : { status: "error", error: String(b.error || "Couldn't reach the printer").slice(0, 300) }).eq("id", b.id).eq("relay_id", r.id);
   return NextResponse.json({ ok: true });
 }

@@ -77,12 +77,20 @@ function Find-Zebra([string]$want) {
   return $p.Name
 }
 $h = @{ "x-relay-token" = $Token }
+[Net.ServicePointManager]::DefaultConnectionLimit = 8
+# every call: a fresh connection and a time limit, so one dropped connection can't hang the relay
+function Say($body) { Invoke-RestMethod -Method Post -Uri "$Server/api/print/relay" -Headers $h -ContentType "application/json" -Body ($body | ConvertTo-Json) -TimeoutSec 20 -DisableKeepAlive -UseBasicParsing | Out-Null }
+$log = Join-Path $dir "relay.log"
+function Note($m) { try { Add-Content -Path $log -Value "$(Get-Date -Format 'MM-dd HH:mm:ss') $m"; if ((Get-Item $log).Length -gt 200000) { Remove-Item $log } } catch {} }
+Note "started"
 while ($true) {
   try {
-    $r = Invoke-RestMethod -Uri "$Server/api/print/relay" -Headers $h -TimeoutSec 45
+    $r = Invoke-RestMethod -Uri "$Server/api/print/relay" -Headers $h -TimeoutSec 45 -DisableKeepAlive -UseBasicParsing
     foreach ($j in $r.jobs) {
       try {
         $b = [System.Text.Encoding]::UTF8.GetBytes($j.zpl)
+        Note "printing $($j.title)"
+        try { Say @{ id = $j.id; step = "printing" } } catch {}
         if ($r.link -eq "usb") {
           $name = Find-Zebra $r.usbName
           [FbsRawPrint]::Send($name, [string]$j.title, $b)
@@ -92,12 +100,14 @@ while ($true) {
           $c.Connect($r.host, [int]$r.port)
           $s = $c.GetStream(); $s.Write($b, 0, $b.Length); $s.Flush(); $c.Close()
         }
-        Invoke-RestMethod -Method Post -Uri "$Server/api/print/relay" -Headers $h -ContentType "application/json" -Body (@{ id = $j.id; ok = $true } | ConvertTo-Json) | Out-Null
+        Note "printed $($j.title)"
+        Say @{ id = $j.id; ok = $true }
       } catch {
-        Invoke-RestMethod -Method Post -Uri "$Server/api/print/relay" -Headers $h -ContentType "application/json" -Body (@{ id = $j.id; ok = $false; error = "$($_.Exception.Message)" } | ConvertTo-Json) | Out-Null
+        Note "error $($j.title): $($_.Exception.Message)"
+        try { Say @{ id = $j.id; ok = $false; error = "$($_.Exception.Message)" } } catch {}
       }
     }
-  } catch { Start-Sleep -Seconds 5 }
+  } catch { Note "connection: $($_.Exception.Message)"; Start-Sleep -Seconds 5 }
 }
 `;
 }
