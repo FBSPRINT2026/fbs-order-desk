@@ -58,6 +58,7 @@ import { labelFileName } from "@/lib/printavoNames";
 import ProjectPicker from "@/components/ProjectPicker";
 import { Pill, pvStatusOf } from "@/components/bits";
 import { MixStrip, useMixParts } from "@/components/MixStrip";
+import { IssueTag, useOpenIssues } from "@/components/IssueTag";
 import SendProofTool from "@/components/tools/SendProofTool";
 import { acceptRequest, requestProofApproval, staffMessage } from "../../actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
@@ -132,6 +133,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [o, setO] = useState<Order | null>(null);
   // a mixed job's parts (screen print done, embroidery printing…) beside its status
   const mixO = useMixParts(useMemo(() => (o ? [o] : []), [o]));
+  const issO = useOpenIssues(useMemo(() => (o ? [o] : []), [o]));
   const canPay = useCan("payments");
   const canTake = useCan("takePayments");
   const seesMoney = useSeesMoney(); // crew (production, receiving, shipping): quantities and what's ordered, no money
@@ -1597,6 +1599,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => <option key={s.k} value={s.k}>{statusText(s.k, o.delivery_method)}</option>)}</optgroup>
           </select>}
           {mixO[o.id] && <span className="mxs-h"><MixStrip parts={mixO[o.id]} /></span>}
+          <IssueTag issues={issO[o.id]} />
           {/* phone only: Documents, Production, Ask AI and More behind one button (the next step stays showing under it) */}
           <button type="button" className="btn ed-acts-tog" aria-expanded={actsOpen} onClick={() => setActsOpen((v) => !v)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>

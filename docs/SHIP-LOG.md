@@ -231,3 +231,18 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 2:24pm · 1.3.435 · Nick · A garment price set by hand gets no wholesale minimum on top
 - Nov 12 2:54pm · 1.3.436 · Nick · QuickBooks: an invoice held back by hand (orders.qbo_hold) and its payments wait in the queue
 - Nov 12 4:23pm · 1.3.437 · Nick · QuickBooks: a closed quote (or canceled invoice) never syncs; one check, qboInvoiceable
+- Nov 12 4:31pm · 1.3.438 · Nick · Printavo balances can be written off (archived_orders.written_off), kept through re-reads
+- Nov 12 4:34pm · 1.3.439 · Nick · QuickBooks payments: overpaid part leaves credit instead of stopping the whole charge; paid held invoices and parts already sent don't block it
+- Nov 12 5:56pm · 1.3.440 · Nick · QuickBooks sync: #40000s bring Printavo's QuickBooks invoice to our order (or make it when Printavo never sent it)
+- Nov 12 6:08pm · 1.3.441 · Nick · Stacked tables: a long cell's own line never covers cells a page places itself (Goods & Receiving number over customer); late bar on the card edge
+- Nov 12 6:13pm · 1.3.442 · Nick · Schedule: a job marked done with no start ends at its finish (not over the warm-up); a paused job sits where it ran, start to pause
+- Nov 12 6:26pm · 1.3.443 · Nick · Schedule: finished work shows on the day it was done (not over the booked day's warm-up); a job number never shrinks under the name beside it
+- Nov 12 6:41pm · 1.3.444 · Nick · Schedule: Issue on a run (Missing / Reject / Reprint): the pieces still to print become their own job; Missing waits for goods; the order stays In Production
+- Nov 12 6:44pm · 1.3.445 · Nick · Schedule: clicking a downtime opens it to change (never a second one); a press or crew off all day shows Off all day; Goods & Receiving row buttons line up
+- Nov 12 6:49pm · 1.3.446 · Nick · QuickBooks: Printavo's invoice that already matches our order stays as it is, just linked; replaced with ours whole the first time the order changes
+- Nov 12 7:09pm · 1.3.447 · Nick · QuickBooks: a customer with a 40000s invoice can be linked to the QuickBooks customer of the same name (Link to it no longer skipped as 'no invoice yet')
+- Nov 12 7:49pm · 1.3.448 · Nick · Stocked inks known everywhere a price is worked out (QuickBooks sync, portal, server): Black Light Green no longer priced as a black with no underbase (#40481)
+- Nov 12 7:52pm · 1.3.449 · Nick · Rules: stocked inks reach every price through the settings
+- Nov 12 8:04pm · 1.3.450 · Nick · QuickBooks: a Printavo invoice short of ours keeps Printavo's lines and gets our missing fees (shipping, setup, card fee) added underneath, the way Printavo did it
+- Nov 12 8:08pm · 1.3.451 · Nick · Rules: missing fees go under Printavo's lines
+- Nov 12 8:15pm · 1.3.452 · Nick · QuickBooks: any difference from Printavo's invoice is replaced with ours whole (rule)

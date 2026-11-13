@@ -108,7 +108,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
     color picked in the Mockup Creator, else the color the mockup drew it in (`shade`, saved with each mockup), else its name), passed to `guessHex` / `shirtBg` / LogoThumb (Nick, Oct 29: "the
     boxes… permanently fix this problem throughout the site");
   - an ink's screen color: `colorHex` from `lib/inkColors.ts` (the Ink Room's stocked inks are loaded for every shop page
-    by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`);
+    by the shop layout, `components/StockInkSeed.tsx`, and for the printed pages by `app/print/[id]/page.tsx`; and everywhere a price is worked out, the QuickBooks sync and server actions included, through `mergeSettings`: the database keeps `settings.data.stockInks` in step with the Ink Room, migration 309; Nick, Nov 12, #40481's Black Light Green read as a black on the server, no underbase);
   - a group's saved mockup pictures: `lib/mockupFresh.ts` (`mockupHref` for every link into a group's mockup, so a logo
     mockup opens the logo builder; the save stamps `mockupArt`, and the order page redraws stale pictures by itself;
     anything that swaps a group's pictures for others clears `mockupArt`);
@@ -231,6 +231,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Canceled (an invoice called off) is stored like a Closed Quote: status `completed` with `declined_at`, type invoice
   (`isCanceled` / `statusKey` → "canceled"), so every finished-job filter skips it; it never goes to QuickBooks live. Neither does a quote of any kind, a Closed
   Quote included (Nick, Nov 12): every QuickBooks "is this an invoice" check is `qboInvoiceable` in `lib/qbo/map.ts`.
+  **The 40,000s in QuickBooks are ours** (Nick, Nov 12 2026): Printavo's QuickBooks invoice for #40000–#49999 is found by its
+  number and brought to our order (lines, fees, shipping, total; its number and date kept), and one Printavo never sent
+  is made like a new invoice (`adoptFind` in `lib/qbo/push.ts`). Printavo stopped sending to QuickBooks on Nov 4.
+  One at the same total as our saved order stays as Printavo made it, only linked (our order's version noted); the first
+  time the order changes here, the invoice is replaced with ours whole (Nick, Nov 12: "if it stays the same, it stays the same").
+  One Printavo sent at a different total (shipping or a fee it never had, other prices) is replaced with ours whole (Nick,
+  Nov 12, after #40193: "anytime you see a difference, you should write what's in our system").
 - **Goods & Receiving opens on its dashboard** (Nick, Nov 11 2026, option E; `app/shop/receiving/ReceivingDash.tsx`): the jobs
   to count in, by the day each runs on the press (Today / Tomorrow / Next day / Later, working days; not on the schedule
   yet is Later; a goods problem stays on Today), under a full-width All / Screen print / Embroidery / Heat press switch, Count in opens the Check-In counter; a counted job grays out under its day and is listed under ✓ Counted until
@@ -310,7 +317,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   no dot after a printing job's number.
   A job marked complete sits where it really ran, from its start to its finish, and later work stays after it; it
   stays on the schedule grayed, even after its order moves to Fulfillment, Ready or Completed (Nick,
-  Nov 12: "it doesn't go away… we still want to see it there"); only bookings not yet done leave when the order moves on.
+  Nov 12: "it doesn't go away… we still want to see it there"); only bookings not yet done leave when the order moves on. Finished work shows on the day it was really done, whatever day it was booked for; one marked complete with no real start (none, or started and done in the same few minutes) ends at its finish, as long as it was figured to
+  take (never drawn at the top of the day over the warm-up); one paused after it ran sits where it ran, start to pause,
+  lunch inside it (Nick, Nov 12, #40493 / #40478).
   A started job runs until it's marked complete: past its planned finish it stretches to now and the jobs after it move
   down, live clock on or off (Nick, Nov 12). The tiny shirt before a job's number is its goods (`GoodsTee`, the digits' exact height on their baseline; green
   counted, amber here not counted, red a problem or not counted and runs within a day, orange not here yet; in the key too), from the latest count first, then the
@@ -337,6 +346,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   its right end ("In 6:12a", "In 7:21a · late", "Not in yet"; display only), and the press under its name ("Gauntlet III ·
   12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.
+- **Issue on a run** (Nick, Nov 12 2026: "missing goods or rejects. Or reprint"): the right-click's red **Issue** button
+  (printing, paused or done, after the fact too) asks why (Missing / Reject / Reprint) and how many still to print by size
+  (`production_issues`). The run so far is finished where it stopped; the pieces become their own job, the same order
+  number with the reason as a tag and only those pieces (`partNeed` in `lib/production.ts`; `production_slots.issue_id`,
+  job key `i:<id>`). Missing waits under Ready To Schedule's Waiting on goods until a count is saved for the order after
+  the issue (or "Here now"); Reject and Reprint are ready at once. An open issue holds the order In Production; its tag
+  shows beside the status on the Orders list and the order's header (`IssueTag`), never in the customer's portal.
 - **A mixed job's parts show under its status** (Nick, Nov 12, option B): an order printing on more than one kind of
   machine shows SP / EMB / HP blocks (green done, blue printing, gray booked, amber dashed not on the schedule; hover
   for when and where) on the Orders list, the order's header and the schedule's job card: `MixStrip` / `useMixParts`

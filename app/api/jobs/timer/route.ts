@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     if (!err && b.action === "done" && job.kind === "o") {
       // the whole job is printed: today's (and earlier) unfinished bookings on the calendar are done
       const now = new Date().toISOString();
-      const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, status, started_at").eq("order_id", job.id).neq("status", "done");
+      const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, status, started_at, issue_id").eq("order_id", job.id).neq("status", "done");
       // only this kind of machine's bookings (Nov 12, Nick, #40313): the screen printer finishing a mixed job's tees
       // never finishes its embroidery or heat press part
       const { data: stRow } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
@@ -82,6 +82,8 @@ export async function POST(req: Request) {
       const mine = typeOf(press || here?.station || "");
       for (const s of ((sl || []) as { id: string; order_id: string; machine: string; status: string; started_at: string | null }[]).filter((x) => !mine || typeOf(x.machine) === mine)) {
         await admin.from("production_slots").update({ status: "done", finished_at: now, started_at: s.started_at || now, progress: 1, progress_at: now, updated_at: now }).eq("id", s.id);
+        // an Issue's pieces printed (missing goods, rejects, a reprint): the issue is closed
+        if ((s as { issue_id?: string | null }).issue_id) await admin.from("production_issues").update({ status: "done", done_at: now }).eq("id", (s as { issue_id?: string | null }).issue_id!);
         await admin.from("production_slot_log").insert({ slot_id: s.id, order_id: s.order_id, machine: s.machine, action: "done", progress: 1, note: "Finished on the phone", by: who.name });
       }
     }

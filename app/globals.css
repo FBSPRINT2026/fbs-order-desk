@@ -18274,7 +18274,8 @@ img.prod-page{background:#fff;object-fit:contain;max-width:100%;max-height:100%}
 table.tbl-stack.tbl-stack-many > tbody > tr{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px 14px;align-items:start}
 table.tbl-stack.tbl-stack-many > tbody > tr > td[data-label]:not([data-label=""]){padding-left:0!important}
 table.tbl-stack.tbl-stack-many > tbody > tr > td[data-label]:not([data-label=""])::before{position:static;display:block;width:auto;margin-bottom:1px}
-table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-stack-many > tbody > tr > td[colspan]{grid-column:1/-1}
+/* a long cell gets its own line, but never over a table that places its own cells (Goods & Receiving cards, Nov 12) */
+:where(table.tbl-stack.tbl-stack-many > tbody > tr > td[data-wide],table.tbl-stack.tbl-stack-many > tbody > tr > td[colspan]){grid-column:1/-1}
 .rop-read.over{outline:2px dashed var(--accent);outline-offset:2px}
 /* goods rows: Order | Shipment | Boxes | Tracking | message, every column left-aligned and its own width (Nov 2, Nick:
    "shipment, left justified, boxes, tracking up at the top… they can't run over on each other") */
@@ -22264,7 +22265,9 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .wov-b iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .wov-wait{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 .rvd-wo{margin-right:6px}
-.rvd-wo svg{margin-right:5px;vertical-align:-2px}
+.rvd-wo svg{margin-right:5px;flex:none}
+/* the row's two buttons the same height, side by side (Nick, Nov 12: "buttons dont line up") */
+table.rvd-tbl:not(.tbl-stack) td.rvd-act .btn{display:inline-flex;align-items:center;justify-content:center;height:30px;vertical-align:middle;box-sizing:border-box}
 @media (max-width:640px){.wov-bg{padding:0}.wov{border-radius:0}}
 
 /* Schedule breaks, option D (Nov 11, Nick): a tinted band with the word centered; lunch inside a job is a line through the card */
@@ -22411,6 +22414,8 @@ table.rvd-tbl.tbl-stack td.rvd-act{grid-column:1/-1;grid-row:3;display:grid!impo
 table.rvd-tbl.tbl-stack td.rvd-act .btn{height:40px;justify-content:center;font-size:14px;margin:0}
 table.rvd-tbl.tbl-stack tr.rvd-sub{display:block!important;padding:8px 14px!important}
 table.rvd-tbl.tbl-stack .rvd-pill{white-space:nowrap}
+table.rvd-tbl.tbl-stack tr.rvd-urg{box-shadow:inset 4px 0 var(--danger)}
+table.rvd-tbl.tbl-stack tr.rvd-urg td:first-child{box-shadow:none}
 /* the sample group stands out on the order (Nick, Nov 12: "the first group should be highlighted… that it's the sample") */
 .smr-grp0{display:contents}
 .smr-grp{border:2px solid #7C5CD6;border-radius:calc(var(--r,8px) + 4px);box-shadow:0 0 0 4px color-mix(in srgb,#7C5CD6 12%,transparent);padding:0 0 2px;margin:14px 0;overflow:hidden;background:var(--surface)}
@@ -22588,7 +22593,8 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mrc-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.mrc-g3 .mrc-act{justify-content:center;padding:0 6px;font-size:12.5px;gap:5px}.mrc-g3 .s2{grid-column:span 2}
 .mrc-act.warn{color:var(--danger)}.mrc-act.warn .mrc-i{color:var(--danger)}.mrc-act .mrc-i.box{color:var(--accent)}
 /* the schedule's goods shirt (Nov 12): the digits' height (cap height), resting on the number's baseline */
-.msf-tn{display:inline;white-space:nowrap;min-width:0}
+/* a job number (and its goods shirt) never shrinks under the name beside it (Nick, Nov 12: "#40456Nine18" in Ready To Schedule) */
+.msf-tn{display:inline;white-space:nowrap;flex:none}
 .msf-tee{display:inline-block;height:0.72em;width:auto;aspect-ratio:16.8/15.8;vertical-align:baseline;margin-right:4px;fill:var(--surface,#fff);stroke:var(--ink-3);stroke-width:1.4;stroke-linejoin:round;overflow:visible}
 .msf-tee.g{fill:var(--ok);stroke:var(--ok)}.msf-tee.a{fill:var(--warn);stroke:var(--warn)}.msf-tee.r{fill:var(--danger);stroke:var(--danger)}.msf-tee.o{fill:var(--fbs-orange);stroke:var(--fbs-orange)}
 .ms-key2 .msf-tn{display:inline-flex;align-items:baseline;gap:0}
@@ -22739,3 +22745,22 @@ label.ckm-tile.over{border-color:var(--warn)}
 .mxs-h{display:inline-flex;align-items:center}.mxs-h .mxs{margin-top:0}
 /* paying from the emailed link: sign in for a saved card (components/PayPanel.tsx guest) */
 .pp-saved-in{display:flex;align-items:center;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line-2);font-size:13.5px;color:var(--ink-2)}.pp-saved-in svg{flex:none;color:var(--accent)}.pp-saved-in a{color:var(--accent);font-weight:700}
+
+/* Issue on a run (Nick, Nov 12 2026): the red Issue button in the right-click, its form, and the job's reason tag */
+.mjx-tag{display:inline-block;margin:0 4px;padding:0 6px;border-radius:999px;font:700 10.5px var(--body);line-height:16px;white-space:nowrap;vertical-align:1px;border:1px solid}
+.mjx-tag.missing{background:color-mix(in srgb,var(--warn) 14%,var(--surface,#fff));color:color-mix(in srgb,var(--warn) 70%,var(--ink));border-color:color-mix(in srgb,var(--warn) 40%,var(--surface,#fff))}
+.mjx-tag.reject,.mjx-tag.reprint{background:color-mix(in srgb,var(--danger) 10%,var(--surface,#fff));color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%,var(--surface,#fff))}
+.mrb-iss{width:100%;margin-top:6px;height:36px;border:0;border-radius:6px;background:var(--danger);color:#fff;font:800 13.5px var(--body);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer}
+.mrb-iss small{font-weight:500;font-size:12px;opacity:.85;margin-left:4px}.mrb-iss .mrc-i{width:15px;height:15px}
+.mrb-iss.on{box-shadow:0 0 0 3px color-mix(in srgb,var(--danger) 25%,transparent)}
+.mrb-pz.mrb-isf{border-color:color-mix(in srgb,var(--danger) 35%,var(--surface,#fff));background:color-mix(in srgb,var(--danger) 5%,var(--surface,#fff))}
+.mrb-pz .mrb-why.mrb-isw{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mrb-pz .mrb-why.mrb-isw button.on{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 12%,var(--surface,#fff))}
+.mrb-isz{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px}
+.mrb-isz label{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px}.mrb-isz label span{font-weight:700}
+.mrb-isz input{width:100%;text-align:center}.mrb-isz small{color:var(--ink-3);font-size:11px;white-space:nowrap}
+.mrb-pgo.mrb-isgo{background:var(--danger)}.mrb-pgo.mrb-isgo:disabled{opacity:.5;cursor:default}
+.msr-spot.iss-wait{border-style:solid;border-color:color-mix(in srgb,var(--warn) 45%,var(--surface,#fff));color:color-mix(in srgb,var(--warn) 70%,var(--ink));background:color-mix(in srgb,var(--warn) 8%,var(--surface,#fff))}
+/* a press or crew off all day: one labeled gray block down its day (Nov 12) */
+.ms-down.msf-offday{background:var(--surface-2);color:var(--ink-3);border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;z-index:1}
+.ms-down.msf-offday b{color:var(--ink);margin-right:4px}
