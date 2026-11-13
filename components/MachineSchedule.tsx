@@ -2162,7 +2162,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         <span>#{g.c.job.number} was here</span><small>moving to {tm ? shortName(tm) : "another press"}</small>
       </div>
     ); }
-    const num = <b className={"msf-n" + (segLate(g) ? " late" : "")}>{whyEl(g.c)}{tn(dotEl(g.c, g), numLink(g.c.job))}{st === "done" ? <em className="ok"> ✓</em> : null}</b>;
+    const num = <b className={"msf-n" + (segLate(g) ? " late" : "")}>{whyEl(g.c)}{tn(dotEl(g.c, g), numLink(g.c.job))}</b>;
     return (
       <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + (notYet(g) ? " mdy-ny" : "") + (rs ? " mpr-c " + rs.k + (band ? " mpr-hasb" : "") : "") + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
         onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(g.c); } }}
@@ -2182,7 +2182,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const notYet = (g: Seg) => g.day === today && g.part === 1 && g.c.job.kind !== "h" && (!g.c.slot || g.c.slot.status === "scheduled" || (g.c.slot.status === "paused" && !g.c.slot.started_at)) && g.start + 15 < now.min;
   const dayState = (g: Seg) => {
     const st = g.c.slot?.status;
-    if (st === "done") { const f = g.c.slot?.finished_at; return <em className="mdy-st ok">{f ? "✓ " + new Date(f).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p") : "✓ Done"}</em>; }
+    if (st === "done") { const f = g.c.slot?.finished_at; return <em className="mdy-st ok">{f ? "Done " + new Date(f).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p") : "Done"}</em>; }
     if (st === "running" && runState(g.c)) return null;
     if (st === "running") return <em className="mdy-st run">Printing{g.c.slot?.progress ? ` · ${Math.round(+g.c.slot.progress * 100)}%` : ""}</em>;
     if (notYet(g)) return <em className="mdy-st bad">Not started</em>;
