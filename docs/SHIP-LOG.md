@@ -298,3 +298,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 11:32am · 1.3.538 · Nick · Rules: Send starts as a new email
 - Nov 13 11:37am · 1.3.540 · Nick · portal.fbsprint.com/employee (and /employees) opens the crew's phone menu
 - Nov 13 11:47am · 1.3.542 · Nick · Payday time card check on the crew phone: approve hours or ask for a fix; Their check column on the Time Clock
+- Nov 13 11:48am · 1.3.543 · Nick · Work order: compact two-column garments for many products with a few pieces each (option B)

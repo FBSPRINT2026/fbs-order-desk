@@ -81,6 +81,11 @@ function colorBg(lines: Group["lines"], color: string, colorHexes?: Record<strin
 }
 /** garments on the work order's first page; the rest go on pages of 10 */
 const WO_FIRST = 6;
+// many products, a few pieces each (Nick, Nov 13 2026, option B: GearGoLive's 13 one-piece garments took 3 pages): the
+// garments in two columns of one line each, about 30 on the job page and 70 on each page after
+const WO_FIRST_COMPACT = 30, WO_MORE_COMPACT = 70;
+/** a group's garments go compact when it has more than 8 and they average 3 pieces or fewer */
+const compactLines = (ls: { sizes?: unknown }[], qty: number) => ls.length > 8 && qty <= ls.length * 3;
 export type Variant = { color: string; swap: Record<string, string>; /** a colorway change: the colorway this sheet runs */ cw?: string };
 function variantsOf(d: Imprint, colors: string[]): Variant[] {
   if (d.visualOnly) return [];
@@ -181,7 +186,9 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
     const vis = noteText.split("\n").reduce((n, ln) => n + Math.max(1, Math.ceil(ln.length / 100)), 0);
     const longNotes = noteText.length + extra * 120 > 520 || vis + extra * 2 > 8;
     const more: (typeof lines)[] = [];
-    for (let i = WO_FIRST; i < lines.length; i += 10) more.push(lines.slice(i, i + 10));
+    const compact = compactLines(lines, lines.reduce((a, l) => a + lineQty(l), 0));
+    const firstN = compact ? WO_FIRST_COMPACT : WO_FIRST, perMore = compact ? WO_MORE_COMPACT : 10;
+    for (let i = firstN; i < lines.length; i += perMore) more.push(lines.slice(i, i + perMore));
     // only the customer's own transfers (Oct 27, Nick: "you need really just two, a count in and then… the mock-up large,
     // for placement"): one placement page, no press sheets
     const allSup = g.imprints.length > 0 && g.imprints.every((d) => d.supplied);
@@ -205,7 +212,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
     // boxes) and the mockup page is their mockup, big, with each print's inks as a line under it
     const theirSeps = !allSup && g.imprints.length > 0 && g.imprints.every((d) => d.custSeps || d.supplied);
     const printPages = allSup || theirSeps ? 0 : Math.ceil(sheetsOf(g, p.designs).length / 2);
-    return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
+    return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, compact, firstN, perMore, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
   const starts: number[] = [];
@@ -220,7 +227,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
       <WoFit />
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
-        const { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps } = plans[gi];
+        const { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, compact, firstN, perMore } = plans[gi];
         const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, p.settings.wholesale));
         const sizes = SIZES.filter((z) => lines.some((l) => l.sizes?.[z]));
         const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
@@ -267,6 +274,21 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
             <div className="cnt2-by"><span>Counted in by <i /></span><span>Final count by <i /></span></div>
           </>
         );
+        // the compact garments (option B): two columns, one line each, its sizes and a box for the count
+        const countGrid = (ls: typeof lines) => (
+          <>
+            <div className="wo-cg">{ls.map((l, li) => {
+              const v = versionHead(g, l, p.designs), prev = li ? versionHead(g, ls[li - 1], p.designs) : null;
+              return <Fragment key={l.id}>
+                {v && (!prev || prev.key !== v.key) && <div className="wo-cg-h"><span className="w2-cw">{v.key}</span> {v.desc}</div>}
+                <CompactLine l={l} colorHexes={p.colorHexes} />
+              </Fragment>;
+            })}</div>
+            <div className="wo-cg-tot">Total <b>{ls.reduce((a, l) => a + lineQty(l), 0)}</b><i /></div>
+            <div className="cnt2-by"><span>Counted in by <i /></span><span>Final count by <i /></span></div>
+          </>
+        );
+        const counts = compact ? countGrid : countTable;
         return (
           <div key={g.id}>
             {/* 1. the job */}
@@ -312,8 +334,8 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                         ways={sheets.filter((sh) => sh.di === di && sh.variant?.cw).map((sh) => ({ name: sh.variant!.cw!, on: sh.variant!.color, qty: sh.qty || 0, file: sh.d.emb?.file?.name || "", threads: inkNames(sh.d.inks) }))} />)}
                 </div>
               </div>
-              <h2>Garments <span>{gc?.allQty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - WO_FIRST} more garment${lines.length - WO_FIRST === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
-              {countTable(lines.slice(0, WO_FIRST))}
+              <h2>Garments <span>{gc?.allQty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - firstN} more garment${lines.length - firstN === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
+              {counts(lines.slice(0, firstN))}
               {(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
                 <h2>Notes {longNotes && <span>continued on page {notesPage ? pgNotes : pgMk}</span>}</h2>
                 <div className={"notes" + (longNotes ? " clip" : "")}>{notesBlock}</div>
@@ -323,9 +345,9 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
             {/* 2. more garments (8 a page) */}
             {more.map((ls, mi) => (
               <section className="sheet wo1" key={"more" + mi}>
-                {top(`Garments ${WO_FIRST + mi * 10 + 1}–${WO_FIRST + mi * 10 + ls.length} of ${lines.length}`)}
+                {top(`Garments ${firstN + mi * perMore + 1}–${firstN + mi * perMore + ls.length} of ${lines.length}`)}
                 <h2>Garments <span>write the counts in the boxes</span></h2>
-                {countTable(ls)}
+                {counts(ls)}
                 <div className="foot"><span>{footL}</span><span>Page {pgMore + mi} of {total}</span></div>
               </section>
             ))}
@@ -508,6 +530,29 @@ function LineRow({ l, sizes, hex, single, colorHexes, cw = [] }: { l: Group["lin
       <td className="sz tot"><b>{q}</b><i /></td>
       <td className="sz fin"><b className="blank">0</b><i /></td>
     </tr>
+  );
+}
+
+/** a garment on a compact work order (option B, Nov 13): swatch, style, name and color, its sizes ("XL 1", "S 2 · M 1"),
+ *  a box for the count; extras, notes and names in a small second line */
+function CompactLine({ l, colorHexes }: { l: Group["lines"][number]; colorHexes?: Record<string, string> }) {
+  const own = (lineHex(l) || "") || colorHexes?.[ckey(l.color)] || colorHex(l.color) || (l.color ? guessHex(l.color) : "");
+  const q = lineQty(l);
+  const sz = SIZES.filter((z) => l.sizes?.[z as keyof typeof l.sizes]).map((z) => `${sizeLabel(z)} ${l.sizes?.[z as keyof typeof l.sizes]}`);
+  const pers = persOf(l), name = l.garment || (!l.style ? l.brand || "Garment" : "");
+  const x = [
+    l.shopUse ? (l.extrasPrint === false ? "Ours, not printed" : "Ours, printed") : l.extras ? (l.extrasPrint === false ? "Not printed extras" : "Printed extras") : "",
+    pers.length ? `${pers.reduce((a, e) => a + (e.qty || 1), 0)} name${pers.length === 1 ? "" : "s"} on the ${pers[0].loc || "Right Chest"}` : "",
+    l.note?.trim() || "",
+  ].filter(Boolean).join(" · ");
+  return (
+    <div className="wo-cl">
+      <Swatch c={own || "#c9ced6"} />
+      <span className="n">{l.style ? <b>{l.style}</b> : null}{name ? ` ${name}` : ""}{l.color ? <small> · {l.color}</small> : null}</span>
+      <span className="q">{sz.length ? sz.join(" · ") : q}</span>
+      <i />
+      {x && <span className="x">{x}</span>}
+    </div>
   );
 }
 
