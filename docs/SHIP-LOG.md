@@ -283,3 +283,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 10:15am · 1.3.509 · Nick · Crew Home Screen app: saving the crew pages to an iPhone's Home Screen makes an FBS Crew icon that opens the crew main menu (its own manifest), not the portal; a crew phone that lands on the portal goes to /crew
 - Nov 13 10:19am · 1.3.511 · Nick · Home Screen apps: the portal's manifest is a named route so /crew links the crew app's own (it still showed the portal's)
 - Nov 13 10:24am · 1.3.513 · Nick · Schedule: click a group's name (an All My Sons run) → Print all its work orders, one print (/print/work)
+- Nov 13 10:27am · 1.3.515 · Nick · Receiving: the jobs to count are split here-first (Here · ready to count, Part here, Problem, Not sure, On the way) on the dashboard (desk and phone) and the crew phone

@@ -1,4 +1,5 @@
 "use client";
+import { countSections } from "@/lib/checkinShared";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CrewHome, CrewJob, CountJob } from "@/lib/crewHome";
@@ -228,12 +229,18 @@ function Counting({ jobs, open }: { jobs: CountJob[]; open: (n: number, v?: stri
         return (
           <div key={w} className="cr-part">
             <div className="jm-label">{t(l)} · {list.length}</div>
-            {list.map((j) => (
-              <button key={j.number} type="button" className="cr-li" onClick={() => open(j.number, "checkin")}>
-                <span className="cr-t">{j.day ? day(j.day, locale).replace(/,.*/, "") : ""}</span><b>#{j.number}</b>
-                <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.name ? ` · ${j.name}` : ""}</small></span>
-                <i className={"cr-st " + j.state}>{t(j.state === "issue" ? "Problem" : j.state === "partial" ? "Part here" : j.state === "ready" ? "Here" : j.state === "way" ? "On the way" : "Not here")}</i>
-              </button>
+            {/* what's surely here first (Nick, Nov 13): Here · ready to count, Part here, Problem, Not sure, On the way */}
+            {countSections(list).map((sec) => (
+              <div key={sec.key} className="cr-sec">
+                <div className="cr-sec-h">{t(sec.label)} · {sec.jobs.length}</div>
+                {sec.jobs.map((j) => (
+                  <button key={j.number} type="button" className="cr-li" onClick={() => open(j.number, "checkin")}>
+                    <span className="cr-t">{j.day ? day(j.day, locale).replace(/,.*/, "") : ""}</span><b>#{j.number}</b>
+                    <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.name ? ` · ${j.name}` : ""}</small></span>
+                    <i className={"cr-st " + j.state}>{t(j.state === "issue" ? "Problem" : j.state === "partial" ? "Part here" : j.state === "ready" ? "Here" : j.state === "way" ? "On the way" : "Not sure")}</i>
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         );

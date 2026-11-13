@@ -27,3 +27,19 @@ export type CheckJob = {
   href: string;
 };
 
+
+/**
+ * The jobs to count in, what's surely here first (Nick, Nov 13 2026: "I want them to count in what we know is here
+ * first"): within a day, Here · ready to count, then Part here, then Problems to recount, then Not sure (no tracking:
+ * it may be on the shelf), then On the way. The receiving dashboard (desk and phone) and the crew phone's list use it.
+ */
+export const COUNT_SECTIONS: { key: string; label: string; states: JobState[] }[] = [
+  { key: "here", label: "Here · ready to count", states: ["ready"] },
+  { key: "part", label: "Part here", states: ["partial"] },
+  { key: "issue", label: "Problem · recount", states: ["issue"] },
+  { key: "unknown", label: "Not sure if it's here", states: ["none"] },
+  { key: "way", label: "On the way", states: ["way"] },
+];
+export function countSections<T extends { state: string }>(jobs: T[]): { key: string; label: string; jobs: T[] }[] {
+  return COUNT_SECTIONS.map((s) => ({ key: s.key, label: s.label, jobs: jobs.filter((j) => (s.states as string[]).includes(j.state)) })).filter((s) => s.jobs.length);
+}

@@ -75,6 +75,10 @@ export function LangToggle() {
 const ES: Record<string, string> = {
   // the crew phone views (Nov 13)
   // Count in v2 and the halfway question (Nov 13)
+  "Here · ready to count": "Aquí · listo para contar",
+  "Problem · recount": "Problema · volver a contar",
+  "Not sure if it's here": "No se sabe si llegó",
+  "Not sure": "No se sabe",
   "Count in another job": "Contar otro trabajo",
   "Stop counting?": "¿Dejar de contar?",
   "You're halfway through counting this": "Vas a la mitad de contar esto",

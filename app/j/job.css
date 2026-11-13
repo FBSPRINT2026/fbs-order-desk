@@ -417,3 +417,7 @@
 /* after a count in: next job or the main menu (Nov 13) */
 .jm-ck-next{display:flex;flex-direction:column;gap:8px}
 .jm-ck-menu{display:flex;align-items:center;justify-content:center;text-decoration:none}
+/* the count list split here-first (Nov 13): Here · ready to count, Part here, Problem, Not sure, On the way */
+.cr-sec{display:flex;flex-direction:column;gap:6px}
+.cr-sec+.cr-sec{margin-top:6px}
+.cr-sec-h{font-size:12px;font-weight:800;color:var(--ink-2);text-transform:uppercase;letter-spacing:.05em;padding:4px 2px 2px;border-bottom:1px solid var(--line)}
