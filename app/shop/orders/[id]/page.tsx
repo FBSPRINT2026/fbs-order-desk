@@ -468,6 +468,21 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [save]);
 
   useEffect(() => () => { if (timer.current) save(); }, [save]);
+  // an order made or changed outside this page (a tool, the server, by hand) can carry a total that isn't what its
+  // lines work out to: the lists, the portal and QuickBooks read the saved total, so it's saved here once it's open
+  // (Nick, Nov 12: Dear Heart's six reorders showed $0 on the customer's orders). Not a finished job.
+  const totalChecked = useRef("");
+  useEffect(() => {
+    if (!o || saveState !== "Saved" || totalChecked.current === o.id || o.status === "completed") return;
+    const t = setTimeout(() => {
+      const d = latest.current;
+      if (!d || d.id !== o.id || timer.current) return;
+      totalChecked.current = o.id;
+      if (Math.abs(calcOrder(d, settings).total - (+d.total || 0)) > 0.005) void save();
+    }, 3000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [o?.id, saveState, settings, save]);
   // the order check on the right (components/tools/OrderReview.tsx, Oct 23): what's typed here is saved before it changes
   // the order, and the order shows its changes as soon as they're made (no reload, no lost typing)
   useEffect(() => {
