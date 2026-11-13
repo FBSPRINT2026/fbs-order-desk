@@ -245,3 +245,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 7:52pm · 1.3.449 · Nick · Rules: stocked inks reach every price through the settings
 - Nov 12 8:04pm · 1.3.450 · Nick · QuickBooks: a Printavo invoice short of ours keeps Printavo's lines and gets our missing fees (shipping, setup, card fee) added underneath, the way Printavo did it
 - Nov 12 8:08pm · 1.3.451 · Nick · Rules: missing fees go under Printavo's lines
+- Nov 12 8:15pm · 1.3.452 · Nick · QuickBooks: any difference from Printavo's invoice is replaced with ours whole (rule)
