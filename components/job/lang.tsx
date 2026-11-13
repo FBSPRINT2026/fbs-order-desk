@@ -75,6 +75,7 @@ export function LangToggle() {
 const ES: Record<string, string> = {
   // the crew phone views (Nov 13)
   // Count in v2 and the halfway question (Nov 13)
+  "Count in another job": "Contar otro trabajo",
   "Stop counting?": "¿Dejar de contar?",
   "You're halfway through counting this": "Vas a la mitad de contar esto",
   "{0} of {1} counted so far.": "{0} de {1} contados hasta ahora.",

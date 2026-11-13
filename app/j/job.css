@@ -414,3 +414,6 @@
 .ci2-ask b{font-size:18px}.ci2-ask p{margin:0;color:var(--ink-3)}
 .ci2-reset{min-height:50px;border:1.5px solid var(--danger);border-radius:14px;background:transparent;color:var(--danger);font:inherit;font-weight:800;cursor:pointer;width:100%}
 @media (prefers-reduced-motion:reduce){.ci2-hold.go .ci2-fill{transition:none}}
+/* after a count in: next job or the main menu (Nov 13) */
+.jm-ck-next{display:flex;flex-direction:column;gap:8px}
+.jm-ck-menu{display:flex;align-items:center;justify-content:center;text-decoration:none}

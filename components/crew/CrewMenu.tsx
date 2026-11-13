@@ -266,7 +266,8 @@ function Punch({ next, busy, onPunch }: { next: string[]; busy: string; onPunch:
 }
 
 /** open a job by its number; the phone's camera app reads the work order's QR straight to the job */
-function ScanJob({ open }: { open: (n: string) => void }) {
+/** Scan a work order QR or type its number (the main menu, and "Count in another job" after a count in) */
+export function ScanJob({ open }: { open: (n: string) => void }) {
   const { t } = useT();
   const [num, setNum] = useState("");
   const ref = useRef<HTMLInputElement>(null);
