@@ -556,6 +556,9 @@ const ES: Record<string, string> = {
   // box labels
   "The label printer isn't set up yet (Shipping Center → Settings → Label printer).": "La impresora de etiquetas aún no está configurada (Centro de envíos → Configuración → Impresora de etiquetas).",
   "How many boxes?": "¿Cuántas cajas?",
+  "How many labels?": "¿Cuántas etiquetas?",
+  "I know my box count": "Ya sé cuántas cajas son",
+  "Each label says BOX ___ OF ___ to write in.": "Cada etiqueta dice CAJA ___ DE ___ para escribirlo a mano.",
   "One fewer box": "Una caja menos",
   "One more box": "Una caja más",
   "Boxes": "Cajas",

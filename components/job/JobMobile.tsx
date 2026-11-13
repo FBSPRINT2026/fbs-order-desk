@@ -409,24 +409,27 @@ function Labels({ card, box, printer, perBox, staff }: { card: JobCard; box: num
   const { t } = useT();
   const [n, setN] = useState(Math.max(box || 0, Math.max(1, Math.ceil((card.qty || 0) / Math.max(1, perBox)))));
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // box count not known yet (most days): labels print BOX ___ OF ___ to write in (Nick, Nov 13)
+  const [known, setKnown] = useState(!!box);
   async function print(only?: number) {
     setBusy(true); setMsg(null);
-    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job: { kind: card.kind, id: card.id }, boxes: n, only }) }).catch(() => null);
+    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job: { kind: card.kind, id: card.id }, boxes: n, known, only: known ? only : undefined }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { message: "Offline. Try again." };
     setBusy(false); setMsg({ ok: !!r?.ok && j.ok !== false, text: t(j.message || j.error || "Done.") });
   }
   return (
     <div className="jm-card">
       {!printer?.ready && <div className="jm-warn">{t("The label printer isn't set up yet (Shipping Center → Settings → Label printer).")}</div>}
-      <div className="jm-label">{t("How many boxes?")}</div>
+      <div className="jm-label">{t("How many labels?")}</div>
       <div className="jm-count">
         <button type="button" aria-label={t("One fewer box")} onClick={() => setN(Math.max(1, n - 1))}>−</button>
         <input inputMode="numeric" value={n} onChange={(e) => setN(Math.max(1, Math.min(99, +e.target.value.replace(/\D/g, "") || 1)))} aria-label={t("Boxes")} />
         <button type="button" aria-label={t("One more box")} onClick={() => setN(Math.min(99, n + 1))}>+</button>
       </div>
-      <p className="jm-faint">{t("{0} pcs · about {1} per box. Each label says box 1 of {2}, 2 of {2}…", card.qty, perBox, n)}</p>
+      <label className="jm-check"><input type="checkbox" checked={known} onChange={(e) => setKnown(e.target.checked)} /> {t("I know my box count")}</label>
+      <p className="jm-faint">{known ? t("{0} pcs · about {1} per box. Each label says box 1 of {2}, 2 of {2}…", card.qty, perBox, n) : t("Each label says BOX ___ OF ___ to write in.")}</p>
       <button type="button" className="jm-go" disabled={busy} onClick={() => print()}>{busy ? t("Sending…") : n === 1 ? t("Print 1 label") : t("Print {0} labels", n)}</button>
-      {box && box <= n && <button type="button" className="jm-ghost" disabled={busy} onClick={() => print(box)}>{t("Just box {0} of {1}", box, n)}</button>}
+      {known && box && box <= n && <button type="button" className="jm-ghost" disabled={busy} onClick={() => print(box)}>{t("Just box {0} of {1}", box, n)}</button>}
       {msg && <div className={msg.ok ? "jm-ok" : "jm-err"} role="status">{msg.text}</div>}
       {staff && card.kind === "o" && <a className="jm-alt" href={`/print/${card.id}/labels?boxes=${n}`}>{t("Open the printable labels instead")}</a>}
     </div>

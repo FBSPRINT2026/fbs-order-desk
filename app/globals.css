@@ -21983,6 +21983,8 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .obl-go{height:52px;font-size:17px;width:100%;justify-content:center}
 .obl-sheet{font-size:13px;align-self:flex-start}
 .obl-miss{color:var(--danger);text-transform:none;letter-spacing:0;font-size:12.5px}
+.obl-kb{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer}
+.obl-kb input{width:20px;height:20px;margin:0}
 @media (max-width:800px){.obl-body{grid-template-columns:1fr}}
 .ob-sc-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .ob-sc-head h2{font-family:var(--display);font-size:22px;margin:0}

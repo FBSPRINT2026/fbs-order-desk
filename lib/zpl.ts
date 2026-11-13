@@ -12,7 +12,14 @@ import { code128Modules } from "@/lib/barcode";
 export const jobLink = (number: string | number, box?: number | null) => `${SITE_URL}/j/${number}${box ? `-${box}` : ""}`;
 
 /** text for a ^FD field: ^FH lets us hex-escape the characters ZPL uses itself */
-const fd = (s: string) => "^FH_^FD" + String(s ?? "").replace(/[_^~\\]/g, (c) => "_" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).replace(/[\r\n]+/g, " ") + "^FS";
+/**
+ * Plain letters only (Nick, Nov 13: "50000-1 Â· scan", "FedEx Ground Â· Nine18"): the printer read "·" as two odd
+ * characters, and any accent, curly quote or dash would do the same. Punctuation becomes its plain twin, accents come off.
+ */
+export const plain = (s: string) => String(s ?? "")
+  .replace(/[·•]/g, "-").replace(/[‐-―−]/g, "-").replace(/[‘’‚′]/g, "'").replace(/[“”„″]/g, '"').replace(/…/g, "...").replace(/×/g, "x")
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "");
+const fd = (s: string) => "^FH_^FD" + plain(s).replace(/[_^~\\]/g, (c) => "_" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")).replace(/[\r\n]+/g, " ") + "^FS";
 
 const esc = (s: string) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
@@ -35,7 +42,7 @@ class Z {
     const w = o.w || 812 - x, lines = o.lines || 1, al = o.align === "C" ? "center" : o.align === "R" ? "right" : "left";
     // the Zebra's font is narrow (about half its height per letter): draw Arial squeezed to match, wrapping at the same width
     const sq = 0.74;
-    this.pic.push(`<foreignObject x="${x}" y="${y}" width="${w}" height="${h * lines * 1.05}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w / sq}px;font:700 ${h}px/${h * 1.02}px Arial,'Helvetica Neue',sans-serif;color:${white ? "#fff" : "#000"};text-align:${al};white-space:${lines > 1 ? "normal" : "nowrap"};overflow:hidden;max-height:${h * lines * 1.05}px;transform:scaleX(${sq});transform-origin:${al === "center" ? "center" : al} top;margin-left:${al === "center" ? (w - w / sq) / 2 : al === "right" ? w - w / sq : 0}px">${esc(s)}</div></foreignObject>`);
+    this.pic.push(`<foreignObject x="${x}" y="${y}" width="${w}" height="${h * lines * 1.05}"><div xmlns="http://www.w3.org/1999/xhtml" style="width:${w / sq}px;font:700 ${h}px/${h * 1.02}px Arial,'Helvetica Neue',sans-serif;color:${white ? "#fff" : "#000"};text-align:${al};white-space:${lines > 1 ? "normal" : "nowrap"};overflow:hidden;max-height:${h * lines * 1.05}px;transform:scaleX(${sq});transform-origin:${al === "center" ? "center" : al} top;margin-left:${al === "center" ? (w - w / sq) / 2 : al === "right" ? w - w / sq : 0}px">${esc(plain(s))}</div></foreignObject>`);
   }
   box(x: number, y: number, w: number, h: number, t = 2, fill = false) {
     const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^GB${n(w)},${n(h)},${fill ? n(Math.min(w, h)) : Math.max(1, n(t))}^FS`);
@@ -58,8 +65,6 @@ class Z {
   svg() { return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 812 1218" shape-rendering="crispEdges"><rect width="812" height="1218" fill="#fff"/>${this.pic.join("")}</svg>`; }
 }
 
-const DATE = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }) : "—");
-
 /** One 4×6 box label: box `box` of `of` (of = 0 → "BOX __ OF __" to write in). */
 export function boxLabelZpl(j: JobCard, box: number, of: number, dpi = 203): string {
   return drawBoxLabel(new Z(dpi / 203), j, box, of).zpl();
@@ -72,42 +77,36 @@ export function boxLabelSvg(j: JobCard, box: number, of: number): string {
 function drawBoxLabel(z: Z, j: JobCard, box: number, of: number): Z {
   const L = 22, W = 812 - 2 * L;
   // header: job number + who it's from, delivery tag, box count
-  z.text(L, 18, 78, `#${j.number}`, { w: 330 });
-  z.text(L, 100, 26, (j.brand || "").toUpperCase(), { w: 330 });
+  z.text(L, 24, 92, `#${j.number}`, { w: 340 });
   // delivery tag, and RUSH under it
   const tag = j.delivery === "ship" ? "SHIP" : j.delivery === "deliver" ? "DELIVERY" : "PICKUP";
   z.box(372, 20, 196, 46, 0, true); z.text(372, 28, 34, tag, { w: 196, align: "C", reverse: true });
   if (j.rush) { z.box(372, 74, 196, 46, 0, true); z.text(372, 82, 34, "RUSH", { w: 196, align: "C", reverse: true }); }
   z.text(590, 18, 34, "BOX", { w: W - 568, align: "R" });
   if (of) z.text(590, 52, 64, `${box} OF ${of}`, { w: W - 568, align: "R" });
-  else z.text(560, 64, 44, "___ OF ___", { w: W - 538, align: "R" });
+  else { z.line(596, 104, 64, 4); z.text(664, 64, 40, "OF", { w: 60, align: "C" }); z.line(W + L - 64, 104, 64, 4); } // box count not known yet: written in
   z.line(L, 132, W, 4);
 
   // job name + PO on the left, the QR (phone menu) on the right, the barcode under the name
-  z.text(L, 146, 38, j.name || "Untitled job", { w: 560, lines: 2 });
-  if (j.po) z.text(L, 228, 28, `PO ${j.po}`, { w: 560 });
-  z.code128(L, 266, 62, `${j.number}-${box || 1}`, 2);
-  z.text(L, 334, 22, `${j.number}-${box || 1}  ·  scan the square code with a phone`, { w: 560 });
+  // the customer, the whole job name and the PO (Nick, Nov 13: the QR scanner reads the square code, so no barcode,
+  // and the QR opens everything else: no ship-to, dates or ship method), stacked by how many lines each takes
+  const lines = (s: string, h: number, w: number) => Math.max(1, Math.ceil((plain(s).length * 0.42 * h) / w));
+  const TW = 550; let y = 150;
+  const cust = j.customer || j.brand || "";
+  if (cust) { const n = Math.min(2, lines(cust, 50, TW)); z.text(L, y, 50, cust, { w: TW, lines: n }); y += n * 50 + 10; }
+  const nm = j.name || "Untitled job", nn = Math.min(3, lines(nm, 38, TW));
+  z.text(L, y, 38, nm, { w: TW, lines: nn }); y += nn * 38 + 12;
+  if (j.po) { z.text(L, y, 46, `PO ${j.po}`, { w: TW }); y += 46; }
   z.qr(600, 140, 4.6, jobLink(j.number, box || null));
-
-  // ship-to (or customer) and dates
-  const top = 372;
-  z.box(L, top, 520, 196, 3);
-  z.text(L + 10, top + 8, 22, j.shipTo.length ? (j.delivery === "ship" ? "SHIP TO" : "DELIVER TO") : "CUSTOMER");
-  const addr = j.shipTo.length ? j.shipTo : [j.customer, j.contact, j.phone].filter(Boolean);
-  addr.slice(0, 5).forEach((ln, i) => z.text(L + 10, top + 38 + i * 30, i === 0 ? 30 : 27, ln.toUpperCase(), { w: 500 }));
-  z.box(L + 530, top, W - 530, 196, 3);
-  z.text(L + 542, top + 10, 20, "IN HANDS"); z.text(L + 542, top + 34, 26, DATE(j.due), { w: W - 550, lines: 2 });
-  if (j.delivery === "ship") { z.text(L + 542, top + 98, 20, "SHIP VIA"); z.text(L + 542, top + 122, 26, j.shipMethod || "—", { w: W - 550, lines: 2 }); }
-  else if (j.customer && j.shipTo.length) { z.text(L + 542, top + 98, 20, "FOR"); z.text(L + 542, top + 122, 26, j.customer, { w: W - 550, lines: 2 }); }
+  z.text(586, 318, 20, "SCAN FOR THE JOB", { w: 204, align: "C" });
 
   // the size grid: what was ordered, with room to write what's in this box
   const rows = j.groups.flatMap((g) => g.rows);
   const sizes = [...new Set(rows.flatMap((r) => r.sizes.map((s) => s.label)))].sort((a, b) => bySize(a.toUpperCase(), b.toUpperCase()));
-  const gy = top + 214, foot = 1218 - 92;
+  const gy = Math.max(y, 340) + 18, foot = 1218 - 92;
   // rows grow to fill the label (room to write what's in the box); at least 54 dots each
   const maxRows = Math.max(1, Math.min(rows.length, Math.floor((foot - gy - 80) / 54)));
-  const rh = Math.min(140, Math.floor((foot - gy - 80) / Math.max(1, maxRows)));
+  const rh = Math.min(320, Math.floor((foot - gy - 80) / Math.max(1, maxRows)));
   const itemW = sizes.length > 8 ? 190 : 230, cols = sizes.length + 1, cw = Math.floor((W - itemW) / Math.max(1, cols));
   z.box(L, gy, W, 38, 0, true);
   z.text(L + 8, gy + 8, 24, "ITEM", { reverse: true });

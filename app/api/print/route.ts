@@ -29,8 +29,8 @@ export async function POST(req: Request) {
     if (!ref) return NextResponse.json({ error: "Which job?" }, { status: 400 });
     const card = await loadJobCard(admin, ref);
     if (!card) return NextResponse.json({ error: "No job with that number." }, { status: 404 });
-    const of = Math.max(0, Math.min(99, Math.round(+b.boxes || 0)));
-    const box = Math.max(1, Math.min(of || 1, Math.round(+b.box || 1)));
+    const n = Math.max(0, Math.min(99, Math.round(+b.boxes || 0))), of = b.known === false ? 0 : n;
+    const box = of ? Math.max(1, Math.min(of, Math.round(+b.box || 1))) : 0;
     return NextResponse.json({ svg: boxLabelSvg(card, box, of), job: { kind: card.kind, id: card.id, number: card.number, name: card.name, customer: card.customer, qty: card.qty } });
   }
   if (b.action === "box") {
@@ -38,10 +38,12 @@ export async function POST(req: Request) {
     if (!ref) return NextResponse.json({ error: "Which job?" }, { status: 400 });
     const card = await loadJobCard(admin, ref);
     if (!card) return NextResponse.json({ error: "No job with that number." }, { status: 404 });
-    const of = Math.max(0, Math.min(99, Math.round(+b.boxes || 0)));
-    const only = Math.round(+b.only || 0);
-    const list = only ? [only] : Array.from({ length: Math.max(1, of) }, (_, i) => i + 1);
-    const r = await queueLabels(admin, list.map((n) => ({ title: `#${card.number} box ${n}${of ? ` of ${of}` : ""}`, zpl: boxLabelZpl(card, n, of, ps.dpi), kind: "box", order_id: card.kind === "o" ? card.id : null, archived_order_id: card.kind === "a" ? card.id : null })), who.name);
+    // boxes = how many labels; known: false = the box count isn't known yet, so each prints "BOX ___ OF ___" to write
+    // in (Nick, Nov 13: "I'm going to print 10 labels because I think I'll probably need 8")
+    const count = Math.max(1, Math.min(99, Math.round(+b.boxes || 0))), of = b.known === false ? 0 : count;
+    const only = of ? Math.round(+b.only || 0) : 0;
+    const list = only ? [only] : Array.from({ length: count }, (_, i) => i + 1);
+    const r = await queueLabels(admin, list.map((n) => ({ title: `#${card.number} ${of ? `box ${n} of ${of}` : `label ${n} of ${count} (box count to write in)`}`, zpl: boxLabelZpl(card, of ? n : 0, of, ps.dpi), kind: "box", order_id: card.kind === "o" ? card.id : null, archived_order_id: card.kind === "a" ? card.id : null })), who.name);
     return NextResponse.json(r, { status: r.ok ? 200 : 202 });
   }
   return NextResponse.json({ error: "Print what?" }, { status: 400 });

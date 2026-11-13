@@ -310,6 +310,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Fulfillment → Being packed, In Production → Still printing), with Picked up (`markPickedUp`: Ready → Completed, logged)
   and Ship; Print box label and Start shipping open their panel under it; then the numbers, Pickup shelf / Deliver, and
   the Shipping Center underneath (`components/shipping/ShippingCenter.tsx`, the one `/shop/shipping` shows too).
+  **Box labels** (Nick, Nov 13 2026): the job #, SHIP / PICKUP / DELIVERY and the box count on top; then the customer, the
+  whole job name and the PO, with the QR (the scanner reads it; no barcode); then the fill-in grid. No ship-to, dates or
+  ship method: the QR opens all of that. Labels print BOX ___ OF ___ to write in unless "I know my box count" is ticked
+  (`known` on `/api/print`). Printed text is plain letters (`plain` in `lib/zpl.ts`). One layout draws both the ZPL and
+  the preview picture (`drawBoxLabel` → `boxLabelZpl` / `boxLabelSvg`).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

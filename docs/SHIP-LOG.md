@@ -334,3 +334,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 3:16pm · 1.3.576 · Nick · Print relay: a fresh connection and a time limit on every call (a dropped connection hung it after the first labels), says when it starts each label, keeps a log
 - Nov 13 3:17pm · 1.3.577 · Nick · Print relay: finds the Zebra once from the local printer list, gives each label 20 seconds then reports an error instead of hanging
 - Nov 13 3:36pm · 1.3.578 · Nick · Box label preview: lettering squeezed to match the Zebra's narrow font, so the picture wraps where the printed label does
+- Nov 13 3:41pm · 1.3.579 · Nick · Box label: number on top, then customer, the whole job name and a bigger PO beside the QR; no barcode or ship-to, so the fill-in grid gets the room. Labels print BOX ___ OF ___ unless 'I know my box count' is ticked (Outbound pop-up and the phone). Plain letters only (no more 'Â')

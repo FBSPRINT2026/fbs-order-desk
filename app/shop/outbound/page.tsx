@@ -197,6 +197,8 @@ function LabelPanel({ start, perBox, onClose }: { start: string; perBox: number;
   const [job, setJob] = useState(start), [card, setCard] = useState<LabelJob | null>(null), [svg, setSvg] = useState("");
   const [looking, setLooking] = useState(!!start), [missing, setMissing] = useState(false);
   const [boxes, setBoxes] = useState(1), [show, setShow] = useState(1), [only, setOnly] = useState(""), [busy, setBusy] = useState(false), [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // most days the box count isn't known until packing is done: labels print "BOX ___ OF ___" unless this is ticked
+  const [known, setKnown] = useState(false);
   const boxRef = useRef<HTMLInputElement>(null);
   const post = (body: Record<string, unknown>) => fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) })).catch(() => ({ ok: false, j: { error: "Offline. Try again." } as Record<string, string> }));
   // find the job (typed up top, or here)
@@ -216,18 +218,18 @@ function LabelPanel({ start, perBox, onClose }: { start: string; perBox: number;
   // the picture, for the box being shown
   useEffect(() => {
     if (!card) return;
-    const h = setTimeout(async () => { const r = await post({ action: "preview", job: { kind: card.kind, id: card.id }, boxes, box: Math.min(show, boxes) }); if (r.ok && r.j.svg) setSvg(r.j.svg); }, 200);
+    const h = setTimeout(async () => { const r = await post({ action: "preview", job: { kind: card.kind, id: card.id }, boxes, known, box: Math.min(show, boxes) }); if (r.ok && r.j.svg) setSvg(r.j.svg); }, 200);
     return () => clearTimeout(h);
-  }, [card, boxes, show]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [card, boxes, show, known]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !busy) onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [busy, onClose]);
   async function print() {
     if (!card || busy) return;
     setBusy(true); setMsg(null);
-    const r = await post({ action: "box", job: { kind: card.kind, id: card.id }, boxes, only: +only || undefined });
+    const r = await post({ action: "box", job: { kind: card.kind, id: card.id }, boxes, known, only: known ? +only || undefined : undefined });
     setBusy(false); setMsg({ ok: r.ok && r.j.ok !== false, text: r.j.message || r.j.error || "Sent." });
   }
   const n = Math.min(show, boxes);
-  const label = +only ? `Print box ${+only} of ${boxes}` : `Print ${boxes} label${boxes === 1 ? "" : "s"}`;
+  const label = known && +only ? `Print box ${+only} of ${boxes}` : `Print ${boxes} label${boxes === 1 ? "" : "s"}`;
   return (
     <div className="pp-modal" role="dialog" aria-modal="true" aria-label="Print box labels" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div className="pp-sheet obl">
@@ -235,7 +237,7 @@ function LabelPanel({ start, perBox, onClose }: { start: string; perBox: number;
         <div className="obl-body">
           <div className="obl-pic">
             {svg ? <div className="obl-label" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="obl-label obl-empty">{looking ? "Finding the job…" : "The label shows here"}</div>}
-            {card && boxes > 1 && <div className="obl-flip"><button type="button" className="btn sm" disabled={n <= 1} onClick={() => setShow(n - 1)}>‹</button><span>Box {n} of {boxes}</span><button type="button" className="btn sm" disabled={n >= boxes} onClick={() => setShow(n + 1)}>›</button></div>}
+            {card && known && boxes > 1 && <div className="obl-flip"><button type="button" className="btn sm" disabled={n <= 1} onClick={() => setShow(n - 1)}>‹</button><span>Box {n} of {boxes}</span><button type="button" className="btn sm" disabled={n >= boxes} onClick={() => setShow(n + 1)}>›</button></div>}
           </div>
           <div className="obl-side">
             {card ? (
@@ -245,14 +247,15 @@ function LabelPanel({ start, perBox, onClose }: { start: string; perBox: number;
               <label className="ob-f ob-f-job"><span>Job</span><input type="text" autoFocus value={job} onChange={(e) => setJob(e.target.value)} placeholder="Scan the work order or type the job #" />
                 {missing && <small className="obl-miss">No job with that number.</small>}</label>
             )}
-            <div className="obl-k">How many boxes?</div>
+            <div className="obl-k">How many labels?</div>
             <div className="obl-n">
               <button type="button" className="ob-step" aria-label="One fewer box" disabled={!card} onClick={() => setBoxes(Math.max(1, boxes - 1))}>−</button>
               <input ref={boxRef} type="number" min={1} max={99} value={boxes} disabled={!card} onChange={(e) => setBoxes(Math.max(1, Math.min(99, Math.round(+e.target.value) || 1)))} onKeyDown={(e) => { if (e.key === "Enter") void print(); }} aria-label="Boxes" />
               <button type="button" className="ob-step" aria-label="One more box" disabled={!card} onClick={() => setBoxes(Math.min(99, boxes + 1))}>+</button>
             </div>
-            {card && <div className="faint">Guessed from the pieces, {perBox} a box.</div>}
-            <label className="ob-f"><span>Only one box (reprint)</span><input type="number" min={1} max={99} value={only} disabled={!card} onChange={(e) => setOnly(e.target.value)} placeholder="All" /></label>
+            <label className="obl-kb"><input type="checkbox" checked={known} onChange={(e) => setKnown(e.target.checked)} /> I know my box count</label>
+            <div className="faint">{known ? `Prints BOX 1 OF ${boxes}, BOX 2 OF ${boxes}… (${perBox} pieces a box is the guess).` : "Each label prints BOX ___ OF ___ to write in. Tick the box to number them."}</div>
+            {known && <label className="ob-f"><span>Only one box (reprint)</span><input type="number" min={1} max={99} value={only} disabled={!card} onChange={(e) => setOnly(e.target.value)} placeholder="All" /></label>}
             <button type="button" className="btn primary obl-go" disabled={!card || busy} onClick={() => void print()}>{busy ? "Sending…" : label}</button>
             {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
             {card?.kind === "o" && <a className="linkbtn obl-sheet" href={`/print/${card.id}/labels?boxes=${boxes}`} target="_blank" rel="noreferrer">Print on paper instead</a>}
