@@ -32,7 +32,7 @@ function Cards() {
       const s = mergeTime((st?.data as { time?: unknown } | null)?.time);
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
       const per = periodOf(s, /^\d{4}-\d{2}-\d{2}$/.test(sp.get("start") || "") ? sp.get("start")! : addDays(periodOf(s, today).start, -1));
-      const [{ data: emps, error }, punches, { data: offs }, ck] = await Promise.all([
+      const [{ data: emps, error }, { data: punches }, { data: offs }, ck] = await Promise.all([
         sb.from("employees").select("*").order("first_name"),
         allRows((r0, r1) => sb.from("time_punches").select("*").gte("at", localToIso(addDays(per.start, -1), 0)).lt("at", localToIso(addDays(per.end, 2), 0)).order("at").order("id").range(r0, r1)),
         sb.from("time_off").select("*").lte("starts_on", per.end).gte("ends_on", per.start),
