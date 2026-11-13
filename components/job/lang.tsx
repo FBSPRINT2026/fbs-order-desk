@@ -74,6 +74,17 @@ export function LangToggle() {
 
 const ES: Record<string, string> = {
   // the crew phone views (Nov 13)
+  "No employee with that number.": "No hay empleado con ese número.",
+  "The two PINs don't match. Make it again.": "Los dos PIN no son iguales. Hazlo otra vez.",
+  "Type your employee number. You only do this once on this phone.": "Escribe tu número de empleado. Solo lo haces una vez en este teléfono.",
+  "Now your PIN.": "Ahora tu PIN.",
+  "Type the same PIN again.": "Escribe el mismo PIN otra vez.",
+  "First time: make your own PIN, 4 to 6 numbers you'll remember. It keeps anyone else from clocking in as you.": "Primera vez: crea tu propio PIN, de 4 a 6 números que recuerdes. Así nadie más puede marcar como tú.",
+  "PIN again": "PIN otra vez",
+  "New PIN": "PIN nuevo",
+  "One moment…": "Un momento…",
+  "You already have a PIN. Sign in with it.": "Ya tienes un PIN. Entra con él.",
+  "Use 4 to 6 numbers.": "Usa de 4 a 6 números.",
   "Deliveries": "Entregas",
   "Nothing ready to deliver.": "Nada listo para entregar.",
   "Ready": "Listo",

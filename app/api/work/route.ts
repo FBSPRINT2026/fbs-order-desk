@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hashPin } from "@/lib/timeclockServer";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { jobAction, jobsToday, runningJob, timeSettings, validPin } from "@/lib/timeclockServer";
@@ -24,6 +25,26 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const jar = await cookies();
   const b = await req.json().catch(() => ({}));
+  // the first sign-in (Nov 13, Nick: nobody should have to set PINs ahead of time): the employee # says who they are and,
+  // with no PIN yet, they make their own; from then on it's their number and their PIN, once per phone
+  if (b.action === "who") {
+    const code = parseInt(String(b.code || ""), 10);
+    const { data: e } = code ? await admin.from("employees").select("id, first_name, active").eq("code", code).maybeSingle() : { data: null };
+    if (!e || !e.active) return NextResponse.json({ error: "bad" }, { status: 404 });
+    const { data: p } = await admin.from("employee_pins").select("employee_id").eq("employee_id", e.id).maybeSingle();
+    return NextResponse.json({ name: e.first_name, hasPin: !!p });
+  }
+  if (b.action === "firstpin") {
+    const code = parseInt(String(b.code || ""), 10), pin = String(b.pin || "");
+    if (!code || !validPin(pin)) return NextResponse.json({ error: "Use 4 to 6 numbers." }, { status: 400 });
+    const { data: e } = await admin.from("employees").select("id, active").eq("code", code).maybeSingle();
+    if (!e || !e.active) return NextResponse.json({ error: "bad" }, { status: 404 });
+    const { data: p } = await admin.from("employee_pins").select("employee_id").eq("employee_id", e.id).maybeSingle();
+    if (p) return NextResponse.json({ error: "You already have a PIN. Sign in with it." }, { status: 409 });
+    const ins = await admin.from("employee_pins").insert({ employee_id: e.id, pin_hash: hashPin(pin) });
+    if (ins.error) return NextResponse.json({ error: ins.error.message }, { status: 500 });
+    b.action = "login";
+  }
   if (b.action === "login") {
     const code = parseInt(String(b.code || ""), 10), pin = String(b.pin || "");
     if (!code || !validPin(pin)) return NextResponse.json({ error: "bad" }, { status: 400 });
