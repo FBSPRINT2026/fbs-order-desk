@@ -74,6 +74,11 @@ export function LangToggle() {
 
 const ES: Record<string, string> = {
   // the crew phone views (Nov 13)
+  "Complete job": "Terminar trabajo",
+  "Complete #{0}? The whole job is printed.": "¿Terminar #{0}? Todo el trabajo está impreso.",
+  "Finish this spot only": "Terminar solo esta ubicación",
+  "Start job": "Empezar trabajo",
+  "Start with setup": "Empezar con la preparación",
   "Main menu": "Menú principal",
   "Crew": "Equipo",
   "Hi, {0}": "Hola, {0}",

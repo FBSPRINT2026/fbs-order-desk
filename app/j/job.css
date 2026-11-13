@@ -358,3 +358,4 @@
 .jm-proof img{width:100%;border-radius:12px;border:1px solid var(--line);background:#fff}
 .jm-wo{width:100%;min-height:75vh;border:1px solid var(--line);border-radius:12px;background:#fff}
 .jm-navrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 8px}.jm-navrow .jm-back{margin:0}
+.jm-go.ok{background:#0F8C78}
