@@ -235,3 +235,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 4:34pm · 1.3.439 · Nick · QuickBooks payments: overpaid part leaves credit instead of stopping the whole charge; paid held invoices and parts already sent don't block it
 - Nov 12 5:56pm · 1.3.440 · Nick · QuickBooks sync: #40000s bring Printavo's QuickBooks invoice to our order (or make it when Printavo never sent it)
 - Nov 12 6:08pm · 1.3.441 · Nick · Stacked tables: a long cell's own line never covers cells a page places itself (Goods & Receiving number over customer); late bar on the card edge
+- Nov 12 6:13pm · 1.3.442 · Nick · Schedule: a job marked done with no start ends at its finish (not over the warm-up); a paused job sits where it ran, start to pause

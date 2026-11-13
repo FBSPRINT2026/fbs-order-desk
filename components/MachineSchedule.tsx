@@ -66,7 +66,7 @@ type Slot = { /** a booking of the order's sample run */ sample?: boolean; id: s
   /** job log: when it really started / finished, how far along (0–1) as of progress_at; which print locations this booking covers (null = all) */
   started_at?: string | null; finished_at?: string | null; progress?: number; progress_at?: string | null; locations?: string[] | null };
 /** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
-type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; /** a job printing since today: when it started and the time it was figured to take (the Printing strip) */ plan?: { start: number; est: number }; carried?: string | null; /** runs right after a job with the same art: the setup it skips */ sameArt?: { with: string; saved: number } };
+type Card = { key: string; job: Job; need: Need; machine: Machine; day: string; minutes: number; startMin: number | null; slot: Slot | null; fromPv: boolean; /** a job printing since today: when it started and the time it was figured to take (the Printing strip) */ plan?: { start: number; est: number }; carried?: string | null; /** runs right after a job with the same art: the setup it skips */ sameArt?: { with: string; saved: number }; /** paused after it ran today: drawn where it ran, start to pause, like finished work */ ran?: boolean };
 /** the locations a booking covers when it's only part of the job's work on that kind of machine (null = all of it) */
 const locsFor = (job: { needs: Need[] }, need: Need) => { const full = job.needs.find((n) => n.type === need.type); return full && locsOf(need).length < locsOf(full).length ? locsOf(need) : null; };
 /** Screen print colors the way the shop says them: front / back, then any sleeves etc. A front-only 4 color is "4/0". */
@@ -266,7 +266,7 @@ function flow(cs: Card[], mach: Machine, nowAbs = -Infinity, busy: Busy = new Ma
   while (pending.length) {
     let c = pending[0];
     // finished work stays on the day it was done (it never spills into later days or pushes today's jobs)
-    if (c.slot?.status === "done") {
+    if (c.slot?.status === "done" || c.ran) {
       pending.shift();
       const [s0, s1] = hrs(c.day);
       const prior = out.filter((g) => g.day === c.day).reduce((m, g) => Math.max(m, g.end), s0);
@@ -768,13 +768,22 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       const need = subNeed(need0, sl.locations);
       // live estimate: follows the press crew's speed sliders and the time standards as they change
       const est = estimate(s, need, mach).minutes || sl.minutes, prog = Math.max(0, Math.min(1, +(sl.progress || 0)));
-      let minutes = est, startMin = sl.start_min;
+      let minutes = est, startMin = sl.start_min, ran = false;
       // started: it sits where it really started; what's left is the estimate less the share already done
       const st0 = sl.started_at ? shopTime(sl.started_at) : null, pa = sl.progress_at ? shopTime(sl.progress_at) : null;
       if (sl.status === "running" && st0 && st0.day === sl.day) { startMin = st0.min; minutes = (pa && pa.day === sl.day && pa.min > st0.min ? pa.min - st0.min : 0) + est * (1 - prog); }
       // finished: it sits where it really ran, from its start to its finish (Nov 12, Nick: "from when she started to when
       // she finished it… so we can still see it there, but grayed out")
-      else if (sl.status === "done" && st0 && st0.day === sl.day && sl.finished_at) { const fi = shopTime(sl.finished_at); if (fi && fi.day === st0.day && fi.min > st0.min) { startMin = st0.min; minutes = fi.min - st0.min; } }
+      else if (sl.status === "done" && sl.finished_at) {
+        const fi = shopTime(sl.finished_at);
+        if (fi && st0 && st0.day === sl.day && fi.day === st0.day && fi.min > st0.min) { startMin = st0.min; minutes = fi.min - st0.min; }
+        // marked complete with no start of its own (Nick, Nov 12, #40493 drawn over the morning warm-up): it ran the
+        // time it was figured to take, up to when it was marked done
+        else if (fi && fi.day === sl.day) { minutes = est; startMin = Math.max(0, fi.min - est); }
+      }
+      // paused after it ran (Nick, Nov 12, #40478: "it ran… paused with the lunch in the middle", drawn as Not started
+      // before lunch): it sits where it really ran, from its start to its pause, lunch inside it
+      else if (sl.status === "paused" && st0 && st0.day === sl.day && pa && pa.day === sl.day && pa.min > st0.min) { startMin = st0.min; minutes = pa.min - st0.min; ran = true; }
       else if (sl.status === "running" || sl.status === "paused") minutes = Math.max(15, est * (1 - prog));
       // its finish time set by hand (Where things stand → Printing today): it runs until then
       const en = sl.status === "running" && sl.ends_at ? shopTime(sl.ends_at) : null;
@@ -783,7 +792,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       // marked completed"): past its planned finish it stretches to now and a little beyond, and the jobs after it move down
       // with it, live clock on or off
       if (sl.status === "running" && startMin != null && sl.day === nowTick.day && startMin + minutes < nowTick.min + 10) minutes = nowTick.min + 10 - startMin;
-      out.push({ key: sl.id, job, need, machine: mach, day: sl.day, minutes: Math.max(15, minutes), startMin, slot: sl, fromPv: false, carried: sl.rolled_from, ...(sl.status === "running" && st0 && st0.day === sl.day ? { plan: { start: st0.min, est } } : {}) });
+      out.push({ key: sl.id, job, need, machine: mach, day: sl.day, minutes: Math.max(15, minutes), startMin, slot: sl, fromPv: false, carried: sl.rolled_from, ...(ran ? { ran } : {}), ...(sl.status === "running" && st0 && st0.day === sl.day ? { plan: { start: st0.min, est } } : {}) });
     }
     for (const p of pvLane) {
       const need = p.job.needs.find((n) => n.type === p.machine.type) || p.job.needs[0];
@@ -1235,7 +1244,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     // not started yet (or paused partway): free to move. Running and done work stays where it is.
     // a firm job (⛰️) that's on course for its date and time stays exactly where it is (unless its press can't print it now)
     const firmHolds = (c: Card) => !!c.job.firm && fits(c.need, c.machine) && (segs.ofCard.get(c.key) || []).reduce((t, g) => Math.max(t, ord(g.day) * 1440 + g.end), 0) <= dueAbs(c.job);
-    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || c.slot.status === "paused") && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c) && c.slot?.locked !== "spot");
+    const movable = cards.filter((c) => c.slot && (c.slot.status === "scheduled" || (c.slot.status === "paused" && !c.ran)) && !c.fromPv && c.day >= today && (!typeF || c.machine.type === typeF) && !firmHolds(c) && c.slot?.locked !== "spot");
     // work that stays where it is (running, done, a firm job on course, other machine types) is an obstacle on its
     // machine, not a wall: open time before and between it is still used (a firm job on Thursday doesn't empty Wednesday)
     let fixed = new Map<string, [number, number][]>(), fixedAbs = new Map<string, [number, number][]>(), jobBusy = new Map<string, [number, number][]>();
@@ -2091,7 +2100,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   };
   /** how a job on the board is doing today (Nov 12, Nick, option C: "see the day… what we've completed and where it's at"):
    *  done (with the time), printing (how far), or not started when its start has gone by */
-  const notYet = (g: Seg) => g.day === today && g.part === 1 && g.c.job.kind !== "h" && (!g.c.slot || g.c.slot.status === "scheduled" || g.c.slot.status === "paused") && g.start + 15 < now.min;
+  const notYet = (g: Seg) => g.day === today && g.part === 1 && g.c.job.kind !== "h" && (!g.c.slot || g.c.slot.status === "scheduled" || (g.c.slot.status === "paused" && !g.c.slot.started_at)) && g.start + 15 < now.min;
   const dayState = (g: Seg) => {
     const st = g.c.slot?.status;
     if (st === "done") { const f = g.c.slot?.finished_at; return <em className="mdy-st ok">{f ? "✓ " + new Date(f).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p") : "✓ Done"}</em>; }
