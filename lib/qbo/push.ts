@@ -36,6 +36,30 @@ const esc = (v: string) => v.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 const now = () => new Date().toISOString();
 const r2 = (n: number) => Math.round((+n || 0) * 100) / 100;
 
+type QLine = { Id?: string; LineNum?: number; DetailType?: string; Amount?: number; Description?: string; SalesItemLineDetail?: { ItemRef?: { value?: string } } };
+/** the items a garment line is sold under (screen printing, embroidery, heat press, the default): anything else is a fee */
+const GARMENT_ITEMS = new Set(["28", "29", "34", "1"]);
+/**
+ * Ours' lines that Printavo's QuickBooks invoice doesn't have, to go underneath its own (Nick, Nov 12 2026). Lines are
+ * matched by amount first (Printavo's "Digitize File 80.00" is our digitizing 80.00); what's left of Printavo's must be
+ * its garment lines written its own way, adding up to what's left of our garment lines. Then our fees still unmatched
+ * (shipping, setup, a card fee) are what it's missing. null when Printavo has something ours doesn't.
+ */
+function missingLines(printavo: { Line?: QLine[] }, ours: { Line?: QLine[] }): QLine[] | null {
+  const sales = (x: { Line?: QLine[] }) => (x.Line || []).filter((l) => l.DetailType === "SalesItemLineDetail");
+  const pv = sales(printavo), left = [...sales(ours)];
+  const pvLeft: QLine[] = [];
+  for (const p of pv) {
+    const i = left.findIndex((l) => r2(+(l.Amount || 0)) === r2(+(p.Amount || 0)));
+    if (i >= 0) left.splice(i, 1); else pvLeft.push(p);
+  }
+  const isGarment = (l: QLine) => GARMENT_ITEMS.has(String(l.SalesItemLineDetail?.ItemRef?.value || ""));
+  const sum = (xs: QLine[]) => r2(xs.reduce((a, l) => a + +(l.Amount || 0), 0));
+  const oursGarments = left.filter(isGarment), oursFees = left.filter((l) => !isGarment(l));
+  if (Math.abs(sum(pvLeft) - sum(oursGarments)) >= 0.01) return null;
+  return oursFees.filter((l) => r2(+(l.Amount || 0)) !== 0).map(({ Id: _i, LineNum: _n, ...l }) => l);
+}
+
 export class Pusher {
   /** qbo: null when QuickBooks isn't connected (previews are still built). live: false = preview, nothing is sent. */
   constructor(private admin: SupabaseClient, private qs: QboSettings, private settings: Settings, private qbo: Qbo | null, private realm: string, private live: boolean, private test = false) {}
@@ -291,6 +315,19 @@ export class Pusher {
         return { status: "needs_review", reason: `QuickBooks invoice #${n} was changed in QuickBooks since we last sent it (its total there is ${r2(+(cur.TotalAmt || 0)).toFixed(2)}, ours is ${build.total.toFixed(2)}). Press "Send ours anyway" to replace it with ours, or Skip to leave QuickBooks' version.`, preview: { ...preview, qboTotal: cur.TotalAmt } };
       }
       if (lk.last_pushed_hash === hashOf(build.body) && fp === base) return { status: "done", reason: "No changes since it was last sent.", qboId: lk.qbo_id, preview };
+      // Printavo's invoice we've never sent to, with a different total: its lines stay as Printavo wrote them and the
+      // charges ours has that it doesn't (shipping, a setup fee, a card fee) go underneath as their own lines, the way
+      // Printavo adds a fee (Nick, Nov 12 2026, #40193: "just add those as a line item underneath. That's how Printavo did
+      // it"). Only when every line Printavo has is also ours; otherwise a person decides.
+      if (adopted && !sentBefore && qboTotal !== build.total) {
+        const add = missingLines(cur as { Line?: QLine[] }, build.body as { Line?: QLine[] });
+        if (!add || !add.length) return { status: "needs_review", reason: `Printavo's QuickBooks invoice #${n} (${qboTotal!.toFixed(2)}) has lines ours doesn't (ours is ${build.total.toFixed(2)}). Not sent: check it against the order.`, preview };
+        rec = await q.sparseUpdate("Invoice", lk.qbo_id, cur.SyncToken, { Line: [...(((cur as { Line?: QLine[] }).Line) || []).filter((l) => l.DetailType !== "SubTotalLineDetail"), ...add] });
+        await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: lk.qbo_id, source: lk.source, rec, last_sent: { fingerprint: invoiceFingerprint(rec) }, hash: hashOf(build.body), pushed: true, note: `Printavo's lines kept; added ${add.length} line${add.length === 1 ? "" : "s"}` });
+        const d2 = r2(+(rec.TotalAmt || 0) - build.storedTotal);
+        if (Math.abs(d2) >= 0.01) return { status: "needs_review", reason: `Added ${add.map((l) => `${String(l.Description || "").split("\n")[0]} ${r2(+(l.Amount || 0)).toFixed(2)}`).join(", ")} to Printavo's QuickBooks invoice #${n}, but it's ${r2(+(rec.TotalAmt || 0)).toFixed(2)} and the order is ${build.storedTotal.toFixed(2)} (difference ${d2.toFixed(2)}).`, preview, qboId: rec.Id };
+        return { status: "done", reason: `Kept Printavo's lines on QuickBooks invoice #${n} and added ${add.map((l) => `${String(l.Description || "").split("\n")[0]} ${r2(+(l.Amount || 0)).toFixed(2)}`).join(", ")}: ${qboTotal!.toFixed(2)} → ${r2(+(rec.TotalAmt || 0)).toFixed(2)}.`, preview, qboId: rec.Id };
+      }
       rec = await q.sparseUpdate("Invoice", lk.qbo_id, cur.SyncToken, build.body);
       await this.saveLink({ entity: "invoice", local_id: o.id, qbo_id: lk.qbo_id, source: lk.source, rec, last_sent: { fingerprint: invoiceFingerprint(rec) }, hash: hashOf(build.body), pushed: true });
     }

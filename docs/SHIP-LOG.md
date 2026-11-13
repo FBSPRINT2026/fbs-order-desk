@@ -243,3 +243,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 12 7:09pm · 1.3.447 · Nick · QuickBooks: a customer with a 40000s invoice can be linked to the QuickBooks customer of the same name (Link to it no longer skipped as 'no invoice yet')
 - Nov 12 7:49pm · 1.3.448 · Nick · Stocked inks known everywhere a price is worked out (QuickBooks sync, portal, server): Black Light Green no longer priced as a black with no underbase (#40481)
 - Nov 12 7:52pm · 1.3.449 · Nick · Rules: stocked inks reach every price through the settings
+- Nov 12 8:04pm · 1.3.450 · Nick · QuickBooks: a Printavo invoice short of ours keeps Printavo's lines and gets our missing fees (shipping, setup, card fee) added underneath, the way Printavo did it
