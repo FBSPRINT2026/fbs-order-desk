@@ -472,6 +472,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [trayAll, setTrayAll] = useState(false);
   // Ready To Schedule's tabs (Nov 11, Nick: "late jobs, holders, and… jobs that are on time")
   const [trayTab, setTrayTab] = useSticky<"all" | "late" | "hold" | "goods" | "ok">("cal.trayTab", "all");
+  // Ready To Schedule by goods (Nick, Nov 13: "show me what's counted… that makes it easier to drop"), in Job Filters
+  const [trayGoods, setTrayGoods] = useSticky<"all" | "counted" | "not">("cal.trayGoods", "all");
   // kinds of order (Nov 11, Nick: "distinguish… what's a cart order from Cedar Promos, what's an All My Sons… order, and
   // what's a regular order… hide the cart orders and… All My Sons… so I can just see the regular"): a customer's Create
   // order trainings (their when-words in the job's name) are its kinds; a job none of them names is Regular. Hidden kinds
@@ -1007,8 +1009,19 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
   /** whose booking a slot is: an order, an old Printavo job, or a hold (a quote's held press time, Production holder) */
   const ownerCols = (job: Job): Record<string, string | boolean | null> => ({ order_id: job.kind === "o" ? job.id : null, archived_order_id: job.kind === "a" ? job.id : null, ...(job.kind === "h" ? { hold_id: job.id } : {}), ...(job.sample === "run" ? { sample: true } : {}), ...(job.issue ? { issue_id: job.issue.id } : {}) });
-  async function book(job: Job, need: Need, machine: Machine, d: string, source = "manual", slot?: Slot | null, startMin: number | null = null) {
+  /**
+   * Booked onto today, a job starts from now at the earliest, live clock on or off (Nick, Nov 13: Make The Schedule at
+   * 11 put jobs on this morning). With no time of its own it lines up after the morning's work, before now; a start
+   * time of now (to the next 5 minutes) keeps it where the day really is, and it still flows after what's ahead of it.
+   */
+  const notBefore = (d: string, startMin: number | null): number | null => {
+    if (d !== today || now.day !== today) return startMin;
+    const nm = Math.ceil(now.min / 5) * 5;
+    return startMin == null || startMin < nm ? nm : startMin;
+  };
+  async function book(job: Job, need: Need, machine: Machine, d: string, source = "manual", slot?: Slot | null, startMin0: number | null = null) {
     if (!s) return;
+    const startMin = notBefore(d, startMin0);
     if (!fits(need, machine)) { setMsg(`#${job.number} ${whyUnfit(need, machine)}.`); return; }
     const minutes = estimate(s, need, machine).minutes;
     const sb = createClient();
@@ -1056,7 +1069,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const rows = list.map((t) => {
       const k = t.sug!.machine.id + t.sug!.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === t.sug!.machine.id && c.day === t.sug!.day).length;
       const position = late(t) ? -1000 + (early[k] = (early[k] ?? 0) + 1) : pos[k]++;
-      return { ...ownerCols(t.job), machine: t.sug!.machine.id, day: t.sug!.day, minutes: t.sug!.minutes, position, kind: t.need.type, label: t.need.label, source: "suggested", locations: locsFor(t.job, t.need) };
+      return { ...ownerCols(t.job), machine: t.sug!.machine.id, day: t.sug!.day, minutes: t.sug!.minutes, position, start_min: notBefore(t.sug!.day, null), kind: t.need.type, label: t.need.label, source: "suggested", locations: locsFor(t.job, t.need) };
     });
     if (!rows.length) return;
     const r = await createClient().from("production_slots").insert(rows);
@@ -1449,8 +1462,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       if (row.st) { const sl = row.st.c.slot!; if (sl.position !== position || sl.day !== row.day) ups.push(Promise.resolve(sb.from("production_slots").update({ position, day: row.day, updated_at: new Date().toISOString() }).eq("id", sl.id))); continue; }
       const o = row.o!;
       const lbl = o.parts > 1 ? subNeed(o.it.need, o.locs).label : o.it.need.label;
-      if (o.it.slot && o.part === 1) ups.push(Promise.resolve(sb.from("production_slots").update({ machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: null, position, rolled_from: null, label: lbl, locations: o.locs, updated_at: new Date().toISOString() }).eq("id", o.it.slot.id)));
-      else ins.push({ ...ownerCols(o.it.job), machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: null, position, kind: o.it.need.type, label: lbl, source: "replan", status: "scheduled", locations: o.locs });
+      if (o.it.slot && o.part === 1) ups.push(Promise.resolve(sb.from("production_slots").update({ machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: notBefore(o.day, null), position, rolled_from: null, label: lbl, locations: o.locs, updated_at: new Date().toISOString() }).eq("id", o.it.slot.id)));
+      else ins.push({ ...ownerCols(o.it.job), machine: o.mach.id, day: o.day, minutes: o.minutes, start_min: notBefore(o.day, null), position, kind: o.it.need.type, label: lbl, source: "replan", status: "scheduled", locations: o.locs });
     }
     await Promise.all(ups);
     if (ins.length) await sb.from("production_slots").insert(ins);
@@ -1740,10 +1753,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     let id = c.card?.slot?.id;
     const minutes = estimate(s, need, mach).minutes;
     if (id) {
-      const r = await sb.from("production_slots").update({ machine: mach.id, day: d, minutes, start_min: null, position: idx, updated_at: new Date().toISOString() }).eq("id", id);
+      const r = await sb.from("production_slots").update({ machine: mach.id, day: d, minutes, start_min: notBefore(d, null), position: idx, updated_at: new Date().toISOString() }).eq("id", id);
       if (r.error) { setMsg(r.error.message); return; }
     } else {
-      const r = await sb.from("production_slots").insert({ ...ownerCols(job), machine: mach.id, day: d, minutes, start_min: null, position: idx, kind: need.type, label: need.label, source: "manual", locations: locsFor(job, need) }).select("id").single();
+      const r = await sb.from("production_slots").insert({ ...ownerCols(job), machine: mach.id, day: d, minutes, start_min: notBefore(d, null), position: idx, kind: need.type, label: need.label, source: "manual", locations: locsFor(job, need) }).select("id").single();
       if (r.error) { setMsg(r.error.message); return; }
       id = (r.data as { id: string }).id;
     }
@@ -2815,7 +2828,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const line = cards.filter((c) => c.machine.id === spot.m.id && c.day === day && c.slot).map((c) => ({ c, at: (segs.ofCard.get(c.key) || [])[0] })).sort((a, b) => (a.at ? ord(a.at.day) * 1440 + a.at.start : 0) - (b.at ? ord(b.at.day) * 1440 + b.at.start : 0));
     const idx = line.filter((x) => x.at && ord(x.at.day) * 1440 + x.at.start < spot.start).length;
     await Promise.all(line.map((x, i) => ({ x, p: i < idx ? i : i + 1 })).filter(({ x, p }) => x.c.slot!.position !== p).map(({ x, p }) => sb.from("production_slots").update({ position: p }).eq("id", x.c.slot!.id)));
-    const r2 = await sb.from("production_slots").insert({ hold_id: (r.data as { id: string }).id, machine: spot.m.id, day, minutes: spot.minutes, start_min: null, position: idx, kind: need.type, label: need.label, source: "planner", status: "scheduled", locations: null });
+    const r2 = await sb.from("production_slots").insert({ hold_id: (r.data as { id: string }).id, machine: spot.m.id, day, minutes: spot.minutes, start_min: notBefore(day, null), position: idx, kind: need.type, label: need.label, source: "planner", status: "scheduled", locations: null });
     if (r2.error) return r2.error.message;
     setMsg(`Planned: ${h.name || "job"} holds ${fmtMin(spot.minutes)} on ${spot.m.name}, ${dayLbl(day)}${h.due_date && spot.end > ord(minusWorkdays(h.due_date, Math.max(1, s!.bufferDays))) * 1440 + 1440 ? " (the schedule is full: it finishes after the in-hands date)" : ""}. Drag it anywhere on the calendar.`);
     load();
@@ -3025,7 +3038,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               const waitsG = (t: (typeof trayV)[number]) => !!t.job.issue?.waits;
               const kinds = { late: trayV.filter((t) => isLate(t) && !waitsG(t)), hold: trayV.filter((t) => t.job.kind === "h"), goods: trayV.filter(waitsG), ok: trayV.filter((t) => t.job.kind !== "h" && !isLate(t) && !waitsG(t)) };
               // the schedule's search finds jobs here too, and this box searches both (Nick, Nov 13): only the matches show
-              const list = (trayTab === "all" ? trayV : kinds[trayTab]).filter((t) => !findWords.length || isHit(t.job));
+              const counted = (t: (typeof trayV)[number]) => t.job.kind === "a" || (t.job.kind === "o" && goodsSt.get(t.job.id) === "received");
+              const list = (trayTab === "all" ? trayV : kinds[trayTab]).filter((t) => !findWords.length || isHit(t.job))
+                .filter((t) => trayGoods === "all" || (trayGoods === "counted" ? counted(t) : t.job.kind === "o" && !counted(t)));
               return (
               <>
                 <div className="toolbar ms-rtabs"><div className="chips">
@@ -3040,7 +3055,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     const all = new Map<string, { label: string; who: string; n: number }>();
                     for (const t of tray) for (const k of kindsOfJob(t.job)) { const x = all.get(k.key) || { label: k.label, who: k.key === "regular" ? "" : t.job.customer, n: 0 }; x.n++; all.set(k.key, x); }
                     const hidden = hideKinds.filter((k) => all.has(k));
-                    if (all.size < 2 && !hidden.length) return null;
+                    const kindsToo = all.size >= 2 || hidden.length > 0;
                     const byWho = new Map<string, [string, { label: string; who: string; n: number }][]>();
                     for (const e of all) if (e[0] !== "regular") byWho.set(e[1].who, [...(byWho.get(e[1].who) || []), e]);
                     const whos = [...byWho].sort((a, b) => b[1].reduce((x, e) => x + e[1].n, 0) - a[1].reduce((x, e) => x + e[1].n, 0));
@@ -3053,19 +3068,21 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     return (
                       <div className="msk-kinds">
                         <button type="button" className={"btn sm" + (hidden.length ? " on" : "")} aria-expanded={kindsOpen} onClick={() => setKindsOpen(!kindsOpen)} title="Show or hide kinds of jobs: a customer's carts, a program like All My Sons, regular orders">
-                          Job Filters{onlyReg ? " · Regular Orders only" : hidden.length ? ` · Hiding ${hidden.length}` : ""} ▾</button>
+                          Job Filters{trayGoods === "counted" ? " · Counted" : trayGoods === "not" ? " · Not counted" : ""}{onlyReg ? " · Regular Orders only" : hidden.length ? ` · Hiding ${hidden.length}` : ""} ▾</button>
                         {kindsOpen && <>
                           <div className="msk-kinds-bg" onClick={() => setKindsOpen(false)} />
                           <div className="msk-kinds-m" role="menu">
-                            {all.has("regular") && row("regular", all.get("regular")!)}
-                            {whos.map(([who, es]) => (
+                            <div className="msk-kinds-g"><div className="msk-kinds-h">Goods</div>
+                              <div className="msk-goods">{([["all", "All"], ["counted", "Counted"], ["not", "Not counted"]] as const).map(([k, l]) => <button key={k} type="button" className={trayGoods === k ? "on" : ""} onClick={() => setTrayGoods(k)}>{l}</button>)}</div></div>
+                            {kindsToo && all.has("regular") && row("regular", all.get("regular")!)}
+                            {kindsToo && whos.map(([who, es]) => (
                               <div key={who} className="msk-kinds-g"><div className="msk-kinds-h" data-notranslate>{who}</div>
                                 {[...es].sort((a, b) => Number(a[1].label.startsWith("Other ")) - Number(b[1].label.startsWith("Other ")) || b[1].n - a[1].n).map(([k, x]) => row(k, x))}</div>
                             ))}
-                            <div className="msk-kinds-a">
+                            {kindsToo && <div className="msk-kinds-a">
                               <button type="button" className="btn sm" onClick={() => setHideKinds(others)}>Only Regular Orders</button>
                               <button type="button" className="btn sm" onClick={() => setHideKinds([])}>Show All</button>
-                            </div>
+                            </div>}
                           </div>
                         </>}
                       </div>

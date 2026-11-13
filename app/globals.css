@@ -22412,6 +22412,10 @@ table.rvd-tbl:not(.tbl-stack) td.rvd-act .btn{display:inline-flex;align-items:ce
 .msk-kinds-r>b{flex:1;font-weight:700}
 .msk-kinds-g .msk-kinds-r>b{font-weight:600}
 .msk-kinds-h{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);padding:10px 8px 2px}
+/* Ready To Schedule by goods: All / Counted / Not counted (Nov 13) */
+.msk-goods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:4px 0 6px}
+.msk-goods button{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.msk-goods button.on{border-color:var(--accent);background:var(--accent-soft,#e7efff);color:var(--accent)}
 .ms-numl{color:inherit;text-decoration:none;cursor:pointer}
 .ms-numl:hover{text-decoration:underline;color:var(--accent)}
 

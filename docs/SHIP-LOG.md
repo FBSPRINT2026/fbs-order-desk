@@ -289,3 +289,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 10:54am · 1.3.521 · Nick · File viewer: Print button (PDFs, .ai files that are PDFs, pictures), everywhere the viewer opens
 - Nov 13 10:58am · 1.3.523 · Nick · Size grid reader: a table carried onto the next page keeps its group heading
 - Nov 13 11:07am · 1.3.525 · Nick · Schedule: Ready To Schedule has its own search, the same words as the schedule's search: matches only, highlighted; the schedule's search counts what's in Ready To Schedule too
+- Nov 13 11:11am · 1.3.527 · Nick · Schedule: Make The Schedule, bookings, Re-plan and holds put on today start from now, never this morning (live clock off too); Ready To Schedule's Job Filters: Goods All / Counted / Not counted
