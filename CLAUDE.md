@@ -283,7 +283,9 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Report → Print time cards (`/print/timecards`, one page each; everyone, or only who hasn't checked on the phone), by Screen
   Printing, Embroidery, Fulfillment, then the rest, each by first name). A day's punches say what they are by their order,
   not the button pressed: any four punches are in, lunch out, lunch in, out; three pressed in, out, in are back from lunch
-  (`withLunch` in `lib/timeclock.ts`; Nick, Nov 13). New crew tools go
+  (`withLunch` in `lib/timeclock.ts`; Nick, Nov 13). **View as** (Nick, Nov 13): the owner, on his own portal login, picks
+  anyone at the bottom of his /crew menu and sees their phone exactly (`VIEWAS_COOKIE` in `lib/jobAccess.ts`, `/api/viewas`);
+  no shared PIN; look only (middleware refuses the phone tools' changes), a bar on top with Stop, ends after 2 hours. New crew tools go
   through these, never a page of their own; every word has its Spanish in `components/job/lang.tsx`.
   Counting goods in on a phone is one tool, `components/job/PhoneCheckin.tsx` (the shop's phone receiving dashboard opens it
   too, `/j/<number>?v=checkin`): every style on the job listed at the top, the picked one's sizes typed in, and a green

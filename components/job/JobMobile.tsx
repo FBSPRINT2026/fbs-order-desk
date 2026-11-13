@@ -1,4 +1,5 @@
 "use client";
+import { ViewAsBar } from "@/components/crew/ViewAs";
 import PinchView from "@/components/job/PinchView";
 import PhotoEdit, { type PhotoEditApi } from "@/components/job/PhotoEdit";
 import { useEffect, useRef, useState } from "react";
@@ -95,6 +96,7 @@ export default function JobMobile(p: {
   return (
     <div className="jm">
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
+      {who.viewAs && <ViewAsBar name={who.name} />}
       <section className={"jm-job" + (view === "checkin" ? " slim" : "")}>
         <div className="jm-navrow">
           <a className="jm-menu" href="/crew" onClick={(e) => { if (countGuard.busy()) { e.preventDefault(); countGuard.ask(() => { location.href = "/crew"; }); } }}><Icon d={I.menu} />{t("Main menu")}</a>

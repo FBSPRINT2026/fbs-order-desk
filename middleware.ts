@@ -32,6 +32,12 @@ export async function middleware(request: NextRequest) {
     url.searchParams.set("next", target);
     return NextResponse.redirect(url);
   }
+  // View as (the owner seeing an employee's phone; lib/jobAccess.ts): look only, so the phone tools' changes are refused
+  // while it's on (Stop, or 2 hours, ends it)
+  if (request.cookies.get("fbs_viewas")?.value && !["GET", "HEAD", "OPTIONS"].includes(request.method)
+    && /^\/(api\/(crew|jobs|work|inks\/batches|print)(\/|$)|crew(\/|$)|j\/|work(\/|$))/.test(request.nextUrl.pathname)) {
+    return NextResponse.json({ error: "You're looking as someone else: nothing is saved. Tap Stop at the top to make changes." }, { status: 403 });
+  }
   let response = NextResponse.next({ request });
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     // Settings missing in Vercel: let pages load so the problem is visible instead of a blank error.
