@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     const { data, error } = await r.admin.rpc("claim_print_jobs", { p_relay: r.id, p_max: 10 });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const jobs = (data || []) as { id: string; title: string; zpl: string }[];
-    if (jobs.length || Date.now() > until) return NextResponse.json({ host: ps.host, port: ps.port, jobs: jobs.map((j) => ({ id: j.id, title: j.title, zpl: j.zpl })) });
+    if (jobs.length || Date.now() > until) return NextResponse.json({ link: ps.link, usbName: ps.usbName, host: ps.host, port: ps.port, jobs: jobs.map((j) => ({ id: j.id, title: j.title, zpl: j.zpl })) });
     await new Promise((res) => setTimeout(res, 1200));
   }
 }

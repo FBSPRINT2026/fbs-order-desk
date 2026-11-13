@@ -11,7 +11,7 @@ import { SITE_URL } from "@/lib/config";
  *  - Shop network: the shop's internet address. Crew PIN sign-ins only open the job's phone menu from there.
  */
 type Status = {
-  settings: { mode: "relay" | "printnode"; host: string; port: number; dpi: 203 | 300; printnodeId: string };
+  settings: { mode: "relay" | "printnode"; link: "usb" | "network"; usbName: string; host: string; port: number; dpi: 203 | 300; printnodeId: string };
   relays: { id: string; name: string; last_seen_at: string | null }[];
   jobs: { id: string; title: string; status: string; error: string; created_by: string; created_at: string }[];
   printnode: boolean; network: { ip: string; ips: string[]; names?: Record<string, string>; on: boolean };
@@ -19,7 +19,7 @@ type Status = {
 const ago = (d: string | null) => { if (!d) return "never"; const s = (Date.now() - Date.parse(d)) / 1000; return s < 90 ? "connected" : s < 3600 ? `${Math.round(s / 60)} min ago` : new Date(d).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
 
 export function relayScript(token: string, server = SITE_URL) {
-  return `# FBS Print relay: sends labels from the portal to the Zebra label printer on this network.
+  return `# FBS Print relay: sends labels from the portal to the Zebra label printer (USB on this computer, or on the network).
 # Install (once): right-click this file > Run with PowerShell, or in PowerShell:
 #   powershell -ExecutionPolicy Bypass -File "$HOME\\Downloads\\fbs-print-relay.ps1" -Install
 # It then starts by itself whenever someone signs in to this computer. Keep this computer on during work hours.
@@ -37,16 +37,52 @@ if ($Install) {
   Start-ScheduledTask -TaskName "FBS Print Relay"
   Write-Host "FBS Print Relay is installed and running. You can close this window."; exit
 }
+# a USB printer: the label goes to it raw (ZPL) through Windows' print spooler
+Add-Type -TypeDefinition @"
+using System; using System.Runtime.InteropServices;
+public class FbsRawPrint {
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  public class DOCINFO { [MarshalAs(UnmanagedType.LPWStr)] public string pDocName; [MarshalAs(UnmanagedType.LPWStr)] public string pOutputFile; [MarshalAs(UnmanagedType.LPWStr)] public string pDataType; }
+  [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool OpenPrinter(string name, out IntPtr h, IntPtr d);
+  [DllImport("winspool.drv", SetLastError = true)] static extern bool ClosePrinter(IntPtr h);
+  [DllImport("winspool.drv", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool StartDocPrinter(IntPtr h, int level, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFO di);
+  [DllImport("winspool.drv", SetLastError = true)] static extern bool EndDocPrinter(IntPtr h);
+  [DllImport("winspool.drv", SetLastError = true)] static extern bool StartPagePrinter(IntPtr h);
+  [DllImport("winspool.drv", SetLastError = true)] static extern bool EndPagePrinter(IntPtr h);
+  [DllImport("winspool.drv", SetLastError = true)] static extern bool WritePrinter(IntPtr h, byte[] b, int n, out int w);
+  public static void Send(string printer, string title, byte[] data) {
+    IntPtr h;
+    if (!OpenPrinter(printer, out h, IntPtr.Zero)) throw new Exception("Can't open the printer " + printer);
+    try {
+      DOCINFO di = new DOCINFO(); di.pDocName = title; di.pDataType = "RAW";
+      if (!StartDocPrinter(h, 1, di)) throw new Exception("The printer didn't take the label");
+      StartPagePrinter(h); int w; WritePrinter(h, data, data.Length, out w); EndPagePrinter(h); EndDocPrinter(h);
+    } finally { ClosePrinter(h); }
+  }
+}
+"@
+function Find-Zebra([string]$want) {
+  if ($want) { return $want }
+  $p = Get-CimInstance Win32_Printer | Where-Object { $_.Name -match "zebra|zdesigner|ZD[0-9]|ZT[0-9]|GK4|GX4|GC4|LP ?28|TLP" } | Select-Object -First 1
+  if (-not $p) { throw "No Zebra printer found on this computer. Plug it in, or type its name in the Shipping Center." }
+  return $p.Name
+}
 $h = @{ "x-relay-token" = $Token }
 while ($true) {
   try {
     $r = Invoke-RestMethod -Uri "$Server/api/print/relay" -Headers $h -TimeoutSec 45
     foreach ($j in $r.jobs) {
       try {
-        if (-not $r.host) { throw "The printer's IP address isn't set in the Shipping Center." }
-        $c = New-Object System.Net.Sockets.TcpClient
-        $c.Connect($r.host, [int]$r.port)
-        $s = $c.GetStream(); $b = [System.Text.Encoding]::UTF8.GetBytes($j.zpl); $s.Write($b, 0, $b.Length); $s.Flush(); $c.Close()
+        $b = [System.Text.Encoding]::UTF8.GetBytes($j.zpl)
+        if ($r.link -eq "usb") {
+          $name = Find-Zebra $r.usbName
+          [FbsRawPrint]::Send($name, [string]$j.title, $b)
+        } else {
+          if (-not $r.host) { throw "The printer's IP address isn't set in the Shipping Center." }
+          $c = New-Object System.Net.Sockets.TcpClient
+          $c.Connect($r.host, [int]$r.port)
+          $s = $c.GetStream(); $s.Write($b, 0, $b.Length); $s.Flush(); $c.Close()
+        }
         Invoke-RestMethod -Method Post -Uri "$Server/api/print/relay" -Headers $h -ContentType "application/json" -Body (@{ id = $j.id; ok = $true } | ConvertTo-Json) | Out-Null
       } catch {
         Invoke-RestMethod -Method Post -Uri "$Server/api/print/relay" -Headers $h -ContentType "application/json" -Body (@{ id = $j.id; ok = $false; error = "$($_.Exception.Message)" } | ConvertTo-Json) | Out-Null
@@ -115,7 +151,20 @@ export default function LabelPrinterPanel() {
                 <option value="printnode">PrintNode{st.printnode ? "" : " (add PRINTNODE_API_KEY in Vercel first)"}</option>
               </select>
             </label>
-            {v.mode === "relay" ? (
+            {v.mode === "relay" && (
+              <label className="field">The printer is plugged in by
+                <select value={v.link || "network"} onChange={(e) => setV({ ...v, link: e.target.value === "usb" ? "usb" : "network" })}>
+                  <option value="usb">USB cable into a shop computer</option>
+                  <option value="network">Network (it has its own IP address)</option>
+                </select>
+              </label>
+            )}
+            {v.mode === "relay" && v.link === "usb" ? (
+              <>
+                <label className="field">Printer name in Windows (leave blank to find the Zebra)<input type="text" value={v.usbName || ""} placeholder="e.g. ZDesigner ZD421-203dpi ZPL" onChange={(e) => setV({ ...v, usbName: e.target.value })} /></label>
+                <p className="faint" style={{ fontSize: 12.5, margin: 0 }}>Set up the print computer below on the computer the printer&apos;s USB cable goes into. Its Zebra driver has to be installed (Windows usually does this when it&apos;s plugged in).</p>
+              </>
+            ) : v.mode === "relay" ? (
               <div className="row" style={{ gap: 8 }}>
                 <label className="field" style={{ flex: 2 }}>Printer IP address<input type="text" value={v.host} placeholder="192.168.1.50" onChange={(e) => setV({ ...v, host: e.target.value.trim() })} /></label>
                 <label className="field" style={{ flex: 1 }}>Port<input type="number" value={v.port} onChange={(e) => setV({ ...v, port: +e.target.value || 9100 })} /></label>
