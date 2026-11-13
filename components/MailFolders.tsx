@@ -810,6 +810,8 @@ export function QuickLook({ files, at, onClose, title, strip }: { files: MailFil
               Chrome set once to "Always open files of this type", it opens in Illustrator by itself */}
           {/* staff only: a customer has no use for it (Nov 2, Nick: "the customer shouldn't see the open in Illustrator button") */}
           {!onCustomerPage() && /\.(pdf|ai|eps|svg)$/i.test(f.name) && <button type="button" className="btn sm" title="Saves it for Illustrator (a PDF as .ai). Once: in Chrome's downloads, pick Always open files of this type, and it opens in Illustrator by itself." onClick={() => void downloadFile(f.href!, f.name.replace(/\.pdf$/i, ".ai"))}>Open in Illustrator</button>}
+          {/* print the file itself (Nick, Nov 13: a customer's order form in the order's files) */}
+          {(kindOf(f) === "img" || /\.(pdf|ai)$/i.test(f.name) || /pdf/i.test(f.type || "")) && <button type="button" className="btn sm" onClick={() => void printFile(f.href!, kindOf(f) === "img")}>Print</button>}
           <button type="button" className="btn sm" onClick={() => void downloadFile(f.href!, f.name)}>Download</button>
           <button type="button" className="mf-look-x" onClick={onClose} aria-label="Close">×</button>
         </div>
@@ -1125,6 +1127,21 @@ export function ThreadView({ c, folders, toggleList, listOpen, back, flash, onMo
 export type MailView = { kind: "inbox" } | { kind: "folder"; path: string } | { kind: "search"; q: string; /** a person or customer picked from the suggestions: their addresses */ who?: string[];
   /** a recent project picked from the suggestions (Oct 15, Nick): the words that name it, and whose it is */ about?: string; cust?: string };
 export const isTyping = (e: React.KeyboardEvent) => e.key === "Enter";
+
+/** print a PDF (an .ai that is a PDF inside) or a picture: loaded into a hidden frame on this page and printed from there */
+async function printFile(href: string, img: boolean) {
+  try {
+    const r = await fetch(href); if (!r.ok) throw new Error(String(r.status));
+    const b = await r.blob();
+    const u = URL.createObjectURL(img ? b : new Blob([b], { type: "application/pdf" }));
+    const fr = document.createElement("iframe");
+    fr.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0";
+    if (img) fr.srcdoc = `<html><head><style>@page{margin:.4in}html,body{margin:0}img{max-width:100%;max-height:100vh;display:block;margin:0 auto}</style></head><body><img src="${u}"></body></html>`; else fr.src = u;
+    fr.onload = () => { setTimeout(() => { try { fr.contentWindow?.focus(); fr.contentWindow?.print(); } catch { window.open(u, "_blank", "noopener"); } }, img ? 300 : 600); };
+    document.body.appendChild(fr);
+    setTimeout(() => { fr.remove(); URL.revokeObjectURL(u); }, 10 * 60 * 1000);
+  } catch { window.open(href, "_blank", "noopener"); }
+}
 
 /** save a file under its own name (its link is on another site, so the browser's download attribute alone won't do) */
 async function downloadFile(href: string, name: string) {

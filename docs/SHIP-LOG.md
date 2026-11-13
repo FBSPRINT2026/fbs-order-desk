@@ -286,3 +286,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 13 10:27am · 1.3.515 · Nick · Receiving: the jobs to count are split here-first (Here · ready to count, Part here, Problem, Not sure, On the way) on the dashboard (desk and phone) and the crew phone
 - Nov 13 10:31am · 1.3.517 · Nick · Schedule: Print all work orders also on an opened group in Coming up
 - Nov 13 10:54am · 1.3.519 · Nick · Order reader: a PDF's size grid is read by where each number stands under the size headers, so empty size boxes don't slide the sizes a column (Tiger Blue #50030 / #40382); Create order, the AI order helper and ClickUp files (READER_REV 2026-11-13a)
+- Nov 13 10:54am · 1.3.521 · Nick · File viewer: Print button (PDFs, .ai files that are PDFs, pictures), everywhere the viewer opens
