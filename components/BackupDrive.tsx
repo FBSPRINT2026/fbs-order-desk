@@ -7,6 +7,7 @@ import { backupScript } from "@/lib/backupDriveScript";
  * The backup drive at home (lib/backupDrive.ts; Nick, Nov 14 2026): set it up once (the download is a small program that
  * installs itself), then see every night's run here. The key is only inside the download; making a new one stops the old.
  */
+const CMD = '$f = (Get-ChildItem "$HOME\\Downloads\\fbs-backup*.ps1" | Sort-Object LastWriteTime | Select-Object -Last 1).FullName; Unblock-File $f; powershell -ExecutionPolicy Bypass -File $f';
 const when = (s?: string) => (s ? new Date(s).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
 const gb = (b: number) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : `${Math.max(0, Math.round(b / 1e6))} MB`);
 
@@ -49,7 +50,8 @@ export default function BackupDrive() {
           {(made || !v.setUp) && <ol className="bkd-steps">
             <li>On the home computer, plug in the drive. Its name has to be <b>FBS Backup</b>.</li>
             <li>Press <b>Set up the backup drive</b> there; it downloads <b>fbs-backup.ps1</b>.</li>
-            <li>In Downloads, right-click it → <b>Run with PowerShell</b>, and say <b>Yes</b> when Windows asks.</li>
+            <li>Click Start, type <b>PowerShell</b>, right-click <b>Windows PowerShell</b> → <b>Run as administrator</b> → Yes. Paste this and press Enter (Windows' Smart App Control blocks double-clicking a downloaded program; this tells Windows it's ours):
+              <code className="bkd-cmd">{CMD}</code></li>
             <li>It starts copying right away (the first time is the whole Dropbox and takes a while), then every night at 1:30 am. If a night is missed, it runs as soon as the computer is on.</li>
           </ol>}
         </>}

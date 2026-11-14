@@ -22995,4 +22995,5 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .bkd-stats small{color:var(--ink-3);font-size:12.5px}
 .bkd-full{grid-column:1/-1}
 .bkd-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bkd-cmd{display:block;margin-top:6px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;font-size:12.5px;user-select:all;word-break:break-all;color:var(--ink)}
 .bkd-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;color:var(--ink-2)}
