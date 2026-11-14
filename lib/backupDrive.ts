@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * nothing on the computer can reach it. Its key lives here only as a hash (settings.data.backupDrive).
  */
 export type DriveReport = { at: string; started?: string; done: boolean; added: number; changed: number; bytes: number; errors: number; firstError?: string; freeGB?: number; sizeGB?: number; held?: string; listed?: number };
-export type DriveState = { keyHash?: string; madeAt?: string; madeBy?: string; ownerEmail?: string; last?: DriveReport; lastDone?: string; allowBig?: boolean };
+export type DriveState = { /** the program last asked for a page or links (it's working) */ seenAt?: string; /** pages of Dropbox read this run, files sent */ pages?: number; linked?: number; keyHash?: string; madeAt?: string; madeBy?: string; ownerEmail?: string; last?: DriveReport; lastDone?: string; allowBig?: boolean };
 
 export const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 export const newDriveKey = () => "fbsb_" + randomBytes(24).toString("base64url");
@@ -28,6 +28,7 @@ export async function saveDrive(admin: SupabaseClient, patch: Partial<DriveState
 /** what's wrong with the backup drive, in a sentence, or "" (the nightly check puts it on the owner's My Day) */
 export function driveProblem(st: DriveState, now = Date.now()): string {
   if (!st.keyHash) return "";
+  if (st.seenAt && now - Date.parse(st.seenAt) < 6 * 3600e3 && !st.last?.held) return ""; // working right now
   const last = st.lastDone || st.last?.at;
   const days = last ? (now - Date.parse(last)) / 86400000 : (now - Date.parse(st.madeAt || new Date(now).toISOString())) / 86400000;
   if (st.last?.held) return `Backup drive: paused, ${st.last.held}. Check Settings → Dropbox → Backup drive.`;

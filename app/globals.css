@@ -22987,6 +22987,7 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 
 /* Backup drive at home (Settings → Dropbox; Nick, Nov 14 2026) */
 .bkd{display:flex;flex-direction:column;gap:12px}
+.bkd-live{background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:9px 12px;font-weight:700}
 .bkd-bad{background:var(--danger-soft);color:var(--danger);border-radius:8px;padding:9px 12px;font-weight:600}
 .bkd-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .bkd-stats>div{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:8px;padding:10px 12px}

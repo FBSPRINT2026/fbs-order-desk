@@ -19,6 +19,8 @@ export async function POST(req: Request) {
   try {
     if (b.action === "list") {
       const r = await dropboxPage(admin, b.cursor || undefined);
+      // heard from: the panel shows it working long before its first report (the first run is the whole Dropbox)
+      await saveDrive(admin, { seenAt: new Date().toISOString(), pages: b.cursor ? (st.pages || 0) + 1 : 1 });
       const entries = r.entries.map((e) => ({ t: e[".tag"], id: e.id || "", p: e.path_display || "", s: e.size ?? 0, m: e.server_modified || "" }));
       // a big change can go through once the owner says so (Settings → Dropbox → Backup drive → Back them up)
       const allowBig = !!st.allowBig;
@@ -26,13 +28,15 @@ export async function POST(req: Request) {
     }
     if (b.action === "links") {
       const ids = (b.ids || []).filter((x) => typeof x === "string" && x.startsWith("id:")).slice(0, 25);
-      return NextResponse.json({ links: await dropboxLinks(admin, ids) });
+      const links = await dropboxLinks(admin, ids);
+      await saveDrive(admin, { seenAt: new Date().toISOString(), linked: (st.linked || 0) + Object.keys(links).length });
+      return NextResponse.json({ links });
     }
     if (b.action === "report") {
       const r = b.report || {};
       const num = (x: unknown) => (Number.isFinite(+(x as number)) ? +(x as number) : 0);
       const rep: DriveReport = { at: new Date().toISOString(), started: String(r.started || ""), done: !!r.done, added: num(r.added), changed: num(r.changed), bytes: num(r.bytes), errors: num(r.errors), firstError: String(r.firstError || "").slice(0, 300), freeGB: r.freeGB == null ? undefined : num(r.freeGB), sizeGB: r.sizeGB == null ? undefined : num(r.sizeGB), held: String(r.held || "").slice(0, 200), listed: num(r.listed) };
-      await saveDrive(admin, { last: rep, ...(rep.done ? { lastDone: rep.at } : {}), ...(rep.done && st.allowBig ? { allowBig: false } : {}) });
+      await saveDrive(admin, { last: rep, ...(rep.done ? { pages: 0, linked: 0 } : {}), ...(rep.done ? { lastDone: rep.at } : {}), ...(rep.done && st.allowBig ? { allowBig: false } : {}) });
       return NextResponse.json({ ok: true });
     }
     return NextResponse.json({ error: "Which action?" }, { status: 400 });

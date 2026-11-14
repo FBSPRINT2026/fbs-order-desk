@@ -34,6 +34,9 @@ export default function BackupDrive() {
         {!v ? <div className="faint">Loading…</div> : <>
           {v.problem && <div className="bkd-bad">{v.problem.replace(/^Backup drive: /, "")}</div>}
           {l?.held && <div className="bkd-row"><button type="button" className="btn" onClick={async () => { await allowBigChange(); load(); }} disabled={v.allowBig}>{v.allowBig ? "OK: backs them up tonight" : "I checked: back them up"}</button><span className="faint">Old copies are kept under _older on the drive either way.</span></div>}
+          {v.setUp && v.seenAt && Date.now() - Date.parse(v.seenAt) < 10 * 60000 && (!v.last || Date.parse(v.seenAt) > Date.parse(v.last.at)) && (
+            <div className="bkd-live">Copying now · {(v.linked || 0).toLocaleString()} files sent to the drive so far this run · last heard {when(v.seenAt)}</div>
+          )}
           {v.setUp ? (
             <div className="bkd-stats">
               <div><span className="k">Last full backup</span><b>{when(v.lastDone)}</b></div>
