@@ -408,7 +408,10 @@ Files in this chat: ${files.length ? files.map((f) => `${f.id} = ${f.name} (${f.
       const res = await fetch(API, {
         method: "POST", signal: ctrl.signal,
         headers: { "x-api-key": process.env.ANTHROPIC_API_KEY || "", "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: s.assistant.ai.model, max_tokens: 4000, system, messages: msgs, tools }),
+        // each turn of this loop sends the whole conversation again: the instructions, the tools and everything said so far
+        // are kept by Anthropic between turns (marked at the newest message), so each turn reads them at a tenth of the
+        // price and answers sooner (Nov 14, Anthropic's caching note)
+        body: JSON.stringify({ model: s.assistant.ai.model, max_tokens: 4000, system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }], messages: cacheMark(msgs), tools }),
       });
       j = await res.json().catch(() => ({}));
       if (!res.ok) { error = j?.error?.message || `Claude API error ${res.status}`; break; }
@@ -435,4 +438,15 @@ Files in this chat: ${files.length ? files.map((f) => `${f.id} = ${f.name} (${f.
   }
   await admin.from("ai_runs").insert({ task: "workbench", model: s.assistant.ai.model, ms: Date.now() - started, created_by: o.by, input_tokens: usage.in, output_tokens: usage.out, status: error ? "error" : "ok", error: error || null });
   return { text: texts.join("\n\n").trim(), cards: ctx.cards, files: ctx.added, error: error || undefined };
+}
+
+
+/** the conversation with a cache mark on its newest block (strings become text blocks; nothing else changes) */
+function cacheMark<M extends { role: string; content: unknown }>(msgs: M[]): M[] {
+  if (!msgs.length) return msgs;
+  const last = msgs[msgs.length - 1];
+  const blocks = typeof last.content === "string" ? [{ type: "text", text: last.content }] : Array.isArray(last.content) ? [...(last.content as Record<string, unknown>[])] : null;
+  if (!blocks || !blocks.length) return msgs;
+  blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: { type: "ephemeral" } };
+  return [...msgs.slice(0, -1), { ...last, content: blocks }];
 }

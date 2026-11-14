@@ -341,3 +341,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 14 7:27am · 1.3.583 · Nick · Backup drive at home: Settings > Dropbox > Backup drive makes a program that copies the whole Dropbox to the FBS Backup drive every night and switches the drive off between runs; old copies of changed files kept; pauses if lots of files change at once; My Day to-do if it misses a run or fills up
 - Nov 14 7:31am · 1.3.584 · Nick · Backup drive setup: run it from an administrator PowerShell with one pasted line (Smart App Control blocks double-clicking a downloaded script)
 - Nov 14 7:35am · 1.3.585 · Nick · Backup drive panel: shows 'Copying now' with files sent so far while a run is going (heard from on every page)
+- Nov 14 7:41am · 1.3.586 · Nick · AI caching: the reader's instructions, attached files and the order helper's conversation are reused between calls (cheaper and faster)
