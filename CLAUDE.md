@@ -317,6 +317,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   ship method: the QR opens all of that. Labels print BOX ___ OF ___ to write in unless "I know my box count" is ticked
   (`known` on `/api/print`). Printed text is plain letters (`plain` in `lib/zpl.ts`). One layout draws both the ZPL and
   the preview picture (`drawBoxLabel` → `boxLabelZpl` / `boxLabelSvg`).
+- **The backup drive at home** (Nick, Nov 14 2026: "keep it plugged in… set this up automatically… back up the whole
+  Dropbox"): Settings → Dropbox → Backup drive makes `fbs-backup.ps1` (`lib/backupDriveScript.ts`), which installs itself
+  as a nightly Windows task on the computer with the FBS Backup drive. Each run switches the drive on, copies what's new
+  or changed in the whole Dropbox through `/api/backup/drive` (Dropbox's sign-in never leaves the server: lists and
+  4-hour links only), keeps the old copy of a changed file under `_older\<date>` (nothing is ever deleted from the drive),
+  reports, and switches the drive off. More than 2,000 existing files changing in one run pauses it until the owner
+  says OK. A missed run, a pause or a nearly full drive puts a to-do on the owner's My Day (`driveCheck`, daily cron).
 - **Version number.** `lib/version.ts` `APP_VERSION` (1.1.001, 1.1.002, …) shows small under the logo. Raise it by one
   with every change that goes live (Nicholas, Oct 20 2026), so he can tell after a refresh that the update is there.
 - **One look for every shop page** (Nicholas, Oct 21 2026: "every time you rebuild something… you rethink the style…

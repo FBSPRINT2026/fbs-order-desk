@@ -1,3 +1,4 @@
+import { driveCheck } from "@/lib/backupDrive";
 import { NextResponse } from "next/server";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +22,8 @@ export async function GET(req: Request) {
   const admin = createAdminClient();
   const out: Record<string, unknown> = {};
   const t0 = Date.now();
+  // the backup drive at home: a My Day to-do for the owner when it hasn't run, is paused or is nearly full
+  await driveCheck(admin).catch(() => {});
 
   const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const settings = mergeSettings(s?.data);

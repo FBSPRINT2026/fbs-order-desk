@@ -127,3 +127,21 @@ export async function sharedLinkFiles(admin: SupabaseClient, url: string, o: { e
   }
   return { files: out, skipped };
 }
+
+
+/**
+ * The backup drive at home (lib/backupDrive.ts) reads the whole Dropbox through these, so Dropbox's sign-in never leaves
+ * the server: a page of everything (or what changed since its cursor), and download links that last 4 hours.
+ */
+export type DbxListed = { ".tag": "file" | "folder" | "deleted"; id?: string; path_display?: string; size?: number; server_modified?: string; content_hash?: string };
+export async function dropboxPage(admin: SupabaseClient, cursor?: string): Promise<{ entries: DbxListed[]; cursor: string; has_more: boolean }> {
+  return cursor ? api(admin, "files/list_folder/continue", { cursor }) : api(admin, "files/list_folder", { path: "", recursive: true, include_deleted: false, limit: 2000 });
+}
+export async function dropboxLinks(admin: SupabaseClient, ids: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  await Promise.all(ids.map(async (id) => {
+    const r = await api<{ link: string }>(admin, "files/get_temporary_link", { path: id }).catch(() => null);
+    if (r?.link) out[id] = r.link;
+  }));
+  return out;
+}

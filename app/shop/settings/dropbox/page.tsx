@@ -1,5 +1,6 @@
 import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
 import DropboxSettings from "@/components/DropboxSettings";
+import BackupDrive from "@/components/BackupDrive";
 export default function Page() {
-  return <><SettingsHead title="Connections" note="QuickBooks, Canva, Dropbox, texts, Printavo, and whether each outside service is working" /><SettingsTabs /><div className="stack"><DropboxSettings /></div></>;
+  return <><SettingsHead title="Connections" note="QuickBooks, Canva, Dropbox, texts, Printavo, and whether each outside service is working" /><SettingsTabs /><div className="stack"><DropboxSettings /><BackupDrive /></div></>;
 }
