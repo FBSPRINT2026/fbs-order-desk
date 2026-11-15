@@ -11,6 +11,7 @@ import ArchivedOrderView, { History } from "@/components/ArchivedOrderView";
 import { downloadUrl, pvHandle } from "@/lib/printavoNames";
 import ArchiveReorder from "@/components/ArchiveReorder";
 import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
+import { archivedStatuses, setArchivedStatus } from "@/app/shop/archive/actions";
 
 /** An archived Printavo invoice or quote (read-only). Artwork shows from our storage copies, or from Printavo until copied. */
 export default function ArchivedOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -56,6 +57,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
         <a className="btn" href={`/print/job/${row.visual_id}`} target="_blank" rel="noreferrer" title="A sheet with the job's QR code, for the press">Job ticket (QR)</a>
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
         <button type="button" className="btn" onClick={() => window.print()}>Print</button>
+        {!(row as { locked?: boolean }).locked && <ArchiveStatus id={row.id} name={row.status_name || ""} onDone={() => setRev((n) => n + 1)} />}
       </div>
       {(row as { removed_at?: string | null }).removed_at && <div className="pv-gone">Deleted in Printavo before it closed, so it&apos;s hidden from every list here.</div>}
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
@@ -104,4 +106,30 @@ function ArchivedGoods({ id, groups }: { id: string; groups: PvGroup[] }) {
       </div>
     </section>
   );
+}
+
+/**
+ * Change an old Printavo job's status (Nick, Nov 15 2026: Printavo closed with some jobs still open). Printavo's own
+ * statuses, in their colors; saved on our copy (app/shop/archive/actions.ts). Jobs before 2026 are locked.
+ */
+function ArchiveStatus({ id, name, onDone }: { id: string; name: string; onDone: () => void }) {
+  const [list, setList] = useState<{ name: string; color: string }[]>([]);
+  const [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  useEffect(() => { archivedStatuses().then((r) => { if (r.ok) setList(r.list); }, () => null); }, []);
+  const cur = list.find((x) => x.name === name);
+  const opts = cur || !name ? list : [{ name, color: "#888" }, ...list];
+  async function pick(v: string) {
+    if (!v || v === name) return;
+    setBusy(true); setErr("");
+    const r = await setArchivedStatus(id, v).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
+    setBusy(false);
+    if (!r.ok) { setErr(r.error); return; }
+    onDone();
+  }
+  return <>
+    <select className="status-select" aria-label="Status" title="This job's status (it was made in Printavo)" style={{ ["--sc" as string]: cur?.color || "var(--ink-3)" }} value={name} disabled={busy || !list.length} onChange={(e) => void pick(e.target.value)}>
+      {opts.map((o) => <option key={o.name} value={o.name}>{o.name}</option>)}
+    </select>
+    {err && <span className="err" style={{ fontSize: 12.5 }}>{err}</span>}
+  </>;
 }

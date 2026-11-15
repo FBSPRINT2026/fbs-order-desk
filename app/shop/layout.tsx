@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isStationEmail } from "@/lib/stations";
+import { isStationEmail, stationOf } from "@/lib/stations";
 import { shopNetwork } from "@/lib/shopNetwork";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { cookies } from "next/headers";
@@ -54,6 +54,8 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     const r = ROLES.find((x) => x.v === want);
     if (p) { role = (p.role as string) || "admin"; viewAs = want; viewName = (p.name as string) || want; }
     else if (r) { role = r.v; viewAs = want; viewName = r.label; }
+    // a shop computer (lib/stations.ts) whose login isn't made yet: its role, and its own pages (accessOf)
+    else if (stationOf(want)) { const sn = stationOf(want)!; role = sn.role; viewAs = want; viewName = `${sn.name} · ${sn.label}`; }
   }
   // the greeting uses the first name (staff name, else the sign-in name, else the email)
   const meta = (user.user_metadata || {}) as { full_name?: string; name?: string };

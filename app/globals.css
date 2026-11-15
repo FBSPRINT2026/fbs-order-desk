@@ -9539,6 +9539,7 @@ a.pit-f{text-decoration:none}
 
 /* View as in Admin Tools: the binoculars, with its list over them (see-through), lit while viewing as someone */
 .nav-viewas .side-viewas{position:absolute!important;inset:0;width:100%!important;height:100%;opacity:0;cursor:pointer;margin:0;padding:0;border:0}
+.nav-viewas-err{position:fixed;left:16px;bottom:16px;z-index:9000;max-width:340px;background:var(--danger);color:#fff;padding:8px 12px;border-radius:var(--r);font:500 13px/1.35 var(--body);box-shadow:0 6px 20px rgba(0,0,0,.18)}
 .side:not(.mini) .nav-tools .nav-viewas.on{background:#f0c75e;color:#3d2c00}
 .side .side-out{all:unset;cursor:pointer;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--side-ink);border:0;padding:0;gap:0}
 .side .side-out:hover{background:rgba(255,255,255,.1);color:#fff}

@@ -20,6 +20,8 @@ import { canOpen, ROLES } from "@/lib/roles";
 import { needsDetails, ordersNeedingDetails } from "@/lib/productionDetails";
 import { getInboxUnread } from "@/app/shop/mail-actions";
 import { setViewAs } from "@/app/shop/view-as-actions";
+import { isStationEmail, STATIONS, stationEmail, stationOf } from "@/lib/stations";
+import { CREW_VIEWS } from "@/lib/crewView";
 import SupportButton from "@/components/SupportButton";
 import ScreenShareDock from "@/components/ScreenShare";
 import { AddToCustomerHost } from "@/components/AddToCustomer";
@@ -118,6 +120,7 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     return () => { document.removeEventListener("click", keep, true); window.removeEventListener("pagehide", keep); };
   }, []);
   const { realRole, role, viewAs, perms, staffName } = useRole();
+  const [vaErr, setVaErr] = useState("");
   // screen printing or embroidery (Oct 24): the switch under Production, and which of its tools show
   const [side, setSide, sideLocked] = useProdSide();
   const crew = !perms.money;
@@ -319,17 +322,35 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
 
   // View as: binoculars, the list opens from the icon (Oct 16, Nick). In my own view it's in Admin Tools; while viewing
   // as someone the menu is exactly theirs, with the binoculars beside Add a shortcut to come back
+  async function pickViewAs(v: string) {
+    setVaErr("");
+    if (v.startsWith("phone:")) {
+      const r = await fetch("/api/viewas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ view: v.slice(6) }) }).catch(() => null);
+      const j = r ? await r.json().catch(() => ({})) : {};
+      if (!r?.ok) { setVaErr((j as { error?: string }).error || "Couldn't open that phone view."); return; }
+      window.location.assign("/crew"); return;
+    }
+    await setViewAs(v);
+    const st = stationOf(v);
+    if (st) window.location.assign(st.home); else window.location.reload();
+  }
   const viewAsEl = (
           <span className={"nav-viewas" + (viewAs ? " on" : "")} data-tip={viewAs ? "Viewing as someone else: pick My view to go back" : "View as"}>
             <svg viewBox="0 0 24 24" aria-hidden><circle cx="6.5" cy="16" r="3.5" /><circle cx="17.5" cy="16" r="3.5" /><path d="M3.3 14.6 5 7a2 2 0 0 1 2-1.6h1A2 2 0 0 1 10 7.4v6.4" /><path d="M20.7 14.6 19 7a2 2 0 0 0-2-1.6h-1a2 2 0 0 0-2 2v6.4" /><path d="M10 11.5h4" /></svg>
             <span className="lbl-t">{viewAs ? "Viewing as someone else" : "View as…"}</span>
             <select className={"side-viewas" + (viewAs ? " on" : "")} value={viewAs} title="View as: see the shop the way someone else does (you stay signed in as you)" aria-label="View as"
-              onChange={async (e) => { await setViewAs(e.target.value); window.location.reload(); }} data-notranslate>
+              onChange={(e) => void pickViewAs(e.target.value)} data-notranslate>
               <option value="">View as…</option>
-              {people.filter((p) => p.email !== email).length > 0 && <optgroup label="People">{people.filter((p) => p.email !== email).map((p) => <option key={p.email} value={p.email}>{p.name || p.email} · {ROLES.find((r) => r.v === p.role)?.label || p.role}</option>)}</optgroup>}
+              {people.filter((p) => p.email !== email && !isStationEmail(p.email)).length > 0 && <optgroup label="People">{people.filter((p) => p.email !== email && !isStationEmail(p.email)).map((p) => <option key={p.email} value={p.email}>{p.name || p.email} · {ROLES.find((r) => r.v === p.role)?.label || p.role}</option>)}</optgroup>}
+              {/* the shop computers and the crew's phones (Nov 15, Nick: "view as press or view as receiving… so I can work on
+                  those today"): a computer opens on its own page with its own menu; a phone opens the crew menu as the first
+                  person with that view (look only, 2 hours) */}
+              <optgroup label="Shop computers">{STATIONS.map((st) => <option key={st.key} value={stationEmail(st)}>{st.name} · {st.label}</option>)}</optgroup>
+              <optgroup label="Phones">{CREW_VIEWS.map((v) => <option key={v.id} value={`phone:${v.id}`}>{v.label} phone</option>)}</optgroup>
               <optgroup label="Roles">{ROLES.filter((r) => r.v !== "owner").map((r) => <option key={r.v} value={r.v}>{r.label}</option>)}</optgroup>
               {viewAs && <option value="">← My view (Owner)</option>}
             </select>
+            {vaErr && <span className="nav-viewas-err" role="alert">{vaErr}</span>}
           </span>
   );
   // my Admin Tools (shown in the Shop Tools spot when ADM is picked): the same size as the shop tools
