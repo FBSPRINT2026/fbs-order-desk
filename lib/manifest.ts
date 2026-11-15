@@ -6,10 +6,12 @@ import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings, orderGroups, type Order } from "@/lib/pricing";
 import { carrierOf, trackedGoods, type GoodsStatus } from "@/lib/goods";
-import { companyKey } from "@/lib/printavoImport";
 import { readTracker, startTracker } from "@/lib/goodsTrack";
 import { excelDate } from "@/lib/xlsx";
 import { allRows } from "@/lib/readAll";
+/** "theMcKennagroup", "The McKenna Group, LLC" and "the  mckenna group" are the same company. */
+const companyKey = (name: string) => name.toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ")
+  .replace(/\b(inc|llc|ltd|co|corp|corporation|company|pllc|pc)\b/g, " ").replace(/^\s*the/, "").replace(/\bthe\s*$/, "").replace(/\s+/g, "");
 
 /**
  * Supplier manifests (S&S Activewear today; SanMar once we've seen theirs): every box shipping to us, with the

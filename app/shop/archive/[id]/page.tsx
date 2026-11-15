@@ -10,7 +10,6 @@ import { fileUrls, type ArchivedRow, storedPath } from "@/lib/archive";
 import ArchivedOrderView, { History } from "@/components/ArchivedOrderView";
 import { downloadUrl, pvHandle } from "@/lib/printavoNames";
 import ArchiveReorder from "@/components/ArchiveReorder";
-import RefreshFromPrintavo from "@/components/RefreshFromPrintavo";
 import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
 
 /** An archived Printavo invoice or quote (read-only). Artwork shows from our storage copies, or from Printavo until copied. */
@@ -56,10 +55,9 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
         {row.kind === "invoice" && <ArchiveReorder archivedId={row.id} />}
         <a className="btn" href={`/print/job/${row.visual_id}`} target="_blank" rel="noreferrer" title="A sheet with the job's QR code, for the press">Job ticket (QR)</a>
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
-        <RefreshFromPrintavo archivedId={row.id} locked={!!(row as { locked?: boolean }).locked} onDone={() => setRev((n) => n + 1)} />
         <button type="button" className="btn" onClick={() => window.print()}>Print</button>
       </div>
-      {(row as { removed_at?: string | null }).removed_at && <div className="pv-gone">Deleted in Printavo, so it&apos;s hidden from every list here. If it shows up in Printavo again, it comes back by itself.</div>}
+      {(row as { removed_at?: string | null }).removed_at && <div className="pv-gone">Deleted in Printavo before it closed, so it&apos;s hidden from every list here.</div>}
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView production={<JobFiles job={{ kind: "a", id: row.id }} inside />}

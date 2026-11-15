@@ -342,3 +342,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 14 7:31am · 1.3.584 · Nick · Backup drive setup: run it from an administrator PowerShell with one pasted line (Smart App Control blocks double-clicking a downloaded script)
 - Nov 14 7:35am · 1.3.585 · Nick · Backup drive panel: shows 'Copying now' with files sent so far while a run is going (heard from on every page)
 - Nov 14 7:41am · 1.3.586 · Nick · AI caching: the reader's instructions, attached files and the order helper's conversation are reused between calls (cheaper and faster)
+- Nov 15 9:10am · 1.3.587 · Nick · Printavo tools removed (sync, send, refresh, import, status check); 40,000 jobs take our own statuses; restore points moved to Settings → Dropbox; old Printavo jobs and their P mark kept

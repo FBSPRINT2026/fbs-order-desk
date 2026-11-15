@@ -34,7 +34,7 @@ export type AOrder = { /** a logo on it is in digitizing (lib/portalView.ts digi
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** an old invoice of an account that has moved to the new system: paid here, not on Printavo (Nov 2, Nick) */ payHere?: boolean;
   /** what else the order can be found by: garments, colors, imprint details, notes… */ search?: string;
-  /** shop: Printavo's own status for a 40,000 job sent there (pvStatusOf), shown like the Orders page */ pv?: string;
+
   /** an order request the customer has sent us, waiting on our confirmation (Oct 24) */ sent?: boolean;
   /** on hold: "On hold · Payment needed" (lib/holds.ts), shown instead of the status */ hold?: string;
   /** portal: the customer starred it to track it (up to 9) */ starred?: boolean;

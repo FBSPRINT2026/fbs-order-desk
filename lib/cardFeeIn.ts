@@ -1,4 +1,4 @@
-import { CARD } from "@/lib/printavoChanges";
+import { CARD } from "@/lib/printavoOld";
 
 /**
  * The credit card fee already inside an invoice's balance (Nov 4, Nick: "invoices that already have the Printavo 3% CC

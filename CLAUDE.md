@@ -34,10 +34,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Don't use it for data, drafts in progress, pop-ups being open, or search boxes.
   In the customer portal nothing is remembered: leave a screen and come back and its tabs and filters are the defaults
   again (Nick, Nov 2 2026: "it should just go back to all"); `useSticky` does this itself.
-- The portal only ever reads from Printavo. Never write, edit or delete anything in Printavo. The only exceptions are
-  the staff-pressed buttons for 40,000-series orders during the move, each behind its own guard in `lib/printavo.ts`:
-  Send to Printavo, Add mockups & art, Resync details, and Reset in Printavo (Nick, Oct 27 2026: clears that order's
-  lines, fees and files in Printavo and sends ours again; `transitionReset`). Never run them yourself.
+- **Printavo is gone** (closed Nov 14 2026; Nick, Nov 15: "remove all the Printavo sync features… only thing I wanna
+  keep is a little P next to the invoice that signify it was made in that system"). Nothing talks to Printavo any more:
+  no sync, no Send to Printavo, no import (their schedules are off, migration 315). What it had up to Nov 13 3:28 PM is
+  ours for good: old jobs in `archived_orders` (the P mark, `components/PrintavoMark.tsx`), their files in our storage,
+  read through `lib/printavoOld.ts`. A 40,000 job that was run from Printavo now takes our own statuses like any order.
 - Secrets live in Vercel env vars, added by Nicholas. Never put keys or passwords in code, chat or the database.
 - **Spanish toggle.** Every shop page has "Translate to Spanish" at the top right (not the customer portal: removed Oct 15 2026, Nicholas) (`components/Translate.tsx`).
   It swaps the page's text in place and saves each phrase's Spanish in `ui_translations`. Put `data-notranslate` on

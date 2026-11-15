@@ -18,7 +18,7 @@ import { customerHold, customerStatus, holdShort } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
 import { jobFor, kindFromWords, type PortalJob, type JobKind, type JobShip } from "@/lib/portalJobs";
 import { carrierOf, trackingLink, type Box } from "@/lib/shipping";
-import { ourStatusFor } from "@/lib/printavoSend";
+import { ourStatusFor } from "@/lib/printavoOld";
 import StartPanel from "@/components/StartPanel";
 import SupportButton from "@/components/SupportButton";
 import PortalTour from "@/components/PortalTour";
@@ -370,7 +370,7 @@ export default async function PortalHome({ searchParams }: { searchParams: Promi
   });
   // order again: their latest finished jobs (new and from before the portal), with a picture when we have one
   // jobs still open in Printavo (synced every few minutes until Printavo is turned off) show on the timeline too,
-  // their Printavo status read the way our own orders' statuses are (lib/printavoSend.ts ourStatusFor)
+  // their Printavo status read the way our own orders' statuses are (lib/printavoOld.ts ourStatusFor)
   const since = new Date(Date.now() - 150 * 86400000).toISOString().slice(0, 10);
   const pvOpen = archived.filter((a) => a.kind === "invoice" && (a.order_date || "") >= since).map((a) => ({ a, st: ourStatusFor(a.status_name || "", "invoice") }))
     .filter((x) => x.st !== "completed" && !/complete|picked up|delivered|cancel/i.test(x.a.status_name || "")).slice(0, 40);

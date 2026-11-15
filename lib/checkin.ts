@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
 import { orderGroups, type Order } from "@/lib/pricing";
 import { sizeKey, PV, mixedBoxes, type MixedBox } from "@/lib/manifest";
-import { goodsFromPrintavo, type PvSnap } from "@/lib/printavoSend";
+import { goodsFromPrintavo, type PvSnap } from "@/lib/printavoOld";
 
 /**
  * Check-In: receiving counts each job's goods in, size by size.

@@ -56,7 +56,7 @@ import OrderTypeRow, { orderTypeOf, ORDER_TYPE_LABEL } from "@/components/OrderT
 import CustomerArtwork from "@/components/CustomerArtwork";
 import { labelFileName } from "@/lib/printavoNames";
 import ProjectPicker from "@/components/ProjectPicker";
-import { Pill, pvStatusOf } from "@/components/bits";
+import { Pill } from "@/components/bits";
 import { MixStrip, useMixParts } from "@/components/MixStrip";
 import { IssueTag, useOpenIssues } from "@/components/IssueTag";
 import SendProofTool from "@/components/tools/SendProofTool";
@@ -67,7 +67,7 @@ import SimpleLines from "@/components/SimpleLines";
 import { KINDS, isSimpleKind, kindLabel, newSimpleGroup, type ProductKind } from "@/lib/simpleOrders";
 import PayReadiness from "@/components/PayReadiness";
 import { checkOrder } from "@/lib/orderChecks";
-import { ADJUST } from "@/lib/printavoChanges";
+import { ADJUST } from "@/lib/printavoOld";
 import { keepConfirmed, orderNeedsDetails } from "@/lib/productionDetails";
 import { dropUnsaved, keepUnsaved, readUnsaved, savedUnsaved, watchPerson } from "@/lib/unsavedCopy";
 import { specialtyGarment } from "@/lib/fabric";
@@ -86,7 +86,7 @@ import ShipQuote from "@/components/ShipQuote";
 import { fmtPhone } from "@/lib/phone";
 import { archiveOrderArt, draftArtCount, orderArtForDelete, type ArtItem } from "@/app/shop/draft-art-actions";
 import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-order-actions";
-import { resetToRequest, printavoDeleteCheck } from "@/app/shop/orders/delete-actions";
+import { resetToRequest, unlinkPrintavo } from "@/app/shop/orders/delete-actions";
 import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
 import { mockupGone, mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
@@ -1216,7 +1216,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // in QuickBooks: asked before deleting (Oct 24, Nick: "this order has already been synced… would you like me to void the
   // order in QuickBooks?"); qbVoid = the yes
   type QbState = { synced: boolean; voided: boolean; qboId?: string; docNumber?: string; source?: string; issue?: string; pending?: boolean };
-  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; /** sent in by the customer: back to Portal requests instead of deleted */ req?: boolean; reqBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean; /** still in Printavo: not deleted here */ pv?: { visualId: string; url: string } | null; pvErr?: string }>(null);
+  const [delAsk, setDelAsk] = useState<null | { loading?: boolean; error?: string; logos: ArtItem[]; mockups: ArtItem[]; pick: Set<string>; busy?: boolean; cu?: { id: string; name: string; team: string } | null; cuBack?: boolean; /** sent in by the customer: back to Portal requests instead of deleted */ req?: boolean; reqBack?: boolean; gone?: boolean; qb?: QbState | null; qbVoid?: boolean; }>(null);
   // the small QB ✓ beside the status: is this order's invoice in QuickBooks
   const [qbSt, setQbSt] = useState<QbState | null>(null);
   // an invoice also asks QuickBooks itself, so one sent before orders kept their link (TEST-40135) is found and linked
@@ -1262,18 +1262,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   async function del() {
     if (!o) return;
     setDelAsk({ loading: true, logos: [], mockups: [], pick: new Set() });
-    const [r, cu, qs, pvc] = await Promise.all([orderArtForDelete(o.id), clickUpJobOfOrder(o.id, o.number).catch(() => null), qboOrderState(o.id, true).catch(() => null), printavoDeleteCheck(o.id).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }))]);
-    // still in Printavo: it can't be deleted here until it's deleted there (app/shop/orders/delete-actions.ts)
-    const pvAsk = pvc.ok ? { pv: pvc.still } : { pvErr: pvc.error };
+    const [r, cu, qs] = await Promise.all([orderArtForDelete(o.id), clickUpJobOfOrder(o.id, o.number).catch(() => null), qboOrderState(o.id, true).catch(() => null)]);
     const qb: QbState | null = qs && qs.ok ? qs : null;
     const qbVoid = !!qb?.synced && !qb.voided && (qb.source === "created" || qb.source === "test");
     // the customer sent it in (their portal, or a ClickUp job brought in as a request): never deleted, only reset to what
     // they sent, back in Portal requests; ClickUp is left alone (Nov 3, Nick: "you just can't delete anymore. You can reset it")
     const req = !!o.submitted_at;
-    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: !req, req, reqBack: req, qb, qbVoid, ...pvAsk });
+    if (!r.ok) return setDelAsk({ error: r.error, logos: [], mockups: [], pick: new Set(), cu, cuBack: !req, req, reqBack: req, qb, qbVoid });
     // a copy of another order's mockup goes with it (nothing is lost); art made only on this order starts as Keep (Nov 2, Nick)
     const pick = new Set<string>(r.mockups.filter((m) => m.copyOf).map((m) => m.id));
-    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: !req, req, reqBack: req, qb, qbVoid, ...pvAsk });
+    setDelAsk({ logos: r.logos, mockups: r.mockups, pick, cu, cuBack: !req, req, reqBack: req, qb, qbVoid });
   }
   async function confirmDel() {
     if (!o || !delAsk) return;
@@ -1293,6 +1291,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       try { for (const k of [`fbs:orderCheck:${o.id}`, `fbs:orderDock:${o.id}`]) sessionStorage.removeItem(k); } catch { /* */ }
       location.assign(`/shop/jobs?req=${o.id}`); return;
     }
+    // one that was sent to Printavo: its link is only history now (Printavo closed Nov 14), cleared so the database's
+    // old "delete it in Printavo first" rule (migration 258) lets it go
+    if ((o as { printavo_id?: string | null }).printavo_id) { const u = await unlinkPrintavo(o.id); if (!u.ok) { setDelAsk({ ...delAsk, busy: false, error: u.error }); return; } }
     // the order goes first; the ClickUp job goes back on New only once it's really gone (else it could be made twice)
     const gone = await reallyDel(false);
     if (!gone) { setDelAsk({ ...delAsk, busy: false, qbVoid: false, error: `Couldn't delete the order${delErr.current ? `: ${delErr.current}` : "."}${delAsk.qbVoid ? " (It was already voided in QuickBooks.)" : ""} Nothing else was changed in ClickUp.` }); return; }
@@ -1475,12 +1476,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const mock = o.groups.length > 0 && o.groups.every((g) => g.mockupAt || g.mockupSkipped || (g.customerMockups || []).length || g.imprints.some((d) => d.supplied?.picture));
     // approved by staff another way (a call, an email: Request separations' "approved another way"), or a Printavo job past art
     const staffArt = events.find((e) => e.kind === "art_approved");
-    const pvPast = !!pvStatusOf(o as never) && ["blanks", "production", "fulfillment", "ready", "completed"].includes(o.status);
+    // a 40,000 job run from Printavo past its art step: its art was approved there
+    const pvPast = !!(o as { printavo_id?: string | null }).printavo_id && ["blanks", "production", "fulfillment", "ready", "completed"].includes(o.status);
     out.push(ch ? { tone: "bad", text: "Art changes asked for" } : ap ? { tone: "ok", text: "Art approved" } : staffArt ? { tone: "ok", text: "Art approved", sub: staffArt.detail || undefined } : pvPast ? { tone: "ok", text: "Art approved", sub: "In Printavo" } : pendingProofs ? { tone: "wait", text: "Proof waiting on the customer" }
       : mock ? { tone: isQuote ? "info" : "ok", text: "Mockup done", sub: isQuote ? undefined : "No proof sent" } : { tone: "wait", text: "No mockup yet" });
     // approval
     out.push(o.approved_at ? { tone: "ok", text: `Approved by ${o.approved_name || "the customer"}`, sub: fmtDate(o.approved_at.slice(0, 10)) }
-      : !isQuote ? { tone: "ok", text: "Approved", sub: pvStatusOf(o as never) ? "In Printavo as an invoice" : "Invoice" }
+      : !isQuote ? { tone: "ok", text: "Approved", sub: "Invoice" }
       : o.status === "quote_sent" ? { tone: "wait", text: "Waiting on the customer's approval" } : { tone: "info", text: "Quote not sent yet" });
     // paid
     if (seesMoney && calc.total > 0) out.push(calc.balance < -0.004 ? { tone: "info", text: `${money(-calc.balance)} credit`, sub: "Overpaid: the customer can use it or get it back (Receive a Payment)" } : calc.balance <= 0.004 ? { tone: "ok", text: "Paid in full" } : calc.paid > 0 ? { tone: "wait", text: `${money(calc.balance)} still due`, sub: `${money(calc.paid)} paid` } : { tone: isQuote ? "info" : "wait", text: `${money(calc.balance)} due`, sub: "Nothing paid yet" });
@@ -1615,13 +1617,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </span>}
             </span>;
           })()}
-          {pvStatusOf(o as never) ? <span className="status-select pv-st" style={{ ["--sc" as string]: st.c }} title="This job is run from Printavo: change its status there and it shows here within a few minutes">{pvStatusOf(o as never)}<small>Printavo</small></span>
-          : <select className={"status-select" + (holdOf((o as { flags?: unknown }).flags) ? " ohs-held" : "")} style={{ ["--sc" as string]: holdOf((o as { flags?: unknown }).flags) ? "var(--warn)" : st.c }} aria-label="Status" value={holdOf((o as { flags?: unknown }).flags) ? "hold" : statusKey(o)} onChange={(e) => void statusPicked(e.target.value)}>
+          <select className={"status-select" + (holdOf((o as { flags?: unknown }).flags) ? " ohs-held" : "")} style={{ ["--sc" as string]: holdOf((o as { flags?: unknown }).flags) ? "var(--warn)" : st.c }} aria-label="Status" value={holdOf((o as { flags?: unknown }).flags) ? "hold" : statusKey(o)} onChange={(e) => void statusPicked(e.target.value)}>
             {/* a hold is for an order (Nov 3, Nick: "once it goes to invoice, it should say on hold"); a quote isn't held */}
             {(o.type === "invoice" || !!holdOf((o as { flags?: unknown }).flags)) && <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>}
             <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote").flatMap((s) => (s.k === "quote_sent" ? [s, REVISION] : [s])), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
             <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => <option key={s.k} value={s.k}>{statusText(s.k, o.delivery_method)}</option>)}</optgroup>
-          </select>}
+          </select>
           {mixO[o.id] && <span className="mxs-h"><MixStrip parts={mixO[o.id]} /></span>}
           <IssueTag issues={issO[o.id]} />
           {/* phone only: Documents, Production, Ask AI and More behind one button (the next step stays showing under it) */}
@@ -1701,14 +1702,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         <div className="dla-bg" role="dialog" aria-modal="true" aria-label={delAsk.req ? "Reset order" : "Delete order"} onClick={() => !delAsk.busy && setDelAsk(null)} onKeyDown={(e) => { if (e.key === "Escape" && !delAsk.busy) setDelAsk(null); }}>
           <div className="dla" onClick={(e) => e.stopPropagation()}>
             <h3>{delAsk.req ? `Reset #${o.number} to the customer\u2019s request?` : `Delete order #${o.number}?`}</h3>
-            {!delAsk.loading && delAsk.pv ? (
-              <div className="dla-pv">
-                <b>This order is in Printavo as #{delAsk.pv.visualId}.</b>
-                <span>Deleting it here would leave it running in Printavo where nobody here can see it. Delete it in Printavo first, then delete it here.</span>
-                {delAsk.pv.url && <a href={delAsk.pv.url} target="_blank" rel="noreferrer">Open #{delAsk.pv.visualId} in Printavo</a>}
-              </div>
-            ) : !delAsk.loading && delAsk.pvErr ? <p className="err">{delAsk.pvErr}</p>
-            : delAsk.loading ? <p className="faint">Looking at the order&apos;s art…</p> : delAsk.error && !delAsk.logos.length && !delAsk.mockups.length ? <p className="err">{delAsk.error}</p> : (
+            {delAsk.loading ? <p className="faint">Looking at the order&apos;s art…</p> : delAsk.error && !delAsk.logos.length && !delAsk.mockups.length ? <p className="err">{delAsk.error}</p> : (
               <>
                 {/* what deleting it does to its art, said plainly (Nov 2, Nick: "if you're copying an order and you go to delete
                     it, you don't even need to ask… unless it's unique… if… it's originally made [here]… would you like me to
@@ -1772,7 +1766,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             <div className="dla-acts">
               {delAsk.gone ? <button type="button" className="btn primary" onClick={() => { setDelAsk(null); leave(); }}>OK</button> : <>
               <button type="button" className="btn ghost" disabled={delAsk.busy} onClick={() => setDelAsk(null)}>Cancel</button>
-              {!delAsk.pv && !delAsk.pvErr && <button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.req ? (delAsk.busy ? "Resetting…" : "Reset to their request") : delAsk.busy ? "Deleting…" : "Delete order"}</button>}</>}
+              {<button type="button" className="btn danger" disabled={delAsk.loading || delAsk.busy} onClick={confirmDel}>{delAsk.req ? (delAsk.busy ? "Resetting…" : "Reset to their request") : delAsk.busy ? "Deleting…" : "Delete order"}</button>}</>}
             </div>
           </div>
         </div>

@@ -1,22 +1,13 @@
 import { ST, statusText } from "@/lib/pricing";
 import { daysUntil, fmtDate, money } from "@/lib/format";
 
-/**
- * A 40,000-series order sent to Printavo: its status is Printavo's, word for word (Oct 15, Nick: "made in the new
- * system, managed production-wise in the old one… just have it mirror back"). "" for every other order.
- */
-export function pvStatusOf(o: { number?: number | null; printavo_id?: string | null; pv_status?: string | null; printavo_state?: { status?: string } | null }) {
-  const n = Number(o.number || 0);
-  return o.printavo_id && n >= 40000 && n < 50000 ? String(o.pv_status || o.printavo_state?.status || "").trim() : "";
-}
-
-/** pv: Printavo's own status (pvStatusOf), shown instead of ours to the shop; customers keep the friendly words */
+/** pv: an old Printavo job's own status words (from the saved copy), shown instead of ours; customers keep the friendly words */
 export function Pill({ status, portal = false, pv, hold, ship }: { status: string; portal?: boolean; pv?: string | null; /** the order's delivery_method: Ready says pickup / ship / deliver */ ship?: string | null;
   /** on hold (lib/holds.ts holdLabel): "On hold · Payment" shows instead, in the hold color, with the status in its tooltip */ hold?: string | null }) {
   if (hold) return <span className="pill pill-hold" style={{ ["--sc" as string]: "var(--warn)" }} title={`${hold} (${statusText(status, ship, portal)})`}><span className="pill-t">{hold}</span></span>;
   const s = ST[status] || ST.quote;
   const text = portal ? statusText(status, ship, true) : pv || statusText(status, ship);
-  return <span className="pill" style={{ ["--sc" as string]: s.c }} title={pv && !portal ? `${text}: Printavo's status (this job is run from Printavo)` : text}><span className="pill-t">{text}</span></span>;
+  return <span className="pill" style={{ ["--sc" as string]: s.c }} title={pv && !portal ? `${text}: Printavo's status (an old Printavo job)` : text}><span className="pill-t">{text}</span></span>;
 }
 
 export function Due({ date, status }: { date: string | null; status: string }) {

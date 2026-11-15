@@ -3,9 +3,9 @@ import { useCallback, useEffect, useState } from "react";
 import { zipStore } from "@/lib/zipStore";
 
 /**
- * Restore points: a full copy of every database table, to download and keep (owner only). The first one is meant to
- * be made before customers start moving off Printavo; the matching code version is the GitHub branch
- * release/v1.0-before-customer-move. Built in rounds by /api/backup/full; this keeps calling until it's done.
+ * Restore points: a full copy of every database table, to download and keep (owner only). Built in rounds by
+ * /api/backup/full; this keeps calling until it's done. On Settings → Dropbox beside the backup drive (Nov 15: it was on
+ * the Printavo page, which went with Printavo).
  */
 type RP = { id: string; status: string; created_at: string; finished_at: string | null; created_by: string; error: string | null; label: string; tables: number; done: number; rows: number; links: { name: string; bytes: number; url: string }[] };
 const when = (d: string) => new Date(d).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -14,7 +14,7 @@ const size = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : b > 1e3 ? 
 export default function RestorePoint() {
   const [list, setList] = useState<RP[] | null>(null);
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), [denied, setDenied] = useState(false);
-  const [label, setLabel] = useState("Before moving customers off Printavo");
+  const [label, setLabel] = useState("Restore point");
   const load = useCallback(async () => {
     const r = await fetch("/api/backup/full", { cache: "no-store" }); const j = await r.json().catch(() => ({}));
     if (r.status === 403) { setDenied(true); return; }
@@ -64,7 +64,7 @@ export default function RestorePoint() {
   return (
     <section className="panel" style={{ marginTop: 14 }}>
       <div className="panel-h">
-        <div><h2>Restore points</h2><div className="faint" style={{ fontSize: 12.5 }}>A full copy of every table (customers, orders, the Printavo copy, settings, staff, production…) to download and keep. Artwork files stay in storage.</div></div>
+        <div><h2>Restore points</h2><div className="faint" style={{ fontSize: 12.5 }}>A full copy of every table (customers, orders, the old Printavo jobs, settings, staff, production…) to download and keep. Artwork files stay in storage.</div></div>
       </div>
       <div className="panel-b stack" style={{ gap: 10 }}>
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>

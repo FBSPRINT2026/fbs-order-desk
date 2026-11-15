@@ -19,7 +19,6 @@ import OrderRail from "@/components/OrderRail";
 import { jobFor } from "@/lib/portalJobs";
 import { setupWords, calcOrder, FULL_COLOR, inkNames, inkWord, methodLabel, methodShort, ONE_SIZE, orderGroups, PAY_TERMS, payDueDate, sizeLabel, SIZES, termsText, type Message, type Order, type Payment, type Proof, withoutShopPieces } from "@/lib/pricing";
 import { fmtDate, fmtDateLong, money } from "@/lib/format";
-import { pvStatusOf } from "@/components/bits";
 import { customerHold, customerStatus, type Flag } from "@/lib/orderStages";
 import { payState } from "@/lib/payReady";
 import { MessageThread, OrderActions, PayButton, ProofCard } from "./client";
@@ -110,7 +109,7 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
   }
 
   // the customer status, for orders run here; a Printavo-run job keeps its old wording
-  const runHere = !pvStatusOf(o as never);
+  const runHere = true;
   const cs = runHere ? customerStatus({ status: o.status, flags: ((o as { flags?: Flag[] }).flags || []) as Flag[], delivery_method: o.delivery_method, simple_order: (o as { simple_order?: { reorder?: unknown } | null }).simple_order }, { proofSent: proofs.length > 0 }) : null;
   const hold = !["completed", "void"].includes(o.status) ? customerHold(((o as { flags?: Flag[] }).flags || []) as Flag[]) : null;
   const pendingProofs = proofs.filter((x) => x.status === "pending");

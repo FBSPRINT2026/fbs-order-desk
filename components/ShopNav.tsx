@@ -1,7 +1,6 @@
 "use client";
 import VersionTag from "@/components/VersionTag";
 import { newCustomer, newQuote } from "@/lib/quickNew";
-import { allRows } from "@/lib/readAll";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { recordVisit, touchCurrent } from "@/lib/navTrail";
@@ -9,8 +8,7 @@ import { AppLaunch } from "@/components/AppStart";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
-import { calcOrder, mergeSettings, type Order } from "@/lib/pricing";
-import { cardFix, printavoChanges, snapOf } from "@/lib/printavoChanges";
+import { mergeSettings } from "@/lib/pricing";
 import { saveShortcuts, type Shortcut } from "@/app/shop/shortcut-actions";
 import { applyDecisions, computeFollowUps, loadAssistantData, loadDecisions } from "@/lib/crm/followups";
 import SearchInput from "@/components/SearchInput";
@@ -43,7 +41,6 @@ const ICONS: Record<string, React.ReactNode> = {
   contacts: <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2" /><circle cx="12" cy="10" r="3" /><path d="M7.5 17.5c.8-2 2.5-3 4.5-3s3.7 1 4.5 3M2 7h2M2 12h2M2 17h2" /></svg>,
   moveport: <svg viewBox="0 0 24 24"><path d="M4 12h11M11 7l5 5-5 5" /><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4" /></svg>,
   payroll: <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2" /><path d="M3.5 9.5h17M8 3v4M16 3v4" /><path d="M13.7 12.3c-.3-.4-.9-.6-1.5-.6-.9 0-1.5.4-1.5 1.1 0 1.5 3.1.8 3.1 2.3 0 .7-.7 1.1-1.6 1.1-.7 0-1.2-.3-1.6-.7M12.2 11v.7M12.2 16.2v.7" /></svg>,
-  pvsync: <svg viewBox="0 0 24 24"><path d="M4 9a8 8 0 0 1 14-3l2 2" /><path d="M20 4v4h-4" /><path d="M20 15a8 8 0 0 1-14 3l-2-2" /><path d="M4 20v-4h4" /></svg>,
   incoming: <svg viewBox="0 0 24 24"><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 3h6l1-3h5" /></svg>,
   orders: <svg viewBox="0 0 24 24"><path d="M7 3h10l3 3v15H4V3z" /><path d="M8 9h8M8 13h8M8 17h5" /></svg>,
   // a screen printing press seen from above: the center hub and its platens
@@ -86,8 +83,8 @@ const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good mor
 
 /** shorter names for the tightest menu (two links a row) */
 /** Shop Tools / Admin Tools tiles: a short name under each icon, two lines at most (Nov 11 2026, Nick) */
-const TOOL_LBL: Record<string, string> = { "AI Workbench": "AI", "Order Goods": "Order", "Time Clock": "Time", "Gang Sheet Builder": "Gang", "Customer Artwork Builder": "Art", "Receive a Payment": "Payment", "Portal customers": "Portal", "QuickBooks": "QBO", "Printavo Sync": "Printavo", "ClickUp Jobs": "ClickUp", "Payroll Center": "Payroll", "Necklines": "Necks", "Support": "Support" };
-const SHORT: Record<string, string> = { "ClickUp Jobs": "ClickUp", "Printavo Sync": "Printavo", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving", "Order Goods": "Order", "Reorder Details": "Details", "Conversations": "Chats", "AI Workbench": "AI", "Thread Wall": "Threads", "Digitizing": "Digitize" };
+const TOOL_LBL: Record<string, string> = { "AI Workbench": "AI", "Order Goods": "Order", "Time Clock": "Time", "Gang Sheet Builder": "Gang", "Customer Artwork Builder": "Art", "Receive a Payment": "Payment", "Portal customers": "Portal", "QuickBooks": "QBO", "ClickUp Jobs": "ClickUp", "Payroll Center": "Payroll", "Necklines": "Necks", "Support": "Support" };
+const SHORT: Record<string, string> = { "ClickUp Jobs": "ClickUp", "Merch Stores": "Stores", "Incoming Orders": "Incoming", "Shipping Center": "Shipping", "Goods & Receiving": "Receiving", "Order Goods": "Order", "Reorder Details": "Details", "Conversations": "Chats", "AI Workbench": "AI", "Thread Wall": "Threads", "Digitizing": "Digitize" };
 /** the menu's tightness steps add up: step 2 has step 1's rules too */
 const sdClass = (l: number) => "side-in" + [1, 2, 3].filter((k) => k <= l).map((k) => " sd-" + k).join("");
 
@@ -134,7 +131,6 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     window.addEventListener("fbs:clickup-count", h);
     return () => window.removeEventListener("fbs:clickup-count", h);
   }, []);
-  const [pvWaiting, setPvWaiting] = useState(0);
   const [qbProblems, setQbProblems] = useState(0); // QuickBooks sync problems (the owner's QB tool)
   // reorders waiting on production details, counted per side (SP / EMB / HP): the dot is only for the side you're on
   const [detailsBySide, setDetailsBySide] = useState<Record<string, number>>({});
@@ -277,15 +273,6 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
     slowAt.current = Date.now();
     getInboxUnread().then((r) => { if (r.ok) setMailNew(r.unread); }, () => null);
     if (realRole === "owner") qboProblemCount().then((r) => setQbProblems(r.n), () => null);
-    // 40,000-series orders with Printavo changes waiting to be accepted (the owner's view only)
-    if (realRole === "owner") Promise.all([allRows((a, b) => sb.from("orders").select("*").not("printavo_id", "is", null).gte("number", 40000).lt("number", 50000).order("id").range(a, b)), sb.from("settings").select("data").eq("id", 1).maybeSingle()])
-      .then(async ([{ data }, { data: st }]) => {
-        const s = mergeSettings(st?.data), os = (data || []) as Order[];
-        const { data: oi } = os.length ? await sb.from("order_internal").select("order_id, production_notes").in("order_id", os.map((o) => o.id)) : { data: [] };
-        const nt = Object.fromEntries((oi || []).map((x) => [x.order_id as string, String(x.production_notes || "")]));
-        setPvWaiting(os.filter((o) => { const snap = snapOf(o); return printavoChanges(o, calcOrder(o, s), snap, nt[o.id] ?? "").changes.length > 0 || !!cardFix(o, snap); }).length);
-      })
-      .then(undefined, () => null);
     }, 1200);
     return () => clearTimeout(later);
   }, [path, realRole]);
@@ -322,7 +309,6 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
       {href === "/shop/clickup" && clickup > 0 && <span className="badge" title={`${clickup} new ClickUp job${clickup === 1 ? "" : "s"} to process`}>{clickup}</span>}
       {href === "/shop/time" && timeCount > 0 && <span className="badge" title={`${timeCount} time clock issue${timeCount === 1 ? "" : "s"} to fix`}>{timeCount}</span>}
       {href === "/shop/settings/quickbooks" && qbProblems > 0 && <span className="badge" title={`${qbProblems} QuickBooks sync problem${qbProblems === 1 ? "" : "s"}: open to see why`}>{qbProblems}</span>}
-      {href === "/shop/printavo-sync" && pvWaiting > 0 && <span className="badge" title={`${pvWaiting} order${pvWaiting === 1 ? "" : "s"} changed in Printavo, waiting to be accepted`}>{pvWaiting}</span>}
       {href === "/shop/inbox" && mailNew > 0 && <span className="badge soft" title={`${mailNew} unread`}>{mailNew}</span>}
       {href === "/shop/details" && details > 0 && <span className="badge" title={`${details} reorder${details === 1 ? "" : "s"} waiting on production details`}>{details}</span>}
       {href === "/shop/jobs" && incoming > 0 && <span className="badge" title={`${incoming} order request${incoming === 1 ? "" : "s"} to review`}>{incoming}</span>}
@@ -350,7 +336,6 @@ export default function ShopNav({ email, firstName, fullName = "", brand, shortc
   const adminTools = <>
     {/* QuickBooks: straight to its settings, with the sync button and the list of anything that didn't sync (Oct 24, Nick) */}
     {link(["/shop/settings/quickbooks", "qb", "QuickBooks"])}
-    {link(["/shop/printavo-sync", "pvsync", "Printavo Sync"])}
     {/* the customers' ClickUp boards: Nick only now (Nov 3, Nick: "remove the ClickUp tool from everybody's view except mine") */}
     {link(["/shop/clickup", "clickup", "ClickUp Jobs"])}
     {/* moving customers over (Nov 3, Nick: "put the tool in my admin tools"): their contacts and details, then the move */}

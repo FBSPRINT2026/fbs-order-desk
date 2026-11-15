@@ -3,7 +3,6 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { stageView } from "@/lib/orderStagesServer";
 import { FLAGS, STEP, type Check, type Flag, type FlagKey, type StepKey } from "@/lib/orderStages";
-import { pvStatusOf } from "@/components/bits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +32,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const admin = createAdminClient();
   const { data: o } = await admin.from("orders").select("id, number, status, printavo_id, pv_status, printavo_state, stage_checks, flags").eq("id", id).maybeSingle();
   if (!o) return NextResponse.json({ error: "Order not found." }, { status: 404 });
-  if (pvStatusOf(o as never)) return NextResponse.json({ error: "This job is run from Printavo: its status is Printavo's." }, { status: 400 });
   const by = String(v.staff?.name || "") || v.email.split("@")[0], at = new Date().toISOString();
   const note = String(b.note || "").trim().slice(0, 300);
   const patch: Record<string, unknown> = {};

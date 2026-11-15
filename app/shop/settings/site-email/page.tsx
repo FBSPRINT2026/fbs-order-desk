@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** Settings → Connections → Site email (owner only): the address the portal sends from, and where replies go (Oct 26, Nick). */
 export default async function Page() {
   const v = await getViewer();
-  const head = <><SettingsHead title="Connections" note="QuickBooks, Canva, Dropbox, texts, Printavo, and whether each outside service is working" /><SettingsTabs /></>;
+  const head = <><SettingsHead title="Connections" note="QuickBooks, Canva, Dropbox, texts, and whether each outside service is working" /><SettingsTabs /></>;
   if (v.role !== "owner") return <>{head}<div className="empty">Only the owner can change the site email.</div></>;
   const [s, from] = await Promise.all([siteEmail(), siteFrom()]);
   return (

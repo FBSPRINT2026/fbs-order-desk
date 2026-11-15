@@ -14,19 +14,6 @@ async function timed(p: Promise<Check>, ms = 10000): Promise<Check> {
   return Promise.race([p, new Promise<Check>((res) => setTimeout(() => res({ ok: false, detail: `no answer within ${ms / 1000} seconds` }), ms))]);
 }
 
-/** Printavo: ask who the account is. */
-async function printavo(): Promise<Check> {
-  const email = process.env.PRINTAVO_EMAIL?.trim(), token = process.env.PRINTAVO_TOKEN?.trim();
-  if (!email || !token) return { ok: false, detail: "PRINTAVO_EMAIL or PRINTAVO_TOKEN is missing" };
-  try {
-    const r = await fetch("https://www.printavo.com/api/v2", { method: "POST", headers: { "Content-Type": "application/json", email, token }, body: JSON.stringify({ query: "{ account { companyName } }" }) });
-    const j = await r.json().catch(() => null);
-    if (!r.ok) return { ok: false, detail: `HTTP ${r.status}${j?.errors?.[0]?.message ? ": " + clip(j.errors[0].message) : ""}` };
-    if (j?.errors?.length) return { ok: false, detail: clip(j.errors[0].message || "error") };
-    return { ok: true, detail: `connected to ${j?.data?.account?.companyName || "the account"}` };
-  } catch (e) { return { ok: false, detail: clip(e instanceof Error ? e.message : String(e)) }; }
-}
-
 /** Stax: look up the merchant the key belongs to, and whether the web payments token is that merchant's. */
 async function stax(): Promise<Check> {
   const key = process.env.STAX_API_KEY?.trim(), web = process.env.STAX_WEB_PAYMENTS_TOKEN?.trim();
@@ -87,13 +74,13 @@ async function sanmarFtp(): Promise<Check> {
 }
 
 /**
- * Live connection check for Printavo, Stax and Claude. Shows only ok / not ok and why — never keys.
+ * Live connection check for Stax, Claude and SanMar. Shows only ok / not ok and why — never keys.
  * Results are cached for 2 minutes so the page can't be used to hammer the services.
  */
 export async function GET() {
   if (cache && Date.now() - cache.at < 120000) return NextResponse.json({ cached: true, ...cache.body });
-  const [p, s, a, sm, sf] = await Promise.all([timed(printavo()), timed(stax()), timed(anthropic()), timed(sanmar()), timed(sanmarFtp(), 28000)]);
-  const body = { printavo: p, stax: s, claude: a, sanmar: sm, sanmar_ftp: sf };
+  const [s, a, sm, sf] = await Promise.all([timed(stax()), timed(anthropic()), timed(sanmar()), timed(sanmarFtp(), 28000)]);
+  const body = { stax: s, claude: a, sanmar: sm, sanmar_ftp: sf };
   cache = { at: Date.now(), body };
   return NextResponse.json(body);
 }
