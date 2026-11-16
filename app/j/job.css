@@ -645,3 +645,4 @@
 .jm-fc-more textarea{width:100%;box-sizing:border-box}
 .jm-fc-done{align-items:center;text-align:center}
 .jm-fc-big{font-size:48px;font-weight:800;color:var(--ok)}
+.jm-tm-rewhy{display:flex;flex-direction:column;gap:4px;width:100%;text-align:left;font-size:12px;font-weight:800;color:var(--ink-3)}

@@ -14,7 +14,8 @@ import FinishSide, { type Wrap } from "./FinishSide";
  */
 type Row = JobTime & { who: string };
 type State = { me: { name: string } | null; /** the shift clock: "in", "break", "out" */ clock?: string | null; /** sides printed on this job, any day */ done?: string[]; running: JobTime | null; paused: JobTime | null; log: Row[] };
-const PAUSES = ["Lunch", "Break", "Running another location first", "Waiting on screens or ink", "Press problem", "End of shift"];
+// why a job stops: a problem first (Nick, Nov 16 2026: Ana's bad screen mid-setup went down as "Lunch", the old default)
+const PAUSES = ["Bad screen · needs a remake", "Waiting on ink", "Waiting on screens", "Press problem", "Garment problem", "Lunch", "Break", "Running another side first", "End of shift", "Something else"];
 const hms = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`; };
 const hm = (ms: number) => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
 const parse = (task: string) => { const [phase, ...rest] = task.split(" · "); return { phase: phase === "Setup" ? "setup" : phase === "Run" ? "run" : "other", loc: rest.join(" · ") || task }; };
@@ -41,7 +42,7 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
   const noteT = (n: string) => (/^Paused: /.test(n) ? t("Paused: {0}", t(n.slice(8))) : t(n));
   const [st, setSt] = useState<State | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState("");
   const [locPick, setLoc] = useState(""), [press, setPress] = useState("");
-  const [why, setWhy] = useState("Lunch");
+  const [why, setWhy] = useState("");
   const [pausing, setPausing] = useState(false), [finishing, setFinishing] = useState<number | null>(null), [now, setNow] = useState(Date.now());
   const [awake, setAwake] = useState(false);
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
@@ -120,8 +121,8 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
             <div className="jm-tm-pause">
               {/* one drop-down, lunch picked to start with, and one button (Nick, Nov 16 2026: "this should be a drop-down") */}
               <label className="jm-label" htmlFor="jm-why">{t("Why are you pausing?")}</label>
-              <select id="jm-why" className="jm-select" value={why} onChange={(e) => setWhy(e.target.value)}>{PAUSES.map((p) => <option key={p} value={p}>{t(p)}</option>)}</select>
-              <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("pause", { reason: why })}>{t("Pause")}</button>
+              <select id="jm-why" className="jm-select" value={why} onChange={(e) => setWhy(e.target.value)}><option value="" disabled>{t("Pick why")}</option>{PAUSES.map((p) => <option key={p} value={p}>{t(p)}</option>)}</select>
+              <button type="button" className="jm-go" disabled={!!busy || !why} onClick={() => act("pause", { reason: why })}>{t("Pause")}</button>
               <button type="button" className="jm-ghost" onClick={() => setPausing(false)}>{t("Cancel")}</button>
             </div>
           ) : (
@@ -148,6 +149,10 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
           <div className="jm-tm-clock">{hms(now - +new Date(st.paused.ended_at!))}</div>
           <div className="jm-faint">{noteT(st.paused.note)} · {t("since {0}", new Date(st.paused.ended_at!).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" }))}</div>
           <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("resume")}>▶ {t("Resume")}</button>
+          {/* the wrong reason picked: change it right here (Nov 16 2026, Ana's bad screen saved as Lunch) */}
+          <label className="jm-tm-rewhy"><span>{t("Why it's paused")}</span>
+            <select className="jm-select" value={PAUSES.includes(st.paused.note.replace(/^Paused: /, "")) ? st.paused.note.replace(/^Paused: /, "") : ""} onChange={(e) => e.target.value && act("why", { reason: e.target.value })}>
+              <option value="" disabled>{t("Pick why")}</option>{PAUSES.map((p) => <option key={p} value={p}>{t(p)}</option>)}</select></label>
           <button type="button" className="jm-link" onClick={() => setSt({ ...st, paused: null })}>{t("Do something else")}</button>
         </div>
       ) : (

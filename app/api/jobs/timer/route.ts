@@ -112,6 +112,11 @@ export async function POST(req: Request) {
   else if (b.action === "pause") {
     if (!here) err = "Nothing is running on this job.";
     else { await stopJob(admin, me, { note: `Paused: ${String(b.reason || "Paused").slice(0, 60)}` }); await slotMove("pause"); }
+  } else if (b.action === "why") {
+    // the reason for a pause, changed after the fact
+    const st = await state(admin, me, job);
+    if (!st.paused) err = "Nothing is paused on this job.";
+    else await admin.from("job_time").update({ note: `Paused: ${String(b.reason || "Paused").slice(0, 60)}` }).eq("id", st.paused.id);
   } else if (b.action === "resume") {
     const st = await state(admin, me, job);
     if (!st.paused) err = "Nothing is paused on this job.";
