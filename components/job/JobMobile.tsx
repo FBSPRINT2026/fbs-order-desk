@@ -260,6 +260,7 @@ function PhotoSave({ job, file, onDone, tag0 = "Approved print", left = 0 }: { j
   const [cap, setCap] = useState(""), [tag, setTag] = useState(tag0), [busy, setBusy] = useState(false), [msg, setMsg] = useState("");
   // crop, rotate and zoom before it's saved (Nov 10, Nick)
   const ed = useRef<PhotoEditApi | null>(null);
+  const [pct, setPct] = useState<number | null>(null);
   const tags = [...new Set([tag0, "Approved print", "Press setup", "Print issue", "General"])];
   return (
     <div className="jm-card jm-shot">
@@ -269,7 +270,7 @@ function PhotoSave({ job, file, onDone, tag0 = "Approved print", left = 0 }: { j
       {msg && <div className="jm-err">{t(msg)}</div>}
       <div className="jm-row">
         <button type="button" className="jm-ghost" disabled={busy} onClick={onDone}>{left ? t("Skip") : t("Cancel")}</button>
-        <button type="button" className="jm-go" disabled={busy} onClick={async () => { setBusy(true); setMsg(""); const f = ed.current ? await ed.current.edited() : file; const r = await addPhoto(job, f, cap, tag === "General" ? "" : tag); setBusy(false); if (r.ok) { setCap(""); onDone(); } else setMsg(r.error || "Couldn't save the photo."); }}>{busy ? t("Saving…") : left ? t("Save photo ({0} more)", left) : t("Save photo")}</button>
+        <button type="button" className="jm-go" disabled={busy} onClick={async () => { setBusy(true); setMsg(""); const f = ed.current ? await ed.current.edited() : file; setPct(0); const r = await addPhoto(job, f, cap, tag === "General" ? "" : tag, setPct); setBusy(false); setPct(null); if (r.ok) { setCap(""); onDone(); } else setMsg(r.error || "Couldn't save the photo."); }}>{busy ? (pct != null && pct < 100 ? t("Sending… {0}%", pct) : t("Saving…")) : left ? t("Save photo ({0} more)", left) : t("Save photo")}</button>
       </div>
     </div>
   );

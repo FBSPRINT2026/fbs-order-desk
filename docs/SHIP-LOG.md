@@ -409,3 +409,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 1:51pm · 1.3.651 · Nick · Crew phones: clock in/out on the main menu, a not-clocked-in ask on the menu and press timer, phone punches wait for a manager's OK on the Time Clock; payday hours check only on payday; faster camera QR scanning (one shared scanner)
 - Nov 16 1:52pm · 1.3.652 · Nick · Crew sign-in: the phone remembers the employee # (PIN only if asked again); no more 'add to home screen' tip that splits the sign-in
 - Nov 16 1:58pm · 1.3.653 · Nick · Crew phones: no punch buttons on the main menu (one My time clock button); instant loading screen and fewer database trips; front today, back later on the press timer (one job, paused with what's printed)
+- Nov 16 2:04pm · 1.3.654 · Nick · Phone photos: shrunk to 1600px (~0.3 MB) before sending, with a Sending… % so a slow connection shows progress

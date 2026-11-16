@@ -9,16 +9,20 @@ export type JobFile = { id: string; kind: "note" | "photo" | "file"; tag: string
 export const NOTE_TAGS = ["Press setup", "Ink / colors", "Print issue", "Approved print", "General"];
 const when = (d: string) => new Date(d).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-/** Shrink a phone photo before it goes up (long side 2000px, JPEG): faster on shop Wi-Fi. Keeps the original if it can't. */
+/**
+ * Shrink a phone photo before it goes up (long side 1600px, JPEG ~0.3 MB): a 12-megapixel phone photo is 3–5 MB, slow on
+ * cellular or busy Wi-Fi (Nick, Nov 16 2026: "it's taking an extremely long time to upload a photo"). 1600px still reads
+ * a size tag or a stain. Keeps the original if it can't.
+ */
 export async function shrinkPhoto(f: File): Promise<File> {
-  if (!/^image\/(jpeg|png|webp|heic|heif)/i.test(f.type) || f.size < 600_000) return f;
+  if (!/^image\/(jpeg|png|webp|heic|heif)/i.test(f.type) || f.size < 350_000) return f;
   try {
-    const bmp = await createImageBitmap(f);
-    const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const bmp = await createImageBitmap(f, { imageOrientation: "from-image" } as ImageBitmapOptions);
+    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
     const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
     c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
-    const b = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.85));
-    return b ? new File([b], f.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : f;
+    const b = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.8));
+    return b && b.size < f.size ? new File([b], f.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : f;
   } catch { return f; }
 }
 
@@ -40,12 +44,22 @@ export async function addNote(job: { kind: "o" | "a"; id: string }, body: string
   const j = r ? await r.json().catch(() => ({})) : { error: "Offline. Try again." };
   return r?.ok ? { ok: true as const, item: j.item as JobFile } : { ok: false as const, error: (j.error as string) || "Couldn't save the note." };
 }
-export async function addPhoto(job: { kind: "o" | "a"; id: string }, file: File, caption: string, tag: string) {
+/** Send a photo, telling how far along it is (0–100) so a slow connection shows it moving, not stuck */
+export async function addPhoto(job: { kind: "o" | "a"; id: string }, file: File, caption: string, tag: string, onProgress?: (pct: number) => void) {
   const fd = new FormData();
   fd.set("kind", job.kind); fd.set("id", job.id); fd.set("file", await shrinkPhoto(file)); fd.set("body", caption); fd.set("tag", tag);
-  const r = await fetch("/api/jobs/files", { method: "POST", body: fd }).catch(() => null);
-  const j = r ? await r.json().catch(() => ({})) : { error: "Offline. Try again." };
-  return r?.ok ? { ok: true as const } : { ok: false as const, error: (j.error as string) || "Couldn't save the photo." };
+  const res = await new Promise<{ status: number; body: string } | null>((done) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", "/api/jobs/files");
+    if (onProgress) x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    x.onload = () => done({ status: x.status, body: x.responseText });
+    x.onerror = () => done(null); x.ontimeout = () => done(null);
+    x.timeout = 120000;
+    x.send(fd);
+  });
+  if (!res) return { ok: false as const, error: "Offline. Try again." };
+  let j: { error?: string } = {}; try { j = JSON.parse(res.body); } catch { /* */ }
+  return res.status >= 200 && res.status < 300 ? { ok: true as const } : { ok: false as const, error: j.error || "Couldn't save the photo." };
 }
 
 /** The panel on the shop's job page: notes and photos, add either, archive (nothing is deleted). */

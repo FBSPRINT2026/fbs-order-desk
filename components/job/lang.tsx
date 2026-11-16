@@ -520,6 +520,7 @@ const ES: Record<string, string> = {
   "Do something else": "Hacer otra cosa",
   "What's next?": "¿Qué sigue?",
   "What are you working on?": "¿En qué estás trabajando?",
+  "Sending… {0}%": "Enviando… {0}%",
   "My time clock": "Mi reloj",
   "Your hours this week": "Tus horas esta semana",
   "{0} later · not now": "{0} después · ahora no",

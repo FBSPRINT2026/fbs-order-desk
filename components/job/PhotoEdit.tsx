@@ -71,12 +71,12 @@ export default function PhotoEdit({ file, apiRef, labels }: { file: File; apiRef
     window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
   };
 
-  // the result: what's inside the box, at the photo's own resolution (at most 4,000 px a side)
+  // the result: what's inside the box, at most 1,600 px a side (Nick, Nov 16 2026: uploads from phones were very slow)
   apiRef.current = {
     edited: async () => {
       if (!img || !box || (!changed.current && rot === 0)) return file;
       let scale = 1 / k; // photo pixels per screen pixel
-      const big = Math.max(box.w, box.h) * scale; if (big > 4000) scale *= 4000 / big;
+      const big = Math.max(box.w, box.h) * scale; if (big > 1600) scale *= 1600 / big;
       const c = document.createElement("canvas");
       c.width = Math.max(1, Math.round(box.w * scale)); c.height = Math.max(1, Math.round(box.h * scale));
       const ctx = c.getContext("2d")!;
@@ -87,7 +87,7 @@ export default function PhotoEdit({ file, apiRef, labels }: { file: File; apiRef
       ctx.rotate((rot * Math.PI) / 180);
       ctx.scale(k, k);
       ctx.drawImage(img, -nw / 2, -nh / 2);
-      const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.9));
+      const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/jpeg", 0.82));
       if (!blob) return file;
       return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
     },
