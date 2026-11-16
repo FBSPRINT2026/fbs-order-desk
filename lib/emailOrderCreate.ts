@@ -63,7 +63,7 @@ export type CreateInput = { activityId?: string; customerId?: string; draft: EOD
   /** a request to fill in where it is, keeping its number (a customer's portal reorder, Nov 1) */ intoOrder?: string };
 
 export async function createOrderFromDraft(admin: SupabaseClient, by: string, input: CreateInput): Promise<{ ok: true; id: string; number: number } | { ok: false; error: string }> {
-  const { data: a } = input.activityId ? await admin.from("activities").select("id, customer_id, subject, body, meta").eq("id", input.activityId).maybeSingle() : { data: null };
+  const { data: a } = input.activityId ? await admin.from("activities").select("id, customer_id, subject, body, meta, occurred_at").eq("id", input.activityId).maybeSingle() : { data: null };
   if (input.activityId && !a) return { ok: false, error: "Email not found." };
   if (a && !a.customer_id) return { ok: false, error: "Make the sender a customer first (the yellow box above)." };
   const d = input.draft;
