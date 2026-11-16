@@ -389,3 +389,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 11:51am · 1.3.631 · Nick · Scanners on every page: a scan anywhere pops Count in for receiving, Print box label / Start shipping for shipping, the job for the press, and opens the order for everyone else
 - Nov 16 11:58am · 1.3.632 · Nick · Job menus: a Zebra plugged in by USB counts as set up (Box labels no longer says Printer not set up)
 - Nov 16 12:07pm · 1.3.633 · Nick · Label printers: each computer has its own Zebra; a label prints on the computer it was sent from (Prints on picker, set up per computer)
+- Nov 16 12:17pm · 1.3.634 · Nick · Issue Center on Goods & Receiving: work each goods issue (who's on it, tell the customer by portal/email or text, supplier email, how it got fixed, history); a recount keeps one issue; counted jobs show the count, not boxes delivered

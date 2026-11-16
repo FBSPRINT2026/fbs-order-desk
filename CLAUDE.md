@@ -311,6 +311,14 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   Its top: a Dashboard button (box icon) beside the Shipments tabs (Arriving & tracking, FBS orders, Customer supplied,
   Ignored); Settings in the header. Two blocks: Counting (a Schedule | Due date switch for the days; All/SP/EMB/HP with the
   search beside it; Today / Tomorrow / Next day / Later / ✓ Counted) and Receiving (trucks).
+- **The Issue Center** (Nick, Nov 16 2026: "one of them needs to say issues… work the issues… SMS or email the customer"):
+  Goods & Receiving's second button beside Dashboard (`components/IssueCenter.tsx`, `app/shop/issue-center-actions.ts`).
+  Every goods issue: Needs us (nobody told yet) first, then by the day it runs; the picked one shows who's on it
+  (`goods_issues.assignee`), Found → Told them → Fix on the way → Closed, what's wrong by style and size, a message to
+  the customer already written (Portal + email through `staffMessage`, or a text opened in Messages and marked "I texted
+  it"; nothing sends by itself), the supplier rep's email when it's our order, the ways it gets fixed, and its history
+  (`goods_issues.log`). A job counted again updates its one open issue, never a second (`openFromCheckin`). Once a job is
+  counted, Receiving shows what was counted ("Counted 676 of 690 · 14 short"), never the carrier's boxes delivered.
 - **The crew's phones** (Nick, Nov 13 2026: "this is how most people at my company are going to get in the site… 30 of
   them are going to use only this view"). One way in: the QR on the wall or on any work order → `/crew` (the main menu)
   or `/j/<number>` (a job's menu, with Main menu at its top), employee # and PIN once, on the shop's Wi-Fi. What a phone

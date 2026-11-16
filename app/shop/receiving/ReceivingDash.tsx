@@ -102,6 +102,15 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
   const open = useMemo(() => live.filter((j) => j.state !== "checked"), [live]);
   const counted = useMemo(() => live.filter((j) => j.state === "checked"), [live]);
   const n = (d: Day) => (d === "counted" ? counted.length : open.filter((j) => dayOf(j) === d).length);
+  // once a job's been counted, what was counted is what shows (Nov 16, Nick: #50061 counted 14 short read "690 of 690
+  // delivered" with a full bar): the carrier's boxes delivered say nothing about what's in them
+  const countOf = (j: CheckJob) => {
+    const c = j.checkins[0];
+    if (!c) return null;
+    const short = (c.lines || []).reduce((a, l) => a + (l.issue && l.issue !== "over" ? Math.max(0, l.expected - l.received, l.bad || 0) : 0), 0);
+    const off = c.status === "issue";
+    return { off, pct: Math.min(100, Math.round((c.received / Math.max(1, c.expected)) * 100)), say: `Counted ${c.received} of ${c.expected}${short ? ` · ${short} short or bad` : off ? " · a problem" : " · all here"}` };
+  };
   const pcsOf = (j: CheckJob) => j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
   const supOf = (j: CheckJob) => (j.suppliers.length ? j.suppliers.join(" / ") : "");
   const sort = (a: CheckJob, b: CheckJob) => {
@@ -149,7 +158,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         <div className="rvm-c1"><Link className="rvm-no" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link><span className={"rvd-pill " + st.tone}>{st.label}</span></div>
         <div className="rvm-cu" data-notranslate>{j.customer}</div>
         {j.nickname ? <div className="rvm-nk" data-notranslate>{j.nickname}</div> : null}
-        <div className="rvm-meta">{j.due ? <span>Due {short(j.due)}</span> : null}<span>{pcsOf(j)} pcs</span>{sup ? <span>{sup}{j.lines ? ` · ${j.arrived} of ${j.shipped} here` : ""}</span> : <span>No manifest</span>}</div>
+        <div className="rvm-meta">{j.due ? <span>Due {short(j.due)}</span> : null}<span>{pcsOf(j)} pcs</span>{countOf(j) ? <span className={countOf(j)!.off ? "rvd-off" : ""}>{sup ? `${sup} · ` : ""}{countOf(j)!.say}</span> : sup ? <span>{sup}{j.lines ? ` · ${j.arrived} of ${j.shipped} here` : ""}</span> : <span>No manifest</span>}</div>
         <div className="rvm-acts">
           {!j.ref.startsWith("pv:") && <button type="button" className="btn rvm-pr" aria-label="Work order" title="Work order" onClick={() => setWo(j)}><PrinterIcon /></button>}
           {/* on a phone, the one phone count in (pick a style, hold to count all, stop halfway and finish later; Nov 13) */}
@@ -229,8 +238,8 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
                     <td className="nw rvd-c-no" data-label=""><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
                     <td className="rvd-c-cu" data-label=""><b data-notranslate>{j.customer}</b>{j.nickname ? <div className="sub" data-notranslate>{j.nickname}</div> : null}</td>
                     <td className="rvd-from rvd-c-due" data-label=""><span className="rvd-ph">Due </span>{j.due ? short(j.due) : "—"}</td>
-                    <td className="rvd-c-sup" data-label=""><span className="rvd-from">{supOf(j) || "No manifest"}</span>{j.lines ? <div className="sub">{`${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}`}</div> : null}</td>
-                    <td className="rvd-pcs rvd-c-pcs" data-label="">{j.shipped && j.lines ? <span className="rvd-bar2"><i style={{ width: `${Math.min(100, Math.round((j.arrived / Math.max(1, j.shipped)) * 100))}%` }} /></span> : null}<b>{pcs}</b> <span className="sub">pcs</span></td>
+                    <td className="rvd-c-sup" data-label=""><span className="rvd-from">{supOf(j) || "No manifest"}</span>{countOf(j) ? <div className={"sub" + (countOf(j)!.off ? " rvd-off" : "")}>{countOf(j)!.say}</div> : j.lines ? <div className="sub">{`${j.arrived} of ${j.shipped} delivered${j.boxes ? ` · ${j.boxes} box${j.boxes === 1 ? "" : "es"}` : ""}`}</div> : null}</td>
+                    <td className="rvd-pcs rvd-c-pcs" data-label="">{countOf(j) ? <span className={"rvd-bar2" + (countOf(j)!.off ? " off" : "")}><i style={{ width: `${countOf(j)!.pct}%` }} /></span> : j.shipped && j.lines ? <span className="rvd-bar2"><i style={{ width: `${Math.min(100, Math.round((j.arrived / Math.max(1, j.shipped)) * 100))}%` }} /></span> : null}<b>{pcs}</b> <span className="sub">pcs</span></td>
                     <td className="rvd-c-st" data-label=""><span className={"rvd-pill " + st.tone}>{st.label}</span></td>
                     <td className="rvd-act" data-label="">{woBtn(j)}<button type="button" className={"btn sm" + (j.state === "ready" || j.state === "partial" || j.state === "none" ? " primary" : "")} onClick={() => setCount(j)}>{j.state === "issue" ? "Recount" : "Count in"}</button></td>
                   </tr>

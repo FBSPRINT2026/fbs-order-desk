@@ -82,7 +82,14 @@ export async function openFromCheckin(admin: SupabaseClient, c: CheckinRow, by: 
     kind, source: "checkin", owner: ownerPick && ownerPick !== "auto" ? ownerPick : src.owner, supplier: src.supplier, supplier_order: src.supplierOrder, po: src.po || String((o as { po_number?: string } | null)?.po_number || ""),
     items, title, detail: detail.slice(0, 2000), photos: c.photos || [], status: "open", dedupe_key: `checkin:${c.id}`, created_by: by,
   };
-  const { data: made, error } = await admin.from("goods_issues").upsert(row, { onConflict: "dedupe_key" }).select("*").single();
+  // counted again (Nov 16 2026, #40507 counted three times made three issues): the newest count is the order's one issue;
+  // an issue already open from an earlier count takes the new count's items and keeps who's on it, what was said and done
+  const prior = await (c.order_id ? admin.from("goods_issues").select("id").eq("order_id", c.order_id) : admin.from("goods_issues").select("id").eq("archived_order_id", c.archived_order_id || ""))
+    .eq("source", "checkin").is("closed_at", null).neq("dedupe_key", row.dedupe_key).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const { status: _s, created_by: _c, owner: _o, ...fresh } = row;
+  const { data: made, error } = prior.data
+    ? await admin.from("goods_issues").update({ ...fresh, updated_at: new Date().toISOString() }).eq("id", prior.data.id).select("*").single()
+    : await admin.from("goods_issues").upsert(row, { onConflict: "dedupe_key" }).select("*").single();
   if (error || !made) return null;
   if (c.order_id) await holdForGoods(admin, c.order_id, `${title}: ${detail}`.slice(0, 300));
   await tellAccount(admin, made as GoodsIssue, number).catch(() => null);

@@ -1,4 +1,5 @@
 "use client";
+import IssueCenter from "@/components/IssueCenter";
 import Link from "next/link";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,7 +26,7 @@ import GoodsIssues from "@/components/GoodsIssues";
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
 type BS = { id: string; order_id: string; blank_order_id: string | null; carrier: string; tracking: string; boxes: number | null; pcs: number | null; note: string; eta: string | null; track_status: string; track_detail: string; est_delivery: string | null; delivered_at: string | null };
-type View = "dash" | "today" | "fbs" | "customer" | "resolve" | "ignored" | "settings";
+type View = "dash" | "issues" | "today" | "fbs" | "customer" | "resolve" | "ignored" | "settings";
 type Arrive = "past" | "today" | "tomorrow" | "later" | "nodate";
 const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
   { k: "past", label: "Should be here: not marked received" }, { k: "today", label: "Arriving today" }, { k: "tomorrow", label: "Tomorrow" }, { k: "later", label: "Later" }, { k: "nodate", label: "On the way, no date yet" },
@@ -156,6 +157,9 @@ export default function GoodsReceiving() {
   const [order, setOrder] = useState<O | null>(null);
   const [note, setNote] = useState("");
   const [view, setViewState] = useState<View>("dash");
+  // open issues, on the Issue Center button (counted by the center itself once opened; first from the issues list)
+  const [issueN, setIssueN] = useState(0);
+  useEffect(() => { void import("@/app/shop/issue-center-actions").then((m) => m.issueCenter()).then((r) => { if (r.ok) setIssueN(r.issues.filter((i) => !i.closed_at).length); }); }, []);
   const [pending, setPending] = useState<PendingShipment[] | null>(null);
   const [pvGoods, setPvGoods] = useState<PrintavoGoods[]>([]);
   const [upBusy, setUpBusy] = useState(false), [refreshKey, setRefreshKey] = useState(0);
@@ -189,7 +193,7 @@ export default function GoodsReceiving() {
   // Check-In: this week's jobs ready to count, and open check-in problems (badges on the Check-In button)
   const [ck, setCk] = useState<{ ready: number; issue: number } | null>(null);
   useEffect(() => { fetch("/api/goods/checkin", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.jobs) setCk({ ready: (j.jobs as { state: string; day: string }[]).filter((x) => x.state === "ready" && x.day <= j.today).length, issue: (j.problems || []).length }); }).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "today" || v === "fbs" || v === "customer" || v === "resolve" || v === "ignored" || v === "settings") setViewState(v); }, []);
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "issues" || v === "today" || v === "fbs" || v === "customer" || v === "resolve" || v === "ignored" || v === "settings") setViewState(v); }, []);
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "dash") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
   const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
@@ -500,12 +504,16 @@ export default function GoodsReceiving() {
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       {/* goods issues across every customer: check-in problems and tracking gone wrong (Nov 2, components/GoodsIssues.tsx) */}
-      {view !== "dash" && <GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} />}
+      {view !== "dash" && view !== "issues" && <GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} />}
       {/* Dashboard on its own, the shipment views under Shipments (Nov 11, Nick) */}
       <div className="rvg-nav">
         <button type="button" className={"rvg-dash" + (view === "dash" ? " on" : "")} onClick={() => setView("dash")}>
           <span className="rvg-ico" aria-hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /><path d="M15.5 15.2l1.4 1.4 2.6-2.8" strokeWidth="1.8" /></svg></span>
           <span className="rvg-t"><b>Dashboard</b><small>Count in · trucks · issues</small></span>
+        </button>
+        <button type="button" className={"rvg-dash rvg-iss" + (view === "issues" ? " on" : "")} onClick={() => setView("issues")}>
+          <span className="rvg-ico rvg-ico-iss" aria-hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18v.5" /></svg></span>
+          <span className="rvg-t"><b>Issue Center{issueN ? <span className="aa-n">{issueN}</span> : null}</b><small>Short · damaged · wrong · tell them</small></span>
         </button>
         <div className="rvg-ship">
           <div className="rvg-ship-h">Shipments</div>
@@ -518,7 +526,8 @@ export default function GoodsReceiving() {
         </div>
       </div>
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
-      {view !== "dash" && view !== "settings" && <div className="rv-search-row">
+      {view === "issues" && <IssueCenter onCount={setIssueN} />}
+      {view !== "dash" && view !== "issues" && view !== "settings" && <div className="rv-search-row">
           <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>
         </div>}
 
