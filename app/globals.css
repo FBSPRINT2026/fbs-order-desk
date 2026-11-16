@@ -23338,3 +23338,7 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .mzc-tools.shut .msk-g .msk-b>svg{width:32px;height:32px;padding:7px}
 .mzc-tools.shut .msk-g .msk-b .msk-n{display:none}
 .mzc-tools.shut .msk-g .msk-b.bad .msk-n{display:block;position:absolute;top:-5px;right:-6px;margin:0;font-size:10px;line-height:15px;padding:0 5px;border-radius:999px;background:var(--danger);color:#fff}
+/* the top-line search: what's typed always shows; the count stays short beside it (Nick, Nov 16: "you can't see what you typed") */
+.mzc-q{flex:0 1 360px;min-width:200px;width:auto}
+.mzc-q input{min-width:110px}
+.mzc-q .msq-n{flex:none}

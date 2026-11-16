@@ -3124,7 +3124,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               const i = (findI + (e.key === "ArrowUp" ? -1 : 1) + hits.length) % hits.length; setFindI(i);
               hits[i].scrollIntoView({ block: "center", behavior: "smooth" }); hits.forEach((h, k) => h.classList.toggle("ms-hit-on", k === i));
             }} />
-          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n} found${nt ? ` · ${nt} in Ready To Schedule` : ""}` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
+          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n + nt} found` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
         </div>
               {(() => {
                 // Start over asks first, and what to do with the locks (Nov 11, Nick: "yes, start over… release all locks or leave locks there")
