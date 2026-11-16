@@ -5,7 +5,10 @@ export const bySize = (a: string, b: string) => { const i = SIZE_ORDER.indexOf(a
 /** one style + color, with how many of each size */
 export type CheckItem = { key: string; style: string; color: string; desc: string; /** the brand ("Comfort Colors") when the line or manifest says it */ brand?: string; sizes: Record<string, number> };
 export type Issue = "" | "short" | "over" | "damaged" | "mispick";
-export type CheckLine = { item: string; style: string; color: string; size: string; expected: number; received: number; issue: Issue; bad?: number; note?: string };
+export type CheckLine = { item: string; style: string; color: string; size: string; expected: number; received: number; issue: Issue; bad?: number; note?: string;
+  /** who sent the goods with the problem (Nick, Nov 16 2026): SanMar, S&S, alphabroder, or typed */ vendor?: string };
+/** the vendors picked from on a problem (anything else is typed) */
+export const VENDORS = ["SanMar", "S&S", "alphabroder"];
 export type CheckinRow = { id: string; order_id: string | null; archived_order_id: string | null; lines: CheckLine[]; expected: number; received: number; boxes: number | null; source: string; status: "complete" | "issue"; note: string; photos: string[]; by: string; created_at: string; resolved_at: string | null; resolved_by: string; resolution: string };
 export type JobKind = "sp" | "emb" | "hp" | "other";
 export const KIND_LABEL: Record<JobKind, string> = { sp: "Screen printing", emb: "Embroidery", hp: "Heat press", other: "Other" };

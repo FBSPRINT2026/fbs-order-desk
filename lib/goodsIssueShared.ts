@@ -1,6 +1,8 @@
 /** Goods issues: types and the email to the supplier's rep, safe for the browser (lib/goodsIssues.ts is the server side). */
 export type IssueOwner = "customer" | "shop";
-export type IssueItem = { style: string; color: string; size: string; expected: number; received: number; owed: number; bad?: number; issue: string; note?: string };
+export type IssueItem = { style: string; color: string; size: string; expected: number; received: number; owed: number; bad?: number; issue: string; note?: string; vendor?: string };
+/** a vendor's name as typed or picked → the supplier key the issues use ("S&S" → "ss") */
+export const supplierKey = (v: string) => { const t = v.trim().toLowerCase().replace(/[^a-z&]/g, ""); return t === "sanmar" ? "sanmar" : t === "s&s" || t === "ss" || t.startsWith("ssactive") ? "ss" : t.startsWith("alpha") ? "alpha" : v.trim(); };
 export type GoodsIssue = {
   id: string; order_id: string | null; archived_order_id: string | null; customer_id: string | null; checkin_id: string | null;
   kind: "short" | "over" | "mispick" | "damaged" | "missing" | "tracking"; source: string; owner: IssueOwner;

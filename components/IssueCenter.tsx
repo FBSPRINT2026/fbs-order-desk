@@ -150,8 +150,8 @@ function Detail({ i, ctx, reload }: { i: CenterIssue; ctx: CenterCtx; reload: ()
         <div className="isc-k">What&apos;s wrong</div>
         {i.items.length ? (
           <div className="tbl-wrap"><table className="tbl">
-            <thead><tr><th>Style</th><th>Color</th><th>Size</th><th className="r">Ordered</th><th className="r">Got</th><th className="r">Owed</th><th>Note</th></tr></thead>
-            <tbody>{i.items.map((it, k) => <tr key={k}><td>{it.style}</td><td>{it.color}</td><td>{it.size}</td><td className="r">{it.expected}</td><td className="r">{it.received}</td><td className={"r" + (it.owed ? " isc-owed" : "")}>{it.issue === "over" ? `+${it.received - it.expected}` : it.owed}</td><td className="sub">{[it.issue === "short" ? "" : it.issue, it.note].filter(Boolean).join(" · ")}</td></tr>)}</tbody>
+            <thead><tr><th>Style</th><th>Color</th><th>Size</th><th className="r">Ordered</th><th className="r">Got</th><th className="r">Owed</th><th>Vendor</th><th>Note</th></tr></thead>
+            <tbody>{i.items.map((it, k) => <tr key={k}><td>{it.style}</td><td>{it.color}</td><td>{it.size}</td><td className="r">{it.expected}</td><td className="r">{it.received}</td><td className={"r" + (it.owed ? " isc-owed" : "")}>{it.issue === "over" ? `+${it.received - it.expected}` : it.owed}</td><td>{it.vendor || (i.supplier ? supplierName(i.supplier) : "")}</td><td className="sub">{[it.issue === "short" ? "" : it.issue, it.note].filter(Boolean).join(" · ")}</td></tr>)}</tbody>
           </table></div>
         ) : <p>{i.detail}</p>}
         {(i.photoUrls || []).length > 0 && <div className="isc-pics">{(i.photoUrls || []).map((u, k) => <a key={k} href={u} target="_blank" rel="noreferrer"><img src={u} alt={`Photo ${k + 1}`} /></a>)}</div>}

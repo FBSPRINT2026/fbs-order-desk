@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
 import type { CheckinRow } from "@/lib/checkinShared";
 import type { Flag } from "@/lib/orderStages";
-import { whoWorks, type GoodsIssue, type IssueItem, type IssueOwner } from "@/lib/goodsIssueShared";
+import { supplierKey, whoWorks, type GoodsIssue, type IssueItem, type IssueOwner } from "@/lib/goodsIssueShared";
 
 /**
  * Goods issues (Nov 2, Nick: "something at the top that says issues… when receiving checks in goods… they sent us a wrong
@@ -66,7 +66,10 @@ export async function openFromCheckin(admin: SupabaseClient, c: CheckinRow, by: 
     style: l.style, color: l.color, size: l.size, expected: l.expected, received: l.received, bad: l.bad || 0, issue: l.issue, note: l.note || "",
     // what's still owed: the pieces short, or the damaged / wrong ones to be replaced (over: nothing owed)
     owed: l.issue === "over" ? 0 : l.issue === "short" ? Math.max(0, l.expected - l.received) : Math.max(l.bad || 0, l.expected - l.received, 0),
+    ...(l.vendor ? { vendor: l.vendor } : {}),
   }));
+  // the vendor counted in picked on the problems (Nov 16, Nick): one vendor for all of them is the issue's supplier
+  const picked = [...new Set(items.map((it) => it.vendor).filter(Boolean))] as string[];
   const src = await goodsSource(admin, c.order_id, c.archived_order_id);
   const { data: o } = c.order_id ? await admin.from("orders").select("number, customer_id, po_number").eq("id", c.order_id).maybeSingle()
     : await admin.from("archived_orders").select("visual_id, customer_id, po_number").eq("id", c.archived_order_id || "").maybeSingle();
@@ -79,7 +82,7 @@ export async function openFromCheckin(admin: SupabaseClient, c: CheckinRow, by: 
   const detail = items.map((it) => `${label(it)}: got ${it.received} of ${it.expected}${it.bad ? ` (${it.bad} ${it.issue === "mispick" ? "wrong" : "damaged"})` : ""}`).join("; ");
   const row = {
     order_id: c.order_id, archived_order_id: c.archived_order_id, customer_id: (o as { customer_id?: string } | null)?.customer_id || null, checkin_id: c.id,
-    kind, source: "checkin", owner: ownerPick && ownerPick !== "auto" ? ownerPick : src.owner, supplier: src.supplier, supplier_order: src.supplierOrder, po: src.po || String((o as { po_number?: string } | null)?.po_number || ""),
+    kind, source: "checkin", owner: ownerPick && ownerPick !== "auto" ? ownerPick : src.owner, supplier: picked.length === 1 ? supplierKey(picked[0]) : src.supplier, supplier_order: src.supplierOrder, po: src.po || String((o as { po_number?: string } | null)?.po_number || ""),
     items, title, detail: detail.slice(0, 2000), photos: c.photos || [], status: "open", dedupe_key: `checkin:${c.id}`, created_by: by,
   };
   // counted again (Nov 16 2026, #40507 counted three times made three issues): the newest count is the order's one issue;

@@ -6,7 +6,7 @@ import PhotoButtons from "@/components/PhotoButtons";
 import { garmentHex } from "@/lib/mockup";
 import GarmentShape, { garmentKind } from "@/components/GarmentShape";
 import { garmentLooks, type GarmentLook } from "@/app/shop/receiving/garment-actions";
-import { bySize, type CheckJob, type CheckLine, type CheckinRow, type Issue } from "@/lib/checkinShared";
+import { bySize, VENDORS, type CheckJob, type CheckLine, type CheckinRow, type Issue } from "@/lib/checkinShared";
 
 /**
  * Count a job's goods in: one grid, garments down and sizes across (Oct 27, Nick picked "B3"), a box per size. Tap a size's expected number (or ✓ on the row,
@@ -16,7 +16,7 @@ import { bySize, type CheckJob, type CheckLine, type CheckinRow, type Issue } fr
  */
 const REASONS: [Issue, string][] = [["short", "Short"], ["damaged", "Damaged"], ["mispick", "Wrong item"], ["over", "Extra"]];
 export const ISSUE_WORD: Record<string, string> = { short: "Short", over: "Extra", damaged: "Damaged", mispick: "Wrong item" };
-type Extra = { issue: Issue; bad: number; note: string };
+type Extra = { issue: Issue; bad: number; note: string; vendor?: string; typing?: boolean };
 
 export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob; onClose: () => void; onSaved: (c: CheckinRow) => void }) {
   const sb = useMemo(() => createClient(), []);
@@ -68,8 +68,10 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
   const expected = cells.reduce((s, c) => s + c.expected, 0), counted = cells.reduce((s, c) => s + (n(c.k) ?? 0), 0);
   const fill = (ks: { k: string; expected: number }[]) => setGot((g) => ({ ...g, ...Object.fromEntries(ks.map((c) => [c.k, String(c.expected)])) }));
   // the problems: every counted size that's off, plus damage / wrong items reported on matching counts
+  // the vendor each problem is on, picked for them from the manifest (S&S, SanMar…) when there's one
+  const defVendor = (() => { const s0 = (job.suppliers || [])[0] || ""; const k = s0.toLowerCase(); return k.includes("sanmar") ? "SanMar" : k.includes("s&s") || k === "ss" ? "S&S" : k.includes("alpha") ? "alphabroder" : s0; })();
   const problems = cells.filter((c) => { const v = n(c.k); return (v !== null && v !== c.expected) || (extra[c.k] && (extra[c.k].issue === "damaged" || extra[c.k].issue === "mispick")); })
-    .map((c) => { const v = n(c.k) ?? 0, x = extra[c.k]; return { ...c, v, issue: (x?.issue || (v < c.expected ? "short" : "over")) as Issue, bad: x?.bad || 0, note: x?.note || "" }; });
+    .map((c) => { const v = n(c.k) ?? 0, x = extra[c.k]; return { ...c, v, issue: (x?.issue || (v < c.expected ? "short" : "over")) as Issue, bad: x?.bad || 0, note: x?.note || "", vendor: x?.vendor ?? defVendor, typing: !!x?.typing }; });
   const setX = (k: string, p: Partial<Extra>, def: Issue) => setExtra((e) => ({ ...e, [k]: { issue: e[k]?.issue || def, bad: e[k]?.bad || 0, note: e[k]?.note || "", ...p } }));
 
   async function addPhotos(fs: File[] | null) {
@@ -89,7 +91,7 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
     setBusy(t("Saving…")); setErr("");
     const lines: CheckLine[] = cells.map((c) => {
       const v = n(c.k) ?? 0, p = problems.find((x) => x.k === c.k);
-      return { item: [c.it.style, c.it.color].filter(Boolean).join(" · "), style: c.it.style, color: c.it.color, size: c.size, expected: c.expected, received: v, issue: p ? p.issue : "", ...(p?.bad ? { bad: p.bad } : {}), ...(p?.note ? { note: p.note } : {}) };
+      return { item: [c.it.style, c.it.color].filter(Boolean).join(" · "), style: c.it.style, color: c.it.color, size: c.size, expected: c.expected, received: v, issue: p ? p.issue : "", ...(p?.bad ? { bad: p.bad } : {}), ...(p?.note ? { note: p.note } : {}), ...(p?.vendor ? { vendor: p.vendor } : {}) };
     });
     const r = await fetch("/api/goods/checkin", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: job.ref, lines, boxes: boxes === "" ? null : +boxes, note, photos: photos.map((p) => p.path), source: job.source, owner }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { error: t("Couldn't reach the server.") };
@@ -228,6 +230,11 @@ export default function CheckinModal({ job, onClose, onSaved }: { job: CheckJob;
                 <span className="ck-prob-w" data-notranslate><b>{[p.it.style, p.it.color].filter(Boolean).join(" · ")} · {p.size === "OTHER" ? t("Other") : p.size}</b> {t("got {0} of {1}", p.v, p.expected)}{p.bad ? " · " + t(p.issue === "mispick" ? "{0} wrong" : "{0} damaged", p.bad) : ""}</span>
                 <select value={p.issue} onChange={(e) => setX(p.k, { issue: e.target.value as Issue }, p.issue)} aria-label={t("Reason")}>{REASONS.map(([k, l]) => <option key={k} value={k}>{t(l)}</option>)}</select>
                 {p.issue === "damaged" || p.issue === "mispick" ? <label className="ck-bad">{t("How many")}<input type="number" min={0} inputMode="numeric" value={p.bad || ""} onChange={(e) => setX(p.k, { bad: +e.target.value || 0 }, p.issue)} /></label> : <span />}
+                {p.typing || (p.vendor && !VENDORS.includes(p.vendor))
+                  ? <input className="ck-vend" value={p.vendor} onChange={(e) => setX(p.k, { vendor: e.target.value, typing: true }, p.issue)} placeholder={t("Vendor")} aria-label={t("Vendor")} autoFocus={p.typing && !p.vendor} />
+                  : <select className="ck-vend" value={p.vendor} onChange={(e) => setX(p.k, e.target.value === "__other" ? { vendor: "", typing: true } : { vendor: e.target.value, typing: false }, p.issue)} aria-label={t("Vendor")}>
+                    <option value="">{t("Vendor…")}</option>{VENDORS.map((v) => <option key={v} value={v}>{v}</option>)}<option value="__other">{t("Other (type it)")}</option>
+                  </select>}
                 <input className="ck-pnote" placeholder={t("Note (optional)")} value={p.note} onChange={(e) => setX(p.k, { note: e.target.value }, p.issue)} />
               </div>
             ))}

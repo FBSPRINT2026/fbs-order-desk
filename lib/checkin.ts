@@ -200,7 +200,7 @@ export async function saveCheckin(admin: SupabaseClient, by: string, b: { ref: s
     const expected = Math.max(0, Math.round(+l.expected || 0)), received = Math.max(0, Math.round(+l.received || 0)), bad = Math.max(0, Math.round(+(l.bad || 0)));
     // the reason: what they picked, else the difference itself
     const issue: Issue = (["short", "over", "damaged", "mispick"] as Issue[]).includes(l.issue) ? l.issue : bad > 0 ? "damaged" : received < expected ? "short" : received > expected ? "over" : "";
-    return { item: String(l.item || "").slice(0, 80), style: String(l.style || "").slice(0, 60), color: String(l.color || "").slice(0, 60), size: String(l.size || "").slice(0, 12), expected, received, issue: received === expected && !bad && issue !== "mispick" && issue !== "damaged" ? "" : issue, ...(bad ? { bad } : {}), ...(l.note ? { note: String(l.note).slice(0, 300) } : {}) };
+    return { item: String(l.item || "").slice(0, 80), style: String(l.style || "").slice(0, 60), color: String(l.color || "").slice(0, 60), size: String(l.size || "").slice(0, 12), expected, received, issue: received === expected && !bad && issue !== "mispick" && issue !== "damaged" ? "" : issue, ...(bad ? { bad } : {}), ...(l.note ? { note: String(l.note).slice(0, 300) } : {}), ...(l.vendor && String(l.vendor).trim() ? { vendor: String(l.vendor).trim().slice(0, 60) } : {}) };
   });
   const expected = lines.reduce((s, l) => s + l.expected, 0), received = lines.reduce((s, l) => s + l.received, 0);
   const status = lines.some((l) => l.issue) ? "issue" : "complete";
