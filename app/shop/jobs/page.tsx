@@ -295,8 +295,8 @@ export default function JobCenter() {
       {showMsgs && <aside className="jx-m" aria-label="FBS Messages">
         <div className="jx-mh"><b>FBS Messages</b>{waitingNow > 0 && <span className="jcm-n">{waitingNow} new</span>}<span className="spacer" />
           <button type="button" className="btn sm ghost" aria-label="Fold messages away" title="Fold FBS Messages away" onClick={() => setMsgsOpen(false)}>✕</button></div>
-        <div className="jx-mf" role="radiogroup" aria-label="Show">{([["waiting", "New", myChats.filter((c) => c.waiting || c.last.from === "customer").length], ["replied", "Waiting on them", myChats.filter((c) => !c.waiting && c.last.from !== "customer").length], ["archived", "Done", myArchived.length]] as const).map(([k, l, nn]) => (
-          <button key={k} type="button" role="radio" aria-checked={!mWant && mShow === k} className={!mWant && mShow === k ? "on" : ""} onClick={() => setMShow(k)}>{l}{k !== "archived" && <em>{nn}</em>}</button>))}</div>
+        <div className="jx-mf" role="radiogroup" aria-label="Show">{([["waiting", "New", myChats.filter((c) => c.waiting || c.last.from === "customer").length], ["replied", "Waiting", myChats.filter((c) => !c.waiting && c.last.from !== "customer").length], ["archived", "Done", myArchived.length]] as const).map(([k, l, nn]) => (
+          <button key={k} type="button" role="radio" aria-checked={!mWant && mShow === k} className={!mWant && mShow === k ? "on" : ""} title={k === "replied" ? "Waiting on them: we answered last" : undefined} onClick={() => setMShow(k)}>{l}{k !== "archived" && <em>{nn}</em>}</button>))}</div>
         <div className="jx-ms"><SearchInput placeholder="Search messages" value={mq} onChange={(e) => setMq(e.target.value)} aria-label="Search messages" /></div>
         <div className="jx-ml">
           {!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : mShow === "waiting" ? "Nothing waiting on you." : "No customer messages."}</div>
