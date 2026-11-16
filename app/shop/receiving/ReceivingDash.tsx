@@ -182,8 +182,8 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         <div className="rvm-list">
           {err ? <div className="empty">{err}</div> : !jobs ? <div className="empty">Loading…</div> : !shown.length && !grayed.length ? <div className="empty">{q.trim() ? "No order matches." : day === "counted" ? "Nothing counted is waiting for the press." : "Nothing to count in."}</div> : <>
             {/* what's surely here first (Nick, Nov 13): Here · ready to count, Part here, Problem, Not sure, On the way */}
-            {countSections<CheckJob>(shown).map((sec) => <Fragment key={sec.key}><div className="rvm-sec">{sec.label} · {sec.jobs.length}</div>{sec.jobs.map((j) => pcard(j, false))}</Fragment>)}
-            {grayed.length > 0 && day !== "counted" && <div className="rvm-sec">Counted · waiting for the press · {grayed.length}</div>}
+            {countSections<CheckJob>(shown).map((sec) => <Fragment key={sec.key}><SecBar k={sec.key} label={sec.label} n={sec.jobs.length} />{sec.jobs.map((j) => pcard(j, false))}</Fragment>)}
+            {grayed.length > 0 && day !== "counted" && <SecBar k="counted" label="Counted · waiting for the press" n={grayed.length} />}
             {grayed.map((j) => pcard(j, true))}
           </>}
         </div>
@@ -231,7 +231,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
               <thead><tr>{([["number", "Order #"], ["customer", "Customer"], ["due", "Due date"], ["supplier", "Supplier"], ["pcs", "Pieces"], ["status", "Status"]] as const).map(([k, l]) => (
                 <th key={k} className={"rvd-th" + (sortBy?.k === k ? " on" : "")} onClick={() => setSortBy((x) => (x?.k === k ? (x.dir === 1 ? { k, dir: -1 } : null) : { k, dir: 1 }))} title="Sort by this">{l}<span className="rvd-ar" aria-hidden>{sortBy?.k === k ? (sortBy.dir === 1 ? "▲" : "▼") : "↕"}</span></th>
               ))}<th /></tr></thead>
-              <tbody>{(sortBy ? [{ key: "all", label: "", jobs: shown }] : countSections<CheckJob>(shown)).map((sec) => <Fragment key={sec.key}>{sec.label && <tr className="rvd-sub rvd-sec"><td colSpan={7}>{sec.label} <span className="rvd-n">{sec.jobs.length}</span></td></tr>}{sec.jobs.map((j) => {
+              <tbody>{(sortBy ? [{ key: "all", label: "", hint: "", jobs: shown }] : countSections<CheckJob>(shown)).map((sec) => <Fragment key={sec.key}>{sec.label && <tr className="rvd-secrow"><td colSpan={7}><SecBar k={sec.key} label={sec.label} n={sec.jobs.length} hint={sec.hint} /></td></tr>}{sec.jobs.map((j) => {
                 const st = stOf(j), pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0);
                 return (
                   <tr key={j.ref} className={day === "today" && !q.trim() && j.state !== "way" && j.state !== "none" ? "rvd-urg" : ""}>
@@ -245,7 +245,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
                   </tr>
                 );
               })}</Fragment>)}
-              {grayed.length > 0 && day !== "counted" && <tr className="rvd-sub"><td colSpan={7}>Counted · waiting for the press to start <span className="rvd-n">{grayed.length}</span></td></tr>}
+              {grayed.length > 0 && day !== "counted" && <tr className="rvd-secrow"><td colSpan={7}><SecBar k="counted" label="Counted · waiting for the press" n={grayed.length} hint="drops off when it starts" /></td></tr>}
               {grayed.map((j) => { const pcs = j.ordered || j.items.reduce((s2, it) => s2 + Object.values(it.sizes).reduce((a, b) => a + b, 0), 0), last = j.checkins[0]; return (
                 <tr key={j.ref} className="rvd-done">
                   <td className="nw rvd-c-no" data-label=""><Link className="ordno" href={j.ref.startsWith("pv:") ? `/shop/archive/${j.ref.slice(3)}` : `/shop/orders/${j.ref}`}>#{j.number}</Link></td>
@@ -274,6 +274,21 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         </div>
       </aside>
       {modals}
+    </div>
+  );
+}
+
+/**
+ * A counting section's heading (Nick, Nov 16 2026, option A: "make those stand out more… a down arrow so people know
+ * it's what's underneath"): a full-width bar in the section's color, white words, its count, and an arrow pointing
+ * down at its jobs. The same bar on the desk and the phone.
+ */
+function SecBar({ k, label, n, hint }: { k: string; label: string; n: number; hint?: string }) {
+  return (
+    <div className={"rvd-bar rvd-bar-" + k}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 5v14M5 12l7 7 7-7" /></svg>
+      <span>{label}</span><span className="rvd-bar-n">{n}</span>
+      {hint && <span className="rvd-bar-h">{hint}</span>}
     </div>
   );
 }

@@ -36,13 +36,14 @@ export type CheckJob = {
  * first"): within a day, Here · ready to count, then Part here, then Problems to recount, then Not sure (no tracking:
  * it may be on the shelf), then On the way. The receiving dashboard (desk and phone) and the crew phone's list use it.
  */
-export const COUNT_SECTIONS: { key: string; label: string; states: JobState[] }[] = [
-  { key: "here", label: "Here · ready to count", states: ["ready"] },
-  { key: "part", label: "Part here", states: ["partial"] },
-  { key: "issue", label: "Problem · recount", states: ["issue"] },
-  { key: "unknown", label: "Not sure if it's here", states: ["none"] },
-  { key: "way", label: "On the way", states: ["way"] },
+/** the counting list's sections, each with its own colored heading bar (Nick, Nov 16 2026, option A: `rvd-bar`) */
+export const COUNT_SECTIONS: { key: string; label: string; hint: string; states: JobState[] }[] = [
+  { key: "here", label: "Here · ready to count", hint: "every box delivered", states: ["ready"] },
+  { key: "part", label: "Part here", hint: "more boxes coming", states: ["partial"] },
+  { key: "issue", label: "Problem · recount", hint: "in the Issue Center", states: ["issue"] },
+  { key: "unknown", label: "Not sure if it's here", hint: "no tracking to go by", states: ["none"] },
+  { key: "way", label: "On the way", hint: "not delivered yet", states: ["way"] },
 ];
-export function countSections<T extends { state: string }>(jobs: T[]): { key: string; label: string; jobs: T[] }[] {
-  return COUNT_SECTIONS.map((s) => ({ key: s.key, label: s.label, jobs: jobs.filter((j) => (s.states as string[]).includes(j.state)) })).filter((s) => s.jobs.length);
+export function countSections<T extends { state: string }>(jobs: T[]): { key: string; label: string; hint: string; jobs: T[] }[] {
+  return COUNT_SECTIONS.map((s) => ({ key: s.key, label: s.label, hint: s.hint, jobs: jobs.filter((j) => (s.states as string[]).includes(j.state)) })).filter((s) => s.jobs.length);
 }

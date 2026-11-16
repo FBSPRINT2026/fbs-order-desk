@@ -23473,3 +23473,17 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .isc-ev{display:grid;grid-template-columns:64px minmax(0,1fr);gap:10px;font-size:13px;padding:4px 0}
 .isc-ev > span:first-child{color:var(--ink-3);white-space:nowrap}
 .isc-ev small{color:var(--ink-3)}
+
+/* counting sections' heading bars (Receiving, desk and phone; Nick, Nov 16 2026, option A) */
+.rvd-secrow td{padding:0!important;border-bottom:0!important}
+.rvd-bar{display:flex;align-items:center;gap:10px;padding:9px 12px;color:#fff;font-weight:800;font-size:13.5px;letter-spacing:.04em;text-transform:uppercase;background:var(--ink-3)}
+.rvd-bar-n{background:rgba(255,255,255,.25);border-radius:999px;padding:1px 9px;font-size:12px;letter-spacing:0}
+.rvd-bar-h{margin-left:auto;font-weight:600;text-transform:none;letter-spacing:0;font-size:12px;opacity:.92}
+.rvd-bar-here{background:var(--ok)}
+.rvd-bar-part{background:color-mix(in srgb,var(--warn) 80%,#000)}
+.rvd-bar-issue{background:var(--danger)}
+.rvd-bar-unknown{background:#6B7689}
+.rvd-bar-way{background:var(--fbs-blue,var(--accent))}
+.rvd-bar-counted{background:#5B6B82}
+.rvm-list .rvd-bar{border-radius:8px;margin:8px 0 2px}
+table.rvd-tbl.tbl-stack tr.rvd-secrow{display:block!important;padding:0!important}
