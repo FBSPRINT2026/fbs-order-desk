@@ -62,7 +62,8 @@ export async function sourceOf(admin: SupabaseClient, activityId: string): Promi
   const attsAll = ((a.meta as { attachments?: { path: string; name: string; type?: string; size?: number }[] } | null)?.attachments || []);
   const { hasOwnSheet } = await import("@/lib/ai/emailOrder");
   const { supplierConfirms } = await import("@/lib/supplierConfirm");
-  const ownSheet = hasOwnSheet(attsAll);
+  // their own sheet: one named like it, or any other PDF or sheet beside the supplier's confirmation
+  const ownSheet = hasOwnSheet(attsAll) || attsAll.filter((f) => /\.(pdf|xlsx?|csv)$/i.test(f.name)).length > attsAll.filter((f) => /confirmation|order ?detail|packing ?slip/i.test(f.name)).length;
   for (const f of attsAll.slice(0, 8)) {
     if (left <= 0) break;
     const pdf = /pdf/i.test(f.type || "") || /\.pdf$/i.test(f.name);
