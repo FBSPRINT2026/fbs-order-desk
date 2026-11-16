@@ -89,14 +89,14 @@ export default function JobMobile(p: {
 
 
   if (!card) return (
-    <div className="jm"><header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
+    <div className="jm" translate="no"><header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
       <main className="jm-main"><div className="jm-card"><h1 className="jm-h">{t("No job #{0}", p.missing || "")}</h1><p>{t("This code doesn't match a job in the portal or in Printavo. Check the number on the label.")}</p></div></main></div>
   );
   const job = { kind: card.kind, id: card.id };
   const title: Record<View, string> = { home: "", setup: t("Press setup"), notes: t("Notes"), photos: t("Photos"), labels: t("Box labels"), ship: t("Ship"), checkin: t("Check in goods"), timer: t("Press timer"), inks: t("Inks"), post: t("Post count"), proof: t("Proof"), wo: t("Work order") };
 
   return (
-    <div className="jm">
+    <div className="jm" translate="no">
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="jm-top-who">{who.name}</span><LangToggle /></header>
       {who.viewAs && <ViewAsBar name={who.name} />}
       <section className={"jm-job" + (view === "checkin" ? " slim" : "")}>

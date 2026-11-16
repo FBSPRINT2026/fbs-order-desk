@@ -51,7 +51,10 @@ export async function learnRun(x: Who & { slotId: string; estMin: number; qty: n
     const admin = createAdminClient();
     const { data: sl } = await admin.from("production_slots").select("id, order_id, day, started_at, finished_at, locations").eq("id", x.slotId).maybeSingle();
     if (!sl?.order_id) return { ok: false };
-    const { data: lg } = await admin.from("production_slot_log").select("action, at").eq("slot_id", x.slotId).order("at");
+    const { data: lg } = await admin.from("production_slot_log").select("action, at, note").eq("slot_id", x.slotId).order("at");
+    // the operator said it took longer for a reason that isn't the job itself (ink ran out, the press went down, waiting
+    // on the customer's OK; Nick, Nov 16 2026): nothing to learn about how long jobs like it take
+    if (((lg || []) as { note?: string | null }[]).some((r) => /Took longer: (Ran out of ink|The press went down|Waiting on the customer|Waiting on goods|Waiting on screens)/.test(r.note || ""))) return { ok: true };
     // running stretches: Start / Resume → Pause / Finished
     let real = 0, from: Date | null = null;
     for (const r of (lg || []) as { action: string; at: string }[]) {

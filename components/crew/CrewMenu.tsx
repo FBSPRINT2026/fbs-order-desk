@@ -62,7 +62,7 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
   const where = home.presses.length === 1 ? home.presses[0].name : t(view?.label || "Office");
 
   return (
-    <div className="jm cr">
+    <div className="jm cr" translate="no">
       <header className="jm-top"><img src="/brand/fbs-logo-white.svg" alt="FBS Print" /><span className="cr-where">{where}</span><LangToggle /></header>
       {home.viewAs && <ViewAsBar name={home.name} />}
       <main className="jm-main cr-main">
@@ -160,16 +160,29 @@ function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) =>
     const run = jobs.find((j) => j.status === "running") || jobs.find((j) => j.status === "paused");
     const next = jobs.find((j) => j.status === "scheduled");
     const lastDone = [...jobs].filter((j) => j.status === "done").sort((a, b) => (b.finished || "").localeCompare(a.finished || ""))[0];
-    // the catcher: the job coming off the oven (printing now), else the last one done
+    // the catcher follows the press (Nick, Nov 16 2026: "whatever job their press operator is running… it's my job to put
+    // in the final count… and the number of boxes"): the job on the press live (who, the side, how far), then the jobs
+    // done that aren't counted yet
     if (v === "catcher") {
-      const j = run || lastDone;
+      const toCount = jobs.filter((x) => x.status === "done" && !x.posted).sort((a, b) => (b.finished || "").localeCompare(a.finished || ""));
+      const j = run || toCount[0] || lastDone;
       if (!j) return null;
+      const used = run?.started ? (now - Date.parse(run.started)) / 60000 : 0;
+      const pct = run && j.minutes ? Math.min(100, Math.round((used / j.minutes) * 100)) : 0;
+      const side = run?.onNow ? t(run.onNow.replace(/^\w+ · /, "")) : "";
       return (
         <section className="cr-hero">
-          <div className="cr-k">{run ? t("COMING OFF THE PRESS") : t("JUST FINISHED")}</div>
-          <div className="cr-n"><b>#{j.number}</b><span>{j.customer}</span></div>
-          <div className="cr-s">{t("{0} pcs", j.qty)}{j.name ? ` · ${j.name}` : ""}</div>
+          <div className="cr-k">{run ? (run.status === "paused" ? t("PAUSED ON THE PRESS") : run.onBy ? `${t(/^Setup/.test(run.onNow || "") ? "{0} IS SETTING UP" : "{0} IS RUNNING", run.onBy.toUpperCase())}${side ? ` · ${side.toUpperCase()}` : ""}` : t("COMING OFF THE PRESS")) : j.posted ? t("JUST FINISHED") : t("READY TO COUNT")}</div>
+          <div className="cr-n"><b>#{j.number}</b><span>{j.customer}</span>{j.rush && <em>{t("Rush")}</em>}</div>
+          <div className="cr-s">{t("{0} pcs", j.qty)}{j.label ? ` · ${shortLabel(j.label)}` : j.name ? ` · ${j.name}` : ""}</div>
+          {run && run.status !== "paused" && <div className="cr-clock" aria-live="off">{clockOf(used)}</div>}
+          {run && j.minutes > 0 && <div className="cr-bar"><i style={{ width: `${pct}%` }} /></div>}
+          {run && (run.sidesDone || []).length > 0 && <div className="cr-time"><span>{(run.sidesDone || []).map((x) => t("{0} done", t(x))).join(" · ")}</span></div>}
           <button type="button" className="cr-go" onClick={() => open(j.number, "post")}>{t("Count it · box labels")}</button>
+          {run && <small className="cr-last">{t("{0} marks the side done; you count what comes off the dryer", run.onBy || t("The operator"))}</small>}
+          {toCount.filter((x) => x !== j).slice(0, 3).map((x) => (
+            <button key={x.number} type="button" className="cr-ghost" onClick={() => open(x.number, "post")}>{t("To count")}: #{x.number} {x.customer}</button>
+          ))}
         </section>
       );
     }

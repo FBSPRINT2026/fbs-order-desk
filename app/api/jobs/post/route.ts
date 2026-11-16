@@ -16,15 +16,27 @@ export const dynamic = "force-dynamic";
  * A wrong count-in is fixed too ("you counted 10, there were 9"): saved as a new count-in with the right numbers.
  * Optionally the order moves on to Ready (worded by its delivery: pickup, ship, deliver) once it's boxed.
  */
-type Line = { style: string; color: string; size: string; pre: number; post: number; reject: number; was?: number };
+type Line = { style: string; color: string; size: string; pre: number; post: number; reject: number; was?: number; /** of the rejects, how many the press operator already filed */ filed?: number };
 
 export async function GET(req: Request) {
   const who = await jobActor();
   if (!who) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
   const u = new URL(req.url), kind = u.searchParams.get("kind"), id = u.searchParams.get("id") || "";
   const { data, error } = await createAdminClient().from("post_counts").select("*").eq(kind === "a" ? "archived_order_id" : "order_id", id).order("created_at", { ascending: false }).limit(5);
-  if (error) return NextResponse.json({ counts: [], setup: false });
-  return NextResponse.json({ counts: data || [], setup: true });
+  // the press operator's rejects (marked on the press timer when a side was done, Nick, Nov 16 2026), not counted yet:
+  // the final count takes them off "here now" and doesn't file them twice
+  let rejects: { style?: string; color?: string; size: string; n: number }[] = [];
+  if (kind !== "a") {
+    const { data: pi } = await createAdminClient().from("production_issues").select("sizes, at").eq("order_id", id).eq("why", "reject").gte("at", new Date(Date.now() - 3 * 86400000).toISOString()).limit(50);
+    const since = ((data || [])[0] as { created_at?: string } | undefined)?.created_at || "";
+    for (const x of (pi || []) as { sizes: Record<string, number>; at: string }[]) {
+      if (since && x.at < since) continue;
+      rejects.push(...Object.entries(x.sizes || {}).map(([size, n]) => ({ size, n: +n || 0 })));
+    }
+    rejects = rejects.filter((x) => x.n > 0);
+  }
+  if (error) return NextResponse.json({ counts: [], setup: false, rejects });
+  return NextResponse.json({ counts: data || [], setup: true, rejects });
 }
 
 export async function POST(req: Request) {
@@ -34,7 +46,7 @@ export async function POST(req: Request) {
   const job = b?.job as { kind: "o" | "a"; id: string } | undefined;
   if (!job?.id || !Array.isArray(b.lines) || !b.lines.length) return NextResponse.json({ error: "Nothing to save." }, { status: 400 });
   const n = (x: unknown) => Math.max(0, Math.round(+(x as number) || 0));
-  const lines: Line[] = (b.lines as Line[]).map((l) => ({ style: String(l.style || "").slice(0, 60), color: String(l.color || "").slice(0, 60), size: String(l.size || "").slice(0, 12), pre: n(l.pre), post: n(l.post), reject: n(l.reject), ...(l.was != null && n(l.was) !== n(l.pre) ? { was: n(l.was) } : {}) }));
+  const lines: Line[] = (b.lines as Line[]).map((l) => ({ style: String(l.style || "").slice(0, 60), color: String(l.color || "").slice(0, 60), size: String(l.size || "").slice(0, 12), pre: n(l.pre), post: n(l.post), reject: n(l.reject), filed: Math.min(n(l.filed), n(l.reject)), ...(l.was != null && n(l.was) !== n(l.pre) ? { was: n(l.was) } : {}) }));
   const pre = lines.reduce((a, l) => a + l.pre, 0), post = lines.reduce((a, l) => a + l.post, 0), rejects = lines.reduce((a, l) => a + l.reject, 0);
   const outcome = b.outcome === "reprint" && rejects > 0 ? "reprint" : post >= pre ? "all_here" : "short";
   const preFixed = lines.some((l) => l.was != null);
@@ -52,10 +64,12 @@ export async function POST(req: Request) {
   // the rejects print again: an Issue on the run (Reject), its own job on the schedule
   if (outcome === "reprint" && job.kind === "o") {
     const sizes: Record<string, number> = {};
-    for (const l of lines) if (l.reject) sizes[l.size] = (sizes[l.size] || 0) + l.reject;
+    // only the rejects found here: the operator's are already an Issue on the run
+    for (const l of lines) { const k = l.reject - (l.filed || 0); if (k > 0) sizes[l.size] = (sizes[l.size] || 0) + k; }
+    const fresh = Object.values(sizes).reduce((a, b) => a + b, 0);
     const { data: sl } = await admin.from("production_slots").select("id, kind").eq("order_id", job.id).order("finished_at", { ascending: false, nullsFirst: false }).limit(1).maybeSingle();
-    const r = await admin.from("production_issues").insert({ order_id: job.id, kind: (sl?.kind as string) || "screen", locations: null, why: "reject", sizes, pcs: rejects, from_slot: sl?.id || null, by: who.name });
-    if (!r.error) done.push(`${rejects} to reprint`);
+    const r = !fresh ? { error: null } : await admin.from("production_issues").insert({ order_id: job.id, kind: (sl?.kind as string) || "screen", locations: null, why: "reject", sizes, pcs: fresh, from_slot: sl?.id || null, by: who.name });
+    if (!r.error && fresh) done.push(`${fresh} to reprint`);
   }
 
   // boxed: the order moves on to Ready, unless pieces are still to print

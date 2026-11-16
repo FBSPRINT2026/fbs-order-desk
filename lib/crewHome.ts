@@ -11,7 +11,7 @@ import type { JobActor } from "@/lib/jobAccess";
  * The crew phone's main menu (/crew; Nick, Nov 13 2026: "this is how most people at my company are going to get in the
  * site"): their time clock, their press's jobs today in order, receiving's jobs to count, and what their view does.
  */
-export type CrewJob = { /** the order, to resume or pause it right from the menu */ orderId?: string; /** sides printed already ("Left Chest") */ sidesDone?: string[]; /** what the press timer is on now ("Run · Full Back") */ onNow?: string; minutes: number; startMin: number | null; number: number; name: string; customer: string; qty: number; status: "running" | "paused" | "done" | "scheduled"; due: string | null; label: string; started: string | null; finished: string | null; counted: "yes" | "no" | "issue" | null; rush: boolean; /** High priority: an extra set of eyes */ priority?: boolean };
+export type CrewJob = { /** the order, to resume or pause it right from the menu */ orderId?: string; /** sides printed already ("Left Chest") */ sidesDone?: string[]; /** what the press timer is on now ("Run · Full Back") */ onNow?: string; /** who is on it ("Ana") */ onBy?: string; /** the catcher's final count is saved */ posted?: boolean; minutes: number; startMin: number | null; number: number; name: string; customer: string; qty: number; status: "running" | "paused" | "done" | "scheduled"; due: string | null; label: string; started: string | null; finished: string | null; counted: "yes" | "no" | "issue" | null; rush: boolean; /** High priority: an extra set of eyes */ priority?: boolean };
 export type CrewPress = { id: string; name: string; jobs: CrewJob[] };
 export type CountJob = { number: number; name: string; customer: string; qty: number; day: string; state: string; when: "today" | "tomorrow" | "later"; kind: string };
 export type CrewHome = {
@@ -78,8 +78,17 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
       ids.length ? admin.from("goods_checkins").select("order_id, status, resolved_at, created_at").in("order_id", ids).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
     ]);
     // what each job's press timer is on right now (the side being set up or printed)
-    const { data: jt } = ids.length ? await admin.from("job_time").select("order_id, task").in("order_id", ids).is("ended_at", null).eq("voided", false) : { data: [] };
-    const nowOn = new Map(((jt || []) as { order_id: string; task: string }[]).map((r) => [r.order_id, r.task]));
+    // and who (the catcher's menu says "Ana is running · Full Front"), and which jobs have their final count (post count)
+    const [{ data: jt }, { data: pc }] = ids.length ? await Promise.all([
+      admin.from("job_time").select("order_id, task, employee_id").in("order_id", ids).is("ended_at", null).eq("voided", false),
+      admin.from("post_counts").select("order_id").in("order_id", ids),
+    ]) : [{ data: [] }, { data: [] }];
+    const jts = (jt || []) as { order_id: string; task: string; employee_id: string }[];
+    const nowOn = new Map(jts.map((r) => [r.order_id, r.task]));
+    const { data: en } = jts.length ? await admin.from("employees").select("id, first_name").in("id", [...new Set(jts.map((r) => r.employee_id))]) : { data: [] };
+    const enm = new Map(((en || []) as { id: string; first_name: string }[]).map((e) => [e.id, e.first_name || ""]));
+    const nowBy = new Map(jts.map((r) => [r.order_id, enm.get(r.employee_id) || ""]));
+    const posted = new Set(((pc || []) as { order_id: string }[]).map((r) => r.order_id));
     type O = { id: string; number: number; nickname: string; qty: number; due_date: string | null; rush: boolean; priority?: boolean; status: string; customers: { company: string; name: string } | null };
     const om = new Map(((os || []) as unknown as O[]).map((o) => [o.id, o]));
     const counted = new Map<string, CrewJob["counted"]>();
@@ -89,7 +98,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
       id: m.id, name: m.name,
       jobs: slots.filter((x) => x.machine === m.id && om.has(x.order_id) && !om.get(x.order_id)!.status.match(/^(completed)$/))
         .sort((a, b) => rank(a.status) - rank(b.status) || (a.start_min ?? 9999) - (b.start_min ?? 9999) || a.position - b.position)
-        .map((x) => { const o = om.get(x.order_id)!; return { orderId: o.id, sidesDone: x.sides_done || [], onNow: nowOn.get(x.order_id) || "", minutes: x.minutes || 0, startMin: x.start_min, number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, status: x.status, due: o.due_date, label: x.label || "", started: x.started_at, finished: x.finished_at, counted: counted.get(x.order_id) || "no", rush: !!o.rush , priority: !!o.priority}; }),
+        .map((x) => { const o = om.get(x.order_id)!; return { orderId: o.id, sidesDone: x.sides_done || [], onNow: nowOn.get(x.order_id) || "", onBy: nowBy.get(x.order_id) || "", posted: posted.has(x.order_id), minutes: x.minutes || 0, startMin: x.start_min, number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, status: x.status, due: o.due_date, label: x.label || "", started: x.started_at, finished: x.finished_at, counted: counted.get(x.order_id) || "no", rush: !!o.rush , priority: !!o.priority}; }),
     }));
   }
 

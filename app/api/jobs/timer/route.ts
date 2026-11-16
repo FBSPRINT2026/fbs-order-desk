@@ -55,7 +55,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const who = await jobActor();
   if (!who?.employeeId) return NextResponse.json({ error: "Sign in with your employee number to log time." }, { status: 401 });
-  const b = (await req.json().catch(() => ({}))) as { job?: J; action?: string; location?: string; press?: string; reason?: string; pieces?: number | null; done?: number; why?: string };
+  const b = (await req.json().catch(() => ({}))) as { job?: J; action?: string; location?: string; press?: string; reason?: string; pieces?: number | null; done?: number; why?: string;
+    /** a side done (Nick, Nov 16 2026): rejects by garment and size and why, an ink changed, a press setup worth keeping,
+     * and on the last side, why it took longer than planned and by how much */
+    wrap?: { rejects?: { style: string; color: string; size: string; n: number }[]; rejectWhy?: string; ink?: string; layout?: string[]; slow?: { why: string; minutes: number; note?: string } } };
   const job = b.job;
   if (!job || (job.kind !== "o" && job.kind !== "a") || !job.id) return NextResponse.json({ error: "Which job?" }, { status: 400 });
   const admin = createAdminClient(), me = who.employeeId;
@@ -114,7 +117,34 @@ export async function POST(req: Request) {
     if (!st.paused) err = "Nothing is paused on this job.";
     else { err = await start(st.paused.task, st.paused.station); if (!err) await slotMove("resume"); }
   } else if (b.action === "finish" || b.action === "done") {
-    if (here) await stopJob(admin, me, { pieces: b.pieces != null && isFinite(+b.pieces) ? +b.pieces : null, note: b.action === "done" ? "Job done" : "" });
+    const w = b.wrap || {};
+    const rej = (Array.isArray(w.rejects) ? w.rejects : []).map((r) => ({ style: String(r.style || "").slice(0, 60), color: String(r.color || "").slice(0, 60), size: String(r.size || "").slice(0, 12), n: Math.max(0, Math.round(+r.n || 0)) })).filter((r) => r.n > 0).slice(0, 200);
+    const rejN = rej.reduce((a, r) => a + r.n, 0), rejWhy = String(w.rejectWhy || "Misprint").slice(0, 40);
+    const slow = w.slow && w.slow.why ? { why: String(w.slow.why).slice(0, 60), minutes: Math.max(0, Math.min(600, Math.round(+w.slow.minutes || 0))), note: String(w.slow.note || "").slice(0, 300) } : null;
+    const parts = [b.action === "done" ? "Job done" : "",
+      rejN ? `${rejN} reject${rejN > 1 ? "s" : ""} (${rejWhy}): ${rej.map((r) => `${[r.style, r.color].filter(Boolean).join(" ")} ${r.size} ×${r.n}`).join(", ")}` : "",
+      w.ink ? `Ink changed: ${String(w.ink).slice(0, 200)}` : "",
+      slow ? `Took longer: ${slow.why}${slow.minutes ? `, +${slow.minutes} min` : ""}${slow.note ? ` (${slow.note})` : ""}` : ""].filter(Boolean);
+    if (here) await stopJob(admin, me, { pieces: b.pieces != null && isFinite(+b.pieces) ? +b.pieces : null, note: parts.join(" · ").slice(0, 900) });
+    const side = here && /^Run · /.test(here.task) ? here.task.replace(/^Run · /, "") : loc;
+    if (job.kind === "o" && (rejN || slow || w.ink)) {
+      const { data: sl } = await admin.from("production_slots").select("id, kind, machine").eq("order_id", job.id).order("day", { ascending: false }).limit(1).maybeSingle();
+      // the press operator's rejects print again: an Issue on the run (Reject), by size; the catcher's count takes them off
+      if (rejN) {
+        const sizes: Record<string, number> = {};
+        for (const r of rej) sizes[r.size] = (sizes[r.size] || 0) + r.n;
+        await admin.from("production_issues").insert({ order_id: job.id, kind: (sl?.kind as string) || "screen", locations: side && side !== "Whole job" ? [side.replace(/^.* · /, "")] : null, why: "reject", sizes, pcs: rejN, from_slot: sl?.id || null, by: who.name });
+      }
+      // why it ran long, for the schedule's log and how jobs like it get figured
+      if (sl) await admin.from("production_slot_log").insert({ slot_id: sl.id, order_id: job.id, machine: sl.machine, action: "progress", note: parts.filter((x) => x !== "Job done").join(" · ").slice(0, 900), by: who.name });
+    }
+    // a tricky setup worth keeping: this press's layout (flashes, cool downs) is remembered until it's changed again
+    const lay = (Array.isArray(w.layout) ? w.layout : []).map(String).filter((x) => ["print", "flash", "cool", "down", "roller", "flashdown"].includes(x)).slice(0, 20);
+    if (lay.length && pressM) {
+      const now = new Date().toISOString();
+      const up = await admin.from("production_equipment").upsert({ machine: pressM.id, stations: lay, updated_by: who.name, updated_at: now }, { onConflict: "machine" });
+      if (!up.error) await admin.from("production_equipment_log").insert({ machine: pressM.id, note: `Press setup saved on the phone (#${here?.job_label || ""} ${side})`.trim(), by: who.name, stations: lay });
+    }
     // a side printed (the run of one spot finished): the schedule's card says so, "Front done" (Nick, Nov 16 2026)
     if (b.action === "finish" && here && /^Run · /.test(here.task) && job.kind === "o") await sideDone(here.task.replace(/^Run · /, ""));
     else if (b.action === "finish") err = "Nothing is running on this job.";

@@ -3,7 +3,7 @@ import { colorHex } from "@/lib/inkColors";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { JobCard } from "@/lib/jobCard";
 import type { JobActor } from "@/lib/jobAccess";
-import { mergeProduction, pressLayOf } from "@/lib/production";
+import { mergeProduction, pressLayOf, withIssue, type EquipRow } from "@/lib/production";
 import { recommendSetup, type PlanPlate } from "@/lib/pressPlan";
 import { paleShirt } from "@/lib/separate";
 import { guessHex } from "@/lib/mockup";
@@ -23,8 +23,15 @@ import { diffSetup, setupLine, type PHead, type PressActual, type PressOption, t
 type Ch = { key: string; name: string; hex: string; kind: string; mesh?: number; order?: number };
 type SepRow = { id: string; number: number; location: string; status: string; channels: Ch[] | null; settings: Record<string, unknown> | null; notes: string; garment_color: string; design_id: string | null; imprint_id: string | null };
 
-export function screenPresses(settingsData: unknown): PressOption[] {
-  const ms = mergeProduction((settingsData as Record<string, unknown> | null)?.production).machines;
+/** the screen presses with how each sits today (its saved layout: flashes, cool downs, a head down; Equipment Status or a
+ * setup saved from the phone), so the phone lays screens where they really go */
+export async function screenPressesNow(admin: SupabaseClient, settingsData: unknown): Promise<PressOption[]> {
+  const { data } = await admin.from("production_equipment").select("*");
+  return screenPresses(settingsData, (data || []) as EquipRow[]);
+}
+export function screenPresses(settingsData: unknown, equip: EquipRow[] = []): PressOption[] {
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const ms = mergeProduction((settingsData as Record<string, unknown> | null)?.production).machines.map((m) => withIssue(m, equip.find((r) => r.machine === m.id), today));
   return ms.filter((m) => m.type === "screen" && m.active !== false).map((m) => ({ id: m.id, name: m.name, colors: m.colors || m.heads || 0, flashes: m.flashes ?? 2, mirror: !!m.mirror, layout: pressLayOf(m) }));
 }
 
@@ -47,7 +54,7 @@ function onPress(press: PressOption | undefined, ch: Ch[], dark: boolean): PHead
 }
 
 export async function pressSheets(admin: SupabaseClient, card: JobCard, settingsData: unknown, pressId = ""): Promise<{ sheets: PressSheet[]; presses: PressOption[] }> {
-  const presses = screenPresses(settingsData);
+  const presses = await screenPressesNow(admin, settingsData);
   // the press the job is laid on: the one it's booked on (or this person's), else the first screen press
   const pk = presses.find((p) => p.id === pressId) || presses[0];
   const pname = (id: string) => presses.find((p) => p.id === id)?.name || "";

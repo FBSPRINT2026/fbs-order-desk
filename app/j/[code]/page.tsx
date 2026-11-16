@@ -12,7 +12,7 @@ import { addressLines, type PvOrder } from "@/lib/archive";
 import { checkinJobFor } from "@/lib/checkin";
 import { printSettings, printerReady } from "@/lib/printQueue";
 import JobMobile from "@/components/job/JobMobile";
-import { pressSheets, screenPresses } from "@/lib/pressActualServer";
+import { pressSheets, screenPressesNow } from "@/lib/pressActualServer";
 import { phoneInks } from "@/lib/jobInksServer";
 import JobSignIn from "@/components/job/JobSignIn";
 import { LangProvider, LANG_COOKIE, type Lang } from "@/components/job/lang";
@@ -62,7 +62,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
 
   // the press the timer starts on and the press setup is laid on (Nick, Nov 16 2026: "the press should be automatically
   // like press one"): the press this person crews (they're standing at it), else where the job is booked, else none
-  const presses0 = screenPresses(st?.data);
+  const presses0 = await screenPressesNow(admin, st?.data);
   const myPressId = await (async () => {
     const empId = who?.employeeId;
     if (empId) {

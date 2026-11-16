@@ -4,6 +4,7 @@ import type { JobCard } from "@/lib/jobCard";
 import type { JobTime } from "@/lib/timeclock";
 import type { PressOption } from "@/lib/pressActual";
 import { useT } from "./lang";
+import FinishSide, { type Wrap } from "./FinishSide";
 
 /**
  * The press timer: Start setup → Setup done, start running → Finish run (pieces) → set up the next location, with
@@ -92,6 +93,13 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
   // this group's next side first; none left in it, the next group (asked which, on the start screen)
   const sameNext = cur ? (curG != null ? locsOf(curG) : locs).find((l) => l !== cur.loc && !doneRuns.has(l)) || "" : "";
   const groupsLeft = multi ? pgs.filter(({ i }) => i !== curG && locsOf(i).some((l) => !doneRuns.has(l))).length : 0;
+  // a side done: the finish sheet's count and what happened; the last side completes the job
+  async function finishSide(pieces: number, wrap: Wrap, last: boolean) {
+    const g = curG;
+    await act(last ? "done" : "finish", { pieces, wrap });
+    if (multi) setGPick(sameNext && g != null ? g : null);
+    setLoc("");
+  }
   const runQty = (l: string) => (curG != null ? card.groups[curG].rows.reduce((b, r) => b + r.total, 0) || card.qty : qtyOf(l));
 
   return (
@@ -105,16 +113,9 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
           <div className="jm-tm-clock" aria-live="off">{hms(now - +new Date(onThis.started_at))}</div>
           <div className="jm-faint">{t("Started {0}", new Date(onThis.started_at).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" }))} · {st.me.name}</div>
           {finishing !== null ? (
-            <div className="jm-tm-fin">
-              <div className="jm-label">{t("How many printed?")}</div>
-              <div className="jm-count">
-                <button type="button" onClick={() => setFinishing(Math.max(0, finishing - 1))}>−</button>
-                <input inputMode="numeric" value={finishing} onChange={(e) => setFinishing(+e.target.value.replace(/\D/g, "") || 0)} aria-label={t("Pieces")} />
-                <button type="button" onClick={() => setFinishing(finishing + 1)}>+</button>
-              </div>
-              <button type="button" className="jm-go" disabled={!!busy} onClick={async () => { const g = curG; await act("finish", { pieces: finishing }); if (multi) setGPick(sameNext && g != null ? g : null); setLoc(""); }}>{t("Finish run · {0} pcs", finishing)}</button>
-              <button type="button" className="jm-ghost" onClick={() => setFinishing(null)}>{t("Cancel")}</button>
-            </div>
+            <FinishSide card={card} side={cur!.loc} group={curG} pieces0={finishing} last={leftAfter.length === 0} busy={!!busy}
+              press={presses.find((p) => p.name === onThis.station || p.name === press)}
+              onCancel={() => setFinishing(null)} onSave={(pieces, wrap) => void finishSide(pieces, wrap, leftAfter.length === 0)} />
           ) : pausing ? (
             <div className="jm-tm-pause">
               {/* one drop-down, lunch picked to start with, and one button (Nick, Nov 16 2026: "this should be a drop-down") */}
@@ -131,7 +132,7 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
               {cur!.phase === "run" && leftAfter.length > 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => setFinishing(runQty(cur!.loc))}>✓ {sameNext
                 ? t("{0} done · set up {1}", t(cur!.loc.replace(/^.* · /, "")), t(sameNext.replace(/^.* · /, "")))
                 : t("{0} done · next group ({1} left)", curG != null ? gname(curG) : t(cur!.loc), groupsLeft)}</button>}
-              {cur!.phase !== "setup" && leftAfter.length === 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>}
+              {cur!.phase !== "setup" && leftAfter.length === 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => (cur!.phase === "run" ? setFinishing(runQty(cur!.loc)) : act("done", { pieces: card.qty }))}>✓ {t("Complete job")}</button>}
               <div className="jm-row">
                 <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => setPausing(true)}>{t("Pause")}</button>
                 {cur!.phase === "setup" && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => act("finish")}>{t("Stop setup")}</button>}
