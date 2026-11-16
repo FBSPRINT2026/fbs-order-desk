@@ -376,3 +376,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 10:19am · 1.3.618 · Nick · Paperwork check: supplier confirmations are left out whenever there's other paperwork (a PO not named like one)
 - Nov 16 10:22am · 1.3.619 · Nick · Create order: a multi-tone color written shorter part by part (Forest/Black/White) is the style's color, no question
 - Nov 16 10:24am · 1.3.620 · Nick · Paperwork check: a size and its quantity are paired on the same line (rows read row by row never take the next row's number)
+- Nov 16 10:25am · 1.3.621 · Nick · Create order: a color written shorter (Forest for Forest Green) is the style's only match, no question
