@@ -75,15 +75,15 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     const clean = proposalToGroups({ groups: [{ name: g.name, garments: g.lines.map((l) => ({ style: l.style, brand: l.brand, description: l.garment, color: l.color, sizes: l.sizes as Record<string, number> })), prints: [] }] })[0];
     return {
       ...g,
-      // what was settled on the line stays: their extras (printed or not, charged or not), its note, a price set on it
-      // (Oct 23, #40122: the extras answer was dropped here and the line came out a plain one)
+      // what was settled on the line stays: everything but the garment fields the check above tidies (their extras,
+      // its note, a price set on it, its look; Oct 23, #40122: the extras answer was dropped here). Nov 16, #50044 All My
+      // Sons Connecticut: the names read for its jacket (persList) were dropped here too, so it keeps every field now
       lines: clean ? clean.lines.map((l, i) => {
         const o = g.lines[i];
-        return { ...l, id: o?.id || l.id, sizeRun: o?.sizeRun, sizeUp: o?.sizeUp,
-          ...(o?.extras ? { extras: true, ...(o.extrasPrint != null ? { extrasPrint: o.extrasPrint } : {}), ...(o.extrasFree != null ? { extrasFree: o.extrasFree } : {}) } : {}),
-          ...(o?.note ? { note: o.note } : {}), ...(o?.priceOverride != null ? { priceOverride: o.priceOverride } : {}),
-          // what it looks like in their photo: drawn in the Mockup Creator when it isn't in a catalog (Oct 27, Peter Millar vest)
-          ...(o?.look ? { look: o.look } : {}) };
+        if (!o) return l;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { style, brand, garment, color, sizes, ...rest } = o;
+        return { ...l, ...rest, id: o.id || l.id };
       }) : g.lines,
       imprints: (g.imprints || []).slice(0, 10).map((im) => ({ ...im, colors: Math.max(1, Math.min(15, Math.round(+im.colors || 1))) })),
     };
