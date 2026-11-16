@@ -1003,6 +1003,9 @@ export function shapeGroups(gs: Group[]): Group[] {
       if (x.cost == null) x.cost = "";
       if (!x.sizes || typeof x.sizes !== "object") x.sizes = {};
       if (x.priceOverride === undefined) x.priceOverride = null;
+      // a one-size line that's been given a size run (M 4 · L 12) is sized now: the flag follows its sizes, or the order
+      // page shows a one-size box with 0 in it (Nov 16, #50026's hoodies, sized by the order helper)
+      if (x.oneSize && Object.entries(x.sizes as Record<string, unknown>).some(([z, n]) => z !== "OS" && +(n as number) > 0)) { delete x.oneSize; delete (x.sizes as Record<string, unknown>).OS; }
       if (!x.id) x.id = globalThis.crypto?.randomUUID?.() || `l${Math.random().toString(36).slice(2)}`;
     }
     for (const im of g.imprints) {

@@ -379,7 +379,7 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
         if (!from.lines.length) groups.splice(groups.indexOf(from), 1);
       }
       else if (c.field === "group_name") { const g = groups.find((x) => x.lines.some((y) => y.id === l.id)); if (!g || !v) continue; g.name = v.slice(0, 80); }
-      else if (c.field === "sizes") { const run = parseRun(v); if (!run) continue; l.sizes = run; }
+      else if (c.field === "sizes") { const run = parseRun(v); if (!run) continue; l.sizes = run; if (Object.keys(run).some((z) => z !== "OS")) delete l.oneSize; else if (run.OS) l.oneSize = true; }
       else if (c.field === "color") { if (!v) continue; l.color = v; }
       else if (c.field === "personalization") {
         const raw = String(c.value || "").trim().slice(0, 4000);
