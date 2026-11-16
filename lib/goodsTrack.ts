@@ -173,6 +173,8 @@ export async function goodsCheck(admin: SupabaseClient, deadline: number) {
       if (!x.tracker_id && f) done.trackers++;
       if (!f) continue;
       await admin.from("goods_shipments").update(f).eq("id", x.id);
+      // the supplier's manifest lines in the same box (what Receiving reads) take the same news
+      await admin.from("supplier_manifest_lines").update(f).eq("tracking", x.tracking).neq("track_status", "delivered");
       Object.assign(x, f); done.updated++;
       const label = `${x.carrier || carrierOf(x.tracking)} ${x.tracking}`.trim();
       if (f.track_status !== before.status && ["failure", "return_to_sender", "error"].includes(f.track_status) && alerted[`problem:${x.id}`] !== f.track_status) {

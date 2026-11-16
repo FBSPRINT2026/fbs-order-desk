@@ -889,12 +889,17 @@ export async function resolvePending(admin: SupabaseClient, deadline: number) {
   // tracking for shipments still waiting for an order
   const trk = new Map<string, Waiting>();
   const { data: pvLinked } = await admin.from("supplier_manifest_lines").select("*").in("kind", ["goods", "blanks"]).not("archived_order_id", "is", null).neq("track_status", "delivered").neq("tracking", "").limit(1000);
-  for (const l of [...((data || []) as Waiting[]), ...((pvLinked || []) as Waiting[])]) if (l.tracking && !isFreight(l.method) && l.track_status !== "delivered" && !trk.has(l.tracking)) trk.set(l.tracking, l);
+  // and the ones already on our orders (Nov 16, Nick: tomorrow's jobs said "On the way" though the boxes were here): a
+  // line linked to an order kept the tracking it had when it was linked, so Receiving never saw it delivered
+  const linkedSince = new Date(Date.now() - 30 * 864e5).toISOString();
+  const { data: oLinked } = await admin.from("supplier_manifest_lines").select("*").in("kind", ["goods", "blanks"]).not("order_id", "is", null).neq("track_status", "delivered").neq("tracking", "").gte("created_at", linkedSince).limit(1000);
+  for (const l of [...((data || []) as Waiting[]), ...((pvLinked || []) as Waiting[]), ...((oLinked || []) as Waiting[])]) if (l.tracking && !isFreight(l.method) && l.track_status !== "delivered" && !trk.has(l.tracking)) trk.set(l.tracking, l);
   for (const l of trk.values()) {
     if (Date.now() > deadline - 10000) break;
     if (l.track_updated_at && Date.now() - Date.parse(l.track_updated_at) < 25 * 60000) continue;
     const f = l.tracker_id ? await readTracker(l.tracker_id).catch(() => null) : await startTracker(l.tracking, carrierOf(l.tracking)).catch(() => null);
-    if (f) { await admin.from("supplier_manifest_lines").update(f).eq("tracking", l.tracking).in("kind", ["", "goods", "blanks"]).is("order_id", null); out.tracked++; }
+    // one tracking number is one fact: every line in that box takes it, on an order or not
+    if (f) { await admin.from("supplier_manifest_lines").update(f).eq("tracking", l.tracking).in("kind", ["", "goods", "blanks"]); out.tracked++; }
   }
   return out;
 }

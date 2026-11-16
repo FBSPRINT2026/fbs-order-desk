@@ -391,3 +391,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 12:07pm · 1.3.633 · Nick · Label printers: each computer has its own Zebra; a label prints on the computer it was sent from (Prints on picker, set up per computer)
 - Nov 16 12:17pm · 1.3.634 · Nick · Issue Center on Goods & Receiving: work each goods issue (who's on it, tell the customer by portal/email or text, supplier email, how it got fixed, history); a recount keeps one issue; counted jobs show the count, not boxes delivered
 - Nov 16 12:18pm · 1.3.635 · Nick · Count in: each problem says its vendor (SanMar, S&S, alphabroder, or typed), picked from the manifest; it goes on the issue
+- Nov 16 12:20pm · 1.3.636 · Nick · Receiving: goods already linked to an order keep getting tracking (they froze at On the way once linked); one tracking number's news goes to every line in that box
