@@ -178,7 +178,7 @@ function locationsIn(S: Tok[], from: number, to: number): string[] {
   return out;
 }
 
-function sizesIn(S: Tok[], from: number, to: number): Record<string, number> {
+function sizesIn(S: Tok[], from: number, to: number, text = ""): Record<string, number> {
   // the sizes in this stretch, a two-word size read as one ("X-LARGE", "2X-LARGE", "XX LARGE", "ONE SIZE")
   const found: { sz: string; at: number; end: number }[] = [];
   let osQty = 0;
@@ -194,8 +194,12 @@ function sizesIn(S: Tok[], from: number, to: number): Record<string, number> {
   // quantity column first: Nov 10, Nine18's POs read "2 LARGE / 2 X-LARGE" as L 2). Whichever way pairs more sizes is
   // how this paperwork is written: read the wrong way, every size takes its neighbor's number and one is left over
   const num = (k: number) => (k >= from && k < to && /^\d{1,4}$/.test(S[k]?.w || "") ? +S[k].w : 0);
-  const after = found.map((f) => { let j = f.end + 1; if (S[j] && QTY.has(S[j].w)) j++; return num(j); });
-  const before = found.map((f, i) => (i > 0 && found[i - 1].end === f.at - 1 ? 0 : num(f.at - 1)));
+  // a size and its number share a line when the text has lines (a PO read row by row: "6 SMALL" / "7 MEDIUM"): a number
+  // on the next line is the next row's (Nov 16, #50040: read the other way, every size took the row below's number and
+  // the 4XL took the beanies' 36)
+  const oneLine = (a: number, b: number) => !text || !S[a] || !S[b] || !/\n/.test(text.slice(Math.min(S[a].end, S[b].end), Math.max(S[a].at, S[b].at)));
+  const after = found.map((f) => { let j = f.end + 1; if (S[j] && QTY.has(S[j].w)) j++; return oneLine(f.end, j) ? num(j) : 0; });
+  const before = found.map((f, i) => (i > 0 && found[i - 1].end === f.at - 1 ? 0 : oneLine(f.at - 1, f.at) ? num(f.at - 1) : 0));
   const pick = before.filter(Boolean).length > after.filter(Boolean).length ? before : after;
   const out: Record<string, number> = {};
   if (osQty && !found.length) out.OS = osQty;
@@ -240,7 +244,7 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
   // each item its own place in the paperwork: its color settles a garment listed twice (a black and a dark gray polo)
   const used = new Set<number>(), at: (Anchor | null)[] = items.map(() => null);
   // the same garment and color listed more than once: the place whose sizes are this item's
-  const sizesAt = (c: Anchor) => { const w = winOf(c); return runOf(sizesIn(S, w.colorAt >= 0 ? w.afterColor : w.from, w.to)); };
+  const sizesAt = (c: Anchor) => { const w = winOf(c); return runOf(sizesIn(S, w.colorAt >= 0 ? w.afterColor : w.from, w.to, text)); };
   items.forEach((it, n) => {
     const fit = cands[n].filter((c) => !used.has(c.i) && winOf(c).color && sameColor(winOf(c).color, it.color));
     const a = fit.find((c) => sizesAt(c) === runOf(haveOf(it))) || fit[0];
@@ -280,7 +284,7 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
       out.push({ kind: "color", group: gi, lineIds: ids, what, paper: w.color || it.color, order: it.color, ...(near ? { fix: near } : {}), say: `${what}: ${it.color} isn't one of ${it.style}'s colors (${cc.slice(0, 8).join(", ")})${near ? `; ${near} is` : ""}.` });
     }
     // sizes
-    const paperSizes = sizesIn(S, w.colorAt >= 0 ? w.afterColor : w.from, w.to);
+    const paperSizes = sizesIn(S, w.colorAt >= 0 ? w.afterColor : w.from, w.to, text);
     // a one-size item's count in the quantity column in front of its own name ("12 | STC15 SPECTATOR KNIT BEANIE", Nov 16,
     // #50028: the beanies took the jacket's "L 2" and nothing said so)
     if (!Object.keys(paperSizes).length && /^\d{1,4}$/.test(S[a.i - 1]?.w || "") && +S[a.i - 1].w > 0) paperSizes.OS = +S[a.i - 1].w;
