@@ -534,6 +534,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [tightOpen, setTightOpen] = useSticky("cal.tightOpen", false);
   // the assistant's tips take turns every 8 seconds, held while the pointer is on them
   const [tipI, setTipI] = useState(0), [tipHold, setTipHold] = useState(false);
+  // the ask box's ideas take turns, one at a time (Nick, Nov 16 2026)
+  const [ideaI, setIdeaI] = useState(0);
+  useEffect(() => { const t = setInterval(() => setIdeaI((i) => i + 1), 6000); return () => clearInterval(t); }, []);
   useEffect(() => { if (tipHold) return; const t = setInterval(() => setTipI((i) => i + 1), 8000); return () => clearInterval(t); }, [tipHold]);
   const [listOpen, setListOpen] = useState(""); // a same-art list opened to show all its jobs
   // a group's name opens a little menu: Print all its work orders (Nick, Nov 13: "click on the group name… print all
@@ -2965,33 +2968,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   // the right panel (Nick, Nov 16 2026, Schedule C): the assistant (a tip, then ask it), then the tools by group
   const toolsBox = (
     <div className="mzc-side">
-      <div className="msk">
-            <div className="msk-tools">
-              <div className="msk-h"><span>Tools</span><Link className="linkbtn" href="/shop/settings/production">Machines &amp; crews</Link></div>
-              {/* grouped again, compact: a small colored name in front of each group (Nov 11, Nick: "indicate… sales tools,
-                  press tools, planning") */}
-              <div className="msk-row">
-                <span className="msk-g plan"><span className="msk-gl">Planning</span>
-                  <button type="button" className="btn primary msk-b" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}><SkIco d="replan" />Re-plan</button>
-                  <button type="button" className={"btn msk-b" + (tight.length ? " bad" : "")} title="Jobs that won't make their in-hands date" onClick={() => setTightOpen(!tightOpen)}><SkIco d="late" />Late jobs<span className="msk-n">{tight.length}</span></button>
-                  <button type="button" className="btn msk-b" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}><SkIco d="norm" />Renormalize</button>
-                  <button type="button" className="btn msk-b" title="Set what's really done: counted, printed, ready, completed" onClick={() => setStandOpen(true)}><SkIco d="prog" />Where things stand</button>
-                </span>
-                <span className="msk-g press"><span className="msk-gl">Press &amp; crew</span>
-                  <button type="button" className={"btn msk-b msk-live" + (s.liveClock ? " on" : "")} disabled={!canEquip} onClick={() => void setLiveClock(!s.liveClock)} title={s.liveClock ? "Live clock is on: the schedule follows the time clock and press timers (not started moves up to now, unfinished days roll to today). Click to plan by hand." : "Live clock is off: the schedule is a plan made by hand, like Printavo; nothing moves on its own. Click to follow the time clock."}><SkIco d="clock" /><span>Live clock</span><span className="msk-sw" aria-hidden><i /></span></button>
-                  <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Progress</button>
-                  <button type="button" className="btn msk-b" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}><SkIco d="ot" />Overtime</button>
-                  <button type="button" className="btn msk-b" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}><SkIco d="shift" />Shift</button>
-                  <button type="button" className="btn msk-b" title="Maintenance, repairs, an employee out" onClick={() => setDownEdit({})}><SkIco d="down" />Downtime</button>
-                  <button type="button" className={"btn msk-b" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" disabled={!canEquip} onClick={() => setEqOpen(true)}><SkIco d="eq" />Equipment{eqIssues.length ? <span className="msk-n">{eqIssues.length}</span> : null}</button>
-                </span>
-                <span className="msk-g sales"><span className="msk-gl">Sales</span>
-                  <button type="button" className="btn msk-b" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}><SkIco d="when" />When can we {VERB[typeF || "screen"].v.toLowerCase()} it?</button>
-                  <button type="button" className="btn msk-b" title="Hold time for jobs you know are coming" onClick={() => setPlanOpen(true)}><SkIco d="plan" />Planner</button>
-                </span>
-              </div>
-              {tightOpen && tight.length > 0 && <ul className="ms-alert-l msk-late">{tight.map((t) => <li key={t.job.key}><Link href={t.job.href}>#{t.job.number}</Link><span>{who(t.job)}</span><small>{t.why}</small></li>)}</ul>}
-            </div>
+      {/* the assistant (Nick, Nov 16 2026): its tip on top, then ask it, ideas one at a time under the box */}
+      <section className="mzc-ai">
             {(() => {
               // the assistant's tips, most pressing first; one shows at a time and they take turns
               type Tip = { lvl: "bad" | "warn" | "ok"; t: string; s: string; act?: [string, () => void] };
@@ -3017,12 +2995,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 </div>
               );
             })()}
-          </div>
-      <div className="mzc-ask">
-                  {/* the AI assistant: two lines right under the tabs line (Nick, Nov 13), the ask box and ideas to tap */}
+        <div className="mzc-askw">
                   <div className="msa-box">
-                    <span className="msa-lbl" aria-hidden>✦ AI assistant</span>
-                    <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
+                                        <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
                       <input ref={askIn} value={askQ} onChange={(e) => setAskQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
                       {/* say it instead of typing it (Nick, Nov 13): the shop's one microphone button, asked when they stop talking */}
                       <MicButton target={() => askIn.current} append keepListening label="Tell the schedule out loud (microphone)" className="msa-mic" onDone={(t) => { if (t.trim()) void askSchedule(t.trim()); }} />
@@ -3035,7 +3010,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       const counted = trayV.filter((t) => t.job.kind === "o" && goodsSt.get(t.job.id) === "received").length;
                       const nx = (() => { let d = addDay(today, 1); for (let g = 0; g < 7 && !machines.some((m) => shiftOn(m, d)); g++) d = addDay(d, 1); return d; })(), lead = machines.map((m) => crewOf(m)?.leader).find(Boolean);
                       const ideas = [top && `Book all ${top} jobs`, counted && `Book every job that's counted`, lead && `${lead} is out ${dayLbl(nx).split(",")[0]}: clear the day`, "Book the late jobs first thing tomorrow"].filter(Boolean) as string[];
-                      return <div className="msa-ideas">{ideas.map((x) => <button key={x} type="button" className="chip" onClick={() => void askSchedule(x)}>{x}</button>)}</div>;
+                      const idea = ideas[ideaI % Math.max(1, ideas.length)];
+                      return idea ? <div className="mzc-try">Try: <button type="button" className="linkbtn" title="Ask this" onClick={() => setAskQ(idea)}>“{idea}”</button></div> : null;
                     })()}
                   </div>
               {/* the assistant's plan, under its box: check it, book it */}
@@ -3050,27 +3026,40 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   <div className="msa-a">{n > 0 ? <><button type="button" className="btn sm primary" onClick={() => void doPlan(askPlan)}>Do it</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></> : <button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button>}</div>
                 </div>; })()}
               </div>}
-      </div>
+        </div>
+      </section>
+      {/* the tools, folding to a row of icons (remembered) */}
+      <section className={"mzc-tools" + (toolsOpen ? "" : " shut")}>
+        <div className="mzc-th"><button type="button" className="mzc-tt" onClick={() => setToolsOpen(!toolsOpen)} aria-expanded={toolsOpen}><span className="car">{toolsOpen ? "▾" : "▸"}</span>Tools</button>
+          {!toolsOpen && tight.length > 0 && <span className="mzc-late">{tight.length} late</span>}<span className="spacer" />{toolsOpen && <Link className="linkbtn" href="/shop/settings/production">Machines &amp; crews</Link>}</div>
+              <div className="msk-row">
+                <span className="msk-g plan"><span className="msk-gl">Planning</span>
+                  <button type="button" className="btn primary msk-b" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}><SkIco d="replan" />Re-plan</button>
+                  <button type="button" className={"btn msk-b" + (tight.length ? " bad" : "")} title="Jobs that won't make their in-hands date" onClick={() => setTightOpen(!tightOpen)}><SkIco d="late" />Late jobs<span className="msk-n">{tight.length}</span></button>
+                  <button type="button" className="btn msk-b" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}><SkIco d="norm" />Renormalize</button>
+                  <button type="button" className="btn msk-b" title="Set what's really done: counted, printed, ready, completed" onClick={() => setStandOpen(true)}><SkIco d="prog" />Where things stand</button>
+                </span>
+                <span className="msk-g press"><span className="msk-gl">Press &amp; crew
+<button type="button" className={"msk-live" + (s.liveClock ? " on" : "")} disabled={!canEquip} onClick={() => void setLiveClock(!s.liveClock)} title={s.liveClock ? "Live clock is on: the schedule follows the time clock and press timers (not started moves up to now, unfinished days roll to today). Click to plan by hand." : "Live clock is off: the schedule is a plan made by hand, like Printavo; nothing moves on its own. Click to follow the time clock."}><span>Live clock</span><span className="msk-sw" aria-hidden><i /></span></button></span>
+                  <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Progress</button>
+                  <button type="button" className="btn msk-b" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}><SkIco d="ot" />Overtime</button>
+                  <button type="button" className="btn msk-b" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}><SkIco d="shift" />Shift</button>
+                  <button type="button" className="btn msk-b" title="Maintenance, repairs, an employee out" onClick={() => setDownEdit({})}><SkIco d="down" />Downtime</button>
+                  <button type="button" className={"btn msk-b" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" disabled={!canEquip} onClick={() => setEqOpen(true)}><SkIco d="eq" />Equipment{eqIssues.length ? <span className="msk-n">{eqIssues.length}</span> : null}</button>
+                </span>
+                <span className="msk-g sales"><span className="msk-gl">Sales</span>
+                  <button type="button" className="btn msk-b" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}><SkIco d="when" />When can we {VERB[typeF || "screen"].v.toLowerCase()} it?</button>
+                  <button type="button" className="btn msk-b" title="Hold time for jobs you know are coming" onClick={() => setPlanOpen(true)}><SkIco d="plan" />Planner</button>
+                </span>
+              </div>
+              {tightOpen && tight.length > 0 && <ul className="ms-alert-l msk-late">{tight.map((t) => <li key={t.job.key}><Link href={t.job.href}>#{t.job.number}</Link><span>{who(t.job)}</span><small>{t.why}</small></li>)}</ul>}
+      </section>
     </div>
   );
   // the right column, from the top of the page down (Nick, Nov 16 2026): the panel, the search, the key, Coming up
   const sideCol = () => (
     <div className="msf-side mzc-r">
         {toolsBox}
-        <div className="msq" role="search">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <input type="search" value={findQ} placeholder="Search the schedule" aria-label="Search the schedule" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") { setFindQ(""); return; }
-              if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
-              e.preventDefault();
-              const hits = [...document.querySelectorAll<HTMLElement>(".msf .ms-hit")].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-              if (!hits.length) return;
-              const i = (findI + (e.key === "ArrowUp" ? -1 : 1) + hits.length) % hits.length; setFindI(i);
-              hits[i].scrollIntoView({ block: "center", behavior: "smooth" }); hits.forEach((h, k) => h.classList.toggle("ms-hit-on", k === i));
-            }} />
-          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n} found${nt ? ` · ${nt} in Ready To Schedule` : ""}` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
-        </div>
         {/* the key under the search (Nov 12, Nick): what the marks mean, folded to one line when hidden */}
         <div className={"mky" + (keyOpen ? "" : " shut")}>
           <div className="mky-h"><span>Key</span>{!keyOpen && <span className="mky-mini"><GoodsTee k="g" t="" /><GoodsTee k="a" t="" /><i className="mky-sw ok" /><i className="mky-sw bad" /></span>}<button type="button" className="linkbtn" onClick={() => setKeyOpen(!keyOpen)}>{keyOpen ? "Hide" : "Show"}</button></div>
@@ -3121,8 +3110,22 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             onDrop={(e) => { e.preventDefault(); setOver(""); if (drag?.card?.slot) unbookMany(drag.group || [drag.card]); setDrag(null); }}>
             <div className="ms-ready-h">
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready to schedule</b><span className="aa-n">{trayV.length}</span></button>
-              <span className="faint ms-band-sub">{trayV.filter((t) => t.sug?.late && !t.job.onHold).length ? <span className="ms-late">{trayV.filter((t) => t.sug?.late && !t.job.onHold).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{trayV.length ? (Object.keys(picks).length ? `${trayV.filter((t) => t.picked).length} picked by you · ` : "") + "by due date · click a spot to change it, then Make The Schedule" : "nothing waiting"}</span>
               <span className="spacer" />
+              {/* one search for Ready to schedule and the presses, on the top line so it stays when the list folds (Nick, Nov 16) */}
+        <div className="msq mzc-q" role="search">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input type="search" value={findQ} placeholder="Search jobs" aria-label="Search Ready to schedule and the presses" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { setFindQ(""); return; }
+              if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
+              e.preventDefault();
+              const hits = [...document.querySelectorAll<HTMLElement>(".msf .ms-hit")].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+              if (!hits.length) return;
+              const i = (findI + (e.key === "ArrowUp" ? -1 : 1) + hits.length) % hits.length; setFindI(i);
+              hits[i].scrollIntoView({ block: "center", behavior: "smooth" }); hits.forEach((h, k) => h.classList.toggle("ms-hit-on", k === i));
+            }} />
+          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n} found${nt ? ` · ${nt} in Ready To Schedule` : ""}` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
+        </div>
               {(() => {
                 // Start over asks first, and what to do with the locks (Nov 11, Nick: "yes, start over… release all locks or leave locks there")
                 const open = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && (!typeF || c.machine.type === typeF)), locked = open.filter((c) => c.slot!.locked), free = open.filter((c) => !c.slot!.locked);
@@ -3188,10 +3191,6 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 <div className="toolbar ms-rtabs"><div className="chips">
                   {([["all", "All", trayV.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ["here", "Goods here", kinds.here.length], ["away", "Not here", kinds.away.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
                 </div>
-                  <label className="msr-q"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-                    <input type="search" value={findQ} placeholder="Search jobs" aria-label="Search Ready To Schedule and the schedule" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }} onKeyDown={(e) => { if (e.key === "Escape") setFindQ(""); }} />
-                    {findWords.length > 0 && <span className={"msq-n" + (list.length ? "" : " none")}>{list.length ? `${list.length} here` : "none here"}</span>}
-                  </label>
                   {(() => {
                     // Job Filters (Nick, Nov 11): Regular Orders first, then each customer's kinds under its name
                     const all = new Map<string, { label: string; who: string; n: number }>();

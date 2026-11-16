@@ -451,9 +451,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.
 - **The schedule's layout** (Nick, Nov 16 2026, Schedule C): Ready to schedule on top, one row a job (Job #, Job, In-hands,
-  Goods, Recommended, + Add), folding up with Hide (remembered); the presses top to bottom under it; on the right the shop
-  assistant (a tip, then the ask box), the tools by group (Planning, Press & crew, Sales, each with tinted icons), the
-  search, the key and Coming up. **The Job Center's layout** (Job Center D): FBS Messages down the left (Needs a reply,
+  Goods, Recommended, + Add), folding up with Hide (remembered); its top line keeps the one search (Ready to schedule and the
+  presses) beside Start over, folded or not; the presses top to bottom under it; on the right, from the top of the page:
+  the shop assistant (a tip, then the ask box with one idea at a time under it, taking turns, never chips), the tools by
+  group (Planning, Press & crew with the Live clock switch on its heading, Sales; tinted icons), folding to a row of icons
+  (remembered), the key and Coming up. **The Job Center's layout** (Job Center D): FBS Messages down the left (Needs a reply,
   then No reply needed); the steps in one bar under Incoming / Quotes / Pre-production / In production
   (centered, no group counts; Declined is a link under the bar); a job opens on the right with where it is (five dots),
   its pieces, one timeline of history and messages and a reply; FBS Messages stays open beside it (Nick, Nov 16: it

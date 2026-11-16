@@ -23288,3 +23288,35 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 @media (max-width:900px){.jx.msgs>.jx-m{min-height:0}}
 .mzc-side .msk-live .msk-sw{margin-left:auto;flex:none}
 .mzc-r .msq{min-height:36px}
+/* the schedule's right panel, revised (Nick, Nov 16 2026): the assistant with its ask box on top, the tools fold to icons,
+   Live clock beside Press & crew; the search lives on Ready to schedule's top line */
+.mzc-ai{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.mzc-ai .msai{border-top:0;border-right:0;border-bottom:0;border-radius:0;box-shadow:none;margin:0}
+.mzc-askw{border-top:1px solid var(--line-2);padding:10px 12px 12px;background:var(--surface-2);min-width:0}
+.mzc-askw .msa-box{margin:0;border:0;padding:0;background:none}
+.mzc-askw .msa-box .msa-f{height:38px;border:1px solid var(--line);border-radius:8px;background:var(--surface);gap:4px;padding:0 4px 0 10px}
+.mzc-askw .msa-box .msa-f:focus-within{border-color:var(--fbs-violet)}
+.mzc-askw .msa-f input{min-width:0;font-size:13.5px}
+.mzc-askw .msa{margin:8px 0 0}
+.mzc-try{display:flex;align-items:baseline;gap:5px;margin-top:7px;font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;min-width:0}
+.mzc-try .linkbtn{color:#6B4BC8;font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;text-decoration:none}
+.mzc-try .linkbtn:hover{text-decoration:underline}
+.mzc-tools{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 10px 8px}
+.mzc-th{display:flex;align-items:center;gap:8px;margin:0 4px 2px}
+.mzc-tt{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:var(--display);font-size:16px;font-weight:800;color:var(--ink)}
+.mzc-tt .car{font-size:12px;color:var(--ink-3);width:12px}
+.mzc-tt:focus-visible{outline:2px solid var(--accent)}
+.mzc-th .linkbtn{font-size:12.5px;font-weight:600}
+.mzc-late{font-size:11px;font-weight:700;background:color-mix(in srgb,var(--danger) 14%,var(--surface));color:var(--danger);border-radius:999px;padding:1px 8px}
+.mzc-side .msk-gl{display:flex;align-items:center}
+.mzc-side .msk-gl .msk-live{all:unset;cursor:pointer;margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+.mzc-side .msk-gl .msk-live:disabled{cursor:default;opacity:.6}
+.mzc-side .msk-gl .msk-live:focus-visible{outline:2px solid var(--accent)}
+.mzc-tools.shut .msk-row{flex-direction:row;flex-wrap:wrap;gap:6px;margin:8px 2px 2px}
+.mzc-tools.shut .msk-g{display:contents}
+.mzc-tools.shut .msk-gl{display:none}
+.mzc-tools.shut .msk-g .msk-b{width:34px;min-height:34px;padding:2px;font-size:0;justify-content:center;gap:0}
+.mzc-tools.shut .msk-n,.mzc-tools.shut .msk-late{display:none}
+/* the one search, on Ready to schedule's top line */
+.mzc-q{width:min(280px,100%);height:34px;flex:0 1 280px;min-width:160px}
+.mzc-r .msq{min-height:0}
