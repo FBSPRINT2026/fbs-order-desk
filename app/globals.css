@@ -23342,3 +23342,11 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .mzc-q{flex:0 1 360px;min-width:200px;width:auto}
 .mzc-q input{min-width:110px}
 .mzc-q .msq-n{flex:none}
+/* the shop assistant as one section (Nick, Nov 16 2026, option A): one white card, one colored edge down its whole side
+   (how pressing the tip is), the ask box in the same card with no band between */
+.mzc-ai{border-left:3px solid var(--accent)}
+.mzc-ai:has(.msai.bad){border-left-color:var(--danger)}
+.mzc-ai:has(.msai.warn){border-left-color:var(--warn)}
+.mzc-ai:has(.msai.ok){border-left-color:var(--ok)}
+.mzc-ai .msai{border:0;background:none;padding:12px 14px 4px}
+.mzc-ai .mzc-askw{border-top:0;background:none;padding:6px 14px 12px}
