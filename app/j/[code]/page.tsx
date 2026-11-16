@@ -62,18 +62,18 @@ export default async function JobPage({ params, searchParams }: { params: Promis
 
   // press setups: the suggestion (the separations) and what really ran (press_actuals); the inks to pull or mix
   const [{ sheets: press, presses }, inks] = await Promise.all([pressSheets(admin, card, st?.data), phoneInks(admin, card, st?.data).catch(() => null)]);
-  // the press the timer starts on (Nick, Nov 16 2026: "the press should be automatically like press one"): where this
-  // job is booked on the schedule, else the press this person crews, else none (the phone's last pick)
+  // the press the timer starts on (Nick, Nov 16 2026: "the press should be automatically like press one"): the press this
+  // person crews (they're standing at it), else where the job is booked on the schedule, else the phone's last pick
   const myPress = await (async () => {
-    const { data: sl } = await admin.from("production_slots").select("machine, day").eq(card.kind === "o" ? "order_id" : "archived_order_id", card.id).is("finished_at", null).order("day").limit(1);
-    const booked = presses.find((x) => x.id === (sl?.[0] as { machine?: string } | undefined)?.machine);
-    if (booked) return booked.name;
     const empId = who?.employeeId;
-    if (!empId) return "";
-    const pr = mergeProduction((st?.data as { production?: unknown } | null)?.production);
-    const crew = pr.crews.find((c) => c.members && Object.values(c.members).includes(empId));
-    const m = crew ? pr.machines.find((x) => x.crew === crew.id && presses.some((y) => y.id === x.id)) : undefined;
-    return m?.name || "";
+    if (empId) {
+      const pr = mergeProduction((st?.data as { production?: unknown } | null)?.production);
+      const crews = pr.crews.filter((c) => c.members && Object.values(c.members).includes(empId)).map((c) => c.id);
+      const m = pr.machines.find((x) => x.crew && crews.includes(x.crew) && presses.some((y) => y.id === x.id));
+      if (m) return m.name;
+    }
+    const { data: sl } = await admin.from("production_slots").select("machine, day").eq(card.kind === "o" ? "order_id" : "archived_order_id", card.id).is("finished_at", null).order("day").limit(1);
+    return presses.find((x) => x.id === (sl?.[0] as { machine?: string } | undefined)?.machine)?.name || "";
   })().catch(() => "");
 
   // shipping (staff with the Shipping Center)
