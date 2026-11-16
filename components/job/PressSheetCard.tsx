@@ -1,5 +1,5 @@
 "use client";
-import { inkChoices } from "@/lib/inkColors";
+import { colorHex, inkChoices } from "@/lib/inkColors";
 import { useMemo, useState } from "react";
 import { diffSetup, type PHead, type PressOption, type PressSheet } from "@/lib/pressActual";
 import { useT } from "./lang";
@@ -19,7 +19,7 @@ function Heads({ heads, faint = false }: { heads: PHead[]; faint?: boolean }) {
   return (
     <ol className={"jm-heads" + (faint ? " faint" : "")}>{heads.map((h, i) => (
       <li key={i} className={"h-" + h.what}><span className="jm-hn">{i + 1}</span>
-        {h.what === "screen" ? <><i style={{ background: h.hex || "#ccc" }} /><b>{h.name}</b>{h.mesh ? <small>{t("{0} mesh", h.mesh)}</small> : null}</>
+        {h.what === "screen" ? <><i style={{ background: h.hex || colorHex(h.name) || "#ccc" }} /><b>{h.name}</b>{h.mesh ? <small>{t("{0} mesh", h.mesh)}</small> : null}</>
           : <b className="jm-faint">{t(h.what === "flash" ? "Flash" : h.what === "cool" ? "Cool down (empty)" : "Empty")}</b>}
       </li>
     ))}</ol>
@@ -50,7 +50,7 @@ export default function PressSheetCard({ sheet, presses, job, onSaved }: { sheet
         </>
       )}
       {!edit && sheet.notes && <p className="jm-pre">{sheet.notes}</p>}
-      {!edit && <button type="button" className="jm-ghost" onClick={() => setEdit(true)}>{a ? t("Change what we ran") : t("We ran it differently")}</button>}
+      {!edit && <button type="button" className="jm-ghost" onClick={() => setEdit(true)}>{t("Change colors")}</button>}
     </div>
   );
 }
@@ -90,7 +90,7 @@ function Editor({ sheet, presses, job, onCancel, onSaved }: { sheet: PressSheet;
           <span className="jm-hn">{i + 1}</span>
           {h.what === "screen" ? (
             <div className="jm-ped-ink">
-              <label className="jm-sw" style={{ background: h.hex || "#ccc" }} title={t("Ink color")}><input type="color" value={h.hex || "#cccccc"} onChange={(e) => set(i, { hex: e.target.value })} aria-label={t("Ink color")} /></label>
+              <label className="jm-sw" style={{ background: h.hex || colorHex(h.name) || "#ccc" }} title={t("Ink color")}><input type="color" value={h.hex || colorHex(h.name) || "#cccccc"} onChange={(e) => set(i, { hex: e.target.value })} aria-label={t("Ink color")} /></label>
               <input list={`inks-${sheet.id}`} value={h.name} onChange={(e) => set(i, { name: e.target.value })} aria-label={t("Ink")} placeholder={t("Ink")} />
             </div>
           ) : <b className="jm-faint jm-ped-k">{t(h.what === "flash" ? "Flash" : h.what === "cool" ? "Cool down (empty)" : "Empty")}</b>}

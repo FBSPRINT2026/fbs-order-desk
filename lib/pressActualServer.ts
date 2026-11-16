@@ -1,4 +1,5 @@
 import "server-only";
+import { colorHex } from "@/lib/inkColors";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { JobCard } from "@/lib/jobCard";
 import type { JobActor } from "@/lib/jobAccess";
@@ -39,7 +40,7 @@ export async function pressSheets(admin: SupabaseClient, card: JobCard, settings
     for (const s of (data || []) as SepRow[]) {
       const ch = (s.channels || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       const setup = (s.settings?.pressSetup || null) as { press: string; heads: string[] } | null;
-      const heads = setup?.heads?.length ? setup.heads.map((h) => slotToHead(h, ch)) : ch.map((c) => ({ what: "screen" as const, key: c.key, name: c.name, hex: c.hex, mesh: c.mesh || null }));
+      const heads = setup?.heads?.length ? setup.heads.map((h) => slotToHead(h, ch)) : ch.map((c) => ({ what: "screen" as const, key: c.key, name: c.name, hex: c.hex || colorHex(c.name), mesh: c.mesh || null }));
       sheets.push({ id: s.id, sepId: s.id, number: s.number, location: s.location, status: s.status, garment: s.garment_color || "", notes: s.notes || "", pressId: setup?.press || "", press: setup ? pname(setup.press) : "", heads, actual: null });
     }
   }
@@ -49,7 +50,7 @@ export async function pressSheets(admin: SupabaseClient, card: JobCard, settings
     if (sheets.some((x) => x.location.trim().toLowerCase() === (p.location || "").trim().toLowerCase())) continue;
     const inks = (p.inks || "").split(/\s*[,/;]\s*|\s+\+\s+/).map((x) => x.trim()).filter(Boolean);
     if (!inks.length) continue;
-    sheets.push({ id: `loc:${p.location || "Print"}`, sepId: null, number: 0, location: p.location || "Print", status: "", garment: "", notes: p.notes || "", pressId: "", press: "", heads: inks.map((n) => ({ what: "screen" as const, name: n, hex: "", mesh: null })), actual: null });
+    sheets.push({ id: `loc:${p.location || "Print"}`, sepId: null, number: 0, location: p.location || "Print", status: "", garment: "", notes: p.notes || "", pressId: "", press: "", heads: inks.map((n) => ({ what: "screen" as const, name: n, hex: colorHex(n), mesh: null })), actual: null });
   }
   if (sheets.length) {
     const { data: acts } = await admin.from("press_actuals").select("*").eq(card.kind === "o" ? "order_id" : "archived_order_id", card.id).order("created_at", { ascending: false }).limit(200);
