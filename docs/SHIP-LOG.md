@@ -380,3 +380,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 10:26am · 1.3.622 · Nick · Order reader: a beanie or cap read into both a printed group and an embroidery group stays only in the embroidery group
 - Nov 16 10:31am · 1.3.623 · Nick · Create order: names read for a garment (personalization) and every other setting on a line survive making the order
 - Nov 16 10:52am · 1.3.624 · Nick · Order reader: personalized pieces counted from the PO row's quantity, never the special instructions' AMS & PERSONALIZATION
+- Nov 16 10:53am · 1.3.625 · Nick · Order reader: an empty personalization group goes once the names are on the garments

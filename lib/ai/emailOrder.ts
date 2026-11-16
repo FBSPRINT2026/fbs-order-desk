@@ -471,7 +471,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-16e";
+export const READER_REV = "2026-11-16f";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -1129,6 +1129,12 @@ ${staffSays}` : ""}`;
     }
     // the names counted against the paperwork (Nov 1, #40345: three PERSONALIZATION rows, CINCO, ICEN and KEITH, read
     // as two names): a PO table with more PERSONALIZATION rows than names read is asked about, never left short
+    // a personalization group left with no pieces (the names are on the garments' own lines now) goes (Nov 16, #50086:
+    // an empty "AMS Personalization" group with a blank garment stayed beside the jacket that carried the name)
+    for (let i = groups.length - 1; i >= 0; i--) {
+      const g = groups[i];
+      if (groups.length > 1 && /personali[sz]/i.test(`${g.name || ""} ${(g.finishing || []).join(" ")}`) && !g.lines.some((l) => lineQty(l) > 0)) groups.splice(i, 1);
+    }
     // the pieces the paperwork personalizes: a PO row's quantity in front of PERSONALIZATION ("1 | PERSONALIZATION"),
     // else each PERSONALIZATION word; never the special instructions' "AMS & PERSONALIZATION" (Nov 16, #50086 asked for
     // a second name that wasn't there)
