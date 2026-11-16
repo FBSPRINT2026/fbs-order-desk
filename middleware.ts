@@ -71,7 +71,10 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   // a customer's proof link opens its PDF with no sign-in (?link=…, checked on the page against lib/proofLinks.ts)
   const linkPdf = path.startsWith("/print/") && request.nextUrl.searchParams.has("link");
-  const needsLogin = path.startsWith("/shop") || path.startsWith("/portal") || (path.startsWith("/print") && !linkPdf) || path.startsWith("/call");
+  // a crew phone (employee # and PIN) opening a job's work order from its phone menu: the page itself checks the PIN
+  // sign-in and shows the work order only (Nick, Nov 16 2026: Miguel's Work order asked him to sign in again)
+  const crewWo = /^\/print\/[0-9a-f-]{36}$/i.test(path) && request.nextUrl.searchParams.get("work") === "1" && !!request.cookies.get("fbs_emp")?.value;
+  const needsLogin = path.startsWith("/shop") || path.startsWith("/portal") || (path.startsWith("/print") && !linkPdf && !crewWo) || path.startsWith("/call");
   if (slow && hasCookie) return response;
   if (!user && needsLogin) {
     const url = request.nextUrl.clone();

@@ -48,7 +48,7 @@ const I = {
 
 /** The phone menu for one job (opened by scanning its QR code). */
 export default function JobMobile(p: {
-  who: JobActor; missing?: string; card?: JobCard; box?: number | null; designs?: Record<string, { number: number; name: string; url: string }>; press?: PressSheet[]; presses?: PressOption[]; inks?: PhoneInksData | null;
+  who: JobActor; missing?: string; card?: JobCard; box?: number | null; designs?: Record<string, { number: number; name: string; url: string }>; press?: PressSheet[]; presses?: PressOption[]; /** the press this job is booked on, or this person crews */ myPress?: string; inks?: PhoneInksData | null;
   ship?: { t: ShipTarget; existing: Shipment | null } | null; shipSettings?: ShipSettings; checkin?: CheckJob | null; printer?: { ready: boolean; dpi: number };
   /** the groups' mockup pictures (signed links), for the Proof tool */ mockups?: { name: string; urls: string[] }[];
 }) {
@@ -119,7 +119,7 @@ export default function JobMobile(p: {
         {view === "ship" && p.ship && p.shipSettings && <MobileShip t={p.ship.t} existing={p.ship.existing} settings={p.shipSettings} box={p.box || null} />}
         {view === "checkin" && p.checkin && <Checkin job={p.checkin} onLeave={back} />}
         {view === "inks" && p.inks && <PhoneInks card={card} data={p.inks} />}
-        {view === "timer" && <PressTimer card={card} presses={p.presses || []} />}
+        {view === "timer" && <PressTimer card={card} presses={p.presses || []} myPress={p.myPress || ""} />}
         {view === "post" && <PostCount card={card} checkin={p.checkin} job={job} />}
         {view === "proof" && <Proof mockups={p.mockups || []} card={card} designs={p.designs || {}} />}
         {view === "wo" && (card.kind === "o" ? <iframe className="jm-wo" src={`/print/${card.id}?work=1&embed=1`} title={t("Work order")} /> : <div className="jm-card"><p className="jm-faint">{t("This job's work order is in Printavo.")}</p></div>)}

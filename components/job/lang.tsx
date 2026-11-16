@@ -32,6 +32,16 @@ export function LangProvider({ initial, employee = false, children }: { initial:
   }, [employee]);
   // the page's language (screen readers, and the few labels drawn by the stylesheet)
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+  // the choice made on this phone wins over whatever the page was drawn in (Nick, Nov 16 2026: Sonia and Miguel picked
+  // Español and the next page came back in English): read it again on every page, and when another tab changes it
+  useEffect(() => {
+    const mine = () => { let v = ""; try { v = localStorage.getItem(LANG_COOKIE) || ""; } catch { /* */ } if (!v) v = (document.cookie.match(/(?:^|;\s*)fbs_lang=(en|es)/) || [])[1] || ""; return v === "es" || v === "en" ? (v as Lang) : null; };
+    const v = mine();
+    if (v && v !== initial) { set(v); document.cookie = `${LANG_COOKIE}=${v}; path=/; max-age=31536000; samesite=lax`; }
+    const on = (e: StorageEvent) => { if (e.key === LANG_COOKIE && (e.newValue === "es" || e.newValue === "en")) set(e.newValue); };
+    window.addEventListener("storage", on);
+    return () => window.removeEventListener("storage", on);
+  }, [initial]);
   return <Ctx.Provider value={{ lang, setLang }}>{children}</Ctx.Provider>;
 }
 
@@ -510,6 +520,13 @@ const ES: Record<string, string> = {
   "Do something else": "Hacer otra cosa",
   "What's next?": "¿Qué sigue?",
   "What are you working on?": "¿En qué estás trabajando?",
+  "What are you setting up?": "¿Qué vas a montar?",
+  "Setting up the next side?": "¿Montas el siguiente lado?",
+  "Start setup": "Empezar montaje",
+  "Already set up · start printing": "Ya está montado · empezar a imprimir",
+  "Pick a press": "Elige una prensa",
+  "Every side is printed.": "Todos los lados están impresos.",
+  "{0} done · set up {1}": "{0} listo · montar {1}",
   "Whole job": "Todo el trabajo",
   "Press": "Prensa",
   "Start setup · {0}": "Empezar montaje · {0}",

@@ -1,3 +1,4 @@
+import { mergeProduction } from "@/lib/production";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { groupPictures } from "@/lib/mockupFresh";
 import type { Group } from "@/lib/pricing";
@@ -61,6 +62,19 @@ export default async function JobPage({ params, searchParams }: { params: Promis
 
   // press setups: the suggestion (the separations) and what really ran (press_actuals); the inks to pull or mix
   const [{ sheets: press, presses }, inks] = await Promise.all([pressSheets(admin, card, st?.data), phoneInks(admin, card, st?.data).catch(() => null)]);
+  // the press the timer starts on (Nick, Nov 16 2026: "the press should be automatically like press one"): where this
+  // job is booked on the schedule, else the press this person crews, else none (the phone's last pick)
+  const myPress = await (async () => {
+    const { data: sl } = await admin.from("production_slots").select("machine, day").eq(card.kind === "o" ? "order_id" : "archived_order_id", card.id).is("finished_at", null).order("day").limit(1);
+    const booked = presses.find((x) => x.id === (sl?.[0] as { machine?: string } | undefined)?.machine);
+    if (booked) return booked.name;
+    const empId = who?.employeeId;
+    if (!empId) return "";
+    const pr = mergeProduction((st?.data as { production?: unknown } | null)?.production);
+    const crew = pr.crews.find((c) => c.members && Object.values(c.members).includes(empId));
+    const m = crew ? pr.machines.find((x) => x.crew === crew.id && presses.some((y) => y.id === x.id)) : undefined;
+    return m?.name || "";
+  })().catch(() => "");
 
   // shipping (staff with the Shipping Center)
   let ship: { t: ShipTarget; existing: Shipment | null } | null = null;
@@ -101,7 +115,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const checkin = who.can.checkin ? await checkinJobFor(admin, { kind: card.kind, id: card.id }).catch(() => null) : null;
 
   return wrap(
-    <JobMobile who={who} card={card} mockups={mockups} box={ref?.box || null} designs={designs} press={press} presses={presses} inks={inks} ship={ship} shipSettings={settings.ship} checkin={checkin}
+    <JobMobile who={who} card={card} mockups={mockups} box={ref?.box || null} designs={designs} press={press} presses={presses} myPress={myPress} inks={inks} ship={ship} shipSettings={settings.ship} checkin={checkin}
       printer={{ ready: printerReady(ps), dpi: ps.dpi }} />
   );
 }

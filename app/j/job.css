@@ -476,3 +476,14 @@
 /* High priority (Nick, Nov 16 2026): violet, beside RUSH */
 .jm-rush.prio{background:#7C5CD6}
 .cr-n em.prio{background:#7C5CD6;color:#fff}
+
+/* the press timer's start (Nick, Nov 16 2026): hi, the press picked for them, the side picked (front first), one button */
+.jm-tm-start{display:flex;flex-direction:column;gap:12px}
+.jm-tm-hi{font-size:22px;font-weight:800;color:var(--ink)}
+.jm-tm-press{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink-3)}
+.jm-tm-press select{flex:1;min-width:0;height:40px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit;font-size:15px;font-weight:700;padding:0 10px}
+.jm-tm-sides{display:grid;gap:8px}
+.jm-tm-side{min-height:56px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation;padding:6px;overflow-wrap:anywhere}
+.jm-tm-side.on{border-color:var(--fbs-blue);background:#EAF3FF;color:var(--fbs-blue)}
+.jm-tm-side.done{opacity:.5;cursor:default}
+.jm-tm-start .jm-link{align-self:center}

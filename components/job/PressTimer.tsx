@@ -19,15 +19,18 @@ const hm = (ms: number) => { const m = Math.round(ms / 60000); return m >= 60 ? 
 const parse = (task: string) => { const [phase, ...rest] = task.split(" · "); return { phase: phase === "Setup" ? "setup" : phase === "Run" ? "run" : "other", loc: rest.join(" · ") || task }; };
 const sticky = { get: (k: string) => { try { return localStorage.getItem(k) || ""; } catch { return ""; } }, set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
 
-export default function PressTimer({ card, presses }: { card: JobCard; presses: PressOption[] }) {
+/** the order a press runs a job's spots in: the front (chest, pocket) first, then the back, then sleeves, then the rest */
+const rankOf = (l: string) => /front|chest|pocket|crest/i.test(l) ? 0 : /back|yoke|nape|neck/i.test(l) ? 1 : /sleeve|arm|cuff/i.test(l) ? 2 : 3;
+
+export default function PressTimer({ card, presses, myPress = "" }: { card: JobCard; presses: PressOption[]; /** the press this job is booked on, or this person crews */ myPress?: string }) {
   const { t, locale } = useT();
   const job = { kind: card.kind, id: card.id };
-  const locs = [...new Set(card.groups.flatMap((g) => g.prints.map((p) => p.location).filter(Boolean)))];
+  const locs = [...new Set(card.groups.flatMap((g) => g.prints.map((p) => p.location).filter(Boolean)))].map((l, i) => ({ l, i })).sort((a, b) => rankOf(a.l) - rankOf(b.l) || a.i - b.i).map((x) => x.l);
   const qtyOf = (loc: string) => card.groups.filter((g) => g.prints.some((p) => p.location === loc)).reduce((a, g) => a + g.rows.reduce((b, r) => b + r.total, 0), 0) || card.qty;
   const taskT = (task: string) => { const x = parse(task); return x.phase === "setup" ? t("Setup · {0}", t(x.loc)) : x.phase === "run" ? t("Run · {0}", t(x.loc)) : t(task); };
   const noteT = (n: string) => (/^Paused: /.test(n) ? t("Paused: {0}", t(n.slice(8))) : t(n));
   const [st, setSt] = useState<State | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState("");
-  const [loc, setLoc] = useState("Whole job"), [press, setPress] = useState("");
+  const [locPick, setLoc] = useState(""), [press, setPress] = useState("");
   const [pausing, setPausing] = useState(false), [finishing, setFinishing] = useState<number | null>(null), [now, setNow] = useState(Date.now());
   const [awake, setAwake] = useState(false);
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
@@ -37,7 +40,7 @@ export default function PressTimer({ card, presses }: { card: JobCard; presses: 
     const j = r ? await r.json().catch(() => ({})) : { error: "Offline" };
     if (!r?.ok) setErr(t(j.error || "Couldn't load.")); else { setErr(""); setSt(j); }
   }, [job.kind, job.id, t]);
-  useEffect(() => { setPress(sticky.get("jm.press") || presses[0]?.name || ""); load(); }, [load, presses]);
+  useEffect(() => { setPress(myPress || sticky.get("jm.press") || presses[0]?.name || ""); load(); }, [load, presses, myPress]);
   // the phone woke up / came back to the page: the server has the truth
   useEffect(() => { const on = () => { if (document.visibilityState === "visible") { load(); if (awake) keepAwake(true); } }; document.addEventListener("visibilitychange", on); return () => document.removeEventListener("visibilitychange", on); });
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
@@ -61,10 +64,16 @@ export default function PressTimer({ card, presses }: { card: JobCard; presses: 
   }
 
   if (!st) return <div className="jm-card"><p className="jm-faint">{err || t("Loading…")}</p></div>;
+  const doneRuns = new Set(st.log.filter((r) => r.ended_at && parse(r.task).phase === "run").map((r) => parse(r.task).loc));
+  // the side to set up next, picked for them (Nick, Nov 16 2026: "by default… the front should be the first thing that's
+  // already selected"): the first spot not printed yet, front first
+  const nextLoc = locs.find((l) => !doneRuns.has(l)) || "";
+  const loc = locPick && locs.includes(locPick) && !doneRuns.has(locPick) ? locPick : nextLoc || (locs.length ? locs[0] : "Whole job");
   if (!st.me) return <div className="jm-card"><p>{t("The press timer is for the crew: sign in on this phone with your employee number and PIN.")}</p></div>;
   const run = st.running, onThis = run && (card.kind === "o" ? run.order_id : run.archived_order_id) === card.id ? run : null;
   const cur = onThis ? parse(onThis.task) : null;
-  const doneRuns = new Set(st.log.filter((r) => r.ended_at && parse(r.task).phase === "run").map((r) => parse(r.task).loc));
+  // spots still to print after the one on the press now
+  const leftAfter = cur ? locs.filter((l) => l !== cur.loc && !doneRuns.has(l)) : [];
 
   return (
     <>
@@ -97,11 +106,13 @@ export default function PressTimer({ card, presses }: { card: JobCard; presses: 
             <div className="jm-tm-btns">
               {cur!.phase === "setup" && <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("run", { location: cur!.loc })}>{t("Setup done · start running")}</button>}
               {/* the one button that matters (Nov 13): the job is printed, the schedule moves on */}
-              {cur!.phase !== "setup" && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>}
+              {/* a side done with another still to print: finish it, then the next side's setup is asked (Nick, Nov 16 2026) */}
+              {cur!.phase === "run" && leftAfter.length > 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => setFinishing(qtyOf(cur!.loc))}>✓ {t("{0} done · set up {1}", t(cur!.loc), t(leftAfter[0]))}</button>}
+              {cur!.phase !== "setup" && leftAfter.length === 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>}
               <div className="jm-row">
                 <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => setPausing(true)}>{t("Pause")}</button>
                 {cur!.phase === "setup" && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => act("finish")}>{t("Stop setup")}</button>}
-                {cur!.phase === "run" && locs.length > 1 && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => setFinishing(qtyOf(cur!.loc))}>{t("Finish this spot only")}</button>}
+                {cur!.phase === "run" && leftAfter.length > 0 && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>}
               </div>
             </div>
           )}
@@ -116,12 +127,19 @@ export default function PressTimer({ card, presses }: { card: JobCard; presses: 
           <button type="button" className="jm-link" onClick={() => setSt({ ...st, paused: null })}>{t("Do something else")}</button>
         </div>
       ) : (
-        <div className="jm-card">
-          <div className="jm-label">{doneRuns.size ? t("What's next?") : t("What are you working on?")}</div>
-          <div className="jm-chips">{[...locs, "Whole job"].map((l) => <button key={l} type="button" className={"jm-chip" + (loc === l ? " on" : "") + (doneRuns.has(l) ? " done" : "")} onClick={() => setLoc(l)}>{doneRuns.has(l) ? "✓ " : ""}{t(l)}</button>)}</div>
-          {presses.length > 0 && <><div className="jm-label">{t("Press")}</div><div className="jm-chips">{presses.map((p) => <button key={p.id} type="button" className={"jm-chip" + (press === p.name ? " on" : "")} onClick={() => setPress(p.name)}>{p.name}</button>)}</div></>}
-          <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("run")}>▶ {t("Start job")}{loc !== "Whole job" ? ` · ${t(loc)}` : ""}</button>
-          <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => act("setup")}>{t("Start with setup")}</button>
+        /* one question and one big button (Nick, Nov 16 2026: "hi Miguel, we're working on this press… what are you
+           setting up, front first… start setup… are you starting up the next side"): the press is picked for them (where
+           the job is booked, else their crew's press) with a small drop-down to change it; the side is picked, front first */
+        <div className="jm-card jm-tm-start">
+          <div className="jm-tm-hi">{t("Hi, {0}", st.me.name.split(" ")[0])}</div>
+          {presses.length > 0 && <label className="jm-tm-press"><span>{t("Press")}</span>
+            <select value={press} onChange={(e) => setPress(e.target.value)} aria-label={t("Press")}>{!presses.some((p) => p.name === press) && <option value="">{t("Pick a press")}</option>}{presses.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}</select></label>}
+          {locs.length > 0 && !nextLoc ? <div className="jm-label">{t("Every side is printed.")}</div> : <>
+            <div className="jm-label">{doneRuns.size ? t("Setting up the next side?") : t("What are you setting up?")}</div>
+            {locs.length > 1 && <div className="jm-tm-sides" style={{ gridTemplateColumns: `repeat(${Math.min(locs.length, 3)}, minmax(0, 1fr))` }}>{locs.map((l) => <button key={l} type="button" className={"jm-tm-side" + (loc === l ? " on" : "") + (doneRuns.has(l) ? " done" : "")} disabled={doneRuns.has(l)} onClick={() => setLoc(l)}>{doneRuns.has(l) ? "✓ " : ""}{t(l)}</button>)}</div>}
+            <button type="button" className="jm-go" disabled={!!busy || (presses.length > 0 && !press)} onClick={() => { void keepAwake(true); act("setup", { location: loc }); }}>▶ {t("Start setup")}{loc !== "Whole job" ? ` · ${t(loc)}` : ""}</button>
+            <button type="button" className="jm-link" disabled={!!busy || (presses.length > 0 && !press)} onClick={() => { void keepAwake(true); act("run", { location: loc }); }}>{t("Already set up · start printing")}</button>
+          </>}
           <button type="button" className="jm-ghost done" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>
         </div>
       )}

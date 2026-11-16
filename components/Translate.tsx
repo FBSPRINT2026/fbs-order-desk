@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useSticky } from "@/lib/useSticky";
 
 /**
  * "Translate to Spanish": a switch at the top right of every page. When it's on, the page's text is shown in Spanish:
@@ -26,7 +25,23 @@ const fill = (t: string, nums: string[]) => t.replace(/\{(\d+)\}/g, (_, i) => nu
 const wanted = (s: string) => s.length <= 400 && LETTER.test(s) && !/^[A-Z]{1,3}$/.test(s) && !/^\S+@\S+\.\S+$/.test(s) && !/^https?:\/\//.test(s);
 
 export default function Translate({ className = "" }: { className?: string }) {
-  const [lang, setLang] = useSticky<"en" | Lang>("lang", "en");
+  // a person's language is kept for good on this browser, never reset like a page's filters, and it's the same choice as
+  // the crew phone's EN / ES (Nick, Nov 16 2026: Sonia and Miguel picked Spanish and the next page was English again)
+  const [lang, setLangS] = useState<"en" | Lang>("en");
+  useEffect(() => {
+    let v = "";
+    try { v = localStorage.getItem("fbs_lang") || ""; if (!v) { const old = JSON.parse(localStorage.getItem("fbs:lang") || "null"); v = typeof old === "string" ? old : (old && typeof old === "object" && typeof old.v === "string" ? old.v : ""); } } catch { /* */ }
+    if (!v) v = (document.cookie.match(/(?:^|;\s*)fbs_lang=(en|es)/) || [])[1] || "";
+    if (v === "es") setLangS("es");
+    const on = (e: StorageEvent) => { if (e.key === "fbs_lang" && (e.newValue === "es" || e.newValue === "en")) setLangS(e.newValue as "en" | Lang); };
+    window.addEventListener("storage", on);
+    return () => window.removeEventListener("storage", on);
+  }, []);
+  const setLang = (l: "en" | Lang) => {
+    setLangS(l);
+    try { localStorage.setItem("fbs_lang", l); } catch { /* */ }
+    document.cookie = `fbs_lang=${l}; path=/; max-age=31536000; samesite=lax`;
+  };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const on = lang === "es";
