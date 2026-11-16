@@ -487,3 +487,6 @@
 .jm-tm-side.on{border-color:var(--fbs-blue);background:#EAF3FF;color:var(--fbs-blue)}
 .jm-tm-side.done{opacity:.5;cursor:default}
 .jm-tm-start .jm-link{align-self:center}
+.jm-tm-notin{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;background:#FFF4EC;border:1.5px solid #F2A65A}
+.jm-tm-notin span{font-size:13px;color:var(--ink-3)}
+.cr-notin .cr-k{color:#F2A65A}

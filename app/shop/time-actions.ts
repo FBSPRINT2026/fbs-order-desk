@@ -293,3 +293,28 @@ export async function timeFixDecide(id: string, approve: boolean, why = ""): Pro
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
+
+/**
+ * Punches made on a phone (the crew menu, the time app): they count right away and wait here for a manager's OK (Nick,
+ * Nov 16 2026: "Jose will have to approve any clock ins done by the phone"). No takes the punch off (voided, kept).
+ */
+export type PhonePunch = { id: string; employee_id: string; kind: string; at: string };
+export async function phonePunchesOpen(): Promise<{ ok: true; punches: PhonePunch[] } | { ok: false; error: string }> {
+  try {
+    await manager();
+    const { data, error } = await createAdminClient().from("time_punches").select("id, employee_id, kind, at").eq("needs_ok", true).eq("voided", false).order("at").limit(300);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, punches: (data || []) as PhonePunch[] };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}
+export async function phonePunchDecide(ids: string[], approve: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const v = await manager();
+    const list = (ids || []).filter((x) => /^[0-9a-f-]{36}$/i.test(String(x))).slice(0, 300);
+    if (!list.length) return { ok: true };
+    const who = v.staff?.name || v.email, now = new Date().toISOString();
+    const { error } = await createAdminClient().from("time_punches").update(approve ? { needs_ok: false, ok_by: who, ok_at: now } : { needs_ok: false, voided: true, ok_by: who, ok_at: now, edited_by: v.email, edited_at: now }).in("id", list).eq("needs_ok", true);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+}

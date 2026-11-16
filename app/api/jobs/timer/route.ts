@@ -42,7 +42,11 @@ export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams, job = { kind: sp.get("kind"), id: sp.get("id") } as J;
   if ((job.kind !== "o" && job.kind !== "a") || !job.id) return NextResponse.json({ error: "Which job?" }, { status: 400 });
   if (!who.employeeId) return NextResponse.json({ me: null });
-  return NextResponse.json({ me: { name: who.name }, ...(await state(createAdminClient(), who.employeeId, job)) });
+  const admin = createAdminClient();
+  // clocked in today? the timer asks first when not (Nick, Nov 16 2026)
+  const { statusOf, timeSettings } = await import("@/lib/timeclockServer");
+  const [st, ck] = await Promise.all([state(admin, who.employeeId, job), timeSettings(admin).then((s) => statusOf(admin, s, who.employeeId!)).catch(() => null)]);
+  return NextResponse.json({ me: { name: who.name }, clock: ck ? ck.state : null, ...st });
 }
 
 export async function POST(req: Request) {

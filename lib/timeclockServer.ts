@@ -177,7 +177,9 @@ export async function recordPunch(admin: SupabaseClient, p: { employeeId: string
   }
   // clocking out for the day finishes a job someone forgot to finish
   if (p.kind === "out") await stopJob(admin, p.employeeId, { auto: true });
-  const { data, error } = await admin.from("time_punches").insert({ employee_id: p.employeeId, kind: p.kind, at, source: p.source, device_id: p.deviceId || null, photo_path, lat: p.lat ?? null, lng: p.lng ?? null, accuracy: p.accuracy ?? null, note: p.note || "" }).select("id, at, kind").single();
+  const { data, error } = await admin.from("time_punches").insert({ employee_id: p.employeeId, kind: p.kind, at, source: p.source, device_id: p.deviceId || null, photo_path, lat: p.lat ?? null, lng: p.lng ?? null, accuracy: p.accuracy ?? null, note: p.note || "",
+    // a punch from a phone counts now and waits for a manager's OK on the Time Clock (Nick, Nov 16 2026)
+    needs_ok: p.source === "phone" }).select("id, at, kind").single();
   if (error) return { error: error.message, status: st };
   return { punch: data, status: await statusOf(admin, s, p.employeeId) };
 }

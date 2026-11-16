@@ -334,15 +334,19 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   in, operator → press timer, catcher → post count with where it goes, shipping → Ship) with its tiles in their order
   (`TILES`). The look is "A + B" (light page, one dark card on top, the list with times, tiles, clock buttons). Their
   time card fixes wait for a manager on the Time Clock (`time_fix_requests`, `timeFixDecide`). **Payday check** (Nick, Nov 13 2026: uAttend's
-  printed sheets, now on the phone): the pay period that just ended is first on their menu for five days after it
-  ends until they answer; "My hours are right" approves it, "Something's wrong" opens a time card fix on the day they
+  printed sheets, now on the phone): the pay period that just ended is first on their menu on payday (the day after it
+  ends; Nick, Nov 16 2026) until they answer; "My hours are right" approves it, "Something's wrong" opens a time card fix on the day they
   tap (`hours` in `lib/crewHome.ts`, `time_card_checks`; the Time Clock's Their check column shows Approved / Fix asked
   / Not yet). Approving the period on the Payroll Report takes the card off everyone's phone; My time cards lists
   the period now running and the six before it (`periodHours`, `/api/crew/cards`). Paper time cards to sign: Payroll
   Report → Print time cards (`/print/timecards`, one page each; everyone, or only who hasn't checked on the phone), by Screen
   Printing, Embroidery, Fulfillment, then the rest, each by first name). A day's punches say what they are by their order,
   not the button pressed: any four punches are in, lunch out, lunch in, out; three pressed in, out, in are back from lunch
-  (`withLunch` in `lib/timeclock.ts`; Nick, Nov 13). **View as** (Nick, Nov 13): the owner, on his own portal login, picks
+  (`withLunch` in `lib/timeclock.ts`; Nick, Nov 13). **Clocking in on the phone** (Nick, Nov 16 2026: "if Miguel didn't
+  clock in… it should ask them… Jose will have to approve any clock ins done by the phone"): the main menu's clock
+  buttons sit right under the hello, and not clocked in today it asks first ("You haven't clocked in today"); the press
+  timer asks the same before Start setup. A phone punch counts at once and waits for a manager's OK on the Time Clock
+  (`time_punches.needs_ok`, Punches from phones: OK / No, which voids it; `phonePunchDecide`). **View as** (Nick, Nov 13): the owner, on his own portal login, picks
   anyone at the bottom of his /crew menu and sees their phone exactly (`VIEWAS_COOKIE` in `lib/jobAccess.ts`, `/api/viewas`);
   no shared PIN; look only (middleware refuses the phone tools' changes), a bar on top with Stop, ends after 2 hours. New crew tools go
   through these, never a page of their own; every word has its Spanish in `components/job/lang.tsx`.

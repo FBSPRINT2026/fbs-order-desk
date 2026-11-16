@@ -125,7 +125,7 @@ async function payPeriodHours(admin: SupabaseClient, s: Awaited<ReturnType<typeo
 
 /**
  * One pay period's time card on the phone (payday card and My time cards; Nick, Nov 13 2026). `ask` (put it first on the
- * menu): the five days after it ends, until they approve it or the office approves the period, whichever comes first.
+ * menu): on payday, the day after it ends, until they approve it or the office approves the period.
  */
 export async function periodHours(admin: SupabaseClient, s: Awaited<ReturnType<typeof timeSettings>>, employeeId: string, start: string, today: string): Promise<PeriodHours> {
   const per = periodOf(s, start);
@@ -144,6 +144,8 @@ export async function periodHours(admin: SupabaseClient, s: Awaited<ReturnType<t
   const c = ck.data as { status: "approved" | "fix_asked"; decided_at: string } | null;
   const check = c ? { status: c.status, at: c.decided_at } : null;
   const office = !!(ap as { approved_at: string | null } | null)?.approved_at;
-  const ask = !office && check?.status !== "approved" && today > per.end && today <= addDays(per.end, 5) && days.length > 0;
+  // payday only: the Friday after the period ends, when the check is made (Nick, Nov 16 2026: on the Monday after, it was
+  // still asking about the period already paid); any other day My time cards has the hours
+  const ask = !office && check?.status !== "approved" && today === addDays(per.end, 1) && days.length > 0;
   return { start: per.start, end: per.end, worked: Math.round(card.worked), overtime: Math.round(card.overtime), breaks: Math.round(card.breaks), ask, check, office, open, days };
 }

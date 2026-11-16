@@ -12,7 +12,7 @@ import { useT } from "./lang";
  * scanning the job again (or reopening the page) picks it right back up.
  */
 type Row = JobTime & { who: string };
-type State = { me: { name: string } | null; running: JobTime | null; paused: JobTime | null; log: Row[] };
+type State = { me: { name: string } | null; /** the shift clock: "in", "break", "out" */ clock?: string | null; running: JobTime | null; paused: JobTime | null; log: Row[] };
 const PAUSES = ["Lunch", "Break", "Running another location first", "Waiting on screens or ink", "Press problem", "End of shift"];
 const hms = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`; };
 const hm = (ms: number) => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
@@ -132,6 +132,16 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
            the job is booked, else their crew's press) with a small drop-down to change it; the side is picked, front first */
         <div className="jm-card jm-tm-start">
           <div className="jm-tm-hi">{t("Hi, {0}", st.me.name.split(" ")[0])}</div>
+          {/* not clocked in: ask first (Nick, Nov 16 2026); a phone punch waits for a manager's OK */}
+          {st.clock === "out" && <div className="jm-tm-notin"><b>{t("You haven't clocked in today")}</b><span>{t("Clock in now. Your manager OKs punches made on a phone.")}</span>
+            <button type="button" className="jm-go warn" disabled={!!busy} onClick={async () => {
+              setBusy("in"); setErr("");
+              const r = await fetch("/api/crew", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "punch", kind: "in" }) }).catch(() => null);
+              const j = r ? await r.json().catch(() => ({})) : { error: "Offline. Try again." };
+              setBusy("");
+              if (!r?.ok) return setErr(t(j.error || "Couldn't save."));
+              setSt({ ...st, clock: "in" });
+            }}>{busy === "in" ? t("Saving…") : t("Clock in")}</button></div>}
           {presses.length > 0 && <label className="jm-tm-press"><span>{t("Press")}</span>
             <select value={press} onChange={(e) => setPress(e.target.value)} aria-label={t("Press")}>{!presses.some((p) => p.name === press) && <option value="">{t("Pick a press")}</option>}{presses.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}</select></label>}
           {locs.length > 0 && !nextLoc ? <div className="jm-label">{t("Every side is printed.")}</div> : <>

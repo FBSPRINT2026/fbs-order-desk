@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CrewHome, CrewJob, CountJob, PeriodHours } from "@/lib/crewHome";
 import { CREW_VIEWS } from "@/lib/crewView";
 import { LangToggle, useT } from "@/components/job/lang";
-import CamScan from "@/components/job/CamScan";
+import CamScan, { preloadScanner } from "@/components/job/CamScan";
 import { ViewAsBar, ViewAsPick } from "@/components/crew/ViewAs";
 
 /**
@@ -44,6 +44,8 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
   const modeLabel = (m: string) => (m === "delivery" ? t("Deliveries") : t(CREW_VIEWS.find((v) => v.id === m)?.label || m));
   const tomorrow = home.day !== home.today;
   const open = (n: number | string, v = "") => { location.href = `/j/${n}${v ? `?v=${v}` : ""}`; };
+  // the camera reader loads while the menu is open, so Scan a job reads at once (Nick, Nov 16 2026)
+  useEffect(() => { const id = setTimeout(() => { void preloadScanner().catch(() => {}); }, 800); return () => clearTimeout(id); }, []);
   const go = (s: "home" | "time" | "scan" | "hours" | "cards") => { if (s === "cards") void loadCards(); if (s !== "home") history.pushState({ cr: s }, ""); setScreen(s); setErr(""); scrollTo(0, 0); };
   useEffect(() => { const on = (e: PopStateEvent) => setScreen((e.state?.cr as "time" | "scan" | "hours" | "cards") || "home"); addEventListener("popstate", on); return () => removeEventListener("popstate", on); }, []);
 
@@ -70,6 +72,16 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
         </div>
         {err && <div className="jm-err" role="alert">{err}</div>}
         {msg && <div className="jm-ok" role="status">{msg}</div>}
+        {/* clocking in and out right on the main menu; not in yet today, it asks first (Nick, Nov 16 2026). A phone punch
+            counts now and waits for a manager's OK on the Time Clock */}
+        {screen === "home" && c && !tomorrow && (c.state === "out" && !c.minutes ? (
+          <section className="cr-hero cr-notin">
+            <div className="cr-k">{t("NOT CLOCKED IN")}</div>
+            <div className="cr-n"><b>{t("You haven't clocked in today")}</b></div>
+            <div className="cr-s">{t("Clock in now. Your manager OKs punches made on a phone.")}</div>
+            <button type="button" className="cr-go" disabled={!!busy} onClick={async () => { if (await post({ action: "punch", kind: "in" })) setMsg(t("Clocked in. Your manager will OK it.")); }}>{busy === "in" ? t("Saving…") : t("Clock in")}</button>
+          </section>
+        ) : <Punch next={c.next} busy={busy} onPunch={async (k) => { if (await post({ action: "punch", kind: k })) setMsg(t("Saved. Your manager will OK it.")); }} />)}
 
         {/* payday: check your hours, first thing on the menu until they answer (Nick, Nov 13) */}
         {screen === "home" && home.hours?.ask && (
@@ -117,9 +129,8 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
             <button type="button" onClick={() => go("scan")}><Svg d={IC.scan} />{t("Scan a job")}</button>
             {home.presses.length > 0 && <button type="button" onClick={() => { location.href = tomorrow ? "/crew" : "/crew?day=next"; }}><Svg d={IC.cal} />{tomorrow ? t("Today") : t("Tomorrow")}</button>}
             {c && <button type="button" onClick={() => go("time")}><Svg d={IC.time} />{t("Time card")}{home.fixes.some((f) => f.status === "pending") && <small>{t("Fix waiting")}</small>}</button>}
-            {c && <button type="button" onClick={() => go("cards")}><Svg d={IC.cal} />{t("My time cards")}{home.hours?.ask ? <small>{t("Check them")}</small> : home.hours?.office || home.hours?.check?.status === "approved" ? <small>{t("Approved ✓")}</small> : null}</button>}
+            {c && <button type="button" onClick={() => go("cards")}><Svg d={IC.cal} />{t("My hours")}{home.hours?.ask ? <small>{t("Check them")}</small> : home.hours?.office || home.hours?.check?.status === "approved" ? <small>{t("Approved ✓")}</small> : null}</button>}
           </div>
-          {c && <Punch next={c.next} busy={busy} onPunch={(k) => post({ action: "punch", kind: k })} />}
           {home.staff && <a className="jm-alt" href="/shop">{t("Open the shop")}</a>}
         </>}
 

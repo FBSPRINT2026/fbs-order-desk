@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import CamScan from "@/components/job/CamScan";
 import { hm, jobMinutes, timeLabel, type JobTime } from "@/lib/timeclock";
 
 /**
@@ -36,7 +37,6 @@ const ES: Record<string, string> = {
 };
 const tr = (lang: Lang, s: string) => (lang === "es" ? s.split(/(\(.*?\))/).map((p) => ES[p.trim()] || ES[p] || p).join(" ").replace(/\s+/g, " ").trim() : s);
 
-declare global { interface Window { BarcodeDetector?: new (o: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> }; ZXingBrowser?: { BrowserMultiFormatReader: new () => { decodeFromStream: (s: MediaStream, v: HTMLVideoElement, cb: (r: { getText: () => string } | undefined) => void) => Promise<{ stop: () => void }> } } } }
 
 export default function WorkApp() {
   const [me, setMe] = useState<Me | null>(null);
@@ -210,34 +210,11 @@ export default function WorkApp() {
   );
 }
 
-/** The camera scanner: the phone's built-in barcode reader when it has one, otherwise a small reader library. */
+/** The camera scanner: the one shared reader (components/job/CamScan.tsx), in the time app's look. */
 function Scanner({ t, busy, typed, setTyped, onCode, onCancel }: { t: (typeof T)["en"]; busy: boolean; typed: string; setTyped: (s: string) => void; onCode: (s: string) => void; onCancel: () => void }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const [camErr, setCamErr] = useState(false);
-  useEffect(() => {
-    let stream: MediaStream | null = null, stop = false, controls: { stop: () => void } | null = null, raf = 0;
-    const found = (s: string) => { if (stop) return; stop = true; if (navigator.vibrate) navigator.vibrate(80); onCode(s); };
-    (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
-        if (!video.current) return;
-        video.current.srcObject = stream; await video.current.play().catch(() => {});
-        if (window.BarcodeDetector) {
-          const det = new window.BarcodeDetector({ formats: ["code_128", "code_39", "qr_code", "ean_13", "upc_a"] });
-          const loop = async () => { if (stop || !video.current) return; try { const c = await det.detect(video.current); if (c[0]?.rawValue) return found(c[0].rawValue); } catch { /* keep trying */ } raf = requestAnimationFrame(loop); };
-          loop();
-        } else {
-          await new Promise<void>((res, rej) => { if (window.ZXingBrowser) return res(); const sc = document.createElement("script"); sc.src = "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js"; sc.onload = () => res(); sc.onerror = () => rej(new Error("load")); document.head.appendChild(sc); });
-          if (!window.ZXingBrowser || !video.current || !stream) throw new Error("no reader");
-          controls = await new window.ZXingBrowser.BrowserMultiFormatReader().decodeFromStream(stream, video.current, (r) => { if (r) found(r.getText()); });
-        }
-      } catch { setCamErr(true); }
-    })();
-    return () => { stop = true; cancelAnimationFrame(raf); controls?.stop(); stream?.getTracks().forEach((x) => x.stop()); };
-  }, [onCode]);
   return (
     <section className="wk-card wk-scanner">
-      {!camErr ? <div className="wk-cam"><video ref={video} playsInline muted /><i className="wk-aim" /><span>{t.aim}</span></div> : <div className="wk-err">{t.noCam}</div>}
+      <CamScan onCode={onCode} aim={t.aim} noCam={t.noCam} look={["wk-cam", "wk-aim", "wk-err"]} />
       <div className="wk-typed"><input inputMode="numeric" placeholder={t.type} value={typed} onChange={(e) => setTyped(e.target.value.replace(/[^\d-]/g, ""))} onKeyDown={(e) => { if (e.key === "Enter" && typed) onCode(typed); }} /><button type="button" className="wk-go" disabled={!typed || busy} onClick={() => onCode(typed)}>{t.find}</button></div>
       <button type="button" className="wk-ghost" onClick={onCancel}>{t.cancel}</button>
     </section>
