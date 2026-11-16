@@ -56,11 +56,8 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
   const e = await employeeFor(admin, (await cookies()).get(EMP_COOKIE)?.value).catch(() => null);
   if (e) {
     const who = await employeeActor(admin, e as Emp);
-    if (net.configured && !net.on) {
-      // kept, to see where phones on the FBS Wi-Fi really come from (Nov 16: the crew turned away)
-      await admin.from("net_misses").insert({ ip: net.ip, employee: [who.name].filter(Boolean).join("") }).then(() => null, () => null);
-      return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false, ip: net.ip };
-    }
+    // a crew PIN works on any network, Wi-Fi or cellular (Nick, Nov 16 2026: "I don't think everybody's gonna be on the
+    // Wi-Fi so that shouldn't be a requirement"); only the shop computers stay on the shop's network
     return { who, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: false };
   }
   return { who: null, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: !!v?.user };

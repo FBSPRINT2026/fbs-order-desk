@@ -37,8 +37,9 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   if (!who) {
     // the crew on the shop's Wi-Fi sign in here; anyone else (a customer at home) goes to their own order in the
     // customer portal, which only shows it to that customer's login
-    if ((gate.onShopNet || !gate.netConfigured) && !(await searchParams).customer && !gate.customer) return wrap(<JobSignIn code={code} />);
-    if (gate.offNetwork && !(await searchParams).customer) return wrap(<JobSignIn code={code} offNetwork ip={gate.ip} />);
+    // anyone not signed in gets the crew sign-in, on any network (Nick, Nov 16 2026: the press crew on cellular were sent
+    // to the customer portal); a customer taps "Customer? See your order" on it, and a signed-in customer goes straight there
+    if (!(await searchParams).customer && !gate.customer) return wrap(<JobSignIn code={code} offNetwork={gate.offNetwork} ip={gate.ip} />);
     const job = ref ? await admin.from("orders").select("id").eq("number", +ref.number).maybeSingle() : null;
     if (job?.data) redirect(`/portal/orders/${job.data.id}`);
     const pv = ref ? await admin.from("archived_orders").select("id").is("removed_at", null).eq("visual_id", ref.number).maybeSingle() : null;

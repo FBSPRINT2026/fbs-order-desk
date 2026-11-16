@@ -326,7 +326,8 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   counted, Receiving shows what was counted ("Counted 676 of 690 · 14 short"), never the carrier's boxes delivered.
 - **The crew's phones** (Nick, Nov 13 2026: "this is how most people at my company are going to get in the site… 30 of
   them are going to use only this view"). One way in: the QR on the wall or on any work order → `/crew` (the main menu)
-  or `/j/<number>` (a job's menu, with Main menu at its top), employee # and PIN once, on the shop's Wi-Fi. What a phone
+  or `/j/<number>` (a job's menu, with Main menu at its top), employee # and PIN once, on any network (Wi-Fi or cellular;
+  Nick, Nov 16 2026: "everybody's not gonna be on the Wi-Fi"; only the shop computers need the shop's network). What a phone
   shows is the person's phone view (`lib/crewView.ts`: Receiving, Press operator, Assistant, Catcher, Fulfillment,
   Shipping, Office; set on Employees → Phone Logins, else their place on a press crew): the main menu's dark card is what
   they're on now (`lib/crewHome.ts`), and a scanned job opens on their view's first tool (`OPENS_ON`: receiving → count
