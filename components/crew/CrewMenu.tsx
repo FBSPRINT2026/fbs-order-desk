@@ -179,13 +179,13 @@ function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) =>
     const over = run && j.minutes && used > j.minutes;
     return (
       <section className="cr-hero">
-        <div className="cr-k">{run ? (run.status === "paused" ? t("PAUSED ON THE PRESS") : t("ON THE PRESS NOW")) : t("UP NEXT")}</div>
+        <div className="cr-k">{run ? (run.status === "paused" ? t("PAUSED ON THE PRESS") : run.onNow ? `${/^Setup/.test(run.onNow) ? t("SETTING UP") : t("RUNNING")} · ${t(run.onNow.replace(/^\w+ · /, "")).toUpperCase()}` : t("RUNNING")) : t("UP NEXT")}</div>
         <div className="cr-n"><b>#{j.number}</b><span>{j.customer}</span>{j.rush && <em>{t("Rush")}</em>}{j.priority && <em className="prio">{t("Priority")}</em>}</div>
         <div className="cr-s">{t("{0} pcs", j.qty)}{j.label ? ` · ${j.label}` : j.name ? ` · ${j.name}` : ""}</div>
-        {run && j.minutes > 0 && <>
-          <div className={"cr-bar" + (over ? " over" : "")}><i style={{ width: `${pct}%` }} /></div>
-          <div className="cr-time"><span>{run.status === "paused" ? t("Paused") : t("Printing {0}", clockOf(used))}</span><span>{t("figured {0}", mins(j.minutes))}</span></div>
-        </>}
+        {/* running: the clock big, how far along, the sides done (Nick, Nov 16 2026, option A) */}
+        {run && run.status !== "paused" && <div className="cr-clock" aria-live="off">{clockOf(used)}</div>}
+        {run && j.minutes > 0 && <div className={"cr-bar" + (over ? " over" : "")}><i style={{ width: `${pct}%` }} /></div>}
+        {run && <div className="cr-time"><span>{[run.status === "paused" ? t("Paused") : "", ...(run.sidesDone || []).map((x) => t("{0} done", t(x)))].filter(Boolean).join(" · ")}</span>{j.minutes > 0 && <span>{t("figured {0}", mins(j.minutes))}</span>}</div>}
         {!run && j.minutes > 0 && <div className="cr-time"><span>{j.startMin != null ? t("Starts {0}", atMin(j.startMin)) : ""}</span><span>{t("figured {0}", mins(j.minutes))}</span></div>}
         {j.counted !== "yes" && <div className="cr-warn">{j.counted === "issue" ? t("Goods problem on this job") : t("Goods not counted in yet")}</div>}
         {run ? (
@@ -198,8 +198,8 @@ function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) =>
                   setBusy(false);
                   if (r?.ok) open(j.number, "timer"); else open(j.number, "timer");
                 }}>{busy ? t("One moment…") : t("Resume #{0}", j.number)}</button>
-              : <button type="button" className="cr-ghost" onClick={() => open(j.number, "timer")}>{t("Pause")}</button>}
-            <button type="button" className={run.status === "paused" ? "cr-ghost" : "cr-go"} onClick={() => open(j.number, "timer")}>{run.status === "paused" ? t("Open the timer") : t("Complete")}</button>
+              : null}
+            <button type="button" className={run.status === "paused" ? "cr-ghost" : "cr-go cr-wide"} onClick={() => open(j.number, "timer")}>{t("Open the timer")}</button>
           </div>
         ) : <button type="button" className="cr-go" onClick={() => open(j.number, v === "assist" ? "" : "timer")}>{v === "assist" ? t("Open the job") : t("Start #{0}", j.number)}</button>}
         {lastDone && <small className="cr-last">{t("Last done: #{0} at {1}", lastDone.number, clock(lastDone.finished, locale))}</small>}

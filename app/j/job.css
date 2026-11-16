@@ -505,3 +505,6 @@
 .cr-clockbtn svg{flex:0 0 auto}
 .cr-clockbtn small{margin-left:auto;font-weight:600;font-size:12.5px;color:var(--ink-3)}
 .jm-select{width:100%;height:52px;border:1.5px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);font:inherit;font-size:17px;font-weight:700;padding:0 12px}
+/* the running job's clock on the main menu, big (Nick, Nov 16 2026, option A) */
+.cr-clock{font-weight:800;font-size:56px;line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.cr-two .cr-wide:only-child{grid-column:1/-1}

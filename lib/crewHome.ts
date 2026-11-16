@@ -11,7 +11,7 @@ import type { JobActor } from "@/lib/jobAccess";
  * The crew phone's main menu (/crew; Nick, Nov 13 2026: "this is how most people at my company are going to get in the
  * site"): their time clock, their press's jobs today in order, receiving's jobs to count, and what their view does.
  */
-export type CrewJob = { /** the order, to resume or pause it right from the menu */ orderId?: string; minutes: number; startMin: number | null; number: number; name: string; customer: string; qty: number; status: "running" | "paused" | "done" | "scheduled"; due: string | null; label: string; started: string | null; finished: string | null; counted: "yes" | "no" | "issue" | null; rush: boolean; /** High priority: an extra set of eyes */ priority?: boolean };
+export type CrewJob = { /** the order, to resume or pause it right from the menu */ orderId?: string; /** sides printed already ("Left Chest") */ sidesDone?: string[]; /** what the press timer is on now ("Run · Full Back") */ onNow?: string; minutes: number; startMin: number | null; number: number; name: string; customer: string; qty: number; status: "running" | "paused" | "done" | "scheduled"; due: string | null; label: string; started: string | null; finished: string | null; counted: "yes" | "no" | "issue" | null; rush: boolean; /** High priority: an extra set of eyes */ priority?: boolean };
 export type CrewPress = { id: string; name: string; jobs: CrewJob[] };
 export type CountJob = { number: number; name: string; customer: string; qty: number; day: string; state: string; when: "today" | "tomorrow" | "later"; kind: string };
 export type CrewHome = {
@@ -70,13 +70,16 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
   out.mine = mine.map((m) => m.id);
   const show = ["press", "assist", "catcher"].includes(who.view) ? mine : who.view === "office" ? machines.filter((m) => m.type === "screen") : [];
   if (show.length) {
-    const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, day, position, start_min, minutes, status, label, started_at, finished_at").in("machine", show.map((m) => m.id)).eq("day", day).not("order_id", "is", null).order("position");
-    const slots = (sl || []) as { order_id: string; machine: string; position: number; start_min: number | null; minutes: number; status: CrewJob["status"]; label: string; started_at: string | null; finished_at: string | null }[];
+    const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, day, position, start_min, minutes, status, label, started_at, finished_at, sides_done").in("machine", show.map((m) => m.id)).eq("day", day).not("order_id", "is", null).order("position");
+    const slots = (sl || []) as { sides_done?: string[] | null; order_id: string; machine: string; position: number; start_min: number | null; minutes: number; status: CrewJob["status"]; label: string; started_at: string | null; finished_at: string | null }[];
     const ids = [...new Set(slots.map((x) => x.order_id))];
     const [{ data: os }, { data: gc }] = await Promise.all([
       ids.length ? admin.from("orders").select("id, number, nickname, qty, due_date, rush, priority, status, customers(company, name)").in("id", ids) : Promise.resolve({ data: [] }),
       ids.length ? admin.from("goods_checkins").select("order_id, status, resolved_at, created_at").in("order_id", ids).order("created_at", { ascending: false }) : Promise.resolve({ data: [] }),
     ]);
+    // what each job's press timer is on right now (the side being set up or printed)
+    const { data: jt } = ids.length ? await admin.from("job_time").select("order_id, task").in("order_id", ids).is("ended_at", null).eq("voided", false) : { data: [] };
+    const nowOn = new Map(((jt || []) as { order_id: string; task: string }[]).map((r) => [r.order_id, r.task]));
     type O = { id: string; number: number; nickname: string; qty: number; due_date: string | null; rush: boolean; priority?: boolean; status: string; customers: { company: string; name: string } | null };
     const om = new Map(((os || []) as unknown as O[]).map((o) => [o.id, o]));
     const counted = new Map<string, CrewJob["counted"]>();
@@ -86,7 +89,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
       id: m.id, name: m.name,
       jobs: slots.filter((x) => x.machine === m.id && om.has(x.order_id) && !om.get(x.order_id)!.status.match(/^(completed)$/))
         .sort((a, b) => rank(a.status) - rank(b.status) || (a.start_min ?? 9999) - (b.start_min ?? 9999) || a.position - b.position)
-        .map((x) => { const o = om.get(x.order_id)!; return { orderId: o.id, minutes: x.minutes || 0, startMin: x.start_min, number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, status: x.status, due: o.due_date, label: x.label || "", started: x.started_at, finished: x.finished_at, counted: counted.get(x.order_id) || "no", rush: !!o.rush , priority: !!o.priority}; }),
+        .map((x) => { const o = om.get(x.order_id)!; return { orderId: o.id, sidesDone: x.sides_done || [], onNow: nowOn.get(x.order_id) || "", minutes: x.minutes || 0, startMin: x.start_min, number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, status: x.status, due: o.due_date, label: x.label || "", started: x.started_at, finished: x.finished_at, counted: counted.get(x.order_id) || "no", rush: !!o.rush , priority: !!o.priority}; }),
     }));
   }
 
