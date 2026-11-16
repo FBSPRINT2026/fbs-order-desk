@@ -221,7 +221,9 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
   const footL = `#${o.number} ${o.nickname}${cust.company || cust.name ? ` · ${cust.company || cust.name}` : ""}`;
   const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
   const dueSub = [o.production_date ? `Print ${day(o.production_date, { weekday: "short", month: "short", day: "numeric" })}` : "", DELIVERY[o.delivery_method] || "Pickup"].filter(Boolean).join(" · ");
-  const qr = qrSvg(jobLink(o.number), 2).svg;
+  // each group's page carries its own QR (Nick, Nov 16 2026, #40382's five groups: "each work order page should have its
+  // own QR code for each group"): the phone's press timer opens on that group
+  const qrs = groups.map((_, gi) => qrSvg(groups.length > 1 ? `${jobLink(o.number)}?g=${gi + 1}` : jobLink(o.number), 2).svg);
   return (
     <>
       <WoFit />
@@ -302,7 +304,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                   {who.length > 0 && <div className="w2-who"><b>{who[0]}</b>{who.slice(1).map((x) => <span key={x} className="nw"> · {x}</span>)}</div>}
                 </div>
                 <div className="w2-due"><span className="lbl">In hands</span><b className="disp">{due || "NOT SET"}</b>{dueSub && <small>{dueSub}</small>}</div>
-                <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /><small>Scan: setup, notes, photos, time</small></div>
+                <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qrs[gi] }} /><small>Scan: setup, notes, photos, time</small></div>
               </div>
               {/* the tags on one line across the page, under the header (Oct 30, Nick: "these can be on the same line") */}
               <div className="flags">

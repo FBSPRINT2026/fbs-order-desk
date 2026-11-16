@@ -25,8 +25,17 @@ const rankOf = (l: string) => /front|chest|pocket|crest/i.test(l) ? 0 : /back|yo
 export default function PressTimer({ card, presses, myPress = "" }: { card: JobCard; presses: PressOption[]; /** the press this job is booked on, or this person crews */ myPress?: string }) {
   const { t, locale } = useT();
   const job = { kind: card.kind, id: card.id };
-  const locs = [...new Set(card.groups.flatMap((g) => g.prints.map((p) => p.location).filter(Boolean)))].map((l, i) => ({ l, i })).sort((a, b) => rankOf(a.l) - rankOf(b.l) || a.i - b.i).map((x) => x.l);
-  const qtyOf = (loc: string) => card.groups.filter((g) => g.prints.some((p) => p.location === loc)).reduce((a, g) => a + g.rows.reduce((b, r) => b + r.total, 0), 0) || card.qty;
+  // a job of several groups runs one group at a time (Nick, Nov 16 2026, #40382's five groups: "which group are you
+  // running?"): each group's work order page has its own QR (?g=2) that opens on it, else the timer asks. Its sides are
+  // "Group 2 · Full Back" on the timer, the job's log and the schedule's card
+  const pgs = card.groups.map((g, i) => ({ g, i })).filter(({ g }) => g.prints.some((p) => p.location && !/embroid|dtf|heat|transfer|dtg|sublim/i.test(p.method || "")));
+  const multi = pgs.length > 1;
+  const gname = (i: number) => card.groups[i]?.name || `Group ${i + 1}`;
+  const [gPick, setGPick] = useState<number | null>(() => { if (typeof window === "undefined") return null; const g = +(new URLSearchParams(location.search).get("g") || 0); return g > 0 && g <= card.groups.length ? g - 1 : null; });
+  const sideLocs = (gs: typeof card.groups) => [...new Set(gs.flatMap((g) => g.prints.map((p) => p.location).filter(Boolean)))].map((l, i) => ({ l, i })).sort((a, b) => rankOf(a.l) - rankOf(b.l) || a.i - b.i).map((x) => x.l);
+  const locsOf = (gi: number | null) => (multi ? (gi == null ? [] : sideLocs([card.groups[gi]]).map((l) => `${gname(gi)} · ${l}`)) : sideLocs(card.groups));
+  const locs = locsOf(gPick);
+  const qtyOf = (loc: string) => (multi && gPick != null ? card.groups[gPick].rows.reduce((b, r) => b + r.total, 0) : card.groups.filter((g) => g.prints.some((p) => p.location === loc)).reduce((a, g) => a + g.rows.reduce((b, r) => b + r.total, 0), 0)) || card.qty;
   const taskT = (task: string) => { const x = parse(task); return x.phase === "setup" ? t("Setup · {0}", t(x.loc)) : x.phase === "run" ? t("Run · {0}", t(x.loc)) : t(task); };
   const noteT = (n: string) => (/^Paused: /.test(n) ? t("Paused: {0}", t(n.slice(8))) : t(n));
   const [st, setSt] = useState<State | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState("");
@@ -135,6 +144,15 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
            the job is booked, else their crew's press) with a small drop-down to change it; the side is picked, front first */
         <div className="jm-card jm-tm-start">
           <div className="jm-tm-hi">{t("Hi, {0}", st.me.name.split(" ")[0])}</div>
+          {multi && (gPick == null ? <>
+            <div className="jm-label">{t("Which group are you running?")}</div>
+            <div className="jm-tm-groups">{pgs.map(({ g, i }) => { const all = locsOf(i), left = all.filter((l) => !doneRuns.has(l)).length; return (
+              <button key={i} type="button" className={"jm-tm-grp" + (!left ? " done" : "")} onClick={() => setGPick(i)}>
+                <b>{!left ? "✓ " : ""}{gname(i)}</b>
+                <small>{[...new Set(g.rows.map((r) => [r.style, r.color].filter(Boolean).join(" ")))].slice(0, 2).join(", ")}{g.rows.length > 2 ? "…" : ""} · {t("{0} pcs", g.rows.reduce((a, r) => a + r.total, 0))}</small>
+                <small>{sideLocs([g]).map((l) => t(l)).join(" + ")}</small>
+              </button>); })}</div>
+          </> : <div className="jm-tm-gnow"><span>{gname(gPick)}</span><button type="button" className="jm-link" onClick={() => setGPick(null)}>{t("Another group")}</button></div>)}
           {/* not clocked in: ask first (Nick, Nov 16 2026); a phone punch waits for a manager's OK */}
           {st.clock === "out" && <div className="jm-tm-notin"><b>{t("You haven't clocked in today")}</b><span>{t("Clock in now. Your manager OKs punches made on a phone.")}</span>
             <button type="button" className="jm-go warn" disabled={!!busy} onClick={async () => {
@@ -147,10 +165,10 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
             }}>{busy === "in" ? t("Saving…") : t("Clock in")}</button></div>}
           {presses.length > 0 && <label className="jm-tm-press"><span>{t("Press")}</span>
             <select value={press} onChange={(e) => setPress(e.target.value)} aria-label={t("Press")}>{!presses.some((p) => p.name === press) && <option value="">{t("Pick a press")}</option>}{presses.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}</select></label>}
-          {locs.length > 0 && !nextLoc ? <div className="jm-label">{t("Every side is printed.")}</div> : <>
+          {multi && gPick == null ? null : locs.length > 0 && !nextLoc ? <div className="jm-label">{t("Every side is printed.")}</div> : <>
             <div className="jm-label">{doneRuns.size ? t("Setting up the next side?") : t("What are you setting up?")}</div>
-            {locs.length > 1 && <div className="jm-tm-sides" style={{ gridTemplateColumns: `repeat(${Math.min(locs.length, 3)}, minmax(0, 1fr))` }}>{locs.map((l) => <button key={l} type="button" className={"jm-tm-side" + (loc === l ? " on" : "") + (doneRuns.has(l) ? " done" : "")} disabled={doneRuns.has(l)} onClick={() => setLoc(l)}>{doneRuns.has(l) ? "✓ " : ""}{t(l)}</button>)}</div>}
-            <button type="button" className="jm-go" disabled={!!busy || (presses.length > 0 && !press)} onClick={() => { void keepAwake(true); act("setup", { location: loc }); }}>▶ {t("Start setup")}{loc !== "Whole job" ? ` · ${t(loc)}` : ""}</button>
+            {locs.length > 1 && <div className="jm-tm-sides" style={{ gridTemplateColumns: `repeat(${Math.min(locs.length, 3)}, minmax(0, 1fr))` }}>{locs.map((l) => <button key={l} type="button" className={"jm-tm-side" + (loc === l ? " on" : "") + (doneRuns.has(l) ? " done" : "")} disabled={doneRuns.has(l)} onClick={() => setLoc(l)}>{doneRuns.has(l) ? "✓ " : ""}{t(multi ? l.replace(/^.* · /, "") : l)}</button>)}</div>}
+            <button type="button" className="jm-go" disabled={!!busy || (presses.length > 0 && !press)} onClick={() => { void keepAwake(true); act("setup", { location: loc }); }}>▶ {t("Start setup")}{loc !== "Whole job" ? ` · ${t(multi ? loc.replace(/^.* · /, "") : loc)}` : ""}</button>
             <button type="button" className="jm-link" disabled={!!busy || (presses.length > 0 && !press)} onClick={() => { void keepAwake(true); act("run", { location: loc }); }}>{t("Already set up · start printing")}</button>
             {/* a side or two now, the rest another day: one job, paused with what's printed (Nick, Nov 16 2026) */}
             {doneRuns.size > 0 && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => { const left = locs.filter((l) => !doneRuns.has(l)); act("later", { done: doneRuns.size / Math.max(1, locs.length), why: t("{0} later", left.map((l) => t(l)).join(", ")) }); }}>{t("{0} later · not now", locs.filter((l) => !doneRuns.has(l)).map((l) => t(l)).join(", "))}</button>}

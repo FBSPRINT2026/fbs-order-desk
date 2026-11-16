@@ -520,6 +520,8 @@ const ES: Record<string, string> = {
   "Do something else": "Hacer otra cosa",
   "What's next?": "¿Qué sigue?",
   "What are you working on?": "¿En qué estás trabajando?",
+  "Which group are you running?": "¿Qué grupo vas a correr?",
+  "Another group": "Otro grupo",
   "RUNNING": "CORRIENDO",
   "SETTING UP": "MONTANDO",
   "{0} done": "{0} listo",
