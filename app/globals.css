@@ -23381,3 +23381,9 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .mai.filed{background:var(--surface-2,#f6f7f9);border-color:var(--line);color:var(--ink-3)}
 .mai.filed .mai-s{color:var(--ink-3)}
 .jmb-ai{display:block;font-size:12px;font-weight:600;color:color-mix(in srgb,var(--fbs-violet) 75%,var(--ink));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Create order's Order type: its own full line, four short words (Nick, Nov 16 2026: "need to fix this", the four
+   choices were cut off in half a narrow panel) */
+.osp-cb-f .osp-ot{grid-column:1/-1}
+.osp-ot .osp-seg{min-width:0;container:ospseg / inline-size}
+@container ospseg (max-width:280px){.osp-seg button{font-size:12px;padding:0 2px}}

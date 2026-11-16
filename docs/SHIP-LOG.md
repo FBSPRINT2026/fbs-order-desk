@@ -362,3 +362,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:09am · 1.3.604 · Nick · Schedule search: what's typed always shows; the count beside it is just 'N found'
 - Nov 16 9:12am · 1.3.605 · Nick · Schedule: the shop assistant is one white card with one colored edge, the ask box in the same section (option A)
 - Nov 16 9:33am · 1.3.606 · Nick · High priority flag on orders; the AI reads every customer message with its order and offers the change (To do / Filed)
+- Nov 16 9:36am · 1.3.607 · Nick · Create order: Order type on its own line with short words (New / Reorder / + Sample / Samples)

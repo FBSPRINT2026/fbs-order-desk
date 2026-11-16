@@ -245,10 +245,10 @@ export default function OrderStartPick({ activityId, text, guess, onPick: onPick
     return (
       <div className="osp-cb">
         <div className="osp-cb-f">
-          <div className="field"><label id={`ot-${key}`}>Order type</label>
+          <div className="field osp-ot"><label id={`ot-${key}`}>Order type</label>
             {/* two buttons, not a dropdown: its open list sat over Make the order and a pick clicked through (Nov 6, Nick) */}
             <div className="osp-seg" role="radiogroup" aria-labelledby={`ot-${key}`}>
-              {([["new", "New order"], ["reorder", "Reorder"], ["pre", "+ Sample"], ["only", "Sample only"]] as const).map(([t, l]) => { const on = t === "pre" || t === "only" ? smp === t : !smp && (c.type === "new" ? "new" : "reorder") === t; return (
+              {([["new", "New"], ["reorder", "Reorder"], ["pre", "+ Sample"], ["only", "Samples"]] as const).map(([t, l]) => { const on = t === "pre" || t === "only" ? smp === t : !smp && (c.type === "new" ? "new" : "reorder") === t; return (
                 <button key={t} type="button" role="radio" aria-checked={on} className={on ? "on" : ""} title={t === "pre" ? "A new order with a pre-production sample first: the Sample tool opens on it" : t === "only" ? "An order of samples only; any of them can be made into an order later" : undefined} onClick={() => { if (on) return; const tt: OT = t === "reorder" ? "reorder" : "new"; setSmp(t === "pre" || t === "only" ? t : ""); if (c.type !== tt) setCard(key, { type: tt }); if (key === SOLO) { setWay(""); setOtherFor(null); setJobFor(tt === "new" ? null : SOLO); } }}>{l}</button>); })}
             </div>
           </div>
