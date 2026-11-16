@@ -28,7 +28,13 @@ export async function checkColors(groups: Group[], /** a customer's usual colors
     // the maker's short name for what they wrote ("BlkHthr" for Black Heather, "MilGreen" for Military Green) is the same
     // color too: no question, and the full name they wrote stays on the order (Oct 31)
     const short = l.color && !gm.colors.some((c) => plain(c) === plain(l.color)) && gm.colors.filter((c) => isShortFor(c, l.color)).length === 1 ? l.color : undefined;
-    const same = l.color ? gm.colors.find((c) => plain(c) === plain(l.color)) || short : undefined;
+    // a two- or three-tone color written shorter, part by part in the same order ("Forest/Black/White" for STC21's
+    // "Forest Green/ Black/ White", Nov 16, #50040): the one style color it can be is it, no question
+    const pw = (x: string) => x.toLowerCase().replace(/gr[ae]y/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
+    const partsOf = (x: string) => x.split(/\s*\/\s*/).filter(Boolean);
+    const shorter = (asked: string, c: string) => { const a = partsOf(asked), o = partsOf(c); return a.length > 1 && a.length === o.length && a.every((p, k) => pw(p).length > 0 && pw(p).every((w) => pw(o[k]).includes(w))); };
+    const tone = l.color && !gm.colors.some((c) => plain(c) === plain(l.color)) ? gm.colors.filter((c) => shorter(l.color, c)) : [];
+    const same = l.color ? gm.colors.find((c) => plain(c) === plain(l.color)) || short || (tone.length === 1 ? tone[0] : undefined) : undefined;
     const exact = !!same;
     const words = (x: string) => x.toLowerCase().replace(/^the\s+/, "").replace(/gr[ae]y/g, "gray").split(/[^a-z0-9]+/).filter(Boolean);
     const theirs = (usual[String(gm.style).toUpperCase()] || []).filter((c) => gm.colors.includes(c)).find((c) => l.color && words(l.color).every((w) => words(c).includes(w)));

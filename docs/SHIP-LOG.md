@@ -374,3 +374,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 10:13am · 1.3.616 · Nick · Paperwork check: a supplier's confirmation isn't checked as their order when they sent their own PO
 - Nov 16 10:15am · 1.3.617 · Nick · Weekly run dates go by when the job came in (the request's time), not today
 - Nov 16 10:19am · 1.3.618 · Nick · Paperwork check: supplier confirmations are left out whenever there's other paperwork (a PO not named like one)
+- Nov 16 10:22am · 1.3.619 · Nick · Create order: a multi-tone color written shorter part by part (Forest/Black/White) is the style's color, no question
