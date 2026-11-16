@@ -1191,7 +1191,9 @@ ${staffSays}` : ""}`;
   // spot the paperwork names for one garment is put right here (an embroidered one as a location change); the rest is
   // asked before the order is made
   try {
-    const paper = [...convo.map((e) => `${e.subject || ""}\n${String(e.body || "")}`), ...fileWords].join("\n\n").slice(0, 60000);
+    // a supplier's confirmation isn't their paperwork when they sent their own sheet: it can cover several of their orders
+    // or part of one (Nov 16, #50037: S&S's "18500 S 5" asked against the PO's S 5 · M 5 · L 5 · XL 5 · 2XL 2)
+    const paper = [...convo.map((e) => `${e.subject || ""}\n${String(e.body || "")}`), ...fileWords.filter((w) => !confirmsMeta.includes(w))].join("\n\n").slice(0, 60000);
     const ctx = await sourceCtx(admin, draft.groups);
     // a garment decorated another way than its group: into the group done that way, its prints filled again for it
     const moved = applyMethodFixes(draft.groups, sourceCheck(paper, draft.groups, ctx));

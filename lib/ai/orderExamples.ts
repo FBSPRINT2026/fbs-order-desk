@@ -59,7 +59,11 @@ export async function sourceOf(admin: SupabaseClient, activityId: string): Promi
   if (!a) return { text: "", subject: "" };
   const parts: string[] = [`Email from ${a.from_email || "the customer"}${a.subject ? ` "${a.subject}"` : ""}:\n${String(a.body || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 3000)}`];
   let left = 3500;
-  for (const f of ((a.meta as { attachments?: { path: string; name: string; type?: string; size?: number }[] } | null)?.attachments || []).slice(0, 8)) {
+  const attsAll = ((a.meta as { attachments?: { path: string; name: string; type?: string; size?: number }[] } | null)?.attachments || []);
+  const { hasOwnSheet } = await import("@/lib/ai/emailOrder");
+  const { supplierConfirms } = await import("@/lib/supplierConfirm");
+  const ownSheet = hasOwnSheet(attsAll);
+  for (const f of attsAll.slice(0, 8)) {
     if (left <= 0) break;
     const pdf = /pdf/i.test(f.type || "") || /\.pdf$/i.test(f.name);
     const office = /\.(xlsx|xlsm|docx|csv|tsv|txt)$/i.test(f.name);
@@ -68,6 +72,9 @@ export async function sourceOf(admin: SupabaseClient, activityId: string): Promi
     if (!data) continue;
     const buf = Buffer.from(await data.arrayBuffer());
     const t = (pdf ? await pdfTextServer(buf, 8, true).catch(() => "") : officeText(f.name, f.type || "", buf)) || "";
+    // a supplier's order confirmation is named, not read, when they sent their own sheet too (Nov 16, #50037: its "S 5"
+    // was checked against the PO's whole size run)
+    if (pdf && supplierConfirms([t])?.rows && ownSheet) { parts.push(`File "${f.name}": a supplier order confirmation (who sends the blanks; not their order)`); continue; }
     const words = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, Math.min(1800, left));
     left -= words.length;
     parts.push(`File "${f.name}" words:\n${words || "(no words read)"}`);
