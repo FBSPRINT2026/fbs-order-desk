@@ -23320,3 +23320,7 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 /* the one search, on Ready to schedule's top line */
 .mzc-q{width:min(280px,100%);height:34px;flex:0 1 280px;min-width:160px}
 .mzc-r .msq{min-height:0}
+/* the request lists (ClickUp-style, components/RequestsDesk.tsx and the ClickUp pages) in a narrow box: their fixed column
+   widths add up past the box and the columns ran into each other (Job Center D at half screen); lay out by contents there */
+.tbl-wrap.cu-fit{container:cufit / inline-size}
+@container cufit (max-width:680px){.tbl.cu-tbl{table-layout:auto}.tbl.cu-tbl th[class*="cu-w-"]{width:auto}.tbl.cu-tbl td,.tbl.cu-tbl th{padding-left:8px;padding-right:8px}}
