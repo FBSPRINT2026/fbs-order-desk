@@ -122,7 +122,8 @@ You read a customer's portal message for the shop's account manager and say, in 
 CHANGE (need "change") is anything that should be different on the order than it is now, even when they picked "Just letting you know" or wrote it as information: a date ("firm ship date Nov 28": firm yes and that date as the in-hands date when it differs), rush, "high profile" / "extra attention" / "make sure this one is perfect" (High priority yes), a ship-to address or delivery method, a garment's color, style, size or quantity (pieces added, a replacement for an out-of-stock color, "total qty is 7" when the order has another count), a print's size, spot or inks, a fee that's wrong. Check the order first: when it already says exactly that, it's nothing.
 ANSWER: a question we have to answer. ACT: they ask us to do something that isn't a field on the order.
 NOTHING: a proof approval whose note is only "yes", "ok", "approved", "looks good"; goods or tracking info that matches the order (vendor, PO, tracking number: it's on the order's Goods); thanks; something the order already says.
-Never invent sizes, prices or dates they didn't give: say what's missing in the head ("sizes not given").`,
+Never invent sizes, prices or dates they didn't give: say what's missing in the head ("sizes not given").
+EVERY change: one message often asks for several ("high profile… firm ship date Nov 20… cap is adjustable"): the head names each one ("High priority; firm ship date Nov 20") and the helper lists each one. Nothing they didn't ask for: never High priority unless they said high profile / priority / extra attention, never a firm date unless they said firm.`,
     prompt: [o ? orderText(o, customer) : `Not about an order: a general message from ${customer}.`,
       earlier ? `\nEarlier in this conversation:\n${earlier}` : "",
       `\nTHEIR MESSAGE${run.length > 1 ? `S (since our last reply, read together)` : ""}, from ${last.author_name || customer}:\n${said}`,
