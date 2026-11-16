@@ -43,20 +43,28 @@ const nextWorkDay = (d: string) => { const x = new Date(d + "T12:00:00Z"); do x.
 export async function crewHome(admin: SupabaseClient, who: JobActor, next = false): Promise<CrewHome> {
   const today = localDay(new Date());
   const day = next ? nextWorkDay(today) : today;
-  const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
-  const ps = mergeProduction((st?.data as { production?: unknown } | null)?.production);
+  // every part of the menu loads at the same time, not one after another (Nick, Nov 16 2026: "the employee screen is
+  // really slow to load")
+  const stP = admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const out: CrewHome = { name: who.name, view: who.view, staff: who.kind === "staff", today, clock: null, fixes: [], presses: [], mine: [], counting: null, issues: [], queue: null, day, deliveries: null, also: who.also || [], hours: null, viewAs: who.viewAs, canViewAs: !!who.canViewAs && !who.viewAs };
 
-  if (who.employeeId) {
-    const s = await timeSettings(admin);
-    const c = await statusOf(admin, s, who.employeeId).catch(() => null);
-    if (c) out.clock = { state: c.state, since: c.since, minutes: c.todayMinutes, next: c.next };
-    const { data: fx } = await admin.from("time_fix_requests").select("id, day, kind, at, minutes, note, status, decision_note").eq("employee_id", who.employeeId).gte("day", new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)).order("created_at", { ascending: false }).limit(10);
+  const parts: Promise<unknown>[] = [];
+  const empId = who.employeeId;
+  if (empId) parts.push((async () => {
+    const [s, { data: fx }] = await Promise.all([
+      timeSettings(admin),
+      admin.from("time_fix_requests").select("id, day, kind, at, minutes, note, status, decision_note").eq("employee_id", empId).gte("day", new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10)).order("created_at", { ascending: false }).limit(10),
+    ]);
     out.fixes = (fx || []) as CrewHome["fixes"];
-    out.hours = await payPeriodHours(admin, s, who.employeeId, today).catch(() => null);
-  }
+    const [c, h] = await Promise.all([statusOf(admin, s, empId).catch(() => null), payPeriodHours(admin, s, empId, today).catch(() => null)]);
+    if (c) out.clock = { state: c.state, since: c.since, minutes: c.todayMinutes, next: c.next };
+    out.hours = h;
+  })());
 
   // the press team: their press's jobs today; the office sees every press
+  parts.push((async () => {
+  const { data: st } = await stP;
+  const ps = mergeProduction((st?.data as { production?: unknown } | null)?.production);
   const machines = ps.machines.filter((m) => m.active !== false);
   const mine = who.employeeId ? crewMachines(who.employeeId, ps.crews, machines) : [];
   out.mine = mine.map((m) => m.id);
@@ -82,8 +90,10 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
     }));
   }
 
+  })());
+
   // receiving: what's to count in, by the day it runs on the press
-  if (who.view === "receiving" || who.view === "office") {
+  if (who.view === "receiving" || who.view === "office") parts.push((async () => {
     const r = await checkinJobs(admin, today, today, null, true).catch(() => null);
     if (r) {
       const tom = nextWorkDay(today);
@@ -91,19 +101,20 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
         .sort((a, b) => (a.day || "9999").localeCompare(b.day || "9999") || a.number - b.number).slice(0, 80);
       out.issues = r.problems.slice(0, 30).map((j) => ({ number: j.number, name: j.nickname || j.customer, what: (j.checkins[0]?.lines || []).filter((l) => l.issue).map((l) => `${l.size} ${l.issue}`).slice(0, 3).join(", ") || "Goods problem" }));
     }
-  }
+  })());
   // fulfillment: what's being finished (folded, bagged, labeled); shipping: what's ready and ships
-  if (who.view === "fulfillment" || who.view === "shipping") {
+  if (who.view === "fulfillment" || who.view === "shipping") parts.push((async () => {
     const q = admin.from("orders").select("number, nickname, qty, due_date, delivery_method, customers(company, name)").is("discarded_at", null);
     const { data } = who.view === "fulfillment" ? await q.eq("status", "fulfillment").order("due_date").limit(60) : await q.eq("status", "ready").eq("delivery_method", "ship").order("due_date").limit(60);
     type Q = { number: number; nickname: string; qty: number; due_date: string | null; delivery_method: string; customers: { company: string; name: string } | null };
     out.queue = ((data || []) as unknown as Q[]).map((o) => ({ number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, due: o.due_date, delivery: o.delivery_method || "pickup" }));
-  }
-  if (who.also?.includes("delivery") || who.view === "office") {
+  })());
+  if (who.also?.includes("delivery") || who.view === "office") parts.push((async () => {
     const { data } = await admin.from("orders").select("number, nickname, qty, due_date, ship_to, customers(company, name, address)").is("discarded_at", null).eq("status", "ready").eq("delivery_method", "deliver").order("due_date").limit(40);
     type D = { number: number; nickname: string; qty: number; due_date: string | null; ship_to: string | null; customers: { company: string; name: string; address: string } | null };
     out.deliveries = ((data || []) as unknown as D[]).map((o) => ({ number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, due: o.due_date, address: (o.ship_to || o.customers?.address || "").split(/\n/).filter(Boolean).slice(0, 2).join(", ") }));
-  }
+  })());
+  await Promise.all(parts);
   return out;
 }
 

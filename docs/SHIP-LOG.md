@@ -405,3 +405,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 1:34pm · 1.3.647 · Nick · Crew phones sign in on any network (Wi-Fi or cellular); scanning a job not signed in always shows the crew sign-in
 - Nov 16 1:44pm · 1.3.648 · Nick · Press timer: hi + the job's press picked (drop-down), front side picked, one Start setup button, next side asked after each; crew phones open the work order without signing in again; Spanish choice kept on every page
 - Nov 16 1:44pm · 1.3.649 · Nick · Press timer starts on the press this person crews (else where the job is booked)
+- Nov 16 1:45pm · 1.3.650 · Nick · Crew main menu loads its parts at the same time (faster)
