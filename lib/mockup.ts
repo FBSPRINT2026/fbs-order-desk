@@ -451,8 +451,8 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   if (longR) right = { ...rc!.pt, long: true, upper: upper("right", rc!.pt.rot) } as typeof right;
   // its description says long sleeves (a sweatshirt, hoodie, long sleeve tee…) but a cuff couldn't be read: the upper
   // arm still comes off the outline, never the tee spot by the elbow
-  if (opts.long && !longL) { const u = upper("left", left.rot); if (u) left = { ...left, upper: u }; }
-  if (opts.long && !longR) { const u = upper("right", right.rot); if (u) right = { ...right, upper: u }; }
+  if (opts.long && !longL) { const u = upper("left", left.rot); if (u) left = { ...left, upper: u } as typeof left; }
+  if (opts.long && !longR) { const u = upper("right", right.rot); if (u) right = { ...right, upper: u } as typeof right; }
   // sanity: a sleeve fold runs ~25-45° (a hanging sleeve can be nearly straight down); if one side reads wrong, mirror the other side's angle
   const ok = (r: number) => (longL || longR ? Math.abs(r) <= 48 : Math.abs(r) >= 22 && Math.abs(r) <= 48);
   if (!ok(left.rot) && ok(right.rot)) left = { ...left, rot: -right.rot };

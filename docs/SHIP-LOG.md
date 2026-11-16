@@ -349,3 +349,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 7:36am · 1.3.591 · Nick · Search results, option A kept simple: Customers (one line each, Open customer) then Invoices (one table: #, job, date, status, total; All / Unpaid / In the works / Quotes); no money stats
 - Nov 16 7:40am · 1.3.592 · Nick · Send a bill: one bill for one invoice or several (Everything owed / Ready to pay / Pick), from the customer page, its Payments area and an invoice's header; the email's Pay button opens the portal with exactly those invoices picked; one reminder 7 days later if still unpaid
 - Nov 16 7:50am · 1.3.593 · Nick · Mockups: a long sleeve's upper arm print sits on the upper arm on every long-sleeve garment (sweatshirts, hoodies, long sleeve tees), front and back, read from the shoulders instead of the elbow or the top of a hood (#50051)
+- Nov 16 7:52am · 1.3.594 · Nick · Mockups: tidy the upper-arm type (no change in behavior)
