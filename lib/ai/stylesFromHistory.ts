@@ -208,6 +208,9 @@ export async function describeFromStyles(admin: SupabaseClient, customerId: stri
     // Embroidery - Stacked All White (Nike LS Polo)", a logo's option name, shares only "polo" with the Nike's name)
     if (said && mine.some((w) => theirs.has(w)) && !styleFits(said, l.brand || known.brand, { title: known.name, brand: known.brand }).nameOff) continue;
     l.garment = known.name.replace(/[\s.\-–—]+$/, "");
+    // its brand comes with it (Nov 16, #50034 All My Sons Sarasota: CP90 kept a guessed "Sport-Tek" beside Port Authority's
+    // name, and the check then asked which one it was)
+    if (known.brand && styleFits(known.name, l.brand || "", { title: known.name, brand: known.brand }).brandOff) l.brand = known.brand;
     done.push(said ? `${st}: "${said}" → "${known.name}"` : `${st}: ${known.name}`);
   }
   return done;

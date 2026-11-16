@@ -366,3 +366,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:39am · 1.3.608 · Nick · Job Center: reading messages in the background no longer holds up the page (a route, not a server action)
 - Nov 16 9:39am · 1.3.609 · Nick · Message AI: names every change a message asks for, and nothing it didn't
 - Nov 16 9:44am · 1.3.610 · Nick · A one-size line given a size run is sized (the order helper and every save)
+- Nov 16 9:53am · 1.3.611 · Nick · Order reader: asks about personalization when no name was read (quotes the PO's names); a style's catalog name brings its brand; no brand question when only our own brand field disagrees

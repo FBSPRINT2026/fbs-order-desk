@@ -262,7 +262,11 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
     // the garment: a style number whose catalog brand or name isn't the paperwork's (then its colors say nothing)
     const c = cat(it.style);
     const off = c && first.l.brand ? styleFits((first.l.garment || "").trim() || c.title, first.l.brand, c) : { brandOff: false, nameOff: false };
-    if (c && (off.brandOff || off.nameOff)) out.push({ kind: "style", group: gi, lineIds: ids, what, paper: (first.l.garment || "").trim() || first.l.brand || "", order: `${it.style} (${c.title.replace(/\.\s*\S+$/, "")})`, say: `${what}: ${it.style} is ${c.title.replace(/\.\s*\S+$/, "")}${off.brandOff ? ` (${c.brand})` : ""}, but the paperwork's garment is ${(first.l.garment || "").trim() || first.l.brand}.` });
+    // only the line's own brand field disagreeing with a garment name that already says the catalog's brand is ours to
+    // fix, not a question about the paperwork (Nov 16, #50034: "CP90 is Port Authority Knit Cap, but the paperwork's
+    // garment is Port Authority Knit Cap. CP90")
+    const selfOnly = !!c && off.brandOff && !off.nameOff && [...tokSet(c.brand)].every((x) => tokSet((first.l.garment || "").trim()).has(x));
+    if (c && !selfOnly && (off.brandOff || off.nameOff)) out.push({ kind: "style", group: gi, lineIds: ids, what, paper: (first.l.garment || "").trim() || first.l.brand || "", order: `${it.style} (${c.title.replace(/\.\s*\S+$/, "")})`, say: `${what}: ${it.style} is ${c.title.replace(/\.\s*\S+$/, "")}${off.brandOff ? ` (${c.brand})` : ""}, but the paperwork's garment is ${(first.l.garment || "").trim() || first.l.brand}.` });
     // a color the maker doesn't have for that style (the cart's "Iron Gray" is SanMar's NKAH6266 "Dark Grey")
     const cc = off.brandOff || off.nameOff ? [] : cat(it.style)?.colors || [];
     const flat = (x: string) => words(x).join("");

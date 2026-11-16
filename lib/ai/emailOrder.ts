@@ -469,7 +469,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-13a";
+export const READER_REV = "2026-11-16a";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -1107,7 +1107,14 @@ ${staffSays}` : ""}`;
     // as two names): a PO table with more PERSONALIZATION rows than names read is asked about, never left short
     const rowsOnPaper = Math.max(0, ...fileWords.map((w) => (w.match(/(?<![\w/])PERSONALI[SZ]ATION(?!S)\b/g) || []).length));
     const namesRead = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + (l.persList || []).length, 0), 0);
-    if (namesRead && rowsOnPaper > namesRead) persAsk.push(`The paperwork has ${rowsOnPaper} personalized pieces but I read ${namesRead} name${namesRead === 1 ? "" : "s"}: which name is missing, and on which garment and size?`);
+    // none read at all is asked too (Nov 16, #50024 All My Sons Detroit: "PERSONALIZATION / CHRIS" under the JST56 jacket
+    // was missed and nothing asked), with what the paperwork says under each PERSONALIZATION row
+    if (rowsOnPaper > namesRead) {
+      const said = [...new Set(fileWords.flatMap((w) => [...w.matchAll(/(?<![\w/])PERSONALI[SZ]ATION(?!S)\b[\s:|-]*([A-Z][A-Za-z.'&/ -]{1,40}?)(?=\s{2,}|\n|$)/g)].map((m) => m[1].trim())).filter((x) => x && !/^(QTY|QUANTITY|DESCRIPTION|UNIT|TOTAL|PRICE)\b/i.test(x)))].slice(0, 12);
+      persAsk.push(namesRead
+        ? `The paperwork has ${rowsOnPaper} personalized pieces but I read ${namesRead} name${namesRead === 1 ? "" : "s"}${said.length ? ` (it says: ${said.join(", ")})` : ""}: which name is missing, and on which garment and size?`
+        : `The paperwork has ${rowsOnPaper} personalized piece${rowsOnPaper === 1 ? "" : "s"}${said.length ? ` (it says: ${said.join(", ")})` : ""} and I didn't put a name on any garment: which name goes on which garment and size?`);
+    }
   }
   // a print's notes are how it's decorated, read by production; a question or a doubt for staff written there ("City
   // logo (Charlotte): confirm which Armstrong logo art to use", "NCM logo - no logo on file yet, needs to be added",
