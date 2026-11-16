@@ -23,6 +23,8 @@ export async function GET(req: Request) {
   const r = await relayOf(req);
   if (!r) return NextResponse.json({ error: "Unknown print computer. Make a new relay key in the Shipping Center." }, { status: 401 });
   const ps = await printSettings(r.admin);
+  // a print computer is at the shop: its address is the shop's network
+  await (await import("@/lib/shopNetwork")).seenAtShop(r.admin, "print relay");
   const until = Date.now() + 22000;
   for (;;) {
     await r.admin.from("print_relays").update({ last_seen_at: new Date().toISOString() }).eq("id", r.id);

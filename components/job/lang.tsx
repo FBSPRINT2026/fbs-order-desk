@@ -637,6 +637,7 @@ const ES: Record<string, string> = {
   "Signing in…": "Entrando…",
   "Sign in": "Entrar",
   "Office staff: sign in with your portal login": "Personal de oficina: entra con tu usuario del portal",
+  "This phone's address:": "Dirección de este teléfono:",
   "Customer? See your order": "¿Eres cliente? Ve tu pedido",
   "Shop tools work on the FBS Wi-Fi": "Las herramientas del taller funcionan en el Wi-Fi de FBS",
   "You're signed in with your employee PIN, but this phone isn't on the shop's network. Connect to the FBS Wi-Fi and scan again.": "Entraste con tu PIN de empleado, pero este teléfono no está en la red del taller. Conéctate al Wi-Fi de FBS y vuelve a escanear.",

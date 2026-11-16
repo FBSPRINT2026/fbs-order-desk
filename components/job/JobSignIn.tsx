@@ -7,7 +7,7 @@ import { LangToggle, useT } from "./lang";
  * Scanned a job's QR code but not signed in on this phone yet: the crew signs in with their employee number and PIN
  * (the same as the employee app; it stays signed in for good while it's used); office staff can use their portal login.
  */
-export default function JobSignIn({ code, offNetwork = false }: { code: string; offNetwork?: boolean }) {
+export default function JobSignIn({ code, offNetwork = false, ip }: { code: string; offNetwork?: boolean; /** this phone's internet address, to tell the office */ ip?: string }) {
   const router = useRouter();
   const { t } = useT();
   const [emp, setEmp] = useState(""), [pin, setPin] = useState(""), [pin2, setPin2] = useState(""), [field, setField] = useState<"emp" | "pin" | "pin2">("emp");
@@ -39,6 +39,7 @@ export default function JobSignIn({ code, offNetwork = false }: { code: string; 
       <main className="jm-main jm-signin">
         <h1>{t("Shop tools work on the FBS Wi-Fi")}</h1>
         <p>{t("You're signed in with your employee PIN, but this phone isn't on the shop's network. Connect to the FBS Wi-Fi and scan again.")}</p>
+        {ip && <p className="jm-ip">{t("This phone's address:")} <b data-notranslate>{ip}</b></p>}
         <a className="jm-alt" href={`/login?next=${encodeURIComponent(code ? `/j/${code}` : "/crew")}`}>{t("Office staff: sign in with your portal login")}</a>
         {code && <a className="jm-alt" href={`/j/${code}?customer=1`}>{t("Customer? See your order")}</a>}
       </main>

@@ -38,7 +38,7 @@ export async function jobActor(): Promise<JobActor | null> {
  * Who it is, and whether the shop tools open for them here: staff portal logins anywhere; crew PIN sign-ins only on
  * the shop's network (once its address is saved), so a PIN used from home, or a customer, can't change a job.
  */
-export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boolean; onShopNet: boolean; netConfigured: boolean; customer: boolean }> {
+export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boolean; onShopNet: boolean; netConfigured: boolean; customer: boolean; ip?: string }> {
   const admin = createAdminClient();
   const [v, net] = await Promise.all([getViewer().catch(() => null), shopNetwork(admin)]);
   const staff = await staffActor(v);
@@ -56,7 +56,11 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
   const e = await employeeFor(admin, (await cookies()).get(EMP_COOKIE)?.value).catch(() => null);
   if (e) {
     const who = await employeeActor(admin, e as Emp);
-    if (net.configured && !net.on) return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false };
+    if (net.configured && !net.on) {
+      // kept, to see where phones on the FBS Wi-Fi really come from (Nov 16: the crew turned away)
+      await admin.from("net_misses").insert({ ip: net.ip, employee: [who.name].filter(Boolean).join("") }).then(() => null, () => null);
+      return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false, ip: net.ip };
+    }
     return { who, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: false };
   }
   return { who: null, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: !!v?.user };

@@ -22,7 +22,7 @@ export default async function CrewPage({ searchParams }: { searchParams: Promise
   let lang: Lang = saved === "es" || saved === "en" ? saved : "en";
   if (!saved && who?.employeeId) { const { data: e } = await admin.from("employees").select("lang").eq("id", who.employeeId).maybeSingle(); if (e?.lang === "es") lang = "es"; }
   const wrap = (el: React.ReactNode) => <LangProvider initial={lang} employee={who?.kind === "employee"}>{el}</LangProvider>;
-  if (!who) return wrap(<JobSignIn code="" offNetwork={gate.offNetwork} />);
+  if (!who) return wrap(<JobSignIn code="" offNetwork={gate.offNetwork} ip={gate.ip} />);
   const home = await crewHome(admin, who, (await searchParams).day === "next");
   return wrap(<CrewMenu home={home} />);
 }

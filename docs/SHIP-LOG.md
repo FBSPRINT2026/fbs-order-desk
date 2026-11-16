@@ -394,3 +394,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 12:20pm · 1.3.636 · Nick · Receiving: goods already linked to an order keep getting tracking (they froze at On the way once linked); one tracking number's news goes to every line in that box
 - Nov 16 12:27pm · 1.3.637 · Nick · Receiving: counting sections get solid colored heading bars with a down arrow (Here green, Part here amber, Problem red, Counted gray), desk and phone
 - Nov 16 12:28pm · 1.3.638 · Nick · Receiving: the long issues list is gone; a small Issues panel on the right lists the open ones and opens the Issue Center at the one clicked
+- Nov 16 12:46pm · 1.3.639 · Nick · Crew phones: the shop's network is also learned from print relays and the wall clock; a phone turned away shows its address and the attempt is kept

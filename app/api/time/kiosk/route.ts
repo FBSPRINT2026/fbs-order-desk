@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const admin = createAdminClient();
   const dev = await deviceFor(admin, (await cookies()).get(DEVICE_COOKIE)?.value);
+  if (dev) await (await import("@/lib/shopNetwork")).seenAtShop(admin, "wall clock");
   if (!dev) return NextResponse.json({ paired: false });
   const [s, name, { data: emps }] = await Promise.all([
     timeSettings(admin), shopName(admin),
