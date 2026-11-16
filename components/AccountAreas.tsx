@@ -88,7 +88,7 @@ export const Ico = ({ d, size = 18 }: { d: string; size?: number }) => (
  * A customer's account split into areas (quotes, orders, payments, artwork, messages…), each searchable. Orders and invoices are the same thing here.
  * Used on the shop's customer page (mode "shop") and in the customer's portal (mode "portal").
  */
-export default function AccountAreas({ simple = false, titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", orderTypes = [], dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders: orders0, payments: payments0, moreOrders, designs, designUrls, mockups, messages, attention, homeTop, details, creditBox, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
+export default function AccountAreas({ simple = false, titleAsk, newMockup, programMockups = {}, gangPanel, brandPortal = true, onBrandPortal, brandColors = [], brandEditor, customerName = "", orderTypes = [], dash, mode, textsPanel, textsCount, productionPanel, brandsPanel, projectsPanel, projectsCount, programPanel, hasProgram, designsPanel, assistant, onPaySelect, statementHref, onEmailStatement, onSendBill, onRecordPayment, messagesPanel, greeting, goodsPanel, goodsHome, goodsCount, orders: orders0, payments: payments0, moreOrders, designs, designUrls, mockups, messages, attention, homeTop, details, creditBox, hrefBase, hrefQuery = "", onSend, onStar, usedIds = [], onDelete, onArchive, onStarMockup, onArchiveMockup, settingsHref, pricingPanel, drafts = [], onDiscardDraft, onUploadLogos, onDeleteForever, logoShirts = {}, logoLooks = {}, payCfg, terms, canAct = true }: {
   mode: "shop" | "portal";
   /** the customer's DTF gang sheets, under Artwork (shop only; Oct 26) */
   gangPanel?: ReactNode;
@@ -100,6 +100,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   statementHref?: string;
   /** staff: email the customer their statement link */
   onEmailStatement?: () => Promise<{ ok: boolean; error?: string; emailed?: boolean }>;
+  /** the shop: Send a bill (components/tools/SendBillTool.tsx), in place of Email statement (Nov 16) */ onSendBill?: () => void;
   /** staff: one check / ACH across many invoices, oldest first */
   onRecordPayment?: (p: { amount: number; method: string; paid_on: string; note: string; orderIds?: string[]; preview?: boolean }) => Promise<{ ok: boolean; error?: string; applied?: { number: number; amount: number; full: boolean }[]; total?: number }>;
   /** portal: reads "pay all of August"-style requests (AI); without it the built-in phrase reader is used */
@@ -253,7 +254,8 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   // artwork shows 6 at a time (two rows of three), with pages underneath
   const [pg, setPg] = useState<Record<string, number>>({});
   // "Pay this statement" arrives with ?pay=all: everything open is checked
-  const [paySel, setPaySel] = useState<string[]>(() => (sp.get("pay") === "all" ? orders.filter((o) => o.type === "invoice" && !o.archived && o.balance > 0.004).map((o) => o.id) : []));
+  // a bill's Pay button arrives with ?pay=<id,id>: just those invoices (lib/bills.ts)
+  const [paySel, setPaySel] = useState<string[]>(() => { const p = sp.get("pay") || ""; const open = orders.filter((o) => o.type === "invoice" && !o.archived && o.balance > 0.004); if (p === "all") return open.map((o) => o.id); const want = new Set(p.split(",").filter(Boolean)); return open.filter((o) => want.has(o.id)).map((o) => o.id); });
   const [stNote, setStNote] = useState("");
   // payment history: its own search, 10 per page, one line per payment (open it to see the invoices it paid)
   const [hq, setHq] = useState("");
@@ -752,10 +754,11 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     body = <>
       <div className="aa-bar"><div className="aa-bar-l"><h2 className="aa-areat">Payments</h2></div>
       {/* the statement buttons on the title's line, at the right (Nov 2, Nick: "so that can collapse down some") */}
-      {(!canPay || statementHref || onEmailStatement) && <div className="aa-stmt">
+      {(!canPay || statementHref || onEmailStatement || onSendBill) && <div className="aa-stmt">
           {!canPay && searchBox}
           {statementHref && <a className="btn sm" href={statementHref} target={mode === "shop" ? "_blank" : undefined} rel="noreferrer">{mode === "shop" ? "Open statement" : "View / print statement"}</a>}
-          {onEmailStatement && <button type="button" className="btn sm" onClick={async () => { setStNote("Sending…"); const r = await onEmailStatement(); setStNote(r.ok ? (r.emailed ? "Statement emailed." : "Couldn't send the email.") : r.error || "Couldn't send."); }}>Email statement</button>}
+          {onSendBill && <button type="button" className="btn sm" onClick={onSendBill}>Send a bill</button>}
+          {!onSendBill && onEmailStatement && <button type="button" className="btn sm" onClick={async () => { setStNote("Sending…"); const r = await onEmailStatement(); setStNote(r.ok ? (r.emailed ? "Statement emailed." : "Couldn't send the email.") : r.error || "Couldn't send."); }}>Email statement</button>}
           {mode === "shop" && onRecordPayment && <button type="button" className={"btn sm" + (recOpen ? " on" : " primary")} onClick={() => setRecOpen((x) => !x)}>{recOpen ? "Close" : "Record a payment"}</button>}
           {stNote && <span className="faint">{stNote}</span>}
         </div>}

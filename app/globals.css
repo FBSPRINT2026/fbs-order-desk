@@ -23042,3 +23042,28 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .sxi .tag{margin-left:6px}
 .sxi-unpaid{margin-left:8px;font-size:12px;font-weight:700;color:var(--danger);white-space:nowrap}
 .sxc .sxr-more,.tbl-wrap .sxr-more{display:block;width:100%;text-align:left;padding:10px 16px;border:0;border-top:1px solid var(--line-2);background:none;color:var(--accent);font:inherit;font-size:14px;cursor:pointer}
+
+/* ===== Send a bill (Nov 16, Nick): one bill for one invoice or several, a panel on the right; components/tools/SendBillTool.tsx ===== */
+.dla.sbl{display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+.sbl-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.sbl-head h2{margin:0;font-family:var(--display);font-size:22px;font-weight:800;color:var(--ink)}
+.sbl-head .faint{font-size:12.5px}
+.sbl-x{width:36px;height:36px;padding:0;display:grid;place-items:center}
+.sbl-x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.sbl-seg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.sbl-seg button{min-height:44px;border:0;border-right:1px solid var(--line);background:var(--surface);font:inherit;font-size:12.5px;color:var(--ink-2);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:4px}
+.sbl-seg button:last-child{border-right:0}
+.sbl-seg button b{color:var(--ink);font-size:13px}
+.sbl-seg button.on{background:color-mix(in srgb,var(--fbs-blue) 12%,transparent);color:var(--accent);font-weight:700}
+.sbl-seg button.on b{color:var(--accent)}
+.sbl-seg button:disabled{opacity:.55;cursor:default}
+.sbl-list{border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden}
+.sbl-it{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 12px;border-top:1px solid var(--line-2);font-size:14px;cursor:pointer}
+.sbl-it:first-child{border-top:0}
+.sbl-it small{display:block;font-size:12px;color:var(--ink-3)}
+.sbl-it.later{background:var(--surface-2)}
+.sbl-tot{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
+.sbl-tot b{font-size:20px}
+.sbl-last{font-size:12.5px}
+.sbl-acts{margin-top:auto;display:flex;justify-content:flex-end;gap:8px;padding-top:10px;border-top:1px solid var(--line-2)}
+.sbl-done{display:flex;flex-direction:column;gap:12px;align-items:flex-start;font-size:14px}

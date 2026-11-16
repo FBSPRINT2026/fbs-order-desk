@@ -233,6 +233,12 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   (Nick, Nov 11): today's numbers and Received today by customer on the left; the customer card, invoices and how they
   paid on the right, or who's waiting on payment when nobody's picked (`waitingOnPayment`);
   old Printavo invoices can be paid by check here. Every "take / record a payment" button opens it.
+- **Sending a bill is one tool** (Nick, Nov 16 2026: "send them a bill… individual bills or grouped… not everybody's
+  going into the portal every day"): `components/tools/SendBillTool.tsx` (`lib/bills.ts`), a panel on the right, from the
+  customer's header and Payments area (Send a bill, in place of Email statement) and an invoice's header (that invoice
+  picked). Everything owed / Ready to pay / Pick invoices; one email with each invoice and one Pay button that opens their
+  portal with exactly those picked (`?area=payments&pay=<ids>`); kept in `bills`, logged on each order, one reminder 7
+  days later for what's still unpaid (`billReminders`, the daily cron). Every "send a bill / statement" button opens it.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.

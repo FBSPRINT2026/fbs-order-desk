@@ -60,6 +60,7 @@ import { Pill } from "@/components/bits";
 import { MixStrip, useMixParts } from "@/components/MixStrip";
 import { IssueTag, useOpenIssues } from "@/components/IssueTag";
 import SendProofTool from "@/components/tools/SendProofTool";
+import SendBillTool from "@/components/tools/SendBillTool";
 import { acceptRequest, requestProofApproval, staffMessage } from "../../actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
 import MenuItem from "@/components/MenuItem";
@@ -1350,6 +1351,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // the order may be ready for separations now: they ask for themselves (lib/autoSeps.ts)
   const [sepN, setSepN] = useState(0);
   // On hold (lib/holds.ts): the pop-up from the status menu, and taking it off
+  const [sendBill, setSendBill] = useState(false);
   const [holdAsk, setHoldAsk] = useState(false);
   async function offHold() {
     if (!o) return;
@@ -1643,6 +1645,9 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {quoteLock.closed && !lockOverride ? <button type="button" className="btn" onClick={() => setClosedAsk(true)}>Open anyway</button>
             : o.status === "quote_sent" && quoteLock.locked ? <button type="button" className="btn primary" onClick={() => void makeChanges()}>Make changes</button>
             : (o.status === "quote" || o.status === "quote_sent") && <SendProofTool target={{ kind: "order", orderId: o.id }} label={o.sent_at ? "Resend to customer" : "Send to customer"} before={beforeSend} onDone={(m) => { setLockOverride(""); void afterSend(m); }} />}
+          {/* an invoice with something owed: Send a bill, this invoice picked (components/tools/SendBillTool.tsx; Nov 16) */}
+          {seesMoney && o.type === "invoice" && !o.draft && o.customer_id && calc.balance > 0.004 && <button type="button" className="btn" onClick={() => setSendBill(true)}>Send a bill</button>}
+          {sendBill && o.customer_id && <SendBillTool customerId={o.customer_id} orderIds={[o.id]} onClose={() => setSendBill(false)} onSent={() => loadSide()} />}
           </span>
           <span className="ed-menus">
           <details className="ot-more" onBlur={closeSoon}>

@@ -9,7 +9,8 @@ import { logoPrintFrom, logoShirtsFrom, logoShownFrom, type LogoPrint } from "@/
 import { colorHex, deltaE } from "@/lib/inkColors";
 import { guessHex } from "@/lib/mockup";
 import BackLink from "@/components/BackLink";
-import { useCan } from "@/components/RoleContext";
+import { useCan, useSeesMoney } from "@/components/RoleContext";
+import SendBillTool from "@/components/tools/SendBillTool";
 import { resetTour } from "@/app/portal/tour-actions";
 import CustomerProductionFiles from "@/components/CustomerProductionFiles";
 import CustomerBrands from "@/components/CustomerBrands";
@@ -46,7 +47,7 @@ import FilmFolder from "@/components/FilmFolder";
 import ShopCustomerProjects from "@/components/ShopCustomerProjects";
 import CustomerDesigns from "@/components/CustomerDesigns";
 import ProgramAdmin from "@/components/ProgramAdmin";
-import { emailStatement, recordLumpPayment } from "@/app/shop/pay-actions";
+import { recordLumpPayment } from "@/app/shop/pay-actions";
 import { needsGoods } from "@/lib/goods";
 import { ARCHIVE_LIST_COLS, archiveAsOrder, archivePayments, type ArchiveSummary, type PvTransaction } from "@/lib/archive";
 import CustomerMove, { needsMove } from "@/components/CustomerMove";
@@ -56,7 +57,8 @@ import { fmtPhone } from "@/lib/phone";
 export default function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const canEdit = useCan("editCustomers"), canQuote = useCan("quotes"), canTake = useCan("takePayments");
+  const canEdit = useCan("editCustomers"), canQuote = useCan("quotes"), canTake = useCan("takePayments"), seesMoney = useSeesMoney();
+  const [billOpen, setBillOpen] = useState(false);
   const [tourMsg, setTourMsg] = useState("");
   const searchParams = useSearchParams();
   const isNew = searchParams.get("new") === "1";
@@ -247,12 +249,15 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
   return (
     <>
       <BackLink href="/shop/customers" label="Customers" />
+      {billOpen && <SendBillTool customerId={id} onClose={() => setBillOpen(false)} onSent={() => setReload((n) => n + 1)} />}
       <div className="page-head" style={{ marginTop: 8 }}>
         <div><h1>{c.company || c.name || "New Customer"}</h1>
           <div className="eyebrow cx-facts">{[c.company ? c.name : "", c.email, c.phone ? fmtPhone(c.phone) : "", c.price_type === "wholesale" ? "Wholesale" : "Retail", PAY_TERMS[c.payment_terms || "receipt"], c.tax_exempt ? "Tax exempt" : ""].filter(Boolean).map((x, i) => <span key={i}>{x}</span>)}{c.is_test ? <span className="ta-tag">Test account</span> : null}</div></div>
         <div className="row">
           <button className="btn" type="button" onClick={() => setDetailsOpen(true)}>Details</button>
           <a className="btn" href={`/portal?as=${id}`} target="_blank" rel="noreferrer">Their portal</a>
+          {/* one bill for one invoice or several, with a Pay button that opens just those (components/tools/SendBillTool.tsx) */}
+          {seesMoney && <button className="btn" type="button" onClick={() => setBillOpen(true)}>Send a bill</button>}
           {canTake && <a className="btn" href={`/shop/receive-payment?customer=${id}`} title="Run their card, or record a check, ACH or cash, on their open invoices">Receive a payment</a>}
           {/* after a call: their portal's tutorial shows again next time anyone there signs in (Nov 3, Nick) */}
           <button className="btn" type="button" disabled={tourMsg === "…"} title="Show their portal's tutorial again the next time anyone there signs in" onClick={async () => { setTourMsg("…"); const r = await resetTour(id); setTourMsg(r.ok ? "Tutorial reset" : r.error || "Couldn't reset"); setTimeout(() => setTourMsg(""), 4000); }}>{tourMsg && tourMsg !== "…" ? tourMsg : "Reset tutorial"}</button>
@@ -400,7 +405,7 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           productionPanel={<CustomerProductionFiles customerId={id} />}
           brandsPanel={<CustomerBrands customerId={id} />}
           textsPanel={textN ? <CustomerTexts customerId={id} /> : undefined} textsCount={textN}
-          statementHref={`/portal/statement?as=${id}`} onEmailStatement={() => emailStatement(id)}
+          statementHref={`/portal/statement?as=${id}`} onSendBill={() => setBillOpen(true)}
           onRecordPayment={async (p) => { const r = await recordLumpPayment(id, p); if (r.ok && !p.preview) { reloadShop(); setReload((n) => n + 1); } return r; }}
           goodsPanel={c.price_type === "wholesale" || os.some((o) => o.price_type === "wholesale") ? <ShopGoods orderIds={os.filter(needsGoods).map((o) => o.id)} customerId={id} onCount={setGoodsOpen} /> : undefined}
           messagesPanel={<ShopMessages customerId={id} customerName={c.name || c.company || "Customer"} shopName={settings?.shop?.name || "FBS Print"}
