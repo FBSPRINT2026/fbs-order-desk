@@ -1,4 +1,6 @@
 "use client";
+import LabelPrinterPick from "@/components/LabelPrinterPick";
+import { myPrinter } from "@/lib/labelPrinter";
 import { jobCode, onScan } from "@/lib/scan";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -228,7 +230,7 @@ function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; 
   // most days the box count isn't known until packing is done: labels print "BOX ___ OF ___" unless this is ticked
   const [known, setKnown] = useState(false);
   const boxRef = useRef<HTMLInputElement>(null);
-  const post = (body: Record<string, unknown>) => fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) })).catch(() => ({ ok: false, j: { error: "Offline. Try again." } as Record<string, string> }));
+  const post = (body: Record<string, unknown>) => fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body, printer: myPrinter() }) }).then(async (r) => ({ ok: r.ok, j: await r.json().catch(() => ({})) })).catch(() => ({ ok: false, j: { error: "Offline. Try again." } as Record<string, string> }));
   // the jobs to pick from: everything open, newest first (approved through ready, and old Printavo jobs that are ready)
   useEffect(() => {
     void (async () => {
@@ -304,6 +306,7 @@ function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; 
           {svg ? <div className="obl-label" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="obl-label obl-empty">{looking ? "Finding the job…" : "The label shows here"}</div>}
           {card && known && boxes > 1 && <div className="obl-flip"><button type="button" className="btn sm" disabled={n <= 1} onClick={() => setShow(n - 1)}>‹</button><span>Box {n} of {boxes}</span><button type="button" className="btn sm" disabled={n >= boxes} onClick={() => setShow(n + 1)}>›</button></div>}
         </div>
+        <LabelPrinterPick />
         <div className="obl-k">How many labels?</div>
         <div className="obl-n">
           <button type="button" className="ob-step" aria-label="One fewer label" disabled={!card} onClick={() => setBoxes(Math.max(1, boxes - 1))}>−</button>

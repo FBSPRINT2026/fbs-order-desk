@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { jobActor } from "@/lib/jobAccess";
 import { loadJobCard, parseJobCode } from "@/lib/jobCard";
 import { boxLabelSvg, boxLabelZpl, testLabelZpl } from "@/lib/zpl";
-import { printSettings, queueLabels } from "@/lib/printQueue";
+import { printers, printSettings, queueLabels } from "@/lib/printQueue";
 import { shopNetwork } from "@/lib/shopNetwork";
 
 export const runtime = "nodejs";
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const ps = await printSettings(admin);
   if (b.action === "test") {
-    const r = await queueLabels(admin, [{ title: "Test label", zpl: testLabelZpl(ps.dpi, who.name), kind: "test" }], who.name);
+    const r = await queueLabels(admin, [{ title: "Test label", zpl: testLabelZpl(ps.dpi, who.name), kind: "test" }], who.name, typeof b.printer === "string" ? b.printer : null);
     return NextResponse.json(r, { status: r.ok ? 200 : 202 });
   }
   // the box label as a picture, before it prints (Outbound's Print box label pop-up)
@@ -43,15 +43,17 @@ export async function POST(req: Request) {
     const count = Math.max(1, Math.min(99, Math.round(+b.boxes || 0))), of = b.known === false ? 0 : count;
     const only = of ? Math.round(+b.only || 0) : 0;
     const list = only ? [only] : Array.from({ length: count }, (_, i) => i + 1);
-    const r = await queueLabels(admin, list.map((n) => ({ title: `#${card.number} ${of ? `box ${n} of ${of}` : `label ${n} of ${count} (box count to write in)`}`, zpl: boxLabelZpl(card, of ? n : 0, of, ps.dpi), kind: "box", order_id: card.kind === "o" ? card.id : null, archived_order_id: card.kind === "a" ? card.id : null })), who.name);
+    const r = await queueLabels(admin, list.map((n) => ({ title: `#${card.number} ${of ? `box ${n} of ${of}` : `label ${n} of ${count} (box count to write in)`}`, zpl: boxLabelZpl(card, of ? n : 0, of, ps.dpi), kind: "box", order_id: card.kind === "o" ? card.id : null, archived_order_id: card.kind === "a" ? card.id : null })), who.name, typeof b.printer === "string" ? b.printer : null);
     return NextResponse.json(r, { status: r.ok ? 200 : 202 });
   }
   return NextResponse.json({ error: "Print what?" }, { status: 400 });
 }
 
 /** The label printer's status (staff): recent labels and the print computers. */
-export async function GET() {
+export async function GET(req: Request) {
   const who = await jobActor();
+  // the print computers to pick from (anyone who prints labels: staff, the crew's phones)
+  if (new URL(req.url).searchParams.get("list") && who) return NextResponse.json({ printers: await printers(createAdminClient()) });
   if (!who || who.kind !== "staff") return NextResponse.json({ error: "Staff only." }, { status: 403 });
   const admin = createAdminClient();
   const [{ data: jobs }, { data: relays }, ps, net] = await Promise.all([

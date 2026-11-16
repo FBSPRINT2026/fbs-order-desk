@@ -1,4 +1,5 @@
 "use client";
+import { myPrinter } from "@/lib/labelPrinter";
 import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
 
@@ -10,7 +11,7 @@ export default function LabelControls({ boxes, size, tight, job }: { boxes: numb
   // straight to the Zebra (ZPL, through the print computer or PrintNode): crisp, no print dialog
   async function zebra() {
     setZbusy(true); setZmsg("");
-    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job, boxes: Math.max(1, parseInt(n, 10) || 1) }) }).catch(() => null);
+    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job, boxes: Math.max(1, parseInt(n, 10) || 1), printer: myPrinter() }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { message: "Offline." };
     setZbusy(false); setZmsg(j.message || j.error || "");
   }

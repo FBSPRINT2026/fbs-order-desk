@@ -1,4 +1,6 @@
 "use client";
+import LabelPrinterPick from "@/components/LabelPrinterPick";
+import { myPrinter } from "@/lib/labelPrinter";
 import { ViewAsBar } from "@/components/crew/ViewAs";
 import PinchView from "@/components/job/PinchView";
 import PhotoEdit, { type PhotoEditApi } from "@/components/job/PhotoEdit";
@@ -413,12 +415,13 @@ function Labels({ card, box, printer, perBox, staff }: { card: JobCard; box: num
   const [known, setKnown] = useState(!!box);
   async function print(only?: number) {
     setBusy(true); setMsg(null);
-    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job: { kind: card.kind, id: card.id }, boxes: n, known, only: known ? only : undefined }) }).catch(() => null);
+    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "box", job: { kind: card.kind, id: card.id }, boxes: n, known, only: known ? only : undefined, printer: myPrinter() }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { message: "Offline. Try again." };
     setBusy(false); setMsg({ ok: !!r?.ok && j.ok !== false, text: t(j.message || j.error || "Done.") });
   }
   return (
     <div className="jm-card">
+      <LabelPrinterPick />
       {!printer?.ready && <div className="jm-warn">{t("The label printer isn't set up yet (Shipping Center → Settings → Label printer).")}</div>}
       <div className="jm-label">{t("How many labels?")}</div>
       <div className="jm-count">

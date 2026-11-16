@@ -363,6 +363,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   `/shop/shipping` shows too), Pickup shelf, Delivery. Right: the box label tool, always open (`LabelPanel`). A label or
   work order scanned anywhere on the page (or its link / # typed in the search and Enter) pops up "Print box label /
   Start shipping" for that job (`ScanChoice`); nothing has to be clicked first.
+  **Each computer has its own Zebra** (Nick, Nov 16 2026): every computer with a label printer runs its own print relay
+  (Shipping Center → Settings → Label printer → "+ This computer's printer", done on that computer, which picks it for
+  that browser), finding its USB Zebra by itself (`print_relays.usb_name` only to name one). A label goes only to the
+  relay the browser picked (`myPrinter` in `lib/labelPrinter.ts`, sent as `printer` to `/api/print`, `print_jobs.relay_target`);
+  "Prints on" (`LabelPrinterPick`) sits beside every label Print button once there's more than one.
   **Box labels** (Nick, Nov 13 2026): the job #, SHIP / PICKUP / DELIVERY and the box count on top; then the customer, the
   whole job name and the PO, with the QR (the scanner reads it; no barcode); then the fill-in grid. No ship-to, dates or
   ship method: the QR opens all of that. Labels print BOX ___ OF ___ to write in unless "I know my box count" is ticked

@@ -27,11 +27,25 @@ export const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 export const newRelayToken = () => "fbsr_" + randomBytes(24).toString("base64url");
 
 /** Queue labels; sent to PrintNode right away when that's the mode. Returns how it went, in words. */
-export async function queueLabels(admin: SupabaseClient, labels: { title: string; zpl: string; kind?: string; order_id?: string | null; archived_order_id?: string | null }[], by: string): Promise<{ ok: boolean; message: string; ids: string[] }> {
+/**
+ * The print computers (each with its own Zebra; Nick, Nov 16 2026): connected = asked for labels in the last 90 seconds.
+ * A label goes to the one the browser picked (lib/labelPrinter.ts); with none picked, the only one there is.
+ */
+export async function printers(admin: SupabaseClient) {
+  const { data } = await admin.from("print_relays").select("id, name, last_seen_at").eq("revoked", false).order("created_at");
+  return ((data || []) as { id: string; name: string; last_seen_at: string | null }[]).map((r) => ({ id: r.id, name: r.name, live: !!r.last_seen_at && Date.now() - Date.parse(r.last_seen_at) < 90000 }));
+}
+
+export async function queueLabels(admin: SupabaseClient, labels: { title: string; zpl: string; kind?: string; order_id?: string | null; archived_order_id?: string | null }[], by: string, printer?: string | null): Promise<{ ok: boolean; message: string; ids: string[] }> {
   if (!labels.length) return { ok: false, message: "Nothing to print.", ids: [] };
   const ps = await printSettings(admin);
   const usePn = ps.mode === "printnode" && !!process.env.PRINTNODE_API_KEY?.trim() && !!ps.printnodeId;
-  const { data, error } = await admin.from("print_jobs").insert(labels.map((l) => ({ title: l.title, zpl: l.zpl, kind: l.kind || "label", order_id: l.order_id || null, archived_order_id: l.archived_order_id || null, created_by: by, status: usePn ? "sent" : "queued", sent_at: usePn ? new Date().toISOString() : null }))).select("id");
+  // which computer's Zebra: the one this browser picked, else the only one
+  const all = usePn ? [] : await printers(admin);
+  const to = usePn ? null : all.find((p) => p.id === printer) || (all.length === 1 ? all[0] : null);
+  if (!usePn && !all.length) return { ok: false, message: "No print computer yet: Shipping Center → Settings → Label printer → Set up a print computer (the one the printer plugs into).", ids: [] };
+  if (!usePn && !to) return { ok: false, message: "Pick this computer's label printer (Prints on, beside Print).", ids: [] };
+  const { data, error } = await admin.from("print_jobs").insert(labels.map((l) => ({ title: l.title, zpl: l.zpl, kind: l.kind || "label", order_id: l.order_id || null, archived_order_id: l.archived_order_id || null, created_by: by, status: usePn ? "sent" : "queued", sent_at: usePn ? new Date().toISOString() : null, relay_target: to?.id || null }))).select("id");
   if (error) return { ok: false, message: error.message, ids: [] };
   const ids = ((data || []) as { id: string }[]).map((x) => x.id);
   if (usePn) {
@@ -45,11 +59,6 @@ export async function queueLabels(admin: SupabaseClient, labels: { title: string
     }
     return errs.length ? { ok: false, message: `PrintNode didn't take ${errs.length} label${errs.length === 1 ? "" : "s"}. Check the printer in PrintNode.`, ids } : { ok: true, message: `Sent ${labels.length} label${labels.length === 1 ? "" : "s"} to the printer.`, ids };
   }
-  // the relay: is a print computer listening?
-  const { data: rl } = await admin.from("print_relays").select("last_seen_at").eq("revoked", false).order("last_seen_at", { ascending: false, nullsFirst: false }).limit(1);
-  const seen = (rl || [])[0]?.last_seen_at as string | undefined;
-  const live = !!seen && Date.now() - Date.parse(seen) < 90000;
-  if (ps.link !== "usb" && !ps.host) return { ok: false, message: "Set up the label printer first: Shipping Center → Settings → Label printer (USB or its IP address).", ids };
-  if (!seen) return { ok: false, message: "No print computer yet: Shipping Center → Settings → Label printer → Set up a print computer (the one the printer plugs into).", ids };
-  return { ok: live, message: live ? `Sent ${labels.length} label${labels.length === 1 ? "" : "s"} to the printer.` : `Queued ${labels.length} label${labels.length === 1 ? "" : "s"}, but the print computer isn't connected. They'll print if it's back within 15 minutes.`, ids };
+  const live = !!to?.live, n = labels.length, ls = `label${n === 1 ? "" : "s"}`;
+  return { ok: live, message: live ? `Sent ${n} ${ls} to ${to!.name}'s printer.` : `Queued ${n} ${ls}, but ${to!.name} isn't connected (its relay isn't running, or the computer is off or asleep). They'll print if it's back within 15 minutes.`, ids };
 }

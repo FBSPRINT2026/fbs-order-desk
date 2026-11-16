@@ -1,4 +1,5 @@
 "use client";
+import { myPrinter, setMyPrinter } from "@/lib/labelPrinter";
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SITE_URL } from "@/lib/config";
@@ -131,8 +132,11 @@ export default function LabelPrinterPanel() {
   const [st, setSt] = useState<Status | null>(null);
   const [v, setV] = useState<Status["settings"] | null>(null);
   const [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [err, setErr] = useState("");
-  const [newName, setNewName] = useState("Shipping computer"), [token, setToken] = useState("");
+  const [newName, setNewName] = useState(""), [token, setToken] = useState("");
   const [netName, setNetName] = useState("Shop");
+  // which computer's Zebra this browser prints on (lib/labelPrinter.ts)
+  const [mine, setMine] = useState("");
+  useEffect(() => { setMine(myPrinter()); }, []);
   const load = useCallback(async () => {
     const r = await fetch("/api/print", { cache: "no-store" }).catch(() => null);
     const j = r ? await r.json().catch(() => null) : null;
@@ -151,7 +155,7 @@ export default function LabelPrinterPanel() {
   }
   async function test() {
     setBusy("test"); setMsg(""); setErr("");
-    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "test" }) }).catch(() => null);
+    const r = await fetch("/api/print", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "test", printer: myPrinter() }) }).catch(() => null);
     const j = r ? await r.json().catch(() => ({})) : { message: "Offline." };
     setBusy(""); setMsg(j.message || j.error || ""); load();
   }
@@ -161,7 +165,7 @@ export default function LabelPrinterPanel() {
     const j = r ? await r.json().catch(() => ({})) : { error: "Offline." };
     setBusy("");
     if (!r?.ok) return setErr(j.error || "Couldn't add it.");
-    setToken(j.token); load();
+    setToken(j.token); if (j.relay?.id) { setMyPrinter(j.relay.id); setMine(j.relay.id); } load();
   }
   function download() {
     const a = document.createElement("a");
@@ -195,7 +199,7 @@ export default function LabelPrinterPanel() {
             )}
             {v.mode === "relay" && v.link === "usb" ? (
               <>
-                <label className="field">Printer name in Windows (leave blank to find the Zebra)<input type="text" value={v.usbName || ""} placeholder="e.g. ZDesigner ZD421-203dpi ZPL" onChange={(e) => setV({ ...v, usbName: e.target.value })} /></label>
+                <span className="faint">Each computer finds the Zebra plugged into it by itself. Set up the relay on every computer with a Zebra (below), on that computer.</span>
                 <p className="faint" style={{ fontSize: 12.5, margin: 0 }}>Set up the print computer below on the computer the printer&apos;s USB cable goes into. Its Zebra driver has to be installed (Windows usually does this when it&apos;s plugged in).</p>
               </>
             ) : v.mode === "relay" ? (
@@ -218,17 +222,17 @@ export default function LabelPrinterPanel() {
 
           <div className="stack" style={{ gap: 10 }}>
             {v.mode === "relay" && <>
-              <div className="sw-h">Print computer {live ? <span style={{ color: "#1E7A4C" }}>● connected</span> : <span style={{ color: "#B8392A" }}>● not connected</span>}</div>
+              <div className="sw-h">Print computers {live ? <span style={{ color: "#1E7A4C" }}>● connected</span> : <span style={{ color: "#B8392A" }}>● not connected</span>}</div>
               {st.relays.map((r) => (
                 <div key={r.id} className="row" style={{ gap: 8, fontSize: 13.5 }}>
-                  <b>{r.name}</b><span className="faint">{ago(r.last_seen_at)}</span><span className="spacer" />
+                  <b>{r.name}</b><span className="faint">{ago(r.last_seen_at)}</span>{mine === r.id ? <span className="tmx-tag ok">This computer</span> : <button type="button" className="linkbtn" onClick={() => { setMyPrinter(r.id); setMine(r.id); }} title="This computer prints its labels on this one">Use on this computer</button>}<span className="spacer" />
                   <button type="button" className="linkbtn" onClick={async () => { await fetch(`/api/print/relays?id=${r.id}`, { method: "DELETE" }); load(); }}>Remove</button>
                 </div>
               ))}
               {!token ? (
                 <div className="row" style={{ gap: 8 }}>
-                  <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="Computer name" style={{ flex: 1 }} />
-                  <button type="button" className="btn" disabled={!!busy} onClick={addRelay}>{st.relays.length ? "+ Another computer" : "+ Set up a print computer"}</button>
+                  <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} aria-label="Computer name" placeholder="This computer's name: Press, Receiving…" style={{ flex: 1 }} />
+                  <button type="button" className="btn" disabled={!!busy || !newName.trim()} onClick={addRelay} title="Do this on the computer the Zebra plugs into: it becomes this computer's label printer">{st.relays.length ? "+ This computer's printer" : "+ Set up a print computer"}</button>
                 </div>
               ) : (
                 <div className="banner" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
