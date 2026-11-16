@@ -53,9 +53,11 @@ class Z {
   qr(x: number, y: number, mag: number, data: string) {
     const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^BQN,2,${Math.max(2, Math.round(mag * this.k))}^FDMA,${data}^FS`);
     const q = qrSvg(data, 0), m = Math.max(2, Math.round(mag)), size = q.modules * m;
-    this.pic.push(q.svg.replace("<svg ", `<svg x="${x}" y="${y + 10}" width="${size}" height="${size}" `));
-    // where it ends (the Zebra puts it 10 dots down): anything under it starts below this
-    return y + 10 + size;
+    // the Zebra prints a QR lower than its field origin (about 40 dots on the ZT230: measured off a printed label, Nov 16
+    // 2026, where it ran into the size grid); the preview draws it where it really lands, and anything under it starts
+    // below that, with room to spare
+    this.pic.push(q.svg.replace("<svg ", `<svg x="${x}" y="${y + 40}" width="${size}" height="${size}" `));
+    return y + 40 + size + 12;
   }
   code128(x: number, y: number, h: number, data: string, module = 2) {
     const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^BY${Math.max(1, Math.round(module * this.k))},3,${n(h)}^BCN,${n(h)},N,N,N^FD${data}^FS`);
@@ -100,7 +102,7 @@ function drawBoxLabel(z: Z, j: JobCard, box: number, of: number): Z {
   z.text(L, y, 38, nm, { w: TW, lines: nn }); y += nn * 38 + 12;
   if (j.po) { z.text(L, y, 46, `PO ${j.po}`, { w: TW }); y += 46; }
   // just the QR on the right (Nick, Nov 16 2026: the "scan for the job" words ran into it)
-  const qrEnd = z.qr(600, 140, 4.6, jobLink(j.number, box || null));
+  const qrEnd = z.qr(610, 130, 4.2, jobLink(j.number, box || null));
 
   // the size grid: what was ordered, with room to write what's in this box
   const rows = j.groups.flatMap((g) => g.rows);
