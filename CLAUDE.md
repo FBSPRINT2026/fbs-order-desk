@@ -131,6 +131,14 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   `.limit()` over 1,000 that isn't paged, and any growing table (orders, customers, logos, mockups, payments, messages…)
   read whole in one go (Nov 1: logos grow 100+ a week; the shop's order list, the order page's customer list and the
   Artwork page all read whole tables).
+- **A customer's weekly run** (Nick, Nov 16 2026, All My Sons: "if they came in last Thursday… this week's… after Thursday…
+  next Tuesday, with the due date at the end of the week"): an order training's default `run` (cutoff, run day, due day;
+  Settings → Order training → Order defaults → Weekly run) sets a new order's production and in-hands dates from when the
+  job came in (`runDates` in `lib/orderTrainings.ts`), unless the job names its own date.
+- **POs read row by row** (Nov 16 2026, the AMS POs): a PDF's words are put back in line order for checking
+  (`readingText`), a PO whose sizes are rows under each garment is read by code (`sizeRows`, fed to the reader and the
+  order helper with the size grid), a size and its number pair only on the same line, and a supplier's confirmation is
+  left out of the paperwork check whenever there's other paperwork.
 - **Order reader rules.** When you change the email/PO order reader's rules (`lib/ai/emailOrder.ts`), raise `READER_REV`
   there, or Create order keeps reusing readings saved with the old rules (Oct 24 2026).
 - **One PMS matching fee per PMS color per order** (Nick, Oct 24 2026: "if you have a same color on the front and the
