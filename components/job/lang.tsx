@@ -541,7 +541,7 @@ const ES: Record<string, string> = {
   "Today on this job": "Hoy en este trabajo",
   "now": "ahora",
   "Keep this screen on while I work": "Mantener la pantalla encendida mientras trabajo",
-  "The timer keeps going if your phone sleeps. Scan the job again (or add this page to your home screen) to get back to it.": "El cronómetro sigue aunque el teléfono se apague. Vuelve a escanear el trabajo (o agrega esta página a tu pantalla de inicio) para regresar.",
+  "The timer keeps going if your phone sleeps. Scan the job again to get back to it.": "El cronómetro sigue aunque el teléfono se apague. Vuelve a escanear el trabajo para regresar.",
   "Sign in with your employee number to log time.": "Entra con tu número de empleado para registrar tiempo.",
   "Nothing is running on this job.": "No hay nada corriendo en este trabajo.",
   "Nothing is paused on this job.": "No hay nada en pausa en este trabajo.",

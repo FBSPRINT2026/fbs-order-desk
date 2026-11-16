@@ -165,7 +165,7 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
         </div>
       )}
       <label className="jm-check"><input type="checkbox" checked={awake} onChange={(e) => keepAwake(e.target.checked)} /> <span>{t("Keep this screen on while I work")}</span></label>
-      <p className="jm-faint" style={{ margin: 0 }}>{t("The timer keeps going if your phone sleeps. Scan the job again (or add this page to your home screen) to get back to it.")}</p>
+      <p className="jm-faint" style={{ margin: 0 }}>{t("The timer keeps going if your phone sleeps. Scan the job again to get back to it.")}</p>
     </>
   );
 }

@@ -11,7 +11,7 @@ export async function middleware(request: NextRequest) {
     if (p === "/") { const u = request.nextUrl.clone(); u.pathname = "/site"; return NextResponse.rewrite(u); }
     const open = p.startsWith("/_next") || p.startsWith("/brand") || p === "/privacy" || p === "/terms" || p.startsWith("/site") || p === "/robots.txt" || p === "/sitemap.xml";
     if (!open) {
-      const portal = /^\/(shop|portal|login|auth|proof|print|p|s|j|work|api)(\/|$)/.test(p);
+      const portal = /^\/(shop|portal|login|auth|proof|print|p|s|j|work|crew|api)(\/|$)/.test(p);
       const old: Record<string, string> = { "/orderform": "#request", "/order-form": "#request", "/contact": "#contact", "/contact-us": "#contact", "/about": "#about", "/about-us": "#about", "/services": "#services", "/our-work": "#work" };
       const to = portal ? `${SITE_URL}${p}${request.nextUrl.search}` : `https://${host}/${old[p.toLowerCase()] || ""}`;
       return NextResponse.redirect(to, portal ? 307 : 301);

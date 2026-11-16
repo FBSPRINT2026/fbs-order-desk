@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LangToggle, useT } from "./lang";
 
@@ -15,6 +15,14 @@ export default function JobSignIn({ code, offNetwork = false, ip }: { code: stri
   // after the number: who it is, and whether they still make their PIN (the first time ever; Nov 13)
   const [who, setWho] = useState<{ name: string; hasPin: boolean } | null>(null);
   const ERR: Record<string, string> = { bad: "Wrong employee # or PIN.", locked: "Too many tries. Wait 5 minutes.", nopin: "You don't have a PIN yet. Ask a manager." };
+  // this phone remembers who signed in on it last, so a sign-in asked again (another browser on the phone, cleared
+  // cookies) is only the PIN (Nick, Nov 16 2026: "he gets his phone one time, I don't want him to have to login ever again")
+  useEffect(() => {
+    let n = ""; try { n = localStorage.getItem("fbs:crewEmp") || ""; } catch { /* */ }
+    if (!/^\d{1,6}$/.test(n)) return;
+    setEmp(n);
+    void post({ action: "who", code: n }).then(({ ok, j }) => { if (ok) { setWho(j); setField("pin"); } });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const post = async (body: Record<string, unknown>) => { const r = await fetch("/api/work", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null); return { ok: !!r?.ok, j: r ? await r.json().catch(() => ({})) : { error: "Offline" } }; };
   async function next() {
     setBusy(true); setErr("");
@@ -30,6 +38,7 @@ export default function JobSignIn({ code, offNetwork = false, ip }: { code: stri
     const { ok, j } = await post({ action: who && !who.hasPin ? "firstpin" : "login", code: emp, pin });
     setBusy(false); setPin(""); setPin2("");
     if (!ok) { if (who && !who.hasPin) setField("pin"); return setErr(t(ERR[j.error] || j.error || "Couldn't sign in.")); }
+    try { localStorage.setItem("fbs:crewEmp", emp); } catch { /* */ }
     router.refresh();
   }
   const val = field === "emp" ? emp : field === "pin" ? pin : pin2, set = field === "emp" ? setEmp : field === "pin" ? setPin : setPin2;
