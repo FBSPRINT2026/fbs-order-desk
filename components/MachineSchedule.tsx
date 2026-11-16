@@ -3031,7 +3031,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       {/* the tools, folding to a row of icons (remembered) */}
       <section className={"mzc-tools" + (toolsOpen ? "" : " shut")}>
         <div className="mzc-th"><button type="button" className="mzc-tt" onClick={() => setToolsOpen(!toolsOpen)} aria-expanded={toolsOpen}><span className="car">{toolsOpen ? "▾" : "▸"}</span>Tools</button>
-          {!toolsOpen && tight.length > 0 && <span className="mzc-late">{tight.length} late</span>}<span className="spacer" />{toolsOpen && <Link className="linkbtn" href="/shop/settings/production">Machines &amp; crews</Link>}</div>
+<span className="spacer" /><Link className="linkbtn" href="/shop/settings/production">Machines &amp; crews</Link></div>
               <div className="msk-row">
                 <span className="msk-g plan"><span className="msk-gl">Planning</span>
                   <button type="button" className="btn primary msk-b" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}><SkIco d="replan" />Re-plan</button>

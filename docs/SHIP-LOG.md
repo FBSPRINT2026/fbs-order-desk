@@ -358,3 +358,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:01am · 1.3.600 · Nick · Request lists in a narrow box (Job Center at half screen, ClickUp pages): columns no longer run into each other
 - Nov 16 9:01am · 1.3.601 · Nick · Job Center: FBS Messages' New / Waiting on them / Done switch fits on one line (its own switch)
 - Nov 16 9:01am · 1.3.602 · Nick · Job Center: the messages switch reads New / Waiting / Done so each fits
+- Nov 16 9:08am · 1.3.603 · Nick · Schedule tools folded: the headings stay (Live clock on Press & crew), each group's tools a row of icons under it, Late jobs keeps its count
