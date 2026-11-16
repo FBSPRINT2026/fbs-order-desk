@@ -21,10 +21,12 @@ const col = (j: J) => (j.kind === "o" ? "order_id" : "archived_order_id");
 const localDay = (d: string | Date) => new Date(d).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
 
 async function state(admin: ReturnType<typeof createAdminClient>, employeeId: string, job: J) {
-  const [running, { data: log }, { data: emps }] = await Promise.all([
+  const [running, { data: log }, { data: emps }, { data: ran }] = await Promise.all([
     runningJob(admin, employeeId),
     admin.from("job_time").select(COLS).eq(col(job), job.id).eq("voided", false).gte("started_at", new Date(Date.now() - 20 * 3600000).toISOString()).order("started_at"),
     admin.from("employees").select("id, first_name, last_name"),
+    // every side printed on this job, any day (the front today, the back tomorrow: one job; Nick, Nov 16 2026)
+    admin.from("job_time").select("task").eq(col(job), job.id).eq("voided", false).like("task", "Run · %").not("ended_at", "is", null).limit(300),
   ]);
   const name = new Map(((emps || []) as { id: string; first_name: string; last_name: string }[]).map((e) => [e.id, `${e.first_name || ""} ${(e.last_name || "").slice(0, 1)}`.trim()]));
   const today = localDay(new Date());
@@ -33,7 +35,8 @@ async function state(admin: ReturnType<typeof createAdminClient>, employeeId: st
   const mine = rows.filter((r) => r.employee_id === employeeId);
   const last = mine[mine.length - 1];
   const paused = !running && last?.ended_at && /^Paused/.test(last.note || "") ? last : null;
-  return { running, paused, log: rows };
+  const done = [...new Set(((ran || []) as { task: string }[]).map((r) => r.task.replace(/^Run · /, "")))];
+  return { running, paused, log: rows, done };
 }
 
 export async function GET(req: Request) {
@@ -52,7 +55,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const who = await jobActor();
   if (!who?.employeeId) return NextResponse.json({ error: "Sign in with your employee number to log time." }, { status: 401 });
-  const b = (await req.json().catch(() => ({}))) as { job?: J; action?: string; location?: string; press?: string; reason?: string; pieces?: number | null };
+  const b = (await req.json().catch(() => ({}))) as { job?: J; action?: string; location?: string; press?: string; reason?: string; pieces?: number | null; done?: number; why?: string };
   const job = b.job;
   if (!job || (job.kind !== "o" && job.kind !== "a") || !job.id) return NextResponse.json({ error: "Which job?" }, { status: 400 });
   const admin = createAdminClient(), me = who.employeeId;
@@ -68,7 +71,7 @@ export async function POST(req: Request) {
   const { data: stRow0 } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
   const machs0 = (((stRow0?.data as { production?: { machines?: { id: string; name: string; type: string }[] } } | null)?.production?.machines) || []);
   const pressM = machs0.find((m) => m.name === press || m.id === press);
-  async function slotMove(to: "start" | "pause" | "resume") {
+  async function slotMove(to: "start" | "pause" | "resume", done?: number, why?: string) {
     if (job!.kind !== "o") return;
     const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, day, status, started_at, progress, minutes").eq("order_id", job!.id).neq("status", "done").order("day");
     const list = (sl || []) as { id: string; order_id: string; machine: string; day: string; status: string; started_at: string | null; progress: number | null }[];
@@ -76,17 +79,25 @@ export async function POST(req: Request) {
     const pick = list.find((x) => pressM && x.machine === pressM.id && (to === "start" ? x.status !== "done" : x.status !== "scheduled"))
       || list.find((x) => (!pressM || typeOf(x.machine) === pressM.type) && (to === "start" ? true : x.status !== "scheduled"));
     if (!pick) return;
-    const now = new Date().toISOString(), p = +(pick.progress || 0);
+    const now = new Date().toISOString(), p = done != null && isFinite(done) ? Math.max(+(pick.progress || 0), Math.min(0.95, Math.max(0, done))) : +(pick.progress || 0);
     const patch = to === "pause" ? { status: "paused", progress: p, progress_at: now } : { status: "running", started_at: pick.started_at || now, progress: p, progress_at: now };
     if (to === "pause" ? pick.status !== "running" : pick.status === "running") return;
     // started on another press than it was booked on: it runs there
     const move = to === "start" && pressM && pick.machine !== pressM.id && typeOf(pick.machine) === pressM.type ? { machine: pressM.id } : {};
     await admin.from("production_slots").update({ ...patch, ...move, ends_at: null, updated_at: now }).eq("id", pick.id);
-    await admin.from("production_slot_log").insert({ slot_id: pick.id, order_id: pick.order_id, machine: (move as { machine?: string }).machine || pick.machine, action: to, progress: p, note: "On the phone", by: who!.name });
+    await admin.from("production_slot_log").insert({ slot_id: pick.id, order_id: pick.order_id, machine: (move as { machine?: string }).machine || pick.machine, action: to, progress: p, note: why ? `On the phone · ${why}` : "On the phone", by: who!.name });
   }
 
   if (b.action === "setup") { err = await start(`Setup · ${loc}`, press); if (!err) await slotMove("start"); }
   else if (b.action === "run") { err = await start(`Run · ${loc}`, press); if (!err) await slotMove("start"); }
+  // some sides now, the rest another day (Nick, Nov 16 2026: "we'll just run the front… come back next day and run the
+  // back… it doesn't mean we're splitting it up"): one job, its booking paused with the printed sides counted as done, so
+  // the schedule keeps only what's left; starting the next side later picks the same booking back up
+  else if (b.action === "later") {
+    if (here) await stopJob(admin, me, { note: "Rest later" });
+    const done = Number((b as { done?: number }).done);
+    await slotMove("pause", isFinite(done) ? done : undefined, String((b as { why?: string }).why || "").slice(0, 80) || "rest of the job later");
+  }
   else if (b.action === "pause") {
     if (!here) err = "Nothing is running on this job.";
     else { await stopJob(admin, me, { note: `Paused: ${String(b.reason || "Paused").slice(0, 60)}` }); await slotMove("pause"); }

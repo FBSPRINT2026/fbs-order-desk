@@ -45,7 +45,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
   const day = next ? nextWorkDay(today) : today;
   // every part of the menu loads at the same time, not one after another (Nick, Nov 16 2026: "the employee screen is
   // really slow to load")
-  const stP = admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const stP = import("@/lib/settingsOnce").then((m) => m.settingsData()).then((data) => ({ data: { data } }));
   const out: CrewHome = { name: who.name, view: who.view, staff: who.kind === "staff", today, clock: null, fixes: [], presses: [], mine: [], counting: null, issues: [], queue: null, day, deliveries: null, also: who.also || [], hours: null, viewAs: who.viewAs, canViewAs: !!who.canViewAs && !who.viewAs };
 
   const parts: Promise<unknown>[] = [];

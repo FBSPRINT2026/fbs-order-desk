@@ -490,3 +490,17 @@
 .jm-tm-notin{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:12px;background:#FFF4EC;border:1.5px solid #F2A65A}
 .jm-tm-notin span{font-size:13px;color:var(--ink-3)}
 .cr-notin .cr-k{color:#F2A65A}
+
+/* the instant loading screen (components/job/CrewLoading.tsx; Nick, Nov 16 2026) */
+.crl{gap:14px}
+.crl-bar{height:4px;border-radius:2px;background:#DDE3EA;overflow:hidden}
+.crl-bar i{display:block;height:100%;width:35%;background:var(--fbs-blue);border-radius:2px;animation:crl-go 1s ease-in-out infinite}
+@keyframes crl-go{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
+.crl-t{margin:0;font-weight:700;color:var(--ink-3);font-size:15px}
+.crl-card{height:150px;border-radius:18px;background:#121925;opacity:.9}
+.crl-card.short{height:90px;background:#fff;border:1.5px solid var(--line);opacity:1}
+@media (prefers-reduced-motion:reduce){.crl-bar i{animation:none;width:100%}}
+/* one button to the time clock, never punch buttons on the main menu (Nick, Nov 16 2026: too easy to hit Start lunch) */
+.cr-clockbtn{display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-weight:800;font-size:16px;text-align:left}
+.cr-clockbtn svg{flex:0 0 auto}
+.cr-clockbtn small{margin-left:auto;font-weight:600;font-size:12.5px;color:var(--ink-3)}

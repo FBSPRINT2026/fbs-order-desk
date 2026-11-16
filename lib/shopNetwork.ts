@@ -25,8 +25,9 @@ export async function seenAtShop(admin: SupabaseClient, source: string) {
 
 export async function shopNetwork(admin: SupabaseClient): Promise<{ ip: string; ips: string[]; names: Record<string, string>; configured: boolean; on: boolean }> {
   const week = new Date(Date.now() - 7 * 864e5).toISOString();
-  const [ip, { data }, { data: seen }] = await Promise.all([requestIp(), admin.from("settings").select("data").eq("id", 1).maybeSingle(), admin.from("shop_ips").select("ip").gte("last_seen", week)]);
-  const net = ((data?.data as Record<string, unknown>)?.network || {}) as { ips?: string[]; names?: Record<string, string> };
+  const { settingsData } = await import("@/lib/settingsOnce");
+  const [ip, sd, { data: seen }] = await Promise.all([requestIp(), settingsData(), admin.from("shop_ips").select("ip").gte("last_seen", week)]);
+  const net = ((sd as Record<string, unknown> | null)?.network || {}) as { ips?: string[]; names?: Record<string, string> };
   const saved = (net.ips || []).map((x) => String(x).trim()).filter(Boolean);
   const ips = [...new Set([...saved, ...((seen || []) as { ip: string }[]).map((x) => x.ip)])];
   // an IPv6 address matches on its first four groups (the network part); IPv4 exactly

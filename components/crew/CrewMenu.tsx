@@ -81,7 +81,7 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
             <div className="cr-s">{t("Clock in now. Your manager OKs punches made on a phone.")}</div>
             <button type="button" className="cr-go" disabled={!!busy} onClick={async () => { if (await post({ action: "punch", kind: "in" })) setMsg(t("Clocked in. Your manager will OK it.")); }}>{busy === "in" ? t("Saving…") : t("Clock in")}</button>
           </section>
-        ) : <Punch next={c.next} busy={busy} onPunch={async (k) => { if (await post({ action: "punch", kind: k })) setMsg(t("Saved. Your manager will OK it.")); }} />)}
+        ) : <button type="button" className="cr-clockbtn" onClick={() => go("time")}><Svg d={IC.time} />{t("My time clock")}<small>{t("Your hours this week")}</small></button>)}
 
         {/* payday: check your hours, first thing on the menu until they answer (Nick, Nov 13) */}
         {screen === "home" && home.hours?.ask && (

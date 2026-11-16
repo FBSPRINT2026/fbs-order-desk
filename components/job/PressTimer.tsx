@@ -12,7 +12,7 @@ import { useT } from "./lang";
  * scanning the job again (or reopening the page) picks it right back up.
  */
 type Row = JobTime & { who: string };
-type State = { me: { name: string } | null; /** the shift clock: "in", "break", "out" */ clock?: string | null; running: JobTime | null; paused: JobTime | null; log: Row[] };
+type State = { me: { name: string } | null; /** the shift clock: "in", "break", "out" */ clock?: string | null; /** sides printed on this job, any day */ done?: string[]; running: JobTime | null; paused: JobTime | null; log: Row[] };
 const PAUSES = ["Lunch", "Break", "Running another location first", "Waiting on screens or ink", "Press problem", "End of shift"];
 const hms = (ms: number) => { const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}`; };
 const hm = (ms: number) => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`; };
@@ -64,7 +64,7 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
   }
 
   if (!st) return <div className="jm-card"><p className="jm-faint">{err || t("Loading…")}</p></div>;
-  const doneRuns = new Set(st.log.filter((r) => r.ended_at && parse(r.task).phase === "run").map((r) => parse(r.task).loc));
+  const doneRuns = new Set([...(st.done || []), ...st.log.filter((r) => r.ended_at && parse(r.task).phase === "run").map((r) => parse(r.task).loc)]);
   // the side to set up next, picked for them (Nick, Nov 16 2026: "by default… the front should be the first thing that's
   // already selected"): the first spot not printed yet, front first
   const nextLoc = locs.find((l) => !doneRuns.has(l)) || "";
@@ -149,6 +149,8 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
             {locs.length > 1 && <div className="jm-tm-sides" style={{ gridTemplateColumns: `repeat(${Math.min(locs.length, 3)}, minmax(0, 1fr))` }}>{locs.map((l) => <button key={l} type="button" className={"jm-tm-side" + (loc === l ? " on" : "") + (doneRuns.has(l) ? " done" : "")} disabled={doneRuns.has(l)} onClick={() => setLoc(l)}>{doneRuns.has(l) ? "✓ " : ""}{t(l)}</button>)}</div>}
             <button type="button" className="jm-go" disabled={!!busy || (presses.length > 0 && !press)} onClick={() => { void keepAwake(true); act("setup", { location: loc }); }}>▶ {t("Start setup")}{loc !== "Whole job" ? ` · ${t(loc)}` : ""}</button>
             <button type="button" className="jm-link" disabled={!!busy || (presses.length > 0 && !press)} onClick={() => { void keepAwake(true); act("run", { location: loc }); }}>{t("Already set up · start printing")}</button>
+            {/* a side or two now, the rest another day: one job, paused with what's printed (Nick, Nov 16 2026) */}
+            {doneRuns.size > 0 && <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => { const left = locs.filter((l) => !doneRuns.has(l)); act("later", { done: doneRuns.size / Math.max(1, locs.length), why: t("{0} later", left.map((l) => t(l)).join(", ")) }); }}>{t("{0} later · not now", locs.filter((l) => !doneRuns.has(l)).map((l) => t(l)).join(", "))}</button>}
           </>}
           <button type="button" className="jm-ghost done" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>
         </div>

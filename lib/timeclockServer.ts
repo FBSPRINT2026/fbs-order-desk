@@ -52,9 +52,9 @@ export async function settleDoubleEntries(admin: SupabaseClient, fromIso: string
   return drop.length;
 }
 
-export async function timeSettings(admin: SupabaseClient): Promise<TimeSettings> {
-  const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
-  return mergeTime((data?.data as { time?: unknown } | null)?.time);
+export async function timeSettings(_admin: SupabaseClient): Promise<TimeSettings> {
+  const { settingsData } = await import("@/lib/settingsOnce");
+  return mergeTime((await settingsData() as { time?: unknown } | null)?.time);
 }
 export async function shopName(admin: SupabaseClient) {
   const { data } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();

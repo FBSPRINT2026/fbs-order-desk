@@ -40,9 +40,12 @@ export async function jobActor(): Promise<JobActor | null> {
  */
 export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boolean; onShopNet: boolean; netConfigured: boolean; customer: boolean; ip?: string }> {
   const admin = createAdminClient();
-  const [v, net] = await Promise.all([getViewer().catch(() => null), shopNetwork(admin)]);
+  // the shop's network is only checked for a shop computer now (crew PINs work anywhere), so it isn't waited on for others
+  const empTok = (await cookies()).get(EMP_COOKIE)?.value;
+  const [v, e0] = await Promise.all([getViewer().catch(() => null), empTok ? employeeFor(admin, empTok).catch(() => null) : Promise.resolve(null)]);
   const staff = await staffActor(v);
-  // a shop computer (lib/stations.ts) only on the shop's network, like a crew PIN
+  const net = staff && isStationEmail(staff.email) ? await shopNetwork(admin) : { configured: false, on: false, ip: "" };
+  // a shop computer (lib/stations.ts) only on the shop's network
   if (staff && isStationEmail(staff.email) && net.configured && !net.on) return { who: null, offNetwork: true, onShopNet: false, netConfigured: true, customer: false };
   if (staff) {
     // the owner viewing as an employee: that employee's phone, look only
@@ -53,7 +56,7 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
     }
     return { who: staff, offNetwork: false, onShopNet: net.on, netConfigured: net.configured, customer: false };
   }
-  const e = await employeeFor(admin, (await cookies()).get(EMP_COOKIE)?.value).catch(() => null);
+  const e = e0;
   if (e) {
     const who = await employeeActor(admin, e as Emp);
     // a crew PIN works on any network, Wi-Fi or cellular (Nick, Nov 16 2026: "I don't think everybody's gonna be on the
@@ -66,7 +69,8 @@ export async function jobGate(): Promise<{ who: JobActor | null; offNetwork: boo
 type Emp = { id: string; first_name?: string | null; last_name?: string | null; code?: number | null; department?: string | null; phone_view?: string | null };
 /** an employee as the phone sees them: their view (Receiving, Press operator…) and extras */
 async function employeeActor(admin: ReturnType<typeof createAdminClient>, e: Emp): Promise<JobActor> {
-  const { data: st } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
+  const { settingsData } = await import("@/lib/settingsOnce");
+  const st = { data: await settingsData() };
   const set = phoneViewsOf(st?.data)[e.id] || e.phone_view || null;
   const view = crewViewOf(set, e.id, mergeProduction((st?.data as { production?: unknown } | null)?.production).crews, e.department || "");
   // shipping (rates, labels) is staff-only for now: a phone login sees where the job goes, not the Ship tool

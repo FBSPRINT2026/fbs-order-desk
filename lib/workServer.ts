@@ -31,12 +31,15 @@ export async function employeeFor(admin: SupabaseClient, token: string | undefin
   if (!token) return null;
   const { data: s } = await admin.from("employee_sessions").select("id, employee_id, expires_at, revoked").eq("token_hash", sha(token)).maybeSingle();
   if (!s || s.revoked || Date.parse(s.expires_at as string) < Date.now()) return null;
-  const { data: e } = await admin.from("employees").select("id, first_name, last_name, active, lang, code").eq("id", s.employee_id).maybeSingle();
+  // one read of the person (phone view and department included), and the "still here" stamp written alongside, not
+  // waited on first (Nick, Nov 16 2026: the crew screens were slow)
+  const [{ data: pv }] = await Promise.all([
+    admin.from("employees").select("*").eq("id", s.employee_id).maybeSingle(),
+    admin.from("employee_sessions").update({ last_seen_at: new Date().toISOString(), expires_at: new Date(Date.now() + DAYS * 86400000).toISOString() }).eq("id", s.id).then(() => null, () => null),
+  ]);
+  const e = pv as { id: string; first_name: string; last_name: string; active: boolean; lang: string; code: number } | null;
   if (!e || !e.active) return null;
-  // their phone view (lib/crewView.ts), read on its own so a database without the column still signs people in
-  const { data: pv } = await admin.from("employees").select("*").eq("id", s.employee_id).maybeSingle();
-  await admin.from("employee_sessions").update({ last_seen_at: new Date().toISOString(), expires_at: new Date(Date.now() + DAYS * 86400000).toISOString() }).eq("id", s.id);
-  return { sessionId: s.id as string, ...(e as { id: string; first_name: string; last_name: string; lang: string; code: number }), phone_view: ((pv as { phone_view?: string | null } | null)?.phone_view || null) as string | null, department: ((pv as { department?: string | null } | null)?.department || "") as string };
+  return { sessionId: s.id as string, id: e.id, first_name: e.first_name, last_name: e.last_name, lang: e.lang, code: e.code, phone_view: ((pv as { phone_view?: string | null } | null)?.phone_view || null) as string | null, department: ((pv as { department?: string | null } | null)?.department || "") as string };
 }
 
 export type WorkJob = OpenJob & { spots: string[] };
