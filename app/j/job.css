@@ -534,3 +534,35 @@
 .cr-ask small{color:var(--ink-3)}
 .jm-tm-gimg{width:84px;height:84px;flex:0 0 84px;border-radius:10px;object-fit:contain;background:#F4F6FA;border:1px solid var(--line)}
 .jm-tm-gtx{display:flex;flex-direction:column;gap:2px;min-width:0}
+
+/* the phone screens in dark mode: the light tints above made the timer's clock hard to read (Nick, Nov 16 2026) */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .jm-tm.setup{background:#2A1D10}
+  :root:not([data-theme="light"]) .jm-tm.run{background:#0F2419}
+  :root:not([data-theme="light"]) .jm-tm.paused{background:#1B2230}
+  :root:not([data-theme="light"]) .jm-ck-now{background:#1B2533}
+  :root:not([data-theme="light"]) .jm-ped-l li{background:#1B2533}
+  :root:not([data-theme="light"]) .jm-tm-side.on{background:#14304D;color:#93C5FD}
+  :root:not([data-theme="light"]) .jm-tm-notin{background:#2A1D10}
+  :root:not([data-theme="light"]) .jm-tm-gnow{background:#14304D;color:#93C5FD}
+  :root:not([data-theme="light"]) .cr-tday.today{background:#14304D}
+  :root:not([data-theme="light"]) .cr-tday.miss span{color:#FCA5A5}
+  :root:not([data-theme="light"]) .cr-ttot{background:#1B2533}
+  :root:not([data-theme="light"]) .cr-tfix{background:#3A1712;color:#FCA5A5;border-color:#7F2A1F}
+  :root:not([data-theme="light"]) .cr-ask{background:#2A1D10}
+  :root:not([data-theme="light"]) .jm-tm-gimg{background:#1B2533}
+}
+:root[data-theme="dark"] .jm-tm.setup{background:#2A1D10}
+:root[data-theme="dark"] .jm-tm.run{background:#0F2419}
+:root[data-theme="dark"] .jm-tm.paused{background:#1B2230}
+:root[data-theme="dark"] .jm-ck-now{background:#1B2533}
+:root[data-theme="dark"] .jm-ped-l li{background:#1B2533}
+:root[data-theme="dark"] .jm-tm-side.on{background:#14304D;color:#93C5FD}
+:root[data-theme="dark"] .jm-tm-notin{background:#2A1D10}
+:root[data-theme="dark"] .jm-tm-gnow{background:#14304D;color:#93C5FD}
+:root[data-theme="dark"] .cr-tday.today{background:#14304D}
+:root[data-theme="dark"] .cr-tday.miss span{color:#FCA5A5}
+:root[data-theme="dark"] .cr-ttot{background:#1B2533}
+:root[data-theme="dark"] .cr-tfix{background:#3A1712;color:#FCA5A5;border-color:#7F2A1F}
+:root[data-theme="dark"] .cr-ask{background:#2A1D10}
+:root[data-theme="dark"] .jm-tm-gimg{background:#1B2533}
