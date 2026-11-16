@@ -420,3 +420,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 2:41pm · 1.3.662 · Nick · Press timer group picker shows each group's mockup picture
 - Nov 16 2:42pm · 1.3.663 · Nick · Phone screens readable in dark mode (press timer card, group picker, time card)
 - Nov 16 2:52pm · 1.3.664 · Nick · Crew phones: a job's print list shortened to each spot once (Full Front 4c · Full Back 3c), also on the schedule; time card: These aren't my hours → What happened? → write your real hours, Jose approves the day; double punches in red
+- Nov 16 2:54pm · 1.3.665 · Nick · Press timer on a job of several groups: what's left counts every group, not only the one picked; running a group's last side offers '<group> done · next group (N left)' and then asks which group is next; its next side first when it has one

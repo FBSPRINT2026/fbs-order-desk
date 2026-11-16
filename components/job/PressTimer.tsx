@@ -82,8 +82,17 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
   if (!st.me) return <div className="jm-card"><p>{t("The press timer is for the crew: sign in on this phone with your employee number and PIN.")}</p></div>;
   const run = st.running, onThis = run && (card.kind === "o" ? run.order_id : run.archived_order_id) === card.id ? run : null;
   const cur = onThis ? parse(onThis.task) : null;
-  // spots still to print after the one on the press now
-  const leftAfter = cur ? locs.filter((l) => l !== cur.loc && !doneRuns.has(l)) : [];
+  // what's still to print after the side on the press now, across the WHOLE job (Nick, Nov 16 2026, #40382: Ana ran
+  // Renegades' Full Front and the timer only offered Complete job, with four groups still to print). The group on the press
+  // is read off the side itself ("Renegades · Full Front"), so it holds after a refresh or coming in from the main menu
+  const groupOf = (l: string) => (multi ? pgs.find(({ i }) => l.startsWith(gname(i) + " · "))?.i ?? null : null);
+  const curG = cur ? groupOf(cur.loc) : null;
+  const allLocs = multi ? pgs.flatMap(({ i }) => locsOf(i)) : locs;
+  const leftAfter = cur ? allLocs.filter((l) => l !== cur.loc && !doneRuns.has(l)) : [];
+  // this group's next side first; none left in it, the next group (asked which, on the start screen)
+  const sameNext = cur ? (curG != null ? locsOf(curG) : locs).find((l) => l !== cur.loc && !doneRuns.has(l)) || "" : "";
+  const groupsLeft = multi ? pgs.filter(({ i }) => i !== curG && locsOf(i).some((l) => !doneRuns.has(l))).length : 0;
+  const runQty = (l: string) => (curG != null ? card.groups[curG].rows.reduce((b, r) => b + r.total, 0) || card.qty : qtyOf(l));
 
   return (
     <>
@@ -103,7 +112,7 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
                 <input inputMode="numeric" value={finishing} onChange={(e) => setFinishing(+e.target.value.replace(/\D/g, "") || 0)} aria-label={t("Pieces")} />
                 <button type="button" onClick={() => setFinishing(finishing + 1)}>+</button>
               </div>
-              <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("finish", { pieces: finishing })}>{t("Finish run · {0} pcs", finishing)}</button>
+              <button type="button" className="jm-go" disabled={!!busy} onClick={async () => { const g = curG; await act("finish", { pieces: finishing }); if (multi) setGPick(sameNext && g != null ? g : null); setLoc(""); }}>{t("Finish run · {0} pcs", finishing)}</button>
               <button type="button" className="jm-ghost" onClick={() => setFinishing(null)}>{t("Cancel")}</button>
             </div>
           ) : pausing ? (
@@ -119,7 +128,9 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
               {cur!.phase === "setup" && <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("run", { location: cur!.loc })}>{t("Setup done · start running")}</button>}
               {/* the one button that matters (Nov 13): the job is printed, the schedule moves on */}
               {/* a side done with another still to print: finish it, then the next side's setup is asked (Nick, Nov 16 2026) */}
-              {cur!.phase === "run" && leftAfter.length > 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => setFinishing(qtyOf(cur!.loc))}>✓ {t("{0} done · set up {1}", t(cur!.loc), t(leftAfter[0]))}</button>}
+              {cur!.phase === "run" && leftAfter.length > 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => setFinishing(runQty(cur!.loc))}>✓ {sameNext
+                ? t("{0} done · set up {1}", t(cur!.loc.replace(/^.* · /, "")), t(sameNext.replace(/^.* · /, "")))
+                : t("{0} done · next group ({1} left)", curG != null ? gname(curG) : t(cur!.loc), groupsLeft)}</button>}
               {cur!.phase !== "setup" && leftAfter.length === 0 && <button type="button" className="jm-go ok" disabled={!!busy} onClick={() => { if (confirm(t("Complete #{0}? The whole job is printed.", card.number))) act("done", { pieces: card.qty }); }}>✓ {t("Complete job")}</button>}
               <div className="jm-row">
                 <button type="button" className="jm-ghost" disabled={!!busy} onClick={() => setPausing(true)}>{t("Pause")}</button>
@@ -145,7 +156,7 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
         <div className="jm-card jm-tm-start">
           <div className="jm-tm-hi">{t("Hi, {0}", st.me.name.split(" ")[0])}</div>
           {multi && (gPick == null ? <>
-            <div className="jm-label">{t("Which group are you running?")}</div>
+            <div className="jm-label">{doneRuns.size ? t("Which group is next?") : t("Which group are you running?")}</div>
             <div className="jm-tm-groups">{pgs.map(({ g, i }) => { const all = locsOf(i), left = all.filter((l) => !doneRuns.has(l)).length; return (
               <button key={i} type="button" className={"jm-tm-grp" + (!left ? " done" : "")} onClick={() => setGPick(i)}>
                 {/* its mockup, to pick it without reading (Nick, Nov 16 2026) */}
