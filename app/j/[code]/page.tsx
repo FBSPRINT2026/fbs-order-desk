@@ -12,7 +12,7 @@ import { addressLines, type PvOrder } from "@/lib/archive";
 import { checkinJobFor } from "@/lib/checkin";
 import { printSettings, printerReady } from "@/lib/printQueue";
 import JobMobile from "@/components/job/JobMobile";
-import { pressSheets } from "@/lib/pressActualServer";
+import { pressSheets, screenPresses } from "@/lib/pressActualServer";
 import { phoneInks } from "@/lib/jobInksServer";
 import JobSignIn from "@/components/job/JobSignIn";
 import { LangProvider, LANG_COOKIE, type Lang } from "@/components/job/lang";
@@ -60,21 +60,23 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const designs: Record<string, { number: number; name: string; url: string }> = {};
   dRows.filter((d) => d.preview_path).forEach((d, i) => { designs[d.id] = { number: d.number, name: d.name, url: signed[i]?.signedUrl || "" }; });
 
-  // press setups: the suggestion (the separations) and what really ran (press_actuals); the inks to pull or mix
-  const [{ sheets: press, presses }, inks] = await Promise.all([pressSheets(admin, card, st?.data), phoneInks(admin, card, st?.data).catch(() => null)]);
-  // the press the timer starts on (Nick, Nov 16 2026: "the press should be automatically like press one"): the press this
-  // person crews (they're standing at it), else where the job is booked on the schedule, else the phone's last pick
-  const myPress = await (async () => {
+  // the press the timer starts on and the press setup is laid on (Nick, Nov 16 2026: "the press should be automatically
+  // like press one"): the press this person crews (they're standing at it), else where the job is booked, else none
+  const presses0 = screenPresses(st?.data);
+  const myPressId = await (async () => {
     const empId = who?.employeeId;
     if (empId) {
       const pr = mergeProduction((st?.data as { production?: unknown } | null)?.production);
       const crews = pr.crews.filter((c) => c.members && Object.values(c.members).includes(empId)).map((c) => c.id);
-      const m = pr.machines.find((x) => x.crew && crews.includes(x.crew) && presses.some((y) => y.id === x.id));
-      if (m) return m.name;
+      const m = pr.machines.find((x) => x.crew && crews.includes(x.crew) && presses0.some((y) => y.id === x.id));
+      if (m) return m.id;
     }
     const { data: sl } = await admin.from("production_slots").select("machine, day").eq(card.kind === "o" ? "order_id" : "archived_order_id", card.id).is("finished_at", null).order("day").limit(1);
-    return presses.find((x) => x.id === (sl?.[0] as { machine?: string } | undefined)?.machine)?.name || "";
+    return presses0.find((x) => x.id === (sl?.[0] as { machine?: string } | undefined)?.machine)?.id || "";
   })().catch(() => "");
+  const myPress = presses0.find((x) => x.id === myPressId)?.name || "";
+  // press setups: the suggestion (the separations, laid on that press) and what really ran; the inks to pull or mix
+  const [{ sheets: press, presses }, inks] = await Promise.all([pressSheets(admin, card, st?.data, myPressId), phoneInks(admin, card, st?.data).catch(() => null)]);
 
   // shipping (staff with the Shipping Center)
   let ship: { t: ShipTarget; existing: Shipment | null } | null = null;

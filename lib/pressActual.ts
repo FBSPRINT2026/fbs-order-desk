@@ -21,7 +21,7 @@ export type PressSheet = {
   pressId: string; press: string; heads: PHead[];
   actual: PressActual | null;
 };
-export type PressOption = { id: string; name: string; colors: number; flashes: number };
+export type PressOption = { id: string; name: string; colors: number; flashes: number; /** turns the other way (load on the left) */ mirror?: boolean; /** how it sits today: a flash, the roller, a head down… */ layout?: import("@/lib/production").Station[] };
 
 const nm = (s: string) => s.trim().toLowerCase();
 const screens = (hs: PHead[]) => hs.filter((h) => h.what === "screen");

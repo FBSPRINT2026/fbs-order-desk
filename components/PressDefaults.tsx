@@ -5,7 +5,8 @@ import PressLayout from "@/components/PressLayout";
 import { defaultLayout, flashesOf, layoutCounts, type Machine, type Station } from "@/lib/production";
 
 /** a press as it normally sits: its saved layout, or the usual one */
-export const pressLayOf = (m: Machine): Station[] => m.layout ? [...m.layout] : defaultLayout(m.issue?.full ?? m.colors, m.issue?.fullFlashes ?? flashesOf(m));
+export { pressLayOf } from "@/lib/production";
+import { pressLayOf } from "@/lib/production";
 
 const OPTS: [Station, string, string][] = [
   ["print", "Printing", "A free head for screens"],

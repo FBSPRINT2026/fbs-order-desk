@@ -145,10 +145,13 @@ export default function CrewMenu({ home }: { home: CrewHome }) {
 }
 
 /** the dark card on top: what this person is on right now */
+/** a running clock, 1:42:08 (Nick, Nov 16 2026: the running job's clock on the main menu) */
+const clockOf = (min: number) => { const s = Math.max(0, Math.floor(min * 60)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`; };
+
 function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) => void }) {
   const { t, locale } = useT();
   const [now, setNow] = useState(Date.now());
-  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(i); }, []);
+  useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
   const v = home.view;
   if (home.day !== home.today) return null;
   const jobs = home.presses.flatMap((p) => p.jobs);
@@ -181,7 +184,7 @@ function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) =>
         <div className="cr-s">{t("{0} pcs", j.qty)}{j.label ? ` · ${j.label}` : j.name ? ` · ${j.name}` : ""}</div>
         {run && j.minutes > 0 && <>
           <div className={"cr-bar" + (over ? " over" : "")}><i style={{ width: `${pct}%` }} /></div>
-          <div className="cr-time"><span>{run.status === "paused" ? t("Paused") : t("Printing {0}", mins(used))}</span><span>{t("figured {0}", mins(j.minutes))}</span></div>
+          <div className="cr-time"><span>{run.status === "paused" ? t("Paused") : t("Printing {0}", clockOf(used))}</span><span>{t("figured {0}", mins(j.minutes))}</span></div>
         </>}
         {!run && j.minutes > 0 && <div className="cr-time"><span>{j.startMin != null ? t("Starts {0}", atMin(j.startMin)) : ""}</span><span>{t("figured {0}", mins(j.minutes))}</span></div>}
         {j.counted !== "yes" && <div className="cr-warn">{j.counted === "issue" ? t("Goods problem on this job") : t("Goods not counted in yet")}</div>}

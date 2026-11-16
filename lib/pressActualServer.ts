@@ -3,7 +3,10 @@ import { colorHex } from "@/lib/inkColors";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { JobCard } from "@/lib/jobCard";
 import type { JobActor } from "@/lib/jobAccess";
-import { mergeProduction } from "@/lib/production";
+import { mergeProduction, pressLayOf } from "@/lib/production";
+import { recommendSetup, type PlanPlate } from "@/lib/pressPlan";
+import { paleShirt } from "@/lib/separate";
+import { guessHex } from "@/lib/mockup";
 import { orderGroups, type Order } from "@/lib/pricing";
 import { diffSetup, setupLine, type PHead, type PressActual, type PressOption, type PressSheet } from "@/lib/pressActual";
 
@@ -22,7 +25,7 @@ type SepRow = { id: string; number: number; location: string; status: string; ch
 
 export function screenPresses(settingsData: unknown): PressOption[] {
   const ms = mergeProduction((settingsData as Record<string, unknown> | null)?.production).machines;
-  return ms.filter((m) => m.type === "screen" && m.active !== false).map((m) => ({ id: m.id, name: m.name, colors: m.colors || m.heads || 0, flashes: m.flashes ?? 2 }));
+  return ms.filter((m) => m.type === "screen" && m.active !== false).map((m) => ({ id: m.id, name: m.name, colors: m.colors || m.heads || 0, flashes: m.flashes ?? 2, mirror: !!m.mirror, layout: pressLayOf(m) }));
 }
 
 const slotToHead = (h: string, ch: Ch[]): PHead => {
@@ -31,8 +34,22 @@ const slotToHead = (h: string, ch: Ch[]): PHead => {
 };
 const headToSlot = (h: PHead) => (h.what === "screen" ? (h.key ? `p:${h.key}` : "") : h.what === "empty" ? "" : h.what);
 
-export async function pressSheets(admin: SupabaseClient, card: JobCard, settingsData: unknown): Promise<{ sheets: PressSheet[]; presses: PressOption[] }> {
+/**
+ * A location's screens laid on a press the way the desk's press setup does it (Nick, Nov 16 2026: "like an image of the
+ * press… head one, head two… this was a cool down"): the suggested order, underbase first on a dark shirt, the flashes
+ * where the press has them, cool-downs, the roller. Left as a plain list when the press can't take it.
+ */
+function onPress(press: PressOption | undefined, ch: Ch[], dark: boolean): PHead[] | null {
+  if (!press?.layout?.length || !ch.length) return null;
+  const plates: PlanPlate[] = ch.map((c) => ({ key: c.key, name: c.name, hex: c.hex || colorHex(c.name) || "#888888", kind: c.kind || "color", coverage: 0.5 }));
+  const r = recommendSetup(press.layout, plates, { dark, allPlates: plates });
+  return r.ok ? r.heads.map((h) => slotToHead(h, ch)) : null;
+}
+
+export async function pressSheets(admin: SupabaseClient, card: JobCard, settingsData: unknown, pressId = ""): Promise<{ sheets: PressSheet[]; presses: PressOption[] }> {
   const presses = screenPresses(settingsData);
+  // the press the job is laid on: the one it's booked on (or this person's), else the first screen press
+  const pk = presses.find((p) => p.id === pressId) || presses[0];
   const pname = (id: string) => presses.find((p) => p.id === id)?.name || "";
   const sheets: PressSheet[] = [];
   if (card.kind === "o") {
@@ -40,8 +57,10 @@ export async function pressSheets(admin: SupabaseClient, card: JobCard, settings
     for (const s of (data || []) as SepRow[]) {
       const ch = (s.channels || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       const setup = (s.settings?.pressSetup || null) as { press: string; heads: string[] } | null;
-      const heads = setup?.heads?.length ? setup.heads.map((h) => slotToHead(h, ch)) : ch.map((c) => ({ what: "screen" as const, key: c.key, name: c.name, hex: c.hex || colorHex(c.name), mesh: c.mesh || null }));
-      sheets.push({ id: s.id, sepId: s.id, number: s.number, location: s.location, status: s.status, garment: s.garment_color || "", notes: s.notes || "", pressId: setup?.press || "", press: setup ? pname(setup.press) : "", heads, actual: null });
+      const dark = !(s.garment_color && paleShirt(guessHex(s.garment_color)));
+      const laid = setup?.heads?.length ? null : onPress(pk, ch, dark);
+      const heads = setup?.heads?.length ? setup.heads.map((h) => slotToHead(h, ch)) : laid || ch.map((c) => ({ what: "screen" as const, key: c.key, name: c.name, hex: c.hex || colorHex(c.name), mesh: c.mesh || null }));
+      sheets.push({ id: s.id, sepId: s.id, number: s.number, location: s.location, status: s.status, garment: s.garment_color || "", notes: s.notes || "", pressId: setup?.press || (laid ? pk!.id : ""), press: setup ? pname(setup.press) : laid ? pk!.name : "", heads, actual: null });
     }
   }
   // locations with no separation (Printavo jobs, or not separated yet): the inks typed on the job
@@ -50,7 +69,13 @@ export async function pressSheets(admin: SupabaseClient, card: JobCard, settings
     if (sheets.some((x) => x.location.trim().toLowerCase() === (p.location || "").trim().toLowerCase())) continue;
     const inks = (p.inks || "").split(/\s*[,/;]\s*|\s+\+\s+/).map((x) => x.trim()).filter(Boolean);
     if (!inks.length) continue;
-    sheets.push({ id: `loc:${p.location || "Print"}`, sepId: null, number: 0, location: p.location || "Print", status: "", garment: "", notes: p.notes || "", pressId: "", press: "", heads: inks.map((n) => ({ what: "screen" as const, name: n, hex: colorHex(n), mesh: null })), actual: null });
+    // a dark shirt gets a white underbase (the shop's rule, lib/separate.ts paleShirt), unless the inks already name one
+    const colors = g.rows.map((r) => r.color).filter(Boolean);
+    const dark = !colors.length || colors.some((c) => !paleShirt(guessHex(c)));
+    const base = dark && !inks.some((n) => /under\s*base|^ub$/i.test(n));
+    const ch: Ch[] = [...(base ? [{ key: "ub", name: "White underbase", hex: "#FFFFFF", kind: "underbase" }] : []), ...inks.map((n, i) => ({ key: `i${i}`, name: n, hex: colorHex(n), kind: /under\s*base/i.test(n) ? "underbase" : "color" }))];
+    const laid = onPress(pk, ch, dark);
+    sheets.push({ id: `loc:${p.location || "Print"}`, sepId: null, number: 0, location: p.location || "Print", status: "", garment: colors.join(", "), notes: p.notes || "", pressId: laid ? pk!.id : "", press: laid ? pk!.name : "", heads: laid || ch.map((c) => ({ what: "screen" as const, key: c.key, name: c.name, hex: c.hex, mesh: null })), actual: null });
   }
   if (sheets.length) {
     const { data: acts } = await admin.from("press_actuals").select("*").eq(card.kind === "o" ? "order_id" : "archived_order_id", card.id).order("created_at", { ascending: false }).limit(200);

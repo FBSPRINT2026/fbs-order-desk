@@ -17,7 +17,7 @@ const when = (d: string, loc: string) => new Date(d).toLocaleString(loc, { timeZ
 function Heads({ heads, faint = false }: { heads: PHead[]; faint?: boolean }) {
   const { t } = useT();
   return (
-    <ol className={"jm-heads" + (faint ? " faint" : "")}>{heads.map((h, i) => (
+    <ol className={"jm-heads" + (faint ? " faint" : "")}>{heads.map((h, i) => h.what === "empty" && heads.length > 6 ? null : (
       <li key={i} className={"h-" + h.what}><span className="jm-hn">{i + 1}</span>
         {h.what === "screen" ? <><i style={{ background: h.hex || colorHex(h.name) || "#ccc" }} /><b>{h.name}</b>{h.mesh ? <small>{t("{0} mesh", h.mesh)}</small> : null}</>
           : <b className="jm-faint">{t(h.what === "flash" ? "Flash" : h.what === "cool" ? "Cool down (empty)" : "Empty")}</b>}

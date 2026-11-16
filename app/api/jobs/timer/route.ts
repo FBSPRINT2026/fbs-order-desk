@@ -135,8 +135,11 @@ export async function POST(req: Request) {
       ]);
       const cur = (o?.status as string) || "";
       if (!(rest || []).length && !(oi || []).length && ["approved", "art", "blanks", "production"].includes(cur)) {
-        const up = await admin.from("orders").update({ status: "fulfillment", type: "invoice" }).eq("id", job.id);
-        if (!up.error) await admin.from("order_events").insert({ order_id: job.id, kind: "status", detail: "fulfillment", actor: who.name });
+        // straight on to Ready (pickup / ship / deliver), as the schedule's Complete does to start with (Nick, Nov 16 2026:
+        // "as soon as Miguel marks it done… it moves to the next step"); the catcher's count comes after and reports
+        // anything short as a problem
+        const up = await admin.from("orders").update({ status: "ready", type: "invoice" }).eq("id", job.id);
+        if (!up.error) await admin.from("order_events").insert({ order_id: job.id, kind: "status", detail: "ready", actor: who.name });
       }
     }
   } else err = "Pick what you're doing.";

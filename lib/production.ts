@@ -588,6 +588,9 @@ export function quickNeed(s: ProductionSettings, j: QuickJob): Need {
 
 /** flash units on a press (2 unless Settings says otherwise) */
 export const flashesOf = (m: Machine) => (m.type === "screen" ? m.flashes ?? 2 : 0);
+/** how a press sits today: its own saved layout, else the usual one for its heads and flashes (Press Defaults, the
+ * Separation Studio, the order's press setup and the crew's phone all draw from this) */
+export const pressLayOf = (m: Machine): Station[] => m.layout ? [...m.layout] : defaultLayout(m.issue?.full ?? m.colors, m.issue?.fullFlashes ?? flashesOf(m));
 /** flashes a print needs: one after the white underbase on a dark garment, one for puff */
 export const flashesFor = (st: Step) => (st.method !== "screen" ? 0 : (st.screens > st.colors ? 1 : 0) + (st.puff ? 1 : 0));
 /** heads a print takes up: its screens plus the flashes between them */
