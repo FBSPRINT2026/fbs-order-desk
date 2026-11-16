@@ -171,6 +171,9 @@ export default function OrdersPage() {
       </div>
       {error && <div className="banner">Couldn&apos;t load orders: {error}</div>}
       <DraftRecovery />
+      {/* the calmer look (Nick, Nov 16 2026): one summary card, the follow-ups on one line, filters as tabs over the list,
+          statuses as a dot and a word */}
+      <div className="olx">
       <div className="stats">
         <button className="stat money-only" type="button" onClick={() => { setType("quotes"); setStatus(""); }}><span className="v">{money(stats.quotesValue)}</span><span className="k">{stats.quotes.length} open quote{stats.quotes.length === 1 ? "" : "s"}</span></button>
         <button className="stat" type="button" onClick={() => { setType("open"); setStatus(""); }}><span className="v">{stats.active.length}</span><span className="k">Jobs in progress</span></button>
@@ -242,6 +245,7 @@ export default function OrdersPage() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
     </>
   );

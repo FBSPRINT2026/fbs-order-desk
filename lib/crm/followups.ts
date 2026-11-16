@@ -5,6 +5,7 @@
 // Every item has a stable `key`. Dismissing or snoozing an item saves that key in ai_suggestions,
 // so it stays hidden until the situation changes (e.g. the quote is sent again gives a new key).
 
+import { needsReply } from "@/lib/messages";
 import { termsPct } from "@/lib/payTerms";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { payDueDate, ST, type Customer, type Order, type Settings, type StatusKey } from "@/lib/pricing";
@@ -60,7 +61,7 @@ export type AssistantData = {
   customers: Customer[];
   payments: { order_id: string; amount: number }[];
   proofs: { order_id: string; status: string; created_at: string; decided_at: string | null }[];
-  messages: { order_id: string | null; customer_id: string | null; author_type: string; created_at: string }[];
+  messages: { order_id: string | null; customer_id: string | null; author_type: string; created_at: string; reason?: string | null }[];
   readyEvents: { order_id: string; created_at: string }[];
 };
 
@@ -112,7 +113,7 @@ async function loadAssistantDataNow(sb: SupabaseClient<any, any, any>): Promise<
     fetchAll<Customer>(() => sb.from("customers").select("*").order("created_at")),
     fetchAll<{ order_id: string; amount: number }>(() => sb.from("payments").select("order_id,amount").order("created_at")),
     fetchAll<AssistantData["proofs"][number]>(() => sb.from("proofs").select("order_id,status,created_at,decided_at").is("archived_at", null).order("created_at")),
-    fetchAll<AssistantData["messages"][number]>(() => sb.from("messages").select("order_id,customer_id,author_type,created_at").is("hidden_at", null).gte("created_at", since).order("created_at")),
+    fetchAll<AssistantData["messages"][number]>(() => sb.from("messages").select("order_id,customer_id,author_type,created_at,reason").is("hidden_at", null).gte("created_at", since).order("created_at")),
     fetchAll<AssistantData["readyEvents"][number]>(() => sb.from("order_events").select("order_id,created_at").eq("kind", "status").eq("detail", "ready").gte("created_at", since).order("created_at")),
   ]);
   return {
@@ -163,8 +164,14 @@ export function computeFollowUps(data: AssistantData, s: Settings, now = Date.no
   };
 
   // ---- customer messages nobody has answered ----
+  // per conversation: the first customer message since our last one that needs an answer ("Sending tracking" and "Just
+  // letting you know" never do: lib/messages.ts REASONS); our reply clears it
   const threads = new Map<string, AssistantData["messages"][number]>();
-  data.messages.forEach((m) => threads.set(m.order_id ? "o:" + m.order_id : "c:" + m.customer_id, m)); // last one wins (sorted by time)
+  data.messages.forEach((m) => { // sorted by time
+    const k = m.order_id ? "o:" + m.order_id : "c:" + m.customer_id;
+    if (m.author_type !== "customer") threads.set(k, m);
+    else if (needsReply(m) && threads.get(k)?.author_type !== "customer") threads.set(k, m);
+  });
   const byId = new Map(data.orders.map((o) => [o.id, o]));
   threads.forEach((m, k) => {
     if (m.author_type !== "customer") return;

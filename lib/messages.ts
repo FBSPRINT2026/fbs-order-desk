@@ -3,12 +3,32 @@ export type Attachment = { path: string; name: string; mime: string; size: numbe
 export type HubFile = { name: string; mime: string; size: number; url: string };
 export type HubMsg = {
   id: string; order_id: string | null; /** the project this conversation is about */ project_id: string | null; /** "goods": about the customer supplied goods on the order */ topic: string; author_type: "staff" | "customer"; author_name: string; body: string;
-  created_at: string; read_at: string | null; files: HubFile[];
+  created_at: string; read_at: string | null; files: HubFile[]; /** what the customer said it is about (REASONS) */ reason?: string | null;
 };
 export type HubOrder = { id: string; number: number; nickname: string; status?: string; href: string; /** still being worked on: listed in the customer's Message Center even before anyone wrote about it */ live?: boolean };
 export const MAX_ATTACH = 25 * 1024 * 1024;
 
-type Row = { id: string; order_id: string | null; project_id?: string | null; topic?: string | null; author_type: string; author_name: string | null; body: string; created_at: string; read_at: string | null; attachments?: Attachment[] | null };
+/**
+ * What a customer's message is about, picked before they send one about an order (Nick, Nov 16 2026). The ones with
+ * `reply: false` never wait on us: no "waiting on us", no to-do, no unread badge; they still show, grayed.
+ */
+export const REASONS = [
+  { k: "question", label: "A question", sub: "We'll write back", reply: true },
+  { k: "change", label: "Change my order", sub: "Sizes, colors, dates", reply: true },
+  { k: "art", label: "Art or a proof", sub: "A new file, a fix", reply: true },
+  { k: "payment", label: "Payment", sub: "A bill, a card, a check", reply: true },
+  { k: "tracking", label: "Sending tracking", sub: "No reply needed", reply: false },
+  { k: "fyi", label: "Just letting you know", sub: "No reply needed", reply: false },
+] as const;
+export type Reason = (typeof REASONS)[number]["k"];
+export const NO_REPLY: readonly string[] = REASONS.filter((r) => !r.reply).map((r) => r.k);
+export const reasonOf = (k?: string | null) => REASONS.find((r) => r.k === k) || null;
+/** a customer message that waits on an answer (no reason given counts as one) */
+export const needsReply = (m: { author_type: string; reason?: string | null }) => m.author_type === "customer" && !NO_REPLY.includes(m.reason || "");
+/** for a query: leave out the messages that need no answer */
+export const NEEDS_REPLY_FILTER = `reason.is.null,reason.not.in.(${NO_REPLY.join(",")})`;
+
+type Row = { reason?: string | null; id: string; order_id: string | null; project_id?: string | null; topic?: string | null; author_type: string; author_name: string | null; body: string; created_at: string; read_at: string | null; attachments?: Attachment[] | null };
 
 /** Adds signed links (valid 1 hour) to each message's files. `sign` is a storage client allowed to read them. */
 export async function withFiles(rows: Row[], sign: (paths: string[]) => Promise<(string | null)[]>): Promise<HubMsg[]> {
@@ -17,7 +37,7 @@ export async function withFiles(rows: Row[], sign: (paths: string[]) => Promise<
   const map = new Map(paths.map((p, i) => [p, urls[i] || ""]));
   return rows.map((r) => ({
     id: r.id, order_id: r.order_id, project_id: r.order_id ? null : r.project_id || null, topic: r.order_id ? r.topic || "" : "", author_type: r.author_type === "staff" ? "staff" : "customer", author_name: r.author_name || "", body: r.body || "",
-    created_at: r.created_at, read_at: r.read_at,
+    created_at: r.created_at, read_at: r.read_at, reason: r.reason || null,
     files: (r.attachments || []).map((a) => ({ name: a.name, mime: a.mime, size: a.size, url: map.get(a.path) || "" })),
   }));
 }

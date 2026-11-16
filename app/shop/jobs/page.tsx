@@ -53,6 +53,16 @@ const GROUPS: G[] = [
     ["approved", "Approved", ic(<><circle cx="12" cy="12" r="9" /><path d="m9 12 2 2 4-4" /></>)],
     ["declined", "Declined", ic(<><circle cx="12" cy="12" r="9" /><path d="m10 10 4 4m0-4-4 4" /></>)]] },
 ];
+/** the bar on top (Nick, Nov 16 2026, Job Center D): the steps under the four parts of the work. Declined is under the list */
+const BAR: { t: string; steps: Step[] }[] = [
+  { t: "Incoming", steps: ["website", "requests"] },
+  { t: "Quotes", steps: ["ready", "sent", "changes"] },
+  { t: "Pre-production", steps: ["sewouts", "goods_order"] },
+  { t: "In production", steps: ["approved"] },
+];
+const STEP_NAME: Partial<Record<Step, string>> = { website: "Leads", requests: "Requests", ready: "Processing", sent: "Sent", changes: "Revisions", sewouts: "Digitizing", goods_order: "Goods", approved: "Approved", declined: "Declined" };
+const STEP_SUB: Partial<Record<Step, string>> = { website: "Website", requests: "From portal", ready: "Being built", sent: "With them", changes: "Came back", sewouts: "Sew-outs", goods_order: "To order", approved: "Last 3 days" };
+const STEP_C: Partial<Record<Step, string>> = { sent: "var(--warn)" };
 /** the two lists of what came in: the portal's and the website's */
 const isReq = (s: Step) => s === "requests" || s === "website";
 const ALL_STEPS = GROUPS.flatMap((g) => g.steps.map((s) => s[0]));
@@ -116,6 +126,7 @@ export default function JobCenter() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [chat, setChat] = useState<string | null>(null);
   const [cn, setCn] = useState(0);
+  const [msgPin, setMsgPin] = useState(false);
   // the Message Center (Nov 2, Nick: "just have the message center… search and then have it say messages… that should
   // exactly line up with the word job"): its Messages heading sits level with the job table's heading
   const [mq, setMq] = useState("");
@@ -177,7 +188,7 @@ export default function JobCenter() {
   // a message picks its job: the tab it's at comes forward and its row lights up (Nov 2, Nick: "when you click on it, it
   // sorts the job on the right"); picking a job opens its conversation
   const openChat = (key: string | null) => {
-    setChat(key);
+    setChat(key); setMsgPin(false);
     const c = key ? chats.find((x) => x.key === key) : null;
     const it = c?.orderId ? byOrder.get(c.orderId) : null;
     // an order opens its panel on the right; a request is processed in the middle, no panel
@@ -229,7 +240,7 @@ export default function JobCenter() {
   })() : null;
   const mWant = mq.trim().toLowerCase();
   // a search looks through everything, Done included
-  const boardChats = (mWant ? myAll : mShow === "archived" ? myArchived : myChats).filter((c) => mWant || (mShow === "waiting" ? c.waiting : mShow === "replied" ? !c.waiting : true)).filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
+  const boardChats = (mWant ? myAll : mShow === "archived" ? myArchived : myChats).filter((c) => mWant || (mShow === "waiting" ? c.waiting || c.last.from === "customer" : mShow === "replied" ? !c.waiting && c.last.from !== "customer" : true)).filter((c) => !mWant || `${whoOf(c)} ${c.customer} ${c.last.body} ${c.number || ""} ${c.nickname}`.toLowerCase().includes(mWant));
   const chatOfJob = (orderId: string) => myChats.find((c) => c.orderId === orderId) || null;
   const colorOfChat = (c: ChatSummary) => tagOf(c).c;
   // a conversation picked is a filter (Nov 2, Nick: "when you click on a message, it should just pull up the message. There
@@ -237,6 +248,11 @@ export default function JobCenter() {
   // board is a general inquiry, with no tab picked
   const focusJob = curChat?.orderId ? byOrder.get(curChat.orderId) || null : null;
   const solo = !!curChat && !focusJob;
+  // a message about a job on the board opens that job on the right, its conversation in the panel (Job Center D); a request
+  // or a general question still opens in the middle
+  const chatInPanel = !!curChat && !!focusJob && focusJob.type !== "request" && !!picked;
+  // the messages panel shows while nothing is open, or when brought back with FBS Messages
+  const showMsgs = msgPin || (!picked && !curChat);
   // the Messages heading level with the jobs' heading: the space above it is measured from the table's own heading,
   // again when anything above the table changes size (filters wrapping, a narrower window)
   useLayoutEffect(() => {
@@ -264,94 +280,47 @@ export default function JobCenter() {
       <div className="page-head">
         <div><h1>Job Center</h1><div className="eyebrow">Every job before production, and what customers are saying about it</div></div>
         <div className="jc-hd-r">
-          {hasAcc && <div className="chips" role="group" aria-label="Whose jobs">
-            {([[true, "My accounts"], [false, "Everyone"]] as const).map(([k, l]) => <button key={l} type="button" className={"chip" + (mineOn === k ? " on" : "")} aria-pressed={mineOn === k} onClick={() => setMine(k)}>{l}</button>)}
+          {/* the messages panel closes while a job is open; this brings it back (Nick, Nov 16 2026, Job Center D) */}
+          {!showMsgs && <button type="button" className="jcd-mbtn" onClick={() => setMsgPin(true)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>FBS Messages{waitingNow > 0 && <em>{waitingNow}</em>}</button>}
+          {hasAcc && <div className="rv-seg" role="group" aria-label="Whose jobs">
+            {([[true, "My accounts"], [false, "Everyone"]] as const).map(([k, l]) => <button key={l} type="button" className={mineOn === k ? "on" : ""} aria-pressed={mineOn === k} onClick={() => setMine(k)}>{l}</button>)}
           </div>}
         </div>
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
-      <div className="jcx">
-      {/* the FBS Message Center (Nov 2, Nick: "the messaging center round logo around an FBS… just FBS in the center and make
-          it radiate"): our logo in a ring of our colors that sends out rings, quicker when a message is waiting on us */}
-      <div className={"jrl-mc" + (solo ? " on" : "") + (signal ? " go" : "")}>
-        <div className="jrl-mc-ban">
-          <span className={"jrl-sig" + (waitingNow ? " live" : "")} aria-hidden>
-            <b /><b /><b />
-            {/* our letters in a dark circle, inside a ring fading through our colors with three balls on it, evenly spaced, all one
-                drawing so everything sits on its center; the ring and balls turn slowly (Nov 2, Nick: "just rethink it") */}
-            <svg className="jrl-logo" viewBox="0 0 60 60" aria-hidden>
-              <defs>
-                <linearGradient id="jrlg1" gradientUnits="userSpaceOnUse" x1="30" y1="6" x2="50.78" y2="42"><stop offset="0" stopColor="#0E9BD8" /><stop offset="1" stopColor="#F26660" /></linearGradient>
-                <linearGradient id="jrlg2" gradientUnits="userSpaceOnUse" x1="50.78" y1="42" x2="9.22" y2="42"><stop offset="0" stopColor="#F26660" /><stop offset="1" stopColor="#FCB122" /></linearGradient>
-                <linearGradient id="jrlg3" gradientUnits="userSpaceOnUse" x1="9.22" y1="42" x2="30" y2="6"><stop offset="0" stopColor="#FCB122" /><stop offset="1" stopColor="#0E9BD8" /></linearGradient>
-              </defs>
-              <circle cx="30" cy="30" r="20" fill="#141D2B" />
-              <image href="/brand/fbs-logo-white-plain.svg" x="17" y="17" width="26" height="26" />
-              <g className="jrl-spin" fill="none" strokeWidth="3" strokeLinecap="round">
-                <path d="M30 6A24 24 0 0 1 50.78 42" stroke="url(#jrlg1)" />
-                <path d="M50.78 42A24 24 0 0 1 9.22 42" stroke="url(#jrlg2)" />
-                <path d="M9.22 42A24 24 0 0 1 30 6" stroke="url(#jrlg3)" />
-                <circle cx="30" cy="6" r="3.6" fill="#0E9BD8" />
-                <circle cx="50.78" cy="42" r="3.6" fill="#F26660" />
-                <circle cx="9.22" cy="42" r="3.6" fill="#FCB122" />
-              </g>
-            </svg>
-          </span>
-          <span className="jrl-mc-t">Message Center<i aria-hidden /></span>
-          {/* who's waiting on us, big, with their initials (Nov 2, Nick picked option C) */}
-          <div className="jrl-mc-big">
-            <button type="button" className="jrl-mc-w" onClick={() => setMShow("waiting")} title="Show the conversations waiting on us"><b>{waitingNow}</b><span>waiting on us<small>{myChats.reduce((a0, c) => a0 + c.unread, 0)} new</small></span></button>
-            <span className="jrl-mc-av" aria-hidden>{myChats.filter((c) => c.waiting).slice(0, 3).map((c) => <i key={c.key} title={whoOf(c)} style={{ background: colorOfChat(c) }}>{(whoOf(c) === "You" ? c.customer : whoOf(c)).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?"}</i>)}{waitingNow > 3 && <i>+{waitingNow - 3}</i>}</span>
-          </div>
-        </div>
-      </div>
-      {/* the stages as cards (Nov 2, Nick: "the title should be on the top… a small number in the top right of each card…
-          small number underneath the bubble. I don't like the notification style bubble"): the picked one tinted, with an
-          arrow down to its list */}
-      <div className="jrl" role="tablist" aria-label="Steps">
-        {GROUPS.map((g) => { const on = !solo && curG?.t === g.t; const tot = items ? g.steps.reduce((a0, [k]) => a0 + (k === "declined" ? 0 : count(k)), 0) : null; return (
-          <div key={g.t} role="tab" aria-selected={on} className={"jrl-sec" + (on ? " on" : "")} style={{ ["--c" as string]: g.c, ["--f" as string]: g.steps.length > 1 ? 2 : 1 }}>
-            <button type="button" className="jrl-h" onClick={() => go(g.steps[0][0])} title={g.line}>
-              <span className="jrl-t">{g.t}</span>
-              <span className="jrl-n">{tot ?? "…"}</span>
-            </button>
-            {/* no "N new messages" on the cards: it pushed the row down; new ones show as dots in the Message Center (Nov 6, Nick) */}
-            {/* the steps joined by a line, each step's count in the card's corner on its side (Nov 2, Nick: "leads would have a
-                46 all the way on the left side, and requests would have a 2 on the right side… and then we need the line") */}
-            <div className={"jrl-ss" + (g.steps.length > 1 ? " two" : "")}>
-              {g.steps.map(([k, l, icon]) => { const nn = count(k); return (
-                <button key={k} type="button" className={"jrl-st" + (!all && !solo && step === k ? " pick" : "")} onClick={() => go(k)} aria-label={`${l}: ${items ? nn : "loading"}`}>
-                  <span className="jrl-ic">{icon}</span>
-                  <span className="jrl-sl">{l}</span>
-                </button>); })}
-            </div>
-            {g.steps.map(([k, l], i) => { const nn = count(k); return <span key={k} className={"jrl-cn " + (g.steps.length > 1 && i === 0 ? "l" : "r") + (items && !nn ? " z" : "")} title={l}>{items ? nn : "…"}</span>; })}
-          </div>
-        ); })}
-      </div>
-      {/* the messages: search, then the Messages heading level with Job on the right; picking one brings its job forward on
-          its tab and opens the conversation under it (Nov 2, Nick) */}
-      <div className="jmb">
-        {/* the counts on the line of the list's colored bar, the search under them (Nov 2, Nick) */}
-        {/* on the line of the list's bar: which conversations to show, with their counts */}
-        {/* like an inbox, on one line (Nov 6, Nick: "needs reply needs to be one line… act like an inbox… say new… then they
-            should be highlighted, like red, unread"): New is what waits on us; an unread one is tinted red below */}
-        <div className="jrl-mf" role="radiogroup" aria-label="Show">{([["waiting", "New", waitingNow], ["replied", "Waiting on them", myChats.length - waitingNow], ["archived", "Done", myArchived.length]] as const).map(([k, l, n]) => (
-          <button key={k} type="button" role="radio" aria-checked={!mWant && mShow === k} className={!mWant && mShow === k ? "on" : ""} onClick={() => setMShow(k)}>{l}<em>{n}</em></button>))}</div>
-        <input className="jmb-s" value={mq} onChange={(e) => setMq(e.target.value)} placeholder="Search messages" aria-label="Search messages" />
-        <div ref={padRef} style={{ height: lvl.pad }} aria-hidden />
-        <div className="jmb-head" style={lvl.h ? { height: lvl.h } : undefined}>Messages</div>
-        <div className="jmb-list">
-          {!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : "No customer messages."}</div>
-            : /* in two parts (Nov 2, Nick: "sort the messages… a little heading that says job related… and then just general
-                 messages"): about a job on the Job Center, then everything else */
-            ([["Job related", boardChats.filter((c) => !!c.orderId && byOrder.has(c.orderId))], ["General messages", boardChats.filter((c) => !c.orderId || !byOrder.has(c.orderId))]] as const).map(([h, list]) => list.length > 0 && (
-              <div key={h} className="jmb-grp"><div className="jmb-grp-h">{h}<span className="pill-n">{list.length}</span></div>
+      <div className={"jcd" + (showMsgs ? " msgs" : "") + (picked ? " pick" : "")}>
+      {/* FBS Messages down the left (Job Center D): what needs a reply first, then what needs none */}
+      {showMsgs && <aside className="jcd-m" aria-label="FBS Messages">
+        <div className="jcd-mh"><b>FBS Messages</b>{waitingNow > 0 && <span className="jcm-n">{waitingNow} new</span>}<span className="spacer" />
+          {(picked || curChat) && <button type="button" className="btn sm ghost" aria-label="Close messages" onClick={() => setMsgPin(false)}>✕</button>}</div>
+        <div className="jcd-mf rv-seg" role="radiogroup" aria-label="Show">{([["waiting", "New", myChats.filter((c) => c.waiting || c.last.from === "customer").length], ["replied", "Waiting on them", myChats.filter((c) => !c.waiting && c.last.from !== "customer").length], ["archived", "Done", myArchived.length]] as const).map(([k, l, nn]) => (
+          <button key={k} type="button" role="radio" aria-checked={!mWant && mShow === k} className={!mWant && mShow === k ? "on" : ""} onClick={() => setMShow(k)}>{l}{k !== "archived" && <em>{nn}</em>}</button>))}</div>
+        <div className="jcd-ms"><SearchInput placeholder="Search messages" value={mq} onChange={(e) => setMq(e.target.value)} aria-label="Search messages" /></div>
+        <div className="jcd-ml">
+          {!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : mShow === "waiting" ? "Nothing waiting on you." : "No customer messages."}</div>
+            : (mShow === "waiting" && !mWant
+              ? [["Needs a reply", boardChats.filter((c) => c.waiting)], ["No reply needed", boardChats.filter((c) => !c.waiting)]] as const
+              : [["Job related", boardChats.filter((c) => !!c.orderId && byOrder.has(c.orderId))], ["General messages", boardChats.filter((c) => !c.orderId || !byOrder.has(c.orderId))]] as const
+            ).map(([h, list]) => list.length > 0 && (
+              <div key={h} className={"jmb-grp" + (h === "No reply needed" ? " quiet" : "")}><div className="jmb-grp-h">{h}<span className="pill-n">{list.length}</span></div>
                 {list.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}</div>))}
         </div>
+      </aside>}
+      <div className="jcd-c">
+      {/* the steps in one bar, under the four parts of the work (Nick, Nov 16 2026: "incoming, quotes… pre-production…
+          in production… just center everything… a little quieter") */}
+      <div className="jcb" role="tablist" aria-label="Steps">
+        {BAR.map((g) => (
+          <div key={g.t} className="jcb-g" style={{ flex: g.steps.length }}>
+            <div className="jcb-gh">{g.t}</div>
+            <div className="jcb-s">{g.steps.map((k) => { const on = !solo && !(curChat && !chatInPanel) && step === k; return (
+              <button key={k} type="button" role="tab" aria-selected={on} className={"jcb-c" + (on ? " on" : "")} style={{ ["--c" as string]: STEP_C[k] || colorOf(k) }} onClick={() => { setChat(null); go(k); }}>
+                <span className="jcb-t">{STEP_NAME[k]}</span><span className="jcb-n">{items ? count(k) : "…"}</span><span className="jcb-d">{STEP_SUB[k]}</span>
+              </button>); })}</div>
+          </div>))}
       </div>
-      <div className={"jc-body jct-body" + (picked ? " has-pick" : "")} style={{ ["--c" as string]: curG?.c || "var(--fbs-blue)" }}>
+      <div className={"jc-body jct-body"} style={{ ["--c" as string]: STEP_C[step] || curG?.c || "var(--fbs-blue)" }}>
         <section className="panel jc-list">
           <div className="panel-b stack" style={{ gap: 12 }}>
             {/* a message with no job in the Job Center (a general question, or an order past it) opens on its own, as a general
@@ -359,7 +328,7 @@ export default function JobCenter() {
             {/* a customer's message (Nov 2, Nick: "when you click on… a message on the left… view the message, show it clearly…
                 when it's a request, just click it and we can quickly go into the process… once it's created into an order, the
                 right panel is great"): where the job is across the top, the conversation, then the request to process or the job */}
-            {curChat ? (() => {
+            {curChat && !chatInPanel ? (() => {
               const fst = focusJob ? (focusJob.steps.includes(step) ? step : (focusJob.steps.find((x) => x !== "leads") || step)) : null;
               const fg = fst ? GROUPS.find((g) => g.steps.some((x) => x[0] === fst)) || null : null;
               const isRq = focusJob?.type === "request";
@@ -392,7 +361,9 @@ export default function JobCenter() {
                 <button key={k} type="button" role="radio" aria-checked={on} className={"prf-dept " + k + (on ? " on" : "") + (nn === 0 ? " z" : "")} title={k === "all" ? "Every department" : `${l}: ${nn ?? 0} job${nn === 1 ? "" : "s"}`} onClick={() => setDept(k)}>{k === "all" ? "All" : DEPT_TAG[k as Dept]}</button>); })}</div>}
               <span className="jc-search"><SearchInput placeholder="Search job, customer or order #" value={q} onChange={(e) => setQ(e.target.value)} /></span>
             </div>
-            <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{curG?.t}</b><span>›</span><b>{(curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && !isReq(step) ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}</div>
+            <div className="jc-swhere">{all ? <b>All jobs</b> : <><b>{BAR.find((g) => g.steps.includes(step))?.t || curG?.t}</b><span>›</span><b>{STEP_NAME[step] || (curG?.steps.find((x) => x[0] === step) || [])[1]}</b></>}{items && !all && !isReq(step) ? <small>{count(step)} job{count(step) === 1 ? "" : "s"}{dept !== "all" ? ` in ${DEPT_TAG[dept as Dept]}` : ""}</small> : null}
+              {/* declined quotes: off the bar, one quiet link here */}
+              <span className="spacer" />{step === "declined" ? <button type="button" className="linkbtn" onClick={() => go("approved")}>Back to Approved</button> : items && count("declined") > 0 ? <button type="button" className="linkbtn jc-decl-l" onClick={() => go("declined")}>Declined · {count("declined")}</button> : null}</div>
             {/* Requests: laid out like ClickUp Jobs' New list, the picked one opened on top (components/RequestsDesk.tsx) */}
             {isReq(step) && !all ? <RequestsDesk key={step} q={q} onlyIds={items ? new Set(pool(step).filter((it) => it.steps.includes(step) && inDept(it) && it.orderId).map((it) => it.orderId!)) : undefined} pick={reqPick || undefined} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
               <div className="tbl-wrap"><table className="tbl jc" data-nofit>
@@ -417,10 +388,12 @@ export default function JobCenter() {
             </>}
           </div>
         </section>
-        {picked && <aside className="jc-side" aria-label="The job">
-          <JobPanel key={picked.key + n} it={picked} step={step} after={after} onClose={() => setPick(null)} onLead={() => setLead(picked)} onUndo={() => void undoDeclined(picked.orderId!).then((r) => after(r.ok ? "Back on the Job Center." : r.error))} />
-        </aside>}
       </div>
+      </div>
+      {picked && <aside className="jc-side jcd-p" aria-label="The job">
+        <JobPanel key={picked.key + n} it={picked} step={step} after={after} chatKey={chatInPanel ? curChat!.key : null} onSent={() => setCn((x) => x + 1)}
+          onClose={() => { setPick(null); setChat(null); }} onLead={() => setLead(picked)} onUndo={() => void undoDeclined(picked.orderId!).then((r) => after(r.ok ? "Back on the Job Center." : r.error))} />
+      </aside>}
       </div>
       {/* Make a job: the one Create order tool (components/tools/CreateOrderTool.tsx), the same as on emails and ClickUp jobs */}
       <DzAsk />

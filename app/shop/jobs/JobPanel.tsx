@@ -7,7 +7,8 @@ import { mockupHref } from "@/lib/mockupFresh";
 import { digitizingHref } from "@/lib/digitizeStatus";
 import { ST } from "@/lib/pricing";
 import type { Dept, JobDetail, JobItem, JobPiece, PieceState, ProofVersion, Step } from "@/lib/jobCenter";
-import { jobPanel, markDeclined, notAJob } from "./actions";
+import { jobChatSend, jobPanel, markDeclined, notAJob } from "./actions";
+import { reasonOf } from "@/lib/messages";
 import { remindProof } from "@/app/shop/proof-actions";
 import { remindSewoutAction } from "@/app/shop/sewout-actions";
 
@@ -37,7 +38,7 @@ const WORD: Record<PieceState | "replaced", [string, string]> = {
 };
 type Row = { at: string; what: string; detail: string; who: string; tone: string };
 
-export default function JobPanel({ it, step, after, onClose, onLead, onUndo }: { it: JobItem; step: Step; after: (m: string) => void; onClose: () => void; onLead: () => void; onUndo: () => void }) {
+export default function JobPanel({ it, step, after, onClose, onLead, onUndo, chatKey, onSent }: { it: JobItem; step: Step; after: (m: string) => void; onClose: () => void; onLead: () => void; onUndo: () => void; /** the conversation a reply goes into ("o:<order>:") */ chatKey?: string | null; /** a reply went out: the Message Center reloads */ onSent?: () => void }) {
   const [d, setD] = useState<JobDetail | null>(null), [rows, setRows] = useState<Row[]>([]), [err, setErr] = useState("");
   useEffect(() => { if (!it.orderId) return; let live = true; void jobPanel(it.orderId).then((r) => { if (!live) return; if (r.ok) { setD(r.detail); setRows(r.rows); } else setErr(r.error); }); return () => { live = false; }; }, [it.orderId]);
   const close = <button type="button" className="jcp-x" aria-label="Close" onClick={onClose}>{I(IC.x)}</button>;
@@ -61,10 +62,25 @@ export default function JobPanel({ it, step, after, onClose, onLead, onUndo }: {
   );
   if (err) return <div className="jcp"><div className="jcp-h"><div><h3>#{it.number}</h3></div>{close}</div><div className="jcp-sec pv-err">{err}</div></div>;
   if (!d) return <div className="jcp"><div className="jcp-h"><div><h3>#{it.number} · {it.title}</h3><div className="sub">{it.customer}</div></div>{close}</div><div className="jcp-sec faint">Loading…</div></div>;
-  return <Detail d={d} rows={rows} it={it} step={step} after={after} close={close} onUndo={onUndo} />;
+  return <Detail d={d} rows={rows} it={it} step={step} after={after} close={close} onUndo={onUndo} chatKey={chatKey || `o:${d.id}:`} onSent={onSent} />;
 }
 
-function Detail({ d, rows, it, step, after, close, onUndo }: { d: JobDetail; rows: Row[]; it: JobItem; step: Step; after: (m: string) => void; close: ReactNode; onUndo: () => void }) {
+/**
+ * Where a job is, as five steps on a line (Nick, Nov 16 2026, Job Center D): Mockup (or Sew-out), Quote, Approval, Goods,
+ * Production. Each is done or not; the first one not done is where it is now.
+ */
+const AFTER_OK = ["approved", "production", "fulfillment", "ready", "completed"];
+function stagesOf(d: JobDetail, it: JobItem): { t: string; st: "ok" | "now" | "" }[] {
+  const art = d.pieces.find((x) => x.k === "art") || d.pieces.find((x) => x.k === "sewout"), quote = d.pieces.find((x) => x.k === "quote");
+  const out = (x?: JobPiece) => !x || x.state === "sent" || x.state === "done";
+  const approved = AFTER_OK.includes(d.status) || (d.pieces.length > 0 && d.pieces.every((x) => x.state === "done"));
+  const ok = [out(art), out(quote), approved, approved && !it.steps.includes("goods_order") && d.status !== "approved", ["fulfillment", "ready", "completed"].includes(d.status)];
+  const now = ok.indexOf(false);
+  return [art?.k === "sewout" ? "Sew-out" : "Mockup", "Quote", "Approval", "Goods", "Production"].map((t, i) => ({ t, st: ok[i] && (now < 0 || i < now) ? "ok" : i === now ? "now" : "" }));
+}
+
+type Said = { at: string; who: string; us: boolean; text: string; msg?: boolean; why?: string | null };
+function Detail({ d, rows, it, step, after, close, onUndo, chatKey, onSent }: { d: JobDetail; rows: Row[]; it: JobItem; step: Step; after: (m: string) => void; close: ReactNode; onUndo: () => void; chatKey: string; onSent?: () => void }) {
   // the piece this step is about, to start with
   const want: PieceState[] = step === "changes" ? ["changes"] : step === "ready" ? ["made", "needed"] : step === "sent" ? ["sent"] : ["needed", "made", "sent", "changes"];
   const start = Math.max(0, step === "sewouts" ? d.pieces.findIndex((p) => p.k === "sewout" && p.state !== "done")
@@ -73,45 +89,75 @@ function Detail({ d, rows, it, step, after, close, onUndo }: { d: JobDetail; row
   const p = d.pieces[sel] || d.pieces[0];
   const who = first(d.contact) || d.customer;
   const anyOut = d.pieces.some((x) => x.state === "sent" || x.state === "changes" || x.state === "done") || !!d.link;
-  const status: [string, string] = d.declinedAt ? ["Declined", "var(--ink-3)"] : it.steps.includes("changes") ? ["Changes asked", "var(--danger)"] : it.steps.includes("ready") ? ["Processing", "var(--fbs-blue)"]
-    : it.steps.includes("sent") ? [`Waiting on ${who}`, "var(--warn)"] : it.steps.includes("requests") ? ["New request", "var(--fbs-violet)"] : it.steps.includes("website") ? ["Website lead", "var(--fbs-violet)"] : it.steps.includes("sewouts") ? ["Sew-out", "var(--ink-2)"]
-    : [ST[d.status]?.label || d.status, "var(--ok)"];
+  const stages = stagesOf(d, it);
+  const fill = Math.max(0, stages.map((x) => x.st).lastIndexOf("ok"));
+  // one timeline, oldest first (Job Center D): what happened (the order's history) and what was written in the portal
+  const [sent, setSent] = useState<Said[]>([]);
+  const tl = [...rows.map((r) => ({ at: r.at, r, m: null as Said | null })), ...[...d.msgs.filter((m) => m.msg), ...sent].map((m) => ({ at: m.at, r: null as Row | null, m }))]
+    .sort((a, b) => a.at.localeCompare(b.at)).slice(-16);
+  // the customer's last word on a proof, sew-out or quote (a portal message is already in the timeline)
+  const saidApart = d.said && !d.msgs.some((m) => m.msg && !m.us && m.at === d.said!.at);
   return (
-    <div className="jcp">
-      <div className="jcp-h">
-        <div><h3>#{d.number} · {d.title}</h3><div className="sub">{[d.customer, d.contact, d.depts.map((x) => DEPT_TAG[x]).join(" "), d.qty ? `${d.qty} pcs` : "", d.due ? `Due ${day(d.due)}` : ""].filter(Boolean).join(" · ")}</div></div>
-        <div className="jcp-hr"><span className="pill" style={{ ["--sc" as string]: status[1] }}><span className="pill-t">{status[0]}</span></span>{close}</div>
+    <div className="jcp jcp2">
+      <div className="jcp2-h">
+        <div className="jcp2-top">
+          <div className="jcp2-t"><div className="sub"><span className="ordno">#{d.number}</span> · {d.customer}{d.contact ? ` · ${d.contact}` : ""}</div><h3>{d.title}</h3>
+            <div className="sub">{[d.qty ? `${d.qty} pcs` : "", d.depts.map((x) => DEPT_TAG[x]).join(" "), d.due ? `due ${day(d.due)}` : "", d.declinedAt ? "Declined" : ""].filter(Boolean).join(" · ")}</div></div>
+          <div className="jcp-hr"><Link className="btn sm" href={`/shop/orders/${d.id}`}>Open job</Link>{close}</div>
+        </div>
+        <ol className="jcp2-dots" aria-label="Where the job is" style={{ ["--fill" as string]: `${(fill / (stages.length - 1)) * 80}%` }}>
+          {stages.map((x) => <li key={x.t} className={x.st} aria-current={x.st === "now" ? "step" : undefined}><i aria-hidden />{x.t}</li>)}
+        </ol>
       </div>
-      {p && <Hero p={p} d={d} />}
-      {d.pieces.length > 1 && <div className="jcp-seg" role="tablist" aria-label="Pieces">
+      {d.pieces.length > 0 && <div className="jcp2-pcs" role="tablist" aria-label="Pieces">
         {d.pieces.map((x, i) => { const w = WORD[x.state]; return (
-          <button key={i} type="button" role="tab" aria-selected={i === sel} className={"jcp-sg" + (i === sel ? " on" : "")} onClick={() => setSel(i)}>
-            <span className="jcp-sg-i">{I(x.k === "art" ? IC.shirt : x.k === "sewout" ? IC.needle : IC.receipt, 17)}</span>
-            <span><b>{x.k === "art" ? "Mockup" : x.k === "sewout" ? `Sew-out · ${x.where.split(",")[0]}` : `Quote ${money(x.total)}`}</b><small><i style={{ background: w[1] }} />{x.k === "quote" && x.state === "sent" && d.pieces.some((y) => y.k !== "quote" && y.state === "sent") ? "After the proof" : w[0]}</small></span>
+          <button key={i} type="button" role="tab" aria-selected={i === sel} className={"jcp2-pc" + (i === sel ? " on" : "")} onClick={() => setSel(i)}>
+            <span className="jcp2-pi">{I(x.k === "art" ? IC.shirt : x.k === "sewout" ? IC.needle : IC.receipt, 17)}</span>
+            <span><b>{x.k === "art" ? `Mockup${x.versions[0] ? ` v${x.versions[0].v}` : ""}` : x.k === "sewout" ? `Sew-out · ${x.where.split(",")[0]}` : `Quote · ${money(x.total)}`}</b><small><i style={{ background: w[1] }} />{x.k === "quote" && x.state === "sent" && d.pieces.some((y) => y.k !== "quote" && y.state === "sent") ? "After the proof" : w[0]}</small></span>
           </button>); })}
       </div>}
+      {p && <Hero p={p} d={d} />}
       {p && <Now p={p} d={d} who={who} after={after} anyOut={anyOut} />}
-      {d.said && <div className="jcp-sec">
+      {saidApart && d.said && <div className="jcp-sec jcp2-said">
         <div className="jcp-lb">{first(d.said.who) || "The customer"} said · {day(d.said.at)} · {d.said.on}</div>
         <div className="jcp-q">“{d.said.text}”</div>
         {d.said.after && <div className="jcp-note">{d.said.after}</div>}
       </div>}
       <div className="jcp-sec">
-        <div className="jcp-lb">Messages</div>
-        {d.msgs.length ? d.msgs.map((m, i) => (
-          <div key={i} className="jcp-msg"><span className={"jcp-av" + (m.us ? " us" : "")}>{m.us ? "FBS" : (first(m.who)[0] || "?").toUpperCase()}</span>
-            <div><b>{m.us ? (m.who ? `${m.who[0].toUpperCase()}${m.who.slice(1)}` : "We") : m.who}</b> <span className="faint">· {day(m.at)}</span><div className="jcp-mt">{m.text}</div></div></div>
-        )) : <div className="faint" style={{ fontSize: 12.5 }}>Nothing sent or written yet.</div>}
-        <div className="jcp-acts"><Link className="btn sm" href={`/shop/orders/${d.id}?tab=msg`}>Write a message</Link></div>
+        <div className="jcp-lb">Conversation and history</div>
+        {tl.length ? <ol className="jcp2-tl">{tl.map((x, i) => x.r ? (
+          <li key={i} className={"ev " + (x.r.tone || (/sent|reminder/i.test(x.r.what) ? "send" : ""))}><i aria-hidden /><span className="jcp2-w">{x.r.what}{x.r.who && !/opened/i.test(x.r.what) ? ` · ${first(x.r.who.split("@")[0])}` : ""}{x.r.detail && /opened/i.test(x.r.what) ? ` · ${x.r.detail}` : ""}</span><span className="jcp2-d">{day(x.r.at)}</span></li>
+        ) : x.m ? (
+          <li key={i} className={x.m.us ? "us" : "them"}><i aria-hidden />
+            <span className="jcp2-w"><b>{x.m.us ? (x.m.who ? `${x.m.who[0].toUpperCase()}${x.m.who.slice(1)}` : "We") : x.m.who || "The customer"}</b>{x.m.us ? " wrote" : " wrote"}{!x.m.us && reasonOf(x.m.why) && <span className={"jcp2-why" + (reasonOf(x.m.why)!.reply ? "" : " fyi")}>{reasonOf(x.m.why)!.label}</span>}
+              <span className="jcp2-say">{x.m.text}</span></span><span className="jcp2-d">{day(x.m.at)}</span></li>
+        ) : null)}</ol> : <div className="faint" style={{ fontSize: 12.5 }}>Nothing yet.</div>}
       </div>
-      <div className="jcp-sec">
-        <div className="jcp-lb">History</div>
-        {rows.length ? <ol className="jcp-tl">{[...rows].map((r, i) => (
-          <li key={i}><span className={"jcp-tl-i " + (r.tone || (/sent|reminder/i.test(r.what) ? "send" : /opened/i.test(r.what) ? "see" : ""))}>{I(r.tone === "ok" ? IC.check : r.tone === "bad" ? IC.pencil : /sent|reminder/i.test(r.what) ? IC.send : /opened/i.test(r.what) ? IC.eye : IC.dot, 13)}</span>
-            <span className="jcp-tl-t">{r.what}{r.who && !/opened/i.test(r.what) ? ` · ${first(r.who.split("@")[0])}` : ""}{r.detail && /opened/i.test(r.what) ? ` · ${r.detail}` : ""}</span><span className="jcp-tl-d">{day(r.at)}</span></li>
-        ))}</ol> : <div className="faint" style={{ fontSize: 12.5 }}>Nothing yet.</div>}
-      </div>
+      <Reply chatKey={chatKey} who={who} onSent={(text) => { setSent((x) => [...x, { at: new Date().toISOString(), who: "", us: true, text, msg: true }]); onSent?.(); }} />
       <Foot d={d} after={after} onUndo={onUndo} />
+    </div>
+  );
+}
+
+/** a reply from the panel: it shows in their portal (the Job Center's replies send no email, like the Message Center's) */
+function Reply({ chatKey, who, onSent }: { chatKey: string; who: string; onSent: (text: string) => void }) {
+  const [text, setText] = useState(""), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const send = async () => {
+    const t = text.trim(); if (!t || busy) return;
+    setBusy(true); setErr("");
+    const r = await jobChatSend(chatKey, t);
+    setBusy(false);
+    if (!r.ok) { setErr(r.error); return; }
+    setText(""); onSent(t);
+  };
+  return (
+    <div className="jcp-sec jcp2-rep">
+      <div className="jcp2-rep-r">
+        <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder={`Reply to ${who}…`} aria-label="Reply"
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }} />
+        <button type="button" className="btn primary" disabled={busy || !text.trim()} onClick={() => void send()}>{busy ? "Sending…" : "Send"}</button>
+      </div>
+      {err ? <p className="jmb-err">{err}</p> : <small className="faint">Shows in their portal.</small>}
     </div>
   );
 }

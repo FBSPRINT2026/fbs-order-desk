@@ -127,6 +127,17 @@ export async function archiveJobChat(key: string, on: boolean) {
   } catch (e) { return fail(e); }
 }
 
+/** Staff change what a customer's message is about (lib/messages.ts REASONS): "Needs a reply after all", or the other way */
+export async function setMessageReason(id: string, reason: string | null) {
+  try {
+    const { admin } = await me();
+    const { reasonOf } = await import("@/lib/messages");
+    const { error } = await admin.from("messages").update({ reason: reasonOf(reason)?.k || null }).eq("id", id).eq("author_type", "customer");
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
 /** One conversation; opening it marks the customer's messages in it read. */
 export async function jobChatThread(key: string, markRead = true) {
   try {

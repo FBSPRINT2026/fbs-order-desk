@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ChatMsg, ChatSummary } from "@/lib/jobChats";
-import { archiveJobChat, jobChatSend, jobChatThread } from "./actions";
+import { archiveJobChat, jobChatSend, jobChatThread, setMessageReason } from "./actions";
+import { REASONS, reasonOf } from "@/lib/messages";
 
 export const ago = (s: string) => {
   const m = Math.floor((Date.now() - new Date(s).getTime()) / 60000);
@@ -22,6 +23,7 @@ export function ChatLine({ c, color, on, onClick, full = false }: { c: ChatSumma
         <span className="jmb-top"><b>{whoOf(c)}</b><small>{ago(c.last.at)}</small>{c.unread > 0 && <span className="jmb-dot" aria-label={`${c.unread} new`} />}</span>
         <span className="jmb-q">{c.last.body}</span>
         {full && <small className="jmb-j">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : c.customer || "General"}{c.topic === "goods" ? " · goods" : ""}</small>}
+        {full && c.last.from === "customer" && reasonOf(c.why) && <span className={"jmb-whyt" + (reasonOf(c.why)!.reply ? "" : " fyi")}>{reasonOf(c.why)!.label}</span>}
       </span>
     </button>
   );
@@ -92,7 +94,14 @@ export function ChatThread({ c, color, onSent, onClose, onArchived, narrow = fal
         <div className="jmb-msgs" ref={box}>
           {!msgs ? <span className="faint">Loading…</span> : msgs.slice(-40).map((m) => (
             <div key={m.id} className={"jmb-b " + m.from}>
-              <small>{m.from === "customer" ? m.who || "Customer" : "We"} · {ago(m.at)}</small>
+              <small>{m.from === "customer" ? m.who || "Customer" : "We"} · {ago(m.at)}
+                {/* what they said it's about; staff can change it ("Needs a reply after all") (Nick, Nov 16 2026) */}
+                {m.from === "customer" && <select className={"jmb-why" + (reasonOf(m.reason) && !reasonOf(m.reason)!.reply ? " fyi" : "")} value={m.reason || ""} aria-label="What it's about"
+                  onChange={(e) => { const v = e.target.value || null; setMsgs((x) => (x || []).map((y) => (y.id === m.id ? { ...y, reason: v } : y))); void setMessageReason(m.id, v).then(() => onSent()); }}>
+                  <option value="">No reason given</option>
+                  {REASONS.map((r) => <option key={r.k} value={r.k}>{r.label}{r.reply ? "" : " · no reply"}</option>)}
+                </select>}
+              </small>
               {m.body && <span>{m.body}</span>}
               {m.files.map((f, i) => f.url ? <a key={i} className="jmb-f" href={f.url} target="_blank" rel="noreferrer">📎 {f.name}</a> : <span key={i} className="jmb-f">📎 {f.name}</span>)}
             </div>

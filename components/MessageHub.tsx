@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { MAX_ATTACH, type Attachment, type HubMsg, type HubOrder } from "@/lib/messages";
+import { MAX_ATTACH, REASONS, reasonOf, type Attachment, type HubMsg, type HubOrder } from "@/lib/messages";
 import SearchInput from "@/components/SearchInput";
 import { PageSearchContext } from "@/components/ArtSearchContext";
 import { heldFiles } from "@/lib/heldFiles";
@@ -28,12 +28,22 @@ const Ico = ({ d, s = 18 }: { d: string; s?: number }) => <svg width={s} height=
 const CLIP = "M21 11.5 12.5 20a5 5 0 0 1-7-7L14 4.5a3.3 3.3 0 0 1 4.7 4.7L10.2 17.7a1.7 1.7 0 0 1-2.4-2.4L15.5 7.6";
 const SEND = "M4 12 20 4l-6 16-3-7z M11 13l9-9";
 const BACK = "M15 18l-6-6 6-6";
+// the reasons' icons (lib/messages.ts REASONS)
+const WHY_ICO: Record<string, string> = {
+  question: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14 M12 17.5h.01",
+  change: "M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16z",
+  art: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z m12 4-5-5L5 21",
+  payment: "M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z M2 10h20",
+  tracking: "M1 3h15v13H1z M16 8h4l3 3v5h-7z M5.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z M18.5 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z",
+  fyi: "M20 6 9 17l-5-5",
+};
+const CARRIERS = ["UPS", "FedEx", "USPS", "DHL", "Other"];
 
 /**
  * The conversation center: a list of conversations (General, plus one per order) and the open thread,
  * with files and photos. Used as the customer's dashboard centerpiece and on the shop's customer page.
  */
-export default function MessageHub({ mode, initial, orders, projects = [], only, load, send, upload, markRead, canAct = true, shopName, customerName, start, height = 620 }: {
+export default function MessageHub({ mode, initial, orders, projects = [], only, load, send, upload, markRead, canAct = true, shopName, customerName, start, height = 620, askWhy = false, track }: {
   mode: "portal" | "shop";
   initial: HubMsg[];
   /** orders a conversation can be about (newest first) */
@@ -43,7 +53,11 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
   /** show just this one conversation (e.g. "p:<project id>" on a project page) */
   only?: string;
   load: () => Promise<HubMsg[] | null>;
-  send: (orderId: string | null, body: string, files: Attachment[], topic: string, projectId?: string | null) => Promise<{ ok: boolean; error?: string }>;
+  send: (orderId: string | null, body: string, files: Attachment[], topic: string, projectId?: string | null, reason?: string | null) => Promise<{ ok: boolean; error?: string }>;
+  /** the customer picks what a message about an order is about before sending (Nick, Nov 16 2026; lib/messages.ts REASONS) */
+  askWhy?: boolean;
+  /** "Sending tracking": tells us goods are on the way (app/portal/goods-actions.ts addTracking) */
+  track?: (orderId: string, carrier: string, tracking: string, note: string) => Promise<{ ok: boolean; error?: string }>;
   upload: (f: File) => Promise<Attachment>;
   markRead: (orderId: string | null, topic: string, projectId?: string | null) => Promise<unknown>;
   canAct?: boolean;
@@ -129,6 +143,13 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [over, setOver] = useState(false);
+  // what the message is about: asked on an order's own conversation in the portal (not its goods talk); a new conversation
+  // starts unpicked
+  const whyOn = askWhy && mode === "portal" && !!cur?.orderId && cur.topic !== "goods";
+  const [why, setWhy] = useState("");
+  const [trk, setTrk] = useState({ carrier: "", tracking: "", note: "" });
+  useEffect(() => { setWhy(""); setTrk({ carrier: "", tracking: "", note: "" }); }, [cur?.key]);
+  const needWhy = whyOn && !why;
   const fileInput = useRef<HTMLInputElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -151,16 +172,38 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
   const uploading = files.some((f) => !f.done && !f.error);
   async function doSend() {
     const ready = files.filter((f) => f.done).map((f) => f.done!);
-    if (!canAct || busy || uploading || (!text.trim() && !ready.length) || !cur) return;
+    if (!canAct || busy || uploading || needWhy || (!text.trim() && !ready.length) || !cur) return;
     setBusy(true); setErr("");
-    const r = await send(cur.orderId, text, ready, cur.topic, cur.projectId || null);
+    const reason = whyOn ? why : null;
+    const r = await send(cur.orderId, text, ready, cur.topic, cur.projectId || null, reason);
     setBusy(false);
     if (!r.ok) { setErr(r.error || "Couldn't send."); return; }
     setText(""); setFiles([]);
     // show it right away, then sync with the server
-    setMsgs((ms) => [...ms, { id: "tmp-" + Date.now(), order_id: cur.orderId, project_id: cur.projectId || null, topic: cur.topic, author_type: mode === "portal" ? "customer" : "staff", author_name: "You", body: text.trim(), created_at: new Date().toISOString(), read_at: null, files: ready.map((a) => ({ name: a.name, mime: a.mime, size: a.size, url: "" })) }]);
+    setMsgs((ms) => [...ms, { id: "tmp-" + Date.now(), order_id: cur.orderId, project_id: cur.projectId || null, topic: cur.topic, author_type: mode === "portal" ? "customer" : "staff", author_name: "You", body: text.trim(), created_at: new Date().toISOString(), read_at: null, reason, files: ready.map((a) => ({ name: a.name, mime: a.mime, size: a.size, url: "" })) }]);
     refresh();
   }
+  /** "Sending tracking": the goods go on the order (Goods & Receiving watches for them) and the message says so */
+  async function sendTracking() {
+    if (!canAct || busy || !cur?.orderId) return;
+    const tracking = trk.tracking.trim(), note = trk.note.trim(), carrier = trk.carrier === "Other" ? "" : trk.carrier;
+    if (!tracking) { setErr("Add the tracking number."); return; }
+    setBusy(true); setErr("");
+    if (track) { const t = await track(cur.orderId, carrier, tracking, note); if (!t.ok) { setBusy(false); setErr(t.error || "Couldn't add the tracking."); return; } }
+    const body = `📦 Tracking: ${carrier ? carrier + " " : ""}${tracking}${note ? `\n${note}` : ""}`;
+    const r = await send(cur.orderId, body, [], cur.topic, null, "tracking");
+    setBusy(false);
+    if (!r.ok) { setErr(r.error || "Couldn't send."); return; }
+    setMsgs((ms) => [...ms, { id: "tmp-" + Date.now(), order_id: cur.orderId, project_id: null, topic: cur.topic, author_type: "customer", author_name: "You", body, created_at: new Date().toISOString(), read_at: null, reason: "tracking", files: [] }]);
+    setTrk({ carrier: "", tracking: "", note: "" }); setWhy("");
+    refresh();
+  }
+  const whyTiles = (
+    <div className="mh-why" role="radiogroup" aria-label="What's your message about?">
+      {REASONS.map((r) => <button key={r.k} type="button" role="radio" aria-checked={why === r.k} className={"mh-why-b" + (why === r.k ? " on" : "") + (r.reply ? "" : " fyi")} disabled={!canAct} onClick={() => { setWhy(r.k); setErr(""); if (r.k !== "tracking") setTimeout(() => ta.current?.focus(), 30); }}>
+        <Ico d={WHY_ICO[r.k]} /><span><b>{r.label}</b><small>{r.sub}</small></span></button>)}
+    </div>
+  );
 
   const openConvo = (k: string) => { setOpen(k); setShowThread(true); setErr(""); };
   const other = mode === "portal" ? shopName : customerName || "Customer";
@@ -230,7 +273,15 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
             {cur.order && !only && <Link className="btn sm" href={cur.order.href}>{cur.projectId ? "Open project" : "Open order"}</Link>}
           </div>
           <div className="mh-scroll" ref={scroller} onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; }}>
-            {!cur.msgs.length && (
+            {!cur.msgs.length && whyOn && why !== "tracking" && (
+              <div className="mh-empty mh-why-empty">
+                <b>What&apos;s your message about?</b>
+                <span>Pick one so it gets to the right person.</span>
+                {whyTiles}
+              </div>
+            )}
+            {!cur.msgs.length && whyOn && why === "tracking" && <div className="mh-empty" />}
+            {!cur.msgs.length && !whyOn && (
               <div className="mh-empty">
                 <b>{cur.orderId ? "No messages about this order yet" : mode === "portal" ? `Say hi to ${shopName}` : "No general messages yet"}</b>
                 <span>{mode === "portal" ? "Ask a question, send a logo or a photo, or tell us about your next idea. You'll get an email when we reply." : "Messages you send here show in their portal, and they get an email."}</span>
@@ -245,6 +296,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
                   <div className={"mh-m" + (me ? " me" : "")}>
                     {!me && <span className="mh-who">{m.author_type === "staff" ? (mode === "portal" ? shopName : m.author_name) : m.author_name || other}</span>}
                     <div className="mh-b">
+                      {m.author_type === "customer" && reasonOf(m.reason) && <span className={"mh-why-t" + (reasonOf(m.reason)!.reply ? "" : " fyi")}>{reasonOf(m.reason)!.label}</span>}
                       {m.body && <div className="mh-text">{m.body}</div>}
                       {m.files.length > 0 && (
                         <div className="mh-files">
@@ -261,6 +313,22 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
             })}
           </div>
           <div className="mh-compose">
+            {whyOn && (why || cur.msgs.length > 0) && <div className="mh-why-chips" role="radiogroup" aria-label="What's it about?">
+              <span>About</span>
+              {REASONS.map((r) => <button key={r.k} type="button" role="radio" aria-checked={why === r.k} className={why === r.k ? "on" : ""} disabled={!canAct} onClick={() => { setWhy(r.k); setErr(""); }}>{r.label}</button>)}
+            </div>}
+            {whyOn && why === "tracking" ? <>
+              <div className="mh-trk">
+                <div className="mh-trk-h"><Ico d={WHY_ICO.tracking} /><span><b>Sending tracking</b><small>No reply needed. We&apos;ll watch for it and count it in when it lands.</small></span></div>
+                <div className="mh-trk-f">
+                  <label><span>Carrier</span><select value={trk.carrier} onChange={(e) => setTrk({ ...trk, carrier: e.target.value })} disabled={!canAct}><option value="">Pick…</option>{CARRIERS.map((c) => <option key={c}>{c}</option>)}</select></label>
+                  <label><span>Tracking #</span><input value={trk.tracking} onChange={(e) => setTrk({ ...trk, tracking: e.target.value })} disabled={!canAct} placeholder="1Z…" /></label>
+                  <label className="w"><span>What&apos;s in it (optional)</span><input value={trk.note} onChange={(e) => setTrk({ ...trk, note: e.target.value })} disabled={!canAct} placeholder="2 boxes of crewnecks" /></label>
+                </div>
+                <button type="button" className="mh-send mh-trk-go" onClick={() => void sendTracking()} disabled={!canAct || busy || !trk.tracking.trim()}><span>{busy ? "Sending…" : "Send tracking"}</span></button>
+              </div>
+              <div className="mh-hint">{err ? <span className="bad">{err}</span> : <>Pick another reason above to write a regular message instead.</>}</div>
+            </> : <>
             {files.length > 0 && (
               <div className="mh-pending">
                 {files.map((f) => (
@@ -273,13 +341,14 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
             )}
             <div className="mh-row">
               <button type="button" className="mh-att" onClick={() => fileInput.current?.click()} disabled={!canAct} aria-label="Attach files" title="Attach photos or files"><Ico d={CLIP} s={20} /></button>
-              <textarea ref={ta} rows={1} value={text} disabled={!canAct} placeholder={!canAct ? "Sending is turned off in the preview." : `Message ${cur.orderId ? `about ${cur.title.split(" · ")[0]}` : other}…`}
+              <textarea ref={ta} rows={1} value={text} disabled={!canAct || needWhy} placeholder={!canAct ? "Sending is turned off in the preview." : needWhy ? "Pick what it's about first" : `Message ${cur.orderId ? `about ${cur.title.split(" · ")[0]}` : other}…`}
                 onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); doSend(); } }}
                 onPaste={(e) => { if (e.clipboardData.files?.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }} aria-label="Message" />
-              <button type="button" className="mh-send" onClick={doSend} disabled={!canAct || busy || uploading || (!text.trim() && !files.some((f) => f.done))} aria-label="Send"><Ico d={SEND} s={18} /><span>{busy ? "Sending…" : "Send"}</span></button>
+              <button type="button" className="mh-send" onClick={doSend} disabled={!canAct || busy || uploading || needWhy || (!text.trim() && !files.some((f) => f.done))} aria-label="Send"><Ico d={SEND} s={18} /><span>{busy ? "Sending…" : "Send"}</span></button>
             </div>
             <div className="mh-hint">{err ? <span className="bad">{err}</span> : <>Enter to send · Shift+Enter for a new line · Drop or paste files</>}</div>
             <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) addFiles(heldFiles(e.target.files)); e.target.value = ""; }} />
+            </>}
           </div>
           {over && <div className="mh-drop">Drop files to attach</div>}
         </>}

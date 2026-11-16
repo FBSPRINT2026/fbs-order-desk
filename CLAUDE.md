@@ -243,6 +243,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   picked). Everything owed / Ready to pay / Pick invoices; one email with each invoice and one Pay button that opens their
   portal with exactly those picked (`?area=payments&pay=<ids>`); kept in `bills`, logged on each order, one reminder 7
   days later for what's still unpaid (`billReminders`, the daily cron). Every "send a bill / statement" button opens it.
+- **A customer's message says what it's about** (Nick, Nov 16 2026: "select like a reason for the message… if they just…
+  add tracking… there's no task associated with that"). In the portal, a message about an order starts with "What's your
+  message about?": A question, Change my order, Art or a proof, Payment, Sending tracking, Just letting you know
+  (`REASONS` in `lib/messages.ts`, saved on `messages.reason`). Sending tracking is two boxes that add the shipment to the
+  order's goods (`addTracking`). Tracking and Just letting you know need no answer: never "waiting on us", no to-do, no
+  unread badge (`needsReply` / `NEEDS_REPLY_FILTER`; anything that counts messages waiting on us goes through them); staff
+  change a reason in the thread. No reason (older messages, email) counts as a question.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.
@@ -374,8 +381,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   is a soft amber band behind the hours, warm-up and lunch plain gray; no shade over the past: the whole day shows from the first crew in, live clock on or off, and how it's going is on the jobs (Nick, Nov 12, option C): one dark header card per press (name, crew, clock-in, the press, then a bar: "2 of 4 done · on pace" / "35m behind" / "20m ahead", `dayScore`: only from what's been marked, the last job marked done against its planned finish or a printing job's updated pieces; a start that went by counts only with the live clock on; nothing marked, no pace is claimed), done jobs soft blue like Printavo, the number in blue (never crossed out) and a blue "Done 12:02p" pill (Nick, Nov 12, option B), the printing job a green border with how far, a job whose start went by "Not started" in red (`dayState`). A phone gets the read-only day view (Done / Running / Next / Waiting / Late start per press); the key sits under the schedule's search on the
   right (Goods / Printing / On the board; Hide folds it to one line, remembered: `.mky`, Nick Nov 12). Time lost to someone not clocked in yet (`Down` flagged "clock" in
   `withClock`) keeps work off but draws no Down box. Holds are jobs like any other: they wait in Ready To Schedule (its
-  tabs: All / Late / Holds / Goods here / Not here, with the search and Job Filters at the right of that line and the AI
-  assistant (ask box with a microphone, ideas under it) right below it; Nick, Nov 13) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
+  tabs: All / Late / Holds / Goods here / Not here, with the search and Job Filters at the right of that line; Nick, Nov 13) and move in a re-plan; a hold's booking carries `hold_id` (`ownerCols`).
   An order On hold (art, receiving, the customer, QC; a payment hold keeps it off the schedule entirely) still shows in
   Ready To Schedule and on the press with an "On hold · <reason>" tag, isn't counted as tight or late, and Make The
   Schedule never books it; drag it onto a press to book it anyway (Nick, Nov 12, #50013).
@@ -444,6 +450,13 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   its right end ("In 6:12a", "In 7:21a · late", "Not in yet"; display only), and the press under its name ("Gauntlet III ·
   12 color", `pressSpec` from its name and colors). Anything new that reacts to punches
   goes behind it.
+- **The schedule's layout** (Nick, Nov 16 2026, Schedule C): Ready to schedule on top, one row a job (Job #, Job, In-hands,
+  Goods, Recommended, + Add), folding up with Hide (remembered); the presses top to bottom under it; on the right the shop
+  assistant (a tip, then the ask box), the tools by group (Planning, Press & crew, Sales, each with tinted icons), the
+  search, the key and Coming up. **The Job Center's layout** (Job Center D): FBS Messages down the left while no job is
+  open (Needs a reply, then No reply needed); the steps in one bar under Incoming / Quotes / Pre-production / In production
+  (centered, no group counts; Declined is a link under the bar); a job opens on the right with where it is (five dots),
+  its pieces, one timeline of history and messages and a reply, and the messages panel closes (FBS Messages brings it back).
 - **Issue on a run** (Nick, Nov 12 2026: "missing goods or rejects. Or reprint"): the right-click's red **Issue** button
   (printing, paused or done, after the fact too) asks why (Missing / Reject / Reprint) and marks it in one click; how many still to print by size is optional
   ("+ How many"; Nick, Nov 12, #40478: "I need to be able to mark it just missing right now"), and with no count the job

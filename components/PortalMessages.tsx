@@ -3,6 +3,7 @@ import { useCallback } from "react";
 import MessageHub from "@/components/MessageHub";
 import { createClient } from "@/lib/supabase/client";
 import { portalAttachUrl, portalMarkRead, portalMessages, portalSend } from "@/app/portal/message-actions";
+import { addTracking } from "@/app/portal/goods-actions";
 import type { HubMsg, HubOrder } from "@/lib/messages";
 
 /** The customer's side of the Messages hub. In a staff preview (`as`) it's read-only. */
@@ -11,7 +12,9 @@ export default function PortalMessages({ initial, orders, projects, only, shopNa
   return (
     <MessageHub mode="portal" initial={initial} orders={orders} projects={projects} only={only} shopName={shopName} canAct={canAct} start={start} height={height}
       load={load}
-      send={(orderId, body, files, topic, projectId) => portalSend(orderId, body, files, topic, projectId)}
+      send={(orderId, body, files, topic, projectId, reason) => portalSend(orderId, body, files, topic, projectId, reason)}
+      askWhy
+      track={(orderId, carrier, tracking, note) => addTracking(orderId, { carrier, tracking, boxes: null, eta: null, note, files: [] })}
       markRead={(orderId, topic, projectId) => portalMarkRead(orderId, topic, projectId)}
       upload={async (f) => {
         const t = await portalAttachUrl(f.name);

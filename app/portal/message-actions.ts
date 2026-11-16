@@ -6,7 +6,7 @@ import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { emailLayout, sendEmail, siteUrl } from "@/lib/email";
 import { mergeSettings } from "@/lib/pricing";
-import { attachNote, cleanAttachments, withFiles, type Attachment, type HubMsg } from "@/lib/messages";
+import { attachNote, cleanAttachments, reasonOf, withFiles, type Attachment, type HubMsg } from "@/lib/messages";
 
 type Result = { ok: boolean; error?: string };
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
@@ -43,7 +43,7 @@ export async function portalMessages(as?: string): Promise<{ ok: boolean; error?
     // sending shows the same list the page opened with (Nov 2, Nick: "it looks different… after you type in it")
     const { data: os } = await admin.from("orders").select("id, draft").in("customer_id", ids).or(SENT_OR_SHOWN).is("discarded_at", null);
     const oids = ((os || []) as { id: string; draft?: boolean | null }[]).filter((o) => !o.draft).map((o) => o.id);
-    const { data } = await allRows((ra, rb) => admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments").is("hidden_at", null)
+    const { data } = await allRows((ra, rb) => admin.from("messages").select("id, order_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments, reason").is("hidden_at", null)
       .or(`customer_id.in.(${ids.join(",")})${oids.length ? `,order_id.in.(${oids.join(",")})` : ""}`).order("created_at").order("id").range(ra, rb));
     return { ok: true, messages: await withFiles(data || [], sign(admin)) };
   } catch (e) { return fail(e); }
@@ -62,7 +62,7 @@ export async function portalAttachUrl(fileName: string): Promise<{ ok: boolean; 
 }
 
 /** The customer sends a message: general (no order) or about one of their orders. The shop gets an email. */
-export async function portalSend(orderId: string | null, body: string, files: Attachment[] = [], topic = "", projectId: string | null = null): Promise<Result> {
+export async function portalSend(orderId: string | null, body: string, files: Attachment[] = [], topic = "", projectId: string | null = null, reason: string | null = null): Promise<Result> {
   try {
     const { admin, email, customers, preview } = await who();
     if (preview) return { ok: false, error: "This is a preview. Customers send messages from their own login." };
@@ -87,13 +87,15 @@ export async function portalSend(orderId: string | null, body: string, files: At
     }
     const author = cust.name || email;
     const tp = orderId && topic === "goods" ? "goods" : "";
-    const { error } = await admin.from("messages").insert({ order_id: orderId, customer_id: orderId ? null : cust.id, project_id: orderId ? null : projectName ? projectId : null, topic: tp, author_type: "customer", author_email: email, author_name: author, body: text, attachments });
+    // what it's about (lib/messages.ts REASONS): only a known one is kept
+    const why = reasonOf(reason)?.k || null;
+    const { error } = await admin.from("messages").insert({ order_id: orderId, customer_id: orderId ? null : cust.id, project_id: orderId ? null : projectName ? projectId : null, topic: tp, author_type: "customer", author_email: email, author_name: author, body: text, attachments, reason: why });
     if (error) return { ok: false, error: error.message };
     if (SHOP_NOTIFY_EMAIL) {
       const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       const shop = mergeSettings(s?.data).shop.name;
       const link = orderId ? `${siteUrl()}/shop/orders/${orderId}` : `${siteUrl()}/shop/customers/${cust.id}?area=messages`;
-      if (orderId) await (await import("@/lib/shopNotice")).notifyShopAbout(admin, orderId, { did: tp ? "sent a goods message" : "sent a message", head: `${author} wrote about #${number}`, body: (text || "(no text)") + attachNote(attachments, "the order desk"), shopName: shop, button: "Open" });
+      if (orderId) await (await import("@/lib/shopNotice")).notifyShopAbout(admin, orderId, { did: tp ? "sent a goods message" : "sent a message", head: `${author} wrote about #${number}${why ? ` · ${reasonOf(why)!.label}` : ""}`, body: (text || "(no text)") + attachNote(attachments, "the order desk"), shopName: shop, button: "Open" });
       else await sendEmail({ to: SHOP_NOTIFY_EMAIL, subject: number ? `New ${tp ? "goods " : ""}message on #${number}` : projectName ? `New message on project ${projectName}` : `New message from ${cust.company || author}`,
         html: emailLayout(shop, number ? `${author} wrote about #${number}` : `${author} wrote`, (text || "(no text)") + attachNote(attachments, "the order desk"), "Open", link) });
     }

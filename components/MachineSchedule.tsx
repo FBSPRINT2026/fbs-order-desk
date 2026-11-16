@@ -2490,6 +2490,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         </div>
       </div>
       <div className="msf-side">
+        {toolsBox}
         <div className="msq" role="search">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
           <input type="search" value={findQ} placeholder="Search the schedule" aria-label="Search the schedule" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }}
@@ -2991,46 +2992,12 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   }
   if (typeof window !== "undefined" && (window as unknown as { __MS_DEBUG?: boolean }).__MS_DEBUG) Object.assign(window, { __ms: { s, cards, segs, machines, today, now, tight, tray, slots, holds, planIt, applyPlan, whatIfs, whenCan, holdSpot, otReport, otOn, acceptAll, book, unbook, saveProgress, logAction, splitByLocation, saveHold, removeHold, cutOvertime, load } });
 
-  return (
-    <div className="ms ms-calm">
-      {/* the calendar's own controls on one line: what's shown on the left, how it's shown on the right */}
-      {/* one line that never wraps: when it gets tight each control turns into a compact dropdown of the same choices */}
-      <div className="ms-head-w">
-      <div className="ms-head">
-        <h2 className="ms-title"><span className="ms-full">Production Calendar</span><span className="ms-cmp">Production</span></h2>
-        <div className="rv-seg ms-who ms-full" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
-        <select className="ms-cmp ms-sel" value={mine ? "mine" : "all"} aria-label="Whose jobs" onChange={(e) => setMine(e.target.value === "mine")}><option value="all">Everyone</option><option value="mine">My accounts</option></select>
-        <span className="spacer" />
-        <label className="ms-wknd ms-desk" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> <span className="ms-full">Weekends</span><span className="ms-cmp">Sat/Sun</span></label>
-        <label className="ms-wknd ms-desk" title="Quotes holding a spot (Hold the spot): off, they're a plain gray band so the time still looks taken"><input type="checkbox" checked={showHolds} onChange={(e) => setShowHolds(e.target.checked)} /> <span className="ms-full">Show holds</span><span className="ms-cmp">Holds</span></label>
-        <div className="rv-seg ms-span ms-full ms-desk">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <select className="ms-cmp ms-sel ms-desk" value={view} aria-label="View" onChange={(e) => setView(e.target.value as View)}>{VIEW_OPTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-        <div className="ms-nav ms-desk">
-          <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
-          <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
-          <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
-        </div>
-      </div>
-      </div>
-      {/* what just happened (booked, re-planned, saved): a quiet note at the bottom of the screen, not above the tools */}
-      {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
-
-      {/* Scheduling Tools: the schedule's health, the actions that change it, and the jobs waiting for a spot */}
-      <section className={"ms-tools" + (toolsOpen ? "" : " closed")}>
-        <div className="ms-tools-h">
-          <button type="button" className="ms-tools-t" onClick={() => setToolsOpen(!toolsOpen)} aria-expanded={toolsOpen}><span className="car">{toolsOpen ? "▾" : "▸"}</span>Scheduling Tools</button>
-          {!toolsOpen && (tight.length ? <span className="ms-health bad">{tight.length} job{tight.length === 1 ? "" : "s"} can&apos;t make in-hands</span> : <span className="ms-health ok">On track</span>)}
-          {!toolsOpen && tray.length > 0 && <span className="ms-health">{tray.length} ready to schedule</span>}
-          <span className="spacer" />
-          <Link className="linkbtn" href="/shop/settings/production">Machines, crews &amp; times</Link>
-        </div>
-        {toolsOpen && <>
-          {/* one slim row of tools: production (the production manager's day), shifts & equipment, sales; each its own color */}
-          {/* left: the tools; right: Shop AI Assistant, how the shop is doing and what needs attention */}
-          {/* option G (Nov 11, Nick): the tools on the left (2/3), one short AI tip at a time on the right (1/3) */}
-          <div className="msk">
+  // the right panel (Nick, Nov 16 2026, Schedule C): the assistant (a tip, then ask it), then the tools by group
+  const toolsBox = (
+    <div className="msc-side">
+      <div className="msk">
             <div className="msk-tools">
-              <div className="msk-h">Scheduling tools</div>
+              <div className="msk-h"><span>Tools</span><Link className="linkbtn" href="/shop/settings/production">Machines &amp; crews</Link></div>
               {/* grouped again, compact: a small colored name in front of each group (Nov 11, Nick: "indicate… sales tools,
                   press tools, planning") */}
               <div className="msk-row">
@@ -3081,11 +3048,74 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               );
             })()}
           </div>
+      <div className="msc-ask">
+                  {/* the AI assistant: two lines right under the tabs line (Nick, Nov 13), the ask box and ideas to tap */}
+                  <div className="msa-box">
+                    <span className="msa-lbl" aria-hidden>✦ AI assistant</span>
+                    <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
+                      <input ref={askIn} value={askQ} onChange={(e) => setAskQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
+                      {/* say it instead of typing it (Nick, Nov 13): the shop's one microphone button, asked when they stop talking */}
+                      <MicButton target={() => askIn.current} append keepListening label="Tell the schedule out loud (microphone)" className="msa-mic" onDone={(t) => { if (t.trim()) void askSchedule(t.trim()); }} />
+                      <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
+                    </form>
+                    {!askPlan && !askBusy && (() => {
+                      // ideas to tap, from what's there now (Nick, Nov 13: "add all Dear Hearts… all jobs that are counted… clear Monday for Miguel, he's out")
+                      const by = new Map<string, number>(); for (const t of trayV) if (t.job.customer && t.job.kind === "o") by.set(t.job.customer, (by.get(t.job.customer) || 0) + 1);
+                      const top = [...by].sort((a, b) => b[1] - a[1])[0]?.[0];
+                      const counted = trayV.filter((t) => t.job.kind === "o" && goodsSt.get(t.job.id) === "received").length;
+                      const nx = (() => { let d = addDay(today, 1); for (let g = 0; g < 7 && !machines.some((m) => shiftOn(m, d)); g++) d = addDay(d, 1); return d; })(), lead = machines.map((m) => crewOf(m)?.leader).find(Boolean);
+                      const ideas = [top && `Book all ${top} jobs`, counted && `Book every job that's counted`, lead && `${lead} is out ${dayLbl(nx).split(",")[0]}: clear the day`, "Book the late jobs first thing tomorrow"].filter(Boolean) as string[];
+                      return <div className="msa-ideas">{ideas.map((x) => <button key={x} type="button" className="chip" onClick={() => void askSchedule(x)}>{x}</button>)}</div>;
+                    })()}
+                  </div>
+              {/* the assistant's plan, under its box: check it, book it */}
+              {askPlan && <div className="msa">
+                {askPlan && (() => { const n = askPlan.book.length + askPlan.unbook.length + askPlan.downtime.length, mn = (id: string) => { const m = machines.find((x) => x.id === id); return m ? crewOf(m)?.leader || shortName(m) : id; }, dl = (d: string) => dayLbl(d).split(",").slice(0, 2).join(","); return <div className="msa-plan">
+                  {askPlan.note && <p>{askPlan.note}</p>}
+                  {n > 0 && <ul>
+                    {askPlan.book.map((r) => { const t = askRefs.current.jobs.get(r.job); return t ? <li key={"b" + r.job}>Book <b>#{t.job.number}</b> <span data-notranslate>{t.job.customer}{t.job.name ? ` · ${t.job.name}` : ""}</span> → {mn(r.machine)} · {dl(r.day)}</li> : null; })}
+                    {askPlan.unbook.map((r) => { const c = askRefs.current.slots.get(r.slot); return c ? <li key={"u" + r.slot}>Take <b>#{c.job.number}</b> <span data-notranslate>{c.job.customer}</span> off {mn(c.machine.id)} · {dl(c.day)}, back to Ready To Schedule</li> : null; })}
+                    {askPlan.downtime.map((d, i) => <li key={"d" + i}>Downtime on {mn(d.machine)} · {dl(d.day)}{d.from != null && d.to != null ? ` ${clock(d.from)}–${clock(d.to)}` : " (all day)"}{d.note ? ` · ${d.note}` : ""}</li>)}
+                  </ul>}
+                  <div className="msa-a">{n > 0 ? <><button type="button" className="btn sm primary" onClick={() => void doPlan(askPlan)}>Do it</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></> : <button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button>}</div>
+                </div>; })()}
+              </div>}
+      </div>
+    </div>
+  );
+  return (
+    <div className="ms ms-calm">
+      {/* the calendar's own controls on one line: what's shown on the left, how it's shown on the right */}
+      {/* one line that never wraps: when it gets tight each control turns into a compact dropdown of the same choices */}
+      <div className="ms-head-w">
+      <div className="ms-head">
+        <h2 className="ms-title"><span className="ms-full">Production Calendar</span><span className="ms-cmp">Production</span></h2>
+        <div className="rv-seg ms-who ms-full" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
+        <select className="ms-cmp ms-sel" value={mine ? "mine" : "all"} aria-label="Whose jobs" onChange={(e) => setMine(e.target.value === "mine")}><option value="all">Everyone</option><option value="mine">My accounts</option></select>
+        <span className="spacer" />
+        <label className="ms-wknd ms-desk" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> <span className="ms-full">Weekends</span><span className="ms-cmp">Sat/Sun</span></label>
+        <label className="ms-wknd ms-desk" title="Quotes holding a spot (Hold the spot): off, they're a plain gray band so the time still looks taken"><input type="checkbox" checked={showHolds} onChange={(e) => setShowHolds(e.target.checked)} /> <span className="ms-full">Show holds</span><span className="ms-cmp">Holds</span></label>
+        <div className="rv-seg ms-span ms-full ms-desk">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
+        <select className="ms-cmp ms-sel ms-desk" value={view} aria-label="View" onChange={(e) => setView(e.target.value as View)}>{VIEW_OPTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+        <div className="ms-nav ms-desk">
+          <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
+          <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); }}>{view === "timeline" ? "This Week" : "Today"}</button>
+          <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
+        </div>
+      </div>
+      </div>
+      {/* what just happened (booked, re-planned, saved): a quiet note at the bottom of the screen, not above the tools */}
+      {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
+
+      {/* Scheduling Tools: the schedule's health, the actions that change it, and the jobs waiting for a spot */}
+      {/* Ready to schedule on top, on its own (Nick, Nov 16 2026, Schedule C): a list that folds up; the tools and the assistant
+          are in the panel on the right */}
+      <section className={"ms-tools msc-rts" + (trayOpen ? "" : " closed")}>
           <div className={"ms-ready" + (drag?.card?.slot ? " drop-back" : "") + (over === "tray" ? " over" : "")}
             onDragOver={(e) => { if (drag?.card?.slot) { e.preventDefault(); setOver("tray"); } }} onDragLeave={() => setOver((o) => (o === "tray" ? "" : o))}
             onDrop={(e) => { e.preventDefault(); setOver(""); if (drag?.card?.slot) unbookMany(drag.group || [drag.card]); setDrag(null); }}>
             <div className="ms-ready-h">
-              <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready To Schedule</b><span className="aa-n">{trayV.length}</span></button>
+              <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready to schedule</b><span className="aa-n">{trayV.length}</span></button>
               <span className="faint ms-band-sub">{trayV.filter((t) => t.sug?.late && !t.job.onHold).length ? <span className="ms-late">{trayV.filter((t) => t.sug?.late && !t.job.onHold).length} tight or late · </span> : null}{coming.length ? `${coming.length} more coming (art being approved) · ` : ""}{trayV.length ? (Object.keys(picks).length ? `${trayV.filter((t) => t.picked).length} picked by you · ` : "") + "by due date · click a spot to change it, then Make The Schedule" : "nothing waiting"}</span>
               <span className="spacer" />
               {(() => {
@@ -3113,7 +3143,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   </div>}
                 </>;
               })()}
-              {trayOpen && trayV.some((t) => t.sug) && <button type="button" className="btn sm primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make The Schedule</button>}
+              {trayV.some((t) => t.sug) && <button type="button" className="btn primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make the schedule</button>}
+              <button type="button" className="btn sm" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}>{trayOpen ? "Hide" : "Show"}</button>
             </div>
             {trc && (() => { const t = tray.find((x) => x.job.key + x.need.type === trc.k); if (!t) return null; const okM = machines.filter((m) => fits(t.need, m)); return (
               <>
@@ -3193,51 +3224,29 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     );
                   })()}
                 </div>
-                  {/* the AI assistant: two lines right under the tabs line (Nick, Nov 13), the ask box and ideas to tap */}
-                  <div className="msa-box">
-                    <span className="msa-lbl" aria-hidden>✦ AI assistant</span>
-                    <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
-                      <input ref={askIn} value={askQ} onChange={(e) => setAskQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") (e.target as HTMLInputElement).blur(); }} placeholder="Tell the schedule: book all Dear Heart jobs Monday on Kelsey's press…" aria-label="Ask the schedule's assistant" />
-                      {/* say it instead of typing it (Nick, Nov 13): the shop's one microphone button, asked when they stop talking */}
-                      <MicButton target={() => askIn.current} append keepListening label="Tell the schedule out loud (microphone)" className="msa-mic" onDone={(t) => { if (t.trim()) void askSchedule(t.trim()); }} />
-                      <button type="submit" className="btn sm" disabled={askBusy || !askQ.trim()}>{askBusy ? "Thinking…" : "Ask"}</button>
-                    </form>
-                    {!askPlan && !askBusy && (() => {
-                      // ideas to tap, from what's there now (Nick, Nov 13: "add all Dear Hearts… all jobs that are counted… clear Monday for Miguel, he's out")
-                      const by = new Map<string, number>(); for (const t of trayV) if (t.job.customer && t.job.kind === "o") by.set(t.job.customer, (by.get(t.job.customer) || 0) + 1);
-                      const top = [...by].sort((a, b) => b[1] - a[1])[0]?.[0];
-                      const counted = trayV.filter((t) => t.job.kind === "o" && goodsSt.get(t.job.id) === "received").length;
-                      const nx = (() => { let d = addDay(today, 1); for (let g = 0; g < 7 && !machines.some((m) => shiftOn(m, d)); g++) d = addDay(d, 1); return d; })(), lead = machines.map((m) => crewOf(m)?.leader).find(Boolean);
-                      const ideas = [top && `Book all ${top} jobs`, counted && `Book every job that's counted`, lead && `${lead} is out ${dayLbl(nx).split(",")[0]}: clear the day`, "Book the late jobs first thing tomorrow"].filter(Boolean) as string[];
-                      return <div className="msa-ideas">{ideas.map((x) => <button key={x} type="button" className="chip" onClick={() => void askSchedule(x)}>{x}</button>)}</div>;
-                    })()}
-                  </div>
-              {/* the assistant's plan, under its box: check it, book it */}
-              {askPlan && <div className="msa">
-                {askPlan && (() => { const n = askPlan.book.length + askPlan.unbook.length + askPlan.downtime.length, mn = (id: string) => { const m = machines.find((x) => x.id === id); return m ? crewOf(m)?.leader || shortName(m) : id; }, dl = (d: string) => dayLbl(d).split(",").slice(0, 2).join(","); return <div className="msa-plan">
-                  {askPlan.note && <p>{askPlan.note}</p>}
-                  {n > 0 && <ul>
-                    {askPlan.book.map((r) => { const t = askRefs.current.jobs.get(r.job); return t ? <li key={"b" + r.job}>Book <b>#{t.job.number}</b> <span data-notranslate>{t.job.customer}{t.job.name ? ` · ${t.job.name}` : ""}</span> → {mn(r.machine)} · {dl(r.day)}</li> : null; })}
-                    {askPlan.unbook.map((r) => { const c = askRefs.current.slots.get(r.slot); return c ? <li key={"u" + r.slot}>Take <b>#{c.job.number}</b> <span data-notranslate>{c.job.customer}</span> off {mn(c.machine.id)} · {dl(c.day)}, back to Ready To Schedule</li> : null; })}
-                    {askPlan.downtime.map((d, i) => <li key={"d" + i}>Downtime on {mn(d.machine)} · {dl(d.day)}{d.from != null && d.to != null ? ` ${clock(d.from)}–${clock(d.to)}` : " (all day)"}{d.note ? ` · ${d.note}` : ""}</li>)}
-                  </ul>}
-                  <div className="msa-a">{n > 0 ? <><button type="button" className="btn sm primary" onClick={() => void doPlan(askPlan)}>Do it</button><button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>Cancel</button></> : <button type="button" className="btn sm ghost" onClick={() => setAskPlan(null)}>OK</button>}</div>
-                </div>; })()}
-              </div>}
+                {list.length > 0 && <div className="msr-hd" aria-hidden><span>Job #</span><span>Job</span><span>In-hands</span><span>Goods</span><span>Recommended</span><span /></div>}
                 <ul className="msr-l">{(() => {
                   // by due date, due today first (no date last); jobs that print together stay in their order
                   const byDue = list.map((t, i) => ({ t, i })).sort((x, y) => (x.t.job.due || "9999").localeCompare(y.t.job.due || "9999") || x.i - y.i).map((x) => x.t);
                   const who = (m: Machine) => crewOf(m)?.leader || shortName(m), dayW = (d: string) => (d === today ? "Today" : dayLbl(d).split(",")[0]);
-                  return (trayAll ? byDue : byDue.slice(0, 24)).map((t) => { const k = t.job.key + t.need.type, open = pickOpen === k, late = isLate(t), pk = picks[k];
+                  return (trayAll ? byDue : byDue.slice(0, 8)).map((t) => { const k = t.job.key + t.need.type, open = pickOpen === k, late = isLate(t), pk = picks[k];
                     const from = t.job.prod && t.job.prod > today ? t.job.prod : today, days: string[] = []; for (let d = from, g = 0; days.length < 6 && g < 21; g++, d = addDay(d, 1)) if (machines.some((m) => shiftOn(m, d))) days.push(d);
                     const okM = machines.filter((m) => fits(t.need, m)), selM = pk?.m || t.sug?.machine.id || okM[0]?.id || "", selD = pk?.d || t.sug?.day || days[0];
                     return (
                     <li key={k} draggable onDragStart={(e) => startDrag(e, { job: t.job, need: t.need, grabMin: 0 })} onDragEnd={() => setDrag(null)} onContextMenu={(e) => { e.preventDefault(); setTrc({ k, x: e.clientX, y: e.clientY }); }} className={"msr-c" + (isHit(t.job) ? " ms-hit" : "") + (t.job.kind === "h" ? " hold" : "") + (t.picked ? " picked" : "") + (open ? " open" : "")} title={`${t.job.name}\n${t.need.label} · ${t.need.qty} pcs${t.job.owner ? `\nAccount: ${t.job.owner}` : ""}${t.sug ? `\n${t.sug.reason}` : ""}`}>
-                      <div className="msr-1">{tn((() => { const d = dotOf({ job: t.job } as Card, Infinity); return d ? <GoodsTee k={d.k} t={d.t} /> : null; })(), <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}{t.job.issue || t.job.onHold ? flags(t.job) : null}<b>{t.job.customer || t.job.name}</b></div>
-                      <div className="msr-2">{t.job.customer ? t.job.name : t.need.label}</div>
-                      <div className="msr-3"><b>{t.need.qty.toLocaleString()}</b><span className={late ? "late" : ""}>{t.job.due ? `due ${dayShort(t.job.due)}` : "no date"}</span><span className="spacer" />
-                        {t.job.issue?.waits ? <button type="button" className="msr-spot iss-wait" onClick={() => void goodsHere(t.job.issue!.id)} title="The missing goods came in: ready to schedule">Waiting on goods · Here now</button> : t.job.onHold ? <span className="msr-spot iss-wait" title="Make The Schedule skips it until the hold comes off; drag it onto a press to book it anyway">On hold · not booked</span> : t.sug ? <button type="button" className={"msr-spot" + (t.picked ? " mine" : "")} onClick={() => setPickOpen(open ? "" : k)} title={t.picked ? "Your pick · click to change" : `Suggested: ${t.sug.reason} · click to put it somewhere else`}>{t.picked ? "✓" : "✦"} {who(t.sug.machine)} · {dayW(t.sug.day)}{t.picked ? "" : " ▾"}</button> : <button type="button" className="msr-spot none" onClick={() => setPickOpen(open ? "" : k)}>Pick a spot ▾</button>}
+                      {/* one row each (Nick, Nov 16 2026, Schedule C): Job #, Job, In-hands, Goods, Recommended, + Add */}
+                      {(() => { const gd = dotOf({ job: t.job } as Card, Infinity); const short = gd ? (gd.k === "g" ? "Counted" : gd.k === "a" ? "Here, not counted" : gd.k === "r" && /problem/i.test(gd.t) ? "Problem" : /on the way/i.test(gd.t) ? "On the way" : "Not here") : "";
+                        const target = pk ? { m: machines.find((m) => m.id === pk.m), d: pk.d } : t.sug ? { m: t.sug.machine, d: t.sug.day } : null;
+                        return <>
+                      <div className="msr-1">{tn(null, <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}</div>
+                      <div className="msr-2"><b>{t.job.customer ? t.job.name || t.need.label : t.job.name}</b>{t.job.issue || t.job.onHold ? flags(t.job) : null}<small data-notranslate>{t.job.customer ? `${t.job.customer} · ` : ""}{t.need.qty.toLocaleString()} pcs</small></div>
+                      <div className={"msr-due" + (late ? " late" : "")}>{t.job.due ? `${dayShort(t.job.due)}${late ? " · late" : ""}` : "No date"}</div>
+                      <div className="msr-gd">{gd ? <><GoodsTee k={gd.k} t={gd.t} /><span>{short}</span></> : <span className="faint">—</span>}</div>
+                      <div className="msr-rec">
+                        {t.job.issue?.waits ? <button type="button" className="msr-spot iss-wait" onClick={() => void goodsHere(t.job.issue!.id)} title="The missing goods came in: ready to schedule">Waiting on goods · Here now</button> : t.job.onHold ? <span className="msr-spot iss-wait" title="Make The Schedule skips it until the hold comes off; drag it onto a press to book it anyway">On hold · not booked</span> : t.sug ? <button type="button" className={"msr-spot" + (t.picked ? " mine" : "")} onClick={() => setPickOpen(open ? "" : k)} title={t.picked ? "Your pick · click to change" : `Recommended: ${t.sug.reason} · click to put it somewhere else`}>{shortName(t.sug.machine)} · {dayW(t.sug.day)}{t.picked ? " ✓" : ""}</button> : <button type="button" className="msr-spot none" onClick={() => setPickOpen(open ? "" : k)}>Pick a spot</button>}
                       </div>
+                      <div className="msr-add">{target?.m && !t.job.onHold && !t.job.issue?.waits ? <button type="button" className="btn sm" title={`Book it on ${shortName(target.m)} · ${dayW(target.d)}`} onClick={() => void book(t.job, t.need, target.m!, target.d, pk ? "manual" : "suggested")}>+ Add</button> : null}</div>
+                        </>; })()}
                       {open && <div className="msr-pop" onClick={(e) => e.stopPropagation()}>
                         {t.auto && <><div className="msr-ph">Suggested</div><div className="msr-sug">✦ <b>{who(t.auto.machine)} · {shortName(t.auto.machine)} · {dayW(t.auto.day)}</b> <span className="faint">{t.auto.reason}</span></div></>}
                         <div className="msr-ph">Put it on</div>
@@ -3249,14 +3258,14 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   ); });
                 })()}</ul>
                 {!list.length && <div className="faint ms-rnone">Nothing here.</div>}
-                {list.length > 24 && <button type="button" className="btn sm ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show all ${list.length}`}</button>}
+                {list.length > 8 && <button type="button" className="linkbtn ms-band-more" onClick={() => setTrayAll(!trayAll)}>{trayAll ? "Show fewer" : `Show ${list.length - 8} more`}</button>}
               </>
               );
             })()}
           </div>
-        </>}
       </section>
 
+      {view !== "flow" && <section className="ms-tools msc-top">{toolsBox}</section>}
       <div className="ms-main">
         {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
         {view === "flow" ? flowView() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
