@@ -369,3 +369,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:53am · 1.3.611 · Nick · Order reader: asks about personalization when no name was read (quotes the PO's names); a style's catalog name brings its brand; no brand question when only our own brand field disagrees
 - Nov 16 9:59am · 1.3.612 · Nick · Order reader: PO tables whose sizes are rows under each garment are read by code, row by row (sizes, one-size counts, personalization names)
 - Nov 16 10:05am · 1.3.613 · Nick · Paperwork check: PDFs read in line order, a style number and its name are one place, a one-size count in front of its name is read (catches lost size rows and swapped quantities)
+- Nov 16 10:06am · 1.3.614 · Nick · Create order: a question answered once isn't asked again when it's read again with the answers

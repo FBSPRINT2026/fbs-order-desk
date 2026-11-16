@@ -938,6 +938,9 @@ export default function QuickOrder({ activityId, start, onClose, onCreated, onRe
     // along the way aren't asked twice); ticked: remembered for this customer's next orders
     {
       const cust = g.customer?.company || g.customer?.name || "this customer";
+      // a question already answered on this order isn't asked again when it's read again with the answers (Nov 16,
+      // #50035: "the paperwork has S 5…" asked a second time after "keep the order's sizes")
+      if (again.length && d.check?.length) { const asked = new Set(again.map((x) => x.split(" → ")[0].trim())); d = { ...d, check: d.check.filter((c) => !asked.has(String(c.q || "").trim())) }; }
       step(`${of}${d.check?.length ? `Checking ${d.check.length === 1 ? "one thing" : `${d.check.length} things`} with you…` : "Here's the order: look it over…"}`);
       if (d.check?.length) note(`${d.check.length} thing${d.check.length === 1 ? "" : "s"} to check, on the order's cards`);
       const rv = await waitFor<ReviewAns>((resolve) => setReview({ d: d!, customer: cust, again: again.length > 0, resolve }));
