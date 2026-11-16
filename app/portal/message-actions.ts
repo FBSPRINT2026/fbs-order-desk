@@ -92,6 +92,16 @@ export async function portalSend(orderId: string | null, body: string, files: At
     const why = reasonOf(reason)?.k || null;
     const { data: made, error } = await admin.from("messages").insert({ order_id: orderId, customer_id: orderId ? null : cust.id, project_id: orderId ? null : projectName ? projectId : null, topic: tp, author_type: "customer", author_email: email, author_name: author, body: text, attachments, reason: why }).select("id").single();
     if (error) return { ok: false, error: error.message };
+    // a file sent about an order goes on the order's files too (Nick, Nov 16 2026: "add an attachment after the order was
+    // submitted"), whatever the reason picked, so art and production have it with the job; the order page sorts what it is
+    if (orderId && !tp && attachments.length) {
+      const when = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
+      for (const a of attachments) {
+        const to = `art/${orderId}/${Date.now().toString(36)}-${a.name.replace(/[^\w.\-]+/g, "_").slice(-120)}`;
+        if ((await admin.storage.from("proofs").copy(a.path, to)).error) continue;
+        await admin.from("art_files").insert({ order_id: orderId, name: a.name, file_path: to, file_type: a.mime || "", note: `From ${author}'s message, ${when}` });
+      }
+    }
     // the AI reads it with its order right after it's sent (lib/ai/messageRead.ts): what it means for the shop
     after(async () => { try { const { aiState } = await import("@/lib/ai/claude"); const st = await aiState(admin); if (st.ready) await (await import("@/lib/ai/messageRead")).readMessage(admin, st.settings, made.id); } catch { /* read later in the Job Center */ } });
     if (SHOP_NOTIFY_EMAIL) {

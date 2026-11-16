@@ -30,6 +30,7 @@ const SEND = "M4 12 20 4l-6 16-3-7z M11 13l9-9";
 const BACK = "M15 18l-6-6 6-6";
 // the reasons' icons (lib/messages.ts REASONS)
 const WHY_ICO: Record<string, string> = {
+  file: "M21.4 11.1 12.2 20.3a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5",
   question: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14 M12 17.5h.01",
   change: "M4 20h4L18.5 9.5a2.83 2.83 0 0 0-4-4L4 16z",
   art: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z m12 4-5-5L5 21",
@@ -150,6 +151,8 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
   const [trk, setTrk] = useState({ carrier: "", tracking: "", note: "" });
   useEffect(() => { setWhy(""); setTrk({ carrier: "", tracking: "", note: "" }); }, [cur?.key]);
   const needWhy = whyOn && !why;
+  // "Add a file": nothing goes until a file is on it
+  const needFile = whyOn && why === "file" && !files.some((f) => f.done);
   const fileInput = useRef<HTMLInputElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -172,7 +175,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
   const uploading = files.some((f) => !f.done && !f.error);
   async function doSend() {
     const ready = files.filter((f) => f.done).map((f) => f.done!);
-    if (!canAct || busy || uploading || needWhy || (!text.trim() && !ready.length) || !cur) return;
+    if (!canAct || busy || uploading || needWhy || needFile || (!text.trim() && !ready.length) || !cur) return;
     setBusy(true); setErr("");
     const reason = whyOn ? why : null;
     const r = await send(cur.orderId, text, ready, cur.topic, cur.projectId || null, reason);
@@ -200,7 +203,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
   }
   const whyTiles = (
     <div className="mh-why" role="radiogroup" aria-label="What's your message about?">
-      {REASONS.map((r) => <button key={r.k} type="button" role="radio" aria-checked={why === r.k} className={"mh-why-b" + (why === r.k ? " on" : "") + (r.reply ? "" : " fyi")} disabled={!canAct} onClick={() => { setWhy(r.k); setErr(""); if (r.k !== "tracking") setTimeout(() => ta.current?.focus(), 30); }}>
+      {REASONS.map((r) => <button key={r.k} type="button" role="radio" aria-checked={why === r.k} className={"mh-why-b" + (why === r.k ? " on" : "") + (r.reply ? "" : " fyi") + (r.k === "file" ? " file" : "")} disabled={!canAct} onClick={() => { setWhy(r.k); setErr(""); if (r.k === "file") fileInput.current?.click(); else if (r.k !== "tracking") setTimeout(() => ta.current?.focus(), 30); }}>
         <Ico d={WHY_ICO[r.k]} /><span><b>{r.label}</b><small>{r.sub}</small></span></button>)}
     </div>
   );
@@ -315,7 +318,7 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
           <div className="mh-compose">
             {whyOn && (why || cur.msgs.length > 0) && <div className="mh-why-chips" role="radiogroup" aria-label="What's it about?">
               <span>About</span>
-              {REASONS.map((r) => <button key={r.k} type="button" role="radio" aria-checked={why === r.k} className={why === r.k ? "on" : ""} disabled={!canAct} onClick={() => { setWhy(r.k); setErr(""); }}>{r.label}</button>)}
+              {REASONS.map((r) => <button key={r.k} type="button" role="radio" aria-checked={why === r.k} className={why === r.k ? "on" : ""} disabled={!canAct} onClick={() => { setWhy(r.k); setErr(""); if (r.k === "file" && !files.length) fileInput.current?.click(); }}>{r.label}</button>)}
             </div>}
             {whyOn && why === "tracking" ? <>
               <div className="mh-trk">
@@ -341,12 +344,12 @@ export default function MessageHub({ mode, initial, orders, projects = [], only,
             )}
             <div className="mh-row">
               <button type="button" className="mh-att" onClick={() => fileInput.current?.click()} disabled={!canAct} aria-label="Attach files" title="Attach photos or files"><Ico d={CLIP} s={20} /></button>
-              <textarea ref={ta} rows={1} value={text} disabled={!canAct || needWhy} placeholder={!canAct ? "Sending is turned off in the preview." : needWhy ? "Pick what it's about first" : `Message ${cur.orderId ? `about ${cur.title.split(" · ")[0]}` : other}…`}
+              <textarea ref={ta} rows={1} value={text} disabled={!canAct || needWhy} placeholder={!canAct ? "Sending is turned off in the preview." : needWhy ? "Pick what it's about first" : whyOn && why === "file" ? "Add a note about the file (optional)" : `Message ${cur.orderId ? `about ${cur.title.split(" · ")[0]}` : other}…`}
                 onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); doSend(); } }}
                 onPaste={(e) => { if (e.clipboardData.files?.length) { e.preventDefault(); addFiles(e.clipboardData.files); } }} aria-label="Message" />
-              <button type="button" className="mh-send" onClick={doSend} disabled={!canAct || busy || uploading || needWhy || (!text.trim() && !files.some((f) => f.done))} aria-label="Send"><Ico d={SEND} s={18} /><span>{busy ? "Sending…" : "Send"}</span></button>
+              <button type="button" className="mh-send" onClick={doSend} disabled={!canAct || busy || uploading || needWhy || needFile || (!text.trim() && !files.some((f) => f.done))} aria-label="Send"><Ico d={SEND} s={18} /><span>{busy ? "Sending…" : "Send"}</span></button>
             </div>
-            <div className="mh-hint">{err ? <span className="bad">{err}</span> : <>Enter to send · Shift+Enter for a new line · Drop or paste files</>}</div>
+            <div className="mh-hint">{err ? <span className="bad">{err}</span> : needFile ? <>Pick the file with the paperclip, or drop or paste it here. It&apos;s added to your order.</> : <>Enter to send · Shift+Enter for a new line · Drop or paste files</>}</div>
             <input ref={fileInput} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) addFiles(heldFiles(e.target.files)); e.target.value = ""; }} />
             </>}
           </div>

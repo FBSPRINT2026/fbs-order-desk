@@ -255,7 +255,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   add tracking… there's no task associated with that"). In the portal, a message about an order starts with "What's your
   message about?": A question, Change my order, Art or a proof, Payment, Sending tracking, Just letting you know
   (`REASONS` in `lib/messages.ts`, saved on `messages.reason`). Sending tracking is two boxes that add the shipment to the
-  order's goods (`addTracking`). Tracking and Just letting you know need no answer: never "waiting on us", no to-do, no
+  order's goods (`addTracking`). Add a file (the tile across the top) opens the file picker; every file a customer sends about an order also goes on the order's files (`art_files`, noted "From <name>'s message"; `portalSend`). Tracking and Just letting you know need no answer: never "waiting on us", no to-do, no
   unread badge (`needsReply` / `NEEDS_REPLY_FILTER`; anything that counts messages waiting on us goes through them); staff
   change a reason in the thread. No reason (older messages, email) counts as a question.
 - **The AI reads every customer message** (Nick, Nov 16 2026: "would you like me to update the shipping address to

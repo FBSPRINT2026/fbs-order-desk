@@ -13,6 +13,9 @@ export const MAX_ATTACH = 25 * 1024 * 1024;
  * `reply: false` never wait on us: no "waiting on us", no to-do, no unread badge; they still show, grayed.
  */
 export const REASONS = [
+  // a file for an order already sent (Nick, Nov 16 2026): the tile across the top; it opens the file picker, and every file a
+  // customer sends about an order is put on the order's files too (portalSend)
+  { k: "file", label: "Add a file", sub: "Art, a logo, a size list, a PO", reply: true },
   { k: "question", label: "A question", sub: "We'll write back", reply: true },
   { k: "change", label: "Change my order", sub: "Sizes, colors, dates", reply: true },
   { k: "art", label: "Art or a proof", sub: "A new file, a fix", reply: true },
