@@ -54,7 +54,7 @@ function orderText(o: Order & Record<string, unknown>, customer: string): string
 
 /** what an order field is called for staff, and its value in words */
 const FIELD: Record<string, string> = { due_date: "In-hands date", firm: "Firm date", ship_to: "Ship to", delivery_method: "Delivery", rush: "Rush", priority: "High priority", nickname: "Job name", po_number: "PO", production_date: "Production date", ship_method: "Ship method" };
-const words = (k: string, v: unknown) => {
+const words2 = (k: string, v: unknown) => {
   if (k === "firm" || k === "rush" || k === "priority") return /^(y|true|on|1)/i.test(String(v)) ? "Yes" : "No";
   if (k === "due_date" || k === "production_date") return v ? dateWords(String(v)) : "none";
   if (k === "delivery_method") return ({ pickup: "Pickup", ship: "Ship", deliver: "Deliver", tbd: "Not told yet" } as Record<string, string>)[String(v)] || String(v || "none");
@@ -149,13 +149,29 @@ EVERY change: one message often asks for several ("high profile… firm ship dat
     const ch = (f.ok ? f.r.changes : []).filter((c) => c.what !== "art") as MsgChange[];
     if (ch.length) {
       read.changes = ch;
-      read.ba = ch.filter((c) => c.what === "order" && FIELD[c.field]).map((c) => ({ k: FIELD[c.field], was: words(c.field, o[c.field]), now: words(c.field, c.value) }));
+      read.ba = ch.filter((c) => c.what === "order" && FIELD[c.field]).map((c) => ({ k: FIELD[c.field], was: words2(c.field, o[c.field]), now: words2(c.field, c.value) }));
       read.says = ch.filter((c) => !(c.what === "order" && FIELD[c.field])).map((c) => c.say);
     } else {
       // the helper couldn't make it (sizes not given, a garment it can't find): still To do, opened in the order
       need = "answer"; read.need = "change"; read.err = f.ok ? (f.r.reply || "").slice(0, 300) : f.error;
     }
   } else if (need === "change") read.need = "answer";
+  // what the words plainly say is never missed (Nov 16, #50072: "high profile… Firm ship date NOV. 20" came back as High
+  // priority only): a firm date or high profile in their message the order doesn't have yet is added to the change
+  if (o) {
+    const words = run.map((r) => r.body || "").join("\n");
+    const extra: MsgChange[] = [];
+    const has = (f: string) => (read.changes || []).some((c) => c.what === "order" && c.field === f);
+    if (/\bfirm\b[^.\n]{0,40}\b(date|ship|deliver|in[- ]?hands|due)/i.test(words) && !o.firm && !has("firm")) extra.push({ what: "order", id: "order", field: "firm", value: "yes", say: "Made the date firm" });
+    if (/\bhigh[\s-]*(profile|priority)\b|\bextra (attention|care)\b/i.test(words) && !o.priority && !has("priority")) extra.push({ what: "order", id: "order", field: "priority", value: "yes", say: "Marked it High priority" });
+    if (extra.length) {
+      read.changes = [...(read.changes || []), ...extra];
+      read.ba = [...(read.ba || []), ...extra.map((c) => ({ k: FIELD[c.field], was: words2(c.field, o[c.field]), now: words2(c.field, c.value) }))];
+      if (read.kind === "filed" || read.need !== "change") { read.kind = "todo"; read.need = "change"; }
+      if (!/firm|priority/i.test(read.head)) read.head = `${read.head}; ${extra.map((c) => c.field === "firm" ? "firm date" : "High priority").join(", ")}`.slice(0, 140);
+      delete read.err;
+    }
+  }
   const kind = read.kind;
   await admin.from("messages").update({ ai: read, ai_kind: kind, ...(kind === "filed" ? { handled_at: now, handled_by: "AI" } : {}) }).eq("id", last.id);
   // the earlier ones in the run go with it

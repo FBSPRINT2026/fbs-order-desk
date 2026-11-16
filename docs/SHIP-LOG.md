@@ -382,3 +382,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 10:52am · 1.3.624 · Nick · Order reader: personalized pieces counted from the PO row's quantity, never the special instructions' AMS & PERSONALIZATION
 - Nov 16 10:53am · 1.3.625 · Nick · Order reader: an empty personalization group goes once the names are on the garments
 - Nov 16 11:04am · 1.3.626 · Nick · House rules: weekly run default and POs read row by row
+- Nov 16 11:05am · 1.3.627 · Nick · Message AI: a firm date or high profile in a customer's message is always offered when the order doesn't have it
