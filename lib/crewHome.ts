@@ -70,7 +70,10 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
   out.mine = mine.map((m) => m.id);
   const show = ["press", "assist", "catcher"].includes(who.view) ? mine : who.view === "office" ? machines.filter((m) => m.type === "screen") : [];
   if (show.length) {
-    const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, day, position, start_min, minutes, status, label, started_at, finished_at, sides_done").in("machine", show.map((m) => m.id)).eq("day", day).not("order_id", "is", null).order("position");
+    const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, day, position, start_min, minutes, status, label, started_at, finished_at, sides_done").in("machine", show.map((m) => m.id))
+      // today's jobs, and one left paused on an earlier day (End of shift: carried on the next morning; Nick, Nov 16 2026)
+      .or(`day.eq.${day},and(status.eq.paused,day.gte.${new Date(Date.parse(day) - 7 * 86400000).toISOString().slice(0, 10)},day.lt.${day})`)
+      .not("order_id", "is", null).order("position");
     const slots = (sl || []) as { sides_done?: string[] | null; order_id: string; machine: string; position: number; start_min: number | null; minutes: number; status: CrewJob["status"]; label: string; started_at: string | null; finished_at: string | null }[];
     const ids = [...new Set(slots.map((x) => x.order_id))];
     const [{ data: os }, { data: gc }] = await Promise.all([

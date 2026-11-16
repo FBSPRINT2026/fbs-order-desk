@@ -32,8 +32,10 @@ async function state(admin: ReturnType<typeof createAdminClient>, employeeId: st
   const today = localDay(new Date());
   const rows = ((log || []) as JobTime[]).filter((r) => localDay(r.started_at) === today).map((r) => ({ ...r, who: name.get(r.employee_id) || "" }));
   // paused: my last entry on this job stopped with "Paused: …" and nothing running since
-  const mine = rows.filter((r) => r.employee_id === employeeId);
-  const last = mine[mine.length - 1];
+  // my last entry on this job, any of the last 3 days: stopped with "Paused: …" (End of shift today, carried on tomorrow)
+  // and nothing running since, it's still paused
+  const { data: myLast } = await admin.from("job_time").select(COLS).eq(col(job), job.id).eq("employee_id", employeeId).eq("voided", false).gte("started_at", new Date(Date.now() - 3 * 86400000).toISOString()).order("started_at", { ascending: false }).limit(1);
+  const last = ((myLast || []) as JobTime[])[0];
   const paused = !running && last?.ended_at && /^Paused/.test(last.note || "") ? last : null;
   const done = [...new Set(((ran || []) as { task: string }[]).map((r) => r.task.replace(/^Run · /, "")))];
   return { running, paused, log: rows, done };

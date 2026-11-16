@@ -144,16 +144,28 @@ export default function PressTimer({ card, presses, myPress = "", mockups = [] }
         </div>
       ) : st.paused ? (
         <div className="jm-card jm-tm paused">
-          <div className="jm-tm-ph">{t("Paused")}</div>
-          <div className="jm-tm-loc">{taskT(st.paused.task)}</div>
-          <div className="jm-tm-clock">{hms(now - +new Date(st.paused.ended_at!))}</div>
-          <div className="jm-faint">{noteT(st.paused.note)} · {t("since {0}", new Date(st.paused.ended_at!).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" }))}</div>
-          <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("resume")}>▶ {t("Resume")}</button>
+          {/* the timer is stopped while paused; End of shift (or a pause from another day) says so plainly and offers to
+              carry on, with nothing ticking (Nick, Nov 16 2026: "it should stop the timer… tomorrow… continue job or start
+              another job") */}
+          {(() => { const at = new Date(st.paused.ended_at!), eod = /End of shift/.test(st.paused.note) || at.toDateString() !== new Date().toDateString();
+            const when = at.toLocaleString(locale, at.toDateString() === new Date().toDateString() ? { hour: "numeric", minute: "2-digit" } : { weekday: "short", hour: "numeric", minute: "2-digit" });
+            return eod ? <>
+              <div className="jm-tm-ph">{t("Stopped")}</div>
+              <div className="jm-tm-loc">{taskT(st.paused.task)}</div>
+              <div className="jm-faint">{t("The timer is off. Stopped {0} · {1}", when, noteT(st.paused.note.replace(/^Paused: /, "")))}</div>
+              <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("resume")}>▶ {t("Continue this job")}</button>
+            </> : <>
+              <div className="jm-tm-ph">{t("Paused")}</div>
+              <div className="jm-tm-loc">{taskT(st.paused.task)}</div>
+              <div className="jm-tm-clock">{hms(now - +at)}</div>
+              <div className="jm-faint">{t("The job's timer is stopped. Paused for {0}", noteT(st.paused.note.replace(/^Paused: /, "")))} · {t("since {0}", when)}</div>
+              <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("resume")}>▶ {t("Resume")}</button>
+            </>; })()}
           {/* the wrong reason picked: change it right here (Nov 16 2026, Ana's bad screen saved as Lunch) */}
           <label className="jm-tm-rewhy"><span>{t("Why it's paused")}</span>
             <select className="jm-select" value={PAUSES.includes(st.paused.note.replace(/^Paused: /, "")) ? st.paused.note.replace(/^Paused: /, "") : ""} onChange={(e) => e.target.value && act("why", { reason: e.target.value })}>
               <option value="" disabled>{t("Pick why")}</option>{PAUSES.map((p) => <option key={p} value={p}>{t(p)}</option>)}</select></label>
-          <button type="button" className="jm-link" onClick={() => setSt({ ...st, paused: null })}>{t("Do something else")}</button>
+          <button type="button" className="jm-ghost" onClick={() => setSt({ ...st, paused: null })}>{t("Start another side or job")}</button>
         </div>
       ) : (
         /* one question and one big button (Nick, Nov 16 2026: "hi Miguel, we're working on this press… what are you
