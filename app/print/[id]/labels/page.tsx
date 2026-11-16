@@ -19,7 +19,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
   if (!user) redirect(`/login?next=/print/${id}/labels`);
   if (!isStaff) notFound();
   const card = await loadJobCard(createAdminClient(), { kind: "o", id });
-  if (!card) notFound();
+  if (!card) return notFound();
   const svg = boxLabelSvg(card, 0, 0);
   const boxes = Math.min(50, Math.max(1, parseInt(sp.boxes || "1", 10) || 1));
   const size = sp.size === "letter" ? "letter" : "4x6";
