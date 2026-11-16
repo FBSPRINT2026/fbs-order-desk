@@ -67,7 +67,7 @@ export async function sourceOf(admin: SupabaseClient, activityId: string): Promi
     const { data } = await admin.storage.from("proofs").download(f.path).catch(() => ({ data: null }));
     if (!data) continue;
     const buf = Buffer.from(await data.arrayBuffer());
-    const t = (pdf ? await pdfTextServer(buf).catch(() => "") : officeText(f.name, f.type || "", buf)) || "";
+    const t = (pdf ? await pdfTextServer(buf, 8, true).catch(() => "") : officeText(f.name, f.type || "", buf)) || "";
     const words = t.replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").trim().slice(0, Math.min(1800, left));
     left -= words.length;
     parts.push(`File "${f.name}" words:\n${words || "(no words read)"}`);

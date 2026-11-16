@@ -5,7 +5,20 @@ import "server-only";
  * Vercel packs the worker with the function). Pages joined by spaces; "" when it can't be read (a scan, a broken file).
  */
 type Doc = { numPages: number; getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: { str?: string }[] }> }> };
-export async function pdfTextServer(buf: Uint8Array, maxPages = 8): Promise<string> {
+export async function pdfTextServer(buf: Uint8Array, maxPages = 8, /** in reading order, a line at a time (lib/sizeGrid.ts readingText): for checking sizes against the paperwork */ ordered = false): Promise<string> {
+  if (ordered) {
+    try {
+      const { readingText } = await import("@/lib/sizeGrid");
+      const w = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+      (globalThis as unknown as { pdfjsWorker?: unknown }).pdfjsWorker = w;
+      const m = await import("pdfjs-dist/legacy/build/pdf.mjs") as unknown as { getDocument: (o: Record<string, unknown>) => { promise: Promise<PDoc> } };
+      const doc = await m.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: false, disableFontFace: true }).promise;
+      const items: { str: string; x: number; y: number; w: number; page: number }[] = [];
+      for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) for (const it of (await (await doc.getPage(n)).getTextContent()).items) if (it.str && it.transform) items.push({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0, page: n });
+      const t = readingText(items);
+      if (t.trim()) return t;
+    } catch { /* the plain way below */ }
+  }
   try {
     const w = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
     (globalThis as unknown as { pdfjsWorker?: unknown }).pdfjsWorker = w;

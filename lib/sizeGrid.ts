@@ -13,7 +13,7 @@ const QTY = /^(QTY|QUANTITY|TOTAL QTY|PCS|PIECES|TOTAL)$/i;
 const canon = (s: string) => { const u = s.toUpperCase().replace(/\s+/g, " ").trim(); return u === "XXL" ? "2XL" : u === "XXXL" ? "3XL" : u === "YXXL" ? "Y2XL" : u; };
 
 /** Lines of text items (same page, about the same height), top to bottom, each left to right. */
-function lines(items: GridItem[]) {
+export function lines(items: GridItem[]) {
   const out: GridItem[][] = [];
   for (const it of [...items].filter((i) => i.str.trim()).sort((a, b) => a.page - b.page || b.y - a.y || a.x - b.x)) {
     const l = out[out.length - 1];
@@ -124,4 +124,10 @@ export function sizeRowsText(rows: RowGarment[]): string {
     const pcs = sz.length ? `${sz.map(([s, n]) => `${s} ${n}`).join(", ")} = ${sum}${r.one != null && r.one !== sum ? ` (its own row says ${r.one})` : ""}` : `one size ${r.one}`;
     return `${r.label}: ${pcs}${r.pers ? ` · PERSONALIZATION ${r.pers}${r.names.length ? `: ${r.names.join(" / ")}` : ""}` : ""}`;
   }).join("\n");
+}
+
+/** A PDF's words in reading order, a line at a time (Nov 16 2026: pdf.js gives some POs every quantity first, then every
+ * description, so "5 SMALL" came apart and the paperwork check read the wrong sizes) */
+export function readingText(items: GridItem[]): string {
+  return lines(items).map((l) => l.map((x) => x.str.trim()).filter(Boolean).join(" ")).filter(Boolean).join("\n");
 }

@@ -323,8 +323,10 @@ export async function readFiles(admin: SupabaseClient, atts: Att[], sigs: Set<st
       documents.push({ data: buf.toString("base64"), label: `${tag} (PDF):` });
       // a supplier's order confirmation (S&S, SanMar): its rows read by code, exactly (Oct 24, Dear Heart's In Every Season)
       const tx = await pdfTextServer(buf);
-      if (tx) words.push(tx);
       const cf = tx ? supplierConfirms([tx]) : null;
+      // the words for checking against the paperwork in reading order (a PO whose quantities pdf.js gives apart from their
+      // size rows read "5 SMALL" wrong, Nov 16, #50035); a supplier confirmation keeps the words its rows are read from
+      if (tx) words.push(cf?.rows ? tx : (await pdfTextServer(buf, 8, true).catch(() => "")) || tx);
       if (cf?.rows && ownSheet) {
         confirmsMeta.push(tx);
         listing.push(`${tag} (PDF, shown above): a supplier order confirmation. Who sends the blanks, when and its order number only: it can cover several of their orders, so NEVER take sizes or garments from it; the sizes are on their own order sheet.`);
@@ -469,7 +471,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-16b";
+export const READER_REV = "2026-11-16c";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];

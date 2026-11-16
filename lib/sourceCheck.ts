@@ -131,7 +131,12 @@ function anchorsFor(S: Tok[], G: string[], style: string): Anchor[] {
   if (st.length >= 4) S.forEach((t, i) => { if (t.w === st) out.push({ i, last: i, score: 1.01 }); });
   // the best of overlapping ones
   const kept: Anchor[] = [];
-  for (const a of [...out].sort((p, q) => q.score - p.score || p.i - q.i)) if (!kept.some((k) => a.i <= k.last && k.i <= a.last)) kept.push(a);
+  // the style number and the name right after it ("562M SWEAT SHIRT FOREST") are one place, not two: kept apart, the
+  // number's window ended where the name began and the sizes under it were never read (Nov 16, #50028)
+  for (const a of [...out].sort((p, q) => q.score - p.score || p.i - q.i)) {
+    const k = kept.find((x) => a.i <= x.last + 1 && x.i <= a.last + 1);
+    if (!k) kept.push({ ...a }); else { k.i = Math.min(k.i, a.i); k.last = Math.max(k.last, a.last); }
+  }
   return kept.sort((p, q) => p.i - q.i);
 }
 
@@ -276,6 +281,9 @@ export function sourceCheck(source: string, groups: Group[], ctx: { catalog?: Sr
     }
     // sizes
     const paperSizes = sizesIn(S, w.colorAt >= 0 ? w.afterColor : w.from, w.to);
+    // a one-size item's count in the quantity column in front of its own name ("12 | STC15 SPECTATOR KNIT BEANIE", Nov 16,
+    // #50028: the beanies took the jacket's "L 2" and nothing said so)
+    if (!Object.keys(paperSizes).length && /^\d{1,4}$/.test(S[a.i - 1]?.w || "") && +S[a.i - 1].w > 0) paperSizes.OS = +S[a.i - 1].w;
     if (Object.keys(paperSizes).length) {
       const have: Record<string, number> = {};
       for (const { l } of it.lines) for (const z of SIZES) { const q = +(l.sizes?.[z] || 0); if (q > 0) have[z] = (have[z] || 0) + q; }
