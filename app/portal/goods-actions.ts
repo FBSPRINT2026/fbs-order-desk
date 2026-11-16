@@ -74,7 +74,7 @@ export async function saveGoodsInfo(orderId: string, g: GoodsInfo): Promise<Resu
     if (!supplier && !po && !ship && !prev) { revalidatePath("/portal"); return { ok: true }; } // nothing to say yet: the goods record just exists
     const { data: cust } = await admin.from("customers").select("name, company").eq("id", o.customer_id).maybeSingle();
     const parts = [supplier ? `coming from ${supplierLabel(supplier)}` : "supplier not known yet", po && `order/PO ${po}`, ship && `ships ${new Date(ship + "T12:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`].filter(Boolean);
-    await admin.from("messages").insert({ order_id: orderId, topic: "goods", author_type: "customer", author_email: email, author_name: cust?.name || email, body: `📦 Goods for #${o.number}: ${parts.join(" · ")}.` });
+    await admin.from("messages").insert({ order_id: orderId, topic: "goods", author_type: "customer", author_email: email, author_name: cust?.name || email, body: `📦 Goods for #${o.number}: ${parts.join(" · ")}.`, reason: "tracking" });
     revalidatePath("/portal");
     return { ok: true };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Something went wrong." }; }

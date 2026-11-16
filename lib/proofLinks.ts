@@ -128,7 +128,7 @@ export async function decideByLink(admin: SupabaseClient, id: string, decision: 
     if (!r.ok) return r;
   }
   // what they wrote goes in the order's Messages too, where the team reads the customer
-  if (text) await admin.from("messages").insert({ order_id: p.o.id, author_type: "customer", author_email: actor, author_name: who || p.customer?.name || "Customer", body: `${label}: ${decision === "approved_changes" ? "approved with a small change (no new proof)" : decision === "changes" ? "changes, send a new proof" : "approved"}. ${text}` });
+  if (text) await admin.from("messages").insert({ order_id: p.o.id, author_type: "customer", author_email: actor, author_name: who || p.customer?.name || "Customer", body: `${label}: ${decision === "approved_changes" ? "approved with a small change (no new proof)" : decision === "changes" ? "changes, send a new proof" : "approved"}. ${text}`, reason: "art" });
   if (p.link.kind === "art" && SHOP_NOTIFY_EMAIL && !quiet) {
     const head = decision === "approved" ? `${who} approved ${label.toLowerCase()}` : decision === "approved_changes" ? `${who} approved ${label.toLowerCase()} with a small change` : `${who || "The customer"} wants changes to ${label.toLowerCase()}`;
     await (await import("@/lib/shopNotice")).notifyShopAbout(admin, p.o.id, { did: decision === "changes" ? "wants proof changes" : decision === "approved_changes" ? "approved the proof with a change" : "approved the proof", head, body: decision === "approved_changes" ? `Make this change before production (no new proof):\n\n${text}` : text || "No comment.", shopName: p.settings.shop.name });

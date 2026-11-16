@@ -1398,7 +1398,7 @@ a.as-ai{text-decoration:none}
 .mh-trk-f span{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
 .mh-trk-f input,.mh-trk-f select{height:36px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:14px;padding:0 10px;background:#fff;color:var(--ink);min-width:0}
 .mh-trk-go{justify-content:center;width:100%}
-.jmb-why{margin-left:6px;height:22px;border:1px solid var(--line);border-radius:999px;background:rgba(14,155,216,.08);color:var(--accent);font:inherit;font-size:11px;font-weight:700;padding:0 6px;cursor:pointer}
+.jmb-why{display:inline-block;width:auto;max-width:200px;vertical-align:middle;margin-left:6px;height:22px;border:1px solid var(--line);border-radius:999px;background:rgba(14,155,216,.08);color:var(--accent);font:inherit;font-size:11px;font-weight:700;padding:0 6px;cursor:pointer}
 .jmb-why.fyi{background:rgba(15,140,120,.1);color:var(--ok)}
 .mh-day{display:flex;justify-content:center;margin:10px 0 6px}
 .mh-day span{font-size:11.5px;font-weight:700;color:var(--ink-3);background:var(--surface-2);padding:3px 10px;border-radius:99px}
@@ -23111,8 +23111,8 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .jx-m{position:sticky;top:12px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .jx-mh{display:flex;align-items:center;gap:8px;padding:12px 14px 10px}
 .jx-mh b{font-family:var(--display);font-size:16px}
-.jx-mf{display:flex;margin:0 14px 10px}
-.jx-mf button{flex:1;text-align:center;white-space:nowrap}
+.jx-mf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0 14px 10px}
+.jx-mf button{text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:6px;padding-right:6px}
 .jx-mf em{font-style:normal;font-size:11px;font-weight:700;margin-left:5px;opacity:.75}
 .jx-ms{padding:0 14px 10px}
 .jx-ml{overflow:auto;min-height:0;flex:1;padding:4px 10px 12px;border-top:1px solid var(--line-2)}
@@ -23125,7 +23125,7 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .jc-hd-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 /* the bar: one card, a centered heading over each part, each step centered */
 .jcb{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.jcb-g{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line)}
+.jcb-g{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line);flex:var(--n,1) 1 0%}
 .jcb-g:last-child{border-right:0}
 .jcb-gh{text-align:center;padding:8px 8px 7px;font-family:var(--display);font-size:13px;font-weight:800;color:var(--ink);background:var(--surface-2);border-bottom:1px solid var(--line-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .jcb-s{display:flex;flex:1}
@@ -23185,10 +23185,10 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 @media (max-width:1280px){.jx.msgs.pick{grid-template-columns:minmax(0,1fr) 400px}.jx.msgs.pick>.jx-m{position:fixed;left:12px;top:70px;bottom:12px;width:320px;z-index:40;box-shadow:0 12px 40px rgba(20,29,43,.25);max-height:none}}
 @media (max-width:1100px){.jx.msgs{grid-template-columns:280px minmax(0,1fr)}.jx.pick{grid-template-columns:minmax(0,1fr) 380px}}
 @media (max-width:900px){.jx,.jx.msgs,.jx.pick,.jx.msgs.pick{grid-template-columns:minmax(0,1fr)}.jx-m,.jx-p{position:static;max-height:none}.jx.msgs.pick>.jx-m{position:static;width:auto;box-shadow:none}.jx.pick>.jx-p{order:-1}.jx-ml{max-height:60vh}
-  .jcb{flex-wrap:wrap}.jcb-g{flex:1 1 100%!important;border-right:0;border-bottom:1px solid var(--line)}.jcb-g:last-child{border-bottom:0}}
+  .jcb{flex-wrap:wrap}.jcb-g{flex:1 1 100%;border-right:0;border-bottom:1px solid var(--line)}.jcb-g:last-child{border-bottom:0}}
 /* the bar fits the room it has (a panel open on both sides): two parts a row, then one */
 .jx-c{container:jxc / inline-size}
-@container jxc (max-width:780px){.jcb{flex-wrap:wrap}.jcb-g{flex:1 1 calc(50% - 1px)!important}.jcb-g:nth-child(2n){border-right:0}.jcb-g:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+@container jxc (max-width:780px){.jcb{flex-wrap:wrap}.jcb-g{flex:1 1 calc(50% - 1px)}.jcb-g:nth-child(2n){border-right:0}.jcb-g:nth-child(-n+2){border-bottom:1px solid var(--line)}}
 @container jxc (max-width:420px){.jcb-g{flex:1 1 100%!important;border-right:0;border-bottom:1px solid var(--line)}.jcb-g:last-child{border-bottom:0}}
 
 /* ===== Schedule C (Nick, Nov 16 2026): Ready to schedule on top as a list that folds, the presses top to bottom as before,
@@ -23256,7 +23256,7 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .olx .as-strip .as-chip{background:none;padding:0;color:var(--accent);font-weight:600;font-size:13px}
 .olx .as-strip .as-chip.u{background:var(--danger-soft);padding:2px 8px}
 .olx>.toolbar{background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0;padding:0 12px;margin:0;gap:10px;flex-wrap:wrap;align-items:center;min-height:50px}
-.olx>.toolbar .chips{gap:2px;align-self:stretch;flex-wrap:wrap}
+.olx>.toolbar .chips{gap:2px;align-self:stretch;flex-wrap:wrap;background:none;padding:0;border:0;border-radius:0}
 .olx>.toolbar .chip{height:auto;border:0;border-radius:0;background:none;padding:14px 11px 12px;border-bottom:2px solid transparent;font-weight:600;color:var(--ink-2)}
 .olx>.toolbar .chip:hover{color:var(--ink)}
 .olx>.toolbar .chip.on{background:none;color:var(--accent);border-bottom-color:var(--accent)}
@@ -23277,3 +23277,14 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 @media (max-width:1180px){.mzc{grid-template-columns:minmax(0,1fr) 280px}}
 @media (max-width:860px){.mzc{grid-template-columns:minmax(0,1fr)}.mzc-r{position:static;max-height:none}}
 @media (max-width:700px){.mzc-r{display:none}}
+/* Job Center D: the list's own line is quiet (the step bar above carries the color), the messages run the page's height */
+.jx .jc-sbar{background:none;padding:0;border:0}
+.jx .jc-sbar .jc-dseg{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px;height:36px}
+.jx .jc-sbar .jc-dseg .prf-dept,.jx .jc-sbar .jc-dseg .prf-dept.embroidery,.jx .jc-sbar .jc-dseg .prf-dept.heat,.jx .jc-sbar .jc-dseg .prf-dept.all{background:transparent!important;color:var(--ink-2)!important;border:0!important;opacity:1}
+.jx .jc-sbar .jc-dseg .prf-dept.z{opacity:.5}
+.jx .jc-sbar .jc-dseg .prf-dept.on,.jx .jc-sbar .jc-dseg .prf-dept.all.on{background:var(--surface)!important;color:var(--accent)!important;box-shadow:0 1px 2px rgba(20,29,43,.12)!important}
+.jx .jc-sbar input{background:var(--surface);border-color:var(--line)}
+.jx.msgs>.jx-m{min-height:min(720px,calc(100vh - 140px))}
+@media (max-width:900px){.jx.msgs>.jx-m{min-height:0}}
+.mzc-side .msk-live .msk-sw{margin-left:auto;flex:none}
+.mzc-r .msq{min-height:36px}

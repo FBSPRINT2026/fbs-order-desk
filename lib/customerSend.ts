@@ -411,7 +411,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     if (["quote", "request", "completed", "void"].includes(o.status)) return { ok: false as const, error: "This was already answered or changed. Refresh the page." };
     if (!why) return { ok: false as const, error: "Tell us what to change." };
     await admin.from("order_events").insert({ order_id: orderId, kind: "invoice_changes", detail: `${who || "The customer"}: ${why.slice(0, 500)}`, actor });
-    await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `Changes to the final invoice: ${why}` });
+    await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `Changes to the final invoice: ${why}`, reason: "change" });
     await shop("asked for invoice changes", `${who || "The customer"} asked for changes to the final invoice on #${o.number}`, why);
     return { ok: true as const };
   }
@@ -436,7 +436,7 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     { order_id: orderId, kind: "status", detail: decision === "decline" ? "closed" : "quote", actor },
     ...(decision === "decline" ? [{ order_id: orderId, kind: "job_declined", detail: `By the customer: ${why.slice(0, 300)}`, actor }] : []),
   ]);
-  await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `${decision === "decline" ? "Declined the quote" : "Changes to the quote"}: ${why}` });
+  await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: actor, author_name: who || "Customer", body: `${decision === "decline" ? "Declined the quote" : "Changes to the quote"}: ${why}`, reason: decision === "decline" ? null : "change" });
   await shop(decision === "decline" ? "declined the quote" : "asked for quote changes", `${who || "The customer"} ${decision === "decline" ? "declined" : "asked for changes to"} quote #${o.number}`, `${decision === "decline" ? "Why" : "What to change"}: ${why}`);
   return { ok: true as const };
 }

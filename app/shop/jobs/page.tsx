@@ -312,7 +312,7 @@ export default function JobCenter() {
           in production… just center everything… a little quieter") */}
       <div className="jcb" role="tablist" aria-label="Steps">
         {BAR.map((g) => (
-          <div key={g.t} className="jcb-g" style={{ flex: g.steps.length }}>
+          <div key={g.t} className="jcb-g" style={{ ["--n" as string]: g.steps.length }}>
             <div className="jcb-gh">{g.t}</div>
             <div className="jcb-s">{g.steps.map((k) => { const on = !solo && !(curChat && !chatInPanel) && step === k; return (
               <button key={k} type="button" role="tab" aria-selected={on} className={"jcb-c" + (on ? " on" : "")} style={{ ["--c" as string]: STEP_C[k] || colorOf(k) }} onClick={() => { setChat(null); go(k); }}>
@@ -343,7 +343,7 @@ export default function JobCenter() {
                 <ChatThread c={curChat} color={colorOfChat(curChat)} onSent={() => setCn((x) => x + 1)} onClose={() => setChat(null)} onArchived={() => { setChat(null); setCn((x) => x + 1); }} />
               </div>
               {isRq && focusJob?.orderId ? <RequestsDesk q="" only={focusJob.orderId} onChanged={() => void loadJobs(true).then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} />
-                : focusJob ? <div className="tbl-wrap"><table className="tbl jc" data-nofit>
+                : focusJob ? <div className="tbl-wrap"><table className="tbl jc">
                   <thead><tr><th>Job</th><th>Dept</th><th>{fst === "approved" ? "Where it is" : "Needs"}</th><th>Also</th><th>Due</th></tr></thead>
                   <tbody><Row it={focusJob} step={fst || step} msgs={unreadOf(focusJob.orderId)} on={pick === focusJob.key} onPick={() => setPick(pick === focusJob.key ? null : focusJob.key)} after={after} onLead={() => setLead(focusJob)} /></tbody>
                 </table></div> : null}
@@ -366,7 +366,7 @@ export default function JobCenter() {
               <span className="spacer" />{step === "declined" ? <button type="button" className="linkbtn" onClick={() => go("approved")}>Back to Approved</button> : items && count("declined") > 0 ? <button type="button" className="linkbtn jc-decl-l" onClick={() => go("declined")}>Declined · {count("declined")}</button> : null}</div>
             {/* Requests: laid out like ClickUp Jobs' New list, the picked one opened on top (components/RequestsDesk.tsx) */}
             {isReq(step) && !all ? <RequestsDesk key={step} q={q} onlyIds={items ? new Set(pool(step).filter((it) => it.steps.includes(step) && inDept(it) && it.orderId).map((it) => it.orderId!)) : undefined} pick={reqPick || undefined} onMessage={(oid) => openChat(`o:${oid}:`)} onChanged={() => void loadJobs().then((r) => { if (r.ok) setItems(r.items.filter((x) => x.type !== "lead")); })} /> : !items ? <div className="faint">Loading…</div> : all ? (!allCount ? <div className="faint">{q ? `No matches for “${q}”.` : "Nothing in the Job Center right now."}</div> : (
-              <div className="tbl-wrap"><table className="tbl jc" data-nofit>
+              <div className="tbl-wrap"><table className="tbl jc">
                 <thead><tr><th>Job</th><th>Dept</th><th>Where it is</th><th>Also</th><th>Due</th></tr></thead>
                 <tbody>{sections.filter((x) => x.rows.length).map((x) => { const open = !!more[x.g.t] || x.rows.length <= 6; return [
                   <tr key={x.g.t} className="jc-sec" style={{ ["--c" as string]: x.g.c }}><td colSpan={5}><i aria-hidden /><b>{x.g.t}</b> · {x.counts.filter(([, n]) => n).map(([k, n]) => `${GROUPS.flatMap((g) => g.steps).find((y) => y[0] === k)![1]} ${n}`).join(" · ")}</td></tr>,
@@ -375,7 +375,7 @@ export default function JobCenter() {
                 ]; })}</tbody>
               </table></div>
             )) : !shown.length ? <div className="faint">{q ? `No matches for “${q}”.` : EMPTY[step]}</div> : (
-              <div className="tbl-wrap"><table className="tbl jc" data-nofit>
+              <div className="tbl-wrap"><table className="tbl jc">
                 <thead><tr>{step === "leads" ? <><th>Lead</th><th>Came in</th><th /></>
                   : step === "declined" ? <><th>Job</th><th>Why</th><th>Declined</th></>
                   : <><th>Job</th><th>Dept</th><th>{step === "approved" ? "Where it is" : isReq(step) ? "Pieces" : "Needs"}</th><th>Also</th><th>{isReq(step) ? "Sent in" : "Due"}</th></>}</tr></thead>

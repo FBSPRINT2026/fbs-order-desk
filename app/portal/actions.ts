@@ -66,7 +66,7 @@ export async function requestQuoteChanges(orderId: string, comment: string): Pro
     const text = comment.trim().slice(0, 5000);
     if (!text) return { ok: false, error: "Tell us what you'd like changed." };
     const { admin, order, email, who, settings } = await customerOrder(orderId);
-    await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: email, author_name: who, body: `Change request: ${text}` });
+    await admin.from("messages").insert({ order_id: orderId, author_type: "customer", author_email: email, author_name: who, body: `Change request: ${text}`, reason: "change" });
     await admin.from("order_events").insert({ order_id: orderId, kind: "changes", detail: "", actor: email });
     await notifyShop("asked for changes", `${who} asked for changes on #${order.number}`, text, orderId, settings.shop.name);
     revalidatePath(`/portal/orders/${orderId}`);

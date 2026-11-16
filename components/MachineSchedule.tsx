@@ -2978,7 +2978,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   <button type="button" className="btn msk-b" title="Set what's really done: counted, printed, ready, completed" onClick={() => setStandOpen(true)}><SkIco d="prog" />Where things stand</button>
                 </span>
                 <span className="msk-g press"><span className="msk-gl">Press &amp; crew</span>
-                  <button type="button" className={"btn msk-b msk-live" + (s.liveClock ? " on" : "")} disabled={!canEquip} onClick={() => void setLiveClock(!s.liveClock)} title={s.liveClock ? "Live clock is on: the schedule follows the time clock and press timers (not started moves up to now, unfinished days roll to today). Click to plan by hand." : "Live clock is off: the schedule is a plan made by hand, like Printavo; nothing moves on its own. Click to follow the time clock."}><span className="msk-sw" aria-hidden><i /></span>Live clock {s.liveClock ? "on" : "off"}</button>
+                  <button type="button" className={"btn msk-b msk-live" + (s.liveClock ? " on" : "")} disabled={!canEquip} onClick={() => void setLiveClock(!s.liveClock)} title={s.liveClock ? "Live clock is on: the schedule follows the time clock and press timers (not started moves up to now, unfinished days roll to today). Click to plan by hand." : "Live clock is off: the schedule is a plan made by hand, like Printavo; nothing moves on its own. Click to follow the time clock."}><SkIco d="clock" /><span>Live clock</span><span className="msk-sw" aria-hidden><i /></span></button>
                   <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Progress</button>
                   <button type="button" className="btn msk-b" title="Who's past 40 hours this pay week" onClick={() => setOtOpen(true)}><SkIco d="ot" />Overtime</button>
                   <button type="button" className="btn msk-b" title="A weekend or extra shift for a crew" onClick={() => setShiftEdit(true)}><SkIco d="shift" />Shift</button>
@@ -4349,6 +4349,7 @@ const SK: Record<string, string> = {
   ot: "M12 5a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 9v4l2 1M9 2h6", norm: "M4 6h16M4 12h10M4 18h6", shift: "M9 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM3 20c0-3 3-5 6-5s6 2 6 5M18 8v6m-3-3h6",
   down: "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z", eq: "M3 7h18v10H3zM7 7V4h10v3M7 17v3h10v-3",
   when: "M3 5h18v16H3zM3 10h18M8 3v4M16 3v4M12 14v3", plan: "M4 4h16v16H4zM4 9h16M9 9v11",
+  clock: "M12 4a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2",
 };
 function SkIco({ d }: { d: string }) {
   return <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={SK[d]} /></svg>;

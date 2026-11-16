@@ -74,7 +74,8 @@ function stagesOf(d: JobDetail, it: JobItem): { t: string; st: "ok" | "now" | ""
   const art = d.pieces.find((x) => x.k === "art") || d.pieces.find((x) => x.k === "sewout"), quote = d.pieces.find((x) => x.k === "quote");
   const out = (x?: JobPiece) => !x || x.state === "sent" || x.state === "done";
   const approved = AFTER_OK.includes(d.status) || (d.pieces.length > 0 && d.pieces.every((x) => x.state === "done"));
-  const ok = [out(art), out(quote), approved, approved && !it.steps.includes("goods_order") && d.status !== "approved", ["fulfillment", "ready", "completed"].includes(d.status)];
+  // no mockup or sew-out yet ("No prints yet") is the first step not done; no quote piece means nothing to price
+  const ok = [approved || (!!art && out(art)), out(quote), approved, approved && !it.steps.includes("goods_order") && d.status !== "approved", ["fulfillment", "ready", "completed"].includes(d.status)];
   const now = ok.indexOf(false);
   return [art?.k === "sewout" ? "Sew-out" : "Mockup", "Quote", "Approval", "Goods", "Production"].map((t, i) => ({ t, st: ok[i] && (now < 0 || i < now) ? "ok" : i === now ? "now" : "" }));
 }
@@ -223,7 +224,7 @@ function Foot({ d, after, onUndo }: { d: JobDetail; after: (m: string) => void; 
   const art = d.pieces.some((p) => p.k === "art");
   return (
     <div className="jcp-sec jcp-foot">
-      <Link className="btn sm" href={`/shop/orders/${d.id}`}>Open job</Link>
+      {/* Open job is in the panel's header */}
       {art && d.mockGroup && <Link className="btn sm" href={mockupHref(d.id, d.mockGroup)}>Mockup Creator</Link>}
       {d.declinedAt ? <button type="button" className="btn sm" onClick={onUndo}>Put it back</button>
         : !["quote", "quote_sent", "request", "approved", "art"].includes(d.status) ? null
