@@ -11,7 +11,7 @@ import type { JobActor } from "@/lib/jobAccess";
  * The crew phone's main menu (/crew; Nick, Nov 13 2026: "this is how most people at my company are going to get in the
  * site"): their time clock, their press's jobs today in order, receiving's jobs to count, and what their view does.
  */
-export type CrewJob = { minutes: number; startMin: number | null; number: number; name: string; customer: string; qty: number; status: "running" | "paused" | "done" | "scheduled"; due: string | null; label: string; started: string | null; finished: string | null; counted: "yes" | "no" | "issue" | null; rush: boolean; /** High priority: an extra set of eyes */ priority?: boolean };
+export type CrewJob = { /** the order, to resume or pause it right from the menu */ orderId?: string; minutes: number; startMin: number | null; number: number; name: string; customer: string; qty: number; status: "running" | "paused" | "done" | "scheduled"; due: string | null; label: string; started: string | null; finished: string | null; counted: "yes" | "no" | "issue" | null; rush: boolean; /** High priority: an extra set of eyes */ priority?: boolean };
 export type CrewPress = { id: string; name: string; jobs: CrewJob[] };
 export type CountJob = { number: number; name: string; customer: string; qty: number; day: string; state: string; when: "today" | "tomorrow" | "later"; kind: string };
 export type CrewHome = {
@@ -86,7 +86,7 @@ export async function crewHome(admin: SupabaseClient, who: JobActor, next = fals
       id: m.id, name: m.name,
       jobs: slots.filter((x) => x.machine === m.id && om.has(x.order_id) && !om.get(x.order_id)!.status.match(/^(completed)$/))
         .sort((a, b) => rank(a.status) - rank(b.status) || (a.start_min ?? 9999) - (b.start_min ?? 9999) || a.position - b.position)
-        .map((x) => { const o = om.get(x.order_id)!; return { minutes: x.minutes || 0, startMin: x.start_min, number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, status: x.status, due: o.due_date, label: x.label || "", started: x.started_at, finished: x.finished_at, counted: counted.get(x.order_id) || "no", rush: !!o.rush , priority: !!o.priority}; }),
+        .map((x) => { const o = om.get(x.order_id)!; return { orderId: o.id, minutes: x.minutes || 0, startMin: x.start_min, number: o.number, name: o.nickname || "", customer: o.customers?.company || o.customers?.name || "", qty: o.qty || 0, status: x.status, due: o.due_date, label: x.label || "", started: x.started_at, finished: x.finished_at, counted: counted.get(x.order_id) || "no", rush: !!o.rush , priority: !!o.priority}; }),
     }));
   }
 

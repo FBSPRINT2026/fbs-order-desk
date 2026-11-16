@@ -31,6 +31,7 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
   const noteT = (n: string) => (/^Paused: /.test(n) ? t("Paused: {0}", t(n.slice(8))) : t(n));
   const [st, setSt] = useState<State | null>(null), [err, setErr] = useState(""), [busy, setBusy] = useState("");
   const [locPick, setLoc] = useState(""), [press, setPress] = useState("");
+  const [why, setWhy] = useState("Lunch");
   const [pausing, setPausing] = useState(false), [finishing, setFinishing] = useState<number | null>(null), [now, setNow] = useState(Date.now());
   const [awake, setAwake] = useState(false);
   const lock = useRef<{ release: () => Promise<void> } | null>(null);
@@ -98,8 +99,10 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
             </div>
           ) : pausing ? (
             <div className="jm-tm-pause">
-              <div className="jm-label">{t("Why are you pausing?")}</div>
-              <div className="jm-chips">{PAUSES.map((p) => <button key={p} type="button" className="jm-chip" disabled={!!busy} onClick={() => act("pause", { reason: p })}>{t(p)}</button>)}</div>
+              {/* one drop-down, lunch picked to start with, and one button (Nick, Nov 16 2026: "this should be a drop-down") */}
+              <label className="jm-label" htmlFor="jm-why">{t("Why are you pausing?")}</label>
+              <select id="jm-why" className="jm-select" value={why} onChange={(e) => setWhy(e.target.value)}>{PAUSES.map((p) => <option key={p} value={p}>{t(p)}</option>)}</select>
+              <button type="button" className="jm-go" disabled={!!busy} onClick={() => act("pause", { reason: why })}>{t("Pause")}</button>
               <button type="button" className="jm-ghost" onClick={() => setPausing(false)}>{t("Cancel")}</button>
             </div>
           ) : (

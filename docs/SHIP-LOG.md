@@ -413,3 +413,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 2:07pm · 1.3.655 · Nick · Phone press setup: inks show their real color; 'Change colors' button
 - Nov 16 2:15pm · 1.3.656 · Nick · Phone: press setup laid on the press (underbase, flash, cool down by head); Complete job goes straight to Ready; running job's clock ticks on the main menu
 - Nov 16 2:19pm · 1.3.657 · Nick · Schedule card shows sides finished on the press timer ('Left Chest done')
+- Nov 16 2:21pm · 1.3.658 · Nick · Phone: pause reasons in one drop-down; Resume a paused job right from the main menu; press tap tags (/crew/press/<id>) open that press's job

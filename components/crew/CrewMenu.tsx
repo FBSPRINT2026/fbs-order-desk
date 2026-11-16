@@ -150,7 +150,7 @@ const clockOf = (min: number) => { const s = Math.max(0, Math.floor(min * 60)), 
 
 function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) => void }) {
   const { t, locale } = useT();
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(Date.now()), [busy, setBusy] = useState(false);
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
   const v = home.view;
   if (home.day !== home.today) return null;
@@ -189,9 +189,17 @@ function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) =>
         {!run && j.minutes > 0 && <div className="cr-time"><span>{j.startMin != null ? t("Starts {0}", atMin(j.startMin)) : ""}</span><span>{t("figured {0}", mins(j.minutes))}</span></div>}
         {j.counted !== "yes" && <div className="cr-warn">{j.counted === "issue" ? t("Goods problem on this job") : t("Goods not counted in yet")}</div>}
         {run ? (
+          // back from lunch: Resume right here, no scanning the ticket (Nick, Nov 16 2026)
           <div className="cr-two">
-            <button type="button" className="cr-ghost" onClick={() => open(j.number, "timer")}>{run.status === "paused" ? t("Resume") : t("Pause")}</button>
-            <button type="button" className="cr-go" onClick={() => open(j.number, "timer")}>{t("Complete")}</button>
+            {run.status === "paused" && run.orderId
+              ? <button type="button" className="cr-go" disabled={busy} onClick={async () => {
+                  setBusy(true);
+                  const r = await fetch("/api/jobs/timer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ job: { kind: "o", id: run.orderId }, action: "resume" }) }).catch(() => null);
+                  setBusy(false);
+                  if (r?.ok) open(j.number, "timer"); else open(j.number, "timer");
+                }}>{busy ? t("One moment…") : t("Resume #{0}", j.number)}</button>
+              : <button type="button" className="cr-ghost" onClick={() => open(j.number, "timer")}>{t("Pause")}</button>}
+            <button type="button" className={run.status === "paused" ? "cr-ghost" : "cr-go"} onClick={() => open(j.number, "timer")}>{run.status === "paused" ? t("Open the timer") : t("Complete")}</button>
           </div>
         ) : <button type="button" className="cr-go" onClick={() => open(j.number, v === "assist" ? "" : "timer")}>{v === "assist" ? t("Open the job") : t("Start #{0}", j.number)}</button>}
         {lastDone && <small className="cr-last">{t("Last done: #{0} at {1}", lastDone.number, clock(lastDone.finished, locale))}</small>}
