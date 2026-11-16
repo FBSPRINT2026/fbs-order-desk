@@ -466,7 +466,9 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-gd{font-size:9.5pt;color:var(--ink2);white-space:pre-wrap;margin-top:2px}
 .pdoc .iv2-cols,.pdoc .iv2-row{display:grid;grid-template-columns:minmax(0,1fr) .55in .8in .95in;column-gap:8px}
 .pdoc .iv2-cols{padding:6px 0 3px;border-bottom:1px solid var(--line);font-size:8pt}
-.pdoc .iv2-cols span:not(:first-child),.pdoc .iv2-row span:not(:first-child){text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+/* only the row's own number columns: text nested inside the name column (a printing item's name and description,
+   Nov 16, Nick, #50089's name pushed right) stays left and wraps */
+.pdoc .iv2-cols>span:not(:first-child),.pdoc .iv2-row>span:not(:first-child){text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .pdoc .iv2-ln{padding:11px 0 12px;border-bottom:1px solid var(--line2);break-inside:avoid}
 .pdoc .iv2-row{align-items:baseline;font-size:12pt}
 /* the garment's name wraps inside its own column, never into Qty (Oct 30, Nick: "Pepper" ran into the 36) */
@@ -500,7 +502,8 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-inks i{width:.72em;height:.72em;border-radius:50%;border:1px solid rgba(0,0,0,.28);display:inline-block;flex:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .pdoc .iv2-prs:not([data-m="short"]) .s,.pdoc .iv2-prs[data-m="short"] .f{display:none}
 .pdoc .iv2-set{display:grid;grid-template-columns:minmax(0,1fr) .95in;column-gap:8px;font-size:9.5pt;color:var(--ink2);padding:4px 0 0}
-.pdoc .iv2-set span:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* the amount only: a row that's all words (Finishing: …) stays left and wraps */
+.pdoc .iv2-set>span:last-child:not(:first-child){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pdoc .iv2-fees{border-top-width:1px;padding-top:2px}
 /* the totals come up right under the items; delivery, payment and notes start level with them on the left (Oct 30, Nick:
    "the total should come up… you've got it hanging") */
