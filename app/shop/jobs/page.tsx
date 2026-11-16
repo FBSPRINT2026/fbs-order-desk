@@ -281,7 +281,7 @@ export default function JobCenter() {
         <div><h1>Job Center</h1><div className="eyebrow">Every job before production, and what customers are saying about it</div></div>
         <div className="jc-hd-r">
           {/* the messages panel closes while a job is open; this brings it back (Nick, Nov 16 2026, Job Center D) */}
-          {!showMsgs && <button type="button" className="jcd-mbtn" onClick={() => setMsgPin(true)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>FBS Messages{waitingNow > 0 && <em>{waitingNow}</em>}</button>}
+          {!showMsgs && <button type="button" className="jx-mbtn" onClick={() => setMsgPin(true)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>FBS Messages{waitingNow > 0 && <em>{waitingNow}</em>}</button>}
           {hasAcc && <div className="rv-seg" role="group" aria-label="Whose jobs">
             {([[true, "My accounts"], [false, "Everyone"]] as const).map(([k, l]) => <button key={l} type="button" className={mineOn === k ? "on" : ""} aria-pressed={mineOn === k} onClick={() => setMine(k)}>{l}</button>)}
           </div>}
@@ -289,15 +289,15 @@ export default function JobCenter() {
       </div>
       {err && <div className="pv-err">{err}</div>}
       {msg && <div className="pv-err sow-msg" role="status">{msg}</div>}
-      <div className={"jcd" + (showMsgs ? " msgs" : "") + (picked ? " pick" : "")}>
+      <div className={"jx" + (showMsgs ? " msgs" : "") + (picked ? " pick" : "")}>
       {/* FBS Messages down the left (Job Center D): what needs a reply first, then what needs none */}
-      {showMsgs && <aside className="jcd-m" aria-label="FBS Messages">
-        <div className="jcd-mh"><b>FBS Messages</b>{waitingNow > 0 && <span className="jcm-n">{waitingNow} new</span>}<span className="spacer" />
+      {showMsgs && <aside className="jx-m" aria-label="FBS Messages">
+        <div className="jx-mh"><b>FBS Messages</b>{waitingNow > 0 && <span className="jcm-n">{waitingNow} new</span>}<span className="spacer" />
           {(picked || curChat) && <button type="button" className="btn sm ghost" aria-label="Close messages" onClick={() => setMsgPin(false)}>✕</button>}</div>
-        <div className="jcd-mf rv-seg" role="radiogroup" aria-label="Show">{([["waiting", "New", myChats.filter((c) => c.waiting || c.last.from === "customer").length], ["replied", "Waiting on them", myChats.filter((c) => !c.waiting && c.last.from !== "customer").length], ["archived", "Done", myArchived.length]] as const).map(([k, l, nn]) => (
+        <div className="jx-mf rv-seg" role="radiogroup" aria-label="Show">{([["waiting", "New", myChats.filter((c) => c.waiting || c.last.from === "customer").length], ["replied", "Waiting on them", myChats.filter((c) => !c.waiting && c.last.from !== "customer").length], ["archived", "Done", myArchived.length]] as const).map(([k, l, nn]) => (
           <button key={k} type="button" role="radio" aria-checked={!mWant && mShow === k} className={!mWant && mShow === k ? "on" : ""} onClick={() => setMShow(k)}>{l}{k !== "archived" && <em>{nn}</em>}</button>))}</div>
-        <div className="jcd-ms"><SearchInput placeholder="Search messages" value={mq} onChange={(e) => setMq(e.target.value)} aria-label="Search messages" /></div>
-        <div className="jcd-ml">
+        <div className="jx-ms"><SearchInput placeholder="Search messages" value={mq} onChange={(e) => setMq(e.target.value)} aria-label="Search messages" /></div>
+        <div className="jx-ml">
           {!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : mShow === "waiting" ? "Nothing waiting on you." : "No customer messages."}</div>
             : (mShow === "waiting" && !mWant
               ? [["Needs a reply", boardChats.filter((c) => c.waiting)], ["No reply needed", boardChats.filter((c) => !c.waiting)]] as const
@@ -307,7 +307,7 @@ export default function JobCenter() {
                 {list.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}</div>))}
         </div>
       </aside>}
-      <div className="jcd-c">
+      <div className="jx-c">
       {/* the steps in one bar, under the four parts of the work (Nick, Nov 16 2026: "incoming, quotes… pre-production…
           in production… just center everything… a little quieter") */}
       <div className="jcb" role="tablist" aria-label="Steps">
@@ -390,7 +390,7 @@ export default function JobCenter() {
         </section>
       </div>
       </div>
-      {picked && <aside className="jc-side jcd-p" aria-label="The job">
+      {picked && <aside className="jc-side jx-p" aria-label="The job">
         <JobPanel key={picked.key + n} it={picked} step={step} after={after} chatKey={chatInPanel ? curChat!.key : null} onSent={() => setCn((x) => x + 1)}
           onClose={() => { setPick(null); setChat(null); }} onLead={() => setLead(picked)} onUndo={() => void undoDeclined(picked.orderId!).then((r) => after(r.ok ? "Back on the Job Center." : r.error))} />
       </aside>}

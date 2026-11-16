@@ -2489,36 +2489,6 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           {flowBlocks.slice(1).map((bk, i) => <div key={"br" + bk.d} className="msf-break" style={{ marginTop: flowTop[i + 1] - 1.5 }} aria-hidden />)}
         </div>
       </div>
-      <div className="msf-side">
-        {toolsBox}
-        <div className="msq" role="search">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <input type="search" value={findQ} placeholder="Search the schedule" aria-label="Search the schedule" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") { setFindQ(""); return; }
-              if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
-              e.preventDefault();
-              const hits = [...document.querySelectorAll<HTMLElement>(".msf .ms-hit")].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-              if (!hits.length) return;
-              const i = (findI + (e.key === "ArrowUp" ? -1 : 1) + hits.length) % hits.length; setFindI(i);
-              hits[i].scrollIntoView({ block: "center", behavior: "smooth" }); hits.forEach((h, k) => h.classList.toggle("ms-hit-on", k === i));
-            }} />
-          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n} found${nt ? ` · ${nt} in Ready To Schedule` : ""}` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
-        </div>
-        {/* the key under the search (Nov 12, Nick): what the marks mean, folded to one line when hidden */}
-        <div className={"mky" + (keyOpen ? "" : " shut")}>
-          <div className="mky-h"><span>Key</span>{!keyOpen && <span className="mky-mini"><GoodsTee k="g" t="" /><GoodsTee k="a" t="" /><i className="mky-sw ok" /><i className="mky-sw bad" /></span>}<button type="button" className="linkbtn" onClick={() => setKeyOpen(!keyOpen)}>{keyOpen ? "Hide" : "Show"}</button></div>
-          {keyOpen && <div className="mky-g">
-            <div className="mky-sub">Goods</div>
-            <div><GoodsTee k="g" t="" />Counted in</div><div><GoodsTee k="a" t="" />Here, not counted</div><div><GoodsTee k="r" t="" />Problem / runs soon</div><div><GoodsTee k="o" t="" />Not here yet</div>
-            <div className="mky-sub">Printing</div>
-            <div><i className="mky-sw ok" />On time</div><div><i className="mky-sw warn" />A little over</div><div><i className="mky-sw bad" />Well over</div><div><i className="mky-sw pz" />Paused / lunch</div>
-            <div className="mky-sub">On the board</div>
-            <div><b className="mky-late">#</b>Late</div><div><i className="mky-sw hold" />Hold</div><div><i className="mky-sw ot" />Overtime</div><div><i className="mky-sw brk" />Warm-up / lunch</div>
-          </div>}
-        </div>
-        {comingUp()}
-      </div>
       {downMenu && <>
         <div className="msf-menu-bg" onClick={() => setDownMenu(null)} onContextMenu={(e) => { e.preventDefault(); setDownMenu(null); }} />
         <div className="msf-menu" style={{ left: Math.max(8, Math.min(downMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1400) - 310)), top: Math.max(8, Math.min(downMenu.y, (typeof window !== "undefined" ? window.innerHeight : 900) - 160)) }}>
@@ -2994,7 +2964,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
   // the right panel (Nick, Nov 16 2026, Schedule C): the assistant (a tip, then ask it), then the tools by group
   const toolsBox = (
-    <div className="msc-side">
+    <div className="mzc-side">
       <div className="msk">
             <div className="msk-tools">
               <div className="msk-h"><span>Tools</span><Link className="linkbtn" href="/shop/settings/production">Machines &amp; crews</Link></div>
@@ -3048,7 +3018,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               );
             })()}
           </div>
-      <div className="msc-ask">
+      <div className="mzc-ask">
                   {/* the AI assistant: two lines right under the tabs line (Nick, Nov 13), the ask box and ideas to tap */}
                   <div className="msa-box">
                     <span className="msa-lbl" aria-hidden>✦ AI assistant</span>
@@ -3083,6 +3053,39 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       </div>
     </div>
   );
+  // the right column, from the top of the page down (Nick, Nov 16 2026): the panel, the search, the key, Coming up
+  const sideCol = () => (
+    <div className="msf-side mzc-r">
+        {toolsBox}
+        <div className="msq" role="search">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+          <input type="search" value={findQ} placeholder="Search the schedule" aria-label="Search the schedule" onChange={(e) => { setFindQ(e.target.value); setFindI(0); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") { setFindQ(""); return; }
+              if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Enter") return;
+              e.preventDefault();
+              const hits = [...document.querySelectorAll<HTMLElement>(".msf .ms-hit")].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top || a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+              if (!hits.length) return;
+              const i = (findI + (e.key === "ArrowUp" ? -1 : 1) + hits.length) % hits.length; setFindI(i);
+              hits[i].scrollIntoView({ block: "center", behavior: "smooth" }); hits.forEach((h, k) => h.classList.toggle("ms-hit-on", k === i));
+            }} />
+          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n} found${nt ? ` · ${nt} in Ready To Schedule` : ""}` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
+        </div>
+        {/* the key under the search (Nov 12, Nick): what the marks mean, folded to one line when hidden */}
+        <div className={"mky" + (keyOpen ? "" : " shut")}>
+          <div className="mky-h"><span>Key</span>{!keyOpen && <span className="mky-mini"><GoodsTee k="g" t="" /><GoodsTee k="a" t="" /><i className="mky-sw ok" /><i className="mky-sw bad" /></span>}<button type="button" className="linkbtn" onClick={() => setKeyOpen(!keyOpen)}>{keyOpen ? "Hide" : "Show"}</button></div>
+          {keyOpen && <div className="mky-g">
+            <div className="mky-sub">Goods</div>
+            <div><GoodsTee k="g" t="" />Counted in</div><div><GoodsTee k="a" t="" />Here, not counted</div><div><GoodsTee k="r" t="" />Problem / runs soon</div><div><GoodsTee k="o" t="" />Not here yet</div>
+            <div className="mky-sub">Printing</div>
+            <div><i className="mky-sw ok" />On time</div><div><i className="mky-sw warn" />A little over</div><div><i className="mky-sw bad" />Well over</div><div><i className="mky-sw pz" />Paused / lunch</div>
+            <div className="mky-sub">On the board</div>
+            <div><b className="mky-late">#</b>Late</div><div><i className="mky-sw hold" />Hold</div><div><i className="mky-sw ot" />Overtime</div><div><i className="mky-sw brk" />Warm-up / lunch</div>
+          </div>}
+        </div>
+        {comingUp()}
+      </div>
+  );
   return (
     <div className="ms ms-calm">
       {/* the calendar's own controls on one line: what's shown on the left, how it's shown on the right */}
@@ -3108,9 +3111,11 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
 
       {/* Scheduling Tools: the schedule's health, the actions that change it, and the jobs waiting for a spot */}
+      <div className="mzc">
+      <div className="mzc-main">
       {/* Ready to schedule on top, on its own (Nick, Nov 16 2026, Schedule C): a list that folds up; the tools and the assistant
           are in the panel on the right */}
-      <section className={"ms-tools msc-rts" + (trayOpen ? "" : " closed")}>
+      <section className={"ms-tools mzc-rts" + (trayOpen ? "" : " closed")}>
           <div className={"ms-ready" + (drag?.card?.slot ? " drop-back" : "") + (over === "tray" ? " over" : "")}
             onDragOver={(e) => { if (drag?.card?.slot) { e.preventDefault(); setOver("tray"); } }} onDragLeave={() => setOver((o) => (o === "tray" ? "" : o))}
             onDrop={(e) => { e.preventDefault(); setOver(""); if (drag?.card?.slot) unbookMany(drag.group || [drag.card]); setDrag(null); }}>
@@ -3265,11 +3270,13 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
           </div>
       </section>
 
-      {view !== "flow" && <section className="ms-tools msc-top">{toolsBox}</section>}
       <div className="ms-main">
         {/* what each look means (Nov 11, Nick: "we need a key at the top for whatever colors you do use") */}
         {view === "flow" ? flowView() : view === "timeline" ? <div className="ms-weeks">{weekGrid(week, week === monday(today) ? "This Week" : week === addDay(monday(today), -7) ? "Last Week" : "Week of")}{weekGrid(addDay(week, 7), addDay(week, 7) === addDay(monday(today), 7) ? "Next Week" : addDay(week, 7) === monday(today) ? "This Week" : "Week of")}</div> : dayGrid(day)}
         {phoneView()}
+      </div>
+      </div>
+      {sideCol()}
       </div>
 
       {planOpen && <PlannerPanel method={typeF || "screen"} s={s} today={today} holds={holds} admin={isAdmin} spotOf={(id) => { const c = cards.find((x) => x.job.key === "h:" + id); const g = c ? (segs.ofCard.get(c.key) || [])[0] : undefined; return c && g ? `${shortName(c.machine)} · ${dayLbl(g.day)} · ${fmtMin(c.minutes)}` : ""; }} onSave={saveHold} onRemove={removeHold} onClose={() => setPlanOpen(false)} />}
