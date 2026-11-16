@@ -88,6 +88,14 @@ export async function POST(req: Request) {
     await admin.from("production_slot_log").insert({ slot_id: pick.id, order_id: pick.order_id, machine: (move as { machine?: string }).machine || pick.machine, action: to, progress: p, note: why ? `On the phone · ${why}` : "On the phone", by: who!.name });
   }
 
+  async function sideDone(side: string) {
+    const { data: sl } = await admin.from("production_slots").select("id, sides_done, locations").eq("order_id", job!.id).neq("status", "done").order("day").limit(5);
+    const pick = ((sl || []) as { id: string; sides_done: string[] | null; locations: string[] | null }[]).find((x) => !x.locations?.length || x.locations.some((l) => l.toLowerCase() === side.toLowerCase())) || (sl || [])[0] as { id: string; sides_done: string[] | null } | undefined;
+    if (!pick) return;
+    const done = [...new Set([...(pick.sides_done || []), side])];
+    await admin.from("production_slots").update({ sides_done: done, updated_at: new Date().toISOString() }).eq("id", pick.id);
+  }
+
   if (b.action === "setup") { err = await start(`Setup · ${loc}`, press); if (!err) await slotMove("start"); }
   else if (b.action === "run") { err = await start(`Run · ${loc}`, press); if (!err) await slotMove("start"); }
   // some sides now, the rest another day (Nick, Nov 16 2026: "we'll just run the front… come back next day and run the
@@ -107,6 +115,8 @@ export async function POST(req: Request) {
     else { err = await start(st.paused.task, st.paused.station); if (!err) await slotMove("resume"); }
   } else if (b.action === "finish" || b.action === "done") {
     if (here) await stopJob(admin, me, { pieces: b.pieces != null && isFinite(+b.pieces) ? +b.pieces : null, note: b.action === "done" ? "Job done" : "" });
+    // a side printed (the run of one spot finished): the schedule's card says so, "Front done" (Nick, Nov 16 2026)
+    if (b.action === "finish" && here && /^Run · /.test(here.task) && job.kind === "o") await sideDone(here.task.replace(/^Run · /, ""));
     else if (b.action === "finish") err = "Nothing is running on this job.";
     if (!err && b.action === "done" && job.kind === "o") {
       // the whole job is printed: today's (and earlier) unfinished bookings on the calendar are done

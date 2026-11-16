@@ -70,7 +70,7 @@ function WhyIcon({ w, title }: { w: "lock" | "cap" | "me" | "ai"; title: string 
     : <svg viewBox="0 0 16 16"><rect x="1.5" y="5" width="7" height="6" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" /><rect x="7.5" y="5" width="7" height="6" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" /></svg>}</span>;
 }
 const firmLbl = (j: Job) => (j.due ? `${new Date(j.due + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}${j.dueTime != null ? " " + clock(j.dueTime) : ""}` : "");
-type Slot = { /** a booking of the order's sample run */ sample?: boolean; /** a booking of an Issue's pieces */ issue_id?: string | null; id: string; order_id: string | null; archived_order_id: string | null; /** Jose's lock (Nov 11 2026): spot = press + time, press, day; re-plan never moves it */ locked?: "spot" | "press" | "day" | "person" | null; /** a Planner hold (a job we know is coming) */ hold_id?: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "paused" | "done"; /** a running job's finish time set by hand (Where things stand) */ ends_at?: string | null; source: string; note: string; rolled_from: string | null;
+type Slot = { /** a booking of the order's sample run */ sample?: boolean; /** a booking of an Issue's pieces */ issue_id?: string | null; id: string; order_id: string | null; archived_order_id: string | null; /** Jose's lock (Nov 11 2026): spot = press + time, press, day; re-plan never moves it */ locked?: "spot" | "press" | "day" | "person" | null; /** a Planner hold (a job we know is coming) */ hold_id?: string | null; machine: string; day: string; position: number; minutes: number; start_min: number | null; kind: string; label: string; status: "scheduled" | "running" | "paused" | "done"; /** a running job's finish time set by hand (Where things stand) */ ends_at?: string | null; source: string; note: string; rolled_from: string | null; /** print spots finished on the press timer ("Front") */ sides_done?: string[] | null;
   /** job log: when it really started / finished, how far along (0–1) as of progress_at; which print locations this booking covers (null = all) */
   started_at?: string | null; finished_at?: string | null; progress?: number; progress_at?: string | null; locations?: string[] | null };
 /** a job on the calendar; startMin = asked-for start (minutes after midnight), null = right after the job before it */
@@ -2284,7 +2284,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         {mv ? <span className={"msf-bt" + (mv.late ? " bad" : "")}>{mv.txt}</span> : null}
         {lines === 3 ? <><span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : g.c.need.label}</span><span className="msf-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}</span></> : null}
         {rs ? (band
-          ? <span className={"mpr-band " + rs.k}><span>Printing{rs.over > 0 ? ` · ${fmtMin(rs.over)} over` : ""}</span><span className="mpr-t">{fmtMin(rs.used)} / {fmtMin(rs.est)}</span></span>
+          ? <span className={"mpr-band " + rs.k}><span>Printing{g.c.slot?.sides_done?.length ? ` · ${g.c.slot.sides_done.join(", ")} done` : ""}{rs.over > 0 ? ` · ${fmtMin(rs.over)} over` : ""}</span><span className="mpr-t">{fmtMin(rs.used)} / {fmtMin(rs.est)}</span></span>
           : <span className={"mpr-side " + rs.k}>Printing</span>) : null}
       </div>
     );
@@ -2296,7 +2296,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const st = g.c.slot?.status;
     if (st === "done") { const f = g.c.slot?.finished_at; return <em className="mdy-st ok">{f ? "Done " + new Date(f).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }).replace(" AM", "a").replace(" PM", "p") : "Done"}</em>; }
     if (st === "running" && runState(g.c)) return null;
-    if (st === "running") return <em className="mdy-st run">Printing{g.c.slot?.progress ? ` · ${Math.round(+g.c.slot.progress * 100)}%` : ""}</em>;
+    if (st === "running") return <em className="mdy-st run">Printing{g.c.slot?.sides_done?.length ? ` · ${g.c.slot.sides_done.join(", ")} done` : g.c.slot?.progress ? ` · ${Math.round(+g.c.slot.progress * 100)}%` : ""}</em>;
+    // a side printed, the rest another time (one job): "Front done" on its card (Nick, Nov 16 2026)
+    if (st === "paused" && g.c.slot?.sides_done?.length) return <em className="mdy-st run">{g.c.slot.sides_done.join(", ")} done</em>;
     if (notYet(g)) return <em className="mdy-st bad">Not started</em>;
     return null;
   };
