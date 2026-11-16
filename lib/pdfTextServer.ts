@@ -25,7 +25,7 @@ export async function pdfTextServer(buf: Uint8Array, maxPages = 8): Promise<stri
 type PDoc = { numPages: number; getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: { str?: string; transform?: number[]; width?: number }[] }> }> };
 export async function pdfSizeGridServer(buf: Uint8Array, maxPages = 8): Promise<string> {
   try {
-    const { sizeGrid, sizeGridText } = await import("@/lib/sizeGrid");
+    const { sizeGrid, sizeGridText, sizeRows, sizeRowsText } = await import("@/lib/sizeGrid");
     const w = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
     (globalThis as unknown as { pdfjsWorker?: unknown }).pdfjsWorker = w;
     const m = await import("pdfjs-dist/legacy/build/pdf.mjs") as unknown as { getDocument: (o: Record<string, unknown>) => { promise: Promise<PDoc> } };
@@ -37,6 +37,8 @@ export async function pdfSizeGridServer(buf: Uint8Array, maxPages = 8): Promise<
         items.push({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width || 0, page: n });
       }
     }
-    return sizeGridText(sizeGrid(items));
+    // a grid of size columns, or a table whose sizes are rows under each garment (Nine18's POs): whichever the PDF has
+    const grid = sizeGridText(sizeGrid(items)), rows = sizeRowsText(sizeRows(items));
+    return [grid, rows ? `Garments read row by row (each size row belongs to the garment above it; a quantity on a garment's own row is a one-size item; PERSONALIZATION rows are names on that garment's pieces):\n${rows}` : ""].filter(Boolean).join("\n");
   } catch { return ""; }
 }
