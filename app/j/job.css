@@ -529,6 +529,22 @@
 .cr-tpun:last-of-type{border-bottom:0}
 .cr-tfix{min-height:52px;border-radius:12px;border:1.5px solid #F3B4A6;background:#FFF4F1;color:#B42318;font:inherit;font-weight:800;font-size:16px;width:100%}
 .cr-tback{align-self:flex-start}
+.cr-tpun.dbl{color:#B42318}
+.cr-tpun.dbl small{display:block;font-size:12px;font-weight:700}
+.cr-tt{font-size:24px;font-weight:800}
+.cr-why{display:flex;flex-direction:column;border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.cr-why button{display:flex;justify-content:space-between;align-items:center;min-height:52px;padding:0 14px;border:0;border-bottom:1px solid var(--line);background:none;font:inherit;font-weight:700;font-size:16px;color:var(--ink);text-align:left}
+.cr-why button:last-child{border-bottom:0}
+.cr-why i{font-style:normal;color:var(--ink-3);font-weight:800}
+.cr-ed{display:flex;flex-direction:column;gap:8px}
+.cr-er{display:grid;grid-template-columns:minmax(0,1fr) 118px 40px;gap:8px;align-items:center}
+.cr-er .jm-select{height:46px;font-size:15px}
+.cr-er input[type=time]{height:46px;border:1.5px solid var(--line);border-radius:10px;background:#F8FAFC;color:var(--ink);font:inherit;font-weight:800;font-size:16px;padding:0 6px;min-width:0;width:100%}
+.cr-er input.chg{border-color:#1F5FBF;background:#EAF3FF;color:#1F5FBF}
+.cr-er.gone .jm-select,.cr-er.gone input{text-decoration:line-through;color:#9AA5B5;background:transparent}
+.cr-erx{width:40px;height:40px;border-radius:99px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-3);font:inherit;font-weight:800;font-size:16px}
+.cr-ednote{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:800;color:var(--ink-3)}
+.cr-ednote textarea{border:1.5px solid var(--line);border-radius:10px;padding:8px;font:inherit;font-size:15px;color:var(--ink);background:var(--surface)}
 .cr-ask{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:12px;background:#FFF4EC;border:1.5px solid #F2A65A}
 .cr-ask b{font-size:18px}
 .cr-ask small{color:var(--ink-3)}
@@ -537,6 +553,9 @@
 
 /* the phone screens in dark mode: the light tints above made the timer's clock hard to read (Nick, Nov 16 2026) */
 @media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .cr-er input[type=time]{background:#1A2230}
+  :root:not([data-theme="light"]) .cr-er input.chg{background:#14324A;color:#93C5FD;border-color:#3B82F6}
+  :root:not([data-theme="light"]) .cr-tpun.dbl{color:#FCA5A5}
   :root:not([data-theme="light"]) .jm-tm.setup{background:#2A1D10}
   :root:not([data-theme="light"]) .jm-tm.run{background:#0F2419}
   :root:not([data-theme="light"]) .jm-tm.paused{background:#1B2230}

@@ -419,3 +419,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 2:39pm · 1.3.661 · Nick · Crew time card: today with Start lunch / Clock out (each asks first), every day of this and the last pay period, a day's punches, 'Something's wrong with this day' opens the fix for it
 - Nov 16 2:41pm · 1.3.662 · Nick · Press timer group picker shows each group's mockup picture
 - Nov 16 2:42pm · 1.3.663 · Nick · Phone screens readable in dark mode (press timer card, group picker, time card)
+- Nov 16 2:52pm · 1.3.664 · Nick · Crew phones: a job's print list shortened to each spot once (Full Front 4c · Full Back 3c), also on the schedule; time card: These aren't my hours → What happened? → write your real hours, Jose approves the day; double punches in red

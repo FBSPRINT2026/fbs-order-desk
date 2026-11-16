@@ -255,13 +255,25 @@ export async function sendToFaceClock(): Promise<{ ok: boolean; message: string 
  * punches it asks for (a lunch: out and back; a missed punch: that punch), marked as from the phone and who approved.
  * "Something else" is approved after the card is fixed by hand.
  */
-export type TimeFix = { id: string; employee_id: string; day: string; kind: "lunch" | "missed_in" | "missed_out" | "other"; at: string | null; minutes: number | null; note: string; status: string; created_at: string };
+export type TimeFix = { id: string; employee_id: string; day: string; kind: "lunch" | "missed_in" | "missed_out" | "other" | "day"; at: string | null; minutes: number | null; note: string; status: string; created_at: string;
+  /** kind "day": what they say the day was, what happened, and the day as punched now */
+  punches?: { kind: string; at: string }[] | null; reason?: string; was?: { kind: string; at: string }[] };
 export async function timeFixesOpen(): Promise<{ ok: true; fixes: TimeFix[] } | { ok: false; error: string }> {
   try {
     await manager();
-    const { data, error } = await createAdminClient().from("time_fix_requests").select("id, employee_id, day, kind, at, minutes, note, status, created_at").eq("status", "pending").order("day").limit(200);
+    const admin = createAdminClient();
+    const { data, error } = await admin.from("time_fix_requests").select("id, employee_id, day, kind, at, minutes, note, status, created_at, punches, reason").eq("status", "pending").order("day").limit(200);
     if (error) return { ok: false, error: error.message };
-    return { ok: true, fixes: (data || []) as TimeFix[] };
+    const fixes = (data || []) as TimeFix[];
+    const days = fixes.filter((f) => f.kind === "day");
+    if (days.length) {
+      const { localDay } = await import("@/lib/timeclock");
+      const ds = days.map((f) => Date.parse(f.day));
+      const { data: ps } = await admin.from("time_punches").select("employee_id, kind, at").in("employee_id", [...new Set(days.map((f) => f.employee_id))]).eq("voided", false)
+        .gte("at", new Date(Math.min(...ds) - 36 * 3600000).toISOString()).lte("at", new Date(Math.max(...ds) + 60 * 3600000).toISOString()).order("at").limit(1000);
+      for (const f of days) f.was = (ps || []).filter((p) => p.employee_id === f.employee_id && localDay(p.at as string) === f.day).map((p) => ({ kind: p.kind as string, at: p.at as string }));
+    }
+    return { ok: true, fixes };
   } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
 }
 export async function timeFixDecide(id: string, approve: boolean, why = ""): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -271,7 +283,22 @@ export async function timeFixDecide(id: string, approve: boolean, why = ""): Pro
     const { data: f } = await admin.from("time_fix_requests").select("*").eq("id", id).maybeSingle();
     if (!f || f.status !== "pending") return { ok: false, error: "That fix was already handled." };
     const now = new Date().toISOString();
-    if (approve && f.kind !== "other") {
+    if (approve && f.kind === "day") {
+      // the day as they wrote it: the day's punches now are voided (kept), theirs go in (Nick, Nov 16 2026)
+      const { localDay } = await import("@/lib/timeclock");
+      const note = `Their day from their phone${f.reason ? ` (${f.reason})` : ""}${f.note ? `: "${String(f.note).slice(0, 150)}"` : ""} · approved by ${v.staff?.name || v.email}`;
+      const from = new Date(Date.parse(String(f.day)) - 36 * 3600000).toISOString(), to = new Date(Date.parse(String(f.day)) + 60 * 3600000).toISOString();
+      const { data: old } = await admin.from("time_punches").select("id, at").eq("employee_id", f.employee_id).eq("voided", false).gte("at", from).lte("at", to);
+      const gone = (old || []).filter((p) => localDay(p.at as string) === f.day).map((p) => p.id as string);
+      if (gone.length) {
+        const { error } = await admin.from("time_punches").update({ voided: true, needs_ok: false, edited_by: v.email, edited_at: now }).in("id", gone);
+        if (error) return { ok: false, error: error.message };
+      }
+      for (const r of (Array.isArray(f.punches) ? f.punches : []) as { kind: string; at: string }[]) {
+        const { error } = await admin.from("time_punches").insert({ employee_id: f.employee_id, kind: r.kind, at: r.at, source: "phone fix", note, edited_by: v.email, edited_at: now });
+        if (error) return { ok: false, error: error.message };
+      }
+    } else if (approve && f.kind !== "other") {
       const at = f.at as string;
       const note = `From their phone${f.note ? `: "${String(f.note).slice(0, 150)}"` : ""} · approved by ${v.staff?.name || v.email}`;
       const rows = f.kind === "lunch"

@@ -4,7 +4,9 @@ import { phonePunchDecide, phonePunchesOpen, timeFixDecide, timeFixesOpen, type 
 import { fullName, type Employee } from "@/lib/timeclock";
 
 /** Fixes from phones, waiting for a manager (the crew's Time card on /crew). Approve makes the punches; "Something else" is fixed on the card by hand first. */
-const WHAT: Record<TimeFix["kind"], string> = { lunch: "Lunch not punched", missed_in: "Forgot to clock in", missed_out: "Forgot to clock out", other: "Something else" };
+const WHAT: Record<TimeFix["kind"], string> = { lunch: "Lunch not punched", missed_in: "Forgot to clock in", missed_out: "Forgot to clock out", other: "Something else", day: "Their real hours" };
+const PKS: Record<string, string> = { in: "In", out: "Out", break_start: "Lunch out", break_end: "Lunch in" };
+const runs = (ps?: { kind: string; at: string }[] | null) => (ps || []).map((p) => `${PKS[p.kind] || p.kind} ${t12(p.at)}`).join(" · ") || "no punches";
 const t12 = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" }) : "");
 const day = (d: string) => new Date(d + "T12:00").toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" });
 
@@ -65,10 +67,12 @@ export default function TimeFixes({ employees, onChanged }: { employees: Employe
             <tr key={f.id}>
               <td><b>{name(f.employee_id)}</b></td>
               <td style={{ whiteSpace: "nowrap" }}>{day(f.day)}</td>
-              <td>{WHAT[f.kind]}{f.at && <div className="sub">{t12(f.at)}{f.minutes ? `, ${f.minutes} min` : ""}</div>}</td>
+              <td>{f.kind === "day"
+                ? <>{WHAT.day}{f.reason ? ` · ${f.reason}` : ""}<div className="sub">Was: {runs(f.was)}</div><div className="sub" style={{ color: "var(--ink)" }}><b>They say:</b> {runs(f.punches)}</div></>
+                : <>{WHAT[f.kind]}{f.at && <div className="sub">{t12(f.at)}{f.minutes ? `, ${f.minutes} min` : ""}</div>}</>}</td>
               <td>{f.note || "—"}</td>
               <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                <button type="button" className="btn primary" disabled={busy === f.id} onClick={() => decide(f, true)}>{f.kind === "other" ? "Fixed, approve" : "Approve"}</button>{" "}
+                <button type="button" className="btn primary" disabled={busy === f.id} onClick={() => decide(f, true)}>{f.kind === "other" ? "Fixed, approve" : f.kind === "day" ? "Approve their day" : "Approve"}</button>{" "}
                 <button type="button" className="btn" disabled={busy === f.id} onClick={() => decide(f, false)}>No</button>
               </td>
             </tr>

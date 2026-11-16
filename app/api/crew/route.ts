@@ -61,6 +61,25 @@ export async function POST(req: Request) {
     await admin.from("time_card_checks").upsert({ employee_id: who.employeeId, period_start: per.start, period_end: per.end, status: "fix_asked", decided_at: new Date().toISOString() }, { onConflict: "employee_id,period_start" });
     return NextResponse.json({ ok: true });
   }
+  // a whole day's real hours (Nick, Nov 16 2026: "these were my actual hours for the day"): what happened + the punches
+  // they say are right; nothing changes until Jose approves it on the Time Clock (timeFixDecide)
+  if (b.action === "fixday") {
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(String(b.day || "")) ? String(b.day) : "";
+    if (!day) return NextResponse.json({ error: "Pick the day." }, { status: 400 });
+    const { localDay } = await import("@/lib/timeclock");
+    const punches = (Array.isArray(b.punches) ? b.punches : []).slice(0, 12)
+      .filter((p: { kind?: string; at?: string }) => ["in", "out", "break_start", "break_end"].includes(String(p?.kind)) && p?.at && !isNaN(Date.parse(p.at)))
+      .map((p: { kind: string; at: string }) => ({ kind: p.kind, at: new Date(p.at).toISOString() }))
+      .sort((a: { at: string }, c: { at: string }) => a.at.localeCompare(c.at));
+    if (punches.some((p: { at: string }) => localDay(p.at) !== day)) return NextResponse.json({ error: "Every time has to be on that day." }, { status: 400 });
+    const reason = String(b.reason || "").slice(0, 60), note = String(b.note || "").slice(0, 500);
+    if (!punches.length && !note.trim()) return NextResponse.json({ error: "Write your hours for the day." }, { status: 400 });
+    const { error } = await admin.from("time_fix_requests").insert({ employee_id: who.employeeId, day, kind: "day", punches, reason, note, at: punches[0]?.at || null });
+    if (error) return NextResponse.json({ error: /time_fix_requests|punches|reason/.test(error.message) ? "Time card fixes aren't set up in the database yet. Tell the office." : error.message }, { status: 500 });
+    const per = periodOf(await timeSettings(admin), day);
+    await admin.from("time_card_checks").upsert({ employee_id: who.employeeId, period_start: per.start, period_end: per.end, status: "fix_asked", decided_at: new Date().toISOString() }, { onConflict: "employee_id,period_start" });
+    return NextResponse.json({ ok: true });
+  }
   // payday: "My hours are right" for a pay period (Nick, Nov 13 2026: uAttend's printed time card sheets, on the phone)
   if (b.action === "hours_ok") {
     const start = /^\d{4}-\d{2}-\d{2}$/.test(String(b.start || "")) ? String(b.start) : "";

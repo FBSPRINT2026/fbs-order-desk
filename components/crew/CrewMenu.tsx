@@ -1,4 +1,5 @@
 "use client";
+import { shortLabel } from "@/lib/jobLabel";
 import { countSections } from "@/lib/checkinShared";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -181,7 +182,7 @@ function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) =>
       <section className="cr-hero">
         <div className="cr-k">{run ? (run.status === "paused" ? t("PAUSED ON THE PRESS") : run.onNow ? `${/^Setup/.test(run.onNow) ? t("SETTING UP") : t("RUNNING")} · ${t(run.onNow.replace(/^\w+ · /, "")).toUpperCase()}` : t("RUNNING")) : t("UP NEXT")}</div>
         <div className="cr-n"><b>#{j.number}</b><span>{j.customer}</span>{j.rush && <em>{t("Rush")}</em>}{j.priority && <em className="prio">{t("Priority")}</em>}</div>
-        <div className="cr-s">{t("{0} pcs", j.qty)}{j.label ? ` · ${j.label}` : j.name ? ` · ${j.name}` : ""}</div>
+        <div className="cr-s">{t("{0} pcs", j.qty)}{j.label ? ` · ${shortLabel(j.label)}` : j.name ? ` · ${j.name}` : ""}</div>
         {/* running: the clock big, how far along, the sides done (Nick, Nov 16 2026, option A) */}
         {run && run.status !== "paused" && <div className="cr-clock" aria-live="off">{clockOf(used)}</div>}
         {run && j.minutes > 0 && <div className={"cr-bar" + (over ? " over" : "")}><i style={{ width: `${pct}%` }} /></div>}
@@ -247,7 +248,7 @@ function PressDay({ name, jobs, view, open }: { name: string; jobs: CrewJob[]; v
       {list.map((j, i) => { const [p, k] = pill(j); return (
         <button key={j.number + "-" + i} type="button" className={"cr-li " + j.status} onClick={() => tap(j)}>
           <span className="cr-t">{when(j)}</span><b>#{j.number}</b>
-          <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.label ? ` · ${j.label}` : ""}</small></span>
+          <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.label ? ` · ${shortLabel(j.label)}` : ""}</small></span>
           <i className={"cr-st " + k}>{p}</i>
         </button>
       ); })}
@@ -344,7 +345,10 @@ function TimeCard({ home, busy, post, done, day0 }: { home: CrewHome; busy: stri
   const { t, locale } = useT();
   const [fix, setFix] = useState({ day: day0 || home.today, kind: "lunch", time: "12:00", minutes: "30", note: "" });
   const [cards, setCards] = useState<PeriodHours[] | null>(null);
-  const [at, setAt] = useState<{ v: "main" } | { v: "day"; d: PeriodHours["days"][number] | { day: string; punches?: never; worked: 0; first: null; last: null; breaks: 0; fixed: false; issues: 0 } } | { v: "fix" }>(day0 ? { v: "fix" } : { v: "main" });
+  type Day = PeriodHours["days"][number];
+  const [at, setAt] = useState<{ v: "main" } | { v: "day"; d: Day } | { v: "why"; d: Day } | { v: "edit"; d: Day; why: string } | { v: "fix" }>(day0 ? { v: "fix" } : { v: "main" });
+  const [rows, setRows] = useState<ERow[]>([]);
+  const [eNote, setENote] = useState("");
   const [ask, setAsk] = useState<string | null>(null);
   useEffect(() => { void fetch("/api/crew/cards").then((r) => r.json()).then((j) => setCards(j.cards || [])).catch(() => setCards([])); }, []);
   const c = home.clock!;
@@ -377,10 +381,55 @@ function TimeCard({ home, busy, post, done, day0 }: { home: CrewHome; busy: stri
         <button type="button" className="jm-link cr-tback" onClick={() => setAt({ v: "main" })}>← {t("Time card")}</button>
         <div className="jm-card">
           <div className="jm-cardh"><b>{day(d.day, locale)}</b><span className="jm-faint">{d.worked ? t("{0} hrs", (d.worked / 60).toFixed(1)) : ""}</span></div>
-          {(d.punches || []).length ? (d.punches || []).map((p, i) => <div key={i} className="cr-tpun"><span>{t(PK[p.kind] || p.kind)}</span><b>{clock(p.at, locale)}</b></div>) : <p className="jm-faint">{t("No punches")}</p>}
+          {(d.punches || []).length ? (d.punches || []).map((p, i, all) => { const dbl = i > 0 && Date.parse(p.at) - Date.parse(all[i - 1].at) < 3 * 60000; return <div key={i} className={"cr-tpun" + (dbl ? " dbl" : "")}><span>{t(PK[p.kind] || p.kind)}{dbl && <small>{t("a minute after the last one: a double punch?")}</small>}</span><b>{clock(p.at, locale)}</b></div>; }) : <p className="jm-faint">{t("No punches")}</p>}
           {d.fixed && <small className="jm-faint">{t("fixed by the office")}</small>}
         </div>
-        <button type="button" className="cr-tfix" onClick={() => { setFix({ ...fix, day: d.day, kind: d.first ? "lunch" : "missed_in" }); setAt({ v: "fix" }); scrollTo(0, 0); }}>{t("Something's wrong with this day")}</button>
+        <button type="button" className="cr-tfix" onClick={() => { setAt({ v: "why", d }); scrollTo(0, 0); }}>{t("These aren't my hours")}</button>
+        <p className="jm-faint" style={{ textAlign: "center" }}>{t("Fixes go to your manager to OK. Your punches don't change until they do.")}</p>
+      </>
+    );
+  }
+  // "These aren't my hours" (Nick, Nov 16 2026): what happened, then the day's punches to correct into the real hours
+  if (at.v === "why") {
+    const d = at.d;
+    return (
+      <>
+        <button type="button" className="jm-link cr-tback" onClick={() => setAt({ v: "day", d })}>← {day(d.day, locale)}</button>
+        <div className="cr-tt">{t("What happened?")}</div>
+        <div className="cr-why">{WHY.map((w) => <button key={w} type="button" onClick={() => { setRows(startRows(d, w)); setENote(""); setAt({ v: "edit", d, why: w }); scrollTo(0, 0); }}>{t(w)}<i aria-hidden>›</i></button>)}</div>
+        <p className="jm-faint" style={{ textAlign: "center" }}>{t("Then you write down your real hours for the day.")}</p>
+      </>
+    );
+  }
+  if (at.v === "edit") {
+    const { d, why } = at;
+    const live = rows.filter((r) => !r.gone && r.time);
+    const mins = workedOf(live), was = d.worked || 0;
+    const set = (i: number, v: Partial<ERow>) => setRows(rows.map((r, k) => (k === i ? { ...r, ...v } : r)));
+    const sendDay = async () => {
+      const punches = live.map((r) => ({ kind: r.kind, at: new Date(`${d.day}T${r.time}:00`).toISOString() }));
+      if (await post({ action: "fixday", day: d.day, reason: why, note: eNote, punches })) { done(t("Sent to your manager to approve.")); setAt({ v: "main" }); }
+    };
+    return (
+      <>
+        <button type="button" className="jm-link cr-tback" onClick={() => setAt({ v: "why", d })}>← {t("What happened?")}</button>
+        <div className="cr-tt">{t("My real hours")} · {day(d.day, locale).split(",")[0]} {+d.day.slice(8)}</div>
+        <div className="jm-card cr-ed">
+          <div className="jm-label">{t(why)}</div>
+          {rows.map((r, i) => (
+            <div key={i} className={"cr-er" + (r.gone ? " gone" : "")}>
+              <select className="jm-select" value={r.kind} disabled={r.gone} onChange={(e) => set(i, { kind: e.target.value as ERow["kind"] })} aria-label={t("Punch")}>
+                {(["in", "break_start", "break_end", "out"] as const).map((k) => <option key={k} value={k}>{t(PK[k])}</option>)}
+              </select>
+              <input type="time" value={r.time} disabled={r.gone} className={r.orig !== undefined && r.orig !== r.time ? "chg" : r.orig === undefined ? "chg" : ""} onChange={(e) => set(i, { time: e.target.value })} aria-label={t("The time")} />
+              <button type="button" className="cr-erx" aria-label={r.gone ? t("Put it back") : t("Take it out")} onClick={() => (r.orig === undefined && !r.gone ? setRows(rows.filter((_, k) => k !== i)) : set(i, { gone: !r.gone }))}>{r.gone ? "↺" : "✕"}</button>
+            </div>
+          ))}
+          <button type="button" className="jm-link" style={{ alignSelf: "flex-start" }} onClick={() => setRows([...rows, { kind: nextKind(rows), time: "" }])}>+ {t("Add a punch")}</button>
+          <label className="cr-ednote">{t("Note (optional)")}<textarea rows={2} value={eNote} onChange={(e) => setENote(e.target.value)} /></label>
+        </div>
+        <div className="cr-ttot"><span>{t("Your hours")}</span><b>{t("{0} hrs", (mins / 60).toFixed(1))} <small className="jm-faint">· {t("was {0}", (was / 60).toFixed(1))}</small></b></div>
+        <button type="button" className="jm-go" disabled={!!busy || (!live.length && !eNote.trim())} onClick={sendDay}>{t("Send to Jose")}</button>
         <p className="jm-faint" style={{ textAlign: "center" }}>{t("Fixes go to your manager to OK. Your punches don't change until they do.")}</p>
       </>
     );
@@ -435,6 +484,33 @@ function TimeCard({ home, busy, post, done, day0 }: { home: CrewHome; busy: stri
       )}
     </>
   );
+}
+
+/** Fixing a day (Nick, Nov 16 2026): what happened, then the day's punches written as they really were */
+const WHY = ["I punched twice", "I forgot to punch my lunch", "I forgot to clock in", "I forgot to clock out", "A time is wrong", "Something else"];
+type ERow = { kind: "in" | "out" | "break_start" | "break_end"; time: string; orig?: string; gone?: boolean };
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { timeZone: "America/Chicago", hour: "2-digit", minute: "2-digit", hour12: false });
+const nextKind = (rs: ERow[]): ERow["kind"] => { const l = rs.filter((r) => !r.gone).at(-1)?.kind; return !l || l === "out" ? "in" : l === "in" || l === "break_end" ? "out" : "break_end"; };
+function startRows(d: { punches?: { kind: string; at: string }[] }, why: string): ERow[] {
+  const ps = d.punches || [];
+  const rs: ERow[] = ps.map((p, i) => ({ kind: (["in", "out", "break_start", "break_end"].includes(p.kind) ? p.kind : "in") as ERow["kind"], time: hhmm(p.at), orig: hhmm(p.at),
+    // a punch a few minutes after the one before is the double punch: struck through to start, one tap puts it back
+    gone: why === "I punched twice" && i > 0 && Date.parse(p.at) - Date.parse(ps[i - 1].at) < 3 * 60000 }));
+  const has = (k: string) => rs.some((r) => r.kind === k && !r.gone);
+  if (why === "I forgot to punch my lunch" && !has("break_start")) rs.push({ kind: "break_start", time: "12:00" }, { kind: "break_end", time: "12:30" });
+  if (why === "I forgot to clock in" && !has("in")) rs.unshift({ kind: "in", time: "" });
+  if (why === "I forgot to clock out" && !has("out")) rs.push({ kind: "out", time: "" });
+  return rs.sort((a, b) => (a.time && b.time ? a.time.localeCompare(b.time) : 0));
+}
+/** minutes worked from a day's punches in time order: in / lunch in start the clock, lunch out / out stop it */
+function workedOf(rs: ERow[]): number {
+  let on: number | null = null, m = 0;
+  for (const r of [...rs].sort((a, b) => a.time.localeCompare(b.time))) {
+    const [h, mi] = r.time.split(":").map(Number), x = h * 60 + mi;
+    if (r.kind === "in" || r.kind === "break_end") { if (on === null) on = x; }
+    else if (on !== null) { m += Math.max(0, x - on); on = null; }
+  }
+  return m;
 }
 const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 
