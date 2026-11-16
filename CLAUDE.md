@@ -377,7 +377,7 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   relay the browser picked (`myPrinter` in `lib/labelPrinter.ts`, sent as `printer` to `/api/print`, `print_jobs.relay_target`);
   "Prints on" (`LabelPrinterPick`) sits beside every label Print button once there's more than one.
   **Box labels** (Nick, Nov 13 2026): the job #, SHIP / PICKUP / DELIVERY and the box count on top; then the customer, the
-  whole job name and the PO, with the QR (the scanner reads it; no barcode); then the fill-in grid. No ship-to, dates or
+  whole job name and the PO, with the QR (the scanner reads it; no barcode); then the fill-in grid (each size: the ordered number, a small box to tick when all of it is in this box, and a line marked OR # to write a partial count; Nick, Nov 16 2026, option A). No ship-to, dates or
   ship method: the QR opens all of that. Labels print BOX ___ OF ___ to write in unless "I know my box count" is ticked
   (`known` on `/api/print`). Printed text is plain letters (`plain` in `lib/zpl.ts`). One layout draws both the ZPL and
   the preview picture (`drawBoxLabel` → `boxLabelZpl` / `boxLabelSvg`).

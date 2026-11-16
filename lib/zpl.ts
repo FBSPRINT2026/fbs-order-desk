@@ -122,8 +122,15 @@ function drawBoxLabel(z: Z, j: JobCard, box: number, of: number): Z {
     sizes.forEach((s, i) => {
       const x = L + itemW + i * cw, q = r.sizes.find((v) => v.label === s)?.qty || 0;
       z.line(x, y, 2, rh);
-      if (q) z.text(x + 5, y + 4, 22, String(q));
-      else z.line(x + cw * 0.3, y + rh / 2, cw * 0.4, 3);
+      // what's in this box (Nick, Nov 16 2026, option A): a small box to tick when every one of that size is in it, and
+      // a line under it to write how many when it's only some
+      if (q) {
+        z.text(x + 5, y + 4, 22, String(q));
+        const ck = 24; z.box(x + cw - ck - 6, y + 6, ck, ck, 3);
+        const ly = y + rh - (rh >= 84 ? 22 : 10);
+        z.line(x + cw * 0.14, ly, cw * 0.72, 3);
+        if (rh >= 84) z.text(x, ly + 5, 14, "OR #", { w: cw, align: "C" });
+      } else z.line(x + cw * 0.3, y + rh / 2, cw * 0.4, 3);
     });
     const tx = L + itemW + sizes.length * cw;
     z.line(tx, y, 2, rh); z.text(tx + 5, y + 4, 22, String(r.total));
@@ -131,8 +138,8 @@ function drawBoxLabel(z: Z, j: JobCard, box: number, of: number): Z {
   const after = gy + 38 + Math.min(rows.length, maxRows) * rh + 8;
   if (rows.length > maxRows) z.text(L, after, 22, `+ ${rows.length - maxRows} more item${rows.length - maxRows === 1 ? "" : "s"} (see the work order)`);
   else if (!rows.length) z.text(L, after, 24, "No garments on this order yet.");
-  z.text(L, foot - 40, 22, "Small # = ordered. Write in what's in this box.", { w: 500 });
-  z.text(L + 500, foot - 40, 24, `Order: ${j.qty} pcs`, { w: W - 500, align: "R" });
+  z.text(L, foot - 40, 20, "Small # = ordered. Tick it if all of it is here, or write how many.", { w: 590 });
+  z.text(L + 590, foot - 40, 24, `Order: ${j.qty} pcs`, { w: W - 590, align: "R" });
 
   // footer
   z.box(L, foot, W, 70, 3);
