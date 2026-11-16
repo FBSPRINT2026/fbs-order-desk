@@ -38,6 +38,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .flag.cs{background:#e7f5fc;color:#0a6f9c;border:1.5px solid var(--blue)}
 .pdoc .flag.pv{background:#fff4e0;color:#8a5a00;border:1.5px solid var(--orange)}
 .pdoc .flag.rush{background:#fdeceb;color:#b3261e;border:1.5px solid var(--salmon)}
+.pdoc .flag.prio{background:#f1ecfb;color:#5b3fa8;border:1.5px solid #8e72d6}
 .pdoc .flag.grp{background:#f2f4f7;color:var(--ink2);border:1.5px solid var(--line)}
 .pdoc .due{border:3px solid var(--ink);border-radius:10px;padding:8px 14px;text-align:center;min-width:1.9in}
 .pdoc .due .d{font-size:24pt;line-height:1.05;white-space:nowrap}

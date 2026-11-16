@@ -29,7 +29,7 @@ export default async function JobTicket({ params }: { params: Promise<{ code: st
       <div className="print-bar"><PrintButton /></div>
       <div style={{ maxWidth: "7.6in", margin: "0 auto", border: "3px solid #141D2B", borderRadius: 10, padding: "0.3in", display: "grid", gridTemplateColumns: "1fr 2.4in", gap: "0.3in", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 13, letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6478" }}>Job ticket{card.rush ? " · RUSH" : ""}</div>
+          <div style={{ fontSize: 13, letterSpacing: ".12em", textTransform: "uppercase", color: "#5A6478" }}>Job ticket{card.rush ? " · RUSH" : ""}{card?.priority ? " · HIGH PRIORITY" : ""}</div>
           <div style={{ fontSize: 64, fontWeight: 800, lineHeight: 1 }}>#{card.number}</div>
           <div style={{ fontSize: 22, fontWeight: 700, marginTop: 6 }}>{card.customer}</div>
           <div style={{ fontSize: 17, marginTop: 2 }}>{card.name}</div>

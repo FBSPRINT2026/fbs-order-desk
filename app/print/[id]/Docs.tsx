@@ -307,6 +307,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
               {/* the tags on one line across the page, under the header (Oct 30, Nick: "these can be on the same line") */}
               <div className="flags">
                 {o.rush && <span className="flag rush">RUSH</span>}
+                {o.priority && <span className="flag prio">HIGH PRIORITY{o.priority_note ? ` · ${o.priority_note.toUpperCase()}` : ""}</span>}
                 {groups.length > 1 && <span className="flag grp">{(g.name || `Group ${gi + 1}`).toUpperCase()}</span>}
                 {gc?.wholesale && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
                 {g.imprints.some((d) => d.supplied) && <span className="flag cs">CUSTOMER SUPPLIED TRANSFERS</span>}

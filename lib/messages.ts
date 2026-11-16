@@ -23,10 +23,16 @@ export const REASONS = [
 export type Reason = (typeof REASONS)[number]["k"];
 export const NO_REPLY: readonly string[] = REASONS.filter((r) => !r.reply).map((r) => r.k);
 export const reasonOf = (k?: string | null) => REASONS.find((r) => r.k === k) || null;
-/** a customer message that waits on an answer (no reason given counts as one) */
-export const needsReply = (m: { author_type: string; reason?: string | null }) => m.author_type === "customer" && !NO_REPLY.includes(m.reason || "");
-/** for a query: leave out the messages that need no answer */
-export const NEEDS_REPLY_FILTER = `reason.is.null,reason.not.in.(${NO_REPLY.join(",")})`;
+/**
+ * A customer message that waits on us: To do. The AI's read of it (lib/ai/messageRead.ts, `ai_kind`) decides first,
+ * whatever reason the customer picked (Nick, Nov 16 2026: "firm ship date, bag size… those are changes… it's not no
+ * reply needed"): "todo" waits, "filed" doesn't. Not read yet, the reason decides (no reason counts as a question). Done
+ * (applied, answered or filed: `handled_at`) never waits.
+ */
+export const needsReply = (m: { author_type: string; reason?: string | null; ai_kind?: string | null; handled_at?: string | null }) =>
+  m.author_type === "customer" && !m.handled_at && (m.ai_kind ? m.ai_kind === "todo" : !NO_REPLY.includes(m.reason || ""));
+/** the same for a query, inside .or(): only the messages that wait on us */
+export const NEEDS_REPLY_FILTER = `and(handled_at.is.null,or(ai_kind.eq.todo,and(ai_kind.is.null,or(reason.is.null,reason.not.in.(${NO_REPLY.join(",")})))))`;
 
 type Row = { reason?: string | null; id: string; order_id: string | null; project_id?: string | null; topic?: string | null; author_type: string; author_name: string | null; body: string; created_at: string; read_at: string | null; attachments?: Attachment[] | null };
 

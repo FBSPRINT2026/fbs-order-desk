@@ -287,6 +287,8 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
     // RUSH in their job name or subject ticks Rush, so it isn't lost when the name is tidied (Nov 10: "RUSH AMS 43244
     // HOUSTON" became "AMS Houston")
     ...(/\brush\b/i.test(`${d.nickname || ""} ${a?.subject || ""}`) ? { rush: true } : {}),
+    // "high profile" / "high priority" anywhere they wrote it ticks High priority (Nick, Nov 16 2026: Peter's MEI carts)
+    ...(/\bhigh[\s-]*(profile|priority)\b|\bextra (attention|care)\b/i.test(`${d.nickname || ""} ${a?.subject || ""} ${(a as { body?: string } | null)?.body || ""} ${notes || ""}`) ? { priority: true, priority_note: "High profile, from their email" } : {}),
     notes, po_number: (d.po_number || "").slice(0, 60),
     delivery_method: tDelivery || (["pickup", "ship", "deliver", "tbd"].includes(d.delivery) ? d.delivery : "tbd"), ship_to: addressBlock(d.ship_to || "").slice(0, 500),
     // a customer who ships on their own carrier account (customers.ship_on): the order ships on it, $0 shipping, the same

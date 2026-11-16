@@ -7,7 +7,7 @@ import SearchInput from "@/components/SearchInput";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import { ST } from "@/lib/pricing";
 import type { Dept, JobItem, Step, Track } from "@/lib/jobCenter";
-import { loadJobChats, loadJobs, notAJob, undoDeclined } from "./actions";
+import { loadJobChats, loadJobs, msgAiPending, notAJob, undoDeclined } from "./actions";
 import JobPanel from "./JobPanel";
 import { ChatLine, ChatThread, whoOf } from "./JobChats";
 import type { ChatSummary } from "@/lib/jobChats";
@@ -152,6 +152,14 @@ export default function JobCenter() {
     get(); const t = setInterval(get, 30_000);
     return () => { live = false; clearInterval(t); };
   }, [cn]);
+  // the AI reads the customer messages nobody has read yet, a few at a time while the Job Center is open, and the list
+  // follows (lib/ai/messageRead.ts; new ones are read as they come in)
+  useEffect(() => {
+    let live = true;
+    const run = async () => { for (let i = 0; i < 20 && live; i++) { const r = await msgAiPending(); if (!r.ok || !r.read) break; setCn((x) => x + 1); if (!r.left) break; } };
+    void run(); const t = setInterval(() => { if (document.visibilityState === "visible") void run(); }, 120_000);
+    return () => { live = false; clearInterval(t); };
+  }, []);
   // coming back shows the last board at once and refreshes it behind; a change made here (n > 0) asks for a fresh count;
   // while it's open it refreshes once a minute (Nov 10, Nick: "it could pull it every minute… leave what was there painted")
   const [tick, setTick] = useState(0);
@@ -301,10 +309,10 @@ export default function JobCenter() {
         <div className="jx-ml">
           {!boardChats.length ? <div className="jmb-none faint">{mq ? `No messages match “${mq}”.` : mShow === "waiting" ? "Nothing waiting on you." : "No customer messages."}</div>
             : (mShow === "waiting" && !mWant
-              ? [["Needs a reply", boardChats.filter((c) => c.waiting)], ["No reply needed", boardChats.filter((c) => !c.waiting)]] as const
+              ? [["To do", boardChats.filter((c) => c.waiting)], ["Filed, nothing to do", boardChats.filter((c) => !c.waiting)]] as const
               : [["Job related", boardChats.filter((c) => !!c.orderId && byOrder.has(c.orderId))], ["General messages", boardChats.filter((c) => !c.orderId || !byOrder.has(c.orderId))]] as const
             ).map(([h, list]) => list.length > 0 && (
-              <div key={h} className={"jmb-grp" + (h === "No reply needed" ? " quiet" : "")}><div className="jmb-grp-h">{h}<span className="pill-n">{list.length}</span></div>
+              <div key={h} className={"jmb-grp" + (h === "Filed, nothing to do" ? " quiet" : "")}><div className="jmb-grp-h">{h}<span className="pill-n">{list.length}</span></div>
                 {list.map((c) => <ChatLine key={c.key} c={c} full color={colorOfChat(c)} on={chat === c.key} onClick={() => openChat(chat === c.key ? null : c.key)} />)}</div>))}
         </div>
       </aside>}

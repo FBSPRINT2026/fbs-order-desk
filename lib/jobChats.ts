@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { allRows } from "@/lib/readAll";
 import { accountOwners } from "@/lib/accountOwners";
 import { needsReply } from "@/lib/messages";
+import type { MsgRead } from "@/lib/messageRead";
 
 /**
  * Customer messages in the Job Center (Nov 2, Nick: "customer messages need to be part of the job center… when we log in,
@@ -17,11 +18,13 @@ export type ChatSummary = {
   unread: number; /** a customer message since our last one needs an answer: waiting on us (a "Sending tracking" or "Just
    * letting you know" one never does: lib/messages.ts REASONS) */ waiting: boolean; owner: string;
   /** what the customer's last message said it's about (REASONS key), if they picked */ why?: string | null;
+  /** what the AI made of their newest messages since our last reply (lib/ai/messageRead.ts): the card under it */
+  ai?: { id: string; read: MsgRead; handled: boolean } | null;
   /** archived by staff after its last message (chat_archive): off the Message Center's lists, in Archived */ archived?: boolean;
 };
-export type ChatMsg = { id: string; from: "customer" | "staff"; who: string; body: string; at: string; files: { name: string; url: string }[]; reason?: string | null };
+export type ChatMsg = { id: string; from: "customer" | "staff"; who: string; body: string; at: string; files: { name: string; url: string }[]; reason?: string | null; /** the AI's read of it (lib/ai/messageRead.ts) */ ai?: MsgRead | null; handled?: boolean };
 
-type Row = { reason?: string | null; id: string; order_id: string | null; customer_id: string | null; project_id: string | null; topic: string | null; author_type: string; author_name: string | null; body: string | null; created_at: string; read_at: string | null; attachments: unknown[] | null };
+type Row = { reason?: string | null; ai_kind?: string | null; handled_at?: string | null; ai?: MsgRead | null; id: string; order_id: string | null; customer_id: string | null; project_id: string | null; topic: string | null; author_type: string; author_name: string | null; body: string | null; created_at: string; read_at: string | null; attachments: unknown[] | null };
 
 export const chatKey = (r: { order_id: string | null; topic?: string | null; customer_id: string | null }) =>
   r.order_id ? `o:${r.order_id}:${r.topic === "goods" ? "goods" : ""}` : `c:${r.customer_id || ""}`;
@@ -33,7 +36,7 @@ export function parseKey(key: string): { orderId: string | null; topic: string; 
 /** the conversations of the last 60 days the customer wrote in */
 export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
   const since = new Date(Date.now() - 60 * 864e5).toISOString();
-  const { data } = await allRows<Row>((r0, r1) => admin.from("messages").select("id, order_id, customer_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments, reason").is("hidden_at", null)
+  const { data } = await allRows<Row>((r0, r1) => admin.from("messages").select("id, order_id, customer_id, project_id, topic, author_type, author_name, body, created_at, read_at, attachments, reason, ai_kind, handled_at, ai").is("hidden_at", null)
     .gte("created_at", since).order("created_at").order("id").range(r0, r1), 20000);
   const rows = (data || []) as Row[];
   const by = new Map<string, Row[]>();
@@ -70,12 +73,14 @@ export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
     let lastStaff = -1; ms.forEach((r, i) => { if (r.author_type !== "customer") lastStaff = i; });
     const waiting = ms.slice(lastStaff + 1).some(needsReply);
     const lastCust = [...ms].reverse().find((r) => r.author_type === "customer");
+    const aiMsg = [...ms.slice(lastStaff + 1)].reverse().find((r) => r.author_type === "customer" && r.ai && !r.ai.coveredBy);
     out.push({
       key: k, orderId: p.orderId, topic: p.topic, customerId: cid || null, projectId: last.project_id || null,
       number: o?.number ?? null, nickname: o?.nickname || "", customer: cid ? custs.get(cid) || "" : "", status: o?.status || "",
       last: { body: String(last.body || (last.attachments?.length ? "Sent a file" : "")).slice(0, 160), from: last.author_type === "customer" ? "customer" : "staff", who: last.author_name || "", at: last.created_at },
       unread: ms.filter((r) => needsReply(r) && !r.read_at).length,
       waiting, owner: cid ? owners.get(cid) || "" : "", why: lastCust?.reason || null,
+      ai: aiMsg ? { id: aiMsg.id, read: aiMsg.ai!, handled: !!aiMsg.handled_at } : null,
       // Done: archived after its last message, or we answered and they've said nothing for 14 days (Nov 6, Nick); a new
       // message from them brings it back to New
       archived: (!!arch.get(k) && arch.get(k)! >= last.created_at) || (!waiting && Date.now() - Date.parse(last.created_at) > 14 * 864e5),
@@ -87,14 +92,14 @@ export async function loadChats(admin: SupabaseClient): Promise<ChatSummary[]> {
 /** one conversation, oldest first */
 export async function loadThread(admin: SupabaseClient, key: string): Promise<ChatMsg[]> {
   const p = parseKey(key);
-  const base = () => { const q = admin.from("messages").select("id, author_type, author_name, body, created_at, attachments, reason").is("hidden_at", null); return p.orderId ? q.eq("order_id", p.orderId).eq("topic", p.topic) : q.is("order_id", null).eq("customer_id", p.customerId || ""); };
+  const base = () => { const q = admin.from("messages").select("id, author_type, author_name, body, created_at, attachments, reason, ai, handled_at").is("hidden_at", null); return p.orderId ? q.eq("order_id", p.orderId).eq("topic", p.topic) : q.is("order_id", null).eq("customer_id", p.customerId || ""); };
   const { data } = await allRows((r0, r1) => base().order("created_at").order("id").range(r0, r1), 2000);
-  const rows = (data || []) as { reason?: string | null; id: string; author_type: string; author_name: string | null; body: string | null; created_at: string; attachments: { path?: string; name?: string }[] | null }[];
+  const rows = (data || []) as { reason?: string | null; ai?: MsgRead | null; handled_at?: string | null; id: string; author_type: string; author_name: string | null; body: string | null; created_at: string; attachments: { path?: string; name?: string }[] | null }[];
   const paths = rows.flatMap((m) => (m.attachments || []).map((a) => a.path || "").filter(Boolean));
   const signed = paths.length ? (await admin.storage.from("proofs").createSignedUrls(paths, 3600)).data || [] : [];
   const url = new Map(paths.map((pp, i) => [pp, signed[i]?.signedUrl || ""]));
   return rows.map((m) => ({ id: m.id, from: m.author_type === "customer" ? "customer" as const : "staff" as const, who: m.author_name || "", body: m.body || "", at: m.created_at,
-    files: (m.attachments || []).map((a) => ({ name: a.name || "file", url: url.get(a.path || "") || "" })), reason: m.reason || null }));
+    files: (m.attachments || []).map((a) => ({ name: a.name || "file", url: url.get(a.path || "") || "" })), reason: m.reason || null, ai: m.ai || null, handled: !!m.handled_at }));
 }
 
 /** staff opened it: the customer's messages in it are read */

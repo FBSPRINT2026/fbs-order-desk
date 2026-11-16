@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { ChatMsg, ChatSummary } from "@/lib/jobChats";
 import { archiveJobChat, jobChatSend, jobChatThread, setMessageReason } from "./actions";
 import { REASONS, reasonOf } from "@/lib/messages";
+import MsgAiCard from "@/components/MsgAiCard";
 
 export const ago = (s: string) => {
   const m = Math.floor((Date.now() - new Date(s).getTime()) / 60000);
@@ -24,6 +25,8 @@ export function ChatLine({ c, color, on, onClick, full = false }: { c: ChatSumma
         <span className="jmb-q">{c.last.body}</span>
         {full && <small className="jmb-j">{c.number ? `#${c.number}${c.nickname ? ` ${c.nickname}` : ""}` : c.customer || "General"}{c.topic === "goods" ? " · goods" : ""}</small>}
         {full && c.last.from === "customer" && reasonOf(c.why) && <span className={"jmb-whyt" + (reasonOf(c.why)!.reply ? "" : " fyi")}>{reasonOf(c.why)!.label}</span>}
+        {/* what the AI made of it, in one line (lib/ai/messageRead.ts): the card with its button is in the thread */}
+        {full && c.ai && !c.ai.handled && c.ai.read.kind === "todo" && <span className="jmb-ai">✦ {c.ai.read.head}</span>}
       </span>
     </button>
   );
@@ -104,6 +107,9 @@ export function ChatThread({ c, color, onSent, onClose, onArchived, narrow = fal
               </small>
               {m.body && <span>{m.body}</span>}
               {m.files.map((f, i) => f.url ? <a key={i} className="jmb-f" href={f.url} target="_blank" rel="noreferrer">📎 {f.name}</a> : <span key={i} className="jmb-f">📎 {f.name}</span>)}
+              {/* what the AI made of it, and the button that does it (Nick, Nov 16 2026) */}
+              {m.from === "customer" && m.ai && !m.ai.coveredBy && <MsgAiCard id={m.id} read={m.ai} handled={!!m.handled} orderId={c.orderId} onChanged={onSent}
+                onReply={(t) => { setText(t); reply.current?.focus(); reply.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }} />}
             </div>
           ))}
         </div>

@@ -172,3 +172,81 @@ export async function jobChatSend(key: string, body: string, files: unknown[] = 
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
+
+/* ── The AI on a customer's message (Nick, Nov 16 2026; lib/ai/messageRead.ts, components/MsgAiCard.tsx) ── */
+
+/** read (or read again) what a customer's message means */
+export async function msgAiRead(id: string) {
+  try {
+    const { admin } = await me();
+    const { aiState } = await import("@/lib/ai/claude");
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: false as const, error: st.reason };
+    const { readMessage } = await import("@/lib/ai/messageRead");
+    return await readMessage(admin, st.settings, id, true);
+  } catch (e) { return fail(e); }
+}
+
+/** the messages nobody has read yet, a few at a time (the Job Center asks again while some are left) */
+export async function msgAiPending() {
+  try {
+    const { admin } = await me();
+    const { aiState } = await import("@/lib/ai/claude");
+    const st = await aiState(admin);
+    if (!st.ready) return { ok: true as const, read: 0, left: 0 };
+    const { readPending } = await import("@/lib/ai/messageRead");
+    return { ok: true as const, ...(await readPending(admin, st.settings, 3)) };
+  } catch (e) { return fail(e); }
+}
+
+/** the message is done: it and the earlier ones its read covers come off To do */
+async function finish(admin: ReturnType<typeof createAdminClient>, id: string, by: string, ai: Record<string, unknown> | null) {
+  const now = new Date().toISOString();
+  const covers = ((ai?.covers as string[]) || []).filter(Boolean);
+  await admin.from("messages").update({ handled_at: now, handled_by: by, ...(ai ? { ai } : {}) }).eq("id", id);
+  if (covers.length) await admin.from("messages").update({ handled_at: now, handled_by: by }).in("id", covers).is("handled_at", null);
+}
+
+/** Apply: the changes the AI worked out, made through the AI order helper; the message is done */
+export async function msgAiApply(id: string) {
+  try {
+    const { admin, email, who } = await me();
+    const { data: m } = await admin.from("messages").select("id, order_id, author_name, created_at, ai").eq("id", id).maybeSingle();
+    const ai = m?.ai as import("@/lib/messageRead").MsgRead | null;
+    if (!m || !ai) return { ok: false as const, error: "Nothing to apply." };
+    let applied: string[] = [];
+    if (m.order_id && ai.changes?.length) {
+      const { applyChanges } = await import("@/lib/ai/orderFix");
+      const when = new Date(m.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" });
+      const a = await applyChanges(admin, m.order_id, email || who, ai.changes.filter((c) => c.what !== "art") as never, `From ${(m.author_name || "the customer").split(/\s+/)[0]}'s message, ${when}`);
+      if (!a.ok) return a;
+      applied = a.applied;
+    }
+    const read = { ...ai, done: { at: new Date().toISOString(), by: who, applied } };
+    await finish(admin, id, who, read);
+    return { ok: true as const, applied, reply: ai.reply || "" };
+  } catch (e) { return fail(e); }
+}
+
+/** "Not this": kept (the next reads are shown it, so it learns); it stays To do */
+export async function msgAiNo(id: string, note = "") {
+  try {
+    const { admin, who } = await me();
+    const { data: m } = await admin.from("messages").select("ai").eq("id", id).maybeSingle();
+    if (!m?.ai) return { ok: false as const, error: "Nothing to change." };
+    const ai = { ...(m.ai as object), kind: "todo", no: { at: new Date().toISOString(), by: who, note: note.trim().slice(0, 300) || undefined } };
+    await admin.from("messages").update({ ai, ai_kind: "todo", handled_at: null, handled_by: null }).eq("id", id);
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}
+
+/** done without changing anything (answered on the phone, handled by hand); or back on To do */
+export async function msgAiDone(id: string, on: boolean) {
+  try {
+    const { admin, who } = await me();
+    const { data: m } = await admin.from("messages").select("ai").eq("id", id).maybeSingle();
+    if (on) await finish(admin, id, who, null);
+    else await admin.from("messages").update({ handled_at: null, handled_by: null, ai_kind: "todo", ...(m?.ai ? { ai: { ...(m.ai as object), kind: "todo" } } : {}) }).eq("id", id);
+    return { ok: true as const };
+  } catch (e) { return fail(e); }
+}

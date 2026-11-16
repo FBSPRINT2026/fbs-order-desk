@@ -317,6 +317,8 @@ const ES: Record<string, string> = {
   // header, menu
   "← Job menu": "← Menú del trabajo",
   "RUSH": "URGENTE",
+  "PRIORITY": "PRIORIDAD",
+  "Priority": "Prioridad",
   "Box {0}": "Caja {0}",
   "{0} pcs": "{0} pzas",
   "pcs": "pzas",

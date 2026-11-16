@@ -272,7 +272,7 @@ export type JobPiece =
 export type JobDetail = {
   id: string; number: number; title: string; status: string; due: string | null; qty: number; customer: string; contact: string; email: string;
   depts: Dept[]; pieces: JobPiece[]; said: { who: string; at: string; text: string; on: string; after: string } | null;
-  msgs: { at: string; who: string; us: boolean; text: string; /** a portal message (not a proof or quote going out) */ msg?: boolean; /** what the customer said it is about */ why?: string | null }[]; link: string | null; mockGroup?: { id: string; mockupKind?: "logo" };
+  msgs: { at: string; who: string; us: boolean; text: string; /** a portal message (not a proof or quote going out) */ msg?: boolean; /** what the customer said it is about */ why?: string | null; id?: string; /** the AI's read (lib/ai/messageRead.ts) */ ai?: import("@/lib/messageRead").MsgRead | null; handled?: boolean }[]; link: string | null; mockGroup?: { id: string; mockupKind?: "logo" };
   declinedAt: string | null; declinedWhy: string;
 };
 
@@ -286,7 +286,7 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
     admin.from("mockups").select("id, file_path, group_id").eq("order_id", orderId).is("archived_at", null).order("created_at"),
     admin.from("sewouts").select("id, imprint_id, version, status, photo_path, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, created_at").eq("order_id", orderId).is("archived_at", null).order("version", { ascending: false }),
     admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", ["sent", "proofs_requested", "sewout_sent", "quote_declined", "quote_changes", "approved", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at"),
-    admin.from("messages").select("author_type, author_name, author_email, body, created_at, reason").is("hidden_at", null).eq("order_id", orderId).eq("topic", "").order("created_at", { ascending: false }).limit(12),
+    admin.from("messages").select("id, author_type, author_name, author_email, body, created_at, reason, ai, handled_at").is("hidden_at", null).eq("order_id", orderId).eq("topic", "").order("created_at", { ascending: false }).limit(12),
     admin.from("proof_links").select("id").eq("order_id", orderId).eq("kind", "order").order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
   const settings = mergeSettings(s?.data);
@@ -364,7 +364,7 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
   const msgs = [
     ...evs.filter((e) => e.kind === "proofs_requested" || e.kind === "sewout_sent" || e.kind === "sent").map((e) => ({ at: e.created_at, who: (e.actor || "").split("@")[0], us: true,
       text: e.kind === "sent" ? (e.detail === "link copied" ? "Quote · link copied to send yourself" : `Quote · to ${e.detail}`) : e.detail.replace(/^Version (\d+)/, "Mockup v$1") })),
-    ...((ms || []) as { author_type: string; author_name: string; author_email: string; body: string; created_at: string; reason?: string | null }[]).map((m) => ({ at: m.created_at, who: m.author_name || (m.author_email || "").split("@")[0], us: m.author_type !== "customer", text: m.body, msg: true, why: m.reason || null })),
+    ...((ms || []) as { id: string; author_type: string; author_name: string; author_email: string; body: string; created_at: string; reason?: string | null; ai?: import("@/lib/messageRead").MsgRead | null; handled_at?: string | null }[]).map((m) => ({ id: m.id, ai: m.ai || null, handled: !!m.handled_at, at: m.created_at, who: m.author_name || (m.author_email || "").split("@")[0], us: m.author_type !== "customer", text: m.body, msg: true, why: m.reason || null })),
   ].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 12);
   const mg = gs.find((g) => (g.imprints || []).length && !mks.some((m) => m.group_id === g.id)) || gs.find((g) => (g.imprints || []).length);
   return {

@@ -61,7 +61,7 @@ export type AssistantData = {
   customers: Customer[];
   payments: { order_id: string; amount: number }[];
   proofs: { order_id: string; status: string; created_at: string; decided_at: string | null }[];
-  messages: { order_id: string | null; customer_id: string | null; author_type: string; created_at: string; reason?: string | null }[];
+  messages: { order_id: string | null; customer_id: string | null; author_type: string; created_at: string; reason?: string | null; ai_kind?: string | null; handled_at?: string | null }[];
   readyEvents: { order_id: string; created_at: string }[];
 };
 
@@ -113,7 +113,7 @@ async function loadAssistantDataNow(sb: SupabaseClient<any, any, any>): Promise<
     fetchAll<Customer>(() => sb.from("customers").select("*").order("created_at")),
     fetchAll<{ order_id: string; amount: number }>(() => sb.from("payments").select("order_id,amount").order("created_at")),
     fetchAll<AssistantData["proofs"][number]>(() => sb.from("proofs").select("order_id,status,created_at,decided_at").is("archived_at", null).order("created_at")),
-    fetchAll<AssistantData["messages"][number]>(() => sb.from("messages").select("order_id,customer_id,author_type,created_at,reason").is("hidden_at", null).gte("created_at", since).order("created_at")),
+    fetchAll<AssistantData["messages"][number]>(() => sb.from("messages").select("order_id,customer_id,author_type,created_at,reason,ai_kind,handled_at").is("hidden_at", null).gte("created_at", since).order("created_at")),
     fetchAll<AssistantData["readyEvents"][number]>(() => sb.from("order_events").select("order_id,created_at").eq("kind", "status").eq("detail", "ready").gte("created_at", since).order("created_at")),
   ]);
   return {

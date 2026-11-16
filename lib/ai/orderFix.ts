@@ -45,6 +45,7 @@ const ORDER_FIELDS: Record<string, { say: string; set: (v: string) => unknown | 
   po_number: { say: "the customer's PO number", set: (v) => v.slice(0, 80) },
   production_date: { say: "YYYY-MM-DD or \"\"", set: (v) => (!v ? null : /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined) },
   rush: { say: "yes/no", set: (v) => yes(v) },
+  priority: { say: "yes/no (High priority: needs a little more attention, an extra set of eyes; \"high profile\")", set: (v) => yes(v) },
   tax_exempt: { say: "yes/no", set: (v) => yes(v) },
   price_type: { say: "retail or wholesale", set: (v) => (/whole/i.test(v) ? "wholesale" : /retail/i.test(v) ? "retail" : undefined) },
   discount_pct: { say: "percent off, a number", set: (v) => { const n = parseFloat(v); return n >= 0 && n <= 100 ? n : undefined; } },
@@ -58,7 +59,7 @@ const EXTRAS = ["printed_free", "not_printed_free", "printed_charged", "not_prin
  * together… there's nothing that I shouldn't be able to tell it that I couldn't tell you"): the order as a document the
  * AI edits with JSON Patch operations (RFC 6902), checked and saved like the order page saves it.
  */
-const DOC_KEYS = ["groups", "fees", "nickname", "po_number", "due_date", "due_time", "firm", "production_date", "rush", "delivery_method", "ship_to", "ship_method", "tracking", "notes", "price_type", "tax_exempt", "tax_rate", "discount_pct", "discount_amt", "discount_type", "waive_setup", "order_type"] as const;
+const DOC_KEYS = ["groups", "fees", "nickname", "po_number", "due_date", "due_time", "firm", "production_date", "rush", "priority", "priority_note", "delivery_method", "ship_to", "ship_method", "tracking", "notes", "price_type", "tax_exempt", "tax_rate", "discount_pct", "discount_amt", "discount_type", "waive_setup", "order_type"] as const;
 const docOf = (o: Record<string, unknown>) => Object.fromEntries(DOC_KEYS.map((k) => [k, o[k] ?? null]));
 type PatchOp = { op: "add" | "remove" | "replace" | "move" | "copy"; path: string; from?: string; value?: unknown };
 const ptr = (p: string) => p.split("/").slice(1).map((x) => x.replace(/~1/g, "/").replace(/~0/g, "~"));
@@ -112,10 +113,10 @@ const PLAIN_MODE = `JUST DO WHAT I SAY MODE (this outranks every rule below). St
 
 `;
 
-export async function orderFix(admin: SupabaseClient, s: Settings, orderId: string, by: string, message: string, mode: "review" | "change", earlier = "",
+export async function orderFix(admin: SupabaseClient, s: Settings, orderId: string, by: string, message: string, /** propose: the changes the message asks for, made only when staff say so (a customer's message in the Job Center, lib/ai/messageRead.ts) */ mode: "review" | "change" | "propose", earlier = "",
   /** what staff dropped or pasted in just now (a PDF's pages, a snip, an Outlook email's attachments) */ dropped?: { images: { media_type: "image/jpeg" | "image/png"; data: string; label?: string }[] }): Promise<{ ok: true; r: FixResult } | { ok: false; error: string }> {
   const msg = message.trim().slice(0, dropped?.images.length || /^Dropped an email/.test(message) ? 7000 : 2000);
-  if (mode === "change" && !msg) return { ok: false, error: "Say what to change first." };
+  if (mode !== "review" && !msg) return { ok: false, error: "Say what to change first." };
   const b = await orderBrief(admin, orderId, false);
   if (!b.ok) return b;
   const { o, images, documents } = b;
@@ -279,7 +280,7 @@ function parseRun(v: string): Partial<Record<(typeof SIZES)[number], number>> | 
 /** a "change" that leaves the order as it is (Oct 23: the check offered "print stays at 3 x 0.7" with a Make this change
  *  button) is dropped, matched on the numbers, not the wording. A check never takes the white underbase off a colored
  *  shirt on its own; only staff saying so does. */
-function sameAsNow(c: OrderChange, groups: Group[], o: Order, mode: "review" | "change"): boolean {
+function sameAsNow(c: OrderChange, groups: Group[], o: Order, mode: "review" | "change" | "propose"): boolean {
   const v = String(c.value || "").trim();
   const num = (x: unknown) => { const n = parseFloat(String(x ?? "")); return Number.isFinite(n) ? n : null; };
   if (c.what === "print") {
@@ -305,12 +306,13 @@ function sameAsNow(c: OrderChange, groups: Group[], o: Order, mode: "review" | "
     if (c.field === "price") { const n = parseFloat(v.replace(/[$,]/g, "")); return l.priceOverride != null && (l.priceOverride as unknown) !== "" && Math.abs(+l.priceOverride - n) < 0.005; }
   }
   if (c.what === "order" && c.field === "firm") return /^y|true|on/i.test(v) === !!(o as { firm?: boolean }).firm;
+  if (c.what === "order" && (c.field === "rush" || c.field === "priority")) return /^y|true|on/i.test(v) === !!(o as unknown as Record<string, unknown>)[c.field];
   if (c.what === "order" && c.field === "due_date") return v === String((o as { due_date?: string }).due_date || "").slice(0, 10);
   return false;
 }
 
 /** the order changes (not art): print fields, their extras, the date */
-export async function applyChanges(admin: SupabaseClient, orderId: string, by: string, changes: OrderChange[]): Promise<{ ok: true; applied: string[] } | { ok: false; error: string }> {
+export async function applyChanges(admin: SupabaseClient, orderId: string, by: string, changes: OrderChange[], /** said in the order's history: "From Peter's message, Nov 12" */ why = "Changed when it was checked"): Promise<{ ok: true; applied: string[] } | { ok: false; error: string }> {
   if (!changes.length) return { ok: true, applied: [] };
   const { data: o } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   if (!o) return { ok: false, error: "Order not found." };
@@ -407,7 +409,7 @@ export async function applyChanges(admin: SupabaseClient, orderId: string, by: s
   try { if (full) { const c = calcOrder({ ...(full as Order), groups, ...patch } as Order, mergeSettings(st?.data)); money = { total: c.total, qty: c.qty }; } } catch { /* the page's next save fixes it */ }
   const { error } = await admin.from("orders").update({ groups, ...patch, ...money }).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
-  await admin.from("order_events").insert({ order_id: orderId, kind: "edited", detail: `Changed when it was checked: ${applied.join("; ")}`.slice(0, 2000), actor: by });
+  await admin.from("order_events").insert({ order_id: orderId, kind: "edited", detail: `${why}: ${applied.join("; ")}`.slice(0, 2000), actor: by });
   return { ok: true, applied };
 }
 

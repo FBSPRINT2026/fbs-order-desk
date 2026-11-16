@@ -166,7 +166,7 @@ function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) =>
     return (
       <section className="cr-hero">
         <div className="cr-k">{run ? (run.status === "paused" ? t("PAUSED ON THE PRESS") : t("ON THE PRESS NOW")) : t("UP NEXT")}</div>
-        <div className="cr-n"><b>#{j.number}</b><span>{j.customer}</span>{j.rush && <em>{t("Rush")}</em>}</div>
+        <div className="cr-n"><b>#{j.number}</b><span>{j.customer}</span>{j.rush && <em>{t("Rush")}</em>}{j.priority && <em className="prio">{t("Priority")}</em>}</div>
         <div className="cr-s">{t("{0} pcs", j.qty)}{j.label ? ` · ${j.label}` : j.name ? ` · ${j.name}` : ""}</div>
         {run && j.minutes > 0 && <>
           <div className={"cr-bar" + (over ? " over" : "")}><i style={{ width: `${pct}%` }} /></div>

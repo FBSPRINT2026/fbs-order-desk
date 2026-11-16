@@ -41,7 +41,7 @@ import { MixStrip, useMixParts } from "@/components/MixStrip";
 /** an Issue on a run (Nov 12, Nick): pieces still to print after it, and why */
 type IssueRef = { id: string; why: "missing" | "reject" | "reprint"; pcs: number; sizes: Record<string, number>; waits: boolean; at: string };
 const ISSUE_WORD: Record<IssueRef["why"], string> = { missing: "Missing", reject: "Reject", reprint: "Reprint" };
-type Job = { /** an Issue: just the pieces still to print */ issue?: IssueRef; /** the order is On hold (lib/holds.ts: art, receiving, the customer, QC; a payment hold keeps it off the schedule): why */ onHold?: string; /** the customer (orders only): which of their kinds of order it is (their Create order trainings) */ cid?: string; /** a pre-production sample run of the order (its own card), or the order's full run waiting on one (lib/samples.ts) */ sample?: "run" | "only"; waits?: boolean; key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; /** the order's production date: it runs that day, never earlier (Nine18's weekly run; Nov 11) */ prod?: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; firm?: boolean; dueTime?: number | null;
+type Job = { /** an Issue: just the pieces still to print */ issue?: IssueRef; /** the order is On hold (lib/holds.ts: art, receiving, the customer, QC; a payment hold keeps it off the schedule): why */ onHold?: string; /** the customer (orders only): which of their kinds of order it is (their Create order trainings) */ cid?: string; /** a pre-production sample run of the order (its own card), or the order's full run waiting on one (lib/samples.ts) */ sample?: "run" | "only"; waits?: boolean; key: string; kind: "o" | "a" | "h"; id: string; number: string; customer: string; name: string; due: string | null; /** the order's production date: it runs that day, never earlier (Nine18's weekly run; Nov 11) */ prod?: string | null; qty: number; status: string; needs: Need[]; href: string; owner: string; rush?: boolean; /** High priority: an extra set of eyes (orders.priority, Nick Nov 16) */ priority?: boolean; priorityNote?: string | null; firm?: boolean; dueTime?: number | null;
   /** a hold from a quote (Hold the spot): its order, when its details are due, who held it */ hold?: { orderId: string | null; detailsDue: string | null; by: string; art: string } };
 /** when a job has to be done (absolute minutes): end of its in-hands day, or the set time on a firm date */
 const dueAbs = (j: Job) => (j.due ? ord(j.due) * 1440 + (j.dueTime != null ? j.dueTime : 1440) : Infinity);
@@ -57,7 +57,7 @@ const holdTag = (j: Job) => { const st = holdState(j); if (!st) return null; con
 const numLink = (j: Job) => (j.href ? <a className="ms-numl" href={j.href} draggable={false} onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>#{j.number}</a> : <>#{j.number}</>);
 // rush and firm as small words on the right of the job's line, no emoji (Nov 12, Nick: "the little rock… get rid of that…
 // move [Firm] to the right side of the box")
-const flags0 = (j: Job) => (j.rush || j.firm ? <span className="mfl">{j.rush ? <em className="mfl-rush" title="Rush">Rush</em> : null}{j.firm ? <em className="mfl-firm" title={`Firm: needed ${firmLbl(j)}`}>Firm · {firmLbl(j)}</em> : null}</span> : null);
+const flags0 = (j: Job) => (j.rush || j.firm || j.priority ? <span className="mfl">{j.priority ? <em className="mfl-prio" title={j.priorityNote || "High priority: an extra set of eyes"}>Priority</em> : null}{j.rush ? <em className="mfl-rush" title="Rush">Rush</em> : null}{j.firm ? <em className="mfl-firm" title={`Firm: needed ${firmLbl(j)}`}>Firm · {firmLbl(j)}</em> : null}</span> : null);
 /** a job's small tags: rush / firm, and a sample run or a full run waiting on its sample (Nov 11, Nick; lib/samples.ts) */
 const flags = (j: Job) => <>{j.onHold ? <em className="mjx-tag hold" title={`On hold · ${j.onHold}: not scheduled by Make The Schedule until the hold comes off`}>On hold · {j.onHold}</em> : null}{j.issue ? <em className={"mjx-tag " + j.issue.why} title={`${ISSUE_WORD[j.issue.why]}: ${j.issue.pcs ? `${j.issue.pcs} pcs still to print` : "how many to be counted"}${j.issue.waits ? " · waits for the goods" : ""}`}>{ISSUE_WORD[j.issue.why]}</em> : null}{flags0(j)}{j.sample ? <em className="ms-smp" title={j.sample === "run" ? "The order's pre-production sample run" : "A sample order"}>Sample</em> : null}{j.waits ? <em className="ms-smpw" title="The full run waits for the customer's OK on the sample">Waits for sample OK</em> : null}</>;
 /** why a job is where it is (Nov 11 2026, Nick): the schedule put it there (sparkle), a person did, it's locked, or
@@ -588,7 +588,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const [{ data: st }, { data: o0 }, { data: a }, { data: sl0 }, { data: off0 }, { data: ex0 }, { data: ho0 }] = await Promise.all([
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       // not a job on hold for payment: production gets it once it's paid (lib/holds.ts)
-      sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times, order_type, flags").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production", "fulfillment"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
+      sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, priority, priority_note, firm, due_time, run_times, order_type, flags").is("discarded_at", null).is("schedule_off_at", null).in("status", ["approved", "art", "blanks", "production", "fulfillment"]).not("flags", "cs", JSON.stringify([{ key: "hold_payment" }])).limit(300),
       // Printavo jobs are left off the calendar (it plans our own orders only); nothing in Printavo is read or changed here
       Promise.resolve({ data: [] as unknown[] }),
       sb.from("production_slots").select("*").or("order_id.not.is.null,hold_id.not.is.null").gte("day", addDay(today, -21)).lte("day", addDay(today, 70)),
@@ -620,7 +620,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       for (const x of (sl0 || []) as Slot[]) if ((x.status === "running" || x.status === "paused") && x.order_id && !have.has(x.order_id) && x.started_at) { x.status = "done"; x.finished_at = x.finished_at || x.progress_at || x.started_at; }
       const doneIds = [...new Set([...((sl0 || []) as Slot[]).filter((x) => x.status === "done" && x.order_id && !have.has(x.order_id)).map((x) => x.order_id!), ...issues.map((x) => x.order_id).filter((id) => !have.has(id))])];
       for (let i = 0; i < doneIds.length; i += 150) {
-        const { data: more } = await sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, firm, due_time, run_times, order_type").in("id", doneIds.slice(i, i + 150)).is("discarded_at", null);
+        const { data: more } = await sb.from("orders").select("id, number, nickname, due_date, production_date, qty, status, customer_id, groups, lines, rush, priority, priority_note, firm, due_time, run_times, order_type").in("id", doneIds.slice(i, i + 150)).is("discarded_at", null);
         o = [...o, ...((more || []) as Record<string, unknown>[])];
       }
     }
@@ -745,10 +745,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       }
     }
     const js: Job[] = [
-      ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; firm?: boolean; due_time?: number | null; production_date?: string | null; order_type?: string | null; run_times?: Record<string, { min: number; by: string }> | null }[]).flatMap((x) => {
+      ...((o || []) as { id: string; number: number; nickname: string; due_date: string | null; qty: number; status: string; customer_id: string | null; groups: Group[]; lines: never[]; rush?: boolean; priority?: boolean; priority_note?: string | null; firm?: boolean; due_time?: number | null; production_date?: string | null; order_type?: string | null; run_times?: Record<string, { min: number; by: string }> | null }[]).flatMap((x) => {
         // a pre-production sample is its own card, and the full run (less the pieces taken off the top) waits on it (Nov 11, Nick; lib/samples.ts)
         const parts = runParts(x.groups || []), runOn = sampleRunOn(x.groups || []);
-        const base = { onHold: holdOf((x as { flags?: unknown }).flags)?.reason, cid: x.customer_id || "", rush: !!x.rush, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", due: x.due_date, status: x.status, href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" };
+        const base = { onHold: holdOf((x as { flags?: unknown }).flags)?.reason, cid: x.customer_id || "", rush: !!x.rush, priority: !!x.priority, priorityNote: x.priority_note || null, firm: !!x.firm || x.due_time != null, dueTime: x.due_time ?? null, kind: "o" as const, id: x.id, number: String(x.number), customer: cn.get(x.customer_id || "") || "", due: x.due_date, status: x.status, href: `/shop/orders/${x.id}`, owner: own.get(x.customer_id || "") || "" };
         const out: Job[] = [];
         if (parts.sample.length) out.push({ ...base, key: "o:" + x.id + ":s", sample: "run", prod: runOn, due: runOn || x.due_date, name: `Sample · ${x.nickname || ""}`.trim(), qty: parts.sample.reduce((a, g) => a + samplePieces(g), 0), needs: withRunTimes(needsForOrder(ps, x as never, parts.sample), undefined) });
         const rest = needsForOrder(ps, x as never, parts.rest);
@@ -2213,10 +2213,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     load();
   }
   /** Rush / Firm from the right click (the order's flags, as the job card's were) */
-  async function flagJob(c: Card, x: { rush?: boolean; firm?: boolean; due_time?: number | null }) {
+  async function flagJob(c: Card, x: { rush?: boolean; priority?: boolean; firm?: boolean; due_time?: number | null }) {
     setLockMenu(null);
     const r = await createClient().from("orders").update({ ...x, updated_at: new Date().toISOString() }).eq("id", c.job.id);
-    setMsg(r.error ? r.error.message : `#${c.job.number}: ${x.rush !== undefined ? (x.rush ? "Rush" : "not Rush") : x.firm ? "Firm" : "not Firm"}.`);
+    setMsg(r.error ? r.error.message : `#${c.job.number}: ${x.rush !== undefined ? (x.rush ? "Rush" : "not Rush") : x.priority !== undefined ? (x.priority ? "High priority" : "not High priority") : x.firm ? "Firm" : "not Firm"}.`);
     load();
   }
   /** every piece here: a count saved with what's expected, the same as counting each size on Goods & Receiving */
@@ -2572,7 +2572,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               {tile("v", "move", "Move", () => { setLockMenu(null); setOpenMove(true); setOpen(c); })}
               {tile("l", "lock", "Lock", () => { setLockMenu(null); setLockSide({ c, g, k: (c.slot?.locked as "spot" | "press" | "day" | "person") || "spot" }); })}
             </div>
-            {c.job.kind === "o" && <div className="mrb-flags"><button type="button" className={c.job.rush ? "on rush" : ""} onClick={() => void flagJob(c, { rush: !c.job.rush })}>Rush</button><button type="button" className={c.job.firm ? "on firm" : ""} onClick={() => void flagJob(c, c.job.firm ? { firm: false, due_time: null } : { firm: true })}>Firm{c.job.firm ? ` · ${firmLbl(c.job)}` : ""}</button></div>}
+            {c.job.kind === "o" && <div className="mrb-flags"><button type="button" className={c.job.rush ? "on rush" : ""} onClick={() => void flagJob(c, { rush: !c.job.rush })}>Rush</button><button type="button" className={c.job.priority ? "on prio" : ""} title="High priority: an extra set of eyes" onClick={() => void flagJob(c, { priority: !c.job.priority })}>Priority</button><button type="button" className={c.job.firm ? "on firm" : ""} onClick={() => void flagJob(c, c.job.firm ? { firm: false, due_time: null } : { firm: true })}>Firm{c.job.firm ? ` · ${firmLbl(c.job)}` : ""}</button></div>}
             {c.slot && (rcSure
               ? <div className="mrb-sure">{c.job.hold ? "Bump this hold?" : "Take it off the schedule?"}<button type="button" className="btn sm danger" onClick={() => { const sl = c.slot!; setRcSure(false); setLockMenu(null); void unbook(sl); }}>Yes</button><button type="button" className="btn sm" onClick={() => setRcSure(false)}>No</button></div>
               : <button type="button" className="mrc-li mrb-off" onClick={() => setRcSure(true)}><RcIco k="x" />{c.job.hold ? "Bump this hold" : "Take off the schedule"}</button>)}
@@ -3519,7 +3519,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             {c.job.due && <span className="mji-pill o">Due {dayShort(c.job.due).replace(",", "")}{c.job.dueTime != null ? ` · ${clock(c.job.dueTime)}` : ""}</span>}
             {goodsPill && <span className="mji-pill gr"><GoodsTee k={goodsPill[0]} t="" />{goodsPill[1]}</span>}
             {sl?.locked && <span className="mji-pill b">Locked to {sl.locked === "spot" ? "this spot" : sl.locked === "press" ? "this press" : sl.locked === "person" ? lead(c.machine) || "this person" : "this day"}</span>}
-            {c.job.rush && <span className="mji-pill r">Rush</span>}{c.job.firm && <span className="mji-pill o">Firm · {firmLbl(c.job)}</span>}
+            {c.job.priority && <span className="mji-pill v" title={c.job.priorityNote || undefined}>Priority{c.job.priorityNote ? ` · ${c.job.priorityNote}` : ""}</span>}{c.job.rush && <span className="mji-pill r">Rush</span>}{c.job.firm && <span className="mji-pill o">Firm · {firmLbl(c.job)}</span>}
           </div>
           <MixStrip parts={mixP[c.job.id]} />
         </div>

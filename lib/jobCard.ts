@@ -14,7 +14,7 @@ export type JobPrint = { location: string; method: string; colors: string; inks:
 export type JobGroup = { name: string; rows: JobRow[]; prints: JobPrint[] };
 export type JobCard = {
   kind: "o" | "a"; id: string; number: string; name: string; customerId: string | null; customer: string; contact: string; phone: string;
-  po: string; due: string | null; production: string | null; rush: boolean; status: string; qty: number;
+  po: string; due: string | null; production: string | null; rush: boolean; /** High priority: an extra set of eyes (orders.priority) */ priority?: boolean; priorityNote?: string | null; status: string; qty: number;
   delivery: "ship" | "deliver" | "pickup" | "tbd"; shipMethod: string; tracking: string; shipTo: string[];
   /** wholesale jobs ship blind: the customer's name instead of ours */
   brand: string; blind: boolean;
@@ -62,7 +62,7 @@ export async function loadJobCard(admin: SupabaseClient, ref: { number: string }
       }));
       return {
         kind: "o", id: o.id, number: String(o.number), name: o.nickname || "", customerId: o.customer_id || null, customer: cu.company || cu.name || "", contact: cu.company ? cu.name || "" : "", phone: cu.phone || "",
-        po: o.po_number || "", due: o.due_date, production: o.production_date || null, rush: !!o.rush, status: ST[o.status as keyof typeof ST]?.label || o.status, qty: o.qty || groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + r.total, 0), 0),
+        po: o.po_number || "", due: o.due_date, production: o.production_date || null, rush: !!o.rush, priority: !!o.priority, priorityNote: o.priority_note || null, status: ST[o.status as keyof typeof ST]?.label || o.status, qty: o.qty || groups.reduce((a, g) => a + g.rows.reduce((b, r) => b + r.total, 0), 0),
         delivery: (o.delivery_method as JobCard["delivery"]) || "pickup", shipMethod: [o.ship_method || "", isThirdParty(o) ? thirdPartyLabel(o.third_party, true) : ""].filter(Boolean).join(" · "), tracking: o.tracking || "",
         shipTo: o.delivery_method !== "pickup" && o.ship_to ? [...(!blind && (cu.company || cu.name) ? [cu.company || cu.name || ""] : []), ...o.ship_to.split(/\n/).map((x) => x.trim()).filter(Boolean)] : [],
         brand: blind ? cu.company || cu.name || "" : shopName, blind,

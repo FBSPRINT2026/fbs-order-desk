@@ -106,7 +106,7 @@ function Card({ o, cust, owner, onOpen, onMove, setDragId, dragging }: { o: Orde
       onClick={(e) => { if (!(e.target as HTMLElement).closest("button")) onOpen(); }}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}>
       <div className="cj-1">
-        <span className="ordno">#{o.number}</span>{o.rush && <span className="cj-rush">Rush</span>}{o.unread > 0 && <span className="unread" title="Unread message" />}
+        <span className="ordno">#{o.number}</span>{o.rush && <span className="cj-rush">Rush</span>}{o.priority && <span className="cj-rush prio" title={o.priority_note || "High priority"}>Priority</span>}{o.unread > 0 && <span className="unread" title="Unread message" />}
         <span className="cj-t">{o.nickname || "Untitled Job"}</span>
       </div>
       <div className="cj-2">

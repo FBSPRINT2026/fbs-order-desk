@@ -437,7 +437,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     const startedAt = Date.now();
     const { data: savedRow, error } = await sb.from("orders").update({
       customer_id: d.customer_id || null, nickname: d.nickname, due_date: d.due_date || null, groups: d.groups, lines: [], fees: d.fees,
-      price_type: d.price_type || "retail", order_type: d.order_type || null, sample: d.order_type === "sample" ? d.sample || null : null, from_sample: d.from_sample || null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
+      price_type: d.price_type || "retail", order_type: d.order_type || null, sample: d.order_type === "sample" ? d.sample || null : null, from_sample: d.from_sample || null, product_kind: isSimpleKind(d.product_kind) ? d.product_kind : null, use_program: !!d.use_program, program_card: d.program_card || null, po_number: d.po_number || "", production_date: d.production_date || null, rush: !!d.rush, priority: !!d.priority, priority_note: d.priority ? (d.priority_note || "").trim() || null : null, firm: !!d.firm, due_time: d.due_time ?? null, delivery_method: d.delivery_method || "pickup",
       bill_to: d.bill_to || null, ship_to: d.ship_to || "", ship_method: d.ship_method || "", tracking: d.tracking || "", third_party: d.third_party || null,
       discount_pct: +d.discount_pct || 0, discount_amt: +(d.discount_amt || 0), discount_type: d.discount_type === "amt" ? "amt" : "pct", tax_exempt: d.tax_exempt, tax_rate: d.tax_rate === null || (d.tax_rate as unknown) === "" ? null : +d.tax_rate,
       waive_setup: d.waive_setup, notes: d.notes, notes_on_invoice: !!d.notes_on_invoice, total: c.total, qty: c.qty,
@@ -1594,7 +1594,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       )}
       <div className="ed-head" style={{ marginTop: 8 }}>
         <div className="ed-title">
-          <h1>{/* the number first, so it shows when a long name is cut off (Oct 31, Nick) */}{!o.draft && <span className="ot-no ot-no1">#{o.number}</span>}{o.nickname || "Untitled Job"}{o.draft ? <span className="ot-no ot-draft"> – Draft, not saved</span> : null}{o.rush && <span className="rush">RUSH</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
+          <h1>{/* the number first, so it shows when a long name is cut off (Oct 31, Nick) */}{!o.draft && <span className="ot-no ot-no1">#{o.number}</span>}{o.nickname || "Untitled Job"}{o.draft ? <span className="ot-no ot-draft"> – Draft, not saved</span> : null}{o.rush && <span className="rush">RUSH</span>}{o.priority && <span className="rush prio" title={o.priority_note || "High priority: an extra set of eyes on this job"}>PRIORITY</span>}{o.firm && <span className="rush firm">FIRM{o.due_date ? ` ${new Date(o.due_date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })}` : ""}{o.due_time != null ? ` ${((Math.floor(o.due_time / 60) + 11) % 12) + 1}:${String(o.due_time % 60).padStart(2, "0")}${o.due_time >= 720 ? "p" : "a"}` : ""}</span>}</h1>
         </div>
         <div className={"ed-actions" + (actsOpen ? " open" : "")}>
           {/* the order's top buttons (Oct 21, Nick): status first, then Ask AI, then Documents and Production menus, More */}
@@ -2076,12 +2076,15 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <span className="jd-flags">
                   <label className={"jd-ck k-firm" + (o.firm ? " on" : "")} title="Firm in-hands date: it can't move (⛰️ on the production calendar)"><input type="checkbox" checked={!!o.firm} onChange={(e) => patch((d) => { d.firm = e.target.checked; })} />Firm</label>
                   <label className={"jd-ck k-rush" + (o.rush ? " on" : "")} title="Rush job (🔥 on the production calendar)"><input type="checkbox" checked={!!o.rush} onChange={(e) => patch((d) => { d.rush = e.target.checked; })} />Rush</label>
+                  <label className={"jd-ck k-prio" + (o.priority ? " on" : "")} title="High priority: this job needs a little more attention, an extra set of eyes (shown on the schedule, the work order and the crew's phones; never to the customer)"><input type="checkbox" checked={!!o.priority} onChange={(e) => patch((d) => { d.priority = e.target.checked; })} />Priority</label>
                 </span>
               </div>
               <div className="panel-b stack">
                 <div className="jl">
                   <label className="jl-k" htmlFor="o-nick">Job name</label>
                   <div className="jl-v"><input id="o-nick" className="jl-in" type="text" value={o.nickname} placeholder="Fall league shirts" onChange={(e) => patch((d) => { d.nickname = e.target.value; })} /></div>
+                  {o.priority && <><label className="jl-k" htmlFor="o-prio">Priority</label>
+                  <div className="jl-v"><input id="o-prio" className="jl-in" type="text" value={o.priority_note || ""} placeholder="Why: high profile, new account…" onChange={(e) => patch((d) => { d.priority_note = e.target.value; })} /></div></>}
                   <label className="jl-k" htmlFor="o-po">PO #</label>
                   <div className="jl-v"><input id="o-po" className="jl-in" type="text" value={o.po_number || ""} placeholder="None" onFocus={(e) => { e.currentTarget.dataset.was = e.currentTarget.value; }} onChange={(e) => patch((d) => { d.po_number = e.target.value; })}
                     // a new PO: the suppliers' manifests waiting for it are matched now (lib/manifest.ts resolvePending), once it's saved

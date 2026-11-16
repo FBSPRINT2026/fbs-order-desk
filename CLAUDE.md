@@ -250,6 +250,20 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   order's goods (`addTracking`). Tracking and Just letting you know need no answer: never "waiting on us", no to-do, no
   unread badge (`needsReply` / `NEEDS_REPLY_FILTER`; anything that counts messages waiting on us goes through them); staff
   change a reason in the thread. No reason (older messages, email) counts as a question.
+- **The AI reads every customer message** (Nick, Nov 16 2026: "would you like me to update the shipping address to
+  this?… firm ship date, bag size… those are changes… it's not no reply needed"). Each portal message is read with its
+  order as it comes in (and any not read yet when the Job Center opens): `readMessage` in `lib/ai/messageRead.ts`, kept
+  on `messages.ai` / `ai_kind`. Whatever reason the customer picked, the read decides: a change to the order (a date, firm,
+  high profile, a ship-to, a garment, a print) or a question is To do; a goods notice, "approved: YES" or something the
+  order already says is filed. A change is worked out by the AI order helper (`orderFix` mode "propose") and made with
+  one button (`applyChanges`, logged "From Peter's message, Nov 12"); a reply is written but never sent by itself. One
+  card, `components/MsgAiCard.tsx`, under the message in the Job Center thread and the job's timeline; "Not this" is
+  kept and shown to the next reads. Waiting on us is `needsReply` / `NEEDS_REPLY_FILTER` (the read first, then the
+  reason; `handled_at` is done).
+- **High priority** (Nick, Nov 16 2026: "this job needs a little more attention, take an extra set of eyes"): beside
+  Rush and Firm, `orders.priority` (+ `priority_note`, why). Violet "Priority" on the order's header and Job details, the
+  Orders list and board, the schedule (job line, card, right-click), the work order, the job ticket and the crew's
+  phones; never to the customer. "High profile" in an email or a message sets it.
 - **Sending to a customer is one Send** (Nick, Nov 10 2026): every Send button opens `components/tools/SendProofTool.tsx`
   with the proof (when there's a new version) and the quote both ticked; staff untick one to send the other alone. Never
   a quote-only or proof-only send path.

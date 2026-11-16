@@ -23350,3 +23350,34 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .mzc-ai:has(.msai.ok){border-left-color:var(--ok)}
 .mzc-ai .msai{border:0;background:none;padding:12px 14px 4px}
 .mzc-ai .mzc-askw{border-top:0;background:none;padding:6px 14px 12px}
+
+/* ── High priority (Nick, Nov 16 2026: "a flag… this job needs a little more attention, an extra set of eyes"):
+   violet beside Rush and Firm everywhere: the order's header and its Job details checkbox, the Orders list, the board,
+   the schedule (job line, card, right-click), the work order and the crew's phones. Never shown to the customer. */
+.rush.prio{background:var(--fbs-violet)}
+.tag.prio-tag{margin-left:6px;background:color-mix(in srgb,var(--fbs-violet) 14%,var(--surface,#fff));color:color-mix(in srgb,var(--fbs-violet) 70%,var(--ink))}
+.cj-rush.prio{background:var(--fbs-violet);margin-left:4px}
+.mfl-prio{color:color-mix(in srgb,var(--fbs-violet) 70%,var(--ink));background:color-mix(in srgb,var(--fbs-violet) 12%,var(--surface,#fff));border:1px solid color-mix(in srgb,var(--fbs-violet) 35%,var(--surface,#fff))}
+.mji-pill.v{background:color-mix(in srgb,var(--fbs-violet) 12%,var(--surface,#fff));color:color-mix(in srgb,var(--fbs-violet) 70%,var(--ink))}
+.mrb-flags button.on.prio{border-color:var(--fbs-violet);color:color-mix(in srgb,var(--fbs-violet) 70%,var(--ink));background:color-mix(in srgb,var(--fbs-violet) 10%,var(--surface,#fff))}
+.jd-ck.k-prio.on{color:var(--ink);font-weight:700}
+
+/* ── The AI on a customer's message (Nick, Nov 16 2026; components/MsgAiCard.tsx): one card under the message, what it
+   means, the order now → after, and one button. Violet like the shop assistant; green once done, gray when filed. */
+.mai{display:flex;flex-wrap:wrap;align-items:flex-start;gap:8px 10px;margin-top:8px;padding:9px 11px;border:1px solid color-mix(in srgb,var(--fbs-violet) 22%,var(--surface,#fff));border-radius:8px;background:color-mix(in srgb,var(--fbs-violet) 6%,var(--surface,#fff));font-size:13px;line-height:1.45;color:var(--ink);white-space:normal;text-align:left}
+.mai-s{flex:none;color:var(--fbs-violet);font-weight:800}
+.mai-w{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.mai-w>b{font-weight:700}
+.mai-ba{font-size:12.5px;color:var(--ink-2,var(--ink))}
+.mai-ba s{color:var(--ink-3)}
+.mai-sub{font-size:12px;color:var(--ink-3)}
+.mai-q{font-size:12.5px;color:var(--ink-2,var(--ink));font-style:italic}
+.mai-err{font-size:12px;color:var(--danger)}
+.mai-b{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mai-no{display:flex;gap:6px;margin-top:4px}
+.mai-no input{flex:1;min-width:0;height:30px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:13px}
+.mai.ok{background:color-mix(in srgb,var(--ok) 8%,var(--surface,#fff));border-color:color-mix(in srgb,var(--ok) 28%,var(--surface,#fff))}
+.mai.ok .mai-s{color:var(--ok)}
+.mai.filed{background:var(--surface-2,#f6f7f9);border-color:var(--line);color:var(--ink-3)}
+.mai.filed .mai-s{color:var(--ink-3)}
+.jmb-ai{display:block;font-size:12px;font-weight:600;color:color-mix(in srgb,var(--fbs-violet) 75%,var(--ink));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

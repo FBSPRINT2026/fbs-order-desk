@@ -102,7 +102,7 @@ export default function JobMobile(p: {
           <a className="jm-menu" href="/crew" onClick={(e) => { if (countGuard.busy()) { e.preventDefault(); countGuard.ask(() => { location.href = "/crew"; }); } }}><Icon d={I.menu} />{t("Main menu")}</a>
           {view !== "home" && <button type="button" className="jm-back" onClick={back}>{t("← Job menu")}</button>}
         </div>
-        <div className="jm-num"><b>#{card.number}</b>{card.rush && <span className="jm-rush">{t("RUSH")}</span>}{p.box ? <span className="jm-box">{t("Box {0}", p.box)}</span> : null}</div>
+        <div className="jm-num"><b>#{card.number}</b>{card.rush && <span className="jm-rush">{t("RUSH")}</span>}{card.priority && <span className="jm-rush prio" title={card.priorityNote || undefined}>{t("PRIORITY")}</span>}{p.box ? <span className="jm-box">{t("Box {0}", p.box)}</span> : null}</div>
         <div className="jm-cust">{card.customer || "—"}</div>
         {card.name && <div className="jm-name">{card.name}</div>}
         <div className="jm-facts"><span><b>{card.qty}</b> {t("pcs")}</span><span>{t("Due")} <b>{fmtDay(card.due, locale)}</b></span>{card.status && <span>{t(card.status)}</span>}<span>{card.delivery === "tbd" ? "TBD" : t(card.delivery === "ship" ? "Ship|delivery" : card.delivery === "deliver" ? "Delivery|delivery" : "Pickup|delivery")}</span></div>

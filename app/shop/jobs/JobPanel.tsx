@@ -1,6 +1,7 @@
 "use client";
 import ClickTwice from "@/components/ClickTwice";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import MsgAiCard from "@/components/MsgAiCard";
 import Link from "next/link";
 import SendProofTool from "@/components/tools/SendProofTool";
 import { mockupHref } from "@/lib/mockupFresh";
@@ -80,7 +81,7 @@ function stagesOf(d: JobDetail, it: JobItem): { t: string; st: "ok" | "now" | ""
   return [art?.k === "sewout" ? "Sew-out" : "Mockup", "Quote", "Approval", "Goods", "Production"].map((t, i) => ({ t, st: ok[i] && (now < 0 || i < now) ? "ok" : i === now ? "now" : "" }));
 }
 
-type Said = { at: string; who: string; us: boolean; text: string; msg?: boolean; why?: string | null };
+type Said = { at: string; who: string; us: boolean; text: string; msg?: boolean; why?: string | null; id?: string; ai?: import("@/lib/messageRead").MsgRead | null; handled?: boolean };
 function Detail({ d, rows, it, step, after, close, onUndo, chatKey, onSent }: { d: JobDetail; rows: Row[]; it: JobItem; step: Step; after: (m: string) => void; close: ReactNode; onUndo: () => void; chatKey: string; onSent?: () => void }) {
   // the piece this step is about, to start with
   const want: PieceState[] = step === "changes" ? ["changes"] : step === "ready" ? ["made", "needed"] : step === "sent" ? ["sent"] : ["needed", "made", "sent", "changes"];
@@ -94,6 +95,7 @@ function Detail({ d, rows, it, step, after, close, onUndo, chatKey, onSent }: { 
   const fill = Math.max(0, stages.map((x) => x.st).lastIndexOf("ok"));
   // one timeline, oldest first (Job Center D): what happened (the order's history) and what was written in the portal
   const [sent, setSent] = useState<Said[]>([]);
+  const [draft, setDraft] = useState<{ t: string; n: number } | null>(null);
   const tl = [...rows.map((r) => ({ at: r.at, r, m: null as Said | null })), ...[...d.msgs.filter((m) => m.msg), ...sent].map((m) => ({ at: m.at, r: null as Row | null, m }))]
     .sort((a, b) => a.at.localeCompare(b.at)).slice(-16);
   // the customer's last word on a proof, sew-out or quote (a portal message is already in the timeline)
@@ -131,18 +133,21 @@ function Detail({ d, rows, it, step, after, close, onUndo, chatKey, onSent }: { 
         ) : x.m ? (
           <li key={i} className={x.m.us ? "us" : "them"}><i aria-hidden />
             <span className="jcp2-w"><b>{x.m.us ? (x.m.who ? `${x.m.who[0].toUpperCase()}${x.m.who.slice(1)}` : "We") : x.m.who || "The customer"}</b>{x.m.us ? " wrote" : " wrote"}{!x.m.us && reasonOf(x.m.why) && <span className={"jcp2-why" + (reasonOf(x.m.why)!.reply ? "" : " fyi")}>{reasonOf(x.m.why)!.label}</span>}
-              <span className="jcp2-say">{x.m.text}</span></span><span className="jcp2-d">{day(x.m.at)}</span></li>
+              <span className="jcp2-say">{x.m.text}</span>
+              {!x.m.us && x.m.id && x.m.ai && !x.m.ai.coveredBy && <MsgAiCard id={x.m.id} read={x.m.ai} handled={!!x.m.handled} orderId={d.id} onChanged={onSent} onReply={(t) => setDraft({ t, n: Date.now() })} />}</span><span className="jcp2-d">{day(x.m.at)}</span></li>
         ) : null)}</ol> : <div className="faint" style={{ fontSize: 12.5 }}>Nothing yet.</div>}
       </div>
-      <Reply chatKey={chatKey} who={who} onSent={(text) => { setSent((x) => [...x, { at: new Date().toISOString(), who: "", us: true, text, msg: true }]); onSent?.(); }} />
+      <Reply chatKey={chatKey} who={who} draft={draft} onSent={(text) => { setSent((x) => [...x, { at: new Date().toISOString(), who: "", us: true, text, msg: true }]); onSent?.(); }} />
       <Foot d={d} after={after} onUndo={onUndo} />
     </div>
   );
 }
 
 /** a reply from the panel: it shows in their portal (the Job Center's replies send no email, like the Message Center's) */
-function Reply({ chatKey, who, onSent }: { chatKey: string; who: string; onSent: (text: string) => void }) {
+function Reply({ chatKey, who, onSent, draft }: { chatKey: string; who: string; onSent: (text: string) => void; /** a reply the AI wrote, put in the box (MsgAiCard) */ draft?: { t: string; n: number } | null }) {
   const [text, setText] = useState(""), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const box = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => { if (draft) { setText(draft.t); box.current?.focus(); } }, [draft]);
   const send = async () => {
     const t = text.trim(); if (!t || busy) return;
     setBusy(true); setErr("");
@@ -154,7 +159,7 @@ function Reply({ chatKey, who, onSent }: { chatKey: string; who: string; onSent:
   return (
     <div className="jcp-sec jcp2-rep">
       <div className="jcp2-rep-r">
-        <textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder={`Reply to ${who}…`} aria-label="Reply"
+        <textarea ref={box} rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder={`Reply to ${who}…`} aria-label="Reply"
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } }} />
         <button type="button" className="btn primary" disabled={busy || !text.trim()} onClick={() => void send()}>{busy ? "Sending…" : "Send"}</button>
       </div>

@@ -1,4 +1,5 @@
 "use server";
+import { after } from "next/server";
 import { SENT_OR_SHOWN } from "@/lib/portalView";
 import { SHOP_NOTIFY_EMAIL } from "@/lib/config";
 import { allRows } from "@/lib/readAll";
@@ -89,8 +90,10 @@ export async function portalSend(orderId: string | null, body: string, files: At
     const tp = orderId && topic === "goods" ? "goods" : "";
     // what it's about (lib/messages.ts REASONS): only a known one is kept
     const why = reasonOf(reason)?.k || null;
-    const { error } = await admin.from("messages").insert({ order_id: orderId, customer_id: orderId ? null : cust.id, project_id: orderId ? null : projectName ? projectId : null, topic: tp, author_type: "customer", author_email: email, author_name: author, body: text, attachments, reason: why });
+    const { data: made, error } = await admin.from("messages").insert({ order_id: orderId, customer_id: orderId ? null : cust.id, project_id: orderId ? null : projectName ? projectId : null, topic: tp, author_type: "customer", author_email: email, author_name: author, body: text, attachments, reason: why }).select("id").single();
     if (error) return { ok: false, error: error.message };
+    // the AI reads it with its order right after it's sent (lib/ai/messageRead.ts): what it means for the shop
+    after(async () => { try { const { aiState } = await import("@/lib/ai/claude"); const st = await aiState(admin); if (st.ready) await (await import("@/lib/ai/messageRead")).readMessage(admin, st.settings, made.id); } catch { /* read later in the Job Center */ } });
     if (SHOP_NOTIFY_EMAIL) {
       const { data: s } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       const shop = mergeSettings(s?.data).shop.name;
