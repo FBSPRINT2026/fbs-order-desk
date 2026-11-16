@@ -1,4 +1,5 @@
 "use client";
+import { PayButton } from "@/components/PayLock";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -43,7 +44,7 @@ export default function EmployeesPage() {
     <>
       <div className="page-head">
         <div><div className="eyebrow">People, teams, job time &amp; efficiency</div><h1>Employees</h1></div>
-        <div className="row" style={{ gap: 8 }}><a className="btn" href="/work" target="_blank" rel="noreferrer">Open Employee App</a></div>
+        <div className="row" style={{ gap: 8 }}>{d && (d.boss || d.seesPay) && <PayButton />}<a className="btn" href="/work" target="_blank" rel="noreferrer">Open Employee App</a></div>
       </div>
       <div className="aa-sub tm-tabs" role="tablist">{TABS.map(([k, l]) => <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => go(k)}>{l}</button>)}</div>
       {!d ? <div className="empty">Loading…</div>

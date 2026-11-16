@@ -1,4 +1,6 @@
 "use client";
+import { payShown, usePayShown } from "@/lib/payLock";
+import { PAY_MASK } from "@/lib/format";
 import { useProdSide } from "@/lib/prodSide";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -17,9 +19,10 @@ import type { TeamData } from "./types";
  */
 const COLORS = ["#0E9BD8", "#F26660", "#FCB122", "#0F8C78", "#7C5CD6", "#D0487A", "#3F7F2E", "#B8621B"];
 const money = (n: number) => `$${n.toFixed(2).replace(/\.00$/, "")}`;
-const payMoney = money;
+const payMoney = (n: number) => (payShown() ? money(n) : PAY_MASK);
 
 export default function TeamPeople({ d }: { d: TeamData }) {
+  usePayShown(); // redraw pay figures when they're shown or hidden (lib/payLock.ts)
   /** pay rates: owners / admins, and anyone given the "pay" permission (Jose, production lead); read only for them */
   const canPay = d.boss || !!d.seesPay;
   const [edit, setEdit] = useState<Partial<Employee> | null>(null);

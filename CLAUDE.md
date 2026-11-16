@@ -40,6 +40,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   ours for good: old jobs in `archived_orders` (the P mark, `components/PrintavoMark.tsx`), their files in our storage,
   read through `lib/printavoOld.ts`. A 40,000 job that was run from Printavo now takes our own statuses like any order.
 - Secrets live in Vercel env vars, added by Nicholas. Never put keys or passwords in code, chat or the database.
+- **Pay is hidden until a PIN** (Nick, Nov 16 2026: "leave our login open on an employee's computer… people get really
+  weird if they see what other people make"). Every pay rate, paycheck, crew rate and labor cost goes through `payMoney`
+  (lib/format.ts: "$•••" until shown) or sits in `<PayCover>`; Show pay (`PayButton`, components/PayLock.tsx) asks the
+  person's own PIN (scrambled in `pay_pins`, set the first time), and it hides again after 10 minutes untouched
+  (lib/payLock.ts). New pay figures go through these.
 - **Spanish toggle.** Every shop page has "Translate to Spanish" at the top right (not the customer portal: removed Oct 15 2026, Nicholas) (`components/Translate.tsx`).
   It swaps the page's text in place and saves each phrase's Spanish in `ui_translations`. Put `data-notranslate` on
   anything that must stay exactly as written (codes, a signature, legal text). Inputs, selects and textareas are never touched.

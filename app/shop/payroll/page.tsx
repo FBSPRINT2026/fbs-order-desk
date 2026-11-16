@@ -1,4 +1,5 @@
 "use client";
+import { PayButton, PayCover } from "@/components/PayLock";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -192,10 +193,12 @@ export default function PayrollCenter() {
         <div className="row" style={{ gap: 8 }}>
           <button type="button" className="btn" disabled={!p} onClick={() => p && setStart(periodOf(d!.settings, addDays(p.start, -1)).start)} aria-label="Previous pay period" title="Previous pay period">←</button>
           <button type="button" className="btn" disabled={!p || addDays(p.end, 1) > today} onClick={() => p && setStart(addDays(p.end, 1))} aria-label="Next pay period" title="Next pay period">→</button>
+          <PayButton />
           <button type="button" className="btn primary" onClick={() => { setTab("advances"); setNewAdv(true); }}>Issue paycheck advance</button>
         </div>
       </div>
 
+      <PayCover what="Payroll figures">
       <div className="stats">
         <button type="button" className="stat" onClick={() => setTab("payday")}><span className={"v" + (toFix.length ? " alert" : "")}>{toFix.reduce((s, r) => s + r.issues, 0)}</span><span className="k">Clock problems</span></button>
         <button type="button" className="stat" onClick={() => setTab("payday")}><span className="v">{w2.length}</span><span className="k">W-2 payroll{w2.length ? ` · ${w2Open.length ? `${w2Open.length} to enter` : "entered"}` : ""}</span></button>
@@ -348,6 +351,7 @@ export default function PayrollCenter() {
       ) : (
         <PastPaydays onOpen={(st) => { setStart(st); setDetailsOpen(false); setTab("payday"); }} onReopen={role === "owner" ? async (st) => { setBusy("Reopening…"); const r = await closePayday(st, true); setBusy(""); if (!r.ok) setErr(r.error); else { setMsg("Payday reopened."); setStart(st); setTab("payday"); load(); } } : undefined} />
       )}
+      </PayCover>
     </>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { usePayShown } from "@/lib/payLock";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { KIND_LABEL, withLunch, addDays, dayLabel, daysBetween, dec, fullName, hm, localDay, localMinutes, localToIso, periodOf, timeLabel, timecard, type Punch, type TimeOff } from "@/lib/timeclock";
@@ -13,6 +14,7 @@ import { clearIssueCache } from "./TimeBubble";
  * punches, fixes (edit a time, add a missed punch, void one — the original is kept), approval, and the payroll file.
  */
 export default function TimeCards({ d }: { d: TimeData }) {
+  const payOn = usePayShown(); // the CSV carries pay only once it's shown with a PIN
   const [start, setStart] = useState(() => periodOf(d.settings, localDay(new Date())).start);
   const period = periodOf(d.settings, start);
   const [punches, setPunches] = useState<Punch[] | null>(null);
@@ -57,12 +59,12 @@ export default function TimeCards({ d }: { d: TimeData }) {
   const days = Array.from({ length: daysBetween(period.start, period.end) + 1 }, (_, i) => addDays(period.start, i));
 
   function exportCsv() {
-    const head = ["Employee", "Employee ID", "Department", "Period Start", "Period End", "Regular Hours", "Overtime Hours", "PTO Hours", "Sick Hours", "Holiday Hours", "Unpaid Hours", "Total Paid Hours", ...(seePay ? ["Pay Rate", "Gross Pay"] : [])];
+    const head = ["Employee", "Employee ID", "Department", "Period Start", "Period End", "Regular Hours", "Overtime Hours", "PTO Hours", "Sick Hours", "Holiday Hours", "Unpaid Hours", "Total Paid Hours", ...(seePay && payOn ? ["Pay Rate", "Gross Pay"] : [])];
     const rows = cards.map(({ e, c }) => {
       const r = pay[e.id]?.rate ?? null;
       const paid = c.regular + c.overtime + c.pto + c.sick + c.holiday;
       const gross = r != null ? (c.regular / 60) * r + (c.overtime / 60) * r * 1.5 + ((c.pto + c.sick + c.holiday) / 60) * r : null;
-      return [fullName(e), e.uattend_id || e.id.slice(0, 8), e.department, period.start, period.end, dec(c.regular), dec(c.overtime), dec(c.pto), dec(c.sick), dec(c.holiday), dec(c.unpaid), dec(paid), ...(seePay ? [r != null ? r.toFixed(2) : "", gross != null ? gross.toFixed(2) : ""] : [])];
+      return [fullName(e), e.uattend_id || e.id.slice(0, 8), e.department, period.start, period.end, dec(c.regular), dec(c.overtime), dec(c.pto), dec(c.sick), dec(c.holiday), dec(c.unpaid), dec(paid), ...(seePay && payOn ? [r != null ? r.toFixed(2) : "", gross != null ? gross.toFixed(2) : ""] : [])];
     });
     const csv = [head, ...rows].map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(",")).join("\n");
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `payroll-${period.start}-to-${period.end}.csv`; a.click();

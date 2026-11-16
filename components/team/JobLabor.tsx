@@ -1,4 +1,5 @@
 "use client";
+import { usePayShown } from "@/lib/payLock";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fullName, hm, jobMinutes, timeLabel, dayLabel, localDay, type Employee, type JobTime } from "@/lib/timeclock";
@@ -7,6 +8,7 @@ import { useCan } from "@/components/RoleContext";
 
 /** Labor on one order: time logged per step (setup, front, back…), who did it, pieces per labor hour and (owners/admins) cost. */
 export default function JobLabor({ orderId, archivedId, qty, total }: { orderId?: string; archivedId?: string; qty?: number; total?: number }) {
+  const payOn = usePayShown(); // redraw pay figures when they're shown or hidden (lib/payLock.ts)
   const [rows, setRows] = useState<JobTime[] | null>(null);
   const [emps, setEmps] = useState<Record<string, Employee>>({});
   const [rates, setRates] = useState<Record<string, number> | null>(null);
@@ -39,7 +41,7 @@ export default function JobLabor({ orderId, archivedId, qty, total }: { orderId?
         <div className="jlb-k">
           {qty ? <span>{(qty / (mins / 60)).toFixed(1)} <small>pcs / labor hr</small></span> : null}
           {cost != null && <span>{payMoney(cost)} <small>labor cost</small></span>}
-          {cost != null && total && canMoney ? <span>{((cost / total) * 100).toFixed(0)}% <small>of the price</small></span> : null}
+          {cost != null && total && canMoney && payOn ? <span>{((cost / total) * 100).toFixed(0)}% <small>of the price</small></span> : null}
         </div>
         <button type="button" className="linkbtn" onClick={() => setOpen(!open)} style={{ alignSelf: "flex-start" }}>{open ? "Hide entries" : `Show ${rows.length} entries`}</button>
         {open && <ul className="jl-list">{rows.map((r) => <li key={r.id}><b>{emps[r.employee_id] ? fullName(emps[r.employee_id]) : "?"}</b> {r.task} · {dayLabel(localDay(r.started_at))} {timeLabel(r.started_at)}–{r.ended_at ? timeLabel(r.ended_at) : "now"} · {hm(jobMinutes(r))}{r.pieces != null ? ` · ${r.pieces} pcs` : ""}</li>)}</ul>}

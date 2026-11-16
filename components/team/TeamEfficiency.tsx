@@ -1,4 +1,5 @@
 "use client";
+import { usePayShown } from "@/lib/payLock";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { addDays, dec, fullName, hm, jobKey, jobMinutes, localDay, localToIso, timecard, type JobTime, type Punch } from "@/lib/timeclock";
@@ -14,6 +15,7 @@ type Ord = { key: string; label: string; customer: string; qty: number; total: n
  * Cost uses each person's hourly rate (owners and admins only).
  */
 export default function TeamEfficiency({ d }: { d: TeamData }) {
+  usePayShown(); // redraw pay figures when they're shown or hidden (lib/payLock.ts)
   /** labor cost: owners / admins and the "pay" permission; order totals and labor % stay owner / admin */
   const pay = d.boss || !!d.seesPay;
   const [to, setTo] = useState(localDay(new Date())); const [from, setFrom] = useState(addDays(localDay(new Date()), -29));

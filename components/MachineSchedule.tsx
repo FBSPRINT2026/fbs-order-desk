@@ -1,4 +1,5 @@
 "use client";
+import { usePayShown } from "@/lib/payLock";
 import { holdOf } from "@/lib/holds";
 import { useProdSide } from "@/lib/prodSide";
 import { runParts, sampleRunOn, samplePieces, waitsOnSample } from "@/lib/samples";
@@ -472,6 +473,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [me, setMe] = useState<{ email: string; name: string }>({ email: "", name: "" });
   // crew pay (owners/admins only): what an hour on each press costs, for job labor cost
   const [pay, setPay] = useState<{ rates: Record<string, number>; names: Record<string, string> } | null>(null);
+  // each person's rate shows only once pay is shown with a PIN (lib/payLock.ts); until then the shop's set wage is used
+  const payOn = usePayShown();
   const [owners, setOwners] = useState<AccountOwner[]>([]);
   const [trayAll, setTrayAll] = useState(false);
   // Ready To Schedule's tabs (Nov 11, Nick: "late jobs, holders, and… jobs that are on time")
@@ -2720,7 +2723,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 
   /** What an hour on this machine costs: its crew's rates added up (press operator + assistant + catcher). */
   const crewCost = (m: Machine): { perHour: number; who: string[] } | null => {
-    if (!pay) return null;
+    if (!pay || !payOn) return null;
     const c = m.crew ? s.crews.find((k) => k.id === m.crew) : undefined;
     if (!c?.members) return null;
     const who: string[] = []; let perHour = 0;

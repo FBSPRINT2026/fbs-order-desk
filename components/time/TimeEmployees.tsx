@@ -1,4 +1,7 @@
 "use client";
+import { usePayShown } from "@/lib/payLock";
+import { PayButton } from "@/components/PayLock";
+import { PAY_MASK, payMoney } from "@/lib/format";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fullName, type Employee } from "@/lib/timeclock";
@@ -13,6 +16,7 @@ const blank = (): Partial<Employee> => ({ first_name: "", last_name: "", email: 
 
 /** Everyone on the clock: name, department, their shop login (for phone punching), PIN, and pay (owners/admins). */
 export default function TimeEmployees({ d }: { d: TimeData }) {
+  const payOn = usePayShown(); // rates show only once pay is shown with a PIN (lib/payLock.ts)
   const [edit, setEdit] = useState<Partial<Employee> | null>(null);
   const [rates, setRates] = useState<Record<string, { rate: number | null; salary: number | null }>>({});
   const pay = seesPay(d);
@@ -32,7 +36,7 @@ export default function TimeEmployees({ d }: { d: TimeData }) {
             <li key={e.id} className="db-row tmx-row" style={{ cursor: "pointer" }} onClick={() => setEdit(e)}>
               <span className="tmx-av" style={{ background: e.color || COLORS[i % COLORS.length] }}>{(e.first_name[0] || "") + (e.last_name[0] || "")}</span>
               <span className="db-main"><b>{e.last_name ? `${e.last_name}, ${e.first_name}` : e.first_name}{!e.active && <span className="faint"> · former</span>}</b><span className="faint">{[e.title, e.department, e.staff_email ? "has a shop login" : ""].filter(Boolean).join(" · ") || "—"}</span></span>
-              <span className="db-side">{e.code ? <span className="faint">ID {e.code}</span> : null}<span className={"tmx-tag " + (e.paid_by === "contract" ? "warn" : "ok")}>{e.paid_by === "contract" ? "Contract" : "Payroll"}</span>{e.takes_lunch === false && <span className="tmx-tag" title="Doesn't take a lunch break">No lunch</span>}<span className="faint">{e.pay_type === "salary" ? (pay && rates[e.id]?.salary ? `$${Math.round(+rates[e.id].salary!).toLocaleString()}/yr` : "Salary") : pay && rates[e.id]?.rate ? `$${(+rates[e.id].rate!).toFixed(2)}/hr` : "Hourly"}</span></span>
+              <span className="db-side">{e.code ? <span className="faint">ID {e.code}</span> : null}<span className={"tmx-tag " + (e.paid_by === "contract" ? "warn" : "ok")}>{e.paid_by === "contract" ? "Contract" : "Payroll"}</span>{e.takes_lunch === false && <span className="tmx-tag" title="Doesn't take a lunch break">No lunch</span>}<span className="faint">{e.pay_type === "salary" ? (pay && rates[e.id]?.salary ? `${payOn ? `$${Math.round(+rates[e.id].salary!).toLocaleString()}` : PAY_MASK}/yr` : "Salary") : pay && rates[e.id]?.rate ? `${payMoney(rates[e.id].rate)}/hr` : "Hourly"}</span></span>
             </li>
           ))}</ul>
         )}
@@ -43,6 +47,7 @@ export default function TimeEmployees({ d }: { d: TimeData }) {
 }
 
 export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Partial<Employee>; onClose: () => void; onSaved: () => void }) {
+  const payOn = usePayShown();
   const [v, setV] = useState<Partial<Employee>>(e);
   const [staff, setStaff] = useState<{ email: string; name: string }[]>([]);
   const [pin, setPin] = useState(""), [rate, setRate] = useState(""), [salary, setSalary] = useState("");
@@ -129,16 +134,16 @@ export function EmployeeEditor({ d, e, onClose, onSaved }: { d: TimeData; e: Par
           <div className="tk-paybox">
             <div className="tk-seg-row">
               <div className="rv-seg" role="group" aria-label="Pay">{(["hourly", "salary"] as const).map((k) => <button key={k} type="button" className={payType === k ? "on" : ""} onClick={() => set("pay_type", k)}>{k === "hourly" ? "Hourly" : "Salary"}</button>)}</div>
-              {boss ? (payType === "salary"
+              {boss && !payOn ? <span className="faint">{PAY_MASK} <PayButton className="btn sm" /></span> : boss ? (payType === "salary"
                 ? <label className="tk-money">$<input type="number" min={0} step="1" value={salary} onChange={(ev) => setSalary(ev.target.value)} placeholder="50000" aria-label="Salary per year" /><span>a year</span></label>
                 : <label className="tk-money">$<input type="number" min={0} step="0.01" value={rate} onChange={(ev) => setRate(ev.target.value)} placeholder="15.00" aria-label="Hourly rate" autoFocus={!v.id} /><span>an hour</span></label>)
-                : pay && <span className="faint">{payType === "salary" ? (salary ? `$${(+salary).toLocaleString()}/yr` : "") : rate ? `$${(+rate).toFixed(2)}/hr` : ""}</span>}
+                : pay && <span className="faint">{payType === "salary" ? (salary ? `${payOn ? `$${(+salary).toLocaleString()}` : PAY_MASK}/yr` : "") : rate ? `${payMoney(rate)}/hr` : ""}</span>}
             </div>
             <div className="tk-seg-row">
               <span className="lbl">Paid through</span>
               <div className="rv-seg" role="group" aria-label="Paid through">{([["payroll", "QuickBooks Payroll"], ["contract", "Contract Labor"]] as const).map(([k, l]) => <button key={k} type="button" className={(v.paid_by || "payroll") === k ? "on" : ""} onClick={() => set("paid_by", k)}>{l}</button>)}</div>
             </div>
-            {boss && payType === "hourly" && rate && +rate > 0 && <div className="faint" style={{ fontSize: 12.5 }}>Overtime: ${(+rate * (d.settings.otRate || 1.5)).toFixed(2)} an hour past {d.settings.otWeekly} hours a week</div>}
+            {boss && payOn && payType === "hourly" && rate && +rate > 0 && <div className="faint" style={{ fontSize: 12.5 }}>Overtime: ${(+rate * (d.settings.otRate || 1.5)).toFixed(2)} an hour past {d.settings.otWeekly} hours a week</div>}
           </div>
           {!more ? <button type="button" className="linkbtn" style={{ alignSelf: "flex-start" }} onClick={() => setMore(true)}>+ More details (phone, email, hire date, login, PIN…)</button> : <>
           {boss && v.id && <label>Employee # (they sign in with it)<input inputMode="numeric" value={v.code ?? ""} onChange={(ev) => set("code", ev.target.value.replace(/\D/g, "") === "" ? null : +ev.target.value.replace(/\D/g, ""))} /></label>}

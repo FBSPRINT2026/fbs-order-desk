@@ -1,4 +1,5 @@
 "use client";
+import { PayButton, PayCover } from "@/components/PayLock";
 import ClockStatus from "@/components/ClockStatus";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -54,6 +55,7 @@ export default function TimePage() {
       <div className="page-head">
         <div><div className="eyebrow">Time &amp; attendance</div><h1>Time Clock</h1></div>
         <div className="row" style={{ gap: 8 }}>
+          {boss && <PayButton />}
           <ClockStatus />
         </div>
       </div>
@@ -63,7 +65,7 @@ export default function TimePage() {
       {d && boss && (tab === "today" || tab === "cards") && <TimeFixes employees={d.employees} />}
       {!d ? <div className="empty">Loading…</div>
         : tab === "cards" ? <TimeCards d={d} />
-        : tab === "payroll" && boss ? <TimePayroll d={d} />
+        : tab === "payroll" && boss ? <PayCover what="Payroll Report figures"><TimePayroll d={d} /></PayCover>
         : tab === "schedule" ? <TimeSchedule d={d} />
         : tab === "employees" ? <TimeEmployees d={d} />
         : tab === "off" ? <TimeOffPanel d={d} />

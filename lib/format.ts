@@ -7,8 +7,17 @@ let hideMoney = false;
 export const setHideMoney = (b: boolean) => { hideMoney = b; };
 export const moneyHidden = () => hideMoney && typeof window !== "undefined";
 export const money = (n: number | string | null | undefined) => (moneyHidden() ? "—" : fmt$.format(+(n ?? 0) || 0));
-/** pay rates and labor cost: shown to whoever may see pay (the "pay" permission), whether or not they see prices */
-export const payMoney = (n: number | string | null | undefined) => fmt$.format(+(n ?? 0) || 0);
+/**
+ * pay rates, paychecks and labor cost: shown to whoever may see pay (the "pay" permission), whether or not they see
+ * prices, and only once they've typed their PIN in this tab ("$•••" until then; lib/payLock.ts). A component that uses
+ * it calls usePayShown() so it redraws when pay is shown or hidden.
+ */
+let payUntil = 0;
+/** set only by lib/payLock.ts, in the browser; a server render always hides */
+export const setPayUntil = (t: number) => { payUntil = t; };
+export const payUnlocked = () => typeof window !== "undefined" && payUntil > Date.now();
+export const PAY_MASK = "$•••";
+export const payMoney = (n: number | string | null | undefined) => (payUnlocked() ? fmt$.format(+(n ?? 0) || 0) : PAY_MASK);
 
 export function todayISO() {
   const d = new Date();
