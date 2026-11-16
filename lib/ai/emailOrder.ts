@@ -20,7 +20,7 @@ import { refetchAttachments } from "@/lib/mail/imap";
 import { convoKeys, groupConvos, senderKey } from "@/lib/mail/convo";
 import { officeText } from "@/lib/officeText";
 import { mergeProduction, needsForPrintavo } from "@/lib/production";
-import { finishingList, fitLocation, lineQty, LOCATIONS, priceList, type PriceType, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type PersEntry, type Order, type Settings } from "@/lib/pricing";
+import { finishingList, fitLocation, headwearOf, lineQty, LOCATIONS, priceList, type PriceType, newGLine, newImprint, orderGroups, SIZES, uid, type GLine, type Group, type Imprint, type PersEntry, type Order, type Settings } from "@/lib/pricing";
 import { bodyOf, smallestOrdered } from "@/lib/garmentBody";
 import { maxWidthFor } from "@/lib/mockup";
 import { correction, LESSON_KIND, type MockupLesson } from "@/lib/mockupLessons";
@@ -471,7 +471,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-16c";
+export const READER_REV = "2026-11-16d";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -1066,6 +1066,28 @@ ${staffSays}` : ""}`;
     }
   }
 
+  // the same beanie or cap read into a printed group and a sewn one (the same style, color and pieces): one garment, kept
+  // in the embroidery group (Nov 16, #50028 / #50040: All My Sons' STC21 beanies were in both the Helper screen print
+  // group and AMS Embroidery)
+  {
+    const sig = (l: GLine) => `${String(l.style || "").trim().toUpperCase()}|${String(l.color || "").trim().toLowerCase()}|${JSON.stringify(Object.entries(l.sizes || {}).filter(([, n]) => +n > 0).sort())}`;
+    const sews = (g: Group) => (g.imprints || []).some((im) => im.method === "embroidery");
+    const seen = new Map<string, { g: Group; l: GLine }>(), emptied = new Set<Group>();
+    for (const g of groups) for (const l of [...g.lines]) {
+      if (!String(l.style || "").trim() || !lineQty(l)) continue;
+      const k = sig(l), was = seen.get(k);
+      if (!was) { seen.set(k, { g, l }); continue; }
+      // only headwear read into a sewn group and a printed one: the same shirts in a screen print group and an embroidery
+      // group can be one mixed job, decorated both ways
+      if (!headwearOf(l) || sews(g) === sews(was.g)) continue;
+      const keepNew = sews(g);
+      const from = keepNew ? was : { g, l };
+      from.g.lines = from.g.lines.filter((x) => x !== from.l);
+      emptied.add(from.g);
+      if (keepNew) seen.set(k, { g, l });
+    }
+    for (let i = groups.length - 1; i >= 0; i--) if (emptied.has(groups[i]) && !groups[i].lines.length && groups.length > 1) groups.splice(i, 1);
+  }
   // hats, visors and beanies print on their own spots (Oct 26, Nick): a shirt location read for one moves to the spot it means
   // (a group named for its one spot takes the spot's new name: "Left Sleeve" on a quarter-zip is its Left Upper Arm)
   for (const g of groups) for (const im of g.imprints || []) { const was = im.location; im.location = fitLocation(im.location, g.lines); if (was !== im.location && g.name === was && g.imprints.length === 1) g.name = im.location; }
