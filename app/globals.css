@@ -23324,3 +23324,9 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
    widths add up past the box and the columns ran into each other (Job Center D at half screen); lay out by contents there */
 .tbl-wrap.cu-fit{container:cufit / inline-size}
 @container cufit (max-width:680px){.tbl.cu-tbl{table-layout:auto}.tbl.cu-tbl th[class*="cu-w-"]{width:auto}.tbl.cu-tbl td,.tbl.cu-tbl th{padding-left:8px;padding-right:8px}}
+/* FBS Messages' New / Waiting on them / Done: one line, three equal parts (its own switch; Nick, Nov 16: it "looks off") */
+.jx .jx-m .jx-mf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;margin:0 14px 10px;padding:3px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;height:auto;overflow:visible}
+.jx .jx-m .jx-mf>button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;height:30px;padding:0 6px;border-radius:6px;font-size:12.5px;font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jx .jx-m .jx-mf>button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(20,29,43,.12)}
+.jx .jx-m .jx-mf>button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.jx .jx-m .jx-mf em{font-style:normal;font-size:11px;font-weight:700;opacity:.75;margin:0}

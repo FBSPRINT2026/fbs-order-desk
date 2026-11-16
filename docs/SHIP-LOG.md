@@ -356,3 +356,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 8:55am · 1.3.598 · Nick · Job Center: FBS Messages stays open when a message or job is opened (its ✕ folds it away, remembered; the FBS Messages button brings it back)
 - Nov 16 8:58am · 1.3.599 · Nick · Schedule right panel revised: assistant with its ask box on top (one idea at a time, taking turns), tools fold to a row of icons, Live clock on the Press & crew heading; the one search moves to Ready to schedule's top line beside Start over and stays when it folds; the small text under the title is gone
 - Nov 16 9:01am · 1.3.600 · Nick · Request lists in a narrow box (Job Center at half screen, ClickUp pages): columns no longer run into each other
+- Nov 16 9:01am · 1.3.601 · Nick · Job Center: FBS Messages' New / Waiting on them / Done switch fits on one line (its own switch)
