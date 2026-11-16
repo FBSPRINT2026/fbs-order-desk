@@ -9,7 +9,7 @@ import { mergeSettings, type Customer } from "@/lib/pricing";
 import { addressFromText, emptyAddress, type BillTo, type Shipment } from "@/lib/shipping";
 import { addressLines, type PvOrder } from "@/lib/archive";
 import { checkinJobFor } from "@/lib/checkin";
-import { printSettings } from "@/lib/printQueue";
+import { printSettings, printerReady } from "@/lib/printQueue";
 import JobMobile from "@/components/job/JobMobile";
 import { pressSheets } from "@/lib/pressActualServer";
 import { phoneInks } from "@/lib/jobInksServer";
@@ -101,6 +101,6 @@ export default async function JobPage({ params, searchParams }: { params: Promis
 
   return wrap(
     <JobMobile who={who} card={card} mockups={mockups} box={ref?.box || null} designs={designs} press={press} presses={presses} inks={inks} ship={ship} shipSettings={settings.ship} checkin={checkin}
-      printer={{ ready: ps.mode === "printnode" ? !!ps.printnodeId : !!ps.host, dpi: ps.dpi }} />
+      printer={{ ready: printerReady(ps), dpi: ps.dpi }} />
   );
 }

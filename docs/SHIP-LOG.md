@@ -387,3 +387,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 11:44am · 1.3.629 · Nick · Pay hidden until a PIN: Show pay on Payroll Center, Time Clock and Employees; rates, paychecks, crew rates and labor cost show $••• until each person's own PIN; hides after 10 min idle
 - Nov 16 11:44am · 1.3.630 · Nick · Handbook: Amanda's Claude can change any page or feature (billing included); how to get the code when a session doesn't have it
 - Nov 16 11:51am · 1.3.631 · Nick · Scanners on every page: a scan anywhere pops Count in for receiving, Print box label / Start shipping for shipping, the job for the press, and opens the order for everyone else
+- Nov 16 11:58am · 1.3.632 · Nick · Job menus: a Zebra plugged in by USB counts as set up (Box labels no longer says Printer not set up)

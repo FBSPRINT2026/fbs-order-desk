@@ -20,6 +20,9 @@ export async function printSettings(admin: SupabaseClient): Promise<PrintSetting
   return { ...DEFAULT_PRINT, ...p, link: p.link === "usb" ? "usb" : "network", usbName: String(p.usbName || "").trim(), port: +(p.port || 9100) || 9100, dpi: +(p.dpi || 203) === 300 ? 300 : 203 };
 }
 
+/** the Zebra is set up: PrintNode with a printer picked, or the relay with the Zebra on USB or at an IP address */
+export const printerReady = (ps: PrintSettings) => (ps.mode === "printnode" ? !!ps.printnodeId : ps.link === "usb" || !!ps.host);
+
 export const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 export const newRelayToken = () => "fbsr_" + randomBytes(24).toString("base64url");
 
