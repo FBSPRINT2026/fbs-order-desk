@@ -12,10 +12,11 @@ import { useSticky } from "@/lib/useSticky";
 import { quickJump } from "@/app/shop/search-actions";
 import { previewUrls } from "@/lib/designs";
 import { ARCHIVE_LIST_COLS, type ArchiveSummary } from "@/lib/archive";
-import { PAY_TERMS, statusKey, type Design, type PayTerms } from "@/lib/pricing";
+import { statusKey, type Design } from "@/lib/pricing";
 import { holdLabel } from "@/lib/holds";
 import { allRows } from "@/lib/readAll";
 import RowLink from "@/components/RowLink";
+import PrintavoMark from "@/components/PrintavoMark";
 
 /**
  * Search everything (Oct 21, Nick: "this looks like a complete disaster… it should be much more informative"). The
@@ -24,6 +25,10 @@ import RowLink from "@/components/RowLink";
  * first, one line each with its mockup, status, due, pieces, total and balance; their logos as pictures; portal
  * messages and texts that mention it; supplier shipments; other customers one line each. A filter toolbar on top, a
  * short AI answer.
+ * Option A (Nov 16, Nick: "search results are just hard to read… it should just say, like, clearly… customer, invoices"):
+ * two plain sections first, Customers (one line each: who, and Open customer; no money numbers: Nick, "I don't need the
+ * financial stats… very simple results") and Invoices (one table, ours and Printavo's together: #, job, date, status,
+ * total, with All / Unpaid / In the works / Quotes); then artwork, messages, ClickUp jobs, shipments and projects.
  */
 type Row = { key: string; href: string; number: number; quote: boolean; name: string; customer: string; customerId: string | null; status: string; /** On hold · reason */ hold?: string; label?: string; color?: string; archived: boolean; due: string | null; day: string; pcs: number; total: number; balance: number; thumb?: string };
 type Cust = { id: string; company: string; name: string; email: string; phone: string; price_type: string | null; payment_terms: string | null };
@@ -35,8 +40,6 @@ type Kind = "all" | "customers" | "orders" | "jobs" | "artwork" | "messages" | "
 type Job = { href: string; ext: boolean; title: string; sub: string; tag: string };
 
 const fmtDay = (d: string | null | undefined) => (d ? new Date(d.slice(0, 10) + "T12:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "");
-const today = () => new Date().toISOString().slice(0, 10);
-const dd = (a: string, b: string) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000);
 const custName = (c?: { company?: string | null; name?: string | null } | null) => c?.company || c?.name || "";
 /** a question for the AI (who / what / when… / a "?" / six words or more), not a name or a number to look up */
 const isQuestion = (t: string) => /\?\s*$/.test(t) || /^(who|what|when|where|why|how|did|does|do|is|are|was|were|which|can|has|have|should|show|find|list|tell)\b/i.test(t) || t.trim().split(/\s+/).length >= 6;
@@ -55,7 +58,10 @@ function SearchInner() {
   const [q, setQ] = useState(q0);
   useEffect(() => { setQ(q0); }, [q0]);
   const { orders: ours, customers: custMap, loading } = useShopData();
-  const [kind, setKind] = useSticky<Kind>("search.kind", "all");
+  const kind: Kind = "all";
+  const [invF, setInvF] = useSticky<"all" | "unpaid" | "works" | "quotes">("search.invoices", "all");
+  const [allInv, setAllInv] = useState(false);
+  const [allCust, setAllCust] = useState(false);
   const [custs, setCusts] = useState<Cust[]>([]);
   const [arch, setArch] = useState<(ArchiveSummary & { po_number?: string | null; customers?: { company: string; name: string } | null })[]>([]);
   const [bestArch, setBestArch] = useState<ArchiveSummary[]>([]);
@@ -66,11 +72,7 @@ function SearchInner() {
   const [ships, setShips] = useState<Ship[]>([]);
   const [projs, setProjs] = useState<Proj[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [pending, setPending] = useState(0);
-  const [more, setMore] = useState(false);
-  /** the result groups opened past their first few */
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const searchedFor = useRef("");
   const [ai, setAi] = useState<{ answer?: string; refs?: { label: string; href: string }[]; off?: boolean; reason?: string; error?: string; busy?: boolean; skip?: boolean } | null>(null);
 
@@ -94,7 +96,7 @@ function SearchInner() {
   useEffect(() => {
     if (jump !== "none") return;
     searchedFor.current = q0;
-    setCusts([]); setArch([]); setArt([]); setMsgs([]); setShips([]); setProjs([]); setJobs([]); setBestArch([]); setOtherStats({}); setMore(false); setOpenGroups({});
+    setCusts([]); setArch([]); setArt([]); setMsgs([]); setShips([]); setProjs([]); setJobs([]); setBestArch([]); setOtherStats({});
     if (t.length < 2) { setPending(0); return; }
     setPending(7);
     let live = true;
@@ -191,14 +193,6 @@ function SearchInner() {
     return [...a, ...b].sort((x, y) => y.day.localeCompare(x.day) || y.number - x.number);
   }, [ours, arch, custIds, custMap, t, num, low]);
 
-  // mockup pictures for our orders shown
-  useEffect(() => {
-    const want = rows.filter((r) => !r.archived).slice(0, 40).map((r) => { const o = ours.find((x) => x.id === r.key); const p = (o?.groups || []).flatMap((g) => (g as { mockupThumbs?: string[] }).mockupThumbs || [])[0]; return p ? [r.key, p] as const : null; }).filter(Boolean) as (readonly [string, string])[];
-    const need = want.filter(([k]) => !thumbs[k]);
-    if (!need.length) return;
-    createClient().storage.from("proofs").createSignedUrls(need.map((x) => x[1]), 3600).then(({ data }) => setThumbs((m) => ({ ...m, ...Object.fromEntries(need.map(([k], i) => [k, data?.[i]?.signedUrl || ""])) })));
-  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // the AI answer: once the results are in (it reads them too)
   useEffect(() => {
     // only for a question (Nov 2, Nick: "people are complaining that this search… returns hard to read results": a name
@@ -213,30 +207,9 @@ function SearchInner() {
     return () => { live = false; };
   }, [pending, loading, q0, jump]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // the card's numbers for the best customer: all their orders, not only the ones the words found
-  const card = useMemo(() => {
-    if (!best) return null;
-    const t0 = today();
-    const mine = ours.filter((o) => o.customer_id === best.id);
-    const pv = bestArch.filter((r) => r.customer_id === best.id);
-    const inv = [...mine.filter((o) => o.type === "invoice").map((o) => ({ n: o.number, day: (o.created_at || "").slice(0, 10), total: o.total, bal: o.balance, done: o.status === "completed", due: o.due_date })),
-      ...pv.filter((r) => r.kind !== "quote").map((r) => ({ n: +r.visual_id || 0, day: (r.order_date || "").slice(0, 10), total: +r.total || 0, bal: +r.balance || 0, done: true, due: r.due_date }))];
-    const active = inv.filter((x) => !x.done);
-    const next = active.filter((x) => x.due).sort((a, b) => (a.due || "").localeCompare(b.due || ""))[0];
-    const owed = inv.filter((x) => x.bal > 0.004);
-    const due = owed.reduce((s, x) => s + x.bal, 0);
-    const late = owed.filter((x) => x.due && x.due < t0);
-    const days = [...new Set(inv.map((x) => x.day).filter(Boolean))].sort().reverse();
-    const last = inv.filter((x) => x.day === days[0]).sort((a, b) => b.n - a.n)[0];
-    const gaps = days.slice(0, 11).map((d, i, a) => (i ? dd(a[i - 1], d) : 0)).slice(1).filter((g) => g > 0).sort((a, b) => a - b);
-    const gap = gaps.length >= 2 ? gaps[Math.floor(gaps.length / 2)] : 0;
-    const every = !gap ? "" : gap < 14 ? `Every ~${gap} days` : gap < 63 ? `Every ~${Math.round(gap / 7)} weeks` : gap < 300 ? `Every ~${Math.round(gap / 30.4)} months` : "About once a year";
-    const nextAround = gap && days[0] ? new Date(Date.parse(days[0]) + gap * 86400000).toISOString().slice(0, 10) : "";
-    const total = inv.reduce((s, x) => s + x.total, 0);
-    return { active, next, due, owed, late, last, days, every, nextAround, total, n: inv.length, since: days.length ? days[days.length - 1].slice(0, 4) : "", t0 };
-  }, [best, ours, bestArch]);
+  // the customers, the one with the most orders first
+  const custList = useMemo(() => (best ? [best, ...custs.filter((c) => c.id !== best.id)] : custs), [best, custs]);
 
-  const others = custs.filter((c) => c.id !== best?.id);
   const counts: Record<Kind, number> = { all: 0, customers: custs.length, orders: rows.length, jobs: jobs.length, artwork: art.length, messages: msgs.length, shipments: ships.length, projects: projs.length };
   counts.all = counts.customers + counts.orders + counts.jobs + counts.artwork + counts.messages + counts.shipments + counts.projects;
   const show = (k: Kind) => (kind === "all" || kind === k) && counts[k] > 0;
@@ -244,21 +217,12 @@ function SearchInner() {
 
   return (
     <>
-      <div className="page-head"><div><div className="eyebrow">Search</div><h1>{q0 ? `“${q0}”` : "Search everything"}</h1></div></div>
+      <div className="page-head"><div><h1>Search</h1><div className="eyebrow">Customers and invoices first, then logos, messages, ClickUp jobs, shipments and projects</div></div></div>
       <form className="srch-box" onSubmit={(e) => { e.preventDefault(); router.replace(`/shop/search?q=${encodeURIComponent(q.trim())}`); }}>
         <SearchInput value={q} onChange={(e) => setQ(e.target.value)} onDictated={(x) => { if (x.trim()) router.replace(`/shop/search?q=${encodeURIComponent(x.trim())}`); }} placeholder="Search everything" autoFocus aria-label="Search" />
         <button type="submit" className="btn primary">Search</button>
       </form>
-      {t.length >= 2 && (
-        <div className="toolbar">
-          <div className="chips" role="tablist" aria-label="Show">
-            {([["all", "All"], ["customers", "Customers"], ["orders", "Orders"], ["jobs", "ClickUp jobs"], ["artwork", "Artwork"], ["messages", "Messages"], ["shipments", "Shipments"], ["projects", "Projects"]] as [Kind, string][])
-              .filter(([k]) => k === "all" || counts[k] > 0 || kind === k)
-              .map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={kind === k} className={"chip" + (kind === k ? " on" : "")} onClick={() => setKind(k)}>{l}<span className="chip-n">{counts[k]}</span></button>)}
-          </div>
-          {searching && <span className="faint">Searching…</span>}
-        </div>
-      )}
+      {searching && t.length >= 2 && <div className="faint sx-busy">Searching…</div>}
       {ai && !ai.off && !ai.skip && (
         <div className="sx-ai"><b>AI answer</b>{ai.busy ? <span className="faint">Thinking…</span> : ai.error ? <span className="bad">{ai.error}</span> : <span>{ai.answer}</span>}
           {!ai.busy && !!ai.refs?.length && <span className="sx-ai-refs">{ai.refs.map((r, i) => <Link key={i} href={r.href}>{r.label}</Link>)}</span>}
@@ -266,71 +230,68 @@ function SearchInner() {
       )}
       {t.length < 2 ? <div className="empty">Type a name, an order #, a PO, a logo or a tracking number.</div> : !searching && !counts.all ? <div className="empty">Nothing found for “{q0}”.</div> : null}
 
-      {best && card && show("customers") && (
-        <section className="sx-cust">
-          <div className="sx-cust-h">
-            <div className="sx-cust-t"><Link href={`/shop/customers/${best.id}`}><b>{best.company || best.name}</b></Link>
-              <span className="faint">{[best.company ? best.name : "", best.email, best.phone, best.price_type === "wholesale" ? "Wholesale" : "Retail", PAY_TERMS[(best.payment_terms || "receipt") as PayTerms]].filter(Boolean).join(" · ")}</span></div>
-            <Link className="btn" href={`/shop/customers/${best.id}`}>Open customer</Link>
-          </div>
-          <div className="stats">
-            <button type="button" className="stat" onClick={() => setKind("orders")}><span className="k">In the works</span><span className="v">{card.active.length} job{card.active.length === 1 ? "" : "s"}</span><small>{card.next ? `#${card.next.n} due ${fmtDay(card.next.due)}` : card.active.length ? "No in-hands dates" : "Nothing in progress"}</small></button>
-            <button type="button" className="stat money-only" onClick={() => router.push(`/shop/customers/${best.id}?area=payments`)}><span className="k">Balance</span><span className={"v" + (card.late.length ? " alert" : "")}>{card.due > 0.004 ? money(card.due) : "Paid up"}</span><small>{card.late.length ? `${money(card.late.reduce((s, x) => s + x.bal, 0))} past due on ${card.late.map((x) => "#" + x.n).slice(0, 3).join(", ")}` : card.owed.length ? card.owed.map((x) => "#" + x.n).slice(0, 3).join(", ") : PAY_TERMS[(best.payment_terms || "receipt") as PayTerms]}</small></button>
-            {/* four cards, like the customer page (Nov 3): how often they order is under the last order */}
-            <button type="button" className="stat" onClick={() => setKind("orders")}><span className="k">Last order</span><span className="v">{card.last ? fmtDay(card.last.day) : "None yet"}</span><small>{card.last ? `${dd(card.t0, card.last.day)} days ago` : ""}{card.every ? `${card.last ? " · " : ""}orders ${String(card.every).replace(/^Every/, "every")}` : ""}{card.nextAround && card.nextAround < card.t0 ? " · due for one" : ""}</small></button>
-            <button type="button" className="stat money-only" onClick={() => router.push(`/shop/customers/${best.id}`)}><span className="k">Lifetime</span><span className="v">{money(card.total)}</span><small>{card.n} order{card.n === 1 ? "" : "s"}{card.since ? ` since ${card.since}` : ""}</small></button>
+      {show("customers") && (
+        <section className="sx-sec">
+          <h2 className="sx-h">Customers <span className="chip-n">{custList.length}</span></h2>
+          <div className="sxc">
+            {(allCust ? custList : custList.slice(0, 5)).map((c) => (
+              <div className="sxc-r" key={c.id}>
+                <div className="sxc-who"><Link href={`/shop/customers/${c.id}`} className="sxc-n">{c.company || c.name}</Link>
+                  <div className="faint">{[c.company ? c.name : "", c.email, c.phone].filter(Boolean).join(" · ")}</div></div>
+                <Link className="btn primary" href={`/shop/customers/${c.id}`}>Open customer</Link>
+              </div>
+            ))}
+            {!allCust && custList.length > 5 && <button type="button" className="sxr-more" onClick={() => setAllCust(true)}>Show all {custList.length} customers</button>}
           </div>
         </section>
       )}
 
       {show("orders") && (() => {
-        // grouped so it reads at a glance (Nov 2, Nick: the results were "hard to read"): what's in the works (due soonest
-        // first), quotes, then finished and Printavo history; two lines each, the words searched for marked, the customer
-        // only when the results are from more than one
         const words = t.split(/\s+/);
         const many = new Set(rows.map((r) => r.customerId || r.customer)).size > 1;
-        const groups: { k: string; title: string; note: string; list: Row[]; first: number }[] = [
-          { k: "open", title: "In the works", note: "due soonest first", list: rows.filter((r) => !r.archived && !r.quote && r.status !== "completed").sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || b.number - a.number), first: 8 },
-          { k: "quotes", title: "Quotes", note: "newest first", list: rows.filter((r) => !r.archived && r.quote && r.status !== "closed"), first: 5 },
-          { k: "done", title: "Finished", note: "newest first", list: rows.filter((r) => !r.archived && ((!r.quote && r.status === "completed") || r.status === "closed")), first: 5 },
-          { k: "pv", title: "Printavo history", note: "newest first", list: rows.filter((r) => r.archived), first: 5 },
+        const owes = (r: Row) => !r.quote && r.balance > 0.004;
+        const works = (r: Row) => !r.archived && !r.quote && r.status !== "completed" && r.status !== "canceled";
+        const F: [typeof invF, string, Row[]][] = [
+          ["all", "All", rows],
+          ["unpaid", "Unpaid", rows.filter(owes)],
+          ["works", "In the works", rows.filter(works).sort((a, b) => (a.due || "9999").localeCompare(b.due || "9999") || b.number - a.number)],
+          ["quotes", "Quotes", rows.filter((r) => r.quote)],
         ];
-        return groups.filter((g) => g.list.length).map((g) => {
-          const all = more || openGroups[g.k];
-          const list = all ? g.list : g.list.slice(0, g.first);
-          return (
-            <section className="sx-sec" key={g.k}>
-              <h3>{g.title} <span className="faint">{g.list.length} · {g.note}</span></h3>
-              <div className="sxr">
-                {list.map((r) => (
-                  <Link className="sxr-r" key={r.key} href={r.href}>
-                    {thumbs[r.key] ? <span className="sxr-th"><img src={thumbs[r.key]} alt="" /></span> : null}
-                    <span className="sxr-m">
-                      <span className="sxr-n"><Hl text={r.name} words={words} /></span>
-                      <span className="sxr-s">
-                        <span className="nowrap">#<Hl text={String(r.number)} words={words} /></span>
-                        {many && r.customer ? <span><Hl text={r.customer} words={words} /></span> : null}
-                        {r.pcs ? <span className="nowrap">{r.pcs} pcs</span> : null}
-                        {r.archived ? (r.day ? <span className="nowrap">{fmtDay(r.day)}</span> : null) : r.due ? <span className="nowrap">due <Due date={r.due} status={r.status} /></span> : <span className="nowrap">no date yet</span>}
-                      </span>
-                    </span>
-                    <span className="sxr-st">{r.archived ? <span className="pv-dot" style={{ ["--sc" as string]: r.color }}>{r.label}</span> : <Pill status={r.status} hold={r.hold} />}</span>
-                    <span className="sxr-a money-only">
-                      <b>{money(r.total)}</b>
-                      {!r.quote && <span className={r.balance > 0.004 ? "sxr-due" : "sxr-paid"}>{r.balance > 0.004 ? `${money(r.balance)} due` : "Paid"}</span>}
-                    </span>
-                  </Link>
-                ))}
-                {!all && g.list.length > g.first && <button type="button" className="sxr-more" onClick={() => setOpenGroups((m) => ({ ...m, [g.k]: true }))}>Show {g.list.length - g.first} more</button>}
+        const cur = F.find((f) => f[0] === invF) || F[0];
+        const list = allInv ? cur[2] : cur[2].slice(0, 10);
+        return (
+          <section className="sx-sec">
+            <div className="sx-hrow">
+              <h2 className="sx-h">Invoices <span className="chip-n">{rows.length}</span></h2>
+              <div className="chips" role="tablist" aria-label="Show">
+                {F.map(([k, l, xs]) => <button key={k} type="button" role="tab" aria-selected={invF === k} className={"chip" + (invF === k ? " on" : "")} onClick={() => { setInvF(k); setAllInv(false); }}>{l}<span className="chip-n">{xs.length}</span></button>)}
               </div>
-            </section>
-          );
-        });
+            </div>
+            {cur[2].length ? (
+              <div className="tbl-wrap"><table className="tbl sxi">
+                <thead><tr><th>#</th><th>Job</th><th>Date</th><th>Status</th><th className="r money-only">Total</th></tr></thead>
+                <tbody>
+                  {list.map((r) => (
+                    <tr className={"rl" + (owes(r) ? " sxi-owe" : "")} key={r.key}>
+                      <td className="nowrap"><RowLink href={r.href} /><span className="ordno"><Hl text={String(r.number)} words={words} /></span>{r.archived && <PrintavoMark />}{r.quote && <span className="tag">Quote</span>}</td>
+                      <td><Hl text={r.name} words={words} />{many && r.customer ? <div className="sub"><Hl text={r.customer} words={words} /></div> : null}</td>
+                      <td className="nowrap">{!r.archived && !r.quote && r.status !== "completed" && r.due ? <>due <Due date={r.due} status={r.status} /></> : fmtDay(r.day)}</td>
+                      <td className="nowrap">{r.archived ? <span className="pv-dot" style={{ ["--sc" as string]: r.color }}>{r.label}</span> : <Pill status={r.status} hold={r.hold} />}{owes(r) && <span className="sxi-unpaid money-only">Unpaid</span>}</td>
+                      <td className="r nowrap money-only">{money(r.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!allInv && cur[2].length > 10 && <button type="button" className="sxr-more" onClick={() => setAllInv(true)}>Show all {cur[2].length}</button>}
+              </div>
+            ) : <div className="empty">None {cur[0] === "unpaid" ? "unpaid" : cur[0] === "works" ? "in the works" : "quotes"} for “{q0}”.</div>}
+          </section>
+        );
       })()}
 
       {show("artwork") && (
         <section className="sx-sec">
-          <h3>Artwork <span className="faint">{art.length}</span></h3>
+          <h2 className="sx-h">Artwork <span className="chip-n">{art.length}</span></h2>
           <div className="sx-art">{art.map((d) => (
             <Link key={d.id} href={`/shop/artwork/${d.id}`} className="sx-art-i"><span className="sx-art-p">{artUrls[d.id] ? <LogoThumb d={d} url={artUrls[d.id]} /> : null}</span><b>D-{d.number} {d.name}</b><small className="faint">{custName(custMap[d.customer_id || ""])}</small></Link>
           ))}</div>
@@ -339,7 +300,7 @@ function SearchInner() {
 
       {show("messages") && (
         <section className="sx-sec">
-          <h3>Messages <span className="faint">{msgs.length} · portal messages and texts that mention it</span></h3>
+          <h2 className="sx-h">Messages <span className="chip-n">{msgs.length}</span><span className="faint">portal messages and texts that mention it</span></h2>
           <div className="tbl-wrap"><table className="tbl"><tbody>
             {msgs.map((m) => <tr className="rl" key={m.key}><td style={{ width: 70 }}><RowLink href={m.href} /><span className="tag">{m.kind}</span></td><td style={{ width: 160 }}><b>{m.who}</b></td><td className="sx-msg">{m.text}</td><td className="r">{fmtDay(m.when)}</td></tr>)}
           </tbody></table></div>
@@ -348,39 +309,25 @@ function SearchInner() {
 
       {show("jobs") && (
         <section className="sx-sec">
-          <h3>ClickUp jobs <span className="faint">{jobs.length}</span></h3>
+          <h2 className="sx-h">ClickUp jobs <span className="chip-n">{jobs.length}</span></h2>
           <div className="tbl-wrap"><table className="tbl"><tbody>{jobs.map((j, i) => <tr className="rl" key={i}><td>{j.ext ? <a className="rl-a" href={j.href} target="_blank" rel="noreferrer" aria-label={`Open ${j.title} in ClickUp`} /> : <RowLink href={j.href} />}<b>{j.title}</b></td><td className="faint">{j.sub}</td><td><span className="tag">{j.tag}</span></td></tr>)}</tbody></table></div>
         </section>
       )}
 
       {show("shipments") && (
         <section className="sx-sec">
-          <h3>Supplier shipments <span className="faint">{ships.length}</span></h3>
+          <h2 className="sx-h">Supplier shipments <span className="chip-n">{ships.length}</span></h2>
           <div className="tbl-wrap"><table className="tbl"><tbody>{ships.map((s, i) => <tr className="rl" key={i}><td><RowLink href={s.href} /><b>{s.title}</b></td><td className="faint">{s.sub}</td></tr>)}</tbody></table></div>
         </section>
       )}
 
       {show("projects") && (
         <section className="sx-sec">
-          <h3>Projects <span className="faint">{projs.length}</span></h3>
+          <h2 className="sx-h">Projects <span className="chip-n">{projs.length}</span></h2>
           <div className="tbl-wrap"><table className="tbl"><tbody>{projs.map((p, i) => <tr className="rl" key={i}><td><RowLink href={p.href} /><b>{p.title}</b></td><td>{p.sub}</td><td><span className="tag">{p.tag}</span></td></tr>)}</tbody></table></div>
         </section>
       )}
 
-      {show("customers") && (best ? others.length > 0 : custs.length > 0) && (
-        <section className="sx-sec">
-          <h3>{best ? "Other customers" : "Customers"} <span className="faint">{best ? others.length : custs.length}</span></h3>
-          <div className="tbl-wrap"><table className="tbl"><tbody>
-            {(best ? others : custs).map((c) => {
-              const mine = ours.filter((o) => o.customer_id === c.id && o.type === "invoice");
-              const st = otherStats[c.id] || { n: 0, total: 0, last: "" };
-              const n = mine.length + st.n, tot = mine.reduce((s, o) => s + o.total, 0) + st.total;
-              const last = [st.last, ...mine.map((o) => (o.created_at || "").slice(0, 10))].sort().reverse()[0] || "";
-              return <tr className="rl" key={c.id}><td><RowLink href={`/shop/customers/${c.id}`} /><b>{c.company || c.name}</b></td><td className="faint">{[c.company ? c.name : "", c.email].filter(Boolean).join(" · ")}</td><td>{n ? `${n} order${n === 1 ? "" : "s"}${last ? ` · last ${fmtDay(last)}` : ""}` : "No orders yet"}</td><td className="r money-only">{n ? `${money(tot)} lifetime` : ""}</td></tr>;
-            })}
-          </tbody></table></div>
-        </section>
-      )}
     </>
   );
 }
