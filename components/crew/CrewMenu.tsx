@@ -333,21 +333,61 @@ export function ScanJob({ open }: { open: (n: string) => void }) {
   );
 }
 
+/**
+ * The time card on the phone (Nick, Nov 16 2026: "he should view his hours at all time… here's my punch from yesterday
+ * and then he should click a button… here's what needs fixing"): today with Start lunch / Clock out (each asks first),
+ * then every day of this pay period and the last one; a day opens its punches and "Something's wrong with this day",
+ * which opens the fix for that day. Fixes and phone punches go to a manager to OK.
+ */
+const PK: Record<string, string> = { in: "Clocked in", break_start: "Lunch out", break_end: "Lunch in", out: "Clocked out" };
 function TimeCard({ home, busy, post, done, day0 }: { home: CrewHome; busy: string; post: (b: Record<string, unknown>) => Promise<boolean>; done: (m: string) => void; /** opened from My hours on a day */ day0?: string | null }) {
   const { t, locale } = useT();
   const [fix, setFix] = useState({ day: day0 || home.today, kind: "lunch", time: "12:00", minutes: "30", note: "" });
+  const [cards, setCards] = useState<PeriodHours[] | null>(null);
+  const [at, setAt] = useState<{ v: "main" } | { v: "day"; d: PeriodHours["days"][number] | { day: string; punches?: never; worked: 0; first: null; last: null; breaks: 0; fixed: false; issues: 0 } } | { v: "fix" }>(day0 ? { v: "fix" } : { v: "main" });
+  const [ask, setAsk] = useState<string | null>(null);
+  useEffect(() => { void fetch("/api/crew/cards").then((r) => r.json()).then((j) => setCards(j.cards || [])).catch(() => setCards([])); }, []);
   const c = home.clock!;
   async function send() {
-    const at = fix.time && fix.kind !== "other" ? new Date(`${fix.day}T${fix.time}:00`).toISOString() : null;
-    if (await post({ action: "fix", day: fix.day, kind: fix.kind, at, minutes: +fix.minutes || 30, note: fix.note })) { done(t("Sent to your manager to approve.")); setFix({ ...fix, note: "" }); }
+    const at0 = fix.time && fix.kind !== "other" ? new Date(`${fix.day}T${fix.time}:00`).toISOString() : null;
+    if (await post({ action: "fix", day: fix.day, kind: fix.kind, at: at0, minutes: +fix.minutes || 30, note: fix.note })) { done(t("Sent to your manager to approve.")); setFix({ ...fix, note: "" }); setAt({ v: "main" }); }
   }
-  return (
+  const nowT = new Date().toLocaleTimeString(locale, { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit" });
+  // the days of a period, today first; a working day with nothing punched (Mon–Fri, before today) shows too, in red
+  const daysOf = (k: PeriodHours) => {
+    const seen = new Map(k.days.map((d) => [d.day, d]));
+    const out: PeriodHours["days"] = [];
+    for (let d = k.end > home.today ? home.today : k.end; d >= k.start; d = addDay(d, -1)) {
+      const x = seen.get(d); const wd = new Date(d + "T12:00:00").getDay();
+      if (x) out.push(x); else if (wd >= 1 && wd <= 5 && d < home.today) out.push({ day: d, first: null, last: null, worked: 0, breaks: 0, fixed: false, issues: 0, punches: [] });
+    }
+    return out;
+  };
+  const dayRow = (d: PeriodHours["days"][number]) => (
+    <button key={d.day} type="button" className={"cr-tday" + (d.day === home.today ? " today" : "") + (!d.first || d.issues ? " miss" : "")} onClick={() => { setAt({ v: "day", d }); scrollTo(0, 0); }}>
+      <b>{day(d.day, locale).split(",")[0]} {+d.day.slice(8)}</b>
+      <span>{!d.first ? t("No punches") : `${clock(d.first, locale)} – ${d.day === home.today && c.state !== "out" ? t("now") : d.last ? clock(d.last, locale) : "…"}${d.breaks ? ` · ${t("lunch {0} min", d.breaks)}` : ""}`}</span>
+      <em>{d.worked ? (d.worked / 60).toFixed(1) : "—"}</em><i aria-hidden>›</i>
+    </button>
+  );
+  if (at.v === "day") {
+    const d = at.d;
+    return (
+      <>
+        <button type="button" className="jm-link cr-tback" onClick={() => setAt({ v: "main" })}>← {t("Time card")}</button>
+        <div className="jm-card">
+          <div className="jm-cardh"><b>{day(d.day, locale)}</b><span className="jm-faint">{d.worked ? t("{0} hrs", (d.worked / 60).toFixed(1)) : ""}</span></div>
+          {(d.punches || []).length ? (d.punches || []).map((p, i) => <div key={i} className="cr-tpun"><span>{t(PK[p.kind] || p.kind)}</span><b>{clock(p.at, locale)}</b></div>) : <p className="jm-faint">{t("No punches")}</p>}
+          {d.fixed && <small className="jm-faint">{t("fixed by the office")}</small>}
+        </div>
+        <button type="button" className="cr-tfix" onClick={() => { setFix({ ...fix, day: d.day, kind: d.first ? "lunch" : "missed_in" }); setAt({ v: "fix" }); scrollTo(0, 0); }}>{t("Something's wrong with this day")}</button>
+        <p className="jm-faint" style={{ textAlign: "center" }}>{t("Fixes go to your manager to OK. Your punches don't change until they do.")}</p>
+      </>
+    );
+  }
+  if (at.v === "fix") return (
     <>
-      <div className="jm-card">
-        <div className="jm-cardh"><b>{t("Today")}</b><span className="jm-faint">{hm(c.minutes)}</span></div>
-        <p className="jm-faint">{c.state === "in" ? t("Clocked in since {0}", clock(c.since, locale)) : c.state === "break" ? t("On lunch since {0}", clock(c.since, locale)) : t("Clocked out")}</p>
-        <Punch next={c.next} busy={busy} onPunch={(k) => post({ action: "punch", kind: k })} />
-      </div>
+      <button type="button" className="jm-link cr-tback" onClick={() => setAt({ v: "main" })}>← {t("Time card")}</button>
       <div className="jm-card cr-fix">
         <b>{t("What needs fixing?")}</b>
         <div className="cr-seg">{Object.entries(FIX).map(([k, l]) => <button key={k} type="button" className={fix.kind === k ? "on" : ""} onClick={() => setFix({ ...fix, kind: k })}>{t(l)}</button>)}</div>
@@ -359,6 +399,32 @@ function TimeCard({ home, busy, post, done, day0 }: { home: CrewHome; busy: stri
         <label>{fix.kind === "other" ? t("What happened") : t("Note (optional)")}<textarea rows={2} value={fix.note} onChange={(e) => setFix({ ...fix, note: e.target.value })} /></label>
         <button type="button" className="jm-go" disabled={!!busy || (fix.kind === "other" && !fix.note.trim())} onClick={send}>{t("Send to my manager")}</button>
       </div>
+    </>
+  );
+  return (
+    <>
+      <div className="jm-card">
+        <div className="jm-cardh"><b>{t("Today")}</b><span className="jm-faint">{hm(c.minutes)}</span></div>
+        <p className="jm-faint">{c.state === "in" ? t("Clocked in since {0}", clock(c.since, locale)) : c.state === "break" ? t("On lunch since {0}", clock(c.since, locale)) : t("Clocked out")}</p>
+        {/* every punch asks first, so a thumb can't clock anyone out (Nick, Nov 16 2026) */}
+        {ask ? <div className="cr-ask">
+          <b>{t("{0} at {1}?", t(PUNCH[ask] || ask), nowT)}</b>
+          <small>{t("Your manager OKs punches made on a phone.")}</small>
+          <div className="cr-two"><button type="button" className="jm-ghost" onClick={() => setAsk(null)}>{t("Cancel")}</button>
+            <button type="button" className="jm-go" disabled={!!busy} onClick={async () => { const k = ask; setAsk(null); if (await post({ action: "punch", kind: k })) done(t("Saved. Your manager will OK it.")); }}>{t("Yes")}</button></div>
+        </div> : <Punch next={c.next} busy={busy} onPunch={(k) => setAsk(k)} />}
+      </div>
+      {!cards ? <div className="jm-card"><p className="jm-faint">{t("Loading…")}</p></div> : cards.slice(0, 2).map((k, i) => {
+        const ds = daysOf(k);
+        return (
+          <div key={k.start} className="jm-card cr-tlist">
+            <div className="jm-cardh"><b>{i === 0 && k.open ? t("My hours") : t("Last pay period")}</b><span className="jm-faint">{day(k.start, locale).replace(/^[^,]*,\s*/, "")} – {day(k.end, locale).replace(/^[^,]*,\s*/, "")}</span></div>
+            {ds.length ? ds.map(dayRow) : <p className="jm-faint">{t("No punches in this pay period.")}</p>}
+            <div className="cr-ttot"><span>{k.open ? t("Total so far") : t("Total")}</span><b>{t("{0} hrs", (k.worked / 60).toFixed(1))}</b></div>
+          </div>
+        );
+      })}
+      <button type="button" className="jm-link" onClick={() => { setAt({ v: "fix" }); scrollTo(0, 0); }}>{t("Something's wrong? Send a fix")}</button>
       {home.fixes.length > 0 && (
         <div className="jm-card cr-fixes">
           <b>{t("Sent")}</b>
@@ -370,6 +436,7 @@ function TimeCard({ home, busy, post, done, day0 }: { home: CrewHome; busy: stri
     </>
   );
 }
+const addDay = (d: string, n: number) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
 
 /** My time cards (Nick, Nov 13 2026: "see your time cards from the past"): the period now running and the ones before it */
 function TimeCardList({ cards, pick }: { cards: PeriodHours[] | null; pick: (c: PeriodHours) => void }) {

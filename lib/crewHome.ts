@@ -36,7 +36,7 @@ export type CrewHome = {
 export type PeriodHours = { start: string; end: string; worked: number; overtime: number; breaks: number; ask: boolean; check: { status: "approved" | "fix_asked"; at: string } | null;
   /** the office approved the period (Time Clock → Payroll Report): nothing left for them to do */ office: boolean;
   /** the period isn't over yet: hours so far */ open: boolean;
-  days: { day: string; first: string | null; last: string | null; worked: number; breaks: number; fixed: boolean; issues: number }[] };
+  days: { day: string; first: string | null; last: string | null; worked: number; breaks: number; fixed: boolean; issues: number; /** every punch that day, in order */ punches?: { kind: string; at: string }[] }[] };
 
 const nextWorkDay = (d: string) => { const x = new Date(d + "T12:00:00Z"); do x.setUTCDate(x.getUTCDate() + 1); while ([0, 6].includes(x.getUTCDay())); return x.toISOString().slice(0, 10); };
 
@@ -143,7 +143,7 @@ export async function periodHours(admin: SupabaseClient, s: Awaited<ReturnType<t
   const card = timecard(s, employeeId, punches, [], per.start, per.end, open ? new Date().toISOString() : new Date(Date.parse(per.end + "T23:59:59Z") + 6 * 3600000).toISOString());
   const fixedDays = new Set(punches.filter(punchFixed).map((p) => localDay(p.at)));
   const days = Object.values(card.days).filter((d) => d.worked > 0 || d.first).sort((a, b) => a.day.localeCompare(b.day))
-    .map((d) => ({ day: d.day, first: d.first, last: d.last, worked: Math.round(d.worked), breaks: Math.round(d.breaks), fixed: fixedDays.has(d.day), issues: d.issues.length }));
+    .map((d) => ({ day: d.day, first: d.first, last: d.last, worked: Math.round(d.worked), breaks: Math.round(d.breaks), fixed: fixedDays.has(d.day), issues: d.issues.length, punches: punches.filter((p) => localDay(p.at) === d.day).map((p) => ({ kind: p.kind, at: p.at })) }));
   const c = ck.data as { status: "approved" | "fix_asked"; decided_at: string } | null;
   const check = c ? { status: c.status, at: c.decided_at } : null;
   const office = !!(ap as { approved_at: string | null } | null)?.approved_at;
