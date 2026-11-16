@@ -21,6 +21,10 @@ export type TrainingDefaults = {
   /** they send their own separations (Nov 10, Nick on Tiger Blue: "he supplies… the separations… gives us visual
    *  mock-ups"): every screen print is printed from their films, their picture is the mockup (the proof), the inks are read
    *  off it, nothing goes to separations: the same as the Order helper's "their separations" files */ own_seps?: boolean;
+  /** a weekly run (Nick, Nov 16 2026: Nine18's All My Sons orders "if they came in last Thursday… this week's… after
+   *  Thursday… next Tuesday, with the due date at the end of the week"): weekdays, 0 = Sunday. A job in by the cutoff day
+   *  runs on the run day after it and is due on the due day after that (lib/orderTrainings.ts runDates) */
+  run?: { cutoff: number; day: number; due: number };
   /** the fields staff set (learning leaves them alone) */ set?: string[];
   /** the fields learned, and from which orders ("#40311, #40314") */ learned?: Record<string, string>;
 };
@@ -31,6 +35,7 @@ export const SHIP_SAID = /\b(ups|usps|fed ?ex|dhl|on ?trac|overnight|next[- ]day
 /** the defaults of the trainings a job uses (the first training that sets a field wins) */
 export function defaultsOf(ts: Pick<Training, "defaults">[]): TrainingDefaults {
   const out: TrainingDefaults = {};
+  for (const t of ts) if (t.defaults?.run && !out.run) out.run = t.defaults.run;
   for (const t of ts) for (const f of DEFAULT_FIELDS) { const v = t.defaults?.[f]; if (v !== undefined && v !== "" && out[f] === undefined) (out as Record<string, unknown>)[f] = v; }
   return out;
 }
@@ -41,10 +46,22 @@ export function defaultsText(d: TrainingDefaults): string {
     d.order_type ? ({ new: "New order", reorder: "Reorder", reorder_changes: "Reorder with changes" } as const)[d.order_type] : "",
     d.confirm === false ? "no production confirmation" : d.confirm ? "production confirms details" : "",
     d.own_seps ? "their own separations" : "",
+    d.run ? `in by ${DAY[d.run.cutoff]}: runs ${DAY[d.run.day]}, due ${DAY[d.run.due]}` : "",
     d.delivery_method ? (d.delivery_method === "ship" ? `ship${d.ship_method ? ` ${d.ship_method}` : ""}` : d.delivery_method === "pickup" ? "pickup" : "we deliver") : d.ship_method ? `ship ${d.ship_method}` : "",
   ].filter(Boolean).join(" · ");
 }
 export const TRAINING_MAX = 8000;
+const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** a weekly run's dates for a job sent in at `sent` (shop time): the first cutoff day on or after it, the run day after
+ *  that, the due day after the run ("2026-11-11" Wed → runs Tue 11-17, due Fri 11-20; Fri 11-13 → Tue 11-24, Fri 11-27) */
+export function runDates(run: { cutoff: number; day: number; due: number }, sent: string | Date): { production: string; due: string } {
+  const ymd = new Date(sent).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+  const d = new Date(ymd + "T12:00:00Z");
+  const step = (x: Date, wd: number, incl: boolean) => { const y = new Date(x); if (!incl) y.setUTCDate(y.getUTCDate() + 1); while (y.getUTCDay() !== wd) y.setUTCDate(y.getUTCDate() + 1); return y; };
+  const cut = step(d, run.cutoff, true), runDay = step(cut, run.day, false), due = step(runDay, run.due, run.due === run.day);
+  const iso = (x: Date) => x.toISOString().slice(0, 10);
+  return { production: iso(runDay), due: iso(due) };
+}
 
 export const trainingWords = (w: string) => (w || "").split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
 const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");

@@ -370,3 +370,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:59am · 1.3.612 · Nick · Order reader: PO tables whose sizes are rows under each garment are read by code, row by row (sizes, one-size counts, personalization names)
 - Nov 16 10:05am · 1.3.613 · Nick · Paperwork check: PDFs read in line order, a style number and its name are one place, a one-size count in front of its name is read (catches lost size rows and swapped quantities)
 - Nov 16 10:06am · 1.3.614 · Nick · Create order: a question answered once isn't asked again when it's read again with the answers
+- Nov 16 10:10am · 1.3.615 · Nick · Order training default: a weekly run (in by Thu → runs Tue, due Fri) sets the production and in-hands dates; set on All My Sons

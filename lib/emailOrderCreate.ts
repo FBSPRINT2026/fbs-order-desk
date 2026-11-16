@@ -12,7 +12,7 @@ import { SITE_URL } from "@/lib/config";
 import { namesForPaths } from "@/lib/printavoFileMeta";
 import { oldJobLabel } from "@/lib/printavoNames";
 import { tickInPrintavo } from "@/lib/clickup";
-import { customerTrainings, defaultsOf, SHIP_SAID, trainingsForText } from "@/lib/orderTrainings";
+import { customerTrainings, defaultsOf, runDates, SHIP_SAID, trainingsForText } from "@/lib/orderTrainings";
 import { learnDefaults } from "@/lib/ai/orderExamples";
 import { after } from "next/server";
 
@@ -283,6 +283,9 @@ export async function createOrderFromDraft(admin: SupabaseClient, by: string, in
   const orderRow = {
     customer_id: custId, status: st.k, type: st.type, source: a ? "email" : "shop", groups, lines: [], use_program: useProgram,
     nickname: (flag + (d.nickname || "").replace(/^🚩\s*/u, "")).slice(0, 120), due_date: /^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? d.due_date : null,
+    // the customer's weekly run (a training default): a job naming no date of its own runs on the run day after the
+    // cutoff it came in by, due at the end of that week (Nick, Nov 16 2026, All My Sons)
+    ...(tdef.run && !/^\d{4}-\d{2}-\d{2}$/.test(d.due_date || "") ? (() => { const r = runDates(tdef.run!, (a as { occurred_at?: string } | null)?.occurred_at || new Date()); return { production_date: r.production, due_date: r.due }; })() : {}),
     ...(d.firm && d.due_date ? { firm: true } : {}),
     // RUSH in their job name or subject ticks Rush, so it isn't lost when the name is tidied (Nov 10: "RUSH AMS 43244
     // HOUSTON" became "AMS Houston")

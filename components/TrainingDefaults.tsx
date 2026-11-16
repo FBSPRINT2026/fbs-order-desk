@@ -48,6 +48,25 @@ export default function TrainingDefaults({ trainingId }: { trainingId: string })
     );
   };
   const shipV = val("ship_method") as string | undefined;
+  // a weekly run (Nick, Nov 16 2026, All My Sons: in by Thursday, runs the next Tuesday, due that Friday)
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const saveRun = async (k: "cutoff" | "day" | "due", v: string) => {
+    const r = { ...(d.run || { cutoff: 4, day: 2, due: 5 }) };
+    const next: Defaults = { ...d };
+    if (v === "") delete next.run; else { r[k] = +v; next.run = r; }
+    setD(next); setState("Saving…");
+    const { error } = await sb.from("order_trainings").update({ defaults: next }).eq("id", trainingId);
+    setState(error ? `Couldn't save: ${error.message}` : "Saved");
+  };
+  const runSel = (k: "cutoff" | "day" | "due", label: string) => (
+    <div className="field tdf-f">
+      <label htmlFor={`tdf-run-${k}-${trainingId}`}>{label}</label>
+      <select id={`tdf-run-${k}-${trainingId}`} value={d.run ? String(d.run[k]) : ""} onChange={(e) => void saveRun(k, e.target.value)}>
+        <option value="">{k === "cutoff" ? "No weekly run" : "—"}</option>
+        {DAYS.map((x, i) => <option key={x} value={i}>{x}</option>)}
+      </select>
+    </div>
+  );
   return (
     <div className="tdf">
       <div className="tdf-h"><b>Order defaults</b><span className="faint"> · put on every order made for these jobs; shipping only when the job doesn&apos;t name a carrier or pickup</span><span className="faint tdf-st">{state}</span></div>
@@ -63,6 +82,9 @@ export default function TrainingDefaults({ trainingId }: { trainingId: string })
           <datalist id={`tdf-car-${trainingId}`}>{CARRIERS.map((c) => <option key={c} value={c} />)}</datalist>
           {note("ship_method") && <span className="faint tdf-n">{note("ship_method")}</span>}
         </div>
+        {runSel("cutoff", "Weekly run: in by")}
+        {d.run && runSel("day", "Runs on")}
+        {d.run && runSel("due", "Due")}
       </div>
     </div>
   );
