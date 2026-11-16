@@ -1,4 +1,5 @@
 "use client";
+import { oldLiveSince } from "@/lib/printavoOld";
 import LabelPrinterPick from "@/components/LabelPrinterPick";
 import { myPrinter } from "@/lib/labelPrinter";
 import { jobCode, onScan } from "@/lib/scan";
@@ -46,7 +47,7 @@ export default function Outbound() {
     const sb = createClient();
     const [n, p, st] = await Promise.all([
       sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, delivery_method, updated_at").is("discarded_at", null).eq("status", "ready").order("due_date", { ascending: true, nullsFirst: false }).limit(500),
-      sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, status_name, updated_at, delivery:data->deliveryMethod").is("removed_at", null).ilike("status_name", "%ready to ship%").order("due_date", { ascending: true, nullsFirst: false }).limit(500),
+      sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, status_name, updated_at, delivery:data->deliveryMethod").is("removed_at", null).ilike("status_name", "%ready to ship%").gte("due_date", oldLiveSince()).order("due_date", { ascending: true, nullsFirst: false }).limit(500),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
     ]);
     setPerBox(mergeSettings(st.data?.data).ship.perBox || 72);
@@ -237,7 +238,7 @@ function LabelPanel({ pick, perBox }: { pick: { n: string; at: number } | null; 
       const sb = createClient();
       const [o, a] = await Promise.all([
         sb.from("orders").select("number, nickname, customer_id").is("discarded_at", null).in("status", ["approved", "production", "fulfillment", "ready"]).order("number", { ascending: false }).limit(800),
-        sb.from("archived_orders").select("visual_id, nickname, customer_id").is("removed_at", null).ilike("status_name", "%ready%").limit(300),
+        sb.from("archived_orders").select("visual_id, nickname, customer_id").is("removed_at", null).ilike("status_name", "%ready%").gte("due_date", oldLiveSince()).limit(300),
       ]);
       type O = { number: number; nickname: string; customer_id: string | null }; type A = { visual_id: string; nickname: string; customer_id: string | null };
       const os = (o.data || []) as O[], as = (a.data || []) as A[];

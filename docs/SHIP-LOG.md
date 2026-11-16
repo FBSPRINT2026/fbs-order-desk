@@ -398,3 +398,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 12:47pm · 1.3.640 · Nick · Box labels: the words under the QR are gone (they ran into it) and the size grid starts below the QR; the printable labels page draws the Zebra's own label (no barcode)
 - Nov 16 12:48pm · 1.3.641 · Nick · Printable labels page: a missing job shows not found
 - Nov 16 12:52pm · 1.3.642 · Nick · Box labels: each size has a small tick box (all of it is here) and a line marked OR # for a partial count
+- Nov 16 12:55pm · 1.3.643 · Nick · Shipping and Outbound: old Printavo jobs still marked Ready only show when their in-hands date is within 90 days (2019-2025 jobs were at the top of Ship Next)

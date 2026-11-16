@@ -47,3 +47,11 @@ export function goodsFromPrintavo(snap: Pick<PvSnap, "groups">): "received" | "p
   if (st.some((x) => x === "received" || x === "partially_received")) return "partial";
   return null;
 }
+
+/**
+ * An old Printavo job still sitting in a Ready status is work only while it's recent (Nick, Nov 16 2026: 2019–2025 jobs
+ * at the top of Ship Next). Printavo is closed, so nobody will ever move them on there, and pre-2026 history is locked.
+ * The ship, pickup and delivery lists only take one whose in-hands date is within this many days.
+ */
+export const OLD_LIVE_DAYS = 90;
+export const oldLiveSince = () => new Date(Date.now() - OLD_LIVE_DAYS * 864e5).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
