@@ -1,4 +1,6 @@
 "use client";
+import { issuesFor } from "@/app/goods-issue-actions";
+import type { GoodsIssue } from "@/lib/goodsIssueShared";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import CheckinModal from "@/components/CheckinModal";
@@ -29,7 +31,7 @@ const nextWork = (day: string) => { const d = new Date(day + "T12:00:00"); do d.
 const wkd = (day: string) => new Date(day + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
 const short = (day: string | null) => (day ? new Date(day.slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "");
 
-export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: DashTruckRow[]; localDay: (iso: string | null | undefined) => string; onTruck: () => void }) {
+export default function ReceivingDash({ trucks, localDay, onTruck, onIssue }: { trucks: DashTruckRow[]; localDay: (iso: string | null | undefined) => string; onTruck: () => void; /** open the Issue Center at this issue */ onIssue?: (id: string) => void }) {
   const [jobs, setJobs] = useState<CheckJob[] | null>(null);
   // jobs the press has started (or finished): their goods are on the press, off this list (Nov 11, Nick)
   const [started, setStarted] = useState<Set<string>>(new Set());
@@ -260,7 +262,6 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
             </table></div>
           )}
         </section>
-        <div className="rvd-iss"><GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} /></div>
         </div>
       </div>
       <aside className="rvd-blk rvd-rcv">
@@ -271,6 +272,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck }: { trucks: D
         </section>
         {truck("ss", "S&S", "ss")}
         {truck("sanmar", "SanMar", "sm")}
+        <IssuesSide onIssue={onIssue} />
         </div>
       </aside>
       {modals}
@@ -290,5 +292,29 @@ function SecBar({ k, label, n, hint }: { k: string; label: string; n: number; hi
       <span>{label}</span><span className="rvd-bar-n">{n}</span>
       {hint && <span className="rvd-bar-h">{hint}</span>}
     </div>
+  );
+}
+
+/**
+ * The open goods issues in a few lines on the right (Nick, Nov 16 2026: "instead of… this big long issues list… a small
+ * right panel that just says issues and list them out quickly"); each opens the Issue Center at that issue, where
+ * they're worked.
+ */
+function IssuesSide({ onIssue }: { onIssue?: (id: string) => void }) {
+  const [list, setList] = useState<GoodsIssue[] | null>(null);
+  useEffect(() => { void issuesFor({}).then((r) => setList(r.ok ? r.issues.filter((i) => !i.closed_at) : [])); }, []);
+  return (
+    <section className="panel rvd-isd">
+      <div className="panel-h"><h2>Issues</h2><span className="faint">{list ? (list.length ? `${list.length} open` : "none open") : "…"}</span></div>
+      <div className="rvd-isd-b">
+        {list && !list.length && <div className="faint rvd-isd-none">All good · no issues</div>}
+        {(list || []).map((i) => (
+          <button key={i.id} type="button" className="rvd-isd-r" onClick={() => onIssue?.(i.id)}>
+            <span className="rvd-isd-1"><b>#{i.number}</b><span>{i.title}</span><span className={"rvd-isd-t" + (i.status === "open" ? " us" : "")}>{i.status === "open" ? "Needs us" : i.status === "replacing" ? "Fix coming" : "Told them"}</span></span>
+            <span className="rvd-isd-2">{i.nickname || i.detail}</span>
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }

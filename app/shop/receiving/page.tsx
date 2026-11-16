@@ -21,7 +21,6 @@ import ReceivingDash from "./ReceivingDash";
 import ReceivingSettings from "@/components/ReceivingSettings";
 import { allRows } from "@/lib/readAll";
 import { useUrlSearch } from "@/lib/useUrlSearch";
-import GoodsIssues from "@/components/GoodsIssues";
 
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
@@ -158,7 +157,7 @@ export default function GoodsReceiving() {
   const [note, setNote] = useState("");
   const [view, setViewState] = useState<View>("dash");
   // open issues, on the Issue Center button (counted by the center itself once opened; first from the issues list)
-  const [issueN, setIssueN] = useState(0);
+  const [issueN, setIssueN] = useState(0), [issuePick, setIssuePick] = useState("");
   useEffect(() => { void import("@/app/shop/issue-center-actions").then((m) => m.issueCenter()).then((r) => { if (r.ok) setIssueN(r.issues.filter((i) => !i.closed_at).length); }); }, []);
   const [pending, setPending] = useState<PendingShipment[] | null>(null);
   const [pvGoods, setPvGoods] = useState<PrintavoGoods[]>([]);
@@ -504,7 +503,7 @@ export default function GoodsReceiving() {
       </div>
       {note && <div className="banner" style={{ marginBottom: 10 }}>{note}</div>}
       {/* goods issues across every customer: check-in problems and tracking gone wrong (Nov 2, components/GoodsIssues.tsx) */}
-      {view !== "dash" && view !== "issues" && <GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} />}
+      {/* goods issues are worked in the Issue Center; the dashboard lists them small on the right (Nov 16, Nick) */}
       {/* Dashboard on its own, the shipment views under Shipments (Nov 11, Nick) */}
       <div className="rvg-nav">
         <button type="button" className={"rvg-dash" + (view === "dash" ? " on" : "")} onClick={() => setView("dash")}>
@@ -526,7 +525,7 @@ export default function GoodsReceiving() {
         </div>
       </div>
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
-      {view === "issues" && <IssueCenter onCount={setIssueN} />}
+      {view === "issues" && <IssueCenter onCount={setIssueN} start={issuePick} />}
       {view !== "dash" && view !== "issues" && view !== "settings" && <div className="rv-search-row">
           <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>
         </div>}
@@ -546,7 +545,7 @@ export default function GoodsReceiving() {
           {!pending ? <div className="empty">Loading…</div> : <ResolveList list={pending} onDone={() => { loadPending(); load(); setRefreshKey((k) => k + 1); }} />}
         </>
       )}
-      {view === "dash" && <ReceivingDash trucks={searched.map((x) => ({ key: x.key, number: x.number, href: x.href, who: x.who, boxes: x.boxes, supplier: x.supplier, at: x.at, state: x.state }))} localDay={localDay} onTruck={() => setTruck(true)} />}
+      {view === "dash" && <ReceivingDash onIssue={(id) => { setIssuePick(id); setView("issues"); }} trucks={searched.map((x) => ({ key: x.key, number: x.number, href: x.href, who: x.who, boxes: x.boxes, supplier: x.supplier, at: x.at, state: x.state }))} localDay={localDay} onTruck={() => setTruck(true)} />}
       {view === "settings" && <ReceivingSettings upBusy={upBusy} onUpload={upload} />}
       {view === "ignored" && (
         <section className="rv-day">

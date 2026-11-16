@@ -45,11 +45,11 @@ function draft(i: CenterIssue, shop: string) {
   return `Hi${first ? ` ${first}` : ""}, it's ${shop}. Your goods for ${job} came in with a problem:\n${problem(i).map((p) => `- ${p}`).join("\n")}\n${runs ? runs.trim() + " " : ""}${ask}`;
 }
 
-export default function IssueCenter({ onCount }: { onCount?: (n: number) => void }) {
+export default function IssueCenter({ onCount, start }: { onCount?: (n: number) => void; /** open at this issue */ start?: string }) {
   const [d, setD] = useState<CenterCtx | null>(null), [err, setErr] = useState("");
   const [tab, setTab] = useSticky<"open" | "mine" | "closed">("receiving.issueTab", "open", AWAY);
   const [q, setQ] = useState("");
-  const [pick, setPick] = useState<string>("");
+  const [pick, setPick] = useState<string>(start || "");
   const load = useCallback(async () => { const r = await issueCenter(); if (r.ok) { setD(r); setErr(""); } else setErr(r.error); }, []);
   useEffect(() => { void load(); }, [load]);
   const open = useMemo(() => (d?.issues || []).filter((i) => !i.closed_at), [d]);
