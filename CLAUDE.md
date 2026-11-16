@@ -273,6 +273,11 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   card, `components/MsgAiCard.tsx`, under the message in the Job Center thread and the job's timeline; "Not this" is
   kept and shown to the next reads. Waiting on us is `needsReply` / `NEEDS_REPLY_FILTER` (the read first, then the
   reason; `handled_at` is done).
+- **Where it came from** (Nick, Nov 16 2026, option A: "I can't see where he originally submitted the order"): every order
+  has a "Where it came from" tab: what the customer sent, word for word, oldest first (their ClickUp job with its files
+  and comments, portal order, emails and texts linked to the order, quoted replies left out: `orderOrigin` in
+  `lib/orderOrigin.ts`), beside the Job Center's own job view (`JobPanel`, the same component, never a copy):
+  `components/OrderOrigin.tsx`. A new way customers send orders in links its activity to the order so it shows here.
 - **High priority** (Nick, Nov 16 2026: "this job needs a little more attention, take an extra set of eyes"): beside
   Rush and Firm, `orders.priority` (+ `priority_note`, why). Violet "Priority" on the order's header and Job details, the
   Orders list and board, the schedule (job line, card, right-click), the work order, the job ticket and the crew's

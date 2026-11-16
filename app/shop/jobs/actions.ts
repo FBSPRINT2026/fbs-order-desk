@@ -238,3 +238,13 @@ export async function msgAiDone(id: string, on: boolean) {
     return { ok: true as const };
   } catch (e) { return fail(e); }
 }
+
+/** Where an order came from, word for word (lib/orderOrigin.ts): the order's "Where it came from" tab (Nick, Nov 16 2026) */
+export async function orderOriginLoad(orderId: string, number: number) {
+  try {
+    const { admin } = await me();
+    if (!/^[0-9a-f-]{36}$/i.test(String(orderId))) throw new Error("No order.");
+    const { orderOrigin } = await import("@/lib/orderOrigin");
+    return { ok: true as const, items: await orderOrigin(admin, orderId, Number(number) || 0) };
+  } catch (e) { return fail(e); }
+}

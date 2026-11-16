@@ -23502,3 +23502,27 @@ table.rvd-tbl.tbl-stack tr.rvd-secrow{display:block!important;padding:0!importan
 .rvd-isd-t.us{background:color-mix(in srgb,var(--danger) 12%,var(--surface));color:var(--danger)}
 .rvd-isd-2{font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .jm-ip{font-size:12.5px;color:var(--ink-3,#77849A)}
+
+/* The order's "Where it came from" tab (components/OrderOrigin.tsx; Nick, Nov 16 2026, option A): what the customer
+   sent on the left, the Job Center's view of the job on the right */
+.orig{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}
+.orig-sent{flex:1.15 1 420px;min-width:0}
+.orig-jc{flex:1 1 380px;min-width:0;padding:0;overflow:hidden}
+.orig-jc .jcp-x,.orig-jc .jcp-hr .btn{display:none}
+.orig-it{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid var(--line)}
+.orig-it:first-child{border-top:0;padding-top:0}
+.orig-src{display:flex;gap:10px;align-items:flex-start}
+.orig-ic{width:30px;height:30px;flex:0 0 30px;border-radius:6px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.orig-who{min-width:0}
+.orig-when{font-size:12px;color:var(--ink-3)}
+.orig-txt{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.5;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.orig-it.first .orig-txt{border-color:var(--accent);}
+.orig-txt.cut{max-height:9.5em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 70%,transparent)}
+.orig-more{align-self:flex-start;background:none;border:0;padding:0;color:var(--accent);font:inherit;font-size:12.5px;cursor:pointer}
+.orig-files{display:flex;flex-direction:column;gap:6px}
+.orig-file{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-size:13px;color:var(--ink);text-decoration:none;min-width:0}
+.orig-file span{min-width:0;overflow-wrap:anywhere}
+.orig-file small{margin-left:auto;color:var(--ink-3);white-space:nowrap}
+.orig-file:hover{border-color:var(--accent)}
+.orig-notes{display:flex;flex-direction:column;gap:8px;font-size:13px;border-left:2px solid var(--line);padding-left:10px}
+.orig-it > .btn{align-self:flex-start}

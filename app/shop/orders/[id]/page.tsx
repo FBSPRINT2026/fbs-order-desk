@@ -90,6 +90,7 @@ import { qboOrderState, qboSyncOrder, voidOrderInQbo } from "@/app/shop/qbo-orde
 import { resetToRequest, unlinkPrintavo } from "@/app/shop/orders/delete-actions";
 import QbLogo from "@/components/QbLogo";
 import { clickUpJobOfOrder, reopenClickUpJob } from "@/app/shop/clickup/actions";
+import OrderOrigin from "@/components/OrderOrigin";
 import { mockupGone, mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
 import type { DgzSewout } from "@/lib/digitizeStatus";
 import { garmentFor, sameBrand } from "@/lib/garmentMatch";
@@ -114,6 +115,8 @@ const TAB_ICONS: Record<string, ReactNode> = {
   order: <><path d="M9 3.5h6v3H9z" /><path d="M7 5H5v15.5h14V5h-2" /><path d="M8.5 11h7M8.5 15h4.5" /></>,
   prod: <><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="M21 16l-5-5-9 8" /></>,
   msg: <path d="M4 5h16v11H10l-5 4v-4H4z" />,
+  // where it came from: an inbox tray (Nick, Nov 16 2026)
+  from: <><path d="M3 13l3-8h12l3 8v6H3z" /><path d="M3 13h5l1 2h6l1-2h5" /></>,
   pay: <><rect x="3" y="6" width="18" height="12" rx="2" /><path d="M3 10h18M7 15h3" /></>,
   act: <><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></>,
 };
@@ -230,7 +233,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // the customer's own carrier account (customers.ship_on, e.g. Nine18 FEDEX): its name and carrier, for the ship methods
   const [ownAcct, setOwnAcct] = useState<{ id: string; name: string; carrier: string } | null>(null);
   // the page's tabs (Oct 15, Nick: "too much information on one page… tabs at the top"); ?tab= keeps it on refresh
-  type Tab = "order" | "prod" | "goods" | "msg" | "pay" | "act";
+  type Tab = "order" | "prod" | "goods" | "msg" | "from" | "pay" | "act";
   const [tab, setTabS] = useState<Tab>("order");
   // a sent quote's lock (Nov 3, Nick): "" none, "quick" a change on the phone to the version they opened, "closed" a
   // declined (closed) quote opened anyway to pull the art
@@ -253,7 +256,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     setRqAsk(true);
   }, [o?.id, o?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   const setTab = (t: Tab) => { setTabS(t); try { const u = new URL(window.location.href); if (t === "order") u.searchParams.delete("tab"); else u.searchParams.set("tab", t); window.history.replaceState(window.history.state, "", u.toString()); } catch { /* */ } };
-  useEffect(() => { try { const t = new URL(window.location.href).searchParams.get("tab"); if (t && ["order", "prod", "goods", "msg", "pay", "act"].includes(t)) setTabS(t as Tab); else if (window.location.hash === "#messages") setTabS("msg"); } catch { /* */ } }, []);
+  useEffect(() => { try { const t = new URL(window.location.href).searchParams.get("tab"); if (t && ["order", "prod", "goods", "msg", "from", "pay", "act"].includes(t)) setTabS(t as Tab); else if (window.location.hash === "#messages") setTabS("msg"); } catch { /* */ } }, []);
   const [talkN, setTalkN] = useState(0);
   const [goodsSt, setGoodsSt] = useState<{ status: string; updated_by: string | null } | null>(null);
 
@@ -1931,7 +1934,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       </section>
 
       <nav className="aa-nav ot-nav" aria-label="Order sections">
-        {([["order", "Order", 0], ["prod", "Art & production", art.length], ["goods", "Goods", 0], ["msg", "Messages", talkN + messages.length], ...(seesMoney ? [["pay", "Payments", payments.length]] : []), ["act", "Activity", 0]] as [Tab, string, number][]).map(([k, l, n]) =>
+        {([["order", "Order", 0], ["prod", "Art & production", art.length], ["goods", "Goods", 0], ["msg", "Messages", talkN + messages.length], ["from", "Where it came from", 0], ...(seesMoney ? [["pay", "Payments", payments.length]] : []), ["act", "Activity", 0]] as [Tab, string, number][]).map(([k, l, n]) =>
           <button key={k} type="button" className={"aa-tab" + (tab === k ? " on" : "")} aria-current={tab === k ? "page" : undefined} onClick={() => setTab(k)} aria-label={l} title={l}><svg className="ot-ic" viewBox="0 0 24 24" aria-hidden>{TAB_ICONS[k]}</svg><span className="ot-l">{l}</span>{n > 0 && <span className="aa-n">{n}</span>}</button>)}
       </nav>
       <div className="ot-panes" inert={(cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>)) || undefined} style={cust && o.number >= 40000 && needsMove(cust as unknown as Record<string, unknown>) ? { opacity: 0.45 } : undefined}>
@@ -2420,6 +2423,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           </section>
           </aside>
         </div>}
+
+        {/* Where it came from: what the customer sent, word for word, beside the Job Center's view of the job (Nick, Nov 16
+            2026, option A) */}
+        {tab === "from" && <div className="ot-one"><OrderOrigin order={{ id: o.id, number: o.number, nickname: o.nickname || "", created_at: (o as unknown as { created_at: string }).created_at, due_date: o.due_date || null, customer_id: (o.customer_id as string | null) || null, status: o.status }} customer={cust?.company || cust?.name || ""} onSay={say} /></div>}
 
         {/* Activity */}
         <div className="ot-one" hidden={tab !== "act"}>

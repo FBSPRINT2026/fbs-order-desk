@@ -401,3 +401,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 12:55pm · 1.3.643 · Nick · Shipping and Outbound: old Printavo jobs still marked Ready only show when their in-hands date is within 90 days (2019-2025 jobs were at the top of Ship Next)
 - Nov 16 12:56pm · 1.3.644 · Nick · Box labels: the QR sits higher and a bit smaller, and the size grid always starts below where the Zebra really prints it
 - Nov 16 1:04pm · 1.3.645 · Nick · Box labels: tick box centered with ALL under it, a line at the bottom for a partial count (option 1)
+- Nov 16 1:10pm · 1.3.646 · Nick · Order page: Where it came from tab (what the customer sent, word for word, beside the Job Center's view of the job)
