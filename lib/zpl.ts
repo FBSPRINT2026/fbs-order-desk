@@ -54,6 +54,8 @@ class Z {
     const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^BQN,2,${Math.max(2, Math.round(mag * this.k))}^FDMA,${data}^FS`);
     const q = qrSvg(data, 0), m = Math.max(2, Math.round(mag)), size = q.modules * m;
     this.pic.push(q.svg.replace("<svg ", `<svg x="${x}" y="${y + 10}" width="${size}" height="${size}" `));
+    // where it ends (the Zebra puts it 10 dots down): anything under it starts below this
+    return y + 10 + size;
   }
   code128(x: number, y: number, h: number, data: string, module = 2) {
     const { n } = this; this.out.push(`^FO${n(x)},${n(y)}^BY${Math.max(1, Math.round(module * this.k))},3,${n(h)}^BCN,${n(h)},N,N,N^FD${data}^FS`);
@@ -97,13 +99,13 @@ function drawBoxLabel(z: Z, j: JobCard, box: number, of: number): Z {
   const nm = j.name || "Untitled job", nn = Math.min(3, lines(nm, 38, TW));
   z.text(L, y, 38, nm, { w: TW, lines: nn }); y += nn * 38 + 12;
   if (j.po) { z.text(L, y, 46, `PO ${j.po}`, { w: TW }); y += 46; }
-  z.qr(600, 140, 4.6, jobLink(j.number, box || null));
-  z.text(586, 318, 20, "SCAN FOR THE JOB", { w: 204, align: "C" });
+  // just the QR on the right (Nick, Nov 16 2026: the "scan for the job" words ran into it)
+  const qrEnd = z.qr(600, 140, 4.6, jobLink(j.number, box || null));
 
   // the size grid: what was ordered, with room to write what's in this box
   const rows = j.groups.flatMap((g) => g.rows);
   const sizes = [...new Set(rows.flatMap((r) => r.sizes.map((s) => s.label)))].sort((a, b) => bySize(a.toUpperCase(), b.toUpperCase()));
-  const gy = Math.max(y, 340) + 18, foot = 1218 - 92;
+  const gy = Math.max(y, qrEnd) + 18, foot = 1218 - 92;
   // rows grow to fill the label (room to write what's in the box); at least 54 dots each
   const maxRows = Math.max(1, Math.min(rows.length, Math.floor((foot - gy - 80) / 54)));
   const rh = Math.min(320, Math.floor((foot - gy - 80) / Math.max(1, maxRows)));
