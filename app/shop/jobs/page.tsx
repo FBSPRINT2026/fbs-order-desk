@@ -7,7 +7,7 @@ import SearchInput from "@/components/SearchInput";
 import CreateOrderTool from "@/components/tools/CreateOrderTool";
 import { ST } from "@/lib/pricing";
 import type { Dept, JobItem, Step, Track } from "@/lib/jobCenter";
-import { loadJobChats, loadJobs, msgAiPending, notAJob, undoDeclined } from "./actions";
+import { loadJobChats, loadJobs, notAJob, undoDeclined } from "./actions";
 import JobPanel from "./JobPanel";
 import { ChatLine, ChatThread, whoOf } from "./JobChats";
 import type { ChatSummary } from "@/lib/jobChats";
@@ -156,7 +156,7 @@ export default function JobCenter() {
   // follows (lib/ai/messageRead.ts; new ones are read as they come in)
   useEffect(() => {
     let live = true;
-    const run = async () => { for (let i = 0; i < 20 && live; i++) { const r = await msgAiPending(); if (!r.ok || !r.read) break; setCn((x) => x + 1); if (!r.left) break; } };
+    const run = async () => { for (let i = 0; i < 20 && live; i++) { const r = await fetch("/api/messages/read", { method: "POST" }).then((x) => x.json()).catch(() => null) as { read?: number; left?: number } | null; if (!r || !r.read) break; setCn((x) => x + 1); if (!r.left) break; } };
     void run(); const t = setInterval(() => { if (document.visibilityState === "visible") void run(); }, 120_000);
     return () => { live = false; clearInterval(t); };
   }, []);

@@ -187,18 +187,6 @@ export async function msgAiRead(id: string) {
   } catch (e) { return fail(e); }
 }
 
-/** the messages nobody has read yet, a few at a time (the Job Center asks again while some are left) */
-export async function msgAiPending() {
-  try {
-    const { admin } = await me();
-    const { aiState } = await import("@/lib/ai/claude");
-    const st = await aiState(admin);
-    if (!st.ready) return { ok: true as const, read: 0, left: 0 };
-    const { readPending } = await import("@/lib/ai/messageRead");
-    return { ok: true as const, ...(await readPending(admin, st.settings, 3)) };
-  } catch (e) { return fail(e); }
-}
-
 /** the message is done: it and the earlier ones its read covers come off To do */
 async function finish(admin: ReturnType<typeof createAdminClient>, id: string, by: string, ai: Record<string, unknown> | null) {
   const now = new Date().toISOString();
