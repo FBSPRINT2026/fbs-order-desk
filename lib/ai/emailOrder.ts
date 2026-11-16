@@ -471,7 +471,7 @@ export async function emailConversation(admin: SupabaseClient, activityId: strin
 /** run the AI for one email and save the suggestion; returns the draft and the past jobs */
 /** which rules a saved reading was made with: raise it when the reader's rules change, and a saved reading made
  *  before is read again when Create order opens it (Oct 24, Nick: the fix didn't show because the old reading was reused) */
-export const READER_REV = "2026-11-16d";
+export const READER_REV = "2026-11-16e";
 
 export async function suggestEmailOrder(admin: SupabaseClient, activityId: string, by: string, o: { told?: string; jobRef?: string | null; /** several past jobs reordered together in one order (one group per design) */ jobRefs?: string[]; reorderOk?: boolean; lookedUp?: LookedUp | null; /** one of several orders in the email (lib/ai/emailPlan.ts): its files only, saved apart */ part?: EOPart | null;
   /** the Order helper (Nov 6): the only files read (the sizes, the art, their mockup); the rest are reference files */ read?: string[];
@@ -1129,8 +1129,14 @@ ${staffSays}` : ""}`;
     }
     // the names counted against the paperwork (Nov 1, #40345: three PERSONALIZATION rows, CINCO, ICEN and KEITH, read
     // as two names): a PO table with more PERSONALIZATION rows than names read is asked about, never left short
-    const rowsOnPaper = Math.max(0, ...fileWords.map((w) => (w.match(/(?<![\w/])PERSONALI[SZ]ATION(?!S)\b/g) || []).length));
-    const namesRead = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + (l.persList || []).length, 0), 0);
+    // the pieces the paperwork personalizes: a PO row's quantity in front of PERSONALIZATION ("1 | PERSONALIZATION"),
+    // else each PERSONALIZATION word; never the special instructions' "AMS & PERSONALIZATION" (Nov 16, #50086 asked for
+    // a second name that wasn't there)
+    const rowsOnPaper = Math.max(0, ...fileWords.map((w) => {
+      const rows = [...w.matchAll(/^\s*(\d{1,3})\s+PERSONALI[SZ]ATION(?!S)\b/gim)];
+      return rows.length ? rows.reduce((t, m) => t + +m[1], 0) : (w.match(/(?<!(?:&|\band)\s*)(?<![\w/])PERSONALI[SZ]ATION(?!S)\b/gi) || []).length;
+    }));
+    const namesRead = groups.reduce((a, g) => a + g.lines.reduce((b, l) => b + (l.persList || []).reduce((c, e) => c + Math.max(1, +(e.qty || 1)), 0), 0), 0);
     // none read at all is asked too (Nov 16, #50024 All My Sons Detroit: "PERSONALIZATION / CHRIS" under the JST56 jacket
     // was missed and nothing asked), with what the paperwork says under each PERSONALIZATION row
     if (rowsOnPaper > namesRead) {
