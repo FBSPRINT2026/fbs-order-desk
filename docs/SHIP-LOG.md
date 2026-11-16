@@ -385,3 +385,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 11:05am · 1.3.627 · Nick · Message AI: a firm date or high profile in a customer's message is always offered when the order doesn't have it
 - Nov 16 11:29am · 1.3.628 · Nick · Portal messages: Add a file tile (opens the picker; files sent about an order go on the order's files). Sign-in link opens a Sign in button page so mail filters can't use up the code
 - Nov 16 11:44am · 1.3.629 · Nick · Pay hidden until a PIN: Show pay on Payroll Center, Time Clock and Employees; rates, paychecks, crew rates and labor cost show $••• until each person's own PIN; hides after 10 min idle
+- Nov 16 11:44am · 1.3.630 · Nick · Handbook: Amanda's Claude can change any page or feature (billing included); how to get the code when a session doesn't have it

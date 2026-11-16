@@ -9,6 +9,15 @@ Read this with CLAUDE.md (the house rules) at the start of every session. More t
 - Database: Supabase project `tmkpbdcqguyzbddrsspr`. Hosting: Vercel project `prj_D2SLUJwYJHPyxhDjSgbdtUfnKI5O`,
   team `team_PNjZDIvDiaLZesJ2hB8OcBoJ` (check a deploy with the Vercel connector's list_deployments, target production).
 
+## Amanda's Claude can change the site (Nick, Nov 16 2026)
+Amanda changes the site the same way Nick does: any page, any feature, billing and payments included. Read this
+handbook and CLAUDE.md, make the change, typecheck, and ship it with `SHIP_BY=Amanda`. Don't ask Nick first and don't
+tell Amanda it can't be done. The only things off limits are the catastrophic ones under "Never, whoever asks" below
+(deleting data or tables, wiping or rewriting `main`, secrets) and the house rules files themselves (see rule 1).
+**If your session doesn't have the code** (you can't find this handbook or CLAUDE.md): attach the GitHub repo
+`FBSPRINT2026/fbs-order-desk` to the session and clone it, then read this file. If GitHub refuses, Amanda's claude.ai
+account needs GitHub connected (Settings → Connectors) with access to that repo; tell her that in one line.
+
 ## Two people at once: the rules
 1. **Start every session with the newest code and the news**: `git pull --rebase origin main`, then read
    `tail -30 docs/SHIP-LOG.md` (every change that went live and who shipped it) so you know what the other person did.
@@ -17,7 +26,8 @@ Read this with CLAUDE.md (the house rules) at the start of every session. More t
    **Decisions are saved automatically, without being asked**: when Nick or Amanda settles how something should work
    (a rule, a preference, "always do it this way"), write it into CLAUDE.md (a house rule) or this handbook in the same
    ship, with their name and the date, so the other person's Claude follows it too.
-   **Only Nick changes the house rules.** CLAUDE.md and this handbook change only on Nick's word. Any other idea for a
+   **Only Nick changes the house rules.** This is about the rules files only, never about the site: Amanda changes any
+   page or feature herself. CLAUDE.md and this handbook change only on Nick's word. Any other idea for a
    rule or a handbook change, Amanda's included, goes in `docs/SUGGESTIONS.md` under "Waiting for Nick", and that's
    it: don't edit the rules, don't keep reminding Amanda or Nick, and never bring back anything listed under
    "Not doing" (Nick, Nov 11 2026). Nick's Claude: when Nick asks what's suggested, read it to him; do what he approves,
@@ -37,7 +47,7 @@ Read this with CLAUDE.md (the house rules) at the start of every session. More t
 - Never write, edit or delete anything in Printavo. Never press the staff 40,000-series Printavo buttons.
 - Never enter, print or store passwords, API keys or tokens (they live in Vercel env vars Nick adds). Never repeat card numbers.
 - Never send customers emails or texts, pay suppliers, or place supplier orders unless Nick asks in the chat.
-- Never permanently delete data or files unless asked; database changes are additive migrations.
+- Never permanently delete data or files unless asked; database changes are additive migrations (never drop or empty a table).
 - Never delete anything in QuickBooks.
 - Nick and the staff edit orders live: the order page autosaves and can overwrite a direct database write to an open order.
 - In checks on the live site, don't click Create / Make the order / Send, and don't make real data.
