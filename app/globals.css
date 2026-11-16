@@ -23182,9 +23182,9 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .jcp2-rep{background:var(--surface-2)}
 .jcp2-rep-r{display:flex;gap:8px;align-items:flex-end}
 .jcp2-rep textarea{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:14px;padding:8px 10px;resize:vertical;background:var(--surface)}
-@media (max-width:1280px){.jx.msgs.pick{grid-template-columns:minmax(0,1fr) 400px}.jx.msgs.pick>.jx-m{position:fixed;left:12px;top:70px;bottom:12px;width:320px;z-index:40;box-shadow:0 12px 40px rgba(20,29,43,.25);max-height:none}}
+@media (max-width:1280px){.jx.msgs.pick{grid-template-columns:260px minmax(0,1fr) 380px}}
 @media (max-width:1100px){.jx.msgs{grid-template-columns:280px minmax(0,1fr)}.jx.pick{grid-template-columns:minmax(0,1fr) 380px}}
-@media (max-width:900px){.jx,.jx.msgs,.jx.pick,.jx.msgs.pick{grid-template-columns:minmax(0,1fr)}.jx-m,.jx-p{position:static;max-height:none}.jx.msgs.pick>.jx-m{position:static;width:auto;box-shadow:none}.jx.pick>.jx-p{order:-1}.jx-ml{max-height:60vh}
+@media (max-width:900px){.jx,.jx.msgs,.jx.pick,.jx.msgs.pick{grid-template-columns:minmax(0,1fr)}.jx-m,.jx-p{position:static;max-height:none}.jx.pick>.jx-p{order:-1}.jx-ml{max-height:60vh}
   .jcb{flex-wrap:wrap}.jcb-g{flex:1 1 100%;border-right:0;border-bottom:1px solid var(--line)}.jcb-g:last-child{border-bottom:0}}
 /* the bar fits the room it has (a panel open on both sides): two parts a row, then one */
 .jx-c{container:jxc / inline-size}

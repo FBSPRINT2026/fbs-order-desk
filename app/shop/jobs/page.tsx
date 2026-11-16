@@ -126,7 +126,9 @@ export default function JobCenter() {
   const [chats, setChats] = useState<ChatSummary[]>([]);
   const [chat, setChat] = useState<string | null>(null);
   const [cn, setCn] = useState(0);
-  const [msgPin, setMsgPin] = useState(false);
+  // FBS Messages stays open while a message or job is worked (Nick, Nov 16: "the messaging center disappears… very strange");
+  // its ✕ folds it away and the FBS Messages button brings it back (remembered)
+  const [msgsOpen, setMsgsOpen] = useSticky<boolean>("jobs.msgsOpen", true);
   // the Message Center (Nov 2, Nick: "just have the message center… search and then have it say messages… that should
   // exactly line up with the word job"): its Messages heading sits level with the job table's heading
   const [mq, setMq] = useState("");
@@ -188,7 +190,7 @@ export default function JobCenter() {
   // a message picks its job: the tab it's at comes forward and its row lights up (Nov 2, Nick: "when you click on it, it
   // sorts the job on the right"); picking a job opens its conversation
   const openChat = (key: string | null) => {
-    setChat(key); setMsgPin(false);
+    setChat(key);
     const c = key ? chats.find((x) => x.key === key) : null;
     const it = c?.orderId ? byOrder.get(c.orderId) : null;
     // an order opens its panel on the right; a request is processed in the middle, no panel
@@ -251,8 +253,7 @@ export default function JobCenter() {
   // a message about a job on the board opens that job on the right, its conversation in the panel (Job Center D); a request
   // or a general question still opens in the middle
   const chatInPanel = !!curChat && !!focusJob && focusJob.type !== "request" && !!picked;
-  // the messages panel shows while nothing is open, or when brought back with FBS Messages
-  const showMsgs = msgPin || (!picked && !curChat);
+  const showMsgs = msgsOpen;
   // the Messages heading level with the jobs' heading: the space above it is measured from the table's own heading,
   // again when anything above the table changes size (filters wrapping, a narrower window)
   useLayoutEffect(() => {
@@ -281,7 +282,7 @@ export default function JobCenter() {
         <div><h1>Job Center</h1><div className="eyebrow">Every job before production, and what customers are saying about it</div></div>
         <div className="jc-hd-r">
           {/* the messages panel closes while a job is open; this brings it back (Nick, Nov 16 2026, Job Center D) */}
-          {!showMsgs && <button type="button" className="jx-mbtn" onClick={() => setMsgPin(true)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>FBS Messages{waitingNow > 0 && <em>{waitingNow}</em>}</button>}
+          {!showMsgs && <button type="button" className="jx-mbtn" onClick={() => setMsgsOpen(true)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>FBS Messages{waitingNow > 0 && <em>{waitingNow}</em>}</button>}
           {hasAcc && <div className="rv-seg" role="group" aria-label="Whose jobs">
             {([[true, "My accounts"], [false, "Everyone"]] as const).map(([k, l]) => <button key={l} type="button" className={mineOn === k ? "on" : ""} aria-pressed={mineOn === k} onClick={() => setMine(k)}>{l}</button>)}
           </div>}
@@ -293,7 +294,7 @@ export default function JobCenter() {
       {/* FBS Messages down the left (Job Center D): what needs a reply first, then what needs none */}
       {showMsgs && <aside className="jx-m" aria-label="FBS Messages">
         <div className="jx-mh"><b>FBS Messages</b>{waitingNow > 0 && <span className="jcm-n">{waitingNow} new</span>}<span className="spacer" />
-          {(picked || curChat) && <button type="button" className="btn sm ghost" aria-label="Close messages" onClick={() => setMsgPin(false)}>✕</button>}</div>
+          <button type="button" className="btn sm ghost" aria-label="Fold messages away" title="Fold FBS Messages away" onClick={() => setMsgsOpen(false)}>✕</button></div>
         <div className="jx-mf rv-seg" role="radiogroup" aria-label="Show">{([["waiting", "New", myChats.filter((c) => c.waiting || c.last.from === "customer").length], ["replied", "Waiting on them", myChats.filter((c) => !c.waiting && c.last.from !== "customer").length], ["archived", "Done", myArchived.length]] as const).map(([k, l, nn]) => (
           <button key={k} type="button" role="radio" aria-checked={!mWant && mShow === k} className={!mWant && mShow === k ? "on" : ""} onClick={() => setMShow(k)}>{l}{k !== "archived" && <em>{nn}</em>}</button>))}</div>
         <div className="jx-ms"><SearchInput placeholder="Search messages" value={mq} onChange={(e) => setMq(e.target.value)} aria-label="Search messages" /></div>
