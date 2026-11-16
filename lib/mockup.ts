@@ -233,7 +233,7 @@ export function neckPicture(img: HTMLImageElement, fit: Fit): { lines: { label: 
  * 100B came out about half again too big: 97% of the chest instead of ~70%).
  */
 const HOOD_FROM_SHADOW = false;
-export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: boolean; kid?: boolean; /** a hoodie (its description says so) */ hood?: boolean } = {}): Fit | null {
+export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: boolean; kid?: boolean; /** a hoodie (its description says so) */ hood?: boolean; /** long sleeves (isLongSleeve) */ long?: boolean } = {}): Fit | null {
   const W = PHOTO_W, H = PHOTO_H;
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
@@ -436,15 +436,23 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
   // a long hanging sleeve: its cuff is far below the short-sleeve "tip"
   const longL = !!lc && lc.tipY > left.y + 120 * s, longR = !!rc && rc.tipY > right.y + 120 * s;
   // a long sleeve's upper arm (Oct 27, Nick: "where you would normally put the imprint if it was a t-shirt"): on the
-  // fold about 7" below the top of the shoulders, turned like the cuff's hemline
+  // fold, turned like the cuff's hemline, a fifth of the way from the top of the shoulders to the hem. Measured from the
+  // shoulders, not the top of the photo (Nov 16, #50051: a hoodie's hood is the top of its photo, so 7" down from there was
+  // still at the hood), and as a share of the garment's own length, not inches (a hoodie's scale is read off its hood too)
+  let shW = 0; for (let y = T; y <= B; y++) if (L[y] >= 0) shW = Math.max(shW, R[y] - L[y]);
+  let shY = T; for (let y = T; y < T + 0.5 * (B - T); y++) if (L[y] >= 0 && R[y] - L[y] >= 0.55 * shW) { shY = y; break; }
   const upper = (side: "left" | "right", rot: number) => {
-    const edge = side === "right" ? R : L, ppi = PX_PER_IN * s, y = Math.round(T + 7.2 * ppi);
+    const edge = side === "right" ? R : L, y = Math.round(shY + 0.193 * (B - shY));
     if (y < 0 || y >= H || edge[y] < 0) return undefined;
     const a = (rot * Math.PI) / 180, out = side === "right" ? { x: Math.cos(a), y: Math.sin(a) } : { x: -Math.cos(a), y: -Math.sin(a) };
     return { x: edge[y] + 2 * out.x, y: y + 2 * out.y, rot };
   };
   if (longL) left = { ...lc!.pt, long: true, upper: upper("left", lc!.pt.rot) } as typeof left;
   if (longR) right = { ...rc!.pt, long: true, upper: upper("right", rc!.pt.rot) } as typeof right;
+  // its description says long sleeves (a sweatshirt, hoodie, long sleeve tee…) but a cuff couldn't be read: the upper
+  // arm still comes off the outline, never the tee spot by the elbow
+  if (opts.long && !longL) { const u = upper("left", left.rot); if (u) left = { ...left, upper: u }; }
+  if (opts.long && !longR) { const u = upper("right", right.rot); if (u) right = { ...right, upper: u }; }
   // sanity: a sleeve fold runs ~25-45° (a hanging sleeve can be nearly straight down); if one side reads wrong, mirror the other side's angle
   const ok = (r: number) => (longL || longR ? Math.abs(r) <= 48 : Math.abs(r) >= 22 && Math.abs(r) <= 48);
   if (!ok(left.rot) && ok(right.rot)) left = { ...left, rot: -right.rot };
@@ -964,4 +972,6 @@ export const ssImg = (path: string) => (!path ? "" : path.startsWith("store:") ?
 /** a short-sleeve tee, from its name and description (for measureGarment's `tee`) */
 // a raglan is a baseball tee with 3/4 sleeves unless it says short sleeve (Oct 21: the Tultex 245 "Fine Jersey Raglan
 // T-Shirt" was read as a short-sleeve tee, its arms counted as chest, and its prints came out far too big)
+/** a garment with long sleeves, by its words: long sleeve tees, sweatshirts, hoodies, fleece, jackets, quarter zips */
+export const isLongSleeve = (text: string) => /long sleeve|\bl\/s\b|\bls\b|hood|sweat|fleece|crew ?neck|jacket|quarter|1\/4|\bzip|pullover|thermal|soft ?shell/i.test(text) && !/short sleeve|\bs\/s\b|tank|sleeveless|vest/i.test(text);
 export const isShortSleeveTee = (text: string) => /\b(tee|t-?shirt|short sleeve)\b/i.test(text) && !/long sleeve|\bls\b|hood|sweat|fleece|crew ?neck sweat|jacket|quarter|1\/4|zip|tank|sleeveless|muscle|raglan 3\/4|3\/4 sleeve|3\/4/i.test(text) && !(/raglan|baseball/i.test(text) && !/short sleeve|s\/s\b/i.test(text));

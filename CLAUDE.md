@@ -195,6 +195,10 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   corner to size it (a hoodie's back with the hood up, a sleeve that sits wrong). Saved on the garment
   (`garments.mockup_fit`, "area:<side>" / "area:<side>:<location>") and used for that style on every order from then on;
   Reset this side clears it. Never tell staff the print areas can't be changed.
+  That's for a style whose photo is unusual, never the fix for a print spot that's wrong on its own: a wrong automatic spot
+  is a bug in the measuring (`measureGarment` in `lib/mockup.ts`), fixed there for every garment like it (Nick, Nov 16,
+  #50051: a long sleeve's upper arm print went by the elbow on sweatshirts and off the shirt on the back; the upper arm is
+  now read from the shoulders, a fifth of the way to the hem, for anything `isLongSleeve`).
 - **Spot color films are solid** (Nick, Nov 12, #50013's camo: "they should all be solid. No halftones and crisp lines"):
   in the Separation Studio's spot color every color prints as its nearest picked ink, solid, and no plate (underbase
   included) is halftoned; only an ink at an end of a fade picked in the art is (`spotMixer` / `tonalOf` in

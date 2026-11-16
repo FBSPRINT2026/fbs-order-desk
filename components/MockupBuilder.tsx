@@ -75,7 +75,7 @@ import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
 import { registerAreas, isCustomSpot, setHeadwearSpots, LOCATION_SPOTS } from "@/lib/mockup";
-import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, measureCap, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
+import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, measureCap, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, isLongSleeve, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
 import { fillRun, bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage } from "@/lib/imagePdf";
@@ -1614,7 +1614,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
   // a cap: measured as a cap, at real size (lib/mockup.ts measureCap; Oct 31, a 4.5" front logo drew an inch wide)
   const isCap = (l?: Line) => !!l && locationsFor([{ style: l.style, brand: l.brand, garment: l.garment, description: garmentFor(l)?.description }]) === HAT_LOCATIONS;
-  const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isCap(l) ? measureCap(img, v) : isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v, { tee: isShortSleeveTee(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), kid: isKidGarment(l), hood: /\bhood/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`) }));
+  const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isCap(l) ? measureCap(img, v) : isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v, { tee: isShortSleeveTee(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), kid: isKidGarment(l), hood: /\bhood/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), long: isLongSleeve(`${garmentFor(l)?.description || ""} ${l.garment || ""}`) }));
   /** a baby or toddler garment (its size run, or a onesie / bodysuit by name) */
   const isKidGarment = (l: Line) => { const b = bodyFor(l); return b.kind === "infant" || b.kind === "toddler" || /one ?piece|onesie|bodysuit|creeper|romper/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`); };
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
