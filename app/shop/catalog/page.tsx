@@ -1,7 +1,7 @@
 "use client";
 import MoneyField from "@/components/MoneyField";
 import { bySupplierStyle, garmentSupName, inCatalogHit, lookupQuery } from "@/lib/garmentSup";
-import SettingsTabs, { SettingsHead } from "@/components/SettingsTabs";
+import SettingsTabs, { SettingsFrame, SettingsHead } from "@/components/SettingsTabs";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SIZES, type Garment } from "@/lib/pricing";
@@ -125,7 +125,7 @@ export default function CatalogPage() {
   const list = items.filter((g) => !q.trim() || [g.style, g.brand, g.description, g.colors.join(" ")].join(" ").toLowerCase().includes(q.trim().toLowerCase()));
 
   return (
-    <>
+    <SettingsFrame>
       <SettingsHead title="Garments" note={`The garment catalog: ${items.length} styles`}>
         <button className="btn" type="button" onClick={() => setShowBulk(!showBulk)}>{showBulk ? "Close import" : "Paste a list"}</button>
       </SettingsHead>
@@ -199,6 +199,6 @@ export default function CatalogPage() {
           </tbody>
         </table>
       </div>
-    </>
+    </SettingsFrame>
   );
 }
