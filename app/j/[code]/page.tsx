@@ -102,7 +102,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   }
 
   // the proof: each group's saved mockup pictures, big (the full picture where it was kept, else the small one)
-  let mockups: { name: string; urls: string[] }[] = [];
+  let mockups: { name: string; urls: string[]; thumb?: string }[] = [];
   if (card.kind === "o") {
     const { data: og } = await admin.from("orders").select("groups").eq("id", card.id).maybeSingle();
     // every kind of mockup the group has, ours or the customer's (groupPictures; #40380's was Tiger Blue's own)
@@ -110,7 +110,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     const all = gs.flatMap((g) => g.paths.flatMap((x) => [x.replace(/-thumb\.png$/, ".png"), x]));
     const signed = all.length ? (await admin.storage.from("proofs").createSignedUrls(all, 3600)).data || [] : [];
     const url = new Map(signed.filter((x) => x.signedUrl && !x.error).map((x) => [x.path, x.signedUrl]));
-    mockups = gs.map((g) => ({ name: g.name, urls: g.paths.map((x) => url.get(x.replace(/-thumb\.png$/, ".png")) || url.get(x) || "").filter(Boolean) }));
+    mockups = gs.map((g) => ({ name: g.name, urls: g.paths.map((x) => url.get(x.replace(/-thumb\.png$/, ".png")) || url.get(x) || "").filter(Boolean), thumb: g.paths.map((x) => url.get(x) || "").find(Boolean) || "" }));
   }
 
   // check-in (staff with Goods & Receiving)

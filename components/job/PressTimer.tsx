@@ -22,7 +22,7 @@ const sticky = { get: (k: string) => { try { return localStorage.getItem(k) || "
 /** the order a press runs a job's spots in: the front (chest, pocket) first, then the back, then sleeves, then the rest */
 const rankOf = (l: string) => /front|chest|pocket|crest/i.test(l) ? 0 : /back|yoke|nape|neck/i.test(l) ? 1 : /sleeve|arm|cuff/i.test(l) ? 2 : 3;
 
-export default function PressTimer({ card, presses, myPress = "" }: { card: JobCard; presses: PressOption[]; /** the press this job is booked on, or this person crews */ myPress?: string }) {
+export default function PressTimer({ card, presses, myPress = "", mockups = [] }: { card: JobCard; presses: PressOption[]; /** the press this job is booked on, or this person crews */ myPress?: string; /** each group's mockup pictures, to pick a group by its picture */ mockups?: { name: string; urls: string[]; thumb?: string }[] }) {
   const { t, locale } = useT();
   const job = { kind: card.kind, id: card.id };
   // a job of several groups runs one group at a time (Nick, Nov 16 2026, #40382's five groups: "which group are you
@@ -148,9 +148,11 @@ export default function PressTimer({ card, presses, myPress = "" }: { card: JobC
             <div className="jm-label">{t("Which group are you running?")}</div>
             <div className="jm-tm-groups">{pgs.map(({ g, i }) => { const all = locsOf(i), left = all.filter((l) => !doneRuns.has(l)).length; return (
               <button key={i} type="button" className={"jm-tm-grp" + (!left ? " done" : "")} onClick={() => setGPick(i)}>
-                <b>{!left ? "✓ " : ""}{gname(i)}</b>
+                {/* its mockup, to pick it without reading (Nick, Nov 16 2026) */}
+                {(() => { const m = mockups.find((x) => x.name === gname(i)) || mockups[i]; const src = m?.thumb || m?.urls[0]; return src ? <img className="jm-tm-gimg" src={src} alt="" /> : <span className="jm-tm-gimg" aria-hidden />; })()}
+                <span className="jm-tm-gtx"><b>{!left ? "✓ " : ""}{gname(i)}</b>
                 <small>{[...new Set(g.rows.map((r) => [r.style, r.color].filter(Boolean).join(" ")))].slice(0, 2).join(", ")}{g.rows.length > 2 ? "…" : ""} · {t("{0} pcs", g.rows.reduce((a, r) => a + r.total, 0))}</small>
-                <small>{sideLocs([g]).map((l) => t(l)).join(" + ")}</small>
+                <small>{sideLocs([g]).map((l) => t(l)).join(" + ")}</small></span>
               </button>); })}</div>
           </> : <div className="jm-tm-gnow"><span>{gname(gPick)}</span><button type="button" className="jm-link" onClick={() => setGPick(null)}>{t("Another group")}</button></div>)}
           {/* not clocked in: ask first (Nick, Nov 16 2026); a phone punch waits for a manager's OK */}
