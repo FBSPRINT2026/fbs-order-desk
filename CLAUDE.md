@@ -337,6 +337,12 @@ decide; never re-suggest what's under its "Not doing" (Nick, Nov 11 2026).**
   button held 3 seconds to count everything in, then Check In first on the review (Nick, Nov 13). Leaving a count halfway, on the phone or the desk's
   `CheckinModal`, always asks: save what's counted to finish later (anyone picks it up: `/api/jobs/checkin/draft`) or
   reset to uncounted. Receiving lists every open order of ours whatever its due date (#40382, due last week, was missing).
+- **Scanners work on every page** (Nick, Nov 16 2026: "you shouldn't have to be on a page… you scan it and it automatically
+  will do something"). `components/ScanWatch.tsx` (shop pages, the crew menu, a job's phone menu) catches a scanner's
+  fast burst + Enter anywhere (never a person typing, never inside a box) and reads the job (`jobCode` in `lib/scan.ts`):
+  receiving (FBS-REC, or anyone on Goods & Receiving) gets the Count in pop-up; shipping (FBS-SHIP) gets Outbound's Print
+  box label / Start shipping; the crew menu and job menus (FBS-PRESS) go straight to the job; everyone else opens the
+  order. A page with its own scan action listens with `onScan` and returns true. Never a scan box of its own.
 - **Shop computers** (Nick, Nov 13 2026: "FBS-REC, FBS-SHIP, FBS-PO and FBS-PRESS… a simple PIN"): four logins in
   `lib/stations.ts`, each a real staff login of its own (`<key>@station.fbsprint.com`, the role's permissions, no money),
   signed in on the sign-in page's "Shop computer" with its name and one PIN (`/api/station/login`; the owner sets the PIN

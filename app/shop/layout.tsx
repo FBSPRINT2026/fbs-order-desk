@@ -7,6 +7,7 @@ import { createClient, getViewer } from "@/lib/supabase/server";
 import { mergeSettings } from "@/lib/pricing";
 import { accessOf, permsFor, ROLES } from "@/lib/roles";
 import ShopNav from "@/components/ShopNav";
+import ScanWatch from "@/components/ScanWatch";
 import PullRefresh from "@/components/PullRefresh";
 import Cheer from "@/components/Cheer";
 import MobileTables from "@/components/MobileTables";
@@ -85,6 +86,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         <SameArtPrompt />
         <ArtboardPrompt />
         <MockupFreshener />
+        <ScanWatch />
       </div>
     </RoleProvider>
   );

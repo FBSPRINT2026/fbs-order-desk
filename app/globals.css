@@ -23402,3 +23402,6 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .payl-f span{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:600}
 .payl-f input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:18px;letter-spacing:.3em}
 .payl-b{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* a scan's note (components/ScanWatch.tsx) */
+.scw-note{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2100;background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:var(--r);font-size:14px;max-width:calc(100% - 32px)}

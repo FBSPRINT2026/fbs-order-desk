@@ -1,4 +1,5 @@
 "use client";
+import { jobCode, onScan } from "@/lib/scan";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -73,21 +74,13 @@ export default function Outbound() {
     return () => clearTimeout(h);
   }, [q]);
 
-  // a label or work order scanned anywhere on the page (Nick, Nov 13: "I have the window open and I scanned a label…
-  // it's going to ask me what to do"): the scanner types fast and ends with Enter; outside a box, catch it and ask
+  // a label or work order scanned anywhere (components/ScanWatch.tsx catches the scanner on every page; Nick, Nov 13: "I
+  // have the window open and I scanned a label… it's going to ask me what to do"): ask label or ship; a scan from
+  // another page comes here as ?scan=<number>
   useEffect(() => {
-    let buf = "", last = 0;
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      const now = Date.now();
-      if (now - last > 120) buf = "";
-      last = now;
-      if (e.key === "Enter") { const n = jobCode(buf); buf = ""; if (n) { e.preventDefault(); setScanned(n); } return; }
-      if (e.key.length === 1) buf += e.key;
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const n = new URLSearchParams(window.location.search).get("scan");
+    if (n && jobCode(n)) { setScanned(jobCode(n)); window.history.replaceState(null, "", window.location.pathname); }
+    return onScan(({ n }) => { setScanned(n); return true; });
   }, []);
 
   const of = (h: Row["how"]) => (rows || []).filter((r) => r.how === h);
@@ -187,11 +180,6 @@ export default function Outbound() {
   );
 }
 
-/** a scanned or typed job: the QR's link ("…/j/50000-2"), "50000-2" or "#50000" → "50000" */
-function jobCode(t: string): string {
-  const s = t.trim();
-  return s.match(/\/j\/#?(\d{3,7})(?:-\d{1,3})?/)?.[1] || s.match(/^#?(\d{3,7})(?:-\d{1,3})?$/)?.[1] || "";
-}
 
 /** After a scan: what to do with this job (Nick, Nov 13). */
 function ScanChoice({ n, onClose, onLabel, onShip }: { n: string; onClose: () => void; onLabel: () => void; onShip: () => string }) {

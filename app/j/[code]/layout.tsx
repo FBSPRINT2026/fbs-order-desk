@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import ScanWatch from "@/components/ScanWatch";
 import "../job.css";
 
 export const metadata: Metadata = { title: "FBS Job", robots: { index: false }, manifest: "/crew.webmanifest", appleWebApp: { capable: true, title: "FBS Crew", statusBarStyle: "black-translucent" } };
 export const viewport: Viewport = { themeColor: "#121925", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function JobLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <>{children}<ScanWatch mode="crew" /></>;
 }
