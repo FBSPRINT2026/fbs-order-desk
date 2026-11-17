@@ -458,3 +458,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:55pm · 1.3.700 · Nick · Saved logo: light/dark by most pieces and the brand's learned colors; fills a new group's untouched starting print; Anthracite/Starlight/Diesel and other performance darks known
 - Nov 17 6:49am · 1.3.701 · Nick · One-size items (caps, bags) get a real Qty box where the sizes go, in the portal and the shop
 - Nov 17 7:31am · 1.3.702 · Nick · PDF text reads ligatures as plain letters everywhere (Greenfield, not Greeneld): order reader, size grids, setup sheets, old art, art builder
+- Nov 17 11:14am · 1.3.703 · Amanda · Portal Quick Drop: a request brings a folder of the shared Portal Quick Drop Dropbox folder in as logos (each subfolder one logo; each DST with its EMB and PDF filed by the existing sew-file setup), under a brand and locked as master logos when asked; run every minute while one waits (quick_drops, /api/quick-drop)
