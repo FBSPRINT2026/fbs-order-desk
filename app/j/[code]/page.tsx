@@ -106,7 +106,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   if (card.kind === "o") {
     const { data: og } = await admin.from("orders").select("groups").eq("id", card.id).maybeSingle();
     // every kind of mockup the group has, ours or the customer's (groupPictures; #40380's was Tiger Blue's own)
-    const gs = ((og?.groups || []) as Group[]).map((g, i) => ({ name: g.name?.trim() || `Group ${i + 1}`, paths: groupPictures(g) }));
+    const gs = ((og?.groups || []) as Group[]).map((g, i) => ({ name: g.name?.trim() || `Group ${i + 1}`, paths: groupPictures(g, false, Object.fromEntries(dRows.map((d) => [d.id, d.preview_path]))) }));
     const all = gs.flatMap((g) => g.paths.flatMap((x) => [x.replace(/-thumb\.png$/, ".png"), x]));
     const signed = all.length ? (await admin.storage.from("proofs").createSignedUrls(all, 3600)).data || [] : [];
     const url = new Map(signed.filter((x) => x.signedUrl && !x.error).map((x) => [x.path, x.signedUrl]));

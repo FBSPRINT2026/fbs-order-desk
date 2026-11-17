@@ -3552,7 +3552,10 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
       // each of this part's groups' current pictures, once (groupPictures: ours, a visual mockup, the customer's), never
       // every save of them (Nick, Nov 16 2026: "a lot of repeat mock-ups… the same things over and over again")
       const rows: { file_path: string; title: string }[] = [], had = new Set<string>();
-      for (const g of gsK) for (const p of groupPictures(g)) if (!had.has(p)) { had.add(p); rows.push({ file_path: p, title: g.name || "" }); }
+      const dIds = [...new Set(gsK.flatMap((g) => (g.imprints || []).filter(mine).map((i) => i.design_id || "").filter(Boolean)))];
+      const { data: dz } = dIds.length ? await sb.from("designs").select("id, preview_path").in("id", dIds) : { data: [] };
+      const logos = Object.fromEntries(((dz || []) as { id: string; preview_path: string | null }[]).map((d) => [d.id, d.preview_path || ""]));
+      for (const g of gsK) for (const p of groupPictures(g, false, logos)) if (!had.has(p)) { had.add(p); rows.push({ file_path: p, title: g.name || "" }); }
       let pics: { url: string; title: string }[] = [];
       if (rows.length) { const { data } = await sb.storage.from("proofs").createSignedUrls(rows.map((x) => x.file_path), 3600); pics = rows.map((x, i) => ({ url: data?.[i]?.signedUrl || "", title: x.title || "" })).filter((x) => x.url); }
       setInfo({ po: (o as { po_number?: string } | null)?.po_number || "", pcs, prints, garments: [...gm.entries()], pics });

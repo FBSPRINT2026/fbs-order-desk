@@ -359,6 +359,10 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wo-m span{font-size:9pt;color:var(--ink3);margin-top:3px}
 .pdoc .wo-m span .wo-st{font-weight:800;color:var(--ink);border:1px solid currentColor;border-radius:3px;padding:0 4px;margin-right:5px;font-size:9.5pt}
 .pdoc .wo-m.none{display:grid;place-items:center;font-size:12pt;color:#fff}
+.pdoc .wo-lg .logo-thumb{flex:1 1 0;min-height:0;width:100%;display:block;border-radius:8px;overflow:hidden}
+.pdoc .wo-lg .logo-thumb img{mix-blend-mode:normal}
+.pdoc .wo-lg .logo-thumb .lp img{flex:none;width:auto;height:auto;max-width:86%;max-height:86%}
+.pdoc .wo-lg .logo-thumb .lv-art{flex:none;width:80%;height:80%}
 .pdoc .wo-prints{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .pdoc .wo-prints>.lbl{flex-basis:100%}
 .pdoc .wo-p{flex:1 1 3.2in;border:1.5px solid var(--ink);border-radius:8px;padding:5px 10px;display:flex;flex-wrap:wrap;gap:1px 10px;align-items:baseline;font-size:10pt;color:var(--ink2)}

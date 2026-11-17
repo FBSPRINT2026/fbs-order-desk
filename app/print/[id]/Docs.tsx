@@ -325,7 +325,20 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                       {/* the style number with the color (Oct 27, Nick: "so that they can sync it in case they don't speak English") */}
                       {sup && !(g.mockupThumbs || []).length ? <span>{where ? <b className="wo-st">{where}</b> : null}Placement reference · big on page {pgMk + i}</span> : <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>}
                     </div>
-                  )) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>}
+                  )) : (() => {
+                    // no mockup: each print's logo on the garment, never a blank box (Nick, Nov 17 2026, #40390's Military
+                    // Green tees ran from Printavo with "No mockup yet" though the stacked logo was on the print)
+                    const logos = g.imprints.filter((d) => d.design_id && p.designs[d.design_id]).slice(0, 4);
+                    return logos.length ? logos.map((d) => {
+                      const des = p.designs[d.design_id!];
+                      return (
+                        <div className="wo-m wo-lg" key={d.id || d.location}>
+                          <PrintThumb d={des} url={printArtUrl(p.designUrls, des.id, d)} print={d} lines={lines} />
+                          <span><b className="wo-st">{d.location}</b>Logo only · no mockup</span>
+                        </div>
+                      );
+                    }) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>;
+                  })()}
                 </div>
                 {/* the prints: one card each, the same rows in the same order (Oct 26, Nick) */}
                 <div className="w2-prints">

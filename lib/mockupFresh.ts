@@ -113,12 +113,16 @@ export function mockupContentKey(snap: unknown): string {
  * cart or an .ai can't be drawn. (Nick, Nov 13 2026, #40380: the phone's Proof said there was no mockup; it only looked
  * at ours.) `full` swaps our small "-thumb.png" for the full picture where one was kept.
  */
-export function groupPictures(g: Pick<Group, "mockupThumbs" | "imprints" | "customerMockups" | "visualMockup">, full = false): string[] {
+export function groupPictures(g: Pick<Group, "mockupThumbs" | "imprints" | "customerMockups" | "visualMockup">, full = false,
+  /** the logos' own pictures (design id → preview_path): with no mockup of any kind, the group's prints' logos stand in,
+   *  never an empty box (Nick, Nov 17 2026: #40390's Military Green tees, run from Printavo, had "No mockup yet") */
+  logos?: Record<string, string>): string[] {
   const pic = (x: string) => /\.(png|jpe?g|webp|gif|svg)$/i.test(x);
   const ours = [...new Set((g.mockupThumbs || []).filter(Boolean))];
   if (ours.length) return full ? ours.map((x) => x.replace(/-thumb\.png$/, ".png")) : ours;
   const placed = (g.imprints || []).map((d) => d.supplied?.picture?.path || d.placeRef?.path || "").filter((x) => x && pic(x));
   if (placed.length) return placed;
   const theirs = [g.visualMockup?.path || "", ...(g.customerMockups || []).map((m) => m.path)].filter((x) => x && pic(x));
-  return [...new Set(theirs)];
+  if (theirs.length) return [...new Set(theirs)];
+  return logos ? [...new Set((g.imprints || []).map((d) => (d.design_id && logos[d.design_id]) || "").filter((x) => x && pic(x)))] : [];
 }
