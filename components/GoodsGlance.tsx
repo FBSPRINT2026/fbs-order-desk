@@ -31,7 +31,8 @@ export default function GoodsGlance({ orderId }: { orderId: string }) {
     : job.state === "ready" ? { w: "Here, not counted", tone: "warn", sub: job.delivered ? `${job.delivered} box${job.delivered === 1 ? "" : "es"} delivered` : "Delivered" }
     : job.state === "partial" ? { w: "Part here", tone: "warn", sub: `${job.delivered} of ${job.boxes} boxes delivered` }
     // no tracking to go by: the order's own goods status (arrived by the manifest before its tracking was cleared)
-    : (job.state === "none" || job.state === "way") && og && (og.status === "arrived" || og.status === "received") ? { w: "Here, not counted", tone: "warn", sub: `Arrived${og.updated_at ? ` ${day(og.updated_at)}` : ""}` }
+    : (job.state === "none" || job.state === "way") && og?.status === "received" ? { w: "Received", tone: "ok", sub: `Marked received${og.updated_at ? ` ${day(og.updated_at)}` : ""} · no count saved` }
+    : (job.state === "none" || job.state === "way") && og?.status === "arrived" ? { w: "Here, not counted", tone: "warn", sub: `Arrived${og.updated_at ? ` ${day(og.updated_at)}` : ""}` }
     : (job.state === "none" || job.state === "way") && og?.status === "partial" ? { w: "Part here", tone: "warn", sub: "Some boxes arrived" }
     : job.state === "way" ? { w: "On the way", tone: "blue", sub: job.boxes ? `${job.boxes} box${job.boxes === 1 ? "" : "es"} shipped` : "Shipped" }
     : { w: "Not here", tone: "bad", sub: "No tracking yet: if it's on the floor, count it in" };
