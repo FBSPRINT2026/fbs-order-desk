@@ -1,4 +1,6 @@
 "use client";
+import RunTogether from "@/components/RunTogether";
+import { runChanged } from "@/app/shop/run-actions";
 import MoneyField from "@/components/MoneyField";
 import DraftArtKeep from "@/components/DraftArtKeep";
 import { accountOfMethod, carrierOf, isThirdParty, notOurShipping, onAccountMethod, type ThirdParty } from "@/lib/thirdParty";
@@ -447,6 +449,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     }).eq("id", d.id).select("updated_at").maybeSingle();
     setSaveState(error ? "Save failed: " + error.message : "Saved");
     if (!error) { const at = String((savedRow as { updated_at?: string } | null)?.updated_at || ""); if (at) baseAt.current = at; savedUnsaved(d.id, startedAt, at); }
+    // run together: the other orders in the run are priced again with this one's pieces
+    if (!error && d.run_id) void runChanged(d.id);
     // their transfers ticked, named or unticked: the Goods panel shows them (order_supplies, kept in step by the database)
     const sup = JSON.stringify(d.groups.flatMap((g) => g.imprints.filter((im) => im.supplied).map((im) => [im.id, im.supplied?.by || "", im.supplied?.ref || "", im.supplied?.where || "", im.location])));
     if (!error && sup !== lastSup.current) { lastSup.current = sup; window.dispatchEvent(new CustomEvent("fbs:goods-changed", { detail: { orderId: d.id } })); }
@@ -2109,6 +2113,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                 <div className="jd-typebox">
                   <OrderTypeRow o={o} patch={patch} bare onSample={() => { const ex = o.groups.find((g) => g.sample?.kind === "pre"); setSampleTool(ex ? { kind: "pre", groupId: ex.id } : { kind: "pre" }); }} sampleRule={(cust as { sample_rule?: SampleRule | null } | undefined)?.sample_rule || null} me={who.staffName || who.email || ""} />
                 </div>
+                {/* run together with other orders of theirs (components/RunTogether.tsx): one run, the same print priced together */}
+                <RunTogether orderId={o.id} runId={o.run_id} ctx={o.run_ctx} onChanged={() => { void sb.from("orders").select("run_id, run_ctx, total").eq("id", o.id).maybeSingle().then(({ data }) => { if (!data) return; const rd = data as { run_id: string | null; run_ctx: Order["run_ctx"] }; setO((x) => (x ? { ...x, run_id: rd.run_id, run_ctx: rd.run_ctx } : x)); if (latest.current) latest.current = { ...latest.current, run_id: rd.run_id, run_ctx: rd.run_ctx }; }); }} />
                 <div className="faint jd-made">{o.type === "quote" ? "Quote" : "Invoice"} · created {fmtDateLong(o.created_at.slice(0, 10))}{o.approved_at ? ` · approved${o.approved_name ? ` by ${o.approved_name}` : ""} ${fmtDate(o.approved_at.slice(0, 10))}` : ""}</div>
               </div>
           </section>

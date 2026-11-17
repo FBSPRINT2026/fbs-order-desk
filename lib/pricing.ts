@@ -495,6 +495,8 @@ export const feeAmount = (f: { amount: number | ""; free?: boolean; tbd?: boolea
 export type Delivery = "pickup" | "ship" | "deliver" | "tbd";
 
 export type Order = {
+  /** run together (Nick, Nov 16 2026): separate orders that print in one run; the shared run, and what the others in it
+   *  bring to this one's prices (lib/runTogether.ts) */ run_id?: string | null; run_ctx?: RunCtx | null;
   /** this order only: billed to a department of the account (lib/billTo.ts; migration 290) */ bill_to?: import("@/lib/billTo").BillTo | null;
   /** which of the customer's order types it is (customers.order_types, Cedar: Bulk / Cart), or empty (orders.order_lane) */ order_lane?: string;
   id: string; number: number; customer_id: string | null; nickname: string; status: StatusKey; type: "quote" | "invoice";
@@ -1180,7 +1182,7 @@ export type GroupCalc = ReturnType<typeof calcGroup>;
  *  one front logo on an Ivory group and a Cantaloupe + Navy group charged its screen twice because the Navy shirt's
  *  underbase made it 2 screens instead of 1). The count isn't part of the key: a print needing more screens than the
  *  ones already made (an underbase, an extra color) pays only for those extra screens. */
-const screenKey = (d: Imprint, _n?: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}|${printSizeKey(d)}` : "");
+export const screenKey = (d: Imprint, _n?: number) => (d.method === "screen" && d.design_id ? `${d.design_id}|${(d.location || "").toLowerCase()}|${printSizeKey(d)}` : "");
 /** a print's size as one key: the number and which way it's measured ('3.5" wide' → "3.5w"); "" when not set. The same
  *  art at another size is other screens and another price break (Nov 9, Nick: "it's got to be the same size") */
 export const printSizeKey = (d: Pick<Imprint, "size">) => { const m = (d.size || "").match(/(\d+(?:\.\d+)?)/); return m ? `${+m[1]}${/tall|high/i.test(d.size || "") ? "t" : "w"}` : ""; };
@@ -1473,8 +1475,9 @@ export function setupWords(c: { groups: { setupItems?: { kind: string }[] }[]; d
   return words.join(", ");
 }
 
+export type RunCtx = { /** the same print's pieces on the run's other orders, by `${method}:${design}:${size}` */ qty: Record<string, number>; /** screens made for an earlier order in the run: screen key → its number */ paid: Record<string, number>; /** the other orders */ mates: { id: string; number: number; nickname: string; qty: number }[] };
 export function calcOrder(
-  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup"> & { price_type?: PriceType; discount_amt?: number; discount_type?: "pct" | "amt"; order_type?: Order["order_type"]; sample?: SampleRule | null },
+  o: Pick<Order, "lines" | "groups" | "fees" | "discount_pct" | "tax_exempt" | "tax_rate" | "waive_setup"> & { run_ctx?: RunCtx | null;  price_type?: PriceType; discount_amt?: number; discount_type?: "pct" | "amt"; order_type?: Order["order_type"]; sample?: SampleRule | null },
   s: Settings,
   payments: Pick<Payment, "amount">[] = []
 ) {
@@ -1512,6 +1515,13 @@ export function calcOrder(
     // prints set as a color change of one another (Imprint.changeOf) print from one set of screens: one print, its
     // pieces counted together for the price break too (Nov 10, Tiger Blue #2845: five teams' backs priced at 193 pieces)
     for (const k of new Set((g.imprints || []).map((d) => seen.links?.get(d.id)).filter((k): k is string => !!k))) dqm.set(k, (dqm.get(k) || 0) + q);
+  }
+  // run together with other orders (lib/runTogether.ts): the same print's pieces on them count toward this one's price
+  // break, and screens the run's first order pays for are already made
+  const rc = (o as { run_ctx?: RunCtx | null }).run_ctx;
+  if (rc) {
+    for (const [k, n] of Object.entries(rc.qty || {})) if (dqm.has(k)) dqm.set(k, (dqm.get(k) || 0) + (+n || 0));
+    for (const [k, num0] of Object.entries(rc.paid || {})) { seen.add(k); (seen.owner ||= new Map()).set(k, `#${num0}`); }
   }
   seen.designQty = dqm;
   // a sample run is priced on its own: it never uses up the order's screens or PMS matches
