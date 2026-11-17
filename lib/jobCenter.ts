@@ -181,7 +181,11 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
       else if (!(c.total > 0)) tracks.push({ k: "numbers", state: "needed", label: "No price yet" });
       else tracks.push({ k: "numbers", state: "made", label: "Quote ready" });
     } else if (invSent && invBack && !invOk) tracks.push({ k: "numbers", state: "changes", label: "Invoice: changes asked", note: invBack.detail.replace(/^[^:]*:\s*/, "") });
-    else if (invSent && !invOk) tracks.push({ k: "numbers", state: "sent", label: "Final invoice sent" });
+    // a final invoice out on a job that's already approved isn't a quote waiting on them (Nick, Nov 16 2026: #40199, #40317,
+    // #40393, #40414 and #40301 sat under Quotes › Sent as "Final invoice sent" while printing or ready): it's noted, done;
+    // only "changes asked" on it brings the job back. What's owed is the Payments side.
+    else if (invSent && !invOk && ["quote", "quote_sent", "pending"].includes(String(o.status))) tracks.push({ k: "numbers", state: "sent", label: "Final invoice sent" });
+    else if (invSent && !invOk) tracks.push({ k: "numbers", state: "done", label: "Final invoice sent" });
     else tracks.push({ k: "numbers", state: "done", label: "Order approved" });
 
     const steps: Step[] = [];
@@ -345,7 +349,7 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
   const sized = gs.some((g) => g.lines.some((l) => lineQty(l) > 0));
   const lastSent = [...evs].reverse().find((e) => e.kind === "sent"), lastDecl = [...evs].reverse().find((e) => e.kind === "quote_declined" || e.kind === "quote_changes");
   const invSent = [...evs].reverse().find((e) => e.kind === "invoice_sent"), invBack = invSent && [...evs].reverse().find((e) => e.kind === "invoice_changes" && e.created_at > invSent.created_at), invOk = invSent && [...evs].reverse().find((e) => e.kind === "invoice_approved" && e.created_at > invSent.created_at);
-  const qState: PieceState = o.status === "quote_sent" ? "sent" : o.status === "quote" ? (lastDecl && (!lastSent || lastDecl.created_at > lastSent.created_at) ? "changes" : !sized || !(c.total > 0) ? "needed" : "made") : invBack && !invOk ? "changes" : invSent && !invOk ? "sent" : "done";
+  const qState: PieceState = o.status === "quote_sent" ? "sent" : o.status === "quote" ? (lastDecl && (!lastSent || lastDecl.created_at > lastSent.created_at) ? "changes" : !sized || !(c.total > 0) ? "needed" : "made") : invBack && !invOk ? "changes" : "done";
   pieces.push({ k: "quote", state: qState, total: c.total, qty: o.qty || 0, sentAt: lastSent?.created_at || o.sent_at || null, decidedAt: qState === "changes" ? (invBack || lastDecl)!.created_at : o.approved_at, decidedName: qState === "changes" ? (invBack || lastDecl)!.detail.split(":")[0] : o.approved_name,
     comment: qState === "changes" ? (invBack || lastDecl)!.detail.replace(/^[^:]*:\s*/, "") : "", pdf: `/print/${orderId}` });
 
