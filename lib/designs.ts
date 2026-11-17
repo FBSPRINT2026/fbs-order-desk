@@ -7,7 +7,7 @@ import { pickArtboard } from "@/lib/artboards";
 
 /** Files the browser can draw as a preview. AI / EPS / PDF originals need a separate preview image. */
 export const PREVIEWABLE = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/i;
-export const DESIGN_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst,.heic,.heif,.tif,.tiff,.bmp";
+export const DESIGN_ACCEPT = ".png,.jpg,.jpeg,.gif,.webp,.svg,.pdf,.ai,.eps,.psd,.dst,.emb,.heic,.heif,.tif,.tiff,.bmp";
 
 function imageSize(f: File): Promise<{ w: number; h: number } | null> {
   return new Promise((res) => {
@@ -26,8 +26,16 @@ export async function uploadDesign(sb: SupabaseClient, opts: { file: File; previ
   /** saved to the customer's logos (their library: Artwork → Saved logos) because someone chose to (Oct 31, Nick);
    *  else it lives in the background with the mockups and orders that use it */ saved?: boolean; /** made by the portal for an order: kept out of the customer's library until the order is sent or approved (migration 166) */ draft?: boolean;
   /** a distressed logo's clean picture (Distress: off), and what the distress is (Oct 22: Peticolas' mask, 3 layers on the film) */ clean?: File | null; distress?: { mask?: string; layers?: number; fit?: "cover" | "stretch"; note?: string } }): Promise<Design> {
-  // an EMB alone can't be read here (Wilcom's own format): say so, not a blank logo (Oct 28, Nick)
-  if (/\.emb$/i.test(opts.file.name)) throw new Error("An EMB file can't be shown here (it's Wilcom's own format). Upload the DST that came with it; the EMB and the worksheet go on the logo on Digitizing.");
+  // an EMB alone is a digitized logo (lib/embFile.ts reads it; Nick, Nov 10 + Nov 16 2026: "I just selected the
+  // Perkins.emb, and it's just not doing anything"): its TrueView picture is the logo's picture, and the EMB is filed on
+  // the logo as its sew file (size, stitches, threads) below
+  if (/\.emb$/i.test(opts.file.name) && !opts.preview) {
+    const { readEmb } = await import("./embFile");
+    const info = await readEmb(await opts.file.arrayBuffer()).catch(() => null);
+    if (!info) throw new Error("Couldn't read that EMB (an older Wilcom file?). Upload its DST or a picture of the logo.");
+    const pic = info.preview ? new File([info.preview as BlobPart], opts.file.name.replace(/\.emb$/i, "") + ".jpg", { type: "image/jpeg" }) : null;
+    opts = { ...opts, method: opts.method || "embroidery", colors: opts.colors || info.colors, ...(pic ? { preview: pic } : {}) };
+  }
   // a file with several artboards: which logo is it? (lib/artboards.ts; Oct 27, Nick)
   if (!opts.preview && !opts.clean) opts = { ...opts, file: await pickArtboard(opts.file) };
   // a see-through logo with empty space around it is saved cropped to the art, so it scales to its real print size
