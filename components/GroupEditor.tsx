@@ -123,8 +123,33 @@ const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 export default function GroupEditor({ persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
   const role0 = useRole(); const meName = role0.staffName || role0.email || "";
   const [visBusy, setVisBusy] = useState(false);
-  async function addVisual(f: File) {
+  // the order's own files to pick a visual mockup from (Nov 16, Nick: "right now I have to download the file, then
+  // re-upload it"): the pictures and PDF / Illustrator files on the order, newest first
+  const [visPick, setVisPick] = useState<{ id: string; name: string; file_path: string; file_type: string | null }[] | null>(null);
+  async function openVisPick() {
+    if (!orderId) return;
+    setVisPick([]);
+    const { data } = await createClient().from("art_files").select("id, name, file_path, file_type").eq("order_id", orderId).order("created_at", { ascending: false });
+    setVisPick(((data || []) as { id: string; name: string; file_path: string; file_type: string | null }[]).filter((f) => /^image\//i.test(f.file_type || "") || /pdf|postscript|illustrator/i.test(f.file_type || "") || /\.(png|jpe?g|gif|webp|heic|pdf|ai|eps)$/i.test(f.name)));
+  }
+  async function visFromFile(f: { name: string; file_path: string; file_type: string | null }) {
     setVisBusy(true);
+    const { data, error } = await createClient().storage.from("proofs").download(f.file_path);
+    if (error || !data) { setVisBusy(false); setBlockMsg(`Couldn't open ${f.name}.`); return; }
+    setVisPick(null);
+    await addVisual(new File([data], f.name, { type: f.file_type || data.type || "" }));
+  }
+  async function addVisual(f0: File) {
+    setVisBusy(true);
+    // a PDF, Illustrator or iPhone file is drawn as a picture first, so the mockup shows everywhere it's used (Nov 16,
+    // #40412: a PDF visual mockup showed as a broken picture)
+    let f = f0;
+    if (!/^image\/(png|jpe?g|gif|webp)$/i.test(f0.type) && !/\.(png|jpe?g|gif|webp)$/i.test(f0.name)) {
+      const { makePreview } = await import("@/lib/artPrep");
+      const png = await makePreview(f0, 2400).catch(() => null);
+      if (!png) { setVisBusy(false); setBlockMsg(`Couldn't draw ${f0.name} as a picture. Try a JPG or PNG of it.`); return; }
+      f = new File([png], f0.name.replace(/\.[^.]+$/, "") + ".png", { type: "image/png" });
+    }
     const path = `art/${orderId || "draft"}/visual-${crypto.randomUUID().slice(0, 8)}-${f.name.replace(/[^\w.\-]+/g, "_")}`;
     const up = await createClient().storage.from("proofs").upload(path, f, { contentType: f.type || undefined });
     setVisBusy(false);
@@ -1369,10 +1394,25 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 <span>Saved logo</span></button>}
               {/* Add visual mockup (Nov 6, Nick): a picture as the mockup, when making one doesn't make sense; the prints
                   still need every detail, then Confirm */}
-              {!fixed && <label className="mk-tile" title="A picture as this group's mockup (no Mockup Creator). Every print still needs its inks or threads and size, then Confirm">
-                <input type="file" accept="image/*,.pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void addVisual(f); }} />
-                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
-                <span>{visBusy ? "Adding…" : g.visualMockup ? "Change visual mockup" : "Add visual mockup"}</span></label>}
+              {!fixed && (orderId
+                ? <button type="button" className={"mk-tile" + (visPick ? " on" : "")} title="A picture as this group's mockup (no Mockup Creator): one of the order's files, or a file from this computer. Every print still needs its details, then Confirm" onClick={() => (visPick ? setVisPick(null) : void openVisPick())}>
+                    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                    <span>{visBusy ? "Adding…" : g.visualMockup ? "Change visual mockup" : "Add visual mockup"}</span></button>
+                : <label className="mk-tile" title="A picture as this group's mockup (no Mockup Creator). Every print still needs its inks or threads and size, then Confirm">
+                    <input type="file" accept="image/*,.pdf,.ai,.eps,.heic" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void addVisual(f); }} />
+                    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                    <span>{visBusy ? "Adding…" : g.visualMockup ? "Change visual mockup" : "Add visual mockup"}</span></label>)}
+            </div>
+          )}
+          {visPick && !fixed && (
+            <div className="vmp">
+              <div className="vmp-h"><b>Visual mockup from</b><button type="button" className="btn icon ghost" aria-label="Close" onClick={() => setVisPick(null)}>✕</button></div>
+              {visPick.length ? <ul className="vmp-list">{visPick.map((f) => (
+                <li key={f.id}><button type="button" className="vmp-f" disabled={visBusy} onClick={() => void visFromFile(f)}><span className="vmp-ext">{(f.name.match(/\.([a-z0-9]+)$/i)?.[1] || "file").toUpperCase()}</span><span className="vmp-n">{f.name}</span></button></li>
+              ))}</ul> : <p className="faint vmp-none">No pictures or PDFs on this order yet.</p>}
+              <label className="btn sm vmp-up">
+                <input type="file" accept="image/*,.pdf,.ai,.eps,.heic" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { setVisPick(null); void addVisual(f); } }} />
+                Upload from this computer</label>
             </div>
           )}
           {onRemoveMockup && g.mockupAt && <button className={"btn sm ghost danger" + (armed === "mk" + g.id ? " armed" : "")} type="button" title="Take this mockup and its prints off the order (the mockup is archived, not deleted) and start this group fresh"

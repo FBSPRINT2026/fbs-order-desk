@@ -93,8 +93,10 @@ export const METHODS: Record<string, string> = { screen: "Screen print", embroid
 /** a print's details are all there, to Confirm it (a visual mockup or their own separations): its spot, its size (their
  *  separations set it) and its inks or threads, which a heat press transfer doesn't have: it prints in full color, theirs
  *  or ours (Nov 10, Nick: Confirm did nothing on a customer-supplied DTF print with no inks) */
-export const printFilled = (d: Pick<Imprint, "method" | "inks" | "size" | "location" | "custSeps" | "colors">) =>
-  !!(d.location || "").trim() && (!!d.custSeps || !!(d.size || "").trim()) && (d.method === "dtf" || (d.method === "screen" && +(d.colors || 0) >= FULL_COLOR) || !!(d.inks || "").trim());
+// a print the customer supplies (their transfers or patches) needs only its spot: its size and colors are the transfer's,
+// and those boxes are grayed out (Nov 16, Nick: #40412's customer supplied heat press patch "is red… you can't hit confirm")
+export const printFilled = (d: Pick<Imprint, "method" | "inks" | "size" | "location" | "custSeps" | "colors" | "supplied">) =>
+  !!(d.location || "").trim() && (!!d.supplied || ((!!d.custSeps || !!(d.size || "").trim()) && (d.method === "dtf" || (d.method === "screen" && +(d.colors || 0) >= FULL_COLOR) || !!(d.inks || "").trim())));
 
 /** the method in 2–3 letters, for a narrow column (Nov 10, Nick: "EMB / SP / HP… if need be") */
 export const methodShort = (d: { method: string; patch?: unknown }) => (d.method === "embroidery" ? "EMB" : d.method === "screen" ? "SP" : d.method === "dtf" ? "HP" : methodLabel(d));
