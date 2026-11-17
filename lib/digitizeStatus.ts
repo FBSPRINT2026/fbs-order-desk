@@ -45,7 +45,10 @@ export const liveSewout = <S extends DgzSewout>(sws: S[], orderId: string, impri
 export function digitizeState(im: Pick<Imprint, "digitized" | "emb">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean; needDst?: boolean } {
   // the logo's file is only the EMB (Nov 10, Nick: "if we have the EMB, that's good enough… but embroidery has to confirm
   // the DST file… upload it and say this is the right DST"): it counts as digitized, and asks embroidery for the DST
-  { const e0 = embSpecsOf(d), f0 = currentSewFile(im, e0.files) || (im.emb?.file as EmbFileLite | undefined); if (f0?.embOnly) { const r = digitizeState0(im, d, live); return { ...r, needDst: true }; } }
+  { const e0 = embSpecsOf(d), f0 = currentSewFile(im, e0.files) || (im.emb?.file as EmbFileLite | undefined); if (f0?.embOnly) { const r = digitizeState0(im, d, live); return { ...r, needDst: true }; }
+    // marked Already digitized with no stitch file anywhere (the logo nor the print): a repeat whose DST production has to
+    // bring in (Nick, Nov 16 2026, #50051 Keeley: "I just need my production staff to upload the DSTs… where do they go?")
+    if (im.digitized && !f0 && !(e0.files || []).length && !live) { const r = digitizeState0(im, d, live); return { ...r, needDst: true }; } }
   return digitizeState0(im, d, live);
 }
 function digitizeState0(im: Pick<Imprint, "digitized" | "emb">, d: Pick<Design, "specs"> | null | undefined, live: DgzSewout | undefined): { state: DgzState; repeat: boolean; changes: boolean } {

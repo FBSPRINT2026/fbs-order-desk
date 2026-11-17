@@ -48,8 +48,8 @@ type EmbSpecs = { files?: EmbFile[]; request?: { at: string; by: string; size: s
    *  own (lib/digitizerAuto.ts); `add_error` when they couldn't be (then Add their files does it by hand) */
   reply?: { at: string; from: string; subject: string; files: { name: string; path: string; type: string; size: number }[]; added_at?: string; add_error?: string } | null };
 type Item = { key: string; o: O; g: Group; im: Imprint; d: Design | null };
-type Filter = "need" | "asked" | "done" | "sent" | "ok" | "all";
-type State = Exclude<Filter, "all">;
+type Filter = "need" | "asked" | "done" | "sent" | "ok" | "all" | "dst";
+type State = Exclude<Filter, "all" | "dst">;
 type Sw = { id: string; order_id: string; imprint_id: string; version: number; photo_path: string; placement_path?: string | null; status: "pending" | "approved" | "changes"; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string; archived_at: string | null; created_at: string; note?: string; changes?: { what: string; from: string; to: string; needle?: number }[] | null;
   raw_path?: string | null; sewn?: { file?: { path: string } | null; threads?: { needle?: number; ordered: string; sewn: string }[] } | null };
 /** a logo's sew-outs on any order, to show each stitch file version's approval (Oct 29, Nick: "once we get approval…
@@ -121,8 +121,10 @@ export default function Digitizing() {
     setFilter(stateOf(it)); setOpen(it.key);
     setTimeout(() => document.querySelector(`[data-dgz="${CSS.escape(it.key)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 150);
   }, [orders, items, sws]); // eslint-disable-line react-hooks/exhaustive-deps
-  const shown = items.filter((it) => filter === "all" || stateOf(it) === filter);
-  const count = (f: Filter) => items.filter((it) => f === "all" || stateOf(it) === f).length;
+  // digitized, the stitch file not brought in yet (a repeat marked Already digitized, or only the EMB): production adds it
+  const dstOf = (it: Item) => !!digitizeState(it.im, it.d, swOf(it).find((x) => !x.archived_at)).needDst;
+  const shown = items.filter((it) => filter === "all" || (filter === "dst" ? dstOf(it) : stateOf(it) === filter));
+  const count = (f: Filter) => items.filter((it) => f === "all" || (f === "dst" ? dstOf(it) : stateOf(it) === f)).length;
 
   /** what the digitizer needs, written out */
   /** what the digitizer needs, written out: Volikes Creative asks for the final size, placement, fabric and colors,
@@ -225,8 +227,11 @@ export default function Digitizing() {
               );
             })}
           </div>
-          <div className="dgz-all"><button type="button" className={"chip" + (filter === "all" ? " on" : "")} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All <span className="pill-n">{orders ? count("all") : "…"}</span></button></div>
-          {!orders ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{filter === "need" ? "Nothing waiting to be digitized. An embroidered print on an order shows up here until its DST is in." : "Nothing here."}</div> : (
+          <div className="dgz-all">
+            {/* the DSTs production brings in (Nick, Nov 16 2026): digitized logos whose stitch file isn't on the order yet */}
+            <button type="button" className={"chip" + (filter === "dst" ? " on" : "")} aria-pressed={filter === "dst"} onClick={() => setFilter("dst")} title="Digitized before, the DST not added yet: drop it in with Add files">DST needed <span className="pill-n">{orders ? count("dst") : "…"}</span></button>
+            <button type="button" className={"chip" + (filter === "all" ? " on" : "")} aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All <span className="pill-n">{orders ? count("all") : "…"}</span></button></div>
+          {!orders ? <div className="faint">Loading…</div> : !shown.length ? <div className="faint">{filter === "need" ? "Nothing waiting to be digitized. An embroidered print on an order shows up here until its DST is in." : filter === "dst" ? "Every digitized logo on an open order has its DST." : "Nothing here."}</div> : (
             <div className="tbl-wrap"><table className="tbl dgz">
               <thead><tr><th>Logo</th><th>Order</th><th>Print</th><th>Stitches</th><th>State</th></tr></thead>
               <tbody>{shown.map((it) => {

@@ -314,7 +314,7 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
         const only = method === "screen" && i.pressOnly?.id ? { id: i.pressOnly.id, name: i.pressOnly.name } : undefined;
         const rounds = method === "screen" && (i.rounds || 1) > 1 ? Math.min(3, i.rounds!) : 0;
         const art = artKey(method, i.design_id, i.inks, colors);
-        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, pieces: `${(g as { id?: string }).id || groups.indexOf(g)}|${garment}`, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}), ...(art ? { art } : {}), ...((i as unknown as { oversize?: boolean }).oversize ? { oversize: true } : {}) });
+        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, pieces: `${(g as { id?: string }).id || groups.indexOf(g)}|${garment}`, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches || (i as unknown as { emb?: { estStitches?: number } }).emb?.estStitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}), ...(art ? { art } : {}), ...((i as unknown as { oversize?: boolean }).oversize ? { oversize: true } : {}) });
       }
     }
   }

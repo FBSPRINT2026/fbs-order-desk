@@ -441,3 +441,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 8:36pm · 1.3.683 · Nick · In Production only by booking a press (status menu and board refuse it before a booking); closed quotes stay under Quotes behind Show older quotes, never Completed (no balance)
 - Nov 16 8:37pm · 1.3.684 · Nick · Schedule: Ready To Schedule's headers sort the list (Job #, Job, In-hands, Goods, Recommended; press again to reverse; remembered)
 - Nov 16 8:47pm · 1.3.685 · Nick · Ready To Schedule: orders run together sit side by side with a 'Runs with #…' tag
+- Nov 16 8:53pm · 1.3.686 · Nick · Digitizing: 'DST needed' lists every digitized print with no stitch file (repeats production brings in); an embroidered print with no count or DST gets its stitches estimated from its logo and size for run time only (not price)

@@ -6,7 +6,7 @@ import NoCharge from "@/components/NoCharge";
 import { useRole } from "@/components/RoleContext";
 import { bySupplierStyle, garmentSupName, inCatalogHit, type GarmentSup } from "@/lib/garmentSup";
 import { PrintThumb } from "@/components/LogoThumb";
-import { threadByName } from "@/lib/embroidery";
+import { estimateStitches, threadByName } from "@/lib/embroidery";
 import { kidLine, screenFeeOf } from "@/lib/pricing";
 import { changeWord, cleanPrintNotes, frontFirst, inkNames, shopNotes, isLightColor, lineQty, pmsInks, pmsKey, screensFor, ADULT_SIZES, BABY_SIZES, TODDLER_SIZES, WAIST_SIZES, FULL_COLOR, designLabel, designOther, INK_COLORS, THREAD_COLORS, LOCATIONS, fitLocation, locationsFor, METHODS, methodLabel, ONE_SIZE, SIZES, YOUTH_SIZES, newGLine, newImprint, uid, persEach, persOf, PERS_SHOW, type PersEntry, type Design, type GLine, type Garment, type Group, type GroupCalc, type Method, type PriceList, type Settings, type Size, colorCosts, sizeUpEach, supplierSizeUp, isSpecialtyItem, specialtyText, digitizingFee, sewoutFee, puffEach, printFilled, specialInks, specialInkEach } from "@/lib/pricing";
 import { money } from "@/lib/format";
@@ -608,6 +608,42 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   // the group description box, opened from "+ Add group description" before anything is typed
   // a line's note box, opened from its ✎ before anything is typed
   const [noteOpen, setNoteOpen] = useState<string | null>(null);
+  // an embroidered print with no stitch count and no DST: its stitches estimated from its own logo and size, for the
+  // schedule's run time only (EmbSpec.estStitches; the price never uses it). Replaced by the file's count when the DST
+  // comes in (Nick, Nov 16 2026, #50051 Keeley: the Left Sleeve's stand-in 5,000 instead of ~7,700)
+  const estSig = g.imprints.map((d) => (d.method === "embroidery" && d.design_id && !d.stitches && !d.emb?.file ? `${d.id}|${d.design_id}|${d.size || ""}|${d.inks || ""}|${d.emb?.estStitches || 0}|${designUrls?.[d.design_id] ? 1 : 0}` : "")).join(",");
+  useEffect(() => {
+    if (fixed) return;
+    let live = true;
+    for (const d of g.imprints) {
+      if (d.method !== "embroidery" || !d.design_id || d.stitches || d.emb?.file) continue;
+      const url = designUrls?.[d.design_id], m = (d.size || "").match(/(\d+(?:\.\d+)?)/), v = m ? +m[1] : 0;
+      if (!url || !(v > 0)) continue;
+      const img = new Image(); img.crossOrigin = "anonymous";
+      img.onload = () => {
+        if (!live) return;
+        const k = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight)), w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        const x = c.getContext("2d", { willReadFrequently: true }); if (!x) return;
+        x.drawImage(img, 0, 0, w, h);
+        let px: Uint8ClampedArray; try { px = x.getImageData(0, 0, w, h).data; } catch { return; }
+        // the logo's own box (a preview with room around it), then how much of it is stitched
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) if (px[(yy * w + xx) * 4 + 3] > 96) { if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; }
+        if (x1 < x0 || y1 < y0) return;
+        let on = 0, n = 0;
+        for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) { n++; if (px[(yy * w + xx) * 4 + 3] > 96) on++; }
+        const ratio = (y1 - y0 + 1) / (x1 - x0 + 1), tall = /tall|high/i.test(d.size || "");
+        const wIn = tall ? v / ratio : v, hIn = tall ? v : v * ratio;
+        const colors = Math.max(1, (d.inks || "").split(/\s*,\s*/).filter(Boolean).length || d.colors || 1);
+        const est = estimateStitches(wIn, hIn, n ? on / n : 0.5, colors, { puff: d.emb?.puff });
+        if (!est || Math.abs((d.emb?.estStitches || 0) - est) < 100) return;
+        update((gx) => { const t = gx.imprints.find((y) => y.id === d.id); if (t && !t.stitches && !t.emb?.file) t.emb = { ...(t.emb || {}), estStitches: est }; });
+      };
+      img.src = url;
+    }
+    return () => { live = false; };
+  }, [estSig]); // eslint-disable-line react-hooks/exhaustive-deps
   const glRef = useRef<HTMLDivElement | null>(null);
   const [glFit, setGlFit] = useState<"w0" | "w1" | "w1c" | "w" | "s">("w");
   const hasCost = !gc.wholesale && !hidePrices;

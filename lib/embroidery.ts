@@ -254,6 +254,8 @@ export function embWarnings(g: EmbGarment, loc: string, wIn: number): string[] {
 export type EmbSpec = {
   /** where the stitch count came from: our estimate, the digitized file, or typed */ stitchesFrom?: "estimate" | "file" | "staff";
   /** how much of the logo's box is stitched, read off the art (for the estimate) */ coverage?: number;
+  /** for timing only, never the price: stitches estimated from the logo and its size when the print has no count and no
+   *  DST (Nick, Nov 16 2026, #50051: "you should be able to estimate the stitch count still by looking at the logo") */ estStitches?: number;
   backing?: string; topping?: string;
   puff?: boolean; metallic?: boolean; detail?: boolean;
   /** 3D puff on part of the logo (Oct 26): thread colors and clicked shapes; none = all of it */ puffParts?: import("@/lib/puff").PuffSel;
