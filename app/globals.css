@@ -352,6 +352,16 @@ body{margin:0}
 .print-page{max-width:800px;margin:0 auto;padding-inline:24px;padding-block:32px;background:var(--surface);color:var(--ink)}
 .print-bar{max-width:800px;margin:0 auto;padding-inline:24px;padding-block:14px 0;display:flex;gap:8px}
 @media print{ .print-bar{display:none} body{background:#fff} .print-page{padding:0} }
+/* pictures on paper (Nick, Nov 17 2026: "all of our work order images are printing really dark"): a screen color on paper
+   comes out darker (no light behind it, ink spread), so a charcoal or military green garment tile went near black and an
+   All Black logo on it disappeared. On paper every garment tile, mockup and solid garment-color panel is lifted once,
+   never twice (a picture inside a tile isn't lifted again) */
+@media print{
+  .logo-thumb{filter:brightness(1.35) saturate(.9)}
+  /* a garment-color panel behind the art: only the color is lifted (a white wash over it), never the inks drawn on it */
+  .pdoc .art, .pdoc .wo-m.none, .pdoc .wj-none, .pdoc .none{background-image:linear-gradient(rgba(255,255,255,.28),rgba(255,255,255,.28))!important}
+  img:not(.logo-thumb img):not(.pdoc .art img):not(.pdoc .brand img):not(.pdoc .iv2-logo){filter:brightness(1.15)}
+}
 
 /* ---------- Printavo-style order entry ---------- */
 .top2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:14px;align-items:start}
