@@ -263,6 +263,11 @@ function VersionWorkOrder({ p, vp }: { p: WoProps; vp: Version[] }) {
   const cuPage = (vi: number) => nV + 1 + Math.floor(vi / 2);
   const qr = qrSvg(jobLink(o.number), 2).svg;
   const light = (l: Group["lines"][number]) => isLightColor(l.color, p.settings.wholesale);
+  // which version goes on the dark garments and which on the light ones: the garments' own colors compared, darker
+  // against lighter (a brown or a kelly green is dark next to white, but it's the light side next to black)
+  const lum = (l: Group["lines"][number]) => { const h = ((lineHex(l) || "") || p.colorHexes?.[ckey(l.color)] || colorHex(l.color) || guessHex(l.color || "") || "#888888").replace("#", ""); const n = (i: number) => parseInt(h.slice(i, i + 2), 16) || 0; return h.length === 6 ? 0.299 * n(0) + 0.587 * n(2) + 0.114 * n(4) : 128; };
+  const avg = vp.map((v) => { const q = pcs(v.items) || 1; return v.items.reduce((a, x) => a + lum(x.l) * lineQty(x.l), 0) / q; });
+  const shadeOf = vp.map((_v, i) => (vp.length !== 2 ? "" : avg[i] < avg[1 - i] ? "Dark garments" : "Light garments"));
   const colorsOf = (v: Version) => [...new Set(v.items.map((y) => y.l.color))].join(", ");
   const cu = (v: Version, vi: number, half: boolean) => <CloseUp key={v.key} half={half} d={v.d} di={v.di} n={1} p={p} gi={v.gi} allLight={v.items.every((x) => light(x.l))} colors={colorsOf(v)} qty={pcs(v.items)} page={cuPage(vi)} total={total} footL={footL} variant={v.name ? { color: colorsOf(v), swap: {}, cw: v.name } : undefined} />;
   return (
@@ -273,7 +278,7 @@ function VersionWorkOrder({ p, vp }: { p: WoProps; vp: Version[] }) {
         const spots = [...new Set(v.items.map((x) => x.spot))];
         const label = `${v.letter ? `${v.letter} · ` : ""}${v.name || "As printed"}`;
         const vLines = v.items.map((x) => x.l);
-        const onWhat = vLines.every(light) ? "Light garments" : vLines.every((l) => !light(l)) ? "Dark garments" : "";
+        const onWhat = shadeOf[vi];
         const last = vi === vp.length - 1 && pi === plans[vi].length - 1;
         // its garments by spot: a heading where a spot starts (again at the top of a continued page)
         const blocks: VGarment[][] = [];
