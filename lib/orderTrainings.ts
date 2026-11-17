@@ -25,6 +25,9 @@ export type TrainingDefaults = {
    *  Thursday… next Tuesday, with the due date at the end of the week"): weekdays, 0 = Sunday. A job in by the cutoff day
    *  runs on the run day after it and is due on the due day after that (lib/orderTrainings.ts runDates) */
   run?: { cutoff: number; day: number; due: number };
+  /** these orders get the simple work order (Nick, Nov 17 2026: "Simple work order should really just be Cedar Promo's
+   *  cart orders… and All My Sons"): the whole job on a page, a card per group as on the order screen, no prices. Set
+   *  by staff only, never learned (app/print/[id]/Docs.tsx CartWorkOrder) */ simple_wo?: boolean;
   /** the fields staff set (learning leaves them alone) */ set?: string[];
   /** the fields learned, and from which orders ("#40311, #40314") */ learned?: Record<string, string>;
 };

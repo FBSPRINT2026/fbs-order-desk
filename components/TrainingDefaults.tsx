@@ -58,6 +58,14 @@ export default function TrainingDefaults({ trainingId }: { trainingId: string })
     const { error } = await sb.from("order_trainings").update({ defaults: next }).eq("id", trainingId);
     setState(error ? `Couldn't save: ${error.message}` : "Saved");
   };
+  // the simple work order for these jobs (Nick, Nov 17 2026: Cedar's store carts and All My Sons)
+  const saveWo = async (v: boolean) => {
+    const next: Defaults = { ...d };
+    if (v) next.simple_wo = true; else delete next.simple_wo;
+    setD(next); setState("Saving…");
+    const { error } = await sb.from("order_trainings").update({ defaults: next }).eq("id", trainingId);
+    setState(error ? `Couldn't save: ${error.message}` : "Saved");
+  };
   const runSel = (k: "cutoff" | "day" | "due", label: string) => (
     <div className="field tdf-f">
       <label htmlFor={`tdf-run-${k}-${trainingId}`}>{label}</label>
@@ -81,6 +89,13 @@ export default function TrainingDefaults({ trainingId }: { trainingId: string })
             onBlur={(e) => { const v = e.target.value.trim(); if (v !== (shipV || "")) void save("ship_method", v || undefined); }} />
           <datalist id={`tdf-car-${trainingId}`}>{CARRIERS.map((c) => <option key={c} value={c} />)}</datalist>
           {note("ship_method") && <span className="faint tdf-n">{note("ship_method")}</span>}
+        </div>
+        <div className="field tdf-f">
+          <label htmlFor={`tdf-wo-${trainingId}`}>Work order</label>
+          <select id={`tdf-wo-${trainingId}`} value={d.simple_wo ? "simple" : ""} onChange={(e) => void saveWo(e.target.value === "simple")}>
+            <option value="">Full work order</option>
+            <option value="simple">Simple (one page, no prices)</option>
+          </select>
         </div>
         {runSel("cutoff", "Weekly run: in by")}
         {d.run && runSel("day", "Runs on")}

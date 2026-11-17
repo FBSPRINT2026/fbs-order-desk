@@ -162,9 +162,11 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
       admin.from("proofs").select("customer_comment, decided_name, decided_at").eq("order_id", id).eq("status", "approved").neq("customer_comment", "").is("archived_at", null),
       admin.from("job_files").select("tag, body, by_name, created_at").eq("order_id", id).eq("kind", "note").eq("archived", false).order("created_at", { ascending: false }).limit(8),
       // a program's simple order (its customer's order training names it): the cart work order (Nick, Nov 17 2026)
-      admin.from("order_trainings").select("when_words").eq("customer_id", o.customer_id),
+      admin.from("order_trainings").select("when_words, defaults").eq("customer_id", o.customer_id),
     ]);
-    const simple = ((trs || []) as { when_words: string }[]).some((t) => trainingSaid(t, [o.nickname, o.po_number].filter(Boolean).join(" ")));
+    // the simple work order only for the kinds of order set to it (Settings → Order training → Work order: Cedar's store
+    // carts and All My Sons, Nick, Nov 17 2026); every other order keeps the full one
+    const simple = ((trs || []) as { when_words: string; defaults?: { simple_wo?: boolean } | null }[]).some((t) => !!t.defaults?.simple_wo && trainingSaid(t, [o.nickname, o.po_number].filter(Boolean).join(" ")));
     const printed = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
     return (
       <div className="pdoc">

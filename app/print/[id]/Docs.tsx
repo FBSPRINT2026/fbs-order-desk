@@ -152,13 +152,13 @@ function neckLine(cust: Partial<Customer>, g: Group, fins: { id: string; name: s
 
 // ───────────────────────────── work order ─────────────────────────────
 type WoProps = DocData & { notes: string; shopNotes: { tag: string; body: string; by_name: string; created_at: string }[]; printed: string;
-  /** a program's simple order (one its customer's order training names: MEI's store carts, All My Sons…): the cart work order */ simple?: boolean };
+  /** an order whose order training is set to the simple work order (Cedar's store carts, All My Sons) */ simple?: boolean };
 /**
  * The work order. A program's simple orders (Nick, Nov 17 2026: "cart orders for Peter… All My Sons, those really simple
  * orders… should have its own work order where it's very simple… The normal work order should stay the same for all
  * their clients") get the cart work order: the whole job first, a card per group as on the order screen, no prices.
- * Every other order keeps the full work order. Which is which is the order's customer's order trainings (Settings →
- * Order training: the words in the job's name that say it's that kind of order), never a customer named in code.
+ * Every other order keeps the full work order. Which is which is set on the order training (Settings → Order training →
+ * Work order: Simple), matched by the words in the job's name like every training, never a customer named in code.
  */
 export function WorkOrderDoc(p0: WoProps) {
   return p0.simple ? <CartWorkOrder {...p0} /> : <FullWorkOrder {...p0} />;
