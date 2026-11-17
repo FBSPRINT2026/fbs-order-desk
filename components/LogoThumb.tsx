@@ -1,7 +1,25 @@
 "use client";
 import type { Design } from "@/lib/pricing";
 import { lineColor, mainLine } from "@/lib/mockup";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { LogoFace, LogoPic, PaintedPic, onShirtsOf } from "@/components/LogoOnShirts";
+
+/** a logo background's own picture (Edit logo → Backgrounds, specs.onShirts[0].path), signed once per page: the tile is
+ *  that picture, as the Artwork page shows it (Nick, Nov 16 2026: the AMS logos on the customer's Brands list came out as
+ *  a white box, the raw .ai preview with its knocked-out letters filled white, while the Artwork page was right) */
+const OWN = new Map<string, Promise<string>>();
+function useOwnPic(path: string): string {
+  const [u, setU] = useState("");
+  useEffect(() => {
+    if (!path) return;
+    let on = true;
+    if (!OWN.has(path)) OWN.set(path, createClient().storage.from("proofs").createSignedUrl(path, 3600).then((r) => r.data?.signedUrl || "").catch(() => ""));
+    OWN.get(path)!.then((x) => { if (on) setU(x); });
+    return () => { on = false; };
+  }, [path]);
+  return u;
+}
 
 /**
  * THE small logo picture, for every list and row that shows a logo (Oct 28, Nick: "these little preview boxes are wrong
@@ -20,13 +38,14 @@ export default function LogoThumb({ d, url, shirt, inkMap, className }: {
   /** the print's ink map (Imprint.inkMap.map): the logo painted in its inks */ inkMap?: Record<string, { hex: string; name: string }> | null;
   className?: string;
 }) {
+  const own = onShirtsOf(d)[0]?.path || "", ownUrl = useOwnPic(!shirt || !inkMap ? own : "");
   if (!url) return <span className={"logo-thumb " + (className || "")} />;
   return (
     <span className={"logo-thumb " + (className || "")}>
       {inkMap && Object.keys(inkMap).length && shirt
         ? <PaintedPic url={url} map={inkMap} shirt={shirt} alt={d.name} />
         : shirt || onShirtsOf(d).length
-          ? <LogoFace d={d} urls={{ [d.id]: url }} shirt={shirt || undefined} printed={shirt ? { shirt } : null} />
+          ? <LogoFace d={d} urls={{ [d.id]: url, ...(own && ownUrl ? { [own]: ownUrl } : {}) }} shirt={shirt || undefined} printed={shirt ? { shirt } : null} />
           : <LogoPic url={url} alt={d.name} cut />}
     </span>
   );
