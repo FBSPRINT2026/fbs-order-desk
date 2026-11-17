@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { fitLocation, locationsFor, type Design, type Group, type Imprint } from "@/lib/pricing";
-import { brandPrint, colorwayFor, colorwaysOf, isDarkGarment, LANES, laneState, SEW_KINDS, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand, type Lane } from "@/lib/brands";
+import { applyColorwayChange, brandDark, brandPrint, colorwayFor, colorwaysOf, isDarkGarment, LANES, laneState, SEW_KINDS, sewFilesOf, sewForPrint, sewKindOf, sewThreads, type Brand, type Lane } from "@/lib/brands";
 
 /**
  * Customer artwork → their brands (Oct 27, Nick: Cedar Promos' MEI, ShipStation / WWEX, Embark: "select, group it and
@@ -89,7 +89,16 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
     if (!pick) return;
     setBusy(true); setErr("");
     try {
-      const im = brandPrint({ design: pick, brand, method: lane, location: loc, lines: group.lines, size: size.trim(), sew, colorway: cws.find((c) => c.name === cwName) || null, darkOf: () => (lane === "embroidery" ? side === "dark" : false) });
+      let im = brandPrint({ design: pick, brand, method: lane, location: loc, lines: group.lines, size: size.trim(), sew, colorway: cws.find((c) => c.name === cwName) || null, darkOf: () => (lane === "embroidery" ? side === "dark" : false) });
+      // light and dark goods in one group get each their own colorway by the brand's rule, split like Split does
+      // (Nick, Nov 16 2026, MEI #50094 / #50078: a Stone shirt among navy and black ones made every shirt Maroon / Black,
+      // and the dark ones had to be split by hand on every cart). Only when the print is the rule's own colorway: one
+      // picked by hand (a one-color version) stays on every garment.
+      const mine = colorwayFor(pick, brand, side === "dark"), other = colorwayFor(pick, brand, side !== "dark");
+      if (im.colorway && mine && other && other.name !== mine.name && im.colorway === mine.name) {
+        const by = Object.fromEntries(group.lines.filter((l) => (l.color || "").trim() && brandDark(brand, l) !== (side === "dark")).map((l) => [l.color.trim(), other.name]));
+        if (Object.keys(by).length) im = applyColorwayChange({ ...im, inkBy: undefined }, pick, by);
+      }
       await onAdd(im, `D-${pick.number} ${pick.name}${brand ? ` (${brand.name})` : ""}`);
     } catch (e) { setErr(e instanceof Error ? e.message : "Couldn't add it."); setBusy(false); }
   }

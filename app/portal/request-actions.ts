@@ -49,6 +49,9 @@ async function myDraft(id: string) {
   return { ...ctx, order: o as Order };
 }
 
+/** an address pasted with its heading ("Shipping Information :", Nov 16 2026, Cedar's carts): the heading isn't part of it */
+const cleanShipTo = (v: string) => v.split(/\r?\n/).filter((l) => !/^\s*(shipping information|ship(ping)? to|ship to address|shipping address)\s*:?\s*$/i.test(l)).join("\n").trim();
+
 /** Start a new order request (no prices; the shop prices it). */
 export async function startRequest(): Promise<Result> {
   try {
@@ -98,7 +101,7 @@ export async function saveRequest(id: string, patch: { groups?: Group[]; nicknam
     if (patch.po_number !== undefined) row.po_number = patch.po_number.slice(0, 60);
     // one of their own order types only (customers.order_types)
     if (patch.order_lane !== undefined) { const ts = ((cust as { order_types?: string[] }).order_types || []); row.order_lane = ts.includes(patch.order_lane) ? patch.order_lane : ""; }
-    if (patch.ship_to !== undefined) row.ship_to = patch.ship_to.slice(0, 1000);
+    if (patch.ship_to !== undefined) row.ship_to = cleanShipTo(patch.ship_to).slice(0, 1000);
     const { data: saved, error } = await admin.from("orders").update(row).eq("id", id).select("updated_at").maybeSingle();
     if (error) return { ok: false, error: error.message };
     return { ok: true, updated_at: String((saved as { updated_at?: string } | null)?.updated_at || "") };
@@ -632,7 +635,7 @@ export async function readMyPo(orderId: string, files: RqFile[]): Promise<Result
     if (!order.nickname && d.nickname) row.nickname = d.nickname.slice(0, 120);
     if (!order.due_date && d.due_date && /^\d{4}-\d{2}-\d{2}$/.test(d.due_date)) row.due_date = d.due_date;
     if (!order.po_number && d.po_number) row.po_number = String(d.po_number).slice(0, 60);
-    if (d.delivery && ["pickup", "ship", "deliver"].includes(d.delivery) && !(order.ship_to || "").trim()) { row.delivery_method = d.delivery; if (d.ship_to) row.ship_to = String(d.ship_to).slice(0, 500); }
+    if (d.delivery && ["pickup", "ship", "deliver"].includes(d.delivery) && !(order.ship_to || "").trim()) { row.delivery_method = d.delivery; if (d.ship_to) row.ship_to = cleanShipTo(String(d.ship_to)).slice(0, 500); }
     const qtyOf = (g: Group) => g.lines.reduce((b, l) => b + Object.values(l.sizes || {}).reduce((c, v) => c + (+v || 0), 0), 0);
     // nothing is saved until they say it looks right (the builder saves it then)
     const lines = groups.flatMap((g) => g.lines.map((l) => ({ group: g.name || "", garment: [l.brand, l.style].filter(Boolean).join(" ") || l.garment || "Garment", color: l.color || "",
@@ -656,7 +659,7 @@ export async function sendSimpleOrder(orderId: string, s: SimpleOrder): Promise<
     if (oTypes.length && !oTypes.includes(String(s.type || ""))) return { ok: false, error: `Pick ${oTypes.join(" or ")}.` };
     const method = ["screen", "embroidery", "transfer", "mixed"].includes(String(s.method)) ? String(s.method) : "";
     const delivery = ["pickup", "ship", "deliver"].includes(String(s.delivery)) ? String(s.delivery) : "pickup";
-    const shipTo = String(s.ship_to || "").trim().slice(0, 500);
+    const shipTo = cleanShipTo(String(s.ship_to || "")).slice(0, 500);
     if (delivery !== "pickup" && !shipTo) return { ok: false, error: `Add the address to ${delivery === "ship" ? "ship" : "deliver"} to.` };
     const due = s.due && /^\d{4}-\d{2}-\d{2}$/.test(s.due) ? s.due : null;
     const qty = Math.max(0, Math.min(1_000_000, Math.round(+(s.qty || 0)))) || null;
