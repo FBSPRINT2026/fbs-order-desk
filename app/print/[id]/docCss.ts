@@ -603,6 +603,23 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wo2 .qr{width:.72in;height:.72in}
 .pdoc .wo2 .codes small{font-size:6.5pt;max-width:.9in}
 .pdoc .wo2 .flags{margin-top:8px}
+/* many garments, a few pieces each (Nick, Nov 17 2026, #40405): the logo once, readable; a row per version; the garments */
+.pdoc .wo-cmp{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.pdoc .wo-cmp-pics{display:flex;gap:10px;justify-content:center}
+.pdoc .wo-cmp-pic{width:3.2in;display:flex;flex-direction:column;align-items:center;gap:3px}
+.pdoc .wo-cmp-pic .logo-thumb,.pdoc .wo-cmp-pic img{width:3.2in;height:1.55in;border-radius:8px;object-fit:contain;display:block}
+.pdoc .wo-cmp-pic.none{height:1.55in;display:grid;place-items:center;color:#fff;border-radius:8px}
+.pdoc .wo-cmp-pic span{font-size:9pt;color:var(--ink3)}
+.pdoc .wo-cmp-pic span .wo-st{font-weight:800;color:var(--ink);border:1px solid currentColor;border-radius:3px;padding:0 4px;margin-right:5px}
+.pdoc .wo-cmp-list{border:1.5px solid var(--ink);border-radius:8px;padding:6px 10px}
+.pdoc .wo-cmp-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1.4fr) minmax(0,1.6fr);gap:2px 10px;padding:5px 0;border-top:1px solid var(--line);font-size:9.5pt;align-items:baseline}
+.pdoc .wo-cmp-row:first-of-type{border-top:0}
+.pdoc .wo-cmp-l b{font-weight:800}
+.pdoc .wo-cmp-l .w2-cw{margin-right:5px}
+.pdoc .wo-cmp-t{display:flex;flex-wrap:wrap;gap:2px 8px}
+.pdoc .wo-cmp-t > span{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.pdoc .wo-cmp-on{grid-column:1/-1;color:var(--ink3);font-size:9pt}
+.pdoc .wo-cmp-row .warn{grid-column:1/-1}
 .pdoc .w2-hero{flex:1 1 0;min-height:2.6in;display:grid;grid-template-columns:minmax(0,1fr) 2.9in;gap:12px;margin-top:10px}
 .pdoc .w2-hero.many{grid-template-columns:minmax(0,1fr) 3.3in}
 .pdoc .w2-hero .wo-mks{margin-top:0;min-height:0;flex:none;height:100%}

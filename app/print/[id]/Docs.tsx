@@ -656,40 +656,72 @@ function FullWorkOrder(p0: WoProps) {
                 {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}
               </div>
               {g.description?.trim() && <div className="gdesc wo">{g.description.trim()}</div>}
-              <div className={"w2-hero" + (g.imprints.length > 2 ? " many" : "")}>
-                {/* the mockup as big as the page allows (up to 4; each also big on its own page) */}
-                <div className={"wo-mks n" + Math.min(4, Math.max(1, firstMk.length))}>
-                  {firstMk.length ? firstMk.slice(0, 4).map((u, i) => (
-                    <div className="wo-m" key={u}>
-                      <img src={u} alt="Mockup" />
-                      {/* the style number with the color (Oct 27, Nick: "so that they can sync it in case they don't speak English") */}
-                      {sup && !(g.mockupThumbs || []).length ? <span>{where ? <b className="wo-st">{where}</b> : null}Placement reference · big on page {pgMk + i}</span> : <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>}
-                    </div>
-                  )) : (() => {
-                    // no mockup: each print's logo on the garment, never a blank box (Nick, Nov 17 2026, #40390's Military
-                    // Green tees ran from Printavo with "No mockup yet" though the stacked logo was on the print)
-                    const logos = g.imprints.filter((d) => d.design_id && p.designs[d.design_id]).slice(0, 4);
-                    return logos.length ? logos.map((d) => {
-                      const des = p.designs[d.design_id!];
+              {compact ? (
+                // many garments, a few pieces each (Nick, Nov 17 2026, #40405: "a small blown up image just enough where you can
+                // read it comfortably… then a long list below of the different logo… and on the bottom of the page the list"):
+                // the logo once, big enough to read; every version of it a row (letter, file, threads, what it goes on); then the garments
+                <div className="wo-cmp">
+                  <div className="wo-cmp-pics">
+                    {(() => {
+                      const logos = g.imprints.filter((d) => d.design_id && p.designs[d.design_id]).slice(0, 3);
+                      if (logos.length) return logos.map((d) => { const des = p.designs[d.design_id!]; return <div className="wo-cmp-pic" key={d.id || d.location}><PrintThumb d={des} url={printArtUrl(p.designUrls, des.id, d)} print={d} lines={lines} /><span><b className="wo-st">{sideOf(d, g.imprints)}</b>{des.name}</span></div>; });
+                      return firstMk[0] ? <div className="wo-cmp-pic"><img src={firstMk[0]} alt="Mockup" /><span>{firstMk.length > 1 ? `Mockups big on pages ${pgMk}–${pgMk + mk.length - 1}` : mk.length ? `Big on page ${pgMk}` : ""}</span></div> : <div className="wo-cmp-pic none" style={{ background: hex }}>No mockup yet</div>;
+                    })()}
+                  </div>
+                  <div className="wo-cmp-list">
+                    <div className="lbl">{g.imprints.length > 1 || sheets.length > 1 ? "Logos · one row each version" : "Logo"}</div>
+                    {g.imprints.length === 0 && <div className="wo-none">No prints on this group.</div>}
+                    {sheets.map((sh, k) => {
+                      const d = sh.d, des = d.design_id ? p.designs[d.design_id] : null, cw = sh.variant?.cw || "";
+                      const L = des && cw ? cwLetter(des, { name: cw }) : "", th = inkNames(d.inks), sz = printSize(d, des);
                       return (
-                        <div className="wo-m wo-lg" key={d.id || d.location}>
-                          <PrintThumb d={des} url={printArtUrl(p.designUrls, des.id, d)} print={d} lines={lines} />
-                          <span><b className="wo-st">{d.location}</b>Logo only · no mockup</span>
+                        <div className="wo-cmp-row" key={d.id + k}>
+                          <span className="wo-cmp-l">{L ? <span className="w2-cw">{L}</span> : null}<b>{sideOf(g.imprints[sh.di], g.imprints)}</b>{cw ? ` · ${cw}` : ""}</span>
+                          <span className="wo-cmp-m">{methodLabel(d)}{d.emb?.file?.name ? <> · <b>{d.emb.file.name}</b></> : null}{sz.label ? ` · ${sz.label}` : ""}{d.stitches ? ` · ${d.stitches.toLocaleString()} st` : ""}</span>
+                          <span className="wo-cmp-t">{th.map((t) => <span key={t}><Swatch c={colorHex(t) || "#ccc"} />{d.method === "embroidery" ? threadShort(t) : t}</span>)}</span>
+                          <span className="wo-cmp-on">On {sh.variant?.color || colors || "every garment"} <b>({sh.qty ?? (gc?.allQty || 0)})</b> · close-up p. {pgPrint + Math.floor(k / 2)}</span>
+                          {(d.confirm?.size || d.confirm?.ink) && !d.visualOnly ? <span className="warn">Confirm {[d.confirm.size && "size", d.confirm.ink && "ink"].filter(Boolean).join(" & ")} before printing</span> : null}
                         </div>
                       );
-                    }) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>;
-                  })()}
+                    })}
+                  </div>
                 </div>
-                {/* the prints: one card each, the same rows in the same order (Oct 26, Nick) */}
-                <div className="w2-prints">
-                  <div className="lbl">Prints</div>
-                  {g.imprints.length === 0 && <div className="wo-none">No prints on this group.</div>}
-                  {g.imprints.length > 4
-                    ? <div className="wo-plist">{g.imprints.map((d, di) => <span key={d.id}><b>{sideOf(d, g.imprints)}</b> {colorsLabel(d)}{inkNames(d.inks).length ? ` · ${inkNames(d.inks).join(", ")}` : ""} <i>p. {printPg[di]}</i></span>)}</div>
-                    : g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} lines={g.lines}
-                        ways={sheets.filter((sh) => sh.di === di && sh.variant?.cw).map((sh) => ({ name: sh.variant!.cw!, on: sh.variant!.color, qty: sh.qty || 0, file: sh.d.emb?.file?.name || "", threads: inkNames(sh.d.inks) }))} />)}
+              ) : (
+              <div className={"w2-hero" + (g.imprints.length > 2 ? " many" : "")}>
+                  {/* the mockup as big as the page allows (up to 4; each also big on its own page) */}
+                  <div className={"wo-mks n" + Math.min(4, Math.max(1, firstMk.length))}>
+                    {firstMk.length ? firstMk.slice(0, 4).map((u, i) => (
+                      <div className="wo-m" key={u}>
+                        <img src={u} alt="Mockup" />
+                        {/* the style number with the color (Oct 27, Nick: "so that they can sync it in case they don't speak English") */}
+                        {sup && !(g.mockupThumbs || []).length ? <span>{where ? <b className="wo-st">{where}</b> : null}Placement reference · big on page {pgMk + i}</span> : <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>}
+                      </div>
+                    )) : (() => {
+                      // no mockup: each print's logo on the garment, never a blank box (Nick, Nov 17 2026, #40390's Military
+                      // Green tees ran from Printavo with "No mockup yet" though the stacked logo was on the print)
+                      const logos = g.imprints.filter((d) => d.design_id && p.designs[d.design_id]).slice(0, 4);
+                      return logos.length ? logos.map((d) => {
+                        const des = p.designs[d.design_id!];
+                        return (
+                          <div className="wo-m wo-lg" key={d.id || d.location}>
+                            <PrintThumb d={des} url={printArtUrl(p.designUrls, des.id, d)} print={d} lines={lines} />
+                            <span><b className="wo-st">{d.location}</b>Logo only · no mockup</span>
+                          </div>
+                        );
+                      }) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>;
+                    })()}
+                  </div>
+                  {/* the prints: one card each, the same rows in the same order (Oct 26, Nick) */}
+                  <div className="w2-prints">
+                    <div className="lbl">Prints</div>
+                    {g.imprints.length === 0 && <div className="wo-none">No prints on this group.</div>}
+                    {g.imprints.length > 4
+                      ? <div className="wo-plist">{g.imprints.map((d, di) => <span key={d.id}><b>{sideOf(d, g.imprints)}</b> {colorsLabel(d)}{inkNames(d.inks).length ? ` · ${inkNames(d.inks).join(", ")}` : ""} <i>p. {printPg[di]}</i></span>)}</div>
+                      : g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} lines={g.lines}
+                          ways={sheets.filter((sh) => sh.di === di && sh.variant?.cw).map((sh) => ({ name: sh.variant!.cw!, on: sh.variant!.color, qty: sh.qty || 0, file: sh.d.emb?.file?.name || "", threads: inkNames(sh.d.inks) }))} />)}
+                  </div>
                 </div>
-              </div>
+              )}
               <h2>Garments <span>{gc?.allQty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - firstN} more garment${lines.length - firstN === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
               {counts(lines.slice(0, firstN))}
               {!!(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
