@@ -34,11 +34,11 @@ const gkey = (style?: string, color?: string) => `${String(style || "").trim().t
 /**
  * A saved logo goes into the print the customer left blank for it (Nick, Nov 16 2026, #50094: their portal order named
  * "Left Chest · Embroidery" with no art; the logo came in as a second print beside it and the price doubled). A blank is
- * a print with no logo, art, inks or supplied piece: the one at the logo's spot first, else any blank of its method.
+ * a print with no logo, art or supplied piece (a thread they typed, "Black", is a wish, not art: #50082): the one at the logo's spot first, else any blank of its method.
  * Their spot and notes stay. With no blank, the logo is added as a new print.
  */
 function fillBlank<T extends { location?: string; method?: string; notes?: string; inks?: string; design_id?: string | null }>(prints: T[], im: T): T[] {
-  const blank = (p: T) => { const x = p as T & { shownArt?: unknown; custSeps?: unknown; supplied?: unknown; patch?: unknown; fromBrand?: unknown }; return !x.design_id && !(x.inks || "").trim() && !x.shownArt && !x.custSeps && !x.supplied && !x.patch && !x.fromBrand; };
+  const blank = (p: T) => { const x = p as T & { shownArt?: unknown; custSeps?: unknown; supplied?: unknown; patch?: unknown; fromBrand?: unknown }; return !x.design_id && !x.shownArt && !x.custSeps && !x.supplied && !x.patch && !x.fromBrand; };
   const at = prints.findIndex((p) => blank(p) && p.method === im.method && (p.location || "") === (im.location || ""));
   const i = at >= 0 ? at : prints.findIndex((p) => blank(p) && p.method === im.method);
   if (i < 0) return [...prints, im];
