@@ -1630,6 +1630,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   // a color the supplier gave no color code for (SanMar's Scarlet): the color read off its photo is saved on the
   // garment, so the order page's logo tiles and close-ups show the shirt's real color too (Oct 21, Nick: #40092's
   // logo box was grey)
+  // which picture each color shows right now (short: a made-here photo is a long data URL). The pictures settle after the
+  // page opens (a style dyed to a color with no supplier photo, a back leveled to its front, their own uploads), so every
+  // reading of the photos runs again when one changes (Nick, Nov 16 2026, #40409's camo New Era: the dyed photo arrived
+  // after the cap was measured on its stand-in, so the hat was never measured and its 4.5" logo drew at a shirt's scale)
+  const photoSig = lines.map((l) => (["front", "back"] as View[]).map((v) => { const u = photo(l, v); return `${u.length}:${u.slice(0, 40)}${u.slice(-40)}`; }).join("|")).join("\n");
   const hexSaved = useRef(new Set<string>());
   useEffect(() => {
     for (const l of lines) {
@@ -1642,7 +1647,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const ci = { ...(g.color_images || {}), [k]: { ...g.color_images![k], hex: f.hex } };
       void sb.from("garments").update({ color_images: ci }).eq("id", g.id).then(({ error }) => { if (!error) setCatalog((c) => c.map((x) => (x.id === g.id ? { ...x, color_images: ci } : x))); });
     }
-  }, [fits, lines, catalog]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fits, lines, catalog, photoSig]); // eslint-disable-line react-hooks/exhaustive-deps
   /**
    * The bottom of the sewn neckline on each photo (where drops are measured from), remembered per photo
    * (garment_necks): a staff fix, else the AI's pick from the lines the pixel finder saw (Oct 20, Nick: "ask AI vision
@@ -1689,7 +1694,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
         registerMasks(fa.mask, fo.mask).then((res) => setRegs((r) => ({ ...r, [key]: res }))).catch(() => {});
       }
     }
-  }, [fits, lines, anchorLine?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fits, lines, anchorLine?.id, photoSig]); // eslint-disable-line react-hooks/exhaustive-deps
   // a hoodie's back: the hood's edge traced (and snapped) by hand, prints go behind the hood (lib/hoodSnap.ts, Oct 23)
   const hoodKey = (l: Line) => { const g = garmentFor(l); return g ? Object.keys(g.color_images || {}).find((c) => colorKey(c) === colorKey(l.color)) || "" : ""; };
   // a hood edge drawn on a color the catalog has no photo entry for (2296 Charcoal, Nov 2: "when I drag it, nothing
@@ -1721,7 +1726,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       if (!base || hoodMasks[key]) continue;
       void maskBehindHood(base, e).then((m) => setHoodMasks((x) => ({ ...x, [key]: m }))).catch(() => null);
     }
-  }, [lines, fits, catalog, hoodLocal]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lines, fits, catalog, hoodLocal, photoSig]); // eslint-disable-line react-hooks/exhaustive-deps
   const fitFor = (l: Line | undefined, v: View, measured?: Fit | null): Fit | null => {
     const f = fitFor0(l, v, measured);
     if (!f || !l || v !== "back") return f;
@@ -1808,7 +1813,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fits, lines]);
+  }, [fits, lines, photoSig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Each style's own print-area spot (Oct 20, Nick: "when I click Print areas, let me drag that print areas grid around
@@ -1891,7 +1896,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       loadImg(u).then((img) => { if (fitKind.current[u] !== kind) return; const fit = measureFor(l, img, v); setFits((f) => ({ ...f, [u]: fit })); }).catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, catalog]);
+  }, [lines, catalog, photoSig]);
 
   // Private Label on this group: the customer's neck label set it prints, and the size shown (lib/neckLabels.ts)
   const curGroup = order ? (orderGroups(order).find((x) => x.id === groupId) || orderGroups(order)[0] || null) : null;
