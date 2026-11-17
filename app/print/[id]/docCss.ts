@@ -553,6 +553,11 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .sheet.iv2.t4 .iv2-g{margin-top:10px}
 .pdoc .sheet.iv2.t4 .iv2-sum{margin-top:12px}
 .pdoc .iv2-nsub{display:none}
+.pdoc .cnt2 tbody.wo-smp{outline:1.5px solid #7C5CD6;outline-offset:-1px}
+.pdoc .cnt2 tbody.wo-smp td{background:#f6f3fd}
+.pdoc .wo-smp-h td,.pdoc div.wo-smp-h{font-size:11.5px;color:#4b3a8f;padding:5px 8px 2px}
+.pdoc .wo-smp-h b{font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-right:6px}
+.pdoc div.wo-smp{border:1.5px solid #7C5CD6;background:#f6f3fd;border-radius:6px;padding:2px 6px 6px;margin:0 0 8px}
 .pdoc .iv2-smp{padding-bottom:8px;border-bottom:1px solid #e3e6ec;margin-bottom:6px}
 .pdoc .iv2-smz{display:block;font-size:12px;color:#6b7280}
 .pdoc .sheet.iv2.t4 .iv2-nsub{display:inline;font-size:8.5pt;color:var(--ink3);font-weight:400}

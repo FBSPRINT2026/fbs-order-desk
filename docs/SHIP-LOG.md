@@ -474,3 +474,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 17 2:57pm · 1.3.716 · Nick · Invoice and QuickBooks: a sample's fee shows on its own line (1 x $20.00), not $0.00 with the fee under it
 - Nov 17 3:03pm · 1.3.717 · Nick · Pre-production sample is a line in the run's group (option A): its pieces and price on one line, Printed / Sent, Sample approved or Changes asked; invoice and proof show it in the run's group
 - Nov 17 3:10pm · 1.3.718 · Nick · Pre-production sample: a box first under Garments, its top line (Printed, Sent, Sample approved, Changes asked, Edit) then its garment as a normal row: sizes and price typed in
+- Nov 17 3:18pm · 1.3.719 · Nick · Work order: the pre-production sample boxed on top of the run's garments (the run prints the rest), a PRE-PRODUCTION SAMPLE stamp beside Customer supplied goods; no big SAMPLE FIRST banner
