@@ -681,7 +681,7 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wj-mks>div{display:flex;flex-direction:column;align-items:center;background:#f4f5f7;border-radius:8px;padding:4px}
 .pdoc .wj-mks img{width:100%;max-height:1.55in;object-fit:contain;mix-blend-mode:multiply}
 .pdoc .wj-mks.n2 img,.pdoc .wj-mks.n3 img,.pdoc .wj-mks.n4 img{max-height:.85in}
-.pdoc .wj-mks .lg>*:first-child{width:100%;max-height:1.4in}
+.pdoc .wj-mks .lg .logo-thumb{flex:none;display:block;position:relative;width:100%;height:1.35in;border-radius:8px;overflow:hidden}
 .pdoc .wj-mks span{font-size:7.5pt;color:var(--ink3);text-align:center;margin-top:2px}
 .pdoc .wj-none{height:1.4in;border-radius:8px;display:grid;place-items:center;color:#fff;font-size:10pt}
 .pdoc .wj-prints{display:flex;flex-direction:column;gap:6px;min-width:0}

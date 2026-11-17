@@ -335,7 +335,7 @@ function CartWorkOrder(p0: WoProps) {
                 const logos = g.imprints.filter((d) => d.design_id && p.designs[d.design_id]).slice(0, 2);
                 return logos.length ? <div className="wj-mks n1">{logos.map((d) => {
                   const des = p.designs[d.design_id!];
-                  return <div key={d.id || d.location} className="lg"><PrintThumb d={des} url={printArtUrl(p.designUrls, des.id, d)} print={d} lines={lines} /><span>{d.location} · logo only</span></div>;
+                  return <div key={d.id || d.location} className="lg wo-lg"><PrintThumb d={des} url={printArtUrl(p.designUrls, des.id, d)} print={d} lines={lines} /><span>{d.location} · logo only</span></div>;
                 })}</div> : <div className="wj-none" style={{ background: hex }}>No mockup yet</div>;
               })()}
           </div>

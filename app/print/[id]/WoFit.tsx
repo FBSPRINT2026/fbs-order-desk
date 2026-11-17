@@ -36,8 +36,8 @@ export default function WoFit() {
         if (!inn) continue;
         let z = 1;
         inn.style.zoom = "1";
-        // a little room to spare: the printed page is a hair shorter than the screen's
-        while (sh.scrollHeight > sh.clientHeight - 10 && z > 0.6) { z = Math.round((z - 0.03) * 100) / 100; inn.style.zoom = String(z); }
+        // only when it really spills (a sheet's scrollHeight is never less than its own height)
+        while (sh.scrollHeight > sh.clientHeight + 1 && z > 0.6) { z = Math.round((z - 0.03) * 100) / 100; inn.style.zoom = String(z); }
       }
       for (const sh of Array.from(document.querySelectorAll<HTMLElement>(".sheet.wo-first"))) {
         STEPS.forEach((c) => sh.classList.remove(c));
