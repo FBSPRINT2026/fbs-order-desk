@@ -3268,7 +3268,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     if (rtsSort.k === "due" && !x.v !== !y.v) return x.v ? -1 : 1;
                     const c = typeof x.v === "number" && typeof y.v === "number" ? x.v - y.v : String(x.v).localeCompare(String(y.v));
                     return c * rtsSort.d || x.i - y.i;
-                  }).map((x) => x.t);
+                  }).map((x) => x.t)
+                    // orders run together (lib/runTogether.ts) sit side by side, under the first of them
+                    .reduce((acc: (typeof list)[number][], t, _i, arr) => { if (acc.includes(t)) return acc; acc.push(t); if (t.job.run) for (const m of arr) if (m !== t && m.job.run === t.job.run && m.need.type === t.need.type && !acc.includes(m)) acc.push(m); return acc; }, []);
                   const who = (m: Machine) => crewOf(m)?.leader || shortName(m), dayW = (d: string) => (d === today ? "Today" : dayLbl(d).split(",")[0]);
                   return (trayAll ? byDue : byDue.slice(0, 8)).map((t) => { const k = t.job.key + t.need.type, open = pickOpen === k, late = isLate(t), pk = picks[k];
                     const from = t.job.prod && t.job.prod > today ? t.job.prod : today, days: string[] = []; for (let d = from, g = 0; days.length < 6 && g < 21; g++, d = addDay(d, 1)) if (machines.some((m) => shiftOn(m, d))) days.push(d);
@@ -3280,7 +3282,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                         const target = pk ? { m: machines.find((m) => m.id === pk.m), d: pk.d } : t.sug ? { m: t.sug.machine, d: t.sug.day } : null;
                         return <>
                       <div className="msr-1">{tn(null, <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}</div>
-                      <div className="msr-2"><b>{t.job.customer ? t.job.name || t.need.label : t.job.name}</b>{t.job.issue || t.job.onHold ? flags(t.job) : null}{(() => { const ms = missed.get(t.job.key + ":" + t.need.type); return ms ? <em className="mjx-tag hold" title={`Booked on ${dayLbl(ms.day)} and never started: book it again and the old booking goes`}>Missed · {dayW(ms.day)}</em> : null; })()}<small data-notranslate>{t.job.customer ? `${t.job.customer} · ` : ""}{t.need.qty.toLocaleString()} pcs</small></div>
+                      <div className="msr-2"><b>{t.job.customer ? t.job.name || t.need.label : t.job.name}</b>{t.job.run && (() => { const mates = list.filter((m) => m !== t && m.job.run === t.job.run && m.need.type === t.need.type); return mates.length ? <em className="mjx-tag rtg-tag" title="Separate orders that print in one run (Run together, on the order's Job details & type)">Runs with {mates.map((m) => `#${m.job.number}`).join(", ")}</em> : null; })()}{t.job.issue || t.job.onHold ? flags(t.job) : null}{(() => { const ms = missed.get(t.job.key + ":" + t.need.type); return ms ? <em className="mjx-tag hold" title={`Booked on ${dayLbl(ms.day)} and never started: book it again and the old booking goes`}>Missed · {dayW(ms.day)}</em> : null; })()}<small data-notranslate>{t.job.customer ? `${t.job.customer} · ` : ""}{t.need.qty.toLocaleString()} pcs</small></div>
                       <div className={"msr-due" + (late ? " late" : "")}>{t.job.due ? `${dayShort(t.job.due)}${late ? " · late" : ""}` : "No date"}</div>
                       <div className="msr-gd">{gd ? <><GoodsTee k={gd.k} t={gd.t} /><span>{short}</span></> : <span className="faint">—</span>}</div>
                       <div className="msr-rec">
