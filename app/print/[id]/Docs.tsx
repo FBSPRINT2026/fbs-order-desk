@@ -188,7 +188,162 @@ type WoProps = DocData & { notes: string; shopNotes: { tag: string; body: string
  * Work order: Simple), matched by the words in the job's name like every training, never a customer named in code.
  */
 export function WorkOrderDoc(p0: WoProps) {
-  return p0.simple ? <CartWorkOrder {...p0} /> : <FullWorkOrder {...p0} />;
+  if (p0.simple) return <CartWorkOrder {...p0} />;
+  const p = withSewing(p0), vp = versionPlan(p);
+  return vp ? <VersionWorkOrder p={p} vp={vp} /> : <FullWorkOrder {...p0} />;
+}
+/** the order as the work order shows it: each embroidered print with the sew file it sews (its logo's when it has none
+ *  of its own), each needle on the thread we really run, ghost lines left off */
+function withSewing<T extends DocData>(p0: T): T {
+  return { ...p0, groups: p0.groups.map((g) => ({ ...g, lines: printedLines(g.lines), imprints: (g.imprints || []).map((im) => withSewThreads(withLiveSew(withSewFile(im, im.design_id ? p0.designs[im.design_id] : null, g.lines || []), im.design_id ? p0.designs[im.design_id] : null))) })) };
+}
+
+/**
+ * The work order by logo version (Nov 17 2026, Amanda on #40405: "an image on the top where it's just big enough to
+ * read… the imprint card to the right… the threads and all that… maroon with white on one page, and then separate it
+ * into left and right. And then on the next page, do another"). For an order whose every group is one print of the
+ * same logo, run in two or more of its versions (white text on dark garments, black text on light ones): a page per
+ * version, its picture and its card on top, its garments under it by the spot they're sewn on, wherever they sit in
+ * the order's groups; then each version's close-up. Any other order keeps the full work order.
+ */
+type VGarment = { gi: number; l: Group["lines"][number]; spot: string };
+type Version = { key: string; name: string; letter: string; d: Imprint; des: Design; gi: number; di: number; items: VGarment[] };
+function versionPlan(p: DocData): Version[] | null {
+  const gs = p.groups.filter((g) => g.lines.some((l) => lineQty(l) > 0));
+  if (!gs.length || gs.some((g) => (g.imprints || []).length !== 1)) return null;
+  const ids = new Set(gs.map((g) => g.imprints[0].design_id || ""));
+  if (ids.size !== 1 || ids.has("")) return null;
+  const des = p.designs[[...ids][0]];
+  if (!des || gs.some((g) => { const d = g.imprints[0]; return !!(d.supplied || d.visualOnly || d.custSeps); })) return null;
+  const k = (x: string) => (x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const by = new Map<string, Version>();
+  p.groups.forEach((g, gi) => {
+    const d0 = g.imprints?.[0];
+    if (!d0) return;
+    for (const l of g.lines) {
+      if (lineQty(l) <= 0) continue;
+      const cw = colorwayOnColor(d0, des, l.color || "")?.name || d0.colorway || "";
+      let v = by.get(k(cw));
+      if (!v) { v = { key: k(cw), name: cw, letter: cw ? cwLetter(des, { name: cw }) || "" : "", d: printOnColor(d0, des, l.color || ""), des, gi, di: 0, items: [] }; by.set(v.key, v); }
+      v.items.push({ gi, l, spot: spotOf(d0, l) || d0.location || "" });
+    }
+  });
+  if (by.size < 2) return null;
+  const vs = [...by.values()];
+  // in each version, its garments by spot, the spots in the order they first come
+  for (const v of vs) { const order = [...new Set(v.items.map((x) => x.spot))]; v.items.sort((a, b) => order.indexOf(a.spot) - order.indexOf(b.spot)); }
+  // the version with the most pieces first
+  return vs.sort((a, b) => b.items.reduce((n, x) => n + lineQty(x.l), 0) - a.items.reduce((n, x) => n + lineQty(x.l), 0) || a.letter.localeCompare(b.letter));
+}
+function VersionWorkOrder({ p, vp }: { p: WoProps; vp: Version[] }) {
+  const { o, cust, groups } = p;
+  const who = [cust.company, cust.name && cust.name !== cust.company ? cust.name : "", o.po_number ? `PO ${o.po_number}` : ""].filter(Boolean) as string[];
+  const footL = `#${o.number} ${o.nickname}${cust.company || cust.name ? ` · ${cust.company || cust.name}` : ""}`;
+  const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
+  const dueSub = [o.production_date ? `Print ${day(o.production_date, { weekday: "short", month: "short", day: "numeric" })}` : "", DELIVERY[o.delivery_method] || "Pickup"].filter(Boolean).join(" · ");
+  const pcs = (xs: VGarment[]) => xs.reduce((a, x) => a + lineQty(x.l), 0);
+  // the order's notes, once, under the last version's garments (a note that only repeats the ship method dropped)
+  const shipM = (o.ship_method || "").trim().toLowerCase();
+  const SHIP = /^\s*ship(ping)?\s*(via|method|by)?:?\s*/i;
+  const notes = [
+    (p.notes || "").split("\n").filter((ln) => !(shipM && SHIP.test(ln) && ln.toLowerCase().replace(SHIP, "").replace(/[.\s]+$/, "") === shipM)).join("\n").replace(/\n{3,}/g, "\n\n").trim(),
+    o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to.split(/\s*\n+\s*/).filter(Boolean).join(", ")}${o.ship_method || isThirdParty(o) ? ` (${[o.ship_method, isThirdParty(o) ? thirdPartyLabel(o.third_party, true) : ""].filter(Boolean).join(", ")})` : ""}` : "",
+  ].filter(Boolean).join("\n\n");
+  const rules = p.cust.brand_print?.rules || [];
+  const hasNotes = !!(notes || rules.length || p.shopNotes.length);
+  const notesH = hasNotes ? 0.5 + notes.split("\n").reduce((n, ln) => n + Math.max(1, Math.ceil(ln.length / 105)), 0) * 0.19 + (rules.length ? 0.25 : 0) + p.shopNotes.length * 0.3 : 0;
+  // each version's pages: the picture and card on the first, its garments by spot as many pages as they take
+  const plans = vp.map((v, vi) => {
+    const last = vi === vp.length - 1;
+    return pageSplit(v.items, (x) => compactH(groups[x.gi], x.l), (x, prev) => (!prev || prev.spot !== x.spot ? 0.45 : 0), WO_ROOM - 1.15 - 2.35 - 0.45 - (last ? notesH : 0), WO_ROOM - 0.75 - 0.45 - (last ? notesH : 0));
+  });
+  const nV = plans.reduce((a, x) => a + x.length, 0), total = nV + Math.ceil(vp.length / 2);
+  const starts: number[] = [];
+  plans.reduce((a, x, i) => { starts[i] = a; return a + x.length; }, 1);
+  const cuPage = (vi: number) => nV + 1 + Math.floor(vi / 2);
+  const qr = qrSvg(jobLink(o.number), 2).svg;
+  const light = (l: Group["lines"][number]) => isLightColor(l.color, p.settings.wholesale);
+  const colorsOf = (v: Version) => [...new Set(v.items.map((y) => y.l.color))].join(", ");
+  const cu = (v: Version, vi: number, half: boolean) => <CloseUp key={v.key} half={half} d={v.d} di={v.di} n={1} p={p} gi={v.gi} allLight={v.items.every((x) => light(x.l))} colors={colorsOf(v)} qty={pcs(v.items)} page={cuPage(vi)} total={total} footL={footL} variant={v.name ? { color: colorsOf(v), swap: {}, cw: v.name } : undefined} />;
+  return (
+    <>
+      <WoFit />
+      {vp.map((v, vi) => plans[vi].map((items, pi) => {
+        const firstPage = pi === 0, d = v.d, sz = printSize(d, v.des), th = inkNames(d.inks);
+        const spots = [...new Set(v.items.map((x) => x.spot))];
+        const label = `${v.letter ? `${v.letter} · ` : ""}${v.name || "As printed"}`;
+        const vLines = v.items.map((x) => x.l);
+        const onWhat = vLines.every(light) ? "Light garments" : vLines.every((l) => !light(l)) ? "Dark garments" : "";
+        const last = vi === vp.length - 1 && pi === plans[vi].length - 1;
+        // its garments by spot: a heading where a spot starts (again at the top of a continued page)
+        const blocks: VGarment[][] = [];
+        for (const x of items) { const b = blocks[blocks.length - 1]; if (b && b[0].spot === x.spot) b.push(x); else blocks.push([x]); }
+        return (
+          <section className="sheet wo1 wo-ver" key={`${v.key}:${pi}`}>
+            <div className="wv-in">
+              {firstPage ? <>
+                <div className="w2-top">
+                  <div className="w2-t">
+                    <div className="lbl">Work order · #{o.number} · {label}{onWhat ? ` · ${onWhat.toLowerCase()}` : ""}</div>
+                    <h1 className="disp">{o.nickname || "Untitled job"}</h1>
+                    {who.length > 0 && <div className="w2-who"><b>{who[0]}</b>{who.slice(1).map((x) => <span key={x} className="nw"> · {x}</span>)}</div>}
+                  </div>
+                  <div className="w2-due"><span className="lbl">In hands</span><b className="disp">{due || "NOT SET"}</b>{dueSub && <small>{dueSub}</small>}</div>
+                  <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /><small>Scan: setup, notes, photos, time</small></div>
+                </div>
+                {(o.rush || o.priority || p.printavo || groups.some((_g, gi) => p.c.groups[gi]?.wholesale)) && <div className="flags">
+                  {o.rush && <span className="flag rush">RUSH</span>}
+                  {o.priority && <span className="flag prio">HIGH PRIORITY{o.priority_note ? ` · ${o.priority_note.toUpperCase()}` : ""}</span>}
+                  {groups.some((_g, gi) => p.c.groups[gi]?.wholesale) && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
+                  {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}
+                </div>}
+                {/* the logo big enough to read, its card beside it */}
+                <div className="wv-hero">
+                  <div className="wv-art"><PrintThumb d={v.des} url={printArtUrl(p.designUrls, v.des.id, d)} print={d} lines={vLines} /><span>{onWhat || "On its garments"} · as sewn{sz.label ? `, ${sz.label}` : ""}</span></div>
+                  <div className="wo-pc">
+                    <div className="h"><b className="disp">{label.toUpperCase()}</b><span>{pcs(v.items)} pcs · close-up p. {cuPage(vi)}</span></div>
+                    <div className="kv">
+                      <i>Logo</i><span><b>D-{v.des.number} {v.des.name}</b></span>
+                      {onWhat && <><i>Goes on</i><span><b>{onWhat}</b></span></>}
+                      <i>Method</i><span>{methodLabel(d)} · <b>{colorsLabel(d)}</b></span>
+                      {d.emb?.file?.name && <><i>Sew file</i><span><b>{d.emb.file.name}</b></span></>}
+                      {th.length > 0 && <><i>{inkWord(d.method, th.length)}</i><span className="wv-th">{th.map((t) => <span key={t}><Swatch c={colorHex(t) || "#ccc"} /><b>{d.method === "embroidery" ? threadShort(t) : t}</b></span>)}</span></>}
+                      <i>Size</i><span>{sz.label ? <b>{sz.label}</b> : "—"} · {dropLabel(d).toLowerCase()}</span>
+                      {d.stitches ? <><i>Stitches</i><span>{d.stitches.toLocaleString()}</span></> : null}
+                      <i>Spots</i><span className="wv-th">{spots.map((s) => <span key={s}><b>{s || "Print"}</b> {pcs(v.items.filter((x) => x.spot === s))} pcs</span>)}</span>
+                      {d.emb?.backing && <><i>Backing</i><span>{d.emb.backing}</span></>}
+                    </div>
+                    {(d.confirm?.size || d.confirm?.ink) && <div className="warn">CONFIRM {[d.confirm.size && "SIZE", d.confirm.ink && (d.method === "embroidery" ? "THREAD" : "INK")].filter(Boolean).join(" & ")} BEFORE {d.method === "embroidery" ? "SEWING" : "PRINTING"}</div>}
+                  </div>
+                </div>
+              </> : <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">{label} · continued</div></div>}
+              {blocks.map((b, bi) => {
+                const all = v.items.filter((x) => x.spot === b[0].spot);
+                const cont = bi === 0 && !firstPage && plans[vi][pi - 1]?.some((x) => x.spot === b[0].spot);
+                return <Fragment key={b[0].l.id}>
+                  <div className="wv-loc"><b className="disp">{b[0].spot || "Print"}</b><span>{pcs(all)} pcs · {all.length} garment{all.length === 1 ? "" : "s"}{cont ? " · continued" : ""}</span></div>
+                  <div className="wo-cg wv-g">{b.map((x) => <CompactLine key={x.l.id} l={x.l} colorHexes={p.colorHexes} />)}</div>
+                </Fragment>;
+              })}
+              <div className="cnt2-by"><span>Counted in by <i /></span><span>Final count by <i /></span></div>
+              {last && hasNotes && <>
+                <h2>Notes</h2>
+                <div className="notes">{notes}
+                  {rules.length > 0 && <div className="sn"><b>BRAND RULES: </b>{rules.join(" · ")}</div>}
+                  {p.shopNotes.map((n, i) => <div className="sn" key={i}>{n.tag ? <b>{n.tag.toUpperCase()}: </b> : null}{n.body} <small>({n.by_name}, {new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })})</small></div>)}
+                </div>
+              </>}
+            </div>
+            <div className="foot"><span>{footL}</span><span>Page {starts[vi] + pi} of {total}{firstPage && vi === 0 ? ` · printed ${p.printed}` : ""}</span></div>
+          </section>
+        );
+      }))}
+      {/* each version's close-up, two a page */}
+      {vp.map((v, vi) => (vi % 2 ? null : vp[vi + 1]
+        ? <section key={"cu" + vi} className="sheet cu-pair">{cu(v, vi, true)}{cu(vp[vi + 1], vi, true)}<div className="foot"><span>{footL}</span><span>Page {cuPage(vi)} of {total}</span></div></section>
+        : <div key={"cu" + vi} style={{ display: "contents" }}>{cu(v, vi, false)}</div>))}
+    </>
+  );
 }
 function CartWorkOrder(p0: WoProps) {
   // each embroidered print with the sew file it sews, its logo's when it has none of its own (lib/brands.ts withSewFile),
