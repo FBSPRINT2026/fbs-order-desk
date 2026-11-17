@@ -43,7 +43,7 @@ export async function looksLikeSheet(data: ArrayBuffer): Promise<{ artPage: numb
     const doc = await openPdf(data.slice(0));
     if (doc.numPages < 2) return null;
     for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
-      const t = (await (await doc.getPage(n)).getTextContent()).items.map((i) => i.str || "").join(" ");
+      const t = (await (await doc.getPage(n)).getTextContent()).items.map((i) => (i.str || "").normalize("NFKC")).join(" ");
       if (SHEET_WORDS.test(t)) return { artPage: n, mockupPage: n === 1 ? 2 : 1 };
     }
   } catch { /* not readable */ }

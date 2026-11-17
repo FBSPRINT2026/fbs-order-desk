@@ -180,7 +180,7 @@ async function nearBox(buf: ArrayBuffer, ext: string, page: number, box: Box): P
   const doc = await pdfjs.getDocument({ data: buf.slice(0) }).promise, pg = await doc.getPage(page), vp = pg.getViewport({ scale: 1 });
   const tc = await pg.getTextContent();
   const cx = (box[0] + box[2]) / 2, cy = (box[1] + box[3]) / 2;
-  const near = tc.items.filter((it) => it.str?.trim() && it.transform).map((it) => ({ t: it.str!, d: Math.hypot(it.transform![4] / vp.width - cx, 1 - it.transform![5] / vp.height - cy) })).sort((a, b) => a.d - b.d).slice(0, 12);
+  const near = tc.items.filter((it) => it.str?.trim() && it.transform).map((it) => ({ t: it.str!.normalize("NFKC"), d: Math.hypot(it.transform![4] / vp.width - cx, 1 - it.transform![5] / vp.height - cy) })).sort((a, b) => a.d - b.d).slice(0, 12);
   const text = near.filter((x) => x.d < 0.35).map((x) => x.t).join(" ");
   const m = /(\d+(?:\.\d+)?)\s*(?:"|”|''|in\b|inch(?:es)?)\s*(?:wide|w\b|width)?/i.exec(text);
   const wIn = m ? +m[1] : undefined;

@@ -43,7 +43,7 @@ export async function pdfText(buf: ArrayBuffer, maxPages = 6): Promise<string> {
   const out: string[] = [];
   for (let n = 1; n <= Math.min(doc.numPages, maxPages); n++) {
     const pg = await doc.getPage(n) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
-    out.push((await pg.getTextContent()).items.map((x) => x.str || "").join(" "));
+    out.push((await pg.getTextContent()).items.map((x) => (x.str || "").normalize("NFKC")).join(" "));
   }
   return out.join(" ").replace(/\s+/g, " ");
 }
@@ -59,7 +59,7 @@ export async function sizesOnSheet(buf: ArrayBuffer): Promise<Partial<Record<"fr
   const out: Partial<Record<"front" | "back" | "left sleeve" | "right sleeve", SheetSide>> = {};
   for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
     const pg = await doc.getPage(n) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
-    const t = (await pg.getTextContent()).items.map((x) => x.str || "").join(" ").replace(/\s+/g, " ");
+    const t = (await pg.getTextContent()).items.map((x) => (x.str || "").normalize("NFKC")).join(" ").replace(/\s+/g, " ");
     // our sized proof, known by what's printed on every one (Oct 23, Nick: yes, recognize it by that, not only by how its
     // size is written): a side with its inks but no size it can read is still ours (w 0: the art pulled off it gives it)
     // or by the page itself (Oct 23, Nick: "visually… the whole bottom third of the sheet is the same on every one"): the
@@ -752,7 +752,7 @@ export async function proofNotes(buf: ArrayBuffer): Promise<{ where: string; w?:
     const doc = await openDoc(buf), out: { where: string; w?: number; h?: number; colors: string[] }[] = [];
     for (let n = 1; n <= Math.min(doc.numPages, 4); n++) {
       const pg = await doc.getPage(n) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
-      const t = (await pg.getTextContent()).items.map((x) => x.str || "").join(" ").replace(/\s+/g, " ");
+      const t = (await pg.getTextContent()).items.map((x) => (x.str || "").normalize("NFKC")).join(" ").replace(/\s+/g, " ");
       const re = /(Front|Back|Left Sleeve|Right Sleeve|Sleeve)\s*Imprint\s*SIZE:?\s*W\s*([\d.]+)\D{0,4}H\s*([\d.]+)\D{0,3}\s*COLORS?:?\s*((?:\d+\.\s*[A-Za-z0-9#&/ -]+?\s*)+?)(?=(?:Front|Back|Left|Right|Sleeve|STANDARD|The above|$))/gi;
       for (const m of t.matchAll(re)) {
         const colors = [...m[4].matchAll(/\d+\.\s*([A-Za-z0-9#&/ -]+?)(?=\s*\d+\.|$)/g)].map((x) => x[1].trim()).filter((c) => c && !/^NA$/i.test(c));
@@ -770,7 +770,7 @@ export async function proofNotes(buf: ArrayBuffer): Promise<{ where: string; w?:
 export async function pmsOnPage(buf: ArrayBuffer): Promise<string[]> {
   try {
     const page = await openPage(buf) as unknown as { getTextContent: () => Promise<{ items: { str?: string }[] }> };
-    const t = (await page.getTextContent()).items.map((x) => x.str || "").join(" ");
+    const t = (await page.getTextContent()).items.map((x) => (x.str || "").normalize("NFKC")).join(" ");
     const out: string[] = [];
     for (const m of t.matchAll(/(?:PMS|Pantone)\s*#?\s*(\d{3,4})\s*-?\s*([CU])?\b/gi)) { const n = `PMS ${m[1]} ${(m[2] || "C").toUpperCase()}`; if (!out.includes(n)) out.push(n); }
     return out;
@@ -852,7 +852,7 @@ export async function artShape(blob: Blob): Promise<{ ratio: number } | null> {
 /** a page of paperwork, not art (lib/paperwork.ts) */
 export async function isPaperworkPage(page: unknown): Promise<boolean> {
   const tc = await (page as { getTextContent: () => Promise<{ items: { str?: string }[] }> }).getTextContent();
-  return looksLikePaperwork(tc.items.map((i) => i.str || "").join(" "));
+  return looksLikePaperwork(tc.items.map((i) => (i.str || "").normalize("NFKC")).join(" "));
 }
 
 /**

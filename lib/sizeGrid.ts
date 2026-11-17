@@ -129,5 +129,5 @@ export function sizeRowsText(rows: RowGarment[]): string {
 /** A PDF's words in reading order, a line at a time (Nov 16 2026: pdf.js gives some POs every quantity first, then every
  * description, so "5 SMALL" came apart and the paperwork check read the wrong sizes) */
 export function readingText(items: GridItem[]): string {
-  return lines(items).map((l) => l.map((x) => x.str.trim()).filter(Boolean).join(" ")).filter(Boolean).join("\n");
+  return lines(items).map((l) => l.map((x) => x.str.normalize("NFKC").trim()).filter(Boolean).join(" ")).filter(Boolean).join("\n");
 }
