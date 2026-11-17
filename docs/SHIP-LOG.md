@@ -476,3 +476,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 17 3:10pm · 1.3.718 · Nick · Pre-production sample: a box first under Garments, its top line (Printed, Sent, Sample approved, Changes asked, Edit) then its garment as a normal row: sizes and price typed in
 - Nov 17 3:18pm · 1.3.719 · Nick · Work order: the pre-production sample boxed on top of the run's garments (the run prints the rest), a PRE-PRODUCTION SAMPLE stamp beside Customer supplied goods; no big SAMPLE FIRST banner
 - Nov 17 3:21pm · 1.3.720 · Nick · Quote/invoice: the pre-production sample laid out like the run's line (picture, sizes, decoration) with a Pre-production sample label, no box
+- Nov 17 3:38pm · 1.3.721 · Nick · Order Goods tab: Where the goods are is a panel on the right, the goods on the left

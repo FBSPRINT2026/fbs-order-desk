@@ -2322,10 +2322,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         {/* Messages: the job's emails and texts, the customer's portal, calls & notes */}
         {/* Goods: its own tab (Oct 29, Nick: "move the goods panel up into its own part of the toolbar… orders, art production,
             then goods, messages") */}
-        <div className="ot-one" hidden={tab !== "goods"}>
-          {o.status !== "request" && tab === "goods" && <GoodsGlance orderId={o.id} />}
+        {/* the goods on the left, Where the goods are in a panel on the right (Nick, Nov 17 2026: "it's a right side panel") */}
+        <div className="ed-grid" hidden={tab !== "goods"}>
+          <div className="stack">
           {o.status !== "request" ? <OrderGoodsPanel orderId={o.id} wholesale={o.price_type === "wholesale" && o.type === "invoice"} customerId={o.customer_id} groups={o.groups} thumbUrls={thumbUrls} onPrints={(ids, fn) => patch((d) => { for (const g of d.groups) for (const im of g.imprints) if (ids.includes(im.id)) fn(im); })} />
             : <div className="faint" style={{ padding: 20 }}>Goods are tracked once the request is accepted.</div>}
+
+          </div>
+          <aside className="ed-aside">
+            {o.status !== "request" && tab === "goods" && <GoodsGlance orderId={o.id} />}
+          </aside>
         </div>
         <div className="ed-grid" hidden={tab !== "msg"}>
           <div className="stack">
