@@ -26,6 +26,26 @@ import { allRows } from "@/lib/readAll";
  * Read from the records every page already uses: orders, mockups, proofs, sewouts, the order's history, and the AI's
  * draft orders.
  */
+/** the mockups made and not sent yet: each group's newest saved mockup (a group saved ten times is one picture, the last),
+ *  not a draft or shelved, not in the proof out now, and made after the last time anything went to the customer (Nov 16,
+ *  Nick: #50069, #50100, #50102 and #50108 sat in Processing after their quotes went out: every older save of a group's
+ *  mockup, and pictures sent with the quote unticked, counted as "made, not sent") */
+export function unsentMockups<M extends { id: string; group_id: string | null; created_at: string; draft?: boolean | null; shelved_at?: string | null }>(mks: M[], liveProofs: { mockup_id: string | null }[], lastSentAt: string): M[] {
+  // a group's latest save: its newest picture and any saved with it (a color change saves one per colorway, and only one
+  // of them goes in the proof: #50100's Super White version of Group 2)
+  const byGroup = new Map<string, M[]>();
+  for (const m of mks) { if (m.draft || m.shelved_at) continue; const k = m.group_id || m.id; byGroup.set(k, [...(byGroup.get(k) || []), m]); }
+  const out: M[] = [];
+  for (const ms of byGroup.values()) {
+    const top = ms.reduce((a, m) => (m.created_at > a ? m.created_at : a), "");
+    const save = ms.filter((m) => Date.parse(top) - Date.parse(m.created_at) <= 15000);
+    if (save.some((m) => liveProofs.some((p) => p.mockup_id === m.id))) continue;
+    if (lastSentAt && top <= lastSentAt) continue;
+    out.push(...save);
+  }
+  return out;
+}
+
 export type Step = "leads" | "requests" | "website" | "ready" | "sent" | "changes" | "sewouts" | "goods_order" | "approved" | "declined";
 export type TrackState = "needed" | "made" | "sent" | "changes" | "done";
 export type Track = { k: "art" | "sewout" | "numbers" | "goods"; state: TrackState; label: string; note?: string };
@@ -87,7 +107,7 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
   const ids = orders.map((o) => o.id);
   tm("main");
   const [mks, pfs, sws, evs, ogs, bos] = await Promise.all([
-    inChunks<{ id: string; order_id: string; group_id: string | null }>(ids, (p) => admin.from("mockups").select("id, order_id, group_id").in("order_id", p).is("archived_at", null)),
+    inChunks<{ id: string; order_id: string; group_id: string | null; created_at: string; draft?: boolean | null; shelved_at?: string | null }>(ids, (p) => admin.from("mockups").select("id, order_id, group_id, created_at, draft, shelved_at").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; version: number; status: string; mockup_id: string | null; sent_at: string | null; decided_at: string | null; customer_comment: string; archived_at: string | null }>(ids, (p) => admin.from("proofs").select("order_id, version, status, mockup_id, sent_at, decided_at, customer_comment, archived_at").in("order_id", p).not("version", "is", null)),
     inChunks<{ id: string; order_id: string; imprint_id: string; status: string; sent_at: string | null; customer_comment: string; created_at: string }>(ids, (p) => admin.from("sewouts").select("id, order_id, imprint_id, status, sent_at, customer_comment, created_at").in("order_id", p).is("archived_at", null)),
     inChunks<{ order_id: string; kind: string; detail: string; created_at: string }>(ids, (p) => admin.from("order_events").select("order_id, kind, detail, created_at").in("order_id", p).in("kind", ["quote_declined", "quote_changes", "sent", "approved", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at", { ascending: false })),
@@ -145,7 +165,8 @@ export async function loadJobCenter(admin: SupabaseClient): Promise<JobItem[]> {
     // a mockup not sent yet is sales' to send only while it's a quote: once the order's approved, a mockup made after (a
     // visual mockup for a reorder production confirms, a production mockup) isn't for the customer (Nov 9, Nick: #40488
     // "there's nothing for the sales team to do, so this one should just move off the list and be marked approved")
-    const unsent = quoting && mine.length > 0 && mine.some((m) => !cur.some((p) => p.mockup_id === m.id));
+    const outAt = evs.find((e) => e.order_id === o.id && (e.kind === "sent" || e.kind === "proofs_requested"))?.created_at || "";
+    const unsent = quoting && unsentMockups(mine, cur, outAt).length > 0;
     const hasPrints = gs.some((g) => (g.imprints || []).length > 0);
     if (unsent) tracks.push({ k: "art", state: "made", label: `Mockup v${Math.max(0, ...all.map((p) => p.version)) + 1} made` });
     else if (live.length) {
@@ -287,7 +308,7 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
   const [{ data: s }, { data: pf }, { data: mk }, { data: sw }, { data: ev }, { data: ms }, { data: lk }] = await Promise.all([
     admin.from("settings").select("data").eq("id", 1).maybeSingle(),
     admin.from("proofs").select("version, status, file_path, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, archived_at, mockup_id, created_at").eq("order_id", orderId).not("version", "is", null).order("created_at"),
-    admin.from("mockups").select("id, file_path, group_id").eq("order_id", orderId).is("archived_at", null).order("created_at"),
+    admin.from("mockups").select("id, file_path, group_id, created_at, draft, shelved_at").eq("order_id", orderId).is("archived_at", null).order("created_at"),
     admin.from("sewouts").select("id, imprint_id, version, status, photo_path, sent_at, sent_to, viewed_at, view_count, decided_at, decided_name, customer_comment, created_at").eq("order_id", orderId).is("archived_at", null).order("version", { ascending: false }),
     admin.from("order_events").select("kind, detail, actor, created_at").eq("order_id", orderId).in("kind", ["sent", "proofs_requested", "sewout_sent", "quote_declined", "quote_changes", "approved", "invoice_sent", "invoice_changes", "invoice_approved"]).order("created_at"),
     admin.from("messages").select("id, author_type, author_name, author_email, body, created_at, reason, ai, handled_at").is("hidden_at", null).eq("order_id", orderId).eq("topic", "").order("created_at", { ascending: false }).limit(12),
@@ -297,7 +318,7 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
   const gs = orderGroups(o);
   type P = { version: number; status: string; file_path: string; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string; archived_at: string | null; mockup_id: string | null };
   type S = { id: string; imprint_id: string; version: number; status: string; photo_path: string; sent_at: string | null; sent_to: string | null; viewed_at: string | null; view_count: number; decided_at: string | null; decided_name: string | null; customer_comment: string };
-  const ps = (pf || []) as P[], mks = (mk || []) as { id: string; file_path: string; group_id: string | null }[], sws = (sw || []) as S[];
+  const ps = (pf || []) as P[], mks = (mk || []) as { id: string; file_path: string; group_id: string | null; created_at: string; draft?: boolean | null; shelved_at?: string | null }[], sws = (sw || []) as S[];
   const evs = (ev || []) as { kind: string; detail: string; actor: string; created_at: string }[];
   // every picture, signed once
   const paths = [...new Set([...ps.map((p) => p.file_path), ...mks.map((m) => m.file_path), ...sws.map((x) => x.photo_path)].filter(Boolean))];
@@ -318,9 +339,11 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
     return { v, state, sentAt: r0.sent_at, sentTo: r0.sent_to, viewedAt: rs.map((p) => p.viewed_at).filter(Boolean).sort()[0] || null, views: Math.max(0, ...rs.map((p) => p.view_count || 0)),
       decidedAt: r0.decided_at, decidedName: r0.decided_name, comment: rs.map((p) => p.customer_comment).find(Boolean) || "", pics: pics(rs.map((p) => p.file_path)) };
   });
-  const unsent = quoting && mks.length > 0 && mks.some((m) => !live.some((p) => p.mockup_id === m.id));
+  const sentAt = [...evs].reverse().find((e) => e.kind === "sent" || e.kind === "proofs_requested")?.created_at || "";
+  const fresh = quoting ? unsentMockups(mks, live, sentAt) : [];
+  const unsent = fresh.length > 0;
   const hasPrints = gs.some((g) => (g.imprints || []).length);
-  if (vs.length || unsent || (quoting && hasPrints)) pieces.push({ k: "art", state: unsent ? "made" : vs[0] ? (vs[0].state === "replaced" ? "done" : vs[0].state) : "needed", versions: vs, next: unsent ? pics(mks.map((m) => m.file_path)) : null, pdf: `/print/${orderId}?proof=1` });
+  if (vs.length || unsent || (quoting && hasPrints)) pieces.push({ k: "art", state: unsent ? "made" : vs[0] ? (vs[0].state === "replaced" ? "done" : vs[0].state) : "needed", versions: vs, next: unsent ? pics(fresh.map((m) => m.file_path)) : null, pdf: `/print/${orderId}?proof=1` });
   // each embroidered print's sew-out, or where it is in digitizing before there is one (lib/digitizeStatus.ts)
   const dIds = [...new Set(gs.flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id))))];
   const { data: dzs } = dIds.length ? await admin.from("designs").select("id, name, specs").in("id", dIds) : { data: [] };
