@@ -1799,7 +1799,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {accepting != null ? (
             <div className="req-accept">
               <label className="mk-f"><span>Message to them (goes to their Messages)</span><textarea rows={2} value={accepting} onChange={(e) => setAccepting(e.target.value)} /></label>
-              <div className="faint" style={{ fontSize: 12.5 }}>{acceptMode === "as_is" ? "Their mockup is the approved art: no proof. It goes to Waiting on goods, or In production if their goods are already checked in." : "You'll go to their mockup to change it. Then send the proof from the order with a note on what you changed; it waits on their OK."}</div>
+              <div className="faint" style={{ fontSize: 12.5 }}>{acceptMode === "as_is" ? "Their mockup is the approved art: no proof. It becomes an invoice at Approved, ready to book on the schedule." : "You'll go to their mockup to change it. Then send the proof from the order with a note on what you changed; it waits on their OK."}</div>
               <div className="row"><button type="button" className="btn primary" disabled={acceptBusy} onClick={accept}>{acceptBusy ? "Accepting…" : acceptMode === "as_is" ? "Accept as is & send message" : "Accept & change the art"}</button><button type="button" className="btn ghost" onClick={() => setAccepting(null)}>Cancel</button></div>
             </div>
           ) : (
