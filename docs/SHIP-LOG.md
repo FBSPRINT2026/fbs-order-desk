@@ -450,3 +450,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:12pm · 1.3.692 · Nick · Embroidery schedule cards: logos and stitches a piece, not one stitch count per chest spot
 - Nov 16 9:17pm · 1.3.693 · Nick · Order page: draw the order only once its customer and settings are loaded (no flash of list prices / no customer)
 - Nov 16 9:17pm · 1.3.694 · Nick · Color and location change dialogs: garment column wraps, no sideways scroll
+- Nov 16 9:34pm · 1.3.695 · Nick · Customer mockup PDFs: every page filed as its own picture; the same file sent twice filed once

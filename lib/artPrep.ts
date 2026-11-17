@@ -288,7 +288,15 @@ export async function vartFile(v: import("./svgVector").VArt, maxPx: number, nam
   } finally { URL.revokeObjectURL(url); }
 }
 
-export async function makePreview(file: File, maxPx = 2400): Promise<File | null> {
+/** how many pages a PDF (or PDF-compatible .ai) has; 1 when it can't be read */
+export async function pdfPageTotal(file: Blob): Promise<number> {
+  try {
+    const pdfjs = (await import(/* webpackIgnore: true */ PDFJS)) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<{ numPages: number }> } };
+    pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+    return (await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise).numPages || 1;
+  } catch { return 1; }
+}
+export async function makePreview(file: File, maxPx = 2400, /** a PDF's page (1 = the first) */ pageNo = 1): Promise<File | null> {
   const base = file.name.replace(/\.[^.]+$/, "") || "logo";
   try {
     // an embroidery file (Oct 28, Nick: "When I upload the EMB or the DST to the logo mockup creator… it's just giving a
@@ -311,13 +319,13 @@ export async function makePreview(file: File, maxPx = 2400): Promise<File | null
       try {
         const { parsePdf, browserInflate } = await import("./pdfVector");
         const v = await parsePdf(new Uint8Array(await file.arrayBuffer()), browserInflate);
-        if (v.distress?.length && v.shapes.length) return await vartFile(v, maxPx, `${base}.png`);
+        if (pageNo === 1 && v.distress?.length && v.shapes.length) return await vartFile(v, maxPx, `${base}.png`);
       } catch { /* drawn by pdf.js below */ }
       // Illustrator files are usually saved PDF-compatible, so the same reader works for most of them
       const pdfjs = (await import(/* webpackIgnore: true */ PDFJS)) as { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<{ getPage: (n: number) => Promise<{ getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: Record<string, unknown>) => { promise: Promise<void> } }> }> } };
       pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
       const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
-      const page = await doc.getPage(1);
+      const page = await doc.getPage(Math.max(1, Math.min(pageNo, (doc as unknown as { numPages?: number }).numPages || 1)));
       const v1 = page.getViewport({ scale: 1 });
       const scale = Math.min(maxPx > 2400 ? 12 : 6, maxPx / Math.max(v1.width, v1.height));
       const vp = page.getViewport({ scale });

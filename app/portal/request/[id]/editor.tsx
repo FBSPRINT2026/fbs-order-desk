@@ -164,7 +164,8 @@ export default function RequestEditor({ look = false, orderTypes = [], orderType
       const r = await saveOwnMockup({ path: t.path, name: f.name.replace(/\.[^.]+$/, ""), isImage: /^image\//.test(f.type) });
       if (!r.ok) throw new Error(r.error);
       if (r.url) setMUrls((u) => ({ ...u, [t.path]: r.url }));
-      patch((d) => { const g = d.groups[gi]; g.customerMockups = [...(g.customerMockups || []), { path: t.path, name: f.name }]; });
+      // the same file sent again (it looked like the first didn't take, #50094) replaces that one, never a second copy
+      patch((d) => { const g = d.groups[gi]; g.customerMockups = [...(g.customerMockups || []).filter((m) => m.name !== f.name), { path: t.path, name: f.name }]; });
     } catch (e) { setErr(e instanceof Error ? e.message : "Upload failed."); }
     setUpBusy("");
   }

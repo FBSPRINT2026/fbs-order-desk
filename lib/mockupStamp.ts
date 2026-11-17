@@ -1,10 +1,11 @@
 "use client";
-import { makePreview } from "./artPrep";
+import { makePreview, pdfPageTotal } from "./artPrep";
 
 /**
  * A customer's own mockup, kept in the job's Production files as a reference: the picture with "CUSTOMER SUPPLIED
  * MOCKUP" repeated across it in gray, so nobody mistakes it for our mockup (we remake it in the Mockup Creator so
- * the separations and print sizes come from our own). PDFs / AI / HEIC are drawn from their first page first.
+ * the separations and print sizes come from our own). PDFs / AI / HEIC are drawn as pictures, every page of a PDF its
+ * own picture (Nick, Nov 16 2026, #50094: a 2-page cart PDF showed only its first page, the OGIO jacket on page 2 never).
  */
 export const STAMP_TAG = "Customer mockup";
 const TEXT = "CUSTOMER SUPPLIED MOCKUP";
@@ -16,12 +17,12 @@ export function stampKey(path: string) {
   return h.toString(36);
 }
 /** the stamped file's name: "-l" since the stamp went very light (Oct 31); one stamped before is stamped again once */
-export const stampName = (path: string) => `custmockup-${stampKey(path)}-l.jpg`;
+export const stampName = (path: string, page = 1) => `custmockup-${stampKey(path)}${page > 1 ? `-p${page}` : ""}-l.jpg`;
 
-export async function stampCustomerMockup(blob: Blob, name: string): Promise<File | null> {
+export async function stampCustomerMockup(blob: Blob, name: string, page = 1): Promise<File | null> {
   let src: Blob = blob;
   if (!/^image\/(png|jpe?g|webp|gif|bmp)/i.test(blob.type) && !/\.(png|jpe?g|webp|gif|bmp)$/i.test(name)) {
-    const prev = await makePreview(new File([blob], name, { type: blob.type }));
+    const prev = await makePreview(new File([blob], name, { type: blob.type }), 2400, page);
     if (!prev) return null;
     src = prev;
   }
@@ -77,23 +78,39 @@ export async function stampOrderMockups(sb: SB, orderId: string, groups: { custo
     await fetch("/api/jobs/files", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: f.id, archived: true }) }).catch(() => null);
   }
   const todo = groups.flatMap((g) => g.customerMockups || []);
+  // the same file sent twice (a customer who uploaded it again, Nov 16 2026, #50094) is filed once: its bytes decide
+  const seenBytes = new Set<string>();
+  const sig = async (b: Blob) => { try { const h = new Uint8Array(await crypto.subtle.digest("SHA-256", await b.arrayBuffer())); return `${b.size}:${[...h.slice(0, 12)].join(".")}`; } catch { return `${b.size}`; } };
   for (const m of todo) {
     const key = stampKey(m.path);
-    if ([...have].some((p) => p.includes(`custmockup-${key}-l`))) continue;
+    const isPdf = /\.(pdf|ai)$/i.test(m.path);
+    const done1 = [...have].some((p) => p.includes(`custmockup-${key}-l`));
+    // a PDF stamped before this change has its first page only: its other pages are added now
+    if (done1 && (!isPdf || [...have].some((p) => p.includes(`custmockup-${key}-p`)))) continue;
     // stamped before in the darker gray: the same file listing gets the light one (the old picture stays in storage)
     const old = [...have].find((p) => p.includes(`custmockup-${key}.jpg`));
     const { data: blob } = await sb.storage.from("proofs").download(m.path);
     if (!blob) continue;
-    const f = await stampCustomerMockup(blob, m.name || m.path.split("/").pop() || "mockup").catch(() => null);
-    if (!f) continue;
-    const path = `art/${orderId}/${stampName(m.path)}`;
-    const up = await sb.storage.from("proofs").upload(path, f, { contentType: "image/jpeg", upsert: true });
-    if (up.error) continue;
+    const s = await sig(blob);
+    if (seenBytes.has(s)) continue;
+    seenBytes.add(s);
+    // an earlier copy of these same bytes already filed (another upload of it): nothing more to add
     const base = (m.name || "mockup").replace(/\.[^.]+$/, "");
-    const { error } = old
-      ? await sb.from("art_files").update({ file_path: path }).eq("order_id", orderId).eq("file_path", old)
-      : await sb.from("art_files").insert({ order_id: orderId, name: `Customer supplied mockup - ${base}.jpg`, file_path: path, file_type: "image/jpeg", category: "customer_mockup" });
-    if (!error) { have.add(path); if (old) have.delete(old); added++; }
+    const pages = isPdf ? Math.min(20, await pdfPageTotal(blob)) : 1;
+    if (done1 && pages < 2) continue;
+    for (let pg = done1 ? 2 : 1; pg <= pages; pg++) {
+      const f = await stampCustomerMockup(blob, m.name || m.path.split("/").pop() || "mockup", pg).catch(() => null);
+      if (!f) continue;
+      const path = `art/${orderId}/${stampName(m.path, pg)}`;
+      if (have.has(path)) continue;
+      const up = await sb.storage.from("proofs").upload(path, f, { contentType: "image/jpeg", upsert: true });
+      if (up.error) continue;
+      const nm = `Customer supplied mockup - ${base}${pages > 1 ? ` (page ${pg} of ${pages})` : ""}.jpg`;
+      const { error } = pg === 1 && old
+        ? await sb.from("art_files").update({ file_path: path }).eq("order_id", orderId).eq("file_path", old)
+        : await sb.from("art_files").insert({ order_id: orderId, name: nm, file_path: path, file_type: "image/jpeg", category: "customer_mockup" });
+      if (!error) { have.add(path); if (pg === 1 && old) have.delete(old); added++; }
+    }
   }
   return added;
 }
