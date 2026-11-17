@@ -978,3 +978,15 @@ export const ssImg = (path: string) => (!path ? "" : path.startsWith("store:") ?
 /** a garment with long sleeves, by its words: long sleeve tees, sweatshirts, hoodies, fleece, jackets, quarter zips */
 export const isLongSleeve = (text: string) => /long sleeve|\bl\/s\b|\bls\b|hood|sweat|fleece|crew ?neck|jacket|quarter|1\/4|\bzip|pullover|thermal|soft ?shell/i.test(text) && !/short sleeve|\bs\/s\b|tank|sleeveless|vest/i.test(text);
 export const isShortSleeveTee = (text: string) => /\b(tee|t-?shirt|short sleeve)\b/i.test(text) && !/long sleeve|\bls\b|hood|sweat|fleece|crew ?neck sweat|jacket|quarter|1\/4|zip|tank|sleeveless|muscle|raglan 3\/4|3\/4 sleeve|3\/4/i.test(text) && !(/raglan|baseball/i.test(text) && !/short sleeve|s\/s\b/i.test(text));
+
+/**
+ * The style a garment is drawn as: a tall cut (PC90HT, PC55LST, 60339T, an "LT" style) of a style that's also on the group
+ * looks the same on a mockup, so it's drawn once, as the regular style (Nick, Nov 17 2026: #50051 printed 8 mockups for 4
+ * looks, every hoodie and long sleeve twice for its tall). Anything else is its own look.
+ */
+export function lookStyle(style: string, styles: string[]): string {
+  const st = (style || "").trim().toUpperCase();
+  const have = new Set(styles.map((x) => (x || "").trim().toUpperCase()));
+  for (const re of [/LT$/, /T$/]) if (re.test(st)) { const b = st.replace(re, ""); if (b.length >= 2 && have.has(b)) return b; }
+  return st;
+}

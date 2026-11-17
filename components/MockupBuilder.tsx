@@ -74,7 +74,7 @@ import { rememberEmbroidery } from "@/lib/embroideryLast";
 import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
-import { registerAreas, isCustomSpot, setHeadwearSpots, LOCATION_SPOTS } from "@/lib/mockup";
+import { registerAreas, isCustomSpot, setHeadwearSpots, LOCATION_SPOTS, lookStyle } from "@/lib/mockup";
 import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, measureCap, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, isLongSleeve, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
 import { fillRun, bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
@@ -684,7 +684,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
           const pcsOf = (c: string) => g.lines.filter((x) => (x.color || "").trim().toLowerCase() === (c || "").trim().toLowerCase()).reduce((n, x) => n + Object.values(x.sizes || {}).reduce((a: number, q) => a + (+(q || 0) || 0), 0), 0);
           const byPcs = logoOnly && !g.imprints.some((x) => Object.keys(x.inkBy || {}).length) ? [...g.lines].sort((a, b) => pcsOf(b.color) - pcsOf(a.color)) : g.lines;
           setMockBg(logoOnly && g.mockupBg && /^#[0-9a-f]{6}$/i.test(g.mockupBg) ? g.mockupBg.toLowerCase() : "");
-          setLines(byPcs.filter((l) => l.style || l.color).filter((l) => { const k = `${(l.style || "").trim().toLowerCase()}|${inkKeyOf(l).trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}), ...(l.shade ? { shade: l.shade } : {}), ...(l.cw ? { cw: l.cw } : {}) })));
+          const stylesHere = g.lines.map((x) => x.style || "");
+          // a tall of a style on the group is the same look: drawn once (lookStyle, #50051)
+          setLines(byPcs.filter((l) => l.style || l.color).filter((l) => { const k = `${lookStyle(l.style || "", stylesHere).toLowerCase()}|${inkKeyOf(l).trim().toLowerCase()}`; if (seenSC.has(k)) return false; seenSC.add(k); return true; }).map((l) => ({ id: l.id, style: l.style, brand: l.brand, color: l.color, garment: l.garment, ...(l.look ? { look: l.look } : {}), ...(l.hex ? { hex: l.hex } : {}), ...(l.shade ? { shade: l.shade } : {}), ...(l.cw ? { cw: l.cw } : {}) })));
           setImprints(g.imprints.map((d) => ({ ...d })));
           setPieceCount(g.lines.reduce((n, l) => n + Object.values(l.sizes || {}).reduce((a: number, v) => a + (+(v || 0)), 0), 0));
           loadedIms.current = Object.fromEntries(g.imprints.map((d) => [d.id, JSON.parse(JSON.stringify(d)) as Imprint]));
@@ -3415,7 +3417,9 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       // picked (Background, eyedropper) as `hex`, and the color it was drawn in either way as `shade` (the catalog's code,
       // the color read off its photo), on each of the order's lines of this garment (its extras line too)
       const shade = shirtHex(l);
-      for (const x of g.lines.filter((y) => y.id === l.id || scKey(y) === scKey(ol))) {
+      // its tall twin is drawn as this one (lookStyle): the same color on it too
+      const sts = g.lines.map((y) => y.style || ""), lk = (y: { style?: string; color?: string }) => `${lookStyle(y.style || "", sts).toLowerCase()}|${(y.color || "").trim().toLowerCase()}`;
+      for (const x of g.lines.filter((y) => y.id === l.id || scKey(y) === scKey(ol) || lk(y) === lk(ol))) {
         if (l.hex && /^#[0-9a-f]{6}$/i.test(l.hex)) x.hex = l.hex.toLowerCase(); else delete x.hex;
         if (/^#[0-9a-f]{6}$/i.test(shade) && (logoOnly || shade.toLowerCase() !== "#9aa1ab")) x.shade = shade.toLowerCase(); else delete x.shade;
       }
