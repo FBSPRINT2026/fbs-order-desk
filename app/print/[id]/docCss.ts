@@ -659,4 +659,56 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .doc-cctag{display:inline-block;width:auto;height:auto;font-size:9.5pt;font-weight:800;letter-spacing:.04em;color:#b3261e;background:#fdecea;border-radius:999px;padding:2px 10px;margin-top:4px}
 /* the group's piece count stays on one line beside its name (Oct 31: "2 / pcs" ran into the Amount heading) */
 .pdoc .iv2-gh > small{white-space:nowrap;flex:none;margin-left:12px}
+/* the work order's job pages (Nov 17 2026, Amanda: "more like this order entry screen… without the pricing"): every
+   group as a card, its picture and prints side by side, its garments under their colorways and spots */
+.pdoc .wo-job .wj-in{flex:none;transform-origin:0 0}
+.pdoc .wj-flags{margin:8px 0 10px}
+.pdoc .wj-tag{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:7.5pt;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);white-space:nowrap}
+.pdoc .wj-tag.big{font-size:8.5pt;padding:3px 8px}
+.pdoc .wj-tag.emb{background:#fdecef;border-color:#f3b8c3;color:#b0213c}
+.pdoc .wj-tag.hp{background:#fff7e8;border-color:#f1d29b;color:#9a5b00}
+.pdoc .wj-tag.sp{background:#eaf4fd;border-color:#a9cdee;color:#1d5f9e}
+.pdoc .wj-tag.cs{background:#eefafb;border-color:#9dd8de;color:#0f7f8c}
+.pdoc .wj-g{border:1.5px solid var(--line);border-radius:10px;margin-bottom:.14in;overflow:hidden;break-inside:avoid}
+.pdoc .wj-h{display:flex;align-items:center;gap:8px;padding:5px 10px;background:#f3f5f8;border-bottom:1px solid var(--line)}
+.pdoc .wj-n{flex:none;width:20px;height:20px;border-radius:5px;background:var(--ink);color:#fff;font-weight:800;font-size:10pt;display:grid;place-items:center}
+.pdoc .wj-t{flex:1 1 auto;min-width:0;font-size:12pt;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdoc .wj-pcs{flex:none;font-size:10.5pt;white-space:nowrap}
+.pdoc .wj-b{display:grid;grid-template-columns:1.65in minmax(0,1fr);gap:10px;padding:8px 10px 4px}
+.pdoc .wj-b.q{grid-template-columns:1.65in minmax(0,1fr) .7in}
+.pdoc .wj-mks{display:grid;gap:5px}
+.pdoc .wj-mks.n2,.pdoc .wj-mks.n3,.pdoc .wj-mks.n4{grid-template-columns:1fr 1fr}
+.pdoc .wj-mks>div{display:flex;flex-direction:column;align-items:center;background:#f4f5f7;border-radius:8px;padding:4px}
+.pdoc .wj-mks img{width:100%;max-height:1.55in;object-fit:contain;mix-blend-mode:multiply}
+.pdoc .wj-mks.n2 img,.pdoc .wj-mks.n3 img,.pdoc .wj-mks.n4 img{max-height:.85in}
+.pdoc .wj-mks .lg>*:first-child{width:100%;max-height:1.4in}
+.pdoc .wj-mks span{font-size:7.5pt;color:var(--ink3);text-align:center;margin-top:2px}
+.pdoc .wj-none{height:1.4in;border-radius:8px;display:grid;place-items:center;color:#fff;font-size:10pt}
+.pdoc .wj-prints{display:flex;flex-direction:column;gap:6px;min-width:0}
+.pdoc .wj-prints .wo-pc .kv{font-size:9pt;padding:4px 9px}
+.pdoc .wj-prints .wo-pc .h b{font-size:11pt}
+.pdoc .wj-qr{display:flex;flex-direction:column;align-items:center;gap:2px}
+.pdoc .wj-qr .qr{width:.66in;height:.66in}
+.pdoc .wj-qr small{font-size:7pt;color:var(--ink3);font-weight:700}
+.pdoc .wj-gn{margin:2px 10px 0;font-size:9pt;color:var(--ink2);white-space:pre-wrap;overflow-wrap:anywhere}
+.pdoc .wj-g .cnt2,.pdoc .wj-g .wo-cg{margin:6px 0 0}
+.pdoc .wj-g .cnt2 td.g{padding-left:10px}
+.pdoc .wj-g .cnt2 th:first-child{padding-left:10px}
+.pdoc .wj-g .cnt2 th:last-child,.pdoc .wj-g .cnt2 td:last-child{padding-right:10px}
+.pdoc .wj-g .cnt2 tr:last-child td{border-bottom:0}
+.pdoc .wj-g .cnt2 tr.w2-cwh td{padding-left:10px;background:#eef1f5;border-bottom:1px solid var(--line)}
+.pdoc .cnt2.inl th.sz,.pdoc .cnt2.inl td.sz{width:.72in}
+.pdoc .cnt2.inl td{padding:3px 5px;vertical-align:middle}
+.pdoc .cnt2.inl td.sz b{display:inline-block;font-size:12pt;vertical-align:middle}
+.pdoc .cnt2.inl td.sz i{display:inline-block;width:.32in;height:.2in;margin:0 0 0 4px;vertical-align:middle}
+.pdoc .cnt2 tr.wj-spot td,.pdoc .wj-spot.cg{padding:4px 5px 2px 20px;font-size:9pt;font-weight:700;color:var(--ink2);border-bottom:1px solid var(--line)}
+.pdoc .wj-spot.cg{grid-column:1/-1}
+.pdoc .wj-spot span{display:inline-block;min-width:14px;padding:0 3px;margin-right:6px;border:1px solid var(--ink);border-radius:3px;font-size:7.5pt;text-align:center;line-height:13px}
+.pdoc .cnt2 tr.wj-split td{padding:5px 0 3px;border-bottom:0;text-align:center}
+.pdoc tr.wj-split span,.pdoc div.wj-split{display:block;border-top:1.5px dashed #f0c27a;line-height:0;margin:4px 10px;font-size:7.5pt;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#b06d00;text-align:center}
+.pdoc div.wj-split{grid-column:1/-1;margin:8px 0}
+.pdoc .wj-more{padding:3px 10px 5px;font-size:8.5pt;color:var(--ink3);text-align:right}
+.pdoc .wj-by{margin:4px 0 0}
+.pdoc .wo-job h2{margin:8px 0 4px}
+.pdoc .wo-job .notes{font-size:10pt;min-height:.45in;overflow-wrap:anywhere}
 `;
