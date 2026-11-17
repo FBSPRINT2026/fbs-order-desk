@@ -447,6 +447,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
   const [day, setDay] = useState(() => shopTime(new Date())!.day);
   const [wknd, setWknd] = useSticky<boolean | null>("cal.weekends", null);
+  // Ready To Schedule sorted by a column header, like the Orders list (Nick, Nov 16 2026): press again to turn it round
+  const [rtsSort, setRtsSort] = useSticky<{ k: "num" | "job" | "due" | "goods" | "rec"; d: 1 | -1 }>("cal.readySort", { k: "due", d: 1 });
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [pvLane, setPvLane] = useState<{ job: Job; machine: Machine; day: string; startMin: number | null; minutes: number | null; carried?: string }[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
@@ -3254,10 +3256,19 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     );
                   })()}
                 </div>
-                {list.length > 0 && <div className="msr-hd" aria-hidden><span>Job #</span><span>Job</span><span>In-hands</span><span>Goods</span><span>Recommended</span><span /></div>}
+                {list.length > 0 && <div className="msr-hd">{([["num", "Job #"], ["job", "Job"], ["due", "In-hands"], ["goods", "Goods"], ["rec", "Recommended"]] as const).map(([k, l]) => (
+                  <button key={k} type="button" className={"msr-sort" + (rtsSort.k === k ? " on" : "")} aria-sort={rtsSort.k === k ? (rtsSort.d === 1 ? "ascending" : "descending") : "none"} title={`Sort by ${l.toLowerCase()}`} onClick={() => setRtsSort(rtsSort.k === k ? { k, d: rtsSort.d === 1 ? -1 : 1 } : { k, d: 1 })}>{l}{rtsSort.k === k && <span aria-hidden>{rtsSort.d === 1 ? " ▲" : " ▼"}</span>}</button>
+                ))}<span /></div>}
                 <ul className="msr-l">{(() => {
                   // by due date, due today first (no date last); jobs that print together stay in their order
-                  const byDue = list.map((t, i) => ({ t, i })).sort((x, y) => (x.t.job.due || "9999").localeCompare(y.t.job.due || "9999") || x.i - y.i).map((x) => x.t);
+                  // the column picked (In-hands by default; no date last either way), ties in their order
+                  const goodsRank = (t: (typeof list)[number]) => { const g = dotOf({ job: t.job } as Card, Infinity); return !g ? 5 : g.k === "r" ? 0 : g.k === "o" ? 1 : g.k === "a" ? 2 : g.k === "g" ? 3 : 4; };
+                  const sortV = (t: (typeof list)[number]): string | number => rtsSort.k === "num" ? +t.job.number || 0 : rtsSort.k === "job" ? `${t.job.name || t.need.label || ""}`.toLowerCase() : rtsSort.k === "goods" ? goodsRank(t) : rtsSort.k === "rec" ? (t.sug ? `${t.sug.day}|${shortName(t.sug.machine)}` : "~") : (t.job.due || "");
+                  const byDue = list.map((t, i) => ({ t, i, v: sortV(t) })).sort((x, y) => {
+                    if (rtsSort.k === "due" && !x.v !== !y.v) return x.v ? -1 : 1;
+                    const c = typeof x.v === "number" && typeof y.v === "number" ? x.v - y.v : String(x.v).localeCompare(String(y.v));
+                    return c * rtsSort.d || x.i - y.i;
+                  }).map((x) => x.t);
                   const who = (m: Machine) => crewOf(m)?.leader || shortName(m), dayW = (d: string) => (d === today ? "Today" : dayLbl(d).split(",")[0]);
                   return (trayAll ? byDue : byDue.slice(0, 8)).map((t) => { const k = t.job.key + t.need.type, open = pickOpen === k, late = isLate(t), pk = picks[k];
                     const from = t.job.prod && t.job.prod > today ? t.job.prod : today, days: string[] = []; for (let d = from, g = 0; days.length < 6 && g < 21; g++, d = addDay(d, 1)) if (machines.some((m) => shiftOn(m, d))) days.push(d);

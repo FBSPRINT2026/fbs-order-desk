@@ -439,3 +439,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 8:15pm · 1.3.681 · Nick · Portal and customer page orders: one 'finished' rule: Orders lists only open jobs; Completed has jobs finished here and old Printavo jobs finished there (completed / picked up / delivered) and closed quotes
 - Nov 16 8:29pm · 1.3.682 · Nick · Run together: a checkbox in Job details & type links a customer's separate orders; the same print prices on all their pieces, screens made once (first order), totals kept in step, one run on the schedule (migration 329)
 - Nov 16 8:36pm · 1.3.683 · Nick · In Production only by booking a press (status menu and board refuse it before a booking); closed quotes stay under Quotes behind Show older quotes, never Completed (no balance)
+- Nov 16 8:37pm · 1.3.684 · Nick · Schedule: Ready To Schedule's headers sort the list (Job #, Job, In-hands, Goods, Recommended; press again to reverse; remembered)
