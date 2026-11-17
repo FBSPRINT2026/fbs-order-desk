@@ -243,7 +243,7 @@ export function mergeProduction(d: unknown): ProductionSettings {
 /* ---------- what a job needs ---------- */
 
 /** One decoration to run: a location on a group of garments. */
-export type Step = { method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string; /** puff ink (raised print): slower printing, longer setup */ puff?: boolean; /** puff picked as a job condition: its slower printing is already in the speed slider */ puffInSpeed?: boolean;
+export type Step = { /** the garments it prints on (a group and a kind of garment): steps on the same pieces (front + back) count them once, steps on different pieces add up (Nick, Nov 16 2026: #40400's five logo groups showed as 13 pcs, its biggest group) */ pieces?: string; method: MachineType; location: string; colors: number; screens: number; qty: number; dark: boolean; garment: "tee" | "heavy" | "bag" | "cap"; stitches: number; note: string; /** puff ink (raised print): slower printing, longer setup */ puff?: boolean; /** puff picked as a job condition: its slower printing is already in the speed slider */ puffInSpeed?: boolean;
   /** this print only runs on one press (Imprint.pressOnly, set on the production mockup) */ only?: { id: string; name: string };
   /** times around the press set on the press setup (Imprint.rounds): every piece goes around that many times */ rounds?: number;
   /** staff set how long this print location takes (all its garments together), on the schedule: used as is */ over?: { min: number; by: string };
@@ -314,7 +314,7 @@ export function needsForOrder(s: ProductionSettings, o: Pick<Order, "groups" | "
         const only = method === "screen" && i.pressOnly?.id ? { id: i.pressOnly.id, name: i.pressOnly.name } : undefined;
         const rounds = method === "screen" && (i.rounds || 1) > 1 ? Math.min(3, i.rounds!) : 0;
         const art = artKey(method, i.design_id, i.inks, colors);
-        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}), ...(art ? { art } : {}), ...((i as unknown as { oversize?: boolean }).oversize ? { oversize: true } : {}) });
+        steps.push({ method, location: i.location || "Front", colors, screens, qty, dark, garment, pieces: `${(g as { id?: string }).id || groups.indexOf(g)}|${garment}`, stitches: method === "embroidery" ? stitchesFor(s, i.location || "", (i as unknown as { stitches?: number }).stitches) : 0, note: "", puff, ...(only ? { only } : {}), ...(rounds ? { rounds } : {}), ...(art ? { art } : {}), ...((i as unknown as { oversize?: boolean }).oversize ? { oversize: true } : {}) });
       }
     }
   }
@@ -410,7 +410,12 @@ export function needsForPrintavo(s: ProductionSettings, row: { qty: number | nul
 /** "Print 1c + Print 1c + Back 2c" → "Print 1c ×2 + Back 2c" */
 const collapse = (ls: string[]) => [...new Set(ls)].map((l) => { const n = ls.filter((x) => x === l).length; return n > 1 ? `${l} ×${n}` : l; }).join(" + ");
 function needOf(type: MachineType, st: Step[]): Need {
-  return { type, steps: st, needColors: type === "screen" ? Math.max(...st.map((x) => x.screens)) : 0, qty: Math.max(...st.map((x) => x.qty)), label: collapse(st.map((x) => (type === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}${x.puff ? " puff" : ""}` : type === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k${x.garment === "cap" ? " cap" : ""}` : x.location))) };
+  // pieces: each set of garments once (its biggest step), the sets added up; steps that don't say which garments they're
+  // on (Printavo) count as one set, as before
+  const sets = new Map<string, number>();
+  for (const x of st) { const k = x.pieces || "?"; sets.set(k, Math.max(sets.get(k) || 0, x.qty)); }
+  const qty = [...sets.values()].reduce((a, b) => a + b, 0);
+  return { type, steps: st, needColors: type === "screen" ? Math.max(...st.map((x) => x.screens)) : 0, qty, label: collapse(st.map((x) => (type === "screen" ? `${x.location} ${x.colors}c${x.dark ? " dark" : ""}${x.puff ? " puff" : ""}` : type === "embroidery" ? `${x.location} ${Math.round(x.stitches / 1000)}k${x.garment === "cap" ? " cap" : ""}` : x.location))) };
 }
 function groupNeeds(steps: Step[]): Need[] {
   const out: Need[] = [];

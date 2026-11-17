@@ -429,3 +429,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 6:53pm · 1.3.671 · Nick · An EMB is a logo anywhere art is uploaded: the file pickers take .emb, its TrueView picture becomes the logo's picture and the EMB is filed as its sew file (size, stitches, threads)
 - Nov 16 6:58pm · 1.3.672 · Nick · Logo thumbnails everywhere use the logo's own background picture (Edit logo → Backgrounds) like the Artwork page, not the raw preview: the AMS logos showed as a white box on the Brands list
 - Nov 16 7:09pm · 1.3.673 · Nick · Schedule: a booking on a past day that never started goes back to Ready to schedule tagged 'Missed · Thu' (booking it again replaces it); the search shows matches from every tab and counts only what it can show
+- Nov 16 7:32pm · 1.3.674 · Nick · Schedule pieces: a job's prints on different garments add up (each group and kind of garment counted once), not just its biggest print: #40400 showed 13 of its 48 pcs
