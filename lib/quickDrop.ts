@@ -25,10 +25,25 @@ export type QuickDropPlan = {
 };
 export type QuickDropRow = { id: number; folder: string; customer_id: string | null; order_id: string | null; plan: QuickDropPlan | null; requested_by: string | null };
 export type DropSew = { code?: string; file: string; stitches: number; colors: number; wIn: number; hIn: number; threads: string[]; emb: boolean; sheet: boolean };
-export type DropLogo = { key: string; design_id: string; number: number; name: string; made: boolean; added: DropSew[]; skipped: string[] };
+export type DropLogo = { key: string; design_id: string; number: number; name: string; made: boolean; added: DropSew[]; skipped: string[]; /** where its picture came from */ picture?: string };
 export type DropResult = { path: string; brand?: { id: string; name: string; made: boolean }; files: { path: string; size: number }[]; logos: DropLogo[]; other: string[]; notes: string[] };
 
 const SEW = /\.(dst|emb|pdf)$/i;
+/** a picture of the logo dropped with its files: it's the logo's picture (Nov 17, Amanda: RMS's Anniversary EMBs carry the
+ *  customer's art as a backdrop, so their TrueView showed two logos) */
+const ART = /\.(png|jpe?g|webp|svg)$/i;
+const artType = (n: string) => (/\.png$/i.test(n) ? "image/png" : /\.webp$/i.test(n) ? "image/webp" : /\.svg$/i.test(n) ? "image/svg+xml" : "image/jpeg");
+
+/** the logo's picture from a dropped image: saved with the logo and set as its picture (a master logo's art file is
+ *  locked, its picture isn't) */
+async function setPicture(admin: SupabaseClient, designId: string, e: DbxEntry): Promise<string> {
+  const { buf } = await download(admin, e.id || e.path_lower);
+  const path = `designs/${designId}/picture-${Date.now()}-${safe(e.name)}`;
+  const u = await admin.storage.from("proofs").upload(path, new Blob([buf], { type: artType(e.name) }), { contentType: artType(e.name) });
+  if (u.error) throw new Error(`Couldn't save ${e.name}: ${u.error.message}`);
+  await admin.from("designs").update({ preview_path: path, width_px: null, height_px: null }).eq("id", designId);
+  return e.name;
+}
 const stem = (n: string) => n.replace(/\.[^.]+$/, "").replace(/\s*(worksheet|sheet)$/i, "").trim().toLowerCase();
 const safe = (n: string) => n.replace(/[^\w.-]+/g, "_");
 
@@ -109,9 +124,10 @@ export async function runQuickDrop(admin: SupabaseClient, row: QuickDropRow): Pr
   for (const [key, list] of groupDrop(path, files)) {
     const want = plan.logos?.[key] || {};
     const sew = list.filter((f) => SEW.test(f.name));
-    res.other.push(...list.filter((f) => !SEW.test(f.name)).map((f) => f.path_display));
+    const arts = list.filter((f) => ART.test(f.name));
+    res.other.push(...list.filter((f) => !SEW.test(f.name) && !ART.test(f.name)).map((f) => f.path_display));
     if (want.skip) { res.notes.push(`${key}: skipped (the plan says so)`); continue; }
-    if (!sew.some((f) => /\.(dst|emb)$/i.test(f.name))) { if (sew.length) res.other.push(...sew.map((f) => f.path_display)); continue; }
+    if (!sew.some((f) => /\.(dst|emb)$/i.test(f.name))) { if (sew.length || arts.length) res.other.push(...[...sew, ...arts].map((f) => f.path_display)); continue; }
     const got = await Promise.all(sew.map((f) => asFile(admin, f)));
     // the logo: the one the plan names, else the account's logo of that name, else a new one
     const name = (want.name || key).trim();
@@ -148,8 +164,11 @@ export async function runQuickDrop(admin: SupabaseClient, row: QuickDropRow): Pr
       const sp = (now?.specs || {}) as Record<string, unknown>;
       if (!sp.master) await admin.from("designs").update({ saved: true, specs: { ...sp, master: { at: new Date().toISOString(), by: row.requested_by || "Quick Drop" } } }).eq("id", d.id);
     }
+    // a picture dropped with it is the logo's picture (the one the plan names, else the first), over the EMB's TrueView
+    const art = arts.find((a) => want.picture && stem(a.name) === want.picture.toLowerCase()) || arts.sort((a, b) => a.name.localeCompare(b.name))[0];
+    const picture = art ? `art ${await setPicture(admin, d.id, art)}` : made ? "the EMB's TrueView" : undefined;
     res.logos.push({
-      key, design_id: d.id, number: d.number, name: d.name, made, skipped,
+      key, design_id: d.id, number: d.number, name: d.name, made, skipped, ...(picture ? { picture } : {}),
       added: added.map((s) => ({ code: s.code, file: s.name, stitches: s.stitches, colors: s.colors, wIn: s.wIn, hIn: s.hIn, threads: (s.ws?.threads || []).map((t) => `${t.code} ${t.name}`.trim()), emb: !!s.emb, sheet: !!s.sheet })),
     });
   }
