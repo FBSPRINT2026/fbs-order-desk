@@ -435,21 +435,23 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     // quotes first, then the orders below them, one search on the top line for both (Oct 15, Nick)
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
     const sentQ = qL.filter((o) => o.status === "request" && o.sent);
-    // a closed quote (declined) is finished: under Completed, not Quotes (Nov 3, Nick)
+    // a closed quote (declined, merged into another order, or closed in the old system) stays a quote: under Quotes with
+    // the older ones, behind "Show older quotes" (Nick, Nov 16 2026: "anything marked closed quote should… live in
+    // quotes"; #50005 had moved to Completed)
     const closedQ = qL.filter((o) => isClosedQuote(o) || (!!o.archived && !!o.done));
-    const quotes2 = qL.filter((o) => !(o.status === "request" && o.sent) && !isClosedQuote(o));
-    // archived quotes (not going ahead) and quotes over 60 days old show with "Show older quotes and archived" (Oct 24, Nick)
-    const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff && !o.archivedQ), olderN = quotes2.length - recentQ.length;
+    const quotes2 = qL.filter((o) => !(o.status === "request" && o.sent));
+    // archived quotes (not going ahead), closed ones and quotes over 60 days old show with "Show older quotes and archived" (Oct 24, Nick)
+    const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff && !o.archivedQ && !closedQ.includes(o)), olderN = quotes2.length - recentQ.length;
     const shownQ = oldQuotes ? quotes2 : recentQ;
     const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
     const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
     const tab = oTab === "drafts" && !draftsLive.length ? "all" : oTab;
     const openI = iL.filter((o) => !finished(o));
-    const done = [...iL.filter(finished), ...closedQ].sort((x, y) => y.number - x.number);
+    const done = iL.filter(finished).sort((x, y) => y.number - x.number);
     // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
-    const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...iL, ...closedQ].sort((x, y) => y.number - x.number);
-    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", openI.length], ["done", "Completed", done.length]];
+    const allRows = [...sentQ, ...quotes2.filter((o) => (!o.archivedQ && !closedQ.includes(o)) || oldQuotes), ...iL].sort((x, y) => y.number - x.number);
+    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", recentQ.length], ["orders", "Orders", openI.length], ["done", "Completed", done.length]];
     // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
     // following will just be on the main page")
     // one card like the dashboard's Your jobs (Nov 2, Nick: "the floating orders total… should be in the box… like the your

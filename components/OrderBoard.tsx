@@ -47,6 +47,11 @@ export default function OrderBoard({ mine: mineProp }: { mine?: boolean }) {
   async function move(id: string, k: StatusKey) {
     const o = orders.find((x) => x.id === id);
     if (!o || o.status === k) return;
+    // In Production comes from booking it on the schedule, never a drag (Nick, Nov 16 2026)
+    if (k === "production") {
+      const { count } = await createClient().from("production_slots").select("id", { count: "exact", head: true }).eq("order_id", id);
+      if (!count) { setMsg(`#${o.number}: book it on the schedule to put it In Production`); return; }
+    }
     setOrders((prev) => prev.map((x) => (x.id === id ? { ...x, status: k, type: ST[k].type } : x)));
     const sb = createClient();
     const { error } = await sb.from("orders").update({ status: k, type: ST[k].type }).eq("id", id);

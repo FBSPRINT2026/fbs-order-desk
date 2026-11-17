@@ -211,6 +211,10 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   const [billOpen, setBillOpen] = useState(false);
   // on a phone (Oct 29, Nick): the top buttons fold into one Actions button, the customer into just the name
   const [actsOpen, setActsOpen] = useState(false);
+  // In Production means booked on a press (Nick, Nov 16 2026: "you shouldn't be able to just select that… if it's an
+  // automated thing, you've got to make it automated"): the status menu offers it only once a booking exists
+  const [booked, setBooked] = useState<boolean | null>(null);
+  useEffect(() => { if (!id) return; void sb.from("production_slots").select("id", { count: "exact", head: true }).eq("order_id", id).then(({ count }) => setBooked((count || 0) > 0)); }, [id, sb]); // eslint-disable-line react-hooks/exhaustive-deps
   const [cuOpen, setCuOpen] = useState(false);
   const [discEdit, setDiscEdit] = useState(false); // typing the discount // the customer's address, email and notes shown
   // Customer artwork (Oct 24): which group is bringing in a mockup from another of the customer's orders
@@ -1630,7 +1634,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             {/* a hold is for an order (Nov 3, Nick: "once it goes to invoice, it should say on hold"); a quote isn't held */}
             {(o.type === "invoice" || !!holdOf((o as { flags?: unknown }).flags)) && <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>}
             <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote").flatMap((s) => (s.k === "quote_sent" ? [s, REVISION] : [s])), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
-            <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => <option key={s.k} value={s.k}>{statusText(s.k, o.delivery_method)}</option>)}</optgroup>
+            <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => { const lock = s.k === "production" && booked === false && statusKey(o) !== "production"; return <option key={s.k} value={s.k} disabled={lock} title={lock ? "Book it on the schedule: booking a job puts it In Production" : undefined}>{statusText(s.k, o.delivery_method)}{lock ? " (book it on the schedule)" : ""}</option>; })}</optgroup>
           </select>
           {mixO[o.id] && <span className="mxs-h"><MixStrip parts={mixO[o.id]} /></span>}
           <IssueTag issues={issO[o.id]} />
