@@ -4,6 +4,7 @@ import { linePic } from "@/lib/simpleOrders";
 import { getViewer } from "@/lib/supabase/server";
 import { jobActor } from "@/lib/jobAccess";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { trainingSaid } from "@/lib/orderTrainings";
 import { calcOrder, withoutShopPieces, mergeSettings, orderGroups, type Customer, type Order, type Payment } from "@/lib/pricing";
 import { loadGroupLook } from "@/lib/groupLook";
 import { addStockInks } from "@/lib/inkColors";
@@ -155,19 +156,22 @@ export default async function PrintPage({ params, searchParams }: { params: Prom
   }
 
   if (work0) {
-    const [{ data: inn }, { data: jn }, { data: apc }] = await Promise.all([
+    const [{ data: inn }, { data: apc }, { data: jn }, { data: trs }] = await Promise.all([
       admin.from("order_internal").select("production_notes").eq("order_id", id).maybeSingle(),
       // the customer approved with changes: the press needs to see what they asked for
       admin.from("proofs").select("customer_comment, decided_name, decided_at").eq("order_id", id).eq("status", "approved").neq("customer_comment", "").is("archived_at", null),
       admin.from("job_files").select("tag, body, by_name, created_at").eq("order_id", id).eq("kind", "note").eq("archived", false).order("created_at", { ascending: false }).limit(8),
+      // a program's simple order (its customer's order training names it): the cart work order (Nick, Nov 17 2026)
+      admin.from("order_trainings").select("when_words").eq("customer_id", o.customer_id),
     ]);
+    const simple = ((trs || []) as { when_words: string }[]).some((t) => trainingSaid(t, [o.nickname, o.po_number].filter(Boolean).join(" ")));
     const printed = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
     return (
       <div className="pdoc">
         <style dangerouslySetInnerHTML={{ __html: DOC_CSS }} />
         <title>{nameOf("Work Order")}</title>
         <div className="print-bar"><PrintButton fileName={nameOf("Work Order")} /></div>
-        <WorkOrderDoc {...data} notes={[...((apc || []) as { customer_comment: string; decided_name: string | null; decided_at: string | null }[]).map((x) => `APPROVED WITH CHANGES${x.decided_name ? ` (${x.decided_name})` : ""}: ${x.customer_comment}`), woNotes(inn?.production_notes || "")].filter(Boolean).join("\n\n")} shopNotes={(jn || []) as { tag: string; body: string; by_name: string; created_at: string }[]} printed={printed} />
+        <WorkOrderDoc {...data} notes={[...((apc || []) as { customer_comment: string; decided_name: string | null; decided_at: string | null }[]).map((x) => `APPROVED WITH CHANGES${x.decided_name ? ` (${x.decided_name})` : ""}: ${x.customer_comment}`), woNotes(inn?.production_notes || "")].filter(Boolean).join("\n\n")} shopNotes={(jn || []) as { tag: string; body: string; by_name: string; created_at: string }[]} printed={printed} simple={simple} />
       </div>
     );
   }

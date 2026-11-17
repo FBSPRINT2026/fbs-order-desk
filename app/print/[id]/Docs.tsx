@@ -79,8 +79,11 @@ function colorBg(lines: Group["lines"], color: string, colorHexes?: Record<strin
   const l = lines.find((x) => ckey(x.color) === ckey(c));
   return (l ? lineHex(l) : "") || colorHexes?.[ckey(c)] || guessHex(c) || "";
 }
+/** garments on the full work order's first page; the rest go on pages of 10 */
+const WO_FIRST = 6;
 // many products, a few pieces each (Nick, Nov 13 2026, option B: GearGoLive's 13 one-piece garments took 3 pages): the
-// garments in two columns of one line each
+// garments in two columns of one line each, about 30 on the job page and 70 on each page after
+const WO_FIRST_COMPACT = 30, WO_MORE_COMPACT = 70;
 /** a group's garments go compact when it has more than 8 and they average 3 pieces or fewer */
 const compactLines = (ls: { sizes?: unknown }[], qty: number) => ls.length > 8 && qty <= ls.length * 3;
 export type Variant = { color: string; swap: Record<string, string>; /** a colorway change: the colorway this sheet runs */ cw?: string };
@@ -148,7 +151,19 @@ function neckLine(cust: Partial<Customer>, g: Group, fins: { id: string; name: s
 }
 
 // ───────────────────────────── work order ─────────────────────────────
-export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: string; body: string; by_name: string; created_at: string }[]; printed: string }) {
+type WoProps = DocData & { notes: string; shopNotes: { tag: string; body: string; by_name: string; created_at: string }[]; printed: string;
+  /** a program's simple order (one its customer's order training names: MEI's store carts, All My Sons…): the cart work order */ simple?: boolean };
+/**
+ * The work order. A program's simple orders (Nick, Nov 17 2026: "cart orders for Peter… All My Sons, those really simple
+ * orders… should have its own work order where it's very simple… The normal work order should stay the same for all
+ * their clients") get the cart work order: the whole job first, a card per group as on the order screen, no prices.
+ * Every other order keeps the full work order. Which is which is the order's customer's order trainings (Settings →
+ * Order training: the words in the job's name that say it's that kind of order), never a customer named in code.
+ */
+export function WorkOrderDoc(p0: WoProps) {
+  return p0.simple ? <CartWorkOrder {...p0} /> : <FullWorkOrder {...p0} />;
+}
+function CartWorkOrder(p0: WoProps) {
   // each embroidered print with the sew file it sews, its logo's when it has none of its own (lib/brands.ts withSewFile),
   // each needle on the thread we really run as the logo has it now (withLiveSew)
   // ghost prints aren't printed: never on the work order (GLine.ghost)
@@ -474,6 +489,283 @@ function spotHead(g: Group, l: Group["lines"][number]): { key: string; label: st
   if (!ps.length) return null;
   const xs = ps.map((d) => { const all = spotsOf(d, g.lines), s = spotOf(d, l); return { d, s, letter: String.fromCharCode(65 + Math.max(0, all.indexOf(s))) }; });
   return { key: xs.map((x) => x.letter).join(""), label: xs.map((x) => `${ps.length > 1 ? `${sideOf(x.d, g.imprints)}: ` : ""}${x.s}`).join(" · ") };
+}
+
+function FullWorkOrder(p0: WoProps) {
+  // each embroidered print with the sew file it sews, its logo's when it has none of its own (lib/brands.ts withSewFile),
+  // each needle on the thread we really run as the logo has it now (withLiveSew)
+  // ghost prints aren't printed: never on the work order (GLine.ghost)
+  const p = { ...p0, groups: p0.groups.map((g) => ({ ...g, lines: printedLines(g.lines), imprints: (g.imprints || []).map((im) => withSewThreads(withLiveSew(withSewFile(im, im.design_id ? p0.designs[im.design_id] : null, g.lines || []), im.design_id ? p0.designs[im.design_id] : null))) })) };
+  const { o, cust, groups, c } = p;
+  // each group's pages (Oct 26, Nick: "the mock-ups aren't nearly big enough, and the little print cubes are too big… the
+  // first page… small versions… then a larger mock-up and its printing underneath"; "make it fill the space… variable";
+  // "4 items… is probably the max… more than that, create a second page"):
+  //   1. the job: header, the mockups filling whatever room is left, the prints as a strip, up to 4 garments' counts, notes
+  //   2. more garments' counts (8 a page) when there are over 4
+  //   3. each mockup big, with its prints blown up under it (the full notes on the first when they're long)
+  //   4. each print's press sheet
+  const plans = groups.map((g, gi) => {
+    // grouped by colorway (Nov 10, Amanda: "group the garments on the work order… group A and then list the garments,
+    // and group B…"): when a print sews or prints differently on some garments, each version's garments together, A first
+    const lines = byVersion(g, g.lines.filter((l) => lineQty(l) > 0 || g.lines.length === 1), p.designs);
+    const first = gi === 0;
+    const gc = c.groups[gi];
+    // the ship-to on one line, and a note that only says the ship method it already says dropped (Oct 31, #40336: "Ship
+    // FedEx Ground." over a five-line ship-to that ended "(FedEx Ground)" spilled the notes onto a second page)
+    const shipM = (o.ship_method || "").trim().toLowerCase();
+    const notes0 = first && p.notes ? p.notes.split("\n").filter((ln) => !(shipM && /^\s*ship(ping)?\s*(via|method|by)?:?\s*/i.test(ln) && ln.toLowerCase().replace(/^\s*ship(ping)?\s*(via|method|by)?:?\s*/, "").replace(/[.\s]+$/, "") === shipM)).join("\n").replace(/\n{3,}/g, "\n\n").trim() : "";
+    const noteParts = [
+      notes0,
+      gc?.finishing.length ? `Finishing: ${gc.finishing.map((f) => f.name).join(", ")}` : "",
+      neckLine(cust, g, gc?.finishing || []),
+      first && o.delivery_method !== "pickup" && o.ship_to ? `${o.delivery_method === "ship" ? "Ship to" : "Deliver to"}: ${o.ship_to.split(/\s*\n+\s*/).filter(Boolean).join(", ")}${o.ship_method || isThirdParty(o) ? ` (${[o.ship_method, isThirdParty(o) ? thirdPartyLabel(o.third_party, true) : ""].filter(Boolean).join(", ")})` : ""}` : "",
+    ].filter(Boolean);
+    const extra = first ? p.shopNotes.length + (p.cust.brand_print?.rules || []).length : 0;
+    const noteText = noteParts.join("\n\n");
+    // how many printed lines the notes take (a long line wraps at about 100 characters), not how many lines they're typed in
+    const vis = noteText.split("\n").reduce((n, ln) => n + Math.max(1, Math.ceil(ln.length / 100)), 0);
+    const longNotes = noteText.length + extra * 120 > 520 || vis + extra * 2 > 8;
+    const more: (typeof lines)[] = [];
+    const compact = compactLines(lines, lines.reduce((a, l) => a + lineQty(l), 0));
+    const firstN = compact ? WO_FIRST_COMPACT : WO_FIRST, perMore = compact ? WO_MORE_COMPACT : 10;
+    for (let i = firstN; i < lines.length; i += perMore) more.push(lines.slice(i, i + perMore));
+    // only the customer's own transfers (Oct 27, Nick: "you need really just two, a count in and then… the mock-up large,
+    // for placement"): one placement page, no press sheets
+    const allSup = g.imprints.length > 0 && g.imprints.every((d) => d.supplied);
+    // a logo mockup (our logo on the shirt color, made in the logo builder) is the same picture as the close-ups: no page
+    // of its own (Oct 30, Nick: "you've got too many boxes… the same thing repeating like 5 times")
+    const logoMk = g.mockupKind === "logo" && !allSup;
+    const mk = logoMk ? [] : (p.mockups[gi] || []).slice(0, allSup ? 1 : 8);
+    // …but it still shows on the first page (Oct 30, #40284 said "No mockup yet" with a mockup made): the picture, no page
+    const firstMk = logoMk ? (p.mockups[gi] || []).slice(0, 1) : mk;
+    // notes too long to sit under the mockup get their own page (Oct 27, Nick: "they're flowing over… going everywhere")
+    const veryLong = noteText.length + extra * 120 > 900 || vis + extra * 2 > 13;
+    const notesPage = longNotes && (!mk.length || veryLong);
+    const colorList = [...new Set(lines.filter((l) => l.color).map((l) => inkKeyOf(l)))] as string[];
+    const vars = g.imprints.map((d) => variantsOf(d, colorList));
+    // one press sheet per print: a color change is noted on it, not a second set of pages (Oct 26, Nick: "if the art
+    // doesn't change, you just need one close-up")
+    // two close-ups a page (Oct 30, Nick: "a close-up of the left chest with the details on it, and then below it, close-up of
+    // the full back"): a front and back print share one page
+    // the customer's own separations (Nov 12, Nick, #40382: "you would just blow up the visual mock-up to be as big as it
+    // could be… the page three would skip"): every print runs from their films, so no press sheets (they'd be empty black
+    // boxes) and the mockup page is their mockup, big, with each print's inks as a line under it
+    const theirSeps = !allSup && g.imprints.length > 0 && g.imprints.every((d) => d.custSeps || d.supplied);
+    const printPages = allSup || theirSeps ? 0 : Math.ceil(sheetsOf(g, p.designs).length / 2);
+    return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, compact, firstN, perMore, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
+  });
+  const total = plans.reduce((a, x) => a + x.n, 0);
+  const starts: number[] = [];
+  plans.reduce((a, x, i) => { starts[i] = a; return a + x.n; }, 1);
+  const who = [cust.company, cust.name && cust.name !== cust.company ? cust.name : "", o.po_number ? `PO ${o.po_number}` : ""].filter(Boolean) as string[];
+  const footL = `#${o.number} ${o.nickname}${cust.company || cust.name ? ` · ${cust.company || cust.name}` : ""}`;
+  const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
+  const dueSub = [o.production_date ? `Print ${day(o.production_date, { weekday: "short", month: "short", day: "numeric" })}` : "", DELIVERY[o.delivery_method] || "Pickup"].filter(Boolean).join(" · ");
+  // each group's page carries its own QR (Nick, Nov 16 2026, #40382's five groups: "each work order page should have its
+  // own QR code for each group"): the phone's press timer opens on that group
+  const qrs = groups.map((_, gi) => qrSvg(groups.length > 1 ? `${jobLink(o.number)}?g=${gi + 1}` : jobLink(o.number), 2).svg);
+  return (
+    <>
+      <WoFit />
+      {groups.map((g, gi) => {
+        const gc = c.groups[gi];
+        const { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, compact, firstN, perMore } = plans[gi];
+        const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, p.settings.wholesale));
+        const sizes = SIZES.filter((z) => lines.some((l) => l.sizes?.[z]));
+        const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
+        const colors = colorList.join(", ");
+        const hex = p.hexes[gi] || "#9aa1ab";
+        const first = gi === 0;
+        // a mockup's garment color: one mockup per color, in the order of the lines
+        const mkColor = (i: number) => (mk.length === colorList.length ? colorList[i] : "");
+        const mkHex = (i: number) => (mkColor(i) && colorHex(mkColor(i))) || hex;
+        // customer supplied transfers: the mockup is their placement reference
+        const sup = g.imprints.find((d) => d.supplied)?.supplied || null;
+        const pg = starts[gi];
+        const pgMore = pg + 1, pgMk = pgMore + more.length, pgNotes = pgMk + mk.length, pgPrint = pgNotes + (notesPage ? 1 : 0);
+        // each print's press sheet, then one more for each color change
+        const printPg: number[] = [];
+        const sheets = sheetsOf(g, p.designs);
+        sheets.forEach((sh, k) => { if (printPg[sh.di] == null) printPg[sh.di] = pgPrint + Math.floor(k / 2); });
+        // their transfers: the print box points at the placement page
+        if (allSup || theirSeps) g.imprints.forEach((_d, di) => { printPg[di] = mk.length ? pgMk : pg; });
+        const where = g.imprints.map((d) => d.supplied?.where || "").find(Boolean) || "";
+        const notesBlock = (
+          <>
+            {noteParts.join("\n\n")}
+            {first && (p.cust.brand_print?.rules || []).length > 0 && <div className="sn"><b>BRAND RULES: </b>{p.cust.brand_print!.rules!.join(" · ")}</div>}
+            {first && p.shopNotes.map((n, i) => <div className="sn" key={i}>{n.tag ? <b>{n.tag.toUpperCase()}: </b> : null}{n.body} <small>({n.by_name}, {new Date(n.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/Chicago" })})</small></div>)}
+          </>
+        );
+        const top = (sub: string) => <div className="p2h"><div className="t disp">{o.nickname} · #{o.number}</div><div className="r">{sub}</div></div>;
+        // the garments: one compact row each, the ordered pieces with a box under each to write the count in (Oct 31, Nick:
+        // "you want to be able to write counts in, but it doesn't need to take up half the page")
+        const countTable = (ls: typeof lines) => (
+          <>
+            <table className="cnt2">
+              <thead><tr><th>Garment</th>{sizes.map((z) => <th key={z} className="sz">{sizeLabel(z)}</th>)}<th className="sz tot">Total</th><th className="sz fin">Final</th></tr></thead>
+              <tbody>{ls.map((l, li) => {
+                // a heading row where a colorway starts (and again at the top of a continued page): its letter and what it sews / prints in
+                const v = versionHead(g, l, p.designs), prev = li ? versionHead(g, ls[li - 1], p.designs) : null;
+                return <Fragment key={l.id}>
+                  {v && (!prev || prev.key !== v.key) && <tr className="w2-cwh"><td colSpan={sizes.length + 3}><span className="w2-cw">{v.key}</span> {v.desc}</td></tr>}
+                  <LineRow l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} colorHexes={p.colorHexes} />
+                </Fragment>;
+              })}</tbody>
+            </table>
+            <div className="cnt2-by"><span>Counted in by <i /></span><span>Final count by <i /></span></div>
+          </>
+        );
+        // the compact garments (option B): two columns, one line each, its sizes and a box for the count
+        const countGrid = (ls: typeof lines) => (
+          <>
+            <div className="wo-cg">{ls.map((l, li) => {
+              const v = versionHead(g, l, p.designs), prev = li ? versionHead(g, ls[li - 1], p.designs) : null;
+              return <Fragment key={l.id}>
+                {v && (!prev || prev.key !== v.key) && <div className="wo-cg-h"><span className="w2-cw">{v.key}</span> {v.desc}</div>}
+                <CompactLine l={l} colorHexes={p.colorHexes} />
+              </Fragment>;
+            })}</div>
+            <div className="wo-cg-tot">Total <b>{ls.reduce((a, l) => a + lineQty(l), 0)}</b><i /></div>
+            <div className="cnt2-by"><span>Counted in by <i /></span><span>Final count by <i /></span></div>
+          </>
+        );
+        const counts = compact ? countGrid : countTable;
+        return (
+          <div key={g.id}>
+            {/* 1. the job */}
+            {/* the job page (Oct 31, Nick: "the job name is huge… no room to view the mock-up… reimagine it"): a short top,
+                the mockup large on the left with the prints beside it, the garments in compact rows, the notes */}
+            <section className="sheet wo1 wo-first wo2">
+              <div className="w2-top">
+                <div className="w2-t">
+                  <div className="lbl">Work order · #{o.number}{groups.length > 1 ? ` · group ${gi + 1} of ${groups.length}` : ""}</div>
+                  <h1 className="disp">{o.nickname || "Untitled job"}</h1>
+                  {who.length > 0 && <div className="w2-who"><b>{who[0]}</b>{who.slice(1).map((x) => <span key={x} className="nw"> · {x}</span>)}</div>}
+                </div>
+                <div className="w2-due"><span className="lbl">In hands</span><b className="disp">{due || "NOT SET"}</b>{dueSub && <small>{dueSub}</small>}</div>
+                <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qrs[gi] }} /><small>Scan: setup, notes, photos, time</small></div>
+              </div>
+              {/* the tags on one line across the page, under the header (Oct 30, Nick: "these can be on the same line") */}
+              <div className="flags">
+                {o.rush && <span className="flag rush">RUSH</span>}
+                {o.priority && <span className="flag prio">HIGH PRIORITY{o.priority_note ? ` · ${o.priority_note.toUpperCase()}` : ""}</span>}
+                {groups.length > 1 && <span className="flag grp">{(g.name || `Group ${gi + 1}`).toUpperCase()}</span>}
+                {gc?.wholesale && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
+                {g.imprints.some((d) => d.supplied) && <span className="flag cs">CUSTOMER SUPPLIED TRANSFERS</span>}
+                {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}
+              </div>
+              {g.description?.trim() && <div className="gdesc wo">{g.description.trim()}</div>}
+              <div className={"w2-hero" + (g.imprints.length > 2 ? " many" : "")}>
+                {/* the mockup as big as the page allows (up to 4; each also big on its own page) */}
+                <div className={"wo-mks n" + Math.min(4, Math.max(1, firstMk.length))}>
+                  {firstMk.length ? firstMk.slice(0, 4).map((u, i) => (
+                    <div className="wo-m" key={u}>
+                      <img src={u} alt="Mockup" />
+                      {/* the style number with the color (Oct 27, Nick: "so that they can sync it in case they don't speak English") */}
+                      {sup && !(g.mockupThumbs || []).length ? <span>{where ? <b className="wo-st">{where}</b> : null}Placement reference · big on page {pgMk + i}</span> : <span>{(() => { const st = mkColor(i) ? lines.find((l) => ckey(l.color) === ckey(mkColor(i)))?.style : lines.length && new Set(lines.map((l) => l.style)).size === 1 ? lines[0].style : ""; return st ? <b className="wo-st">{st}</b> : null; })()}{mkColor(i) || (i === 0 && colors ? colors : "")}{mk.length > 1 || mkColor(i) ? ` · big on page ${pgMk + i}` : ""}</span>}
+                    </div>
+                  )) : (() => {
+                    // no mockup: each print's logo on the garment, never a blank box (Nick, Nov 17 2026, #40390's Military
+                    // Green tees ran from Printavo with "No mockup yet" though the stacked logo was on the print)
+                    const logos = g.imprints.filter((d) => d.design_id && p.designs[d.design_id]).slice(0, 4);
+                    return logos.length ? logos.map((d) => {
+                      const des = p.designs[d.design_id!];
+                      return (
+                        <div className="wo-m wo-lg" key={d.id || d.location}>
+                          <PrintThumb d={des} url={printArtUrl(p.designUrls, des.id, d)} print={d} lines={lines} />
+                          <span><b className="wo-st">{d.location}</b>Logo only · no mockup</span>
+                        </div>
+                      );
+                    }) : <div className="wo-m none" style={{ background: hex }}>No mockup yet</div>;
+                  })()}
+                </div>
+                {/* the prints: one card each, the same rows in the same order (Oct 26, Nick) */}
+                <div className="w2-prints">
+                  <div className="lbl">Prints</div>
+                  {g.imprints.length === 0 && <div className="wo-none">No prints on this group.</div>}
+                  {g.imprints.length > 4
+                    ? <div className="wo-plist">{g.imprints.map((d, di) => <span key={d.id}><b>{sideOf(d, g.imprints)}</b> {colorsLabel(d)}{inkNames(d.inks).length ? ` · ${inkNames(d.inks).join(", ")}` : ""} <i>p. {printPg[di]}</i></span>)}</div>
+                    : g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} lines={g.lines}
+                        ways={sheets.filter((sh) => sh.di === di && sh.variant?.cw).map((sh) => ({ name: sh.variant!.cw!, on: sh.variant!.color, qty: sh.qty || 0, file: sh.d.emb?.file?.name || "", threads: inkNames(sh.d.inks) }))} />)}
+                </div>
+              </div>
+              <h2>Garments <span>{gc?.allQty || 0} pieces · write the counts in the boxes{more.length ? ` · ${lines.length - firstN} more garment${lines.length - firstN === 1 ? "" : "s"} on page ${pgMore}` : ""}</span></h2>
+              {counts(lines.slice(0, firstN))}
+              {!!(noteParts.length > 0 || (first && (p.shopNotes.length || (p.cust.brand_print?.rules || []).length))) && <>
+                <h2>Notes {longNotes && <span>continued on page {notesPage ? pgNotes : pgMk}</span>}</h2>
+                <div className={"notes" + (longNotes ? " clip" : "")}>{notesBlock}</div>
+              </>}
+              <div className="foot"><span>{footL}</span><span>Page {pg} of {total} · printed {p.printed}</span></div>
+            </section>
+            {/* 2. more garments (8 a page) */}
+            {more.map((ls, mi) => (
+              <section className="sheet wo1" key={"more" + mi}>
+                {top(`Garments ${firstN + mi * perMore + 1}–${firstN + mi * perMore + ls.length} of ${lines.length}`)}
+                <h2>Garments <span>write the counts in the boxes</span></h2>
+                {counts(ls)}
+                <div className="foot"><span>{footL}</span><span>Page {pgMore + mi} of {total}</span></div>
+              </section>
+            ))}
+            {/* 3. each mockup big, its prints blown up under it */}
+            {mk.map((u, i) => {
+              const col = mkColor(i), bg = col ? colorBg(lines, col, p.colorHexes) || mkHex(i) : mkHex(i);
+              const qty = col ? lines.filter((l) => l.color === col).reduce((a, l) => a + lineQty(l), 0) : gc?.allQty || 0;
+              return (
+                <section className="sheet wo1" key={"mk" + i}>
+                  {top([col || colors, `${qty} pcs`, mk.length > 1 ? `mockup ${i + 1} of ${mk.length}` : ""].filter(Boolean).join(" · "))}
+                  <div className="wo-big"><img src={u} alt="Mockup" /></div>
+                  {allSup && <>
+                    <div className="wo-place"><b className="disp">{where || "Placement as shown"}</b><span>Customer supplied transfers{[g.imprints[0].supplied?.by, g.imprints[0].supplied?.ref ? `order ${g.imprints[0].supplied.ref}` : ""].filter(Boolean).length ? ` · ${[g.imprints[0].supplied?.by, g.imprints[0].supplied?.ref ? `order ${g.imprints[0].supplied.ref}` : ""].filter(Boolean).join(" · ")}` : ""} · press them where they are in this picture</span></div>
+                    <div className="specs wo-place-f">{["Press temp", "Time", "Pressure", "Peel"].map((k) => <div className="sp" key={k}><div className="lbl">{k}</div><div className="v fill" /></div>)}</div>
+                  </>}
+                  {g.imprints.length > 0 && !allSup && (
+                    <div className={"wo-cubes n" + Math.min(3, g.imprints.length) + (theirSeps ? " wo-cs" : "")}>
+                      {g.imprints.map((d0, di) => {
+                        const des = d0.design_id ? p.designs[d0.design_id] : null;
+                        // on this mockup's garment color: a colorway change runs that colorway (its own picture), else the print
+                        const dc = col ? printOnColor(d0, des, col) : d0, d = dc;
+                        const pic = des ? printArtUrl(p.designUrls, des.id, d) : "", sz = printSize(d, des);
+                        const v = col && dc === d0 ? vars[di].find((x) => ckey(x.color) === ckey(col)) : undefined;
+                        return (
+                          <div className="wo-cube" key={d.id}>
+                            {!theirSeps && <div className={"a" + (isDark(bg) ? " dark" : "")} style={{ background: bg }}>
+                              {pic ? <PaintedArt src={pic} imp={d} inkMap={d.inkMap} designId={d.design_id} swap={v?.swap} alt={des ? `D-${des.number}` : ""} /> : <span className="none">No art yet</span>}
+                            </div>}
+                            <div className="s"><b className="disp">{sideOf(d, g.imprints)}</b> {d.visualOnly ? "· run it like last time" : `· ${[d.colorway && des ? `${cwLetter(des, { name: d.colorway }) || ""} ${d.colorway}`.trim() : "", sz.label, inkNames(d.inks).map((k) => swapInk(k, v?.swap)).join(", ")].filter(Boolean).join(" · ")}`}{v ? <span className="wo-cc">{changeWord(d.method)}</span> : dc !== d0 ? <span className="wo-cc">Colorway</span> : null}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {i === 0 && g.imprints.length > 4 && <div className="wo-cards">{g.imprints.map((d, di) => <PrintCard key={d.id} d={d} des={d.design_id ? p.designs[d.design_id] : null} all={g.imprints} allLight={allLight} page={printPg[di]} lines={g.lines} />)}</div>}
+                  {i === 0 && longNotes && !notesPage && <><h2>Notes</h2><div className="notes wo-mk-notes">{notesBlock}</div></>}
+                  <div className="foot"><span>{footL}</span><span>Page {pgMk + i} of {total}</span></div>
+                </section>
+              );
+            })}
+            {notesPage && (
+              <section className="sheet wo1">
+                {top("Notes")}
+                <h2>Notes</h2>
+                <div className="notes">{notesBlock}</div>
+                <div className="foot"><span>{footL}</span><span>Page {pgNotes} of {total}</span></div>
+              </section>
+            )}
+            {/* 4. each print's press sheet */}
+            {!allSup && !theirSeps && sheets.map((sh, k) => (k % 2 ? null : sheets[k + 1]
+              ? (
+                <section key={sh.d.id + k} className="sheet cu-pair">
+                  {[sh, sheets[k + 1]].map((x, j) => <CloseUp key={x.d.id + (k + j)} half d={x.d} di={x.di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={x.variant ? x.variant.color : colors} qty={x.qty ?? (gc?.allQty || 0)} page={pgPrint + Math.floor(k / 2)} total={total} footL={footL} variant={x.variant} />)}
+                  <div className="foot"><span>{footL}</span><span>Page {pgPrint + Math.floor(k / 2)} of {total}</span></div>
+                </section>
+              )
+              : <div key={sh.d.id + k} style={{ display: "contents" }}><CloseUp d={sh.d} di={sh.di} n={g.imprints.length} p={p} gi={gi} allLight={allLight} colors={sh.variant ? sh.variant.color : colors} qty={sh.qty ?? (gc?.allQty || 0)} page={pgPrint + Math.floor(k / 2)} total={total} footL={footL} variant={sh.variant} /></div>))}
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 /** which side of the garment a print is on: FRONT, BACK or SLEEVE (the location's own name only when two share a side) */
