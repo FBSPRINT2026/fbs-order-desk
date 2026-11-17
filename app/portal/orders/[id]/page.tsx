@@ -1,6 +1,6 @@
 import { asCustomerSees, designSpecsFor, SENT_OR_SHOWN } from "@/lib/portalView";
+import PortalGoodsLine from "@/components/PortalGoodsLine";
 import { cardFeeInOrder } from "@/lib/cardFeeIn";
-import PortalGoods from "@/components/PortalGoods";
 import PortalAttachments from "@/components/PortalAttachments";
 import { Fragment } from "react";
 import BackLink from "@/components/BackLink";
@@ -429,12 +429,8 @@ export default async function PortalOrder({ params, searchParams }: { params: Pr
             )}
 
             {/* their goods for this order, in the side panel under Payment (Oct 24, Nick) */}
-            {goodsHere.length > 0 && (
-              <section className="panel" id="goods">
-                <div className="panel-h"><h2>Customer supplied goods</h2><span className="faint">Your garments: send us tracking, see when they&apos;re here</span></div>
-                <div className="panel-b"><PortalGoods items={goodsHere} canAct={!preview} qs={qsAs} empty="" /></div>
-              </section>
-            )}
+            {/* small: one line an order, the full card under Details (Nick, Nov 16 2026: "the whole right panel just goes on forever") */}
+            {goodsHere.length > 0 && <PortalGoodsLine items={goodsHere} canAct={!preview} qs={qsAs} />}
 
             {/* the papers for this order: the invoice, each proof, each mockup */}
             {!intake && <section className="panel">

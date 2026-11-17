@@ -1,4 +1,5 @@
 "use client";
+import GoodsGlance from "@/components/GoodsGlance";
 import RunTogether from "@/components/RunTogether";
 import { runChanged } from "@/app/shop/run-actions";
 import MoneyField from "@/components/MoneyField";
@@ -2308,6 +2309,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
         {/* Goods: its own tab (Oct 29, Nick: "move the goods panel up into its own part of the toolbar… orders, art production,
             then goods, messages") */}
         <div className="ot-one" hidden={tab !== "goods"}>
+          {o.status !== "request" && tab === "goods" && <GoodsGlance orderId={o.id} />}
           {o.status !== "request" ? <OrderGoodsPanel orderId={o.id} wholesale={o.price_type === "wholesale" && o.type === "invoice"} customerId={o.customer_id} groups={o.groups} thumbUrls={thumbUrls} onPrints={(ids, fn) => patch((d) => { for (const g of d.groups) for (const im of g.imprints) if (ids.includes(im.id)) fn(im); })} />
             : <div className="faint" style={{ padding: 20 }}>Goods are tracked once the request is accepted.</div>}
         </div>
