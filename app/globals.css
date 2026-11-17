@@ -22629,6 +22629,9 @@ table.rvd-tbl.tbl-stack tr.rvd-urg td:first-child{box-shadow:none}
 .smr-grp0{display:contents}
 .smr-grp{border:2px solid #7C5CD6;border-radius:calc(var(--r,8px) + 4px);box-shadow:0 0 0 4px color-mix(in srgb,#7C5CD6 12%,transparent);padding:0 0 2px;margin:14px 0;overflow:hidden;background:var(--surface)}
 .smr-grp>.smr-bar{margin:0;border:0;border-bottom:1px solid color-mix(in srgb,#7C5CD6 25%,var(--line));border-radius:0;background:linear-gradient(90deg,color-mix(in srgb,#7C5CD6 10%,var(--surface)),var(--surface))}
+.smr-fol{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:10px 14px;font-size:14px}
+.smr-fol-l{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3)}
+.smr-fol .faint{flex-basis:100%;font-size:12.5px}
 .smr-grp .smr-tag{background:#7C5CD6;color:#fff}
 .smr-grp>:not(.smr-bar){margin-top:0}
 

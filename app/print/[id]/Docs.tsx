@@ -1,4 +1,5 @@
 import { hasSpotChange, spotLines, spotOf, spotsOf } from "@/lib/spotChange";
+import { samplePieces, samplePiecesText } from "@/lib/samples";
 import { billBlock, billToOf } from "@/lib/billTo";
 import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile, withSewThreads } from "@/lib/brands";
 import { persOf, PERS_SHOW, printedLines } from "@/lib/pricing";
@@ -179,7 +180,22 @@ function neckLine(cust: Partial<Customer>, g: Group, fins: { id: string; name: s
 
 // ───────────────────────────── work order ─────────────────────────────
 type WoProps = DocData & { notes: string; shopNotes: { tag: string; body: string; by_name: string; created_at: string }[]; printed: string;
-  /** an order whose order training is set to the simple work order (Cedar's store carts, All My Sons) */ simple?: boolean };
+  /** an order whose order training is set to the simple work order (Cedar's store carts, All My Sons) */ simple?: boolean;
+  /** a run's pre-production sample, by the run group's id: "1 pc · M 1" (set by WorkOrderDoc) */ sampleFirst?: Record<string, string> };
+/**
+ * A pre-production sample of the run (GroupSample.follows) prints from the run's own pages: no pages of its own, a
+ * SAMPLE FIRST tag on the run's page with its pieces (Nick, Nov 17 2026, #50122: "we're just running one first and then
+ * sending it to them. And then the rest would just come, same artwork, same everything"). Every per-group list is kept
+ * in step with the groups left.
+ */
+function sampleFolded(p: WoProps): WoProps {
+  const keep = p.groups.map((g, i) => (g.sample?.kind === "pre" && g.sample.follows ? -1 : i)).filter((i) => i >= 0);
+  if (keep.length === p.groups.length) return p;
+  const first: Record<string, string> = {};
+  for (const g of p.groups) if (g.sample?.kind === "pre" && g.sample.follows) { const n = samplePieces(g); first[g.sample.follows] = `${n} pc${n === 1 ? "" : "s"} · ${samplePiecesText(g)}${g.sample.stage && g.sample.stage !== "planned" ? ` · ${g.sample.stage}` : ""}`; }
+  const pick = <T,>(xs: T[] | undefined) => (xs ? keep.map((i) => xs[i]) : xs) as T[];
+  return { ...p, groups: pick(p.groups), o: { ...p.o, groups: pick(p.o.groups) }, c: { ...p.c, groups: pick(p.c.groups) }, mockups: pick(p.mockups), byLine: p.byLine ? pick(p.byLine) : undefined, hexes: pick(p.hexes), maxes: pick(p.maxes), sampleFirst: first };
+}
 /**
  * The work order. A program's simple orders (Nick, Nov 17 2026: "cart orders for Peter… All My Sons, those really simple
  * orders… should have its own work order where it's very simple… The normal work order should stay the same for all
@@ -187,7 +203,8 @@ type WoProps = DocData & { notes: string; shopNotes: { tag: string; body: string
  * Every other order keeps the full work order. Which is which is set on the order training (Settings → Order training →
  * Work order: Simple), matched by the words in the job's name like every training, never a customer named in code.
  */
-export function WorkOrderDoc(p0: WoProps) {
+export function WorkOrderDoc(pIn: WoProps) {
+  const p0 = sampleFolded(pIn);
   if (p0.simple) return <CartWorkOrder {...p0} />;
   const p = withSewing(p0), vp = versionPlan(p);
   return vp ? <VersionWorkOrder p={p} vp={vp} /> : <FullWorkOrder {...p0} />;
@@ -296,8 +313,9 @@ function VersionWorkOrder({ p, vp }: { p: WoProps; vp: Version[] }) {
                   <div className="w2-due"><span className="lbl">In hands</span><b className="disp">{due || "NOT SET"}</b>{dueSub && <small>{dueSub}</small>}</div>
                   <div className="codes"><div className="qr" dangerouslySetInnerHTML={{ __html: qr }} /><small>Scan: setup, notes, photos, time</small></div>
                 </div>
-                {(o.rush || o.priority || p.printavo || groups.some((_g, gi) => p.c.groups[gi]?.wholesale)) && <div className="flags">
+                {(o.rush || o.priority || p.printavo || Object.keys(p.sampleFirst || {}).length > 0 || groups.some((_g, gi) => p.c.groups[gi]?.wholesale)) && <div className="flags">
                   {o.rush && <span className="flag rush">RUSH</span>}
+                  {Object.values(p.sampleFirst || {}).map((t) => <span key={t} className="flag rush">SAMPLE FIRST · {t.toUpperCase()} · PRINT, SEND FOR OK, THEN THE RUN</span>)}
                   {o.priority && <span className="flag prio">HIGH PRIORITY{o.priority_note ? ` · ${o.priority_note.toUpperCase()}` : ""}</span>}
                   {groups.some((_g, gi) => p.c.groups[gi]?.wholesale) && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
                   {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}
@@ -381,7 +399,7 @@ function CartWorkOrder(p0: WoProps) {
     const theirSeps = !allSup && g.imprints.length > 0 && g.imprints.every((d) => d.custSeps || d.supplied);
     const printPages = allSup || theirSeps ? 0 : Math.ceil(sheetsOf(g, p.designs).length / 2);
     // the group's own notes on its card: what it is, its finishing, its neck labels
-    const gnotes = [g.description?.trim() || "", gc?.finishing.length ? `Finishing: ${gc.finishing.map((f) => f.name).join(", ")}` : "", neckLine(cust, g, gc?.finishing || [])].filter(Boolean);
+    const gnotes = [p0.sampleFirst?.[g.id] ? `SAMPLE FIRST: ${p0.sampleFirst[g.id]}. Print it, send it for their OK, then the run.` : "", g.description?.trim() || "", gc?.finishing.length ? `Finishing: ${gc.finishing.map((f) => f.name).join(", ")}` : "", neckLine(cust, g, gc?.finishing || [])].filter(Boolean);
     return { lines, mk, firstMk, vars, allSup, theirSeps, compact, gnotes, n: mk.length + printPages };
   });
   // the order's notes, once, at the end of the job pages: its notes, where it goes, the shop's notes and brand rules
@@ -847,6 +865,7 @@ function FullWorkOrder(p0: WoProps) {
                 {o.rush && <span className="flag rush">RUSH</span>}
                 {o.priority && <span className="flag prio">HIGH PRIORITY{o.priority_note ? ` · ${o.priority_note.toUpperCase()}` : ""}</span>}
                 {groups.length > 1 && <span className="flag grp">{(g.name || `Group ${gi + 1}`).toUpperCase()}</span>}
+                {p.sampleFirst?.[g.id] && <span className="flag rush">SAMPLE FIRST · {p.sampleFirst[g.id].toUpperCase()} · PRINT, SEND FOR OK, THEN THE RUN</span>}
                 {gc?.wholesale && <span className="flag cs">CUSTOMER SUPPLIED GOODS</span>}
                 {g.imprints.some((d) => d.supplied) && <span className="flag cs">CUSTOMER SUPPLIED TRANSFERS</span>}
                 {p.printavo && <span className="flag pv">RUN FROM PRINTAVO</span>}

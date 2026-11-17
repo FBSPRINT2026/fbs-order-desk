@@ -24,6 +24,9 @@ export type GroupSample = {
   /** the day it's meant to print (yyyy-mm-dd) */ runOn?: string; note?: string; stage?: SampleStage;
   /** when each stage was reached, and by whom */ at?: Partial<Record<SampleStage, { at: string; by?: string }>>;
   /** a sample-only design made into an order: that order (Make the order) */ made?: { id: string; number: number };
+  /** a pre-production sample of the run itself (Nick, Nov 17 2026, #50122: "we're just running one first… the rest would
+   *  come, same artwork, same everything… mockups would be shared"): the run group it follows. Its prints, mockups and
+   *  garments' looks are always that group's (syncSamples); only its pieces are its own */ follows?: string;
 };
 /** an order started from a sample (Make the order): the sample order and its group, and the credit carried over */
 export type FromSample = { id: string; number: number; group: string; name?: string; credit: number };
@@ -69,9 +72,43 @@ export function offTheTop(groups: Group[]): Map<string, Record<string, number>> 
 export const waitsOnSample = (groups: Group[]) => groups.some((g) => g.sample?.kind === "pre" && g.sample.stage !== "approved");
 export const isSampleGroup = (g: Pick<Group, "sample">) => !!g.sample;
 
+const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+const ART_KEYS = ["mockupThumbs", "mockupArt", "mockupKind", "mockupSize", "mockupOffsets", "mockupZoom", "mockupAt", "visualMockup", "customerMockups", "mockupBg", "youthSet"] as const;
+/**
+ * A pre-production sample that follows its run (GroupSample.follows) takes the run's art every time the order is read or
+ * changed: the same prints (each keeps a stable id of its own, `<run print id>~s`), the same mockups, and each sample line
+ * the look of the line it's pulled from (its sizes stay its own). One set of art, so the sample and the run can't drift
+ * (Nov 17, #50122: a mockup made on the sample group moved its prints and left the run with none). In place; returns groups.
+ */
+export function syncSamples<G extends Group>(groups: G[]): G[] {
+  if (!groups?.some((g) => g.sample?.follows)) return groups;
+  for (const g of groups) {
+    const f = g.sample?.follows; if (!f) continue;
+    const run = groups.find((x) => x.id === f && !x.sample);
+    if (!run) continue;
+    g.imprints = (run.imprints || []).map((p) => ({ ...clone(p), id: `${p.id}~s`, fromPrint: p.id, changeOf: undefined }));
+    const gr = g as unknown as Record<string, unknown>, rr = run as unknown as Record<string, unknown>;
+    for (const k of ART_KEYS) { if (rr[k] !== undefined) gr[k] = clone(rr[k]); else delete gr[k]; }
+    g.lines = (g.lines || []).map((l) => {
+      const src = l.sampleOf ? run.lines.find((x) => x.id === l.sampleOf) : undefined;
+      return src ? { ...clone(src), id: l.id, sizes: l.sizes, priceOverride: null, sampleOf: src.id, extras: undefined, shopUse: undefined } as GLine : l;
+    }).filter((l) => !l.sampleOf || run.lines.some((x) => x.id === l.sampleOf));
+  }
+  return groups;
+}
+/** the sample that follows this run group, if any */
+export const sampleOfRun = <G extends Group>(groups: G[], runId: string): G | undefined => groups.find((g) => g.sample?.kind === "pre" && g.sample.follows === runId);
+/** the sample's pieces in words: "M 1", "S 1 · M 1 · L 1" */
+export const samplePiecesText = (g: Pick<Group, "lines">) => {
+  const by = new Map<string, number>();
+  for (const l of g.lines || []) for (const [k, v] of Object.entries(l.sizes || {})) if (n(v)) by.set(k, (by.get(k) || 0) + n(v));
+  return [...by].map(([k, v]) => `${k} ${v}`).join(" · ");
+};
+
 /** the order's groups as production runs them, in two parts (the schedule, the work order): the sample's groups, and
  *  the rest with the pieces taken off the top for the sample left out */
 export function runParts(groups: Group[]): { sample: Group[]; rest: Group[] } {
+  syncSamples(groups);
   const top = offTheTop(groups);
   const sample = groups.filter((g) => g.sample?.kind === "pre");
   const rest = groups.filter((g) => g.sample?.kind !== "pre").map((g) => (g.lines.some((l) => top.has(l.id)) ? { ...g, lines: g.lines.map((l) => {

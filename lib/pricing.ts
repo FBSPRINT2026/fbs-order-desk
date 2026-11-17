@@ -1,5 +1,6 @@
 import { dtfEach, dtfGridOn, dtfMinimum, dtfPress } from "@/lib/dtfGrid";
 import { addStockInks, colorHex } from "./inkColors";
+import { syncSamples } from "@/lib/samples";
 
 // Shared pricing engine and order vocabulary.
 // Used by the shop editor (live totals), the customer portal (display)
@@ -1040,7 +1041,7 @@ export function shapeGroups(gs: Group[]): Group[] {
   return gs;
 }
 export function orderGroups(o: Pick<Order, "groups" | "lines">): Group[] {
-  if (o.groups && o.groups.length) { shapeGroups(o.groups); for (const g of o.groups) if (Array.isArray(g.imprints)) frontFirst(g.imprints); return o.groups; }
+  if (o.groups && o.groups.length) { shapeGroups(o.groups); for (const g of o.groups) if (Array.isArray(g.imprints)) frontFirst(g.imprints); return syncSamples(o.groups); }
   return (o.lines || []).map((l) => ({
     id: l.id,
     lines: [{ id: l.id + "-g", style: l.style || "", brand: "", garment: l.garment || "", color: l.color || "", cost: l.cost, sizes: l.sizes || {}, priceOverride: l.priceOverride ?? null }],

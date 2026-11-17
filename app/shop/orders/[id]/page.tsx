@@ -99,6 +99,7 @@ import type { DgzSewout } from "@/lib/digitizeStatus";
 import { garmentFor, sameBrand } from "@/lib/garmentMatch";
 import SampleRunTool, { SampleBar } from "@/components/tools/SampleRunTool";
 import type { SampleKind } from "@/lib/samples";
+import { syncSamples, samplePiecesText } from "@/lib/samples";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -775,6 +776,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       if (!prev) return prev;
       const n: Order = JSON.parse(JSON.stringify(prev));
       fn(n);
+      // a sample of the run takes the run's art on every change (lib/samples.ts syncSamples)
+      syncSamples(n.groups || []);
       latest.current = n;
       // a copy in this browser until the server has it (Oct 24, Nick: "maybe somebody loses their internet connection"):
       // offered back on the next open if it never got saved
@@ -2016,14 +2019,17 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {isSimpleKind(o.product_kind) ? <SimpleLines orderId={o.id} kind={o.product_kind} groups={o.groups} hidePrices={!seesMoney || undefined} update={(fn) => patch((d) => fn(d.groups))} save={save} /> : <>
           <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => (<div key={g.id} className={g.sample ? "smr-grp" : "smr-grp0"}>
             {g.sample && <SampleBar g={g} orderId={o.id} me={who.staffName || who.email || ""} patch={patch} onEdit={() => setSampleTool({ kind: g.sample?.kind || "only", groupId: g.id })} />}
-            <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
+            {g.sample?.follows ? (
+              // a sample of the run (GroupSample.follows): only its pieces here; its prints, mockups and screens are the run's
+              <div className="smr-fol"><span className="smr-fol-l">Sample pieces</span><b data-notranslate>{[...new Set(g.lines.map((l) => [l.style, l.color].filter(Boolean).join(" ")))].join(", ")}</b><span className="nw">{samplePiecesText(g)}</span><span className="faint">Prints, mockup and screens: the same as {(() => { const ri = o.groups.findIndex((x) => x.id === g.sample?.follows); return ri >= 0 ? o.groups[ri].name?.trim() || `Group ${ri + 1}` : "the run"; })()}, below</span></div>
+            ) : <GroupEditor persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || o.groups.length === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={o.groups.length > 1}
               onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : goneAsk(g)} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
               onRemove={() => patch((d) => { d.groups.splice(gi, 1); })}
               moveTo={o.groups.flatMap((x, xi) => (x.id === g.id ? [] : [{ id: x.id, label: [x.name?.trim() || `Group ${xi + 1}`, x.lines.map((l) => l.style).filter(Boolean).slice(0, 2).join(", ")].filter(Boolean).join(" · ") }]))}
-              onMoveLine={moveLine} />
+              onMoveLine={moveLine} />}
           </div>))}</OrderInkCtx.Provider>
           {sampleTool && <SampleRunTool o={o} patch={patch} kind={sampleTool.kind} groupId={sampleTool.groupId} onClose={() => setSampleTool(null)} />}
           <div className="row grp-add">

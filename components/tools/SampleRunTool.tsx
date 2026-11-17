@@ -1,14 +1,15 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import MoneyField from "@/components/MoneyField";
 import { SIZES, uid, type Group, type GLine, type Order } from "@/lib/pricing";
-import { SAMPLE_STAGES, SOURCE_LABEL, sampleCharged, sampleCredit, samplePieces, startCharges, type GroupSample, type SampleCharge, type SampleKind, type SampleSource, type SampleStage } from "@/lib/samples";
+import { SAMPLE_STAGES, SOURCE_LABEL, sampleCharged, sampleCredit, samplePieces, startCharges, syncSamples, type GroupSample, type SampleCharge, type SampleKind, type SampleSource, type SampleStage } from "@/lib/samples";
 
 /**
  * THE Sample tool (Nov 11 2026, Nick): one pop-up for both kinds of sample (lib/samples.ts).
- *  - Order + sample: pick the pieces to sample off the order's garments (one of each size in a click), the prints,
+ *  - Order + sample: pick the pieces to sample off the order's garments (one of each size in a click) (its prints,
+ *    mockups and screens are always the run's: GroupSample.follows),
  *    where the pieces come from, the charges, the day. It becomes its own "Sample run" group at the top of the order.
  *  - Sample only: a group of a Sample order gets its charges, day and note.
  * Charges are "anything goes" (Nick: "the rules on samples are… all over the map… it should be a very any option"):
@@ -32,11 +33,9 @@ export default function SampleRunTool({ o, patch, groupId, kind, onClose }: { o:
   // the pieces picked, by the order line they come from (pre-production only)
   const [pick, setPick] = useState<Record<string, Record<string, number>>>(() => {
     const m: Record<string, Record<string, number>> = {};
-    for (const l of editing?.lines || []) if (l.sampleOf) m[l.sampleOf] = { ...(l.sizes as Record<string, number>) };
+    for (const g of editing ? o.groups.filter((x) => x.sample?.kind === "pre") : []) for (const l of g.lines || []) if (l.sampleOf) m[l.sampleOf] = { ...(l.sizes as Record<string, number>) };
     return m;
   });
-  const prints0 = useMemo(() => new Set((editing?.imprints || []).map((d) => d.fromPrint || d.id)), [editing]);
-  const [prints, setPrints] = useState<Set<string>>(() => (editing ? prints0 : new Set(prod.flatMap((g) => g.imprints.map((d) => d.id)))));
   const lines = prod.flatMap((g) => g.lines.filter((l) => pcs(l.sizes as Record<string, number>) > 0 || (l.style || "").trim()).map((l) => ({ g, l })));
   const picked = Object.values(pick).reduce<number>((a, z) => a + pcs(z), 0);
   const total = sampleCharged({ kind, source, charges }), credit = sampleCredit({ kind, source, charges });
@@ -52,16 +51,23 @@ export default function SampleRunTool({ o, patch, groupId, kind, onClose }: { o:
         if (g) g.sample = sample;
         return;
       }
-      // pre-production: the sample's own group, its lines copied from the order's with the sizes picked, its prints the ones ticked
-      const srcGroups = d.groups.filter((g) => !g.sample);
-      const sl: GLine[] = srcGroups.flatMap((g) => g.lines.filter((l) => pcs(pick[l.id] || {}) > 0).map((l) => ({ ...JSON.parse(JSON.stringify(l)), id: editing?.lines.find((x) => x.sampleOf === l.id)?.id || uid(), sizes: Object.fromEntries(Object.entries(pick[l.id] || {}).filter(([, v]) => v > 0)), priceOverride: null, sampleOf: l.id } as GLine)));
-      const from = srcGroups.find((g) => g.lines.some((l) => pcs(pick[l.id] || {}) > 0)) || srcGroups[0];
-      const seenLoc = new Set<string>();
-      const imps = srcGroups.flatMap((g) => g.imprints).filter((p) => prints.has(p.id)).filter((p) => { const k = `${p.design_id || p.id}|${p.location}`; if (seenLoc.has(k)) return false; seenLoc.add(k); return true; })
-        .map((p) => ({ ...JSON.parse(JSON.stringify(p)), id: editing?.imprints.find((x) => x.fromPrint === p.id)?.id || uid(), fromPrint: p.id, changeOf: undefined }));
-      const base: Group = editing ? d.groups.find((g) => g.id === editing.id)! : { id: uid(), name: "Sample run", lines: [], imprints: [], ...(from?.mockupThumbs ? { mockupThumbs: [...from.mockupThumbs] } : {}), ...(from?.mockupArt ? { mockupArt: from.mockupArt } : {}) } as Group;
-      base.lines = sl; base.imprints = imps; base.sample = sample;
-      if (!editing) d.groups.unshift(base);
+      // pre-production: a sample of the run itself (Nov 17, #50122): for each group whose garments it's pulled from, one
+      // sample that follows that group (GroupSample.follows): only its pieces are its own, its prints, mockups and screens
+      // are always the run's (syncSamples). Charges, stage and note sit on the first; a sample made before follows on save.
+      const runs = d.groups.filter((g) => !g.sample);
+      const old = d.groups.filter((g) => g.sample?.kind === "pre");
+      const made: Group[] = [];
+      for (const run of runs) {
+        const ls = run.lines.filter((l) => pcs(pick[l.id] || {}) > 0);
+        if (!ls.length) continue;
+        const was = old.find((g) => g.sample?.follows === run.id) || (made.length ? undefined : editing);
+        const sl: GLine[] = ls.map((l) => ({ ...JSON.parse(JSON.stringify(l)), id: was?.lines.find((x) => x.sampleOf === l.id)?.id || uid(), sizes: Object.fromEntries(Object.entries(pick[l.id] || {}).filter(([, v]) => v > 0)), priceOverride: null, sampleOf: l.id } as GLine));
+        made.push({ id: was?.id || uid(), name: "Sample run", lines: sl, imprints: [], sample: made.length ? { kind: "pre", source, charges: [], stage: sample.stage, follows: run.id } : { ...sample, follows: run.id } } as Group);
+      }
+      // each sample sits right above the run it follows
+      const rest = d.groups.filter((g) => g.sample?.kind !== "pre");
+      d.groups = rest.flatMap((g) => [...made.filter((m) => m.sample?.follows === g.id), g]);
+      syncSamples(d.groups);
     });
     onClose();
   }
@@ -85,12 +91,8 @@ export default function SampleRunTool({ o, patch, groupId, kind, onClose }: { o:
                 </div>
               );
             })}
-            {prod.some((g) => g.imprints.length) && <>
-              <div className="smr-lab">Prints</div>
-              <div className="smr-prints">{prod.flatMap((g) => g.imprints).map((p) => (
-                <label key={p.id} className="smr-chk"><input type="checkbox" checked={prints.has(p.id)} onChange={(e) => setPrints((x) => { const n = new Set(x); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n; })} />{p.location}{p.method === "screen" ? ` · ${p.colors}c` : ""}</label>
-              ))}</div>
-            </>}
+            <div className="smr-lab">Prints, mockups and screens</div>
+            <div className="faint smr-hint">The same as the run&apos;s: change them on the order and the sample changes with them.</div>
             <div className="smr-lab">Where the sample pieces come from</div>
             <div className="smr-seg" role="radiogroup">{(["top", "customer", "extra"] as SampleSource[]).map((k) => (
               <button key={k} type="button" role="radio" aria-checked={source === k} className={source === k ? "on" : ""} onClick={() => setSource(k)}>{SOURCE_LABEL[k]}</button>
@@ -115,7 +117,7 @@ export default function SampleRunTool({ o, patch, groupId, kind, onClose }: { o:
           </div>
           <div className="smr-foot">
             <span className="faint">{kind === "pre" ? `${picked} pc${picked === 1 ? "" : "s"} · ` : ""}${total.toFixed(2)} on the sample{credit ? ` · $${credit.toFixed(2)} credited on the full run` : ""}{kind === "pre" ? " · the full run waits for their OK" : ""}</span>
-            {editing && kind === "pre" && <button type="button" className="btn ghost" onClick={() => { patch((d) => { d.groups = d.groups.filter((g) => g.id !== editing.id); }); onClose(); }}>Remove sample</button>}
+            {editing && kind === "pre" && <button type="button" className="btn ghost" onClick={() => { patch((d) => { d.groups = d.groups.filter((g) => g.sample?.kind !== "pre"); }); onClose(); }}>Remove sample</button>}
             <button type="button" className="btn primary" disabled={!canSave} onClick={save}>{editing ? "Save" : kind === "pre" ? "Add sample" : "Save"}</button>
           </div>
         </div>
