@@ -1,4 +1,5 @@
 "use client";
+import { clearTextWidths, textWidth } from "@/lib/textWidth";
 import MoneyField from "@/components/MoneyField";
 import { garmentFor } from "@/lib/garmentMatch";
 import NoCharge from "@/components/NoCharge";
@@ -588,20 +589,9 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
   const glSig = JSON.stringify([groupCols, hasCost, gc.qty, gc.sub, g.lines.map((l, i) => [l.style, l.brand, l.color, l.cost, l.priceOverride, l.sizes, l.sizeUpSet, l.sizeUp, gc.lines[i]?.qty, gc.lines[i]?.sub, gc.lines[i]?.calcEach])]);
   useEffect(() => {
     const el = glRef.current; if (!el) return;
-    // a hidden copy of the text in the same font settings (canvas can't do tabular numbers, which are wider)
-    const probe = document.createElement("span");
-    probe.setAttribute("aria-hidden", "true"); probe.setAttribute("data-notranslate", "");
-    probe.style.cssText = "position:fixed;left:0;top:0;visibility:hidden;white-space:pre;pointer-events:none;padding:0;border:0;margin:0";
-    document.body.appendChild(probe);
-    const textW = (node: Element, text: string) => {
-      if (!text) return 0;
-      const cs = getComputedStyle(node), ps = probe.style;
-      ps.fontFamily = cs.fontFamily; ps.fontSize = cs.fontSize; ps.fontWeight = cs.fontWeight; ps.fontStyle = cs.fontStyle;
-      ps.fontStretch = cs.fontStretch; ps.fontVariantNumeric = cs.fontVariantNumeric; ps.fontFeatureSettings = cs.fontFeatureSettings;
-      ps.letterSpacing = cs.letterSpacing; ps.textTransform = cs.textTransform;
-      probe.textContent = text;
-      return Math.ceil(probe.getBoundingClientRect().width);
-    };
+    // the text's width in the page's own fonts (lib/textWidth.ts: one contained probe, remembered, so a big order never
+    // re-lays out the whole page per number; Nov 16, #50108 froze the browser for a minute)
+    const textW = textWidth;
     // the widest value in a column (an input: what's typed, else the placeholder it shows), plus its padding, kept within lo…hi
     const widest = (sel: string, pad: number, lo: number, hi: number) => {
       let m = 0;
@@ -653,7 +643,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       const A = Math.max(80, ...per.map((x) => x.st + x.br)); // style + brand, the widest row
       const B = Math.max(80, ...per.map((x) => x.st + x.br + x.de)); // style + brand + description
       const coMax = Math.max(44, ...per.map((x) => x.co));
-      per.forEach((x) => { const v = (k: string, n: number) => x.r.style.setProperty(k, `${n}px`); v("--str", x.st); v("--brr", A - x.st); v("--brr0", x.br); v("--der", B - x.st - x.br); });
+      const rowWrites = () => per.forEach((x) => { const v = (k: string, n: number) => x.r.style.setProperty(k, `${n}px`); v("--str", x.st); v("--brr", A - x.st); v("--brr0", x.br); v("--der", B - x.st - x.br); });
       const st = per[0]?.st ?? 60, br = A - st, co = coMax, deB = B - A;
       const cs = hasCost ? widest(".gl .a-cs input", 14, 34, 90) : 0;
       const qt = Math.max(widest(".gl .a-qt input", 10, 30, 80), widest(".grp-total > .a-qt", 4, 30, 80));
@@ -676,11 +666,14 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
       let own = 1;
       el.querySelectorAll<HTMLElement>(".gl .a-sz .szrow").forEach((r) => { own = Math.max(own, r.querySelectorAll(".szc:not(.szc-off)").length); });
       // each row's own style width, for the stacked layout (no gap after a short style number)
-      el.querySelectorAll<HTMLElement>(".gl .a-st").forEach((c) => { const i = c.querySelector("input"); if (i) c.style.setProperty("--stw", `${Math.max(24, textW(i, i.value || i.placeholder || "") + 4)}px`); });
+      // (read them all, then write them all: a write between two reads makes the browser lay the page out again)
+      const stw = [...el.querySelectorAll<HTMLElement>(".gl .a-st")].map((c) => { const i = c.querySelector("input"); return [c, i ? Math.max(24, textW(i, i.value || i.placeholder || "") + 4) : 0] as const; });
       // the ✎ and ✕ buttons side by side
       let xw = 0;
       el.querySelectorAll<HTMLElement>(".gl .a-x").forEach((c) => { const bs = [...c.querySelectorAll<HTMLElement>("button")]; xw = Math.max(xw, bs.reduce((a, b) => a + Math.ceil(b.getBoundingClientRect().width), 0) + Math.max(0, bs.length - 1) * 2); });
       X = Math.max(22, xw);
+      rowWrites();
+      stw.forEach(([c, w]) => { if (w) c.style.setProperty("--stw", `${w}px`); });
       return { deB, st, br, co, cs, qt, ea: Math.max(ea, eaIn + 20), eaIn, to, boxMin, own };
     };
     const fit = () => {
@@ -741,8 +734,8 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
     ro?.observe(el);
     let live = true;
     // the fonts arriving late change every width: measure again
-    document.fonts?.ready?.then(() => { if (live) { m = null; fit(); } }).catch(() => {});
-    return () => { live = false; ro?.disconnect(); probe.remove(); };
+    document.fonts?.ready?.then(() => { if (live) { clearTextWidths(); m = null; fit(); } }).catch(() => {});
+    return () => { live = false; ro?.disconnect(); };
   }, [glSig]); // eslint-disable-line react-hooks/exhaustive-deps
   // Imprints and finishing stay grayed out until the group has a mockup (or staff choose to skip it)
   registerAreas(g.imprints);
