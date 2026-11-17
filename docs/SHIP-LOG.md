@@ -444,3 +444,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 8:53pm · 1.3.686 · Nick · Digitizing: 'DST needed' lists every digitized print with no stitch file (repeats production brings in); an embroidered print with no count or DST gets its stitches estimated from its logo and size for run time only (not price)
 - Nov 16 9:01pm · 1.3.687 · Nick · Goods at a glance: a Goods card on the shop order's Goods tab (where they are, ordered vs counted, Count in); the customer's order page shows their goods as one small line an order, the full card under Details
 - Nov 16 9:03pm · 1.3.688 · Nick · Schedule job card: only this machine's part of a mixed job (its groups' mockups, prints, garments and pieces); each group's current mockup once, never every save
+- Nov 16 9:03pm · 1.3.689 · Nick · Goods card: falls back to the order's own goods status when tracking was cleared (arrived → Here, not counted), shows the supplier order

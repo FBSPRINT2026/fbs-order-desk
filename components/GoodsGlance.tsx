@@ -14,9 +14,10 @@ const day = (s?: string | null) => (s ? new Date(s.length > 10 ? s : s + "T12:00
 
 export default function GoodsGlance({ orderId }: { orderId: string }) {
   const [job, setJob] = useState<CheckJob | null | undefined>(undefined);
+  const [og, setOg] = useState<{ status: string; supplier: string; supplier_po: string; updated_at: string | null } | null>(null);
   const [err, setErr] = useState("");
   const [count, setCount] = useState(false);
-  const load = () => { void goodsGlance(orderId).then((r) => { if (r.ok) setJob(r.job); else { setErr(r.error); setJob(null); } }); };
+  const load = () => { void goodsGlance(orderId).then((r) => { if (r.ok) { setJob(r.job); setOg(r.goods); } else { setErr(r.error); setJob(null); } }); };
   useEffect(load, [orderId]); // eslint-disable-line react-hooks/exhaustive-deps
   if (job === undefined) return <section className="panel ggl"><div className="panel-b faint">Reading the goods…</div></section>;
   if (!job) return err ? <section className="panel ggl"><div className="panel-b faint">{err}</div></section> : null;
@@ -29,15 +30,19 @@ export default function GoodsGlance({ orderId }: { orderId: string }) {
     : job.state === "checked" && last ? (counted >= (last.expected || ordered) ? { w: "Counted", tone: "ok", sub: `All ${counted} here · ${last.by || "counted"}, ${day(last.created_at)}` } : { w: "Partly counted", tone: "blue", sub: `${counted} of ${last.expected || ordered} · ${last.by || ""}, ${day(last.created_at)}` })
     : job.state === "ready" ? { w: "Here, not counted", tone: "warn", sub: job.delivered ? `${job.delivered} box${job.delivered === 1 ? "" : "es"} delivered` : "Delivered" }
     : job.state === "partial" ? { w: "Part here", tone: "warn", sub: `${job.delivered} of ${job.boxes} boxes delivered` }
+    // no tracking to go by: the order's own goods status (arrived by the manifest before its tracking was cleared)
+    : (job.state === "none" || job.state === "way") && og && (og.status === "arrived" || og.status === "received") ? { w: "Here, not counted", tone: "warn", sub: `Arrived${og.updated_at ? ` ${day(og.updated_at)}` : ""}` }
+    : (job.state === "none" || job.state === "way") && og?.status === "partial" ? { w: "Part here", tone: "warn", sub: "Some boxes arrived" }
     : job.state === "way" ? { w: "On the way", tone: "blue", sub: job.boxes ? `${job.boxes} box${job.boxes === 1 ? "" : "es"} shipped` : "Shipped" }
     : { w: "Not here", tone: "bad", sub: "No tracking yet: if it's on the floor, count it in" };
-  const from = [job.suppliers.join(", "), job.po ? `PO ${job.po}` : ""].filter(Boolean).join(" · ");
+  const sup = job.suppliers.join(", ") || ({ sanmar: "SanMar", ss: "S&S", alpha: "alphabroder" } as Record<string, string>)[og?.supplier || ""] || og?.supplier || "";
+  const from = [sup, og?.supplier_po ? `order ${og.supplier_po}` : job.po ? `PO ${job.po}` : ""].filter(Boolean).join(" · ");
   // counted per style and color, from the latest count
   const got = (style: string, color: string) => last ? last.lines.filter((l) => l.style === style && l.color === color).reduce((a, l) => a + (+l.received || 0), 0) : null;
 
   return (
     <section className="panel ggl">
-      <div className="panel-h"><h2>Goods</h2><span className={"ggl-st " + st.tone}>{st.w}</span></div>
+      <div className="panel-h"><h2>Where the goods are</h2><span className={"ggl-st " + st.tone}>{st.w}</span></div>
       <div className="panel-b stack" style={{ gap: 8 }}>
         <div className="ggl-sub">{st.sub}{from ? ` · ${from}` : ""}</div>
         {job.items.length > 0 && (
