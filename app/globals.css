@@ -23164,6 +23164,8 @@ tr.wo-on td{background:var(--accent-soft,#e8f1fc)}
 .jcp2-pc b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .jcp2-pc small{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-3)}
 .jcp2-pc small i{width:7px;height:7px;border-radius:50%;flex:none}
+.jcp2-pc>span{min-width:0}
+.jcp2-pc small.jcp2-logo{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
 .jcp2-pi{width:32px;height:32px;border-radius:7px;background:var(--surface-2);display:grid;place-items:center;flex:none;color:var(--ink-2)}
 .jcp2 .jcp-hero{height:190px;margin:12px 16px 0;border:1px solid var(--line-2);border-radius:8px}
 .jcp2 .jcp-sec{padding:12px 16px}

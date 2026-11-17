@@ -116,7 +116,9 @@ function Detail({ d, rows, it, step, after, close, onUndo, chatKey, onSent }: { 
         {d.pieces.map((x, i) => { const w = WORD[x.state]; return (
           <button key={i} type="button" role="tab" aria-selected={i === sel} className={"jcp2-pc" + (i === sel ? " on" : "")} onClick={() => setSel(i)}>
             <span className="jcp2-pi">{I(x.k === "art" ? IC.shirt : x.k === "sewout" ? IC.needle : IC.receipt, 17)}</span>
-            <span><b>{x.k === "art" ? `Mockup${x.versions[0] ? ` v${x.versions[0].v}` : ""}` : x.k === "sewout" ? `Sew-out · ${x.where.split(",")[0]}` : `Quote · ${money(x.total)}`}</b><small><i style={{ background: w[1] }} />{x.k === "quote" && x.state === "sent" && d.pieces.some((y) => y.k !== "quote" && y.state === "sent") ? "After the proof" : w[0]}</small></span>
+            <span><b title={x.k === "sewout" ? [x.where, x.logo].filter(Boolean).join(" · ") : undefined}>{x.k === "art" ? `Mockup${x.versions[0] ? ` v${x.versions[0].v}` : ""}` : x.k === "sewout" ? `Sew-out · ${x.where.split(",")[0]}` : `Quote · ${money(x.total)}`}</b>
+              {x.k === "sewout" && x.logo && <small className="jcp2-logo">{x.logo}</small>}
+              <small><i style={{ background: w[1] }} />{x.k === "quote" && x.state === "sent" && d.pieces.some((y) => y.k !== "quote" && y.state === "sent") ? "After the proof" : x.k === "sewout" && x.id === null && x.dz ? x.dz : w[0]}</small></span>
           </button>); })}
       </div>}
       {p && <Hero p={p} d={d} />}

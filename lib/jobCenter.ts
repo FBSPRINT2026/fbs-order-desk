@@ -271,7 +271,7 @@ export type PieceState = "needed" | "made" | "sent" | "changes" | "done";
 export type ProofVersion = { v: number; state: PieceState | "replaced"; sentAt: string | null; sentTo: string | null; viewedAt: string | null; views: number; decidedAt: string | null; decidedName: string | null; comment: string; pics: string[] };
 export type JobPiece =
   | { k: "art"; state: PieceState; versions: ProofVersion[]; next: string[] | null; pdf: string }
-  | { k: "sewout"; id: string | null; where: string; imprintId: string; state: PieceState; /** before a sew-out: where it is in digitizing */ dz?: string; v: number; sentAt: string | null; sentTo: string | null; viewedAt: string | null; views: number; decidedAt: string | null; decidedName: string | null; comment: string; pic: string; pdf: string }
+  | { k: "sewout"; id: string | null; where: string; imprintId: string; state: PieceState; /** before a sew-out: where it is in digitizing */ dz?: string; /** the logo's name: two logos at the same spot told apart (Nov 16, #40483's two Left Chests) */ logo?: string; v: number; sentAt: string | null; sentTo: string | null; viewedAt: string | null; views: number; decidedAt: string | null; decidedName: string | null; comment: string; pic: string; pdf: string }
   | { k: "quote"; state: PieceState; total: number; qty: number; sentAt: string | null; decidedAt: string | null; decidedName: string | null; comment: string; pdf: string };
 export type JobDetail = {
   id: string; number: number; title: string; status: string; due: string | null; qty: number; customer: string; contact: string; email: string;
@@ -323,7 +323,8 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
   if (vs.length || unsent || (quoting && hasPrints)) pieces.push({ k: "art", state: unsent ? "made" : vs[0] ? (vs[0].state === "replaced" ? "done" : vs[0].state) : "needed", versions: vs, next: unsent ? pics(mks.map((m) => m.file_path)) : null, pdf: `/print/${orderId}?proof=1` });
   // each embroidered print's sew-out, or where it is in digitizing before there is one (lib/digitizeStatus.ts)
   const dIds = [...new Set(gs.flatMap((g) => (g.imprints || []).filter((im) => im.method === "embroidery" && im.design_id).map((im) => String(im.design_id))))];
-  const { data: dzs } = dIds.length ? await admin.from("designs").select("id, specs").in("id", dIds) : { data: [] };
+  const { data: dzs } = dIds.length ? await admin.from("designs").select("id, name, specs").in("id", dIds) : { data: [] };
+  const logoName = (id: unknown) => String(((dzs || []) as { id: string; name?: string }[]).find((z) => z.id === String(id || ""))?.name || "");
   // one per logo (or per spot, before a logo is picked): the same logo on many garments is one sew-out (Nov 9: #40400's
   // panel had a tab for each of its 20 prints)
   const pieceSeen = new Set<string>();
@@ -336,12 +337,13 @@ export async function jobDetail(admin: SupabaseClient, orderId: string): Promise
     const where = `${im.location || "Embroidery"}${im.size ? `, ${im.size}` : ""}`;
     if (!x) {
       const st = digitizeState(im, ((dzs || []) as { id: string; specs: unknown }[]).find((z) => z.id === im.design_id) as never, undefined);
-      if (st.state === "ok" && st.repeat) continue;
-      pieces.push({ k: "sewout", id: null, where, imprintId: im.id, state: st.state === "ok" ? "done" : "needed", v: 0, sentAt: null, sentTo: null, viewedAt: null, views: 0, decidedAt: null, decidedName: null, comment: "", pic: "", pdf: "",
-        dz: st.state === "need" ? "Needs digitizing" : st.state === "asked" ? (st.changes ? "Changes asked of the digitizer" : "With the digitizer") : st.state === "done" ? "The file is in: sew it out" : "" });
+      // a logo sewn out and approved before still shows, as on file, so every embroidered spot is on the panel (Nov 16:
+      // #40483's Right Upper Arm was left off and looked forgotten)
+      pieces.push({ k: "sewout", id: null, where, imprintId: im.id, logo: logoName(im.design_id), state: st.state === "ok" ? "done" : "needed", v: 0, sentAt: null, sentTo: null, viewedAt: null, views: 0, decidedAt: null, decidedName: null, comment: "", pic: "", pdf: "",
+        dz: st.state === "ok" && st.repeat ? "On file from before" : st.state === "need" ? "Needs digitizing" : st.state === "asked" ? (st.changes ? "Changes asked of the digitizer" : "With the digitizer") : st.state === "done" ? "The file is in: sew it out" : "" });
       continue;
     }
-    pieces.push({ k: "sewout", id: x.id, where, imprintId: im.id, state: x.status === "approved" ? "done" : x.status === "changes" ? "changes" : x.sent_at ? "sent" : "made", v: x.version, sentAt: x.sent_at, sentTo: x.sent_to,
+    pieces.push({ k: "sewout", id: x.id, where, imprintId: im.id, logo: logoName(im.design_id), state: x.status === "approved" ? "done" : x.status === "changes" ? "changes" : x.sent_at ? "sent" : "made", v: x.version, sentAt: x.sent_at, sentTo: x.sent_to,
       viewedAt: x.viewed_at, views: x.view_count || 0, decidedAt: x.decided_at, decidedName: x.decided_name, comment: x.customer_comment || "", pic: url.get(x.photo_path) || "", pdf: `/print/${orderId}?sewout=${x.id}` });
   }
   // the quote
