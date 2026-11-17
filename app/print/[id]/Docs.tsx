@@ -1,5 +1,5 @@
 import { hasSpotChange, spotLines, spotOf, spotsOf } from "@/lib/spotChange";
-import { samplePieces, samplePiecesText } from "@/lib/samples";
+import { samplePieces, samplePiecesText, sampleOnLines } from "@/lib/samples";
 import { billBlock, billToOf } from "@/lib/billTo";
 import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile, withSewThreads } from "@/lib/brands";
 import { persOf, PERS_SHOW, printedLines } from "@/lib/pricing";
@@ -1586,7 +1586,9 @@ export function InvoiceDoc(p: DocData) {
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
         if (!gc) return null;
-        const lines = g.lines.map((l, li) => ({ l, li, lc: gc.lines[li] })).filter((x) => x.lc && (x.lc.qty > 0 || g.lines.length === 1));
+        // a sample's charges show on its own pieces (lib/samples.ts sampleOnLines)
+        const sm = g.sample ? sampleOnLines(gc.lines, gc.sampleCharges || []) : null;
+        const lines = g.lines.map((l, li) => ({ l, li, lc: (sm ? sm.lines : gc.lines)[li] })).filter((x) => x.lc && (x.lc.qty > 0 || g.lines.length === 1));
         const prints = g.imprints.map((d) => ({ d, inks: d.visualOnly ? [] : inkNames(d.inks) }));
         return (
           <div className="iv2-g" key={g.id}>
@@ -1648,7 +1650,7 @@ export function InvoiceDoc(p: DocData) {
             {g.imprints.some((d) => (d.artChanges || []).length) && <div className="iv2-note">Changes we made to your art: {g.imprints.flatMap((d) => d.artChanges || []).join("; ")}</div>}
             {gc.setupItems.map((s, i) => <div className="iv2-set" key={`s${i}`}><span>{s.youth ? "Youth " + SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread).replace(/^Setup: /, "setup: ").replace(/^Digitizing/, "digitizing") : SETUP_LABEL(s.kind, s.qty, !!(s as { thread?: boolean }).thread)}</span><span>{money(s.amount)}</span></div>)}
             {/* a sample run's own charges (Group.sample; lib/samples.ts) */}
-            {(gc.sampleCharges || []).map((c) => <div className="iv2-set" key={"smp" + c.id}><span>Sample: {c.label || "charge"}</span><span>{money(+(c.amount || 0))}</span></div>)}
+            {(sm ? sm.rows : gc.sampleCharges || []).map((c) => <div className="iv2-set" key={"smp" + c.id}><span>Sample: {c.label || "charge"}</span><span>{money(+(c.amount || 0))}</span></div>)}
             {gc.materials > 0 && <div className="iv2-set"><span>2XL+ materials</span><span>{money(gc.materials)}</span></div>}
           </div>
         );

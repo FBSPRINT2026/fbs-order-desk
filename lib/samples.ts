@@ -124,3 +124,23 @@ export const sampleRunOn = (groups: Group[]) => groups.filter((g) => g.sample?.k
  *  twice); extra pieces the customer sends are counted in but never ordered from a supplier */
 export const goodsGroups = <G extends Pick<Group, "sample">>(groups: G[], ordering = false) =>
   groups.filter((g) => !(g.sample?.kind === "pre" && (g.sample.source === "top" || (ordering && g.sample.source === "customer"))));
+
+/**
+ * A sample's charges on its own garment lines, as the customer reads them (Nick, Nov 17 2026, #50122: "the invoice doesn't
+ * show the… fee for the sample… It should be $20"): the printed invoice and QuickBooks show the sample's pieces at what the
+ * sample costs (1 × $20.00 = $20.00), never at $0.00 with the fee as a row under them. Its charges are spread over its
+ * pieces (the last line takes any odd cent); a credit back on the full run stays its own row. With no pieces, the charges
+ * stay rows. `lines` are the group's calc lines in order; returns them changed and the charge rows still to show.
+ */
+export function sampleOnLines<L extends { qty: number; each: number; sub: number }, C extends { id: string; amount: number | "" }>(lines: L[], charges: C[]): { lines: L[]; rows: C[] } {
+  const fold = charges.filter((c) => n(c.amount) > 0), rest = charges.filter((c) => !(n(c.amount) > 0));
+  const fee = r2(fold.reduce((a, c) => a + n(c.amount), 0)), q = lines.reduce((a, l) => a + (l.qty || 0), 0);
+  if (!fee || !q) return { lines, rows: charges };
+  let left = fee; const last = lines.map((l) => l.qty > 0).lastIndexOf(true);
+  const out = lines.map((l, i) => {
+    if (!(l.qty > 0)) return l;
+    const sub = i === last ? r2(left) : r2((fee * l.qty) / q); left = r2(left - sub);
+    return { ...l, each: r2((l.sub + sub) / l.qty), sub: r2(l.sub + sub) };
+  });
+  return { lines: out, rows: rest };
+}

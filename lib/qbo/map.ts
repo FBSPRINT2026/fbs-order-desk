@@ -1,3 +1,4 @@
+import { sampleOnLines } from "@/lib/samples";
 import { billAddressText, billToOf } from "@/lib/billTo";
 import { calcOrder, imprintLabel, isCanceled, isClosedQuote, PERS_SHOW, orderGroups, withoutShopPieces, payDueDate, r2, sizeLabel, SIZES, type Order, type PayTerms, type Settings } from "@/lib/pricing";
 
@@ -298,7 +299,9 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
     const gc = calc.groups[gi];
     const method = g.imprints?.[0]?.method;
     const key = method ? METHOD_ITEM[method] || "screen" : "garments";
-    const shown = g.lines.map((l, li) => ({ l, lc: gc?.lines[li] })).filter((x) => (x.lc?.qty || 0) > 0);
+    // a sample's charges are priced on its own pieces, as on the printed invoice (lib/samples.ts sampleOnLines)
+    const sm = g.sample && gc ? sampleOnLines(gc.lines, gc.sampleCharges || []) : null;
+    const shown = g.lines.map((l, li) => ({ l, lc: (sm ? sm.lines : gc?.lines || [])[li] })).filter((x) => (x.lc?.qty || 0) > 0);
     shown.forEach(({ l, lc }, i) => {
       const title = [[l.brand, l.style, l.garment].filter(Boolean).join(" ") || "Garment", l.color].filter(Boolean).join(" · ") + (gc?.wholesale ? " (customer supplied)" : "");
       const sizes = SIZES.filter((z) => +(l.sizes?.[z] || 0) > 0).map((z) => `${sizeLabel(z)} ${l.sizes[z]}`).join(", ");
@@ -317,6 +320,8 @@ export function invoicePayload(inp: { order: OrderRow; customer: OurCustomer | n
       if (its.length > PERS_SHOW && its.every((x) => x.unit === its[0].unit)) { const q = its.reduce((a, x) => a + x.qty, 0); add("Personalization", `Personalization: ${q} names`, key, q, its[0].unit, r2(q * its[0].unit)); }
       else for (const x of its) add("Personalization", `Personalization: ${x.text}${x.size ? ` (${sizeLabel(x.size)})` : ""}`, key, x.qty, x.unit, x.amount);
     });
+    // the sample's charges not on its pieces (a credit back on the full run, or a sample with no pieces)
+    for (const c of sm?.rows || []) { const a = r2(+(c.amount || 0)); if (a) add(`Sample: ${c.label || "charge"}`, `Sample: ${c.label || "charge"}`, "fee", 1, a, a); }
   });
 
   // setup, itemized like Printavo listed it (new / repeat screens, digitizing, PMS match, ink changes, minimum)
