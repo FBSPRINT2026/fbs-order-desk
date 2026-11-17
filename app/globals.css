@@ -14309,6 +14309,9 @@ select.chip.arc-spot.on{border-color:var(--accent);color:var(--accent);backgroun
 .cc-chg input,.cc-chg select{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);min-width:220px}
 .cc-more{align-self:flex-start}
 .cc-tbl td,.cc-tbl th{white-space:nowrap}
+/* the garment column wraps so the dialog never scrolls sideways (Nov 16: #40390's location change had a sideways bar) */
+.cc-tbl td:first-child{white-space:normal}
+.cc-g{flex-wrap:wrap;row-gap:2px}
 .cc-tbl th:not(:first-child),.cc-tbl td:not(:first-child){text-align:center}
 .cc-g{display:inline-flex;align-items:center;gap:8px}
 .cc-g i{width:18px;height:18px;border-radius:5px;border:1px solid var(--line);display:inline-block}
