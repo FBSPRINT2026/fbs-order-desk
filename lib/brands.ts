@@ -481,8 +481,15 @@ export function brandPrint(o: { design: Design; brand: Brand | null; method: Lan
     // a colorway linked to its own sew file sews in that file's threads (the dark goods' colorway in its file's threads)
     const linked = (side: "light" | "dark") => sewThreads(colorwaySew(d, colorwayFor(d, brand, side === "dark")));
     const th = (side: "light" | "dark") => linked(side).length ? linked(side) : o.sew?.threads?.[side]?.length ? o.sew.threads[side]! : brand?.embroidery[side] || [];
-    const a = th(base), b = th(base === "light" ? "dark" : "light");
-    { const cw = colorwayFor(d, brand, base === "dark"); if (cw && colorwaySew(d, cw)) im.colorway = cw.name; }
+    // a sew file picked by hand that is another colorway's own file (MEI's one-color All White on dark polos) is that
+    // colorway: its threads on every garment, never the brand rule's linked file (Nov 16, #40390: E4 Super White was picked
+    // and the print came in Maroon / Off White, Isacord Cream + Carmine)
+    const ruleSew = colorwaySew(d, colorwayFor(d, brand, base === "dark"));
+    const own = o.sew?.code && (!ruleSew || ruleSew.code !== o.sew.code) ? colorwaysOf(d).find((c) => c.sew === o.sew!.code) || null : null;
+    const picked = own ? sewThreads(o.sew) : [];
+    const a = picked.length ? picked : th(base), b = picked.length ? picked : th(base === "light" ? "dark" : "light");
+    if (own) im.colorway = own.name;
+    else { const cw = colorwayFor(d, brand, base === "dark"); if (cw && colorwaySew(d, cw)) im.colorway = cw.name; }
     im.inks = a.join(", ");
     im.colors = Math.max(1, a.length || o.sew?.colors || 1);
     if (base === "light" && dark.length && b.length && b.join() !== a.join()) {

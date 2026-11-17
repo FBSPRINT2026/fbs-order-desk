@@ -1636,7 +1636,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   {(g.specialtyInk || g.specialtyInkSet) && inkRate ? (
                     <div className="sbx-r">
                       <span className="sbx-loc">Poly / dyed</span>
-                      <span className="faint" title={g.fabricNote || ""}>{g.specialtyInkSet ? "set by hand" : g.fabricNote || "specialty ink"}</span>
+                      <span className="sbx-mid faint" title={g.fabricNote || ""}>{g.specialtyInkSet ? "set by hand" : g.fabricNote || "specialty ink"}</span>
                       {!hidePrices && <b className={"num" + (g.specialtyInk ? "" : " sbx-off")}>{money(g.specialtyInk ? inkRate : 0)}/pc</b>}
                       <label className="check sbx-end"><input type="checkbox" checked={!g.specialtyInk} onChange={(e) => update((x) => { x.specialtyInk = !e.target.checked || undefined; x.specialtyInkSet = e.target.checked || undefined; })} />No charge</label>
                     </div>
@@ -1645,10 +1645,10 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                 {embImps.length > 0 && <div className="sbx-sec">
                   <div className="sbx-h gsec"><span>Digitizing</span></div>
                   {embImps.map((d) => (
-                    <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Embroidery"}</span>{d.stitches ? <span className="faint">{d.stitches.toLocaleString()} stitches{d.emb?.file ? "" : " (estimate)"}</span> : null}{!hidePrices && !d.digitized && (d.digitizeFee != null
+                    <div key={d.id} className="sbx-r"><span className="sbx-loc">{d.location || "Embroidery"}</span><span className="sbx-mid">{d.stitches ? <span className="faint">{d.stitches.toLocaleString()} stitches{d.emb?.file ? "" : " (estimate)"}</span> : null}{!hidePrices && !d.digitized && (d.digitizeFee != null
                         ? <span className="sbx-ov"><input type="number" min={0} step={1} value={d.digitizeFee} aria-label={`Digitizing price for the ${d.location || "logo"}`} onChange={(e) => { const di = g.imprints.indexOf(d), v = e.target.value; update((x) => { x.imprints[di].digitizeFee = v === "" ? 0 : Math.max(0, +v || 0); }); }} />
                             <button type="button" className="linkbtn" onClick={() => { const di = g.imprints.indexOf(d); update((x) => { delete x.imprints[di].digitizeFee; }); }}>Use the stitch price</button></span>
-                        : <button type="button" className="linkbtn" title="A complex logo: set its digitizing price by hand" onClick={() => { const di = g.imprints.indexOf(d); update((x) => { x.imprints[di].digitizeFee = digitizingFee({ ...d, digitizeFee: undefined }, wpl); }); }}>Complex: set the price</button>)}
+                        : <button type="button" className="linkbtn" title="A complex logo: set its digitizing price by hand" onClick={() => { const di = g.imprints.indexOf(d); update((x) => { x.imprints[di].digitizeFee = digitizingFee({ ...d, digitizeFee: undefined }, wpl); }); }}>Complex: set the price</button>)}</span>
                       {/* the one digitizing fee (lib/pricing.ts digitizingFee): $40, plus $1 a started 1,000 past 6,000 (Oct 28, Nick) */}
                       {!hidePrices && <b className={"num" + (d.digitized ? " sbx-off" : "")} title={d.digitized ? "Digitized before: no charge" : d.digitizeFee != null ? "Set by hand" : `${money(wpl.digitizing)} base${(d.stitches || 0) > (wpl.digStitches ?? 6000) ? ` + ${Math.ceil(((d.stitches || 0) - (wpl.digStitches ?? 6000)) / 1000)} × ${money(wpl.digPer1k ?? 1)} for the stitches past ${(wpl.digStitches ?? 6000).toLocaleString()}` : ""}`}>{money(digitizingFee(d, wpl))}</b>}
                       {/* the logo's DST is on file from before (Oct 27, Nick: "like repeat screens… already digitized… that overrides it") */}
@@ -1657,7 +1657,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   {/* their own stitch file: the sew-out fee, one per print (Nov 10, Nick: "when a customer supplies a DST, we have to
                       charge them a Sew Out Fee… $15… we would check it") */}
                   {embImps.map((d) => (
-                    <div key={d.id + "-sew"} className="sbx-r"><span className="sbx-loc">Sew-out</span><span className="faint">{embImps.length > 1 ? `${d.location || "Embroidery"} · ` : ""}they sent their own DST</span>
+                    <div key={d.id + "-sew"} className="sbx-r"><span className="sbx-loc">Sew-out</span><span className="sbx-mid faint">{embImps.length > 1 ? `${d.location || "Embroidery"} · ` : ""}they sent their own DST</span>
                       {!hidePrices && <b className={"num" + (d.sewoutCharge ? "" : " sbx-off")}>{money(d.sewoutCharge ? sewoutFee(d, wpl) : 0)}</b>}
                       <label className="check sbx-end" title={`They supplied the stitch file: we sew it out and check it (${money(wpl.sewoutFee ?? 15)})`}><input type="checkbox" checked={!!d.sewoutCharge} onChange={(e) => { const di = g.imprints.indexOf(d); update((x) => { x.imprints[di].sewoutCharge = e.target.checked || undefined; }); }} />Charge sew-out</label></div>
                   ))}
@@ -1667,7 +1667,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   {(wpl.embSpecialty?.length || 0) > 0 && g.lines.some((l) => (l.style || "").trim()) && (() => {
                     const on = g.lines.some((l) => isSpecialtyItem(l)), rate = wpl.embSpecialty![Math.min(gc.eti, wpl.embSpecialty!.length - 1)] || 0;
                     return (
-                      <div className="sbx-r"><span className="sbx-loc">Specialty item</span><span className="faint">hats, bags, fleece, jackets</span>{!hidePrices && <b className={"num" + (on ? "" : " sbx-off")}>{money(on ? rate * embImps.length : 0)}/pc</b>}
+                      <div className="sbx-r"><span className="sbx-loc">Specialty item</span><span className="sbx-mid faint">hats, bags, fleece, jackets</span>{!hidePrices && <b className={"num" + (on ? "" : " sbx-off")}>{money(on ? rate * embImps.length : 0)}/pc</b>}
                         {/* only the lines that are specialty items are charged (Nov 4, Nick on #40461: the caps in a group of shirts
                             weren't charged): ticking it goes back to each line's own kind (hats, bags, fleece by name), or every line
                             when none is one by its name; unticking takes it off them all */}
@@ -1680,7 +1680,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   })()}
                   {/* each extra on its own row like the ones above: name, price, tick (Nov 10, Nick: "this area has gotten pretty messy") */}
                   {embList.map((f) => { const on = (g.finishing || []).includes(f.id); return (
-                    <div key={f.id} className="sbx-r"><span className="sbx-loc">{f.name.replace(/\s*\(embroidery\)\s*$/i, "")}</span>
+                    <div key={f.id} className="sbx-r"><span className="sbx-loc">{f.name.replace(/\s*\(embroidery\)\s*$/i, "")}</span><span className="sbx-mid" />
                       {!hidePrices && <b className={"num" + (on ? "" : " sbx-off")}>{money(on ? f.price : 0)}/pc</b>}
                       <label className="check sbx-end"><input type="checkbox" checked={on} onChange={(e) => tick(f.id, e.target.checked)} />Add</label></div>
                   ); })}

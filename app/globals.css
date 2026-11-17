@@ -5681,13 +5681,25 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ws-fees .field small,.ws .field small{font-size:11.5px}
 .ws-notes{font-size:12.5px;white-space:pre-wrap}
 /* group editor: screens / inks / digitizing (contract jobs), small, beside the group total; the order's finishing panel */
-.sbx{display:flex;flex-direction:column;gap:8px;font-size:12.5px;max-width:520px;margin-bottom:10px}
+.sbx{display:flex;flex-direction:column;gap:8px;font-size:12.5px;max-width:600px;margin-bottom:10px}
 .sbx-h{display:flex;align-items:center;gap:12px;font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--muted);margin-bottom:2px}
 .sbx-h label.check{font-weight:400;font-size:12.5px;color:var(--text,inherit);letter-spacing:0}
-.sbx-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:2px 0}
+/* every row of the box (Inks, Digitizing, Embroidery extras) is the same four columns, so names, prices and ticks line up
+   down the box and a long note wraps inside its own column instead of pushing the tick onto a line of its own
+   (Nov 16, Nick: "you can't really see what's going on there anymore"); a narrow box puts the tick under the row */
+.sbx{container:sbx / inline-size}
+.sbx-r{display:grid;grid-template-columns:112px minmax(0,1fr) 72px 150px;align-items:center;column-gap:12px;row-gap:2px;padding:3px 0}
+.sbx-r>.sbx-loc{grid-column:1}
+.sbx-r>.sbx-mid{grid-column:2;display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;row-gap:2px;min-width:0}
+.sbx-r>b.num{grid-column:3;white-space:nowrap}
+.sbx-r>.sbx-end{grid-column:4}
+@container sbx (max-width:430px){
+  .sbx-r{grid-template-columns:96px minmax(0,1fr) auto}
+  .sbx-r>.sbx-end{grid-column:2 / -1}
+}
 .sbx-r label.check{display:inline-flex;gap:5px;align-items:center}
-.sbx-r .linkbtn{margin-left:4px}
-.sbx-r b.num{margin-left:auto;font-weight:600;min-width:58px;text-align:right}
+.sbx-r .linkbtn{margin-left:0}
+.sbx-r b.num{font-weight:600;text-align:right}
 .sbx-r b.num.sbx-off{color:var(--muted);text-decoration:line-through;font-weight:400}
 .sbx-end{min-width:150px;color:var(--muted)}
 .sbx-end:has(input:checked){color:inherit}
@@ -5696,7 +5708,7 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .sbx-ovr{display:inline-flex;align-items:center;gap:2px;margin-left:6px;font-size:11px;padding:0 2px 0 6px;border-radius:9px;background:var(--surface-2);color:var(--muted)}
 .sbx-ovr button{border:0;background:none;color:inherit;cursor:pointer;font-size:13px;line-height:1;padding:0 3px}
 .sbx-num{width:48px;padding:2px 5px;font-size:12.5px}
-.sbx-loc{min-width:84px;font-weight:500}
+.sbx-loc{font-weight:500}
 .sbx-ov{display:inline-flex;align-items:center;gap:8px}
 .sbx-ov input{width:84px;height:36px;border:1px solid var(--line);border-radius:6px;padding:0 8px;font:inherit;font-size:14px;color:var(--ink)}
 .fin-panel{margin-bottom:14px}
