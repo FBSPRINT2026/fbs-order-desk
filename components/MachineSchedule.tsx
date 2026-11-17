@@ -961,12 +961,25 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   }
   const loadMap = useMemo(() => { const m: Record<string, Record<string, number>> = {}; for (const [k, gs] of segs.by) { const [id, d] = k.split("|"); (m[id] ||= {})[d] = gs.filter((g) => g.c.slot?.status !== "done").reduce((a, g) => a + g.work, 0); } return m; }, [segs]);
 
+  // a booking on a day that's gone that never started (live clock off, nobody moved it) isn't on the calendar any more: it
+  // goes back to Ready to schedule tagged "Missed · Thu", and booking it again replaces it (Nick, Nov 16 2026: #40392
+  // sat on EMB 6 last Thursday, not started, and searching Perkins found nothing)
+  const missed = useMemo(() => {
+    const m = new Map<string, Slot>();
+    for (const c of cards) if (c.slot && c.day < today && c.slot.status === "scheduled" && !c.slot.started_at && !c.slot.hold_id) m.set(c.job.key + ":" + c.need.type, c.slot);
+    return m;
+  }, [cards, today]);
+  /** a missed booking of this job's kind of work goes away once it's booked again (after the new booking is saved) */
+  async function dropMissed(keys: { job: Job; type: string }[]) {
+    const ids = keys.map((k) => missed.get(k.job.key + ":" + k.type)?.id).filter(Boolean) as string[];
+    if (ids.length) await createClient().from("production_slots").delete().in("id", ids).eq("status", "scheduled").is("started_at", null);
+  }
   // ready to schedule: in production (goods here, art done) or a Printavo "ready for production / scheduling" status, not booked yet
   const tray = useMemo(() => {
     if (!s || !jobs) return [];
     // what's booked per job and kind of machine: everything, or just some print locations
     const onCal = new Map<string, string[] | "all">();
-    for (const c of cards) { const k = c.job.key + ":" + c.need.type, cur = onCal.get(k); if (cur === "all") continue; const l = c.slot?.locations; onCal.set(k, !l || !l.length ? "all" : [...(cur || []), ...l]); }
+    for (const c of cards) { const k = c.job.key + ":" + c.need.type, cur = onCal.get(k); if (c.slot && missed.get(k)?.id === c.slot.id) continue; if (cur === "all") continue; const l = c.slot?.locations; onCal.set(k, !l || !l.length ? "all" : [...(cur || []), ...l]); }
     // approved orders wait here (Nov 9, Nick: "a job that's marked invoiced… and approved should just go on to the production
     // scheduler"); booking one makes it In Production (a database trigger, migration 302)
     // a hold (a quote's press time, Production holder) waits here too when it isn't on a press (Nov 11, Nick: "it should
@@ -1013,7 +1026,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       out.push({ job: j, need: n, sug, picked: !!(pk && pm), auto });
     }
     return out;
-  }, [s, jobs, cards, loadMap, today, mine, owners, me, typeF, picks, now.day, Math.floor(now.min / 15)]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [s, jobs, cards, loadMap, today, mine, owners, me, typeF, picks, now.day, Math.floor(now.min / 15), missed]); // eslint-disable-line react-hooks/exhaustive-deps
   const coming = (jobs || []).filter((j) => j.kind === "o" && j.status === "art");
   // too tight: waiting jobs with no room before in-hands, and booked jobs that finish after their in-hands date
   const tight = useMemo(() => {
@@ -1052,6 +1065,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       ? await sb.from("production_slots").update({ machine: machine.id, day: d, minutes, start_min: startMin, position: pos, updated_at: new Date().toISOString() }).eq("id", slot.id)
       : await sb.from("production_slots").insert({ ...ownerCols(job), machine: machine.id, day: d, minutes, start_min: startMin, position: pos, kind: need.type, label: need.label, source, locations: locsFor(job, need) });
     if (r.error) { setMsg(r.error.message); return; }
+    if (!slot) await dropMissed([{ job, type: need.type }]);
     setMsg(`#${job.number} → ${machine.name}, ${dayLbl(d)}${startMin != null ? ` at ${clockLong(startMin)}` : ""} (${fmtMin(minutes)})`);
     load();
   }
@@ -1095,6 +1109,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     });
     if (!rows.length) return;
     const r = await createClient().from("production_slots").insert(rows);
+    if (!r.error) await dropMissed(list.map((t) => ({ job: t.job, type: t.need.type })));
     const nLate = list.filter(late).length;
     const nPick = list.filter((t) => t.picked).length;
     setMsg(r.error ? r.error.message : `Scheduled ${rows.length} job${rows.length === 1 ? "" : "s"}${nPick ? ` (${nPick} where you picked)` : ""}${nLate ? `; ${nLate} late or past due went first on their day` : ""}.`);
@@ -1847,6 +1862,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     } else {
       const r = await sb.from("production_slots").insert({ ...ownerCols(job), machine: mach.id, day: d, minutes, start_min: notBefore(d, null), position: idx, kind: need.type, label: need.label, source: "manual", locations: locsFor(job, need) }).select("id").single();
       if (r.error) { setMsg(r.error.message); return; }
+      await dropMissed([{ job, type: need.type }]);
       id = (r.data as { id: string }).id;
     }
     // renumber the cell so the moved job sits where it was dropped (pinned times give way to the running order)
@@ -2086,6 +2102,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       ? await sb.from("production_slots").update({ machine: mach.id, day: d, start_min: when, position: pos, locked: "spot", updated_at: new Date().toISOString() }).eq("id", dr.card.slot.id)
       : await sb.from("production_slots").insert({ ...ownerCols(job), machine: mach.id, day: d, minutes: dr.card?.minutes || estimate(s, need, mach).minutes, start_min: when, position: pos, kind: need.type, label: need.label, source: "manual", locked: "spot", locations: locsFor(job, need) });
     if (r.error) { setMsg(r.error.message); return; }
+    if (!dr.card?.slot) await dropMissed([{ job, type: need.type }]);
     setMsg(`#${job.number} pinned to ${shortName(mach)} ${dayLbl(d)} ${clockLong(when)}. Re-plan works around it; right-click → Unlock to let it move.`);
     load();
   }
@@ -3130,7 +3147,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               const i = (findI + (e.key === "ArrowUp" ? -1 : 1) + hits.length) % hits.length; setFindI(i);
               hits[i].scrollIntoView({ block: "center", behavior: "smooth" }); hits.forEach((h, k) => h.classList.toggle("ms-hit-on", k === i));
             }} />
-          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n + nt} found` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
+          {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job) && !(c.slot && [...missed.values()].some((m) => m.id === c.slot!.id)) && (showPast || c.day >= today)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n + nt} found` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
         </div>
               {(() => {
                 // Start over asks first, and what to do with the locks (Nov 11, Nick: "yes, start over… release all locks or leave locks there")
@@ -3191,7 +3208,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               const gHere = (t: (typeof trayV)[number]) => !waitsG(t) && (t.job.kind === "a" || (t.job.kind === "o" && ["received", "arrived", "partial"].includes(goodsSt.get(t.job.id) || "")));
               const kinds = { late: trayV.filter((t) => isLate(t) && !waitsG(t)), hold: trayV.filter((t) => t.job.kind === "h"), here: trayV.filter(gHere), away: trayV.filter((t) => t.job.kind === "o" && !gHere(t)) };
               // the schedule's search finds jobs here too, and this box searches both (Nick, Nov 13): only the matches show
-              const list = (trayTab === "all" ? trayV : kinds[trayTab]).filter((t) => !findWords.length || isHit(t.job));
+              // while searching, every tab's matches show (Nov 16: "1 found" with Holds picked showed nothing)
+              const list = findWords.length ? trayV.filter((t) => isHit(t.job)) : trayTab === "all" ? trayV : kinds[trayTab];
               return (
               <>
                 <div className="toolbar ms-rtabs"><div className="chips">
@@ -3249,7 +3267,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                         const target = pk ? { m: machines.find((m) => m.id === pk.m), d: pk.d } : t.sug ? { m: t.sug.machine, d: t.sug.day } : null;
                         return <>
                       <div className="msr-1">{tn(null, <Link className={"msr-n" + (late ? " late" : "")} href={t.job.href}>#{t.job.number}</Link>)}</div>
-                      <div className="msr-2"><b>{t.job.customer ? t.job.name || t.need.label : t.job.name}</b>{t.job.issue || t.job.onHold ? flags(t.job) : null}<small data-notranslate>{t.job.customer ? `${t.job.customer} · ` : ""}{t.need.qty.toLocaleString()} pcs</small></div>
+                      <div className="msr-2"><b>{t.job.customer ? t.job.name || t.need.label : t.job.name}</b>{t.job.issue || t.job.onHold ? flags(t.job) : null}{(() => { const ms = missed.get(t.job.key + ":" + t.need.type); return ms ? <em className="mjx-tag hold" title={`Booked on ${dayLbl(ms.day)} and never started: book it again and the old booking goes`}>Missed · {dayW(ms.day)}</em> : null; })()}<small data-notranslate>{t.job.customer ? `${t.job.customer} · ` : ""}{t.need.qty.toLocaleString()} pcs</small></div>
                       <div className={"msr-due" + (late ? " late" : "")}>{t.job.due ? `${dayShort(t.job.due)}${late ? " · late" : ""}` : "No date"}</div>
                       <div className="msr-gd">{gd ? <><GoodsTee k={gd.k} t={gd.t} /><span>{short}</span></> : <span className="faint">—</span>}</div>
                       <div className="msr-rec">
