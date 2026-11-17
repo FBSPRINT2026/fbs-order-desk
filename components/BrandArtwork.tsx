@@ -58,23 +58,28 @@ export default function BrandArtwork({ customerId, group, brands, onAdd, onMocku
   // one thread (or colorway) for the print, picked here from the brand's two; a color change is made on the order after,
   // with its Color change button (Oct 27, Nick: "just add location and thread… drop down between their two brand
   // standards… then you should click a button that says color change")
-  const dark = lines.length > 0 && lines.every((l) => isDarkGarment(l));
+  // light or dark goods by what most of the pieces are, read by the brand's own learned colors first (MEI's "starlight" is
+  // dark; Nov 16 2026, #50079: a Starlight cover-up and an Anthracite polo got the light-goods logo). The others are split
+  // into their own colorway when the logo is added (add() below).
+  const darkFor = (b: Brand | null) => { const d = lines.filter((l) => (b ? brandDark(b, l) : isDarkGarment(l))).length; return lines.length > 0 && d * 2 > lines.length; };
+  const dark = darkFor(null);
   const [side, setSide] = useState<"light" | "dark">("light");
   const others = (ds || []).filter((d) => !bOf(d));
   // a search looks through all of their logos (and brand names); else the brand picked
   const shown = (ds || []).filter((d) => (t ? `d-${d.number} ${d.number} ${d.name} ${brandById(bOf(d))?.name || ""}`.toLowerCase().includes(t) : tab === ALL || (tab === OTHER ? !bOf(d) : bOf(d) === tab)));
   // a brand's logos first in the lane they're ready in
   const sorted = [...shown].sort((a, b) => Number(laneState(b, lane).ready) - Number(laneState(a, lane).ready));
-  const picOf = (d: Design) => { const cw = colorwayFor(d, brandById(bOf(d)), dark); return (cw?.preview && pics[cw.preview]) || (d.preview_path && pics[d.preview_path]) || ""; };
+  const picOf = (d: Design) => { const cw = colorwayFor(d, brandById(bOf(d)), darkFor(brandById(bOf(d)))); return (cw?.preview && pics[cw.preview]) || (d.preview_path && pics[d.preview_path]) || ""; };
 
   // picking a logo: its sew file for these goods, its colorway by the brand's rule, a size to start from
   const kind = sewKindOf(group.lines);
   useEffect(() => {
     if (!pick) return;
-    const fs = sewFilesOf(pick), best = sewForPrint(pick, brandById(bOf(pick)), dark, kind);
+    const pdark = darkFor(brandById(bOf(pick)));
+    const fs = sewFilesOf(pick), best = sewForPrint(pick, brandById(bOf(pick)), pdark, kind);
     setSewIx(Math.max(0, best ? fs.indexOf(best) : 0));
-    setCwName(colorwayFor(pick, brandById(bOf(pick)), dark)?.name || "");
-    setSide(dark ? "dark" : "light");
+    setCwName(colorwayFor(pick, brandById(bOf(pick)), pdark)?.name || "");
+    setSide(pdark ? "dark" : "light");
     setSize(lane === "embroidery" ? "" : SIZE_GUESS[loc] || "");
     setErr("");
   }, [pick?.id, lane]); // eslint-disable-line react-hooks/exhaustive-deps

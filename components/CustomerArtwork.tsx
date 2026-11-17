@@ -40,10 +40,12 @@ const gkey = (style?: string, color?: string) => `${String(style || "").trim().t
 function fillBlank<T extends { location?: string; method?: string; notes?: string; inks?: string; design_id?: string | null }>(prints: T[], im: T): T[] {
   const blank = (p: T) => { const x = p as T & { shownArt?: unknown; custSeps?: unknown; supplied?: unknown; patch?: unknown; fromBrand?: unknown }; return !x.design_id && !x.shownArt && !x.custSeps && !x.supplied && !x.patch && !x.fromBrand; };
   const at = prints.findIndex((p) => blank(p) && p.method === im.method && (p.location || "") === (im.location || ""));
-  const i = at >= 0 ? at : prints.findIndex((p) => blank(p) && p.method === im.method);
+  const same = prints.findIndex((p) => blank(p) && p.method === im.method);
+  // a new group's own starting print (Full Front · Screen print, never touched) is a blank too when it's the only print
+  const i = at >= 0 ? at : same >= 0 ? same : prints.length === 1 && blank(prints[0]) ? 0 : -1;
   if (i < 0) return [...prints, im];
-  const was = prints[i];
-  return prints.map((p, k) => (k === i ? ({ ...im, id: (was as { id?: string }).id || (im as { id?: string }).id, location: was.location || im.location, notes: im.notes || was.notes } as T) : p));
+  const was = prints[i], keepSpot = was.method === im.method;
+  return prints.map((p, k) => (k === i ? ({ ...im, id: (was as { id?: string }).id || (im as { id?: string }).id, location: (keepSpot && was.location) || im.location, notes: im.notes || (keepSpot ? was.notes : "") } as T) : p));
 }
 
 export default function CustomerArtwork({ customerId, orderId, group, onClose, onPick, start = "brands" }: { customerId: string; orderId: string; group: Group; onClose: () => void; onPick: (p: ArtPick) => Promise<void> | void;

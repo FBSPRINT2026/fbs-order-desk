@@ -856,6 +856,9 @@ const SUPPLIER_NAMED: Record<string, string> = {
   "dark blue": "#1f2f55", "dark green": "#1f3d2b", pink: "#f4a6c1", purple: "#4b2a7b", yellow: "#f7d117",
   burgundy: "#6a1f2d", wine: "#5e1a2b", "hunter green": "#2b4a35", "olive green": "#5f6131", lavender: "#b9a7d6", mint: "#a9dcc0", peach: "#f6b48f",
   // the plain color words any name may end in ("Regatta Blue", a worksheet's "Light Green"), the last thing tried
+  // performance-wear darks a cart names (Nov 16 2026, MEI carts: Anthracite and Diesel Grey read as light gray)
+  anthracite: "#3b3e43", "diesel grey": "#4a4d50", "diesel gray": "#4a4d50", blacktop: "#2f3134", "iron grey": "#4b4f54", "iron gray": "#4b4f54",
+  "carbon heather": "#55585c", "insignia blue": "#2c3e5a", "starlight blue": "#2b3550", starlight: "#2b3550", "midnight navy": "#1c2238", "river blue navy": "#283a57",
   blue: "#2a5caa", green: "#2e7d4f", "dark red": "#7a1d2e", "light red": "#e8848a", "dark purple": "#3b1f5e", "light purple": "#b9a7d6",
   "dark yellow": "#d4a017", "light orange": "#f7a35c", "dark orange": "#bf5700", "light brown": "#a07850", aqua: "#3fb8c4", turquoise: "#30b5b0", magenta: "#c6007e", violet: "#8a74b5",
 };
