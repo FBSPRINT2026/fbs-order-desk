@@ -1616,13 +1616,10 @@ export function InvoiceDoc(p: DocData) {
             <div className="iv2-gh disp"><span>{g.name?.trim() || (runN > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}{prints.length > 0 && <span className="iv2-gm"> · {[...new Set(prints.map(({ d }) => (d.patch ? "Heat press patch" : DECO[d.method]) || methodLabel(d)).filter(Boolean))].join(" + ")}</span>}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
             {g.description?.trim() && <div className="iv2-gd">{g.description.trim()}</div>}
             <div className="iv2-cols lbl"><span>Item</span><span>Qty</span><span>Each</span><span>Amount</span></div>
-            {fol.map(({ x, lines: sl, rows }) => <div key={x.id}>
-              {x.lines.map((l, li) => { const lc = sl[li]; if (!lc || !(lc.qty > 0)) return null; const name = [l.brand, l.style].filter(Boolean).join(" ") || l.garment || "Garment"; return (
-                <div className="iv2-ln iv2-smp" key={l.id}><div className="iv2-row"><span className="iv2-nm"><b>Pre-production sample</b> · {name}{l.color ? <> · {l.color}</> : null}<span className="iv2-smz">{invoiceSizes(l.sizes as Record<string, number>).filter((z) => z.n).map((z) => `${sizeLabel(z.z)} ${z.n}`).join(" · ")}</span></span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div></div>
-              ); })}
-              {rows.map((c2) => <div className="iv2-set" key={"smp" + c2.id}><span>Sample: {c2.label || "charge"}</span><span>{money(+(c2.amount || 0))}</span></div>)}
-            </div>)}
-            {lines.map(({ l, li, lc }) => {
+            {fol.flatMap(({ x, rows }) => rows.map((c2) => <div className="iv2-set" key={"smp" + x.id + c2.id}><span>Sample: {c2.label || "charge"}</span><span>{money(+(c2.amount || 0))}</span></div>))}
+            {/* the run's pre-production sample first, laid out like the run's own lines (its art is the run's), with a label
+                (Nick, Nov 17 2026: "just make it so that says pre-production sample… you don't need the box… just the label") */}
+            {[...fol.flatMap(({ x, lines: sl }) => x.lines.map((l, k) => ({ l, li: Math.max(0, g.lines.findIndex((y) => y.id === l.sampleOf)), lc: sl[k], smp: true })).filter((z) => z.lc && z.lc.qty > 0)), ...lines.map((z) => ({ ...z, smp: false }))].map(({ l, li, lc, smp }) => {
               // the line's own mockup; the group's first only for its own color (never another color's picture); else the print's logo
               // on the garment's color
               const pic = p.byLine?.[gi]?.[li] || (lineColor(l) === lineColor(g.lines[0]) ? p.mockups[gi]?.[0] : "") || "";
@@ -1637,7 +1634,8 @@ export function InvoiceDoc(p: DocData) {
                 </div>
               );
               return (
-                <div className="iv2-ln" key={l.id}>
+                <div className={"iv2-ln" + (smp ? " iv2-smp" : "")} key={l.id}>
+                  {smp && <div className="iv2-smt">Pre-production sample · printed first, sent for your OK, then the run</div>}
                   <div className="iv2-row"><span className="iv2-nm"><b>{name}</b>{l.color ? <> · {l.color}</> : null}{l.garment && name !== l.garment && <small className="iv2-nsub"> {l.garment}</small>}</span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div>
                   {(l.garment && name !== l.garment) && <div className="iv2-sub">{l.garment}</div>}
                   {l.extras && <div className="iv2-note"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}
