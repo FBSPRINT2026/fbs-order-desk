@@ -98,8 +98,10 @@ function glance(need: Need, minutes: number) {
     cur.colors = Math.max(cur.colors, need.type === "embroidery" ? Math.round((st.stitches || 0) / 1000) : st.colors || 0); cur.qty += st.qty || 0; byLoc.set(k, cur);
   }
   const locs = [...byLoc.values()].sort((a, b) => a.k - b.k);
-  const units = Math.max(0, ...locs.map((x) => x.qty));
-  const colors = need.type === "screen" ? screenColors(need) : need.type === "embroidery" ? locs.map((x) => `${x.colors || 8}k`).join("/") : locs.length > 1 ? `${locs.length} loc` : "heat";
+  // the job's pieces (each garment once, however many spots it has: lib/production.ts needOf), not the biggest spot's
+  // (Nick, Nov 16 2026, #40390: "4k/4k · 3" for 3 polos and a fleece)
+  const units = need.qty || Math.max(0, ...locs.map((x) => x.qty));
+  const colors = need.type === "screen" ? screenColors(need) : need.type === "embroidery" ? `${locs.map((x) => `${x.colors || 8}k`).join(" + ")} st` : locs.length > 1 ? `${locs.length} loc` : "heat";
   const h = Math.floor(minutes / 60), m = Math.round(minutes % 60);
   return { units, colors, run: h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m` };
 }
@@ -2301,8 +2303,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       <div key={key} role="button" tabIndex={0} draggable data-k={g.c.key} data-d={g.day} className={cls(g) + (notYet(g) ? " mdy-ny" : "") + (rs ? " mpr-c " + rs.k + (band ? " mpr-hasb" : "") : "") + " msf-card l" + lines + extraCls + (mv ? " msf-bump" : "") + (pvLay && g.c.key === pvKey && !extraCls && g.c.machine.id === pv?.mid ? " msf-drop" : "")} style={{ top: y1 + 1, height: h }} title={tip(g)}
         onDragStart={(e) => startDrag(e, { card: g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(g.c); } }}
         onContextMenu={(e) => { e.preventDefault(); openRc(g.c, g, e.clientX, e.clientY); }}>
-        <span className="msf-1">{num}{tagOf(g)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{dayState(g)}{flags(g.c.job)}{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()}</span> : null}</span>
-        {lines === 2 ? <span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : ""}<span className="msf-x">{g.c.job.customer ? " · " : ""}{gl.colors} · {gl.units.toLocaleString()} · {gl.run}</span></span> : null}
+        <span className="msf-1">{num}{tagOf(g)}<span className="msf-co">{abbrCo(g.c.job.customer || name)}</span>{dayState(g)}{flags(g.c.job)}{lines === 1 ? <span className="msf-x"> · {gl.colors} · {gl.units.toLocaleString()} pcs</span> : null}</span>
+        {lines === 2 ? <span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : ""}<span className="msf-x">{g.c.job.customer ? " · " : ""}{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}</span></span> : null}
         {mv ? <span className={"msf-bt" + (mv.late ? " bad" : "")}>{mv.txt}</span> : null}
         {lines === 3 ? <><span className="msf-2">{holdTag(g.c.job)}{g.c.job.customer ? name : g.c.need.label}</span><span className="msf-3">{gl.colors} · {gl.units.toLocaleString()} pcs · {gl.run}</span></> : null}
         {rs ? (band
@@ -2497,7 +2499,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                           <div key={x.g.c.key + x.g.part} role="button" tabIndex={0} draggable data-k={x.g.c.key} data-d={x.g.day} className={"msf-run-r" + (isHit(x.g.c.job) ? " ms-hit" : "") + (segLate(x.g) ? " late" : "") + (x.g.c.slot?.status === "done" ? " done" : "")} title={tip(x.g)}
                             onDragStart={(e) => startDrag(e, { card: x.g.c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(x.g.c)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(x.g.c); } }}
                             onContextMenu={(e) => { e.preventDefault(); openRc(x.g.c, x.g, e.clientX, e.clientY); }}>
-                            {whyEl(x.g.c)}{tn(dotEl(x.g.c, x.g), <b>#{x.g.c.job.number}</b>)}<span className="nm">{x.g.c.job.name || x.g.c.need.label}</span><small>{gl.colors} · {gl.units.toLocaleString()}</small>
+                            {whyEl(x.g.c)}{tn(dotEl(x.g.c, x.g), <b>#{x.g.c.job.number}</b>)}<span className="nm">{x.g.c.job.name || x.g.c.need.label}</span><small>{gl.colors} · {gl.units.toLocaleString()} pcs</small>
                           </div>
                         ); })}
                         {show.length < r.length ? <button type="button" className="msf-run-more" onClick={() => setListOpen(id)}>+{r.length - show.length} more</button> : open ? <button type="button" className="msf-run-more" onClick={() => setListOpen("")}>Show less</button> : null}

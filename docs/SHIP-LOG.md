@@ -446,3 +446,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:03pm · 1.3.688 · Nick · Schedule job card: only this machine's part of a mixed job (its groups' mockups, prints, garments and pieces); each group's current mockup once, never every save
 - Nov 16 9:03pm · 1.3.689 · Nick · Goods card: falls back to the order's own goods status when tracking was cleared (arrived → Here, not counted), shows the supplier order
 - Nov 16 9:04pm · 1.3.690 · Nick · Goods card: marked received with no count says Received
+- Nov 16 9:06pm · 1.3.691 · Nick · Schedule cards: the job's pieces (not its biggest spot's), 'pcs' after them; embroidery stitches read '4k + 4k st'
