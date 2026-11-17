@@ -361,6 +361,8 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wo-m.none{display:grid;place-items:center;font-size:12pt;color:#fff}
 .pdoc .wo-lg .logo-thumb{flex:1 1 0;min-height:0;width:100%;display:block;border-radius:8px;overflow:hidden}
 .pdoc .wo-lg .logo-thumb img{mix-blend-mode:normal}
+.pdoc .w2-spots{display:flex;flex-direction:column;gap:1px}
+.pdoc .w2-spot b{color:#b45309}
 .pdoc .wo-lg .logo-thumb .lp img{flex:none;width:auto;height:auto;max-width:86%;max-height:86%}
 .pdoc .wo-lg .logo-thumb .lv-art{flex:none;width:80%;height:80%}
 .pdoc .wo-prints{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}

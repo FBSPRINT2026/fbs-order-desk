@@ -1,4 +1,4 @@
-import { hasSpotChange, spotLines } from "@/lib/spotChange";
+import { hasSpotChange, spotLines, spotOf } from "@/lib/spotChange";
 import { billBlock, billToOf } from "@/lib/billTo";
 import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile, withSewThreads } from "@/lib/brands";
 import { persOf, PERS_SHOW, printedLines } from "@/lib/pricing";
@@ -269,7 +269,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
                 const v = versionHead(g, l, p.designs), prev = li ? versionHead(g, ls[li - 1], p.designs) : null;
                 return <Fragment key={l.id}>
                   {v && (!prev || prev.key !== v.key) && <tr className="w2-cwh"><td colSpan={sizes.length + 3}><span className="w2-cw">{v.key}</span> {v.desc}</td></tr>}
-                  <LineRow l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} colorHexes={p.colorHexes} />
+                  <LineRow l={l} sizes={sizes} hex={p.hexes[gi]} single={lines.length === 1} colorHexes={p.colorHexes} spots={movedSpots(g, l)} />
                 </Fragment>;
               })}</tbody>
             </table>
@@ -283,7 +283,7 @@ export function WorkOrderDoc(p0: DocData & { notes: string; shopNotes: { tag: st
               const v = versionHead(g, l, p.designs), prev = li ? versionHead(g, ls[li - 1], p.designs) : null;
               return <Fragment key={l.id}>
                 {v && (!prev || prev.key !== v.key) && <div className="wo-cg-h"><span className="w2-cw">{v.key}</span> {v.desc}</div>}
-                <CompactLine l={l} colorHexes={p.colorHexes} />
+                <CompactLine l={l} colorHexes={p.colorHexes} spots={movedSpots(g, l)} />
               </Fragment>;
             })}</div>
             <div className="wo-cg-tot">Total <b>{ls.reduce((a, l) => a + lineQty(l), 0)}</b><i /></div>
@@ -475,6 +475,9 @@ function PrintCard({ d, des, all, allLight, page, ways = [], lines = [] }: { d: 
             {w.file ? <span className="w2-file">{w.file}</span> : null}
             <span className="w2-th">{w.threads.map((k) => <span key={k} title={k}><Swatch c={colorHex(k) || "#ccc"} />{threadShort(k)}</span>)}</span></span></span>)}
         {changes.map(([k, ch]) => <span key={k} style={{ display: "contents" }}><i>{verOf(k) ? `${verOf(k)} · ` : ""}On {k}</i><span>{ch.map(([a, b]) => <span key={a}><Swatch c={colorHex(b) || "#ccc"} /><b>{b}</b> ({changeWord(d.method).toLowerCase()}, not {a}) </span>)}</span></span>)}
+        {/* a location change (same file, another spot on some garments): on the job page, not only the close-up (Nick,
+            Nov 17 2026, #40390: the fleece's Right Chest was only on page 6) */}
+        {lines.length > 0 && hasSpotChange(d, lines) && <><i>Location</i><span className="w2-spots">{spotLines(d, lines).map((x) => <span key={x.letter}><b>{x.letter} · {x.spot}</b> {x.what}</span>)}<span className="faint">same file</span></span></>}
         <i>Size</i><span>{d.visualOnly ? <b>Set on press (reorder)</b> : <>{sz.label ? <b>{sz.label}</b> : "—"} · {dropLabel(d).toLowerCase()}</>}</span>
         {d.method === "embroidery" ? (d.stitches ? <><i>Stitches</i><span>{d.stitches.toLocaleString()}</span></> : null)
           : sc ? <><i>Screens</i><span>{sc.n ? sc.n : "see separations"} · {d.printStyle === "fashion" ? "no underbase" : sc.under ? "underbase" : "no underbase"}</span></> : null}
@@ -527,7 +530,11 @@ function versionOn(d: Imprint, lines: Group["lines"], l: Group["lines"][number])
   const k = (c: string) => (c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
   return vs.find((v) => v.colors.some((c) => k(c) === k(baseColor(inkKeyOf(l)))))?.letter || "";
 }
-function LineRow({ l, sizes, hex, single, colorHexes, cw = [] }: { l: Group["lines"][number]; sizes: readonly string[]; hex: string; single: boolean; colorHexes?: Record<string, string>; /** its colorway letters (A, B…), as on the order */ cw?: string[] }) {
+/** where a garment's prints go when a print's location change moves it ("Right Chest"), or "" when it's at the print's own spot */
+function movedSpots(g: Group, l: Group["lines"][number]): string[] {
+  return [...new Set(g.imprints.filter((d) => hasSpotChange(d, g.lines)).map((d) => spotOf(d, l)).filter((x) => x && !g.imprints.some((d) => d.location === x)))];
+}
+function LineRow({ l, sizes, hex, single, colorHexes, cw = [], spots = [] }: { l: Group["lines"][number]; sizes: readonly string[]; hex: string; single: boolean; colorHexes?: Record<string, string>; /** its colorway letters (A, B…), as on the order */ cw?: string[]; /** a location change: where this garment's print goes instead */ spots?: string[] }) {
   const own = (lineHex(l) || "") || colorHexes?.[ckey(l.color)] || colorHex(l.color) || (l.color ? guessHex(l.color) : "");
   const q = lineQty(l);
   const pers = persOf(l);
@@ -536,6 +543,7 @@ function LineRow({ l, sizes, hex, single, colorHexes, cw = [] }: { l: Group["lin
       <td className="g">
         <div className="g1"><Swatch c={single ? hex : own || "#c9ced6"} /><b>{[l.style, l.brand].filter(Boolean).join(" · ") || "Garment"}</b>{l.color ? <span> · {l.color}</span> : null}{cw.map((x) => <span key={x} className="w2-cw" title={`Colorway ${x}`}>{x}</span>)}</div>
         {l.garment && <div className="g2">{l.garment}</div>}
+        {spots.length > 0 && <div className="lnote w2-spot"><b>Location change:</b> {spots.join(", ")}</div>}
         {l.shopUse ? <div className="lnote"><b>{l.extrasPrint === false ? "Ours, not printed" : "Ours, printed"}</b> (not on the customer&apos;s invoice)</div> : l.extras && <div className="lnote"><b>{l.extrasPrint === false ? "Not printed extras" : "Printed extras"}</b>{l.extrasFree === false ? "" : " (no charge)"}</div>}
         {l.note?.trim() && <div className="lnote">{l.note.trim()}</div>}
         {pers.length > PERS_SHOW
@@ -551,12 +559,13 @@ function LineRow({ l, sizes, hex, single, colorHexes, cw = [] }: { l: Group["lin
 
 /** a garment on a compact work order (option B, Nov 13): swatch, style, name and color, its sizes ("XL 1", "S 2 · M 1"),
  *  a box for the count; extras, notes and names in a small second line */
-function CompactLine({ l, colorHexes }: { l: Group["lines"][number]; colorHexes?: Record<string, string> }) {
+function CompactLine({ l, colorHexes, spots = [] }: { l: Group["lines"][number]; colorHexes?: Record<string, string>; /** a location change: where its print goes instead */ spots?: string[] }) {
   const own = (lineHex(l) || "") || colorHexes?.[ckey(l.color)] || colorHex(l.color) || (l.color ? guessHex(l.color) : "");
   const q = lineQty(l);
   const sz = SIZES.filter((z) => l.sizes?.[z as keyof typeof l.sizes]).map((z) => `${sizeLabel(z)} ${l.sizes?.[z as keyof typeof l.sizes]}`);
   const pers = persOf(l), name = l.garment || (!l.style ? l.brand || "Garment" : "");
   const x = [
+    spots.length ? `Location change: ${spots.join(", ")}` : "",
     l.shopUse ? (l.extrasPrint === false ? "Ours, not printed" : "Ours, printed") : l.extras ? (l.extrasPrint === false ? "Not printed extras" : "Printed extras") : "",
     pers.length ? `${pers.reduce((a, e) => a + (e.qty || 1), 0)} name${pers.length === 1 ? "" : "s"} on the ${pers[0].loc || "Right Chest"}` : "",
     l.note?.trim() || "",
