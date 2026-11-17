@@ -162,43 +162,32 @@ export function SampleBar({ g, orderId, me, patch, onEdit, onMade }: { g: Group;
 }
 
 /**
- * A pre-production sample of the run, as a line in the run's group (Nick, Nov 17 2026, option A: "make the sample look like
- * the other lines… say pre-production sample there… then come back and say… sample is approved, just like if we sent them
- * a digital sample"). Its pieces and price on one line, where it is (Planned → Printed → Sent), and the customer's answer:
- * Sample approved (the run goes ahead) or Changes asked (it stays on hold). Its prints, mockup and screens are the run's.
+ * The top line of a run's pre-production sample (Nick, Nov 17 2026: "put the box around pre-production… on the top line…
+ * sample approved, changes asked, edit"): Pre-production sample, Printed and Sent (tap to tick), where it is, then Sample
+ * approved / Changes asked / Edit, all on one line. Its garments sit under it as normal rows (GroupEditor `samples`).
  */
-export function SampleLine({ g, me, patch, onEdit, hidePrices }: { g: Group; me: string; patch: Patch; onEdit: () => void; hidePrices?: boolean }) {
+export function SampleHead({ g, me, patch, onEdit }: { g: Group; me: string; patch: Patch; onEdit: () => void }) {
   const s = g.sample!;
   const st: SampleStage = !s.stage || s.stage === "pulled" ? "planned" : s.stage;
   const setStage = (k: SampleStage) => patch((d) => { const x = d.groups.find((y) => y.id === g.id); if (!x?.sample) return; x.sample.stage = k; x.sample.at = { ...(x.sample.at || {}), [k]: { at: new Date().toISOString(), by: me } }; });
-  const n = samplePieces(g), fee = sampleCharged(s) - sampleCredit(s);
-  const garments = [...new Set(g.lines.map((l) => [l.brand, l.style].filter(Boolean).join(" ") + (l.color ? ` ${l.color}` : "")))].join(", ");
-  const when = (k: SampleStage) => { const a = s.at?.[k]; return a ? `${new Date(a.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}${a.by ? ` · ${a.by}` : ""}` : ""; };
-  const steps: { k: SampleStage; label: string }[] = [{ k: "printed", label: "Printed" }, { k: "sent", label: "Sent to customer" }];
+  const when = (k: SampleStage) => { const a = s.at?.[k]; return a ? `${new Date(a.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}${a.by ? ` · ${a.by.split(/[ @]/)[0]}` : ""}` : ""; };
   const order: SampleStage[] = ["planned", "printed", "sent", "changes", "approved"];
   const at = order.indexOf(st);
+  const chip = (k: "printed" | "sent", label: string) => { const done = at >= order.indexOf(k); return (
+    <button type="button" className={"smr-chip" + (done ? " done" : "")} title={done ? when(k) || label : `Mark ${label.toLowerCase()}`} onClick={() => setStage(done && (st === k || (k === "sent" && st === "changes")) ? (k === "sent" ? "printed" : "planned") : k)}>{done ? "✓ " : ""}{label}</button>
+  ); };
   return (
-    <div className={"smr-ln" + (st === "approved" ? " ok" : st === "changes" ? " chg" : "")}>
-      <div className="smr-ln-t">
-        <span className="smr-tag">Pre-production sample</span>
-        <b data-notranslate>{garments}</b>
-        <span className="nw">{samplePiecesText(g)}</span>
-        <span className="smr-sp" />
-        {!hidePrices && <span className="nw smr-ln-m">{n} × ${(n ? fee / n : fee).toFixed(2)} = <b>${fee.toFixed(2)}</b></span>}
-      </div>
-      <div className="smr-ln-s">
-        {steps.map((x) => { const done = at >= order.indexOf(x.k); return (
-          <button key={x.k} type="button" className={"smr-chip" + (done ? " done" : "")} onClick={() => setStage(done && st === x.k ? (x.k === "sent" ? "printed" : "planned") : x.k)} title={done ? when(x.k) || x.label : `Mark ${x.label.toLowerCase()}`}>{done ? "✓ " : ""}{x.label}</button>
-        ); })}
-        {st === "approved" ? <span className="smr-ok">✓ Sample approved{when("approved") ? ` · ${when("approved")}` : ""}</span>
-          : st === "changes" ? <span className="smr-chg">Changes asked{when("changes") ? ` · ${when("changes")}` : ""} · the run is on hold</span>
-          : <span className="smr-wt">{st === "sent" ? "Waiting on their OK" : "The run waits for the sample OK"}</span>}
-        <span className="smr-sp" />
-        {st !== "approved" && <button type="button" className="btn sm" onClick={() => setStage("approved")}>Sample approved</button>}
-        {st !== "approved" && st !== "changes" && <button type="button" className="btn sm ghost" onClick={() => setStage("changes")}>Changes asked</button>}
-        {st === "approved" && <button type="button" className="btn sm ghost" onClick={() => setStage("sent")}>Undo</button>}
-        <button type="button" className="btn sm ghost" onClick={onEdit}>Edit</button>
-      </div>
-    </div>
+    <>
+      <span className="smr-hl">Pre-production sample</span>
+      {st !== "approved" && <>{chip("printed", "Printed")}{chip("sent", "Sent")}</>}
+      {st === "approved" ? <span className="smr-ok">✓ Sample approved{when("approved") ? ` ${when("approved")}` : ""}</span>
+        : st === "changes" ? <span className="smr-chg">Changes asked · the run is on hold</span>
+        : <span className="smr-wt">{st === "sent" ? "Waiting on their OK" : "The run waits for the sample OK"}</span>}
+      <span className="smr-sp" />
+      {st !== "approved" && <button type="button" className="btn sm" onClick={() => setStage("approved")}>Sample approved</button>}
+      {st !== "approved" && st !== "changes" && <button type="button" className="btn sm ghost" onClick={() => setStage("changes")}>Changes asked</button>}
+      {st === "approved" && <button type="button" className="btn sm ghost" onClick={() => setStage("sent")}>Undo</button>}
+      <button type="button" className="btn sm ghost" onClick={onEdit}>Edit</button>
+    </>
   );
 }

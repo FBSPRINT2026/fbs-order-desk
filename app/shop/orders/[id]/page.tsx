@@ -97,9 +97,9 @@ import OrderOrigin from "@/components/OrderOrigin";
 import { mockupGone, mockupHref, mockupStale, remakeMockup } from "@/lib/mockupFresh";
 import type { DgzSewout } from "@/lib/digitizeStatus";
 import { garmentFor, sameBrand } from "@/lib/garmentMatch";
-import SampleRunTool, { SampleBar, SampleLine } from "@/components/tools/SampleRunTool";
+import SampleRunTool, { SampleBar, SampleHead } from "@/components/tools/SampleRunTool";
 import type { SampleKind } from "@/lib/samples";
-import { syncSamples, samplesLast } from "@/lib/samples";
+import { syncSamples, samplesLast, sampleOnLines, samplePieces } from "@/lib/samples";
 
 const EVENT_LABEL: Record<string, string> = {
   details: "Production details",
@@ -2022,7 +2022,12 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           <OrderInkCtx.Provider value={orderInks(o.groups)}>{o.groups.map((g, gi) => g.sample?.follows ? null : (<div key={g.id} className={g.sample ? "smr-grp" : "smr-grp0"}>
             {g.sample && <SampleBar g={g} orderId={o.id} me={who.staffName || who.email || ""} patch={patch} onEdit={() => setSampleTool({ kind: g.sample?.kind || "only", groupId: g.id })} />}
             {/* a pre-production sample of this run is a line in it (GroupSample.follows; Nick, Nov 17 2026, option A) */}
-            <GroupEditor linesTop={o.groups.filter((x) => x.sample?.follows === g.id).map((x) => <SampleLine key={x.id} g={x} me={who.staffName || who.email || ""} patch={patch} hidePrices={!seesMoney || undefined} onEdit={() => setSampleTool({ kind: "pre", groupId: x.id })} />)} persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || runCount === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={runCount > 1}
+            <GroupEditor samples={o.groups.flatMap((x, xi) => x.sample?.follows === g.id ? [{ id: x.id, done: x.sample.stage === "approved",
+              head: <SampleHead g={x} me={who.staffName || who.email || ""} patch={patch} onEdit={() => setSampleTool({ kind: "pre", groupId: x.id })} />,
+              lines: x.lines, calc: sampleOnLines(calc.groups[xi]?.lines || [], calc.groups[xi]?.sampleCharges || []).lines,
+              setSize: (li: number, z: string, v: number) => patch((d) => { const y = d.groups.find((q) => q.id === x.id); const ln = y?.lines[li]; if (!ln) return; const sz = ln.sizes as Record<string, number>; if (v) sz[z] = v; else delete sz[z]; }),
+              // the price each: the sample's charges come to it × its pieces (its first charge takes the difference)
+              setEach: (v: number) => patch((d) => { const y = d.groups.find((q) => q.id === x.id); if (!y?.sample) return; const pcs = samplePieces(y); const cs = y.sample.charges.length ? y.sample.charges : [{ id: uid(), label: "Sample fee", amount: 0 }]; const others = cs.slice(1).reduce((a, c) => a + (+(c.amount || 0)), 0); cs[0] = { ...cs[0], amount: Math.round((v * pcs - others) * 100) / 100 }; y.sample.charges = cs; }) }] : [])} persPrice={(() => { const x: Record<string, number> = (o.use_program && prog?.card?.extraPrices) || {}; const k = Object.keys(x).find((kk) => /personal/i.test(kk)); return k ? +x[k] : undefined; })()} finishingAt={finPerGroup || runCount === 1 ? "group" : "order"} neckSets={((cust as unknown as { neck_labels?: NeckLabelSet[] } | undefined)?.neck_labels) || []} customerId={o.customer_id || undefined} hidePrices={!seesMoney || undefined} key={g.id} gi={gi} g={g} gc={calc.groups[gi]} settings={settings} prices={priceList(settings, o.price_type)} catalog={catalog} canRemove={runCount > 1}
               onCustomerArt={o.customer_id ? (at) => { setCustArtAt(at); setCustArt(gi); } : undefined}
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : goneAsk(g)} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}

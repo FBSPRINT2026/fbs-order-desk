@@ -23617,14 +23617,17 @@ table.rvd-tbl.tbl-stack tr.rvd-secrow{display:block!important;padding:0!importan
 .pgl-bar span.done{background:var(--ok)}
 .pgl-more{align-self:flex-start;font-size:12.5px}
 .pgl-full{margin-top:4px}
-/* a run's pre-production sample as a line in its group (components/tools/SampleRunTool.tsx SampleLine; Nick, Nov 17 2026, option A) */
-.smr-ln{border:1px solid color-mix(in srgb,#7C5CD6 30%,var(--line));background:color-mix(in srgb,#7C5CD6 5%,var(--surface));border-radius:var(--r,8px);padding:8px 12px;margin:8px 0 4px;display:flex;flex-direction:column;gap:6px}
-.smr-ln.ok{border-color:color-mix(in srgb,var(--ok) 40%,var(--line));background:color-mix(in srgb,var(--ok) 5%,var(--surface))}
-.smr-ln.chg{border-color:color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 6%,var(--surface))}
-.smr-ln-t,.smr-ln-s{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:14px}
-.smr-ln-m{color:var(--ink-3)}.smr-ln-m b{color:var(--ink)}
+/* a run's pre-production sample: a box first under Garments, its top line then its garments as normal rows
+   (components/GroupEditor.tsx `samples`, SampleRunTool.tsx SampleHead; Nick, Nov 17 2026) */
+.smr-box{border:1px solid color-mix(in srgb,#7C5CD6 35%,var(--line));background:color-mix(in srgb,#7C5CD6 5%,var(--surface));border-radius:var(--r,8px);padding:6px 8px 4px;margin:6px -8px 8px}
+.smr-box.ok{border-color:color-mix(in srgb,var(--ok) 45%,var(--line));background:color-mix(in srgb,var(--ok) 5%,var(--surface))}
+.smr-head{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;font-size:13px;padding-bottom:4px}
+.smr-hl{font-weight:800;color:#5b3fb5;white-space:nowrap}
+.smr-box.ok .smr-hl{color:var(--ok)}
+.smr-sty .a-st b,.smr-box .a-co b{font-size:14px}
+.smr-box .gl-sty span{white-space:nowrap}
 .smr-chip{font:inherit;font-size:12px;height:24px;padding:0 9px;border-radius:99px;border:1px dashed var(--line);background:var(--surface);color:var(--ink-3);cursor:pointer;white-space:nowrap}
 .smr-chip.done{border-style:solid;color:var(--ink)}
 .smr-ok{font-size:12.5px;font-weight:700;color:var(--ok);white-space:nowrap}
-.smr-chg{font-size:12.5px;font-weight:700;color:color-mix(in srgb,var(--warn) 75%,var(--ink))}
-.smr-wt{font-size:12.5px;color:color-mix(in srgb,var(--warn) 75%,var(--ink))}
+.smr-chg{font-size:12.5px;font-weight:700;color:color-mix(in srgb,var(--warn) 75%,var(--ink));white-space:nowrap}
+.smr-wt{font-size:12.5px;color:color-mix(in srgb,var(--warn) 75%,var(--ink));white-space:nowrap}

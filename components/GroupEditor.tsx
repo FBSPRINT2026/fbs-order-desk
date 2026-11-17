@@ -89,7 +89,10 @@ type Props = {
   /** garments: the shirt on its own line and the sizes under it, never squeezed onto one line (the customer's builder) */ sizesBelow?: boolean;
   /** the customer's builder: Tag Print with no tag on file uploads their tag art (shown from thumbUrls) */ onUploadTag?: (f: File) => Promise<{ path: string; name: string } | null>;
   /** buttons under the mockup spot beside the prints (the portal: Create mockup / Upload your own mockup, Oct 24) */ mockupExtra?: React.ReactNode;
-  /** a line shown first under Garments: the run's pre-production sample (lib/samples.ts; Nick, Nov 17 2026, option A) */ linesTop?: React.ReactNode;
+  /** the run's pre-production samples, each a boxed line first under Garments (lib/samples.ts; Nick, Nov 17 2026: "put the
+   *  box around pre-production… the same grid layout, the same dollar amount… on the top line… sample approved, changes
+   *  asked, edit"): its top line (head), then its garments as normal rows (the same columns), sizes and price typed in */
+  samples?: { id: string; head: React.ReactNode; lines: GLine[]; calc: { qty: number; each: number; sub: number }[]; setSize: (li: number, s: string, v: number) => void; setEach?: (v: number) => void; done?: boolean }[];
   /** their saved mockups ("mockups": Saved mockup) or their brands and logos ("brands": Saved logo) onto this group
    *  (components/CustomerArtwork.tsx; Oct 24, Oct 31) */ onCustomerArt?: (start: "mockups" | "brands") => void;
   /** the customer's order made from their mockup (Oct 24, Nick: "it should look exactly like it does on our order screen with
@@ -121,7 +124,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ linesTop, persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
+export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
   const role0 = useRole(); const meName = role0.staffName || role0.email || "";
   const [visBusy, setVisBusy] = useState(false);
   // the order's own files to pick a visual mockup from (Nov 16, Nick: "right now I have to download the file, then
@@ -1089,7 +1092,6 @@ export default function GroupEditor({ linesTop, persPrice, onLogo, printsFixed =
           one"); how many sizes it has decides when the prices drop under the sizes (globals.css "Garments: the size run") */}
       <div ref={glRef} className={"line-b fit-" + glFit + (hasCost ? "" : " nocs")}>
         <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
-        {linesTop}
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head gl-r2">
             <span className="a-sth">Style</span>
@@ -1099,6 +1101,27 @@ export default function GroupEditor({ linesTop, persPrice, onLogo, printsFixed =
             {!gc.wholesale && !hidePrices && <span className="a-cs">Cost</span>}
             <span className="a-qt c">Qty</span><span className="a-ea r">Each</span><span className="a-to r">Total</span>
           </div>
+          {(samples || []).map((sm) => (
+            <div key={sm.id} className={"smr-box" + (sm.done ? " ok" : "")} data-notranslate>
+              <div className="smr-head">{sm.head}</div>
+              {sm.lines.map((l, li) => { const lc = sm.calc[li]; return (
+                <div key={l.id} className="gl">
+                  <div className="gl-sty smr-sty"><div className="a-st"><b>{l.style}</b></div><div className="a-bd"><div className="a-br"><span>{l.brand}</span></div><div className="a-de"><span className="faint">{l.garment}</span></div></div></div>
+                  <div className="gl-row gl-r2">
+                    <div className="a-co"><b>{l.color}</b></div>
+                    <div className="a-sz"><SizeRow cols={groupCols as (keyof GLine["sizes"])[]} off={(z) => !colsFor(l).includes(z)} sizes={l.sizes || {}} onSet={(z, raw) => sm.setSize(li, z, Math.max(0, Math.floor(+raw || 0)))} up={() => undefined} upSet={() => false} onUp={() => {}} /></div>
+                    {!gc.wholesale && !hidePrices && <div className="a-cs" />}
+                    <div className="a-qt c"><input type="number" readOnly tabIndex={-1} className="pre qty locked" value={lc?.qty ?? 0} aria-label="Sample quantity" /></div>
+                    {hidePrices ? <div className="a-ea r" /> : <>
+                      <div className="a-ea r">{sm.setEach && sm.lines.length === 1 ? <MoneyField min="0" className="pre ov" aria-label="Sample price each" value={lc ? lc.each : ""} onChange={(e) => { const v = +e.target.value; if (!isNaN(v)) sm.setEach!(v); }} /> : <span className="num">{money(lc?.each)}</span>}</div>
+                      <div className="a-to r num"><b>{money(lc?.sub)}</b></div>
+                    </>}
+                    <div className="a-x" />
+                  </div>
+                </div>
+              ); })}
+            </div>
+          ))}
           {/* with a color change, the lines show grouped by version (A's together, then B's), each keeping its own index */}
           {(secOn || spShow ? g.lines.map((l, li) => ({ l, li })).sort((a, b) => (secOn ? verKey(inkKeyOf(a.l)).localeCompare(verKey(inkKeyOf(b.l))) : 0) || (spShow ? spKey(a.l).localeCompare(spKey(b.l)) : 0) || a.li - b.li) : g.lines.map((l, li) => ({ l, li }))).map(({ l, li }, pos, order) => {
             const lc = gc.lines[li];
