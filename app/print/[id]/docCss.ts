@@ -728,4 +728,16 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .wj-by{margin:4px 0 0}
 .pdoc .wo-job h2{margin:8px 0 4px}
 .pdoc .wo-job .notes{font-size:10pt;min-height:.45in;overflow-wrap:anywhere}
+/* the work order by logo version (Nov 17 2026, #40405): the logo big enough to read with its card, then its garments by spot */
+.pdoc .wo-ver .wv-in{flex:none;transform-origin:0 0}
+.pdoc .wv-hero{display:grid;grid-template-columns:3.2in minmax(0,1fr);gap:12px;margin:10px 0 4px}
+.pdoc .wv-art{display:flex;flex-direction:column;align-items:center;gap:4px}
+.pdoc .wv-art .logo-thumb{display:block;position:relative;width:100%;height:2in;border-radius:10px;overflow:hidden}
+.pdoc .wv-art .logo-thumb img{mix-blend-mode:normal}
+.pdoc .wv-art>span{font-size:8.5pt;color:var(--ink3)}
+.pdoc .wv-th{display:flex;flex-wrap:wrap;gap:2px 14px}
+.pdoc .wv-loc{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:10px 0 0;border-bottom:2px solid var(--ink)}
+.pdoc .wv-loc b{font-size:13pt;text-transform:uppercase;letter-spacing:.03em}
+.pdoc .wv-loc span{font-size:9pt;color:var(--ink3);white-space:nowrap}
+.pdoc .wo-cg.wv-g{border-top:0}
 `;

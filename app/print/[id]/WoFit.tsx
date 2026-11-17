@@ -31,8 +31,8 @@ export default function WoFit() {
         while (sh.scrollHeight > sh.clientHeight + 1 && z > 0.4) { z = Math.round((z - 0.03) * 100) / 100; sh.style.setProperty("--cu", String(z)); }
       }
       // a job page whose cards came out taller than measured: everything on it a little smaller until it fits (Nov 17)
-      for (const sh of Array.from(document.querySelectorAll<HTMLElement>(".sheet.wo-job"))) {
-        const inn = sh.querySelector<HTMLElement>(".wj-in");
+      for (const sh of Array.from(document.querySelectorAll<HTMLElement>(".sheet.wo-job, .sheet.wo-ver"))) {
+        const inn = sh.querySelector<HTMLElement>(".wj-in, .wv-in");
         if (!inn) continue;
         let z = 1;
         inn.style.zoom = "1";

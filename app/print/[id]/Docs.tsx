@@ -83,7 +83,34 @@ function colorBg(lines: Group["lines"], color: string, colorHexes?: Record<strin
 const WO_FIRST = 6;
 // many products, a few pieces each (Nick, Nov 13 2026, option B: GearGoLive's 13 one-piece garments took 3 pages): the
 // garments in two columns of one line each, about 30 on the job page and 70 on each page after
-const WO_FIRST_COMPACT = 30, WO_MORE_COMPACT = 70;
+/** a letter page's room inside its margins and footer, in inches */
+const WO_ROOM = 9.68;
+/**
+ * Garments two to a row split into pages by their real height (Nov 17 2026, #40405: a fixed 30 garments a page cut 8
+ * off the bottom when each had a name under it): `h` is a garment's own height (taller with a second line), `head` the
+ * heading that starts a fresh row before it (a logo version, a spot), asked with no garment before it at the top of a
+ * page so a heading repeats there. The first page holds what fits in `first`, each after in `rest`; at least one each.
+ */
+function pageSplit<T>(ls: T[], h: (l: T) => number, head: (l: T, prev: T | null) => number, first: number, rest: number): T[][] {
+  const out: T[][] = [];
+  let cur: T[] = [], room = first, used = 0, col = 0, rowH = 0;
+  for (const l of ls) {
+    const hd = head(l, cur.length ? cur[cur.length - 1] : null), x = h(l);
+    let add = hd ? hd + x : col === 0 ? x : Math.max(0, x - rowH);
+    if (cur.length && used + add > room) { out.push(cur); cur = []; room = rest; used = 0; col = 0; rowH = 0; add = head(l, null) + x; }
+    else if (hd) col = 0;
+    cur.push(l); used += add;
+    if (col === 0) { rowH = x; col = 1; } else { col = 0; rowH = 0; }
+  }
+  if (cur.length || !out.length) out.push(cur);
+  return out;
+}
+/** a garment line's height on a compact list: taller with a second line (a name, extras, a note, a moved spot) */
+const compactH = (g: Group, l: Group["lines"][number]) => (l.note?.trim() || l.extras || l.shopUse || persOf(l).length || movedSpots(g, l).length ? 0.37 : 0.25);
+/** the compact garments split into pages (with a heading where each logo version starts) */
+function compactPages<T extends Group["lines"][number]>(g: Group, ls: T[], designs: Record<string, Design>, first: number, rest: number): T[][] {
+  return pageSplit(ls, (l) => compactH(g, l), (l, prev) => { const v = versionHead(g, l, designs)?.key || ""; return v && (!prev || (versionHead(g, prev, designs)?.key || "") !== v) ? 0.3 : 0; }, first - 0.25, rest - 0.25);
+}
 /** a group's garments go compact when it has more than 8 and they average 3 pieces or fewer */
 const compactLines = (ls: { sizes?: unknown }[], qty: number) => ls.length > 8 && qty <= ls.length * 3;
 export type Variant = { color: string; swap: Record<string, string>; /** a colorway change: the colorway this sheet runs */ cw?: string };
@@ -527,8 +554,17 @@ function FullWorkOrder(p0: WoProps) {
     const longNotes = noteText.length + extra * 120 > 520 || vis + extra * 2 > 8;
     const more: (typeof lines)[] = [];
     const compact = compactLines(lines, lines.reduce((a, l) => a + lineQty(l), 0));
-    const firstN = compact ? WO_FIRST_COMPACT : WO_FIRST, perMore = compact ? WO_MORE_COMPACT : 10;
-    for (let i = firstN; i < lines.length; i += perMore) more.push(lines.slice(i, i + perMore));
+    if (compact) {
+      // the compact list goes by the room each page really has, never a fixed count (Nov 17 2026, #40405: 30 garments
+      // with a name under each didn't fit under the logo rows, and garments 23–30 were cut off the bottom of page 1)
+      const sheets0 = sheetsOf(g, p.designs).length;
+      const notesH = noteText || extra ? 0.45 + Math.min(longNotes ? 1.05 : 9, 0.25 + vis * 0.19 + extra * 0.3) : 0;
+      const room1 = WO_ROOM - 1.85 - (g.description?.trim() ? 0.25 + Math.ceil(g.description.trim().length / 110) * 0.2 : 0)
+        - Math.max(1.7, 0.35 + sheets0 * 0.62) - 0.95 - notesH;
+      for (const ls of compactPages(g, lines, p.designs, room1, WO_ROOM - 1.7)) more.push(ls);
+    } else for (let i = WO_FIRST; i < lines.length; i += 10) more.push(lines.slice(i, i + 10));
+    const firstLs = compact ? more.shift() || [] : lines.slice(0, WO_FIRST);
+    const firstN = firstLs.length;
     // only the customer's own transfers (Oct 27, Nick: "you need really just two, a count in and then… the mock-up large,
     // for placement"): one placement page, no press sheets
     const allSup = g.imprints.length > 0 && g.imprints.every((d) => d.supplied);
@@ -552,7 +588,7 @@ function FullWorkOrder(p0: WoProps) {
     // boxes) and the mockup page is their mockup, big, with each print's inks as a line under it
     const theirSeps = !allSup && g.imprints.length > 0 && g.imprints.every((d) => d.custSeps || d.supplied);
     const printPages = allSup || theirSeps ? 0 : Math.ceil(sheetsOf(g, p.designs).length / 2);
-    return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, compact, firstN, perMore, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
+    return { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, compact, firstN, n: 1 + more.length + mk.length + (notesPage ? 1 : 0) + printPages };
   });
   const total = plans.reduce((a, x) => a + x.n, 0);
   const starts: number[] = [];
@@ -569,7 +605,7 @@ function FullWorkOrder(p0: WoProps) {
       <WoFit />
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
-        const { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, compact, firstN, perMore } = plans[gi];
+        const { lines, noteParts, longNotes, more, mk, firstMk, notesPage, vars, allSup, theirSeps, compact, firstN } = plans[gi];
         const allLight = !g.lines.some((l) => lineQty(l) > 0 && !isLightColor(l.color, p.settings.wholesale));
         const sizes = SIZES.filter((z) => lines.some((l) => l.sizes?.[z]));
         const colorList = [...new Set(lines.map((l) => l.color).filter(Boolean))] as string[];
@@ -733,7 +769,7 @@ function FullWorkOrder(p0: WoProps) {
             {/* 2. more garments (8 a page) */}
             {more.map((ls, mi) => (
               <section className="sheet wo1" key={"more" + mi}>
-                {top(`Garments ${firstN + mi * perMore + 1}–${firstN + mi * perMore + ls.length} of ${lines.length}`)}
+                {(() => { const from = firstN + more.slice(0, mi).reduce((a, x) => a + x.length, 0); return top(`Garments ${from + 1}–${from + ls.length} of ${lines.length}`); })()}
                 <h2>Garments <span>write the counts in the boxes</span></h2>
                 {counts(ls)}
                 <div className="foot"><span>{footL}</span><span>Page {pgMore + mi} of {total}</span></div>
