@@ -323,11 +323,14 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
       d.discount_type = d.discount_type === "amt" ? "amt" : "pct";
       d.tax_rate = d.tax_rate === null ? null : +d.tax_rate;
       if (Array.isArray(d.groups)) shapeGroups(d.groups); // every print and line whole, whoever wrote it
+      // test companies are offered too: the picker only shows what's typed, so they come up when typed for (lib/format testFound)
+      // the customers, settings and catalog are ready BEFORE the order is drawn: drawn first, it showed for a moment with no
+      // customer, list prices and a wrong total (Nick, Nov 16 2026, #40483: "it shows quote for a second… then it goes to the real")
+      const custs = (await withPrivate(sb, (cu.data || []) as Customer[])).sort((a, b) => custLabel(a).localeCompare(custLabel(b)));
+      setCustomers(custs);
+      setSettings(mergeSettings(st.data?.data));
       setO(d);
       latest.current = d;
-      // test companies are offered too: the picker only shows what's typed, so they come up when typed for (lib/format testFound)
-      setCustomers((await withPrivate(sb, (cu.data || []) as Customer[])).sort((a, b) => custLabel(a).localeCompare(custLabel(b))));
-      setSettings(mergeSettings(st.data?.data));
       setCatalog((cat.data || []) as Garment[]);
       setProdNotes(inn.data?.production_notes || "");
       setSaveState("Saved");
