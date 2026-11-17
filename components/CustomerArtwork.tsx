@@ -31,6 +31,21 @@ const thumbOf = (p: string) => p.replace(/(\.[a-z]+)$/i, "-thumb.png");
 const garments = (s?: Snap) => [...new Set((s?.lines || []).map((l) => [l.style, l.color].filter(Boolean).join(" ")).filter(Boolean))];
 const gkey = (style?: string, color?: string) => `${String(style || "").trim().toLowerCase()}|${String(color || "").trim().toLowerCase()}`;
 
+/**
+ * A saved logo goes into the print the customer left blank for it (Nick, Nov 16 2026, #50094: their portal order named
+ * "Left Chest · Embroidery" with no art; the logo came in as a second print beside it and the price doubled). A blank is
+ * a print with no logo, art, inks or supplied piece: the one at the logo's spot first, else any blank of its method.
+ * Their spot and notes stay. With no blank, the logo is added as a new print.
+ */
+function fillBlank<T extends { location?: string; method?: string; notes?: string; inks?: string; design_id?: string | null }>(prints: T[], im: T): T[] {
+  const blank = (p: T) => { const x = p as T & { shownArt?: unknown; custSeps?: unknown; supplied?: unknown; patch?: unknown; fromBrand?: unknown }; return !x.design_id && !(x.inks || "").trim() && !x.shownArt && !x.custSeps && !x.supplied && !x.patch && !x.fromBrand; };
+  const at = prints.findIndex((p) => blank(p) && p.method === im.method && (p.location || "") === (im.location || ""));
+  const i = at >= 0 ? at : prints.findIndex((p) => blank(p) && p.method === im.method);
+  if (i < 0) return [...prints, im];
+  const was = prints[i];
+  return prints.map((p, k) => (k === i ? ({ ...im, id: (was as { id?: string }).id || (im as { id?: string }).id, location: was.location || im.location, notes: im.notes || was.notes } as T) : p));
+}
+
 export default function CustomerArtwork({ customerId, orderId, group, onClose, onPick, start = "brands" }: { customerId: string; orderId: string; group: Group; onClose: () => void; onPick: (p: ArtPick) => Promise<void> | void;
   /** where it opens (Oct 31, Nick: "add a pre-existing mock-up, add a pre-existing logo"): their saved mockups, or their brands and logos */ start?: "mockups" | "brands" }) {
   const sb = useMemo(() => createClient(), []);
@@ -264,7 +279,7 @@ export default function CustomerArtwork({ customerId, orderId, group, onClose, o
         )}
         {tab === "brands" ? (brands === null ? <p className="faint">Loading their brands…</p> : (
           <BrandArtwork customerId={customerId} group={group} brands={brands} onMockups={() => { setTab("mockups"); setLogo(null); }}
-            onAdd={(im, label) => onPick({ imprints: [...group.imprints, im], offsets: group.mockupOffsets || {}, thumbs: group.mockupThumbs || null, remake: false, label, keepMockup: true })} />
+            onAdd={(im, label) => onPick({ imprints: fillBlank(group.imprints, im), offsets: group.mockupOffsets || {}, thumbs: group.mockupThumbs || null, remake: false, label, keepMockup: true })} />
         )) : tab === "mockups" ? (saves === null ? <p className="faint">Loading their mockups…</p> : !shown.length ? <p className="faint">{q ? "Nothing matches." : "No saved mockups on their account yet."}</p> : (
           <div className="ca-grid">
             {shown.slice(0, 60).map((s) => (
