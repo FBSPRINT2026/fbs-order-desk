@@ -1173,7 +1173,14 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
                   </div>
                   <div className="a-sz">
                     {l.oneSize ? (
-                      <div className="os-note" title={l.sizeRun?.length === 1 ? undefined : "Clear the Qty to switch back to sizes"}>One-size item</div>
+                      // a box to type the count right where the sizes would be (Nov 17 2026, Cedar's carts: a cap or backpack showed only
+                      // "One-size item" and a 0 that didn't look typeable, so customers added the item again as a second line with the
+                      // count under XS: #50097, #50072, #50074, #50095, #50111)
+                      <label className="os-note os-qty" title={l.sizeRun?.length === 1 ? undefined : "Clear the Qty to switch back to sizes"}>
+                        <span>One size · Qty</span>
+                        <input type="number" min="0" step="1" inputMode="numeric" aria-label="Quantity" placeholder="0" value={l.sizes?.OS || ""}
+                          onChange={(e) => update((x) => { const r = x.lines[li]; const v = Math.max(0, Math.floor(+e.target.value || 0)); r.oneSize = true; r.sizes = v ? { [ONE_SIZE]: v } : {}; })} />
+                      </label>
                     ) : (
                       <SizeRow cols={groupCols as (keyof GLine["sizes"])[]} off={(s) => !colsFor(l).includes(s)} sizes={l.sizes || {}} onSet={setQty}
                         up={(s) => (l.sizeUpSet?.[s as Size] != null ? +l.sizeUpSet[s as Size]! : !gc.wholesale && l.sizeUp && l.sizeUp[s] !== undefined ? sizeUpEach(l, s as Size) : prices.upcharges[s as keyof typeof prices.upcharges])}

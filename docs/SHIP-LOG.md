@@ -456,3 +456,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:47pm · 1.3.698 · Nick · Saved logo splits light and dark goods into their brand colorways by itself; ship-to drops a pasted 'Shipping Information' heading
 - Nov 16 9:49pm · 1.3.699 · Nick · Saved logo also fills a blank print the customer typed a thread color on
 - Nov 16 9:55pm · 1.3.700 · Nick · Saved logo: light/dark by most pieces and the brand's learned colors; fills a new group's untouched starting print; Anthracite/Starlight/Diesel and other performance darks known
+- Nov 17 6:49am · 1.3.701 · Nick · One-size items (caps, bags) get a real Qty box where the sizes go, in the portal and the shop
