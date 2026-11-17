@@ -29,7 +29,7 @@ import RowLink from "@/components/RowLink";
 import { useUrlSearch } from "@/lib/useUrlSearch";
 import PortalSimpleMenu, { SimpleBack, SimpleMenuContext } from "@/components/PortalSimpleMenu";
 
-export type AOrder = { /** a logo on it is in digitizing (lib/portalView.ts digitizeNote): the status the customer sees */ digitizing?: string; /** the credit card fee already in its balance (lib/cardFeeIn.ts) */ cardFeeIn?: number; /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_lane?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
+export type AOrder = { /** an old (Printavo) order finished there: completed / picked up / delivered, or a closed quote */ done?: boolean; /** a logo on it is in digitizing (lib/portalView.ts digitizeNote): the status the customer sees */ digitizing?: string; /** the credit card fee already in its balance (lib/cardFeeIn.ts) */ cardFeeIn?: number; /** which of the customer's order types it is (Cedar: Bulk / Cart), or empty */ order_lane?: string; id: string; number: number; nickname: string; status: string; type: string; total: number; paid: number; balance: number; due_date: string | null; created_at: string; qty: number; price_type?: string; /** payment due date under the customer's terms */ pay_due?: string | null;
   /** an old order from before (read-only): opens at `href` and shows its own status name and color */ archived?: boolean; href?: string; statusLabel?: string; statusColor?: string;
   /** an old (Printavo) invoice with a balance: its online invoice, where it can be paid until the cutover */ payUrl?: string;
   /** an old invoice of an account that has moved to the new system: paid here, not on Printavo (Nov 2, Nick) */ payHere?: boolean;
@@ -284,6 +284,9 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   const quotes = orders.filter((o) => o.type === "quote" && (mode === "shop" || o.status !== "quote"));
   const inWork = orders.filter((o) => o.type === "invoice" && IN_WORK.includes(o.status));
   const invoices = orders.filter((o) => o.type === "invoice");
+  // finished, in either system (Nov 16, Nick: "orders would be active orders… completed would be done"): a job completed
+  // here, or an old Printavo one finished there. Every Orders / Completed list goes by this one rule.
+  const finished = (o: AOrder) => o.status === "completed" || (!!o.archived && !!o.done);
   // old archived orders are listed with the rest but aren't paid or tracked here
   const liveInvoices = invoices.filter((o) => !o.archived);
   const receive = orders.filter((o) => o.price_type === "wholesale" && o.type === "invoice" && WAITING.includes(o.status));
@@ -433,7 +436,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     const cutoff = new Date(Date.now() - 60 * 86400000).toISOString();
     const sentQ = qL.filter((o) => o.status === "request" && o.sent);
     // a closed quote (declined) is finished: under Completed, not Quotes (Nov 3, Nick)
-    const closedQ = qL.filter((o) => isClosedQuote(o));
+    const closedQ = qL.filter((o) => isClosedQuote(o) || (!!o.archived && !!o.done));
     const quotes2 = qL.filter((o) => !(o.status === "request" && o.sent) && !isClosedQuote(o));
     // archived quotes (not going ahead) and quotes over 60 days old show with "Show older quotes and archived" (Oct 24, Nick)
     const recentQ = quotes2.filter((o) => (o.created_at || "") >= cutoff && !o.archivedQ), olderN = quotes2.length - recentQ.length;
@@ -441,11 +444,12 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     const openQ = quotes2.filter((o) => !o.archived && o.status === "quote_sent").length;
     const draftsLive = drafts.filter((d) => !goneDrafts[d.id]);
     const tab = oTab === "drafts" && !draftsLive.length ? "all" : oTab;
-    const done = [...iL.filter((o) => o.status === "completed"), ...closedQ].sort((x, y) => y.number - x.number);
+    const openI = iL.filter((o) => !finished(o));
+    const done = [...iL.filter(finished), ...closedQ].sort((x, y) => y.number - x.number);
     // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
     const allRows = [...sentQ, ...quotes2.filter((o) => !o.archivedQ || oldQuotes), ...iL, ...closedQ].sort((x, y) => y.number - x.number);
-    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", iL.length], ["done", "Completed", done.length]];
+    const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", quotes2.length], ["orders", "Orders", openI.length], ["done", "Completed", done.length]];
     // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
     // following will just be on the main page")
     // one card like the dashboard's Your jobs (Nov 2, Nick: "the floating orders total… should be in the box… like the your
@@ -455,7 +459,7 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
       drafts: ["Drafts", "Not sent to us yet. Pick one up or discard it."],
       sent: ["Sent to FBS", "We're checking these. You'll get a message when we confirm."],
       quotes: ["Quotes", openQ ? `${openQ} waiting on you` : "Prices we've sent you"],
-      orders: ["Orders", `Total ${money(iL.reduce((a, o) => a + o.total, 0))}`],
+      orders: ["Orders", `Total ${money(openI.reduce((a, o) => a + o.total, 0))}`],
       done: ["Completed", `${done.length} finished order${done.length === 1 ? "" : "s"}`],
     };
     return <section className="aa-ocard">
@@ -511,8 +515,8 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
         {(olderN > 0 || oldQuotes) && <button type="button" className="aa-oldq-more" aria-pressed={oldQuotes} onClick={() => setOldQuotes(!oldQuotes)}>{oldQuotes ? "Hide older quotes and archived" : `Show older quotes and archived (${olderN})`}</button>}
       </>}
       {tab === "orders" && <>
-        <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(iL.reduce((a, o) => a + o.total, 0))}</span></div>
-        {orderTable(iL, "invoice")}
+        <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(openI.reduce((a, o) => a + o.total, 0))}</span></div>
+        {orderTable(openI, "invoice")}
       </>}
       {tab === "done" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Completed</h3></div>
@@ -606,10 +610,10 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   } else if (area === "home" && mode === "shop") {
     // one line of numbers, then every order one line each under Active / Quotes / Done (Oct 21, Nick: "too much
     // information… how pieces are underneath each thing")
-    const active = invoices.filter((o) => !o.archived && o.status !== "completed");
+    const active = invoices.filter((o) => !finished(o));
     const dayOf = (o: AOrder) => (o.created_at || o.due_date || "").slice(0, 10);
     const newest = (l: AOrder[]) => l.slice().sort((x, y) => dayOf(y).localeCompare(dayOf(x)) || y.number - x.number);
-    const completed = invoices.filter((o) => o.archived || o.status === "completed");
+    const completed = invoices.filter(finished);
     // All · Order requests · Quotes · Orders · Completed (Nov 2, Nick: "it should say all, order requests, quote, orders and
     // completed on this page"); a request isn't a quote yet
     const lists = { all: newest(orders.filter((o) => o.type === "invoice" || quotes.includes(o))), requests: newest(quotes.filter((o) => o.status === "request")), quotes: newest(quotes.filter((o) => o.status !== "request")), orders: newest(active), completed: newest(completed) };

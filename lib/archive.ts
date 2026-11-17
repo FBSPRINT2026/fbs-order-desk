@@ -1,3 +1,4 @@
+import { ourStatusFor } from "@/lib/printavoOld";
 /**
  * An archived Printavo order, stored exactly as Printavo had it (archived_orders.data).
  * Shared by the importer (server) and the read-only archived order page.
@@ -109,7 +110,10 @@ export type ArchiveSummary = Pick<ArchivedRow, "id" | "kind" | "visual_id" | "cu
 const METHOD_NAMES: Record<string, string> = { BANK_TRANSFER: "Bank transfer", CASH: "Cash", CHECK: "Check", CREDIT_CARD: "Credit card", ECHECK: "eCheck", OTHER: "Other" };
 /** An archived order as a row in the customer's order lists (same shape as new orders, marked archived). */
 export function archiveAsOrder(r: ArchiveSummary, href: string) {
-  return { id: r.id, number: +r.visual_id || 0, nickname: r.nickname || "", status: "archived", type: r.kind, total: +r.total || 0, paid: +r.paid || 0, balance: +r.balance || 0,
+  // finished in the old system: a job completed, picked up or delivered, or a closed quote (Nov 16, Nick: the portal's
+  // Completed tab only had jobs finished here, never the ones finished in Printavo)
+  const done = r.kind === "invoice" ? ourStatusFor(r.status_name || "", "invoice") === "completed" : /closed/i.test(r.status_name || "");
+  return { done, id: r.id, number: +r.visual_id || 0, nickname: r.nickname || "", status: "archived", type: r.kind, total: +r.total || 0, paid: +r.paid || 0, balance: +r.balance || 0,
     due_date: r.due_date, created_at: r.order_date || "", qty: r.qty || 0, pay_due: null, archived: true, href, statusLabel: r.status_name, statusColor: r.status_color, search: r.search || "" };
 }
 /** An archived order's payments as rows in the payment history. */
