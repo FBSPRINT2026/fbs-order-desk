@@ -16,7 +16,7 @@ import { createClient } from "@/lib/supabase/client";
 import { withPace, operatorOf, parseDuration, type RunLesson } from "@/lib/runLearn";
 import { setRunTime, learnRun } from "@/app/shop/run-time-actions";
 import { addTask } from "@/app/shop/myday-actions";
-import { partNeed, seedStyleTitles, mergeProduction, estimateRaw, locKey, artsOf, MIN_JOB_MIN, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
+import { methodType, partNeed, seedStyleTitles, mergeProduction, estimateRaw, locKey, artsOf, MIN_JOB_MIN, needsForOrder, needsForPrintavo, estimate, fits, suggest, fmtMin, machineForStatus, capacityMin, shiftOn, typicalShift, isOffDay, windowsIn, downsOn, breaksOn, lunchStart, LUNCH_EARLIEST, CREW_ROLES, otFromOn, weekOvertime, payWeekStart, type WeekOT, quickNeed, plusWorkdays, minusWorkdays, type QuickJob, condsFor, condSpeed, withIssue, withClock, withCrewHours, type ClockPunch, type EquipRow, type Station, defaultLayout, layoutCounts, flashesOf, flashesFor, stationsNeeded, pressOnlyOf, subNeed, restNeed, locsOf, PV_READY, type Machine, type Crew, type Down, type Need, type ProductionSettings, type Suggestion, type MachineType } from "@/lib/production";
 import { mergeSettings, isMe, ST, type StatusKey, type Group, type AccountOwner } from "@/lib/pricing";
 import { orderStatusEmail } from "@/app/shop/customer-email-actions";
 import CheckinModal from "@/components/CheckinModal";
@@ -3525,17 +3525,19 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
       const gs = ((o as { groups?: Group[] } | null)?.groups || []) as Group[];
       const seen = new Set<string>(), prints: { loc: string; inks: string; colors: number }[] = [], gm = new Map<string, number>();
       let pcs = 0;
-      for (const g of gs) {
-        if (g.sample) continue;
-        for (const i of g.imprints || []) { const k = `${i.location}|${i.inks}`; if (!i.location || seen.has(k)) continue; seen.add(k); prints.push({ loc: i.location, inks: i.inks || "", colors: i.colors || 0 }); }
+      // only this machine's part of the job (Nick, Nov 16 2026: "when you click on embroidery… you should only see the
+      // embroidery… 490 pieces, that's confusing"): the groups with a print of this kind, and only those prints
+      const mine = (i: { method?: string }) => methodType(i.method || "screen") === c.need.type;
+      const gsK = gs.filter((g) => !g.sample && (g.imprints || []).some(mine));
+      for (const g of gsK) {
+        for (const i of g.imprints || []) { if (!mine(i)) continue; const k = `${i.location}|${i.inks}`; if (!i.location || seen.has(k)) continue; seen.add(k); prints.push({ loc: i.location, inks: i.inks || "", colors: i.colors || 0 }); }
         // the garment by its style number and color ("1717 Sage"; Nov 12, Nick)
         for (const l of g.lines || []) { const n = Object.values(l.sizes || {}).reduce((t, x) => t + (+(x as number) || 0), 0); if (!n) continue; pcs += n; const k = [l.style, l.color].filter(Boolean).join(" ") || l.garment || "Garment"; gm.set(k, (gm.get(k) || 0) + n); }
       }
-      // every current mockup on the order (Nov 12, Nick: "I should be able to see all the mock-ups")
-      const { data: ms } = await sb.from("mockups").select("file_path, title, created_at").eq("order_id", c.job.id).is("archived_at", null).order("created_at").limit(24);
-      const rows = ((ms || []) as { file_path: string; title: string | null }[]).filter((x) => x.file_path);
-      // no mockup made here: the group's own pictures (a visual mockup, the customer's: groupPictures; Nov 13, #40380)
-      if (!rows.length) for (const g of gs) for (const p of groupPictures(g)) rows.push({ file_path: p, title: g.name || "" });
+      // each of this part's groups' current pictures, once (groupPictures: ours, a visual mockup, the customer's), never
+      // every save of them (Nick, Nov 16 2026: "a lot of repeat mock-ups… the same things over and over again")
+      const rows: { file_path: string; title: string }[] = [], had = new Set<string>();
+      for (const g of gsK) for (const p of groupPictures(g)) if (!had.has(p)) { had.add(p); rows.push({ file_path: p, title: g.name || "" }); }
       let pics: { url: string; title: string }[] = [];
       if (rows.length) { const { data } = await sb.storage.from("proofs").createSignedUrls(rows.map((x) => x.file_path), 3600); pics = rows.map((x, i) => ({ url: data?.[i]?.signedUrl || "", title: x.title || "" })).filter((x) => x.url); }
       setInfo({ po: (o as { po_number?: string } | null)?.po_number || "", pcs, prints, garments: [...gm.entries()], pics });
