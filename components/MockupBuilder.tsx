@@ -1614,6 +1614,8 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   };
   // a cap: measured as a cap, at real size (lib/mockup.ts measureCap; Oct 31, a 4.5" front logo drew an inch wide)
   const isCap = (l?: Line) => !!l && locationsFor([{ style: l.style, brand: l.brand, garment: l.garment, description: garmentFor(l)?.description }]) === HAT_LOCATIONS;
+  /** a made-here photo of a shirt: placed on the reference shirt, not measured (a cap's or bag's is measured) */
+  const dataFlat = (l: Line, u: string) => u.startsWith("data:") && !isCap(l) && !isBag(l);
   const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isCap(l) ? measureCap(img, v) : isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v, { tee: isShortSleeveTee(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), kid: isKidGarment(l), hood: /\bhood/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), long: isLongSleeve(`${garmentFor(l)?.description || ""} ${l.garment || ""}`) }));
   /** a baby or toddler garment (its size run, or a onesie / bodysuit by name) */
   const isKidGarment = (l: Line) => { const b = bodyFor(l); return b.kind === "infant" || b.kind === "toddler" || /one ?piece|onesie|bodysuit|creeper|romper/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`); };
@@ -1733,7 +1735,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   const fitFor0 = (l: Line | undefined, v: View, measured?: Fit | null): Fit | null => {
     if (!l) return null;
     const u = photo(l, v);
-    if (u.startsWith("data:")) return null;
+    if (dataFlat(l, u)) return null;
     // laid over the template: the template's reading, moved onto this photo (a good fit only: most of the outline covered)
     const a = anchorOf(l);
     if (a && a.id !== l.id) {
@@ -1755,7 +1757,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   /** one photo's own reading (the template's, or a color not laid over it yet) */
   const baseFit = (l: Line, v: View, measured?: Fit | null): Fit | null => {
     const u = photo(l, v);
-    if (u.startsWith("data:")) return null;
+    if (dataFlat(l, u)) return null;
     const f = fits[u] || measured || null;
     if (!f || f.flat || !f.body) return f;
     // every color of one style is the same shirt from the same photo shoot (Oct 22, Nick: "these are the exact same
@@ -1878,8 +1880,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   useEffect(() => {
     for (const l of lines) for (const v of ["front", "back"] as View[]) {
       const u = photo(l, v);
-      if (u.startsWith("data:")) continue;
       const kind = isCap(l) ? "cap" : isBag(l) ? "bag" : "wear";
+      // a photo made here (the style dyed to a color its supplier has no photo of, or a drawn one) is measured too when
+      // it's a cap or a bag: they're placed by their own outline at real size (Nick, Nov 16 2026, #40409's camo New Era:
+      // the dyed photo wasn't measured, so the 4.5" front logo was drawn at a shirt's scale, about an inch wide)
+      if (u.startsWith("data:") && kind === "wear") continue;
       if (u in fits && fitKind.current[u] === kind) continue;
       fitKind.current[u] = kind;
       setFits((f) => ({ ...f, [u]: null }));
@@ -2793,7 +2798,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], ox = i * (pw + gap), oy = 0;
       const bg = await loadImg(photo(l, v)).catch(() => loadImg(drawn(l, v)));
-      const u = photo(l, v), fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
+      const u = photo(l, v), fit = dataFlat(l, u) ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       // the shirt at the same size as on screen (every photo zoomed to fill the frame like the reference tee); kept to its own cell
       const nm = frameOf(l, v);
       main.save(); main.beginPath(); main.rect(ox, oy, pw, ph); main.clip();
@@ -2927,7 +2932,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     const v = viewsFor(im.location)[0]; if (!v) return null;
     const u = photo(l, v);
     const bg = await loadImg(u).catch(() => loadImg(drawn(l, v)));
-    const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
+    const fit = dataFlat(l, u) ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
     const p = place(im, v, fit, l); if (!p.d) return null;
     // the print with a little shirt around it, drawn straight at the size it's shown (not cut from a smaller picture)
     const nm = frameOf(l, v);
@@ -3878,7 +3883,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
       const W = PHOTO_W * BD_K, H = PHOTO_H * BD_K;
       const u = photo(l, v);
       const bg = await loadImg(u).catch(() => loadImg(drawn(l, v)));
-      const fit = u.startsWith("data:") ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
+      const fit = dataFlat(l, u) ? null : fitFor(l, v, fits[u] || measureFor(l, bg, v));
       const nm = frameOf(l, v);
       const c = document.createElement("canvas"); c.width = W; c.height = H;
       const g = c.getContext("2d")!;
