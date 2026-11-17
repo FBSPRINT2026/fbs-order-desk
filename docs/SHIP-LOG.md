@@ -447,3 +447,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 16 9:03pm · 1.3.689 · Nick · Goods card: falls back to the order's own goods status when tracking was cleared (arrived → Here, not counted), shows the supplier order
 - Nov 16 9:04pm · 1.3.690 · Nick · Goods card: marked received with no count says Received
 - Nov 16 9:06pm · 1.3.691 · Nick · Schedule cards: the job's pieces (not its biggest spot's), 'pcs' after them; embroidery stitches read '4k + 4k st'
+- Nov 16 9:12pm · 1.3.692 · Nick · Embroidery schedule cards: logos and stitches a piece, not one stitch count per chest spot

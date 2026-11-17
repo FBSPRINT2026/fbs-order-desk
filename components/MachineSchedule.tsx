@@ -95,15 +95,28 @@ function glance(need: Need, minutes: number) {
   const byLoc = new Map<string, { colors: number; qty: number; k: number }>();
   for (const st of need.steps) {
     const k = (st.location || "").trim().toLowerCase() || "print", cur = byLoc.get(k) || { colors: 0, qty: 0, k: byLoc.size };
-    cur.colors = Math.max(cur.colors, need.type === "embroidery" ? Math.round((st.stitches || 0) / 1000) : st.colors || 0); cur.qty += st.qty || 0; byLoc.set(k, cur);
+    cur.colors = Math.max(cur.colors, st.colors || 0); cur.qty += st.qty || 0; byLoc.set(k, cur);
   }
   const locs = [...byLoc.values()].sort((a, b) => a.k - b.k);
   // the job's pieces (each garment once, however many spots it has: lib/production.ts needOf), not the biggest spot's
   // (Nick, Nov 16 2026, #40390: "4k/4k · 3" for 3 polos and a fleece)
   const units = need.qty || Math.max(0, ...locs.map((x) => x.qty));
-  const colors = need.type === "screen" ? screenColors(need) : need.type === "embroidery" ? `${locs.map((x) => `${x.colors || 8}k`).join(" + ")} st` : locs.length > 1 ? `${locs.length} loc` : "heat";
+  const colors = need.type === "screen" ? screenColors(need) : need.type === "embroidery" ? embGlance(need) : locs.length > 1 ? `${locs.length} loc` : "heat";
   const h = Math.floor(minutes / 60), m = Math.round(minutes % 60);
   return { units, colors, run: h ? (m ? `${h}h ${m}m` : `${h}h`) : `${m}m` };
+}
+/**
+ * An embroidery job the way the machine sees it (Nick, Nov 16 2026, #40400: "8K plus 8K… this is all the same, like just
+ * left chest"): which chest a logo sews on doesn't change the run, so spots aren't listed. What sets the run is how many
+ * logos (each its own file to load) and the stitches a piece: "5 logos · ~8k st" (~ when no file or logo estimate gives
+ * the count and the shop's default was used), a range when the logos differ ("4k–9k st"), "caps" when any are caps.
+ */
+function embGlance(need: Need) {
+  const logos = new Set(need.steps.map((st) => st.art || `g:${(st.pieces || st.location).split("|")[0]}`));
+  const ks = need.steps.map((st) => Math.max(1, Math.round((st.stitches || 0) / 500) / 2)), lo = Math.min(...ks), hi = Math.max(...ks);
+  const guess = need.steps.some((st) => st.stGuess), cap = need.steps.some((st) => st.garment === "cap");
+  const st = `${guess ? "~" : ""}${lo === hi ? `${lo}k` : `${lo}–${hi}k`} st`;
+  return [logos.size > 1 ? `${logos.size} logos` : "", st, cap ? "caps" : ""].filter(Boolean).join(" · ");
 }
 /** one day's piece of a job (a long job is several pieces, one per working day) */
 /** one day's piece of a job: clock start/end, and the work minutes it covers (less than the clock time when the press runs slow) */
