@@ -472,3 +472,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 17 1:09pm · 1.3.714 · Amanda · Work order by logo version: which version is for dark garments and which for light ones goes by comparing the two versions' garment colors (the black-text page said Dark garments)
 - Nov 17 2:49pm · 1.3.715 · Nick · Pre-production sample of the run follows its run: one set of prints, mockups and screens (shared), only its pieces its own; shown as a strip above the run; work order prints the run once with a SAMPLE FIRST tag (#50122)
 - Nov 17 2:57pm · 1.3.716 · Nick · Invoice and QuickBooks: a sample's fee shows on its own line (1 x $20.00), not $0.00 with the fee under it
+- Nov 17 3:03pm · 1.3.717 · Nick · Pre-production sample is a line in the run's group (option A): its pieces and price on one line, Printed / Sent, Sample approved or Changes asked; invoice and proof show it in the run's group

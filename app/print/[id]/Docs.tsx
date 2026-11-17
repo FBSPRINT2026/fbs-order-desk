@@ -1338,13 +1338,15 @@ export function ProofDoc(p: DocData & { printed: string; version?: number }) {
     <>
       <ArtFit />
       {groups.map((g, gi) => {
+        // a run's pre-production sample is the run's own art: no proof page of its own
+        if (g.sample?.follows) return null;
         const { mk, extra, idx } = plan[gi];
         const hex = p.hexes[gi] || "#9aa1ab";
         const shown = g.lines.filter((l) => l.style || l.color);
         const lines = shown.filter((l) => lineQty(l) > 0 || shown.length === 1);
         // each mockup picture is one garment (in the order they were saved)
         const capOf = (i: number) => { const l = shown[i]; return l ? [[l.brand, l.style].filter(Boolean).join(" "), l.color].filter(Boolean).join(" · ") : ""; };
-        const gname = groups.length > 1 ? (g.name?.trim() || `Group ${gi + 1}`) : "";
+        const gname = groups.filter((x) => !x.sample?.follows).length > 1 ? (g.name?.trim() || `Group ${gi + 1}`) : "";
         const sameG = (y: Group["lines"][number], l: Group["lines"][number]) => `${y.brand}|${y.style}|${y.color}`.toLowerCase() === `${l.brand}|${l.style}|${l.color}`.toLowerCase();
         /** a garment's sizes, every line of the same garment and color added up: "S 1 · M 2 · L 6 · 16 pcs" */
         const sizesOf = (l: Group["lines"][number]) => { const same = g.lines.filter((y) => sameG(y, l)); const sz = SIZES.map((z) => [z, same.reduce((a, y) => a + (+(y.sizes?.[z] || 0)), 0)] as const).filter(([, n]) => n > 0); return sz.length ? `${sz.map(([z, n]) => `${z} ${n}`).join(" · ")} · ${sz.reduce((a, [, n]) => a + n, 0)} pcs` : ""; };
@@ -1585,16 +1587,25 @@ export function InvoiceDoc(p: DocData) {
       </div>
       {groups.map((g, gi) => {
         const gc = c.groups[gi];
-        if (!gc) return null;
+        // a run's pre-production sample is a line in the run's group (GroupSample.follows; Nick, Nov 17 2026, option A)
+        if (!gc || g.sample?.follows) return null;
+        const runN = groups.filter((x) => !x.sample?.follows).length;
+        const fol = groups.map((x, xi) => ({ x, xc: c.groups[xi] })).filter(({ x, xc }) => xc && x.sample?.follows === g.id).map(({ x, xc }) => ({ x, ...sampleOnLines(xc!.lines, xc!.sampleCharges || []) }));
         // a sample's charges show on its own pieces (lib/samples.ts sampleOnLines)
         const sm = g.sample ? sampleOnLines(gc.lines, gc.sampleCharges || []) : null;
         const lines = g.lines.map((l, li) => ({ l, li, lc: (sm ? sm.lines : gc.lines)[li] })).filter((x) => x.lc && (x.lc.qty > 0 || g.lines.length === 1));
         const prints = g.imprints.map((d) => ({ d, inks: d.visualOnly ? [] : inkNames(d.inks) }));
         return (
           <div className="iv2-g" key={g.id}>
-            <div className="iv2-gh disp"><span>{g.name?.trim() || (groups.length > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}{prints.length > 0 && <span className="iv2-gm"> · {[...new Set(prints.map(({ d }) => (d.patch ? "Heat press patch" : DECO[d.method]) || methodLabel(d)).filter(Boolean))].join(" + ")}</span>}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
+            <div className="iv2-gh disp"><span>{g.name?.trim() || (runN > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}{prints.length > 0 && <span className="iv2-gm"> · {[...new Set(prints.map(({ d }) => (d.patch ? "Heat press patch" : DECO[d.method]) || methodLabel(d)).filter(Boolean))].join(" + ")}</span>}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
             {g.description?.trim() && <div className="iv2-gd">{g.description.trim()}</div>}
             <div className="iv2-cols lbl"><span>Item</span><span>Qty</span><span>Each</span><span>Amount</span></div>
+            {fol.map(({ x, lines: sl, rows }) => <div key={x.id}>
+              {x.lines.map((l, li) => { const lc = sl[li]; if (!lc || !(lc.qty > 0)) return null; const name = [l.brand, l.style].filter(Boolean).join(" ") || l.garment || "Garment"; return (
+                <div className="iv2-ln iv2-smp" key={l.id}><div className="iv2-row"><span className="iv2-nm"><b>Pre-production sample</b> · {name}{l.color ? <> · {l.color}</> : null}<span className="iv2-smz">{invoiceSizes(l.sizes as Record<string, number>).filter((z) => z.n).map((z) => `${sizeLabel(z.z)} ${z.n}`).join(" · ")}</span></span><span>{lc.qty}</span><span>{money(lc.each)}</span><span><b>{money(lc.sub)}</b></span></div></div>
+              ); })}
+              {rows.map((c2) => <div className="iv2-set" key={"smp" + c2.id}><span>Sample: {c2.label || "charge"}</span><span>{money(+(c2.amount || 0))}</span></div>)}
+            </div>)}
             {lines.map(({ l, li, lc }) => {
               // the line's own mockup; the group's first only for its own color (never another color's picture); else the print's logo
               // on the garment's color

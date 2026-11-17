@@ -16,7 +16,9 @@ export type SampleKind = "pre" | "only";
 /** where the sample's pieces come from: off the top of the order's own goods (the run is that many fewer), extra
  *  pieces the customer sent for it, or extra blanks we order for it */
 export type SampleSource = "top" | "customer" | "extra";
-export type SampleStage = "planned" | "pulled" | "printed" | "approved";
+/** where a sample is: planned, printed, sent to the customer, then approved, or changes asked (the run stays on hold);
+ *  "pulled" is from before Nov 17 and reads as planned */
+export type SampleStage = "planned" | "pulled" | "printed" | "sent" | "approved" | "changes";
 export type SampleCharge = { id: string; label: string; amount: number | "";
   /** paid on the sample and taken off the full run (a credit on the real order) */ credit?: boolean };
 export type GroupSample = {
@@ -32,7 +34,7 @@ export type GroupSample = {
 export type FromSample = { id: string; number: number; group: string; name?: string; credit: number };
 
 export const SAMPLE_STAGES: { k: SampleStage; label: string }[] = [
-  { k: "planned", label: "Planned" }, { k: "pulled", label: "Pulled" }, { k: "printed", label: "Printed" }, { k: "approved", label: "Approved" },
+  { k: "planned", label: "Planned" }, { k: "printed", label: "Printed" }, { k: "sent", label: "Sent" }, { k: "approved", label: "Approved" },
 ];
 export const SOURCE_LABEL: Record<SampleSource, string> = { top: "Off the top", customer: "Extra from customer", extra: "Order extra blanks" };
 
@@ -96,6 +98,19 @@ export function syncSamples<G extends Group>(groups: G[]): G[] {
   }
   return groups;
 }
+/** a sample that follows a run (GroupSample.follows) is shown as a line in that run's group, never as a group of its own
+ *  (Nick, Nov 17 2026, option A: "instead of group one, just make it sample"), so it's kept after every other group: the
+ *  run groups keep their numbers. In place; returns groups. */
+export function samplesLast<G extends Group>(groups: G[]): G[] {
+  const fol = (g: G) => !!g.sample?.follows;
+  const i = groups.findIndex(fol);
+  if (i < 0 || groups.slice(i).every(fol)) return groups;
+  const keep = groups.filter((g) => !fol(g)), f = groups.filter(fol);
+  groups.splice(0, groups.length, ...keep, ...f);
+  return groups;
+}
+/** a sample that follows a run: the order shows it as a line in that run's group */
+export const isFollower = (g: Pick<Group, "sample">) => !!g.sample?.follows;
 /** the sample that follows this run group, if any */
 export const sampleOfRun = <G extends Group>(groups: G[], runId: string): G | undefined => groups.find((g) => g.sample?.kind === "pre" && g.sample.follows === runId);
 /** the sample's pieces in words: "M 1", "S 1 · M 1 · L 1" */

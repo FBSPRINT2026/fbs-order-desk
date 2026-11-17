@@ -553,6 +553,8 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .sheet.iv2.t4 .iv2-g{margin-top:10px}
 .pdoc .sheet.iv2.t4 .iv2-sum{margin-top:12px}
 .pdoc .iv2-nsub{display:none}
+.pdoc .iv2-smp{padding-bottom:8px;border-bottom:1px solid #e3e6ec;margin-bottom:6px}
+.pdoc .iv2-smz{display:block;font-size:12px;color:#6b7280}
 .pdoc .sheet.iv2.t4 .iv2-nsub{display:inline;font-size:8.5pt;color:var(--ink3);font-weight:400}
 .pdoc .sheet.iv2.t4 .iv2-sub{display:none}
 .pdoc .sheet.iv2.t4 .tot .r{height:.27in}

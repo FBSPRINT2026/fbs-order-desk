@@ -89,6 +89,7 @@ type Props = {
   /** garments: the shirt on its own line and the sizes under it, never squeezed onto one line (the customer's builder) */ sizesBelow?: boolean;
   /** the customer's builder: Tag Print with no tag on file uploads their tag art (shown from thumbUrls) */ onUploadTag?: (f: File) => Promise<{ path: string; name: string } | null>;
   /** buttons under the mockup spot beside the prints (the portal: Create mockup / Upload your own mockup, Oct 24) */ mockupExtra?: React.ReactNode;
+  /** a line shown first under Garments: the run's pre-production sample (lib/samples.ts; Nick, Nov 17 2026, option A) */ linesTop?: React.ReactNode;
   /** their saved mockups ("mockups": Saved mockup) or their brands and logos ("brands": Saved logo) onto this group
    *  (components/CustomerArtwork.tsx; Oct 24, Oct 31) */ onCustomerArt?: (start: "mockups" | "brands") => void;
   /** the customer's order made from their mockup (Oct 24, Nick: "it should look exactly like it does on our order screen with
@@ -120,7 +121,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
+export default function GroupEditor({ linesTop, persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
   const role0 = useRole(); const meName = role0.staffName || role0.email || "";
   const [visBusy, setVisBusy] = useState(false);
   // the order's own files to pick a visual mockup from (Nov 16, Nick: "right now I have to download the file, then
@@ -1088,6 +1089,7 @@ export default function GroupEditor({ persPrice, onLogo, printsFixed = false, on
           one"); how many sizes it has decides when the prices drop under the sizes (globals.css "Garments: the size run") */}
       <div ref={glRef} className={"line-b fit-" + glFit + (hasCost ? "" : " nocs")}>
         <div className="lbl gsec" style={{ marginBottom: -4 }}>Garments</div>
+        {linesTop}
         <div className={"gl-list" + (gc.wholesale ? " ws" : "")}>
           <div className="gl-row gl-head gl-r2">
             <span className="a-sth">Style</span>

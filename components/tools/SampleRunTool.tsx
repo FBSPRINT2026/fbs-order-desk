@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import MoneyField from "@/components/MoneyField";
 import { SIZES, uid, type Group, type GLine, type Order } from "@/lib/pricing";
-import { SAMPLE_STAGES, SOURCE_LABEL, sampleCharged, sampleCredit, samplePieces, startCharges, syncSamples, type GroupSample, type SampleCharge, type SampleKind, type SampleSource, type SampleStage } from "@/lib/samples";
+import { SAMPLE_STAGES, SOURCE_LABEL, sampleCharged, sampleCredit, samplePieces, startCharges, syncSamples, samplePiecesText, type GroupSample, type SampleCharge, type SampleKind, type SampleSource, type SampleStage } from "@/lib/samples";
 
 /**
  * THE Sample tool (Nov 11 2026, Nick): one pop-up for both kinds of sample (lib/samples.ts).
@@ -64,9 +64,8 @@ export default function SampleRunTool({ o, patch, groupId, kind, onClose }: { o:
         const sl: GLine[] = ls.map((l) => ({ ...JSON.parse(JSON.stringify(l)), id: was?.lines.find((x) => x.sampleOf === l.id)?.id || uid(), sizes: Object.fromEntries(Object.entries(pick[l.id] || {}).filter(([, v]) => v > 0)), priceOverride: null, sampleOf: l.id } as GLine));
         made.push({ id: was?.id || uid(), name: "Sample run", lines: sl, imprints: [], sample: made.length ? { kind: "pre", source, charges: [], stage: sample.stage, follows: run.id } : { ...sample, follows: run.id } } as Group);
       }
-      // each sample sits right above the run it follows
-      const rest = d.groups.filter((g) => g.sample?.kind !== "pre");
-      d.groups = rest.flatMap((g) => [...made.filter((m) => m.sample?.follows === g.id), g]);
+      // each sample is a line in its run's group on the order; kept after the run groups so they keep their numbers
+      d.groups = [...d.groups.filter((g) => g.sample?.kind !== "pre"), ...made];
       syncSamples(d.groups);
     });
     onClose();
@@ -132,7 +131,7 @@ export default function SampleRunTool({ o, patch, groupId, kind, onClose }: { o:
 export function SampleBar({ g, orderId, me, patch, onEdit, onMade }: { g: Group; orderId: string; me: string; patch: Patch; onEdit: () => void; onMade?: (id: string, number: number) => void }) {
   const s = g.sample!;
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
-  const st = s.stage || "planned", ix = SAMPLE_STAGES.findIndex((x) => x.k === st);
+  const st = !s.stage || s.stage === "pulled" ? "planned" : s.stage === "changes" ? "sent" : s.stage, ix = SAMPLE_STAGES.findIndex((x) => x.k === st);
   const setStage = (k: SampleStage) => patch((d) => { const x = d.groups.find((y) => y.id === g.id); if (!x) return; x.sample ||= { ...s }; x.sample.stage = k; x.sample.at = { ...(x.sample.at || {}), [k]: { at: new Date().toISOString(), by: me } }; });
   async function make() {
     setBusy(true); setErr("");
@@ -158,6 +157,48 @@ export function SampleBar({ g, orderId, me, patch, onEdit, onMade }: { g: Group;
       {(s.charges.length > 0 || s.note) && <div className="smr-bar-c">{s.charges.map((c) => <span key={c.id} className="nw">{c.label || "Charge"} <b>${(+(c.amount || 0)).toFixed(2)}</b>{c.credit ? " · credited" : ""}</span>)}{s.note ? <span className="faint">{s.note}</span> : null}</div>}
       {s.kind === "pre" && st !== "approved" && <div className="smr-wait">The full run waits for the customer&apos;s OK on this sample.</div>}
       {err && <div className="smr-err">{err}</div>}
+    </div>
+  );
+}
+
+/**
+ * A pre-production sample of the run, as a line in the run's group (Nick, Nov 17 2026, option A: "make the sample look like
+ * the other lines… say pre-production sample there… then come back and say… sample is approved, just like if we sent them
+ * a digital sample"). Its pieces and price on one line, where it is (Planned → Printed → Sent), and the customer's answer:
+ * Sample approved (the run goes ahead) or Changes asked (it stays on hold). Its prints, mockup and screens are the run's.
+ */
+export function SampleLine({ g, me, patch, onEdit, hidePrices }: { g: Group; me: string; patch: Patch; onEdit: () => void; hidePrices?: boolean }) {
+  const s = g.sample!;
+  const st: SampleStage = !s.stage || s.stage === "pulled" ? "planned" : s.stage;
+  const setStage = (k: SampleStage) => patch((d) => { const x = d.groups.find((y) => y.id === g.id); if (!x?.sample) return; x.sample.stage = k; x.sample.at = { ...(x.sample.at || {}), [k]: { at: new Date().toISOString(), by: me } }; });
+  const n = samplePieces(g), fee = sampleCharged(s) - sampleCredit(s);
+  const garments = [...new Set(g.lines.map((l) => [l.brand, l.style].filter(Boolean).join(" ") + (l.color ? ` ${l.color}` : "")))].join(", ");
+  const when = (k: SampleStage) => { const a = s.at?.[k]; return a ? `${new Date(a.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}${a.by ? ` · ${a.by}` : ""}` : ""; };
+  const steps: { k: SampleStage; label: string }[] = [{ k: "printed", label: "Printed" }, { k: "sent", label: "Sent to customer" }];
+  const order: SampleStage[] = ["planned", "printed", "sent", "changes", "approved"];
+  const at = order.indexOf(st);
+  return (
+    <div className={"smr-ln" + (st === "approved" ? " ok" : st === "changes" ? " chg" : "")}>
+      <div className="smr-ln-t">
+        <span className="smr-tag">Pre-production sample</span>
+        <b data-notranslate>{garments}</b>
+        <span className="nw">{samplePiecesText(g)}</span>
+        <span className="smr-sp" />
+        {!hidePrices && <span className="nw smr-ln-m">{n} × ${(n ? fee / n : fee).toFixed(2)} = <b>${fee.toFixed(2)}</b></span>}
+      </div>
+      <div className="smr-ln-s">
+        {steps.map((x) => { const done = at >= order.indexOf(x.k); return (
+          <button key={x.k} type="button" className={"smr-chip" + (done ? " done" : "")} onClick={() => setStage(done && st === x.k ? (x.k === "sent" ? "printed" : "planned") : x.k)} title={done ? when(x.k) || x.label : `Mark ${x.label.toLowerCase()}`}>{done ? "✓ " : ""}{x.label}</button>
+        ); })}
+        {st === "approved" ? <span className="smr-ok">✓ Sample approved{when("approved") ? ` · ${when("approved")}` : ""}</span>
+          : st === "changes" ? <span className="smr-chg">Changes asked{when("changes") ? ` · ${when("changes")}` : ""} · the run is on hold</span>
+          : <span className="smr-wt">{st === "sent" ? "Waiting on their OK" : "The run waits for the sample OK"}</span>}
+        <span className="smr-sp" />
+        {st !== "approved" && <button type="button" className="btn sm" onClick={() => setStage("approved")}>Sample approved</button>}
+        {st !== "approved" && st !== "changes" && <button type="button" className="btn sm ghost" onClick={() => setStage("changes")}>Changes asked</button>}
+        {st === "approved" && <button type="button" className="btn sm ghost" onClick={() => setStage("sent")}>Undo</button>}
+        <button type="button" className="btn sm ghost" onClick={onEdit}>Edit</button>
+      </div>
     </div>
   );
 }
