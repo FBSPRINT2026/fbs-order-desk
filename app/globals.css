@@ -12125,6 +12125,12 @@ html body .ord .line-b .gl .a-x{gap:2px}
 @media (hover:hover){html body .ord .line-b .gl:not(:hover):not(:focus-within) .ln-add{visibility:hidden}}
 html body .ord .line-b .gl .ln-add{color:var(--ink-3);font-size:13px}
 html body .ord .line-b .gl > .gl-note{grid-column:1/-1;margin:4px 0 0}
+/* a note on the next color of the same style sits on that row, in the empty space where the style and brand would be
+   (Amanda, Nov 18 2026, #50114: "Tall sizes" sat under the second Black row as if it were the first's); a long note
+   wraps there. Stacked rows (phones, .fit-s) keep it under the line. */
+@media (min-width:641px){
+  html body .ord .line-b:not(.fit-s) .gl-list .gl.same:not(:has(> .gl-xtra)) > .gl-note{grid-area:1 / 1 / 2 / 3;align-self:center;margin:0;min-width:0;padding-right:8px}
+}
 /* the customer's extras on their own line (Oct 22): where the brand sits on a line under the same style; "+ Extras" on
    hover, a pill when on (printed free) */
 html body .ord .line-b .gl > .gl-xtra{grid-area:br;justify-self:start;align-self:center;display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border:1px dashed var(--line);border-radius:999px;background:transparent;color:var(--ink-3);font:600 12px/1 var(--body);white-space:nowrap;cursor:pointer}
