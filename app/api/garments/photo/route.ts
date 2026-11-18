@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
  * { setBack: { path, from } }: the back picked for that color (one of those photos, an upload, or "drawn": the drawn back,
  * so it stops asking), saved on the garment for every mockup of it.
  */
-const BACK_PATH = /^(Images\/[\w\/.\-]+\.(jpe?g|png|webp)|https:\/\/([\w-]+\.)*sanmar\.com\/[\w\/.\-%~]+\.(jpe?g|png|webp)|store:garment-backs\/[\w\/.\-]+\.(jpe?g|png|webp))$/i;
+const BACK_PATH = /^(Images\/[\w\/.\-]+\.(jpe?g|png|webp)|https:\/\/([\w-]+\.)*(sanmar|a4)\.com\/[\w\/.\-%~]+\.(jpe?g|png|webp)|store:garment-backs\/[\w\/.\-]+\.(jpe?g|png|webp))$/i;
 const sq = (s: string) => (s || "").toLowerCase().replace(/grey/g, "gray").replace(/[^a-z0-9]+/g, "");
 export async function POST(req: Request) {
   const v = await getViewer(); if (!v.user || !v.isStaff) return NextResponse.json({ error: "Staff only." }, { status: 403 });

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { photoHostRe } from "@/lib/garmentSup";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,8 @@ export async function GET(req: Request) {
   }
   let src = "";
   if (u) {
-    // SanMar and One Stop photos: a full URL on their own host
-    if (!/^https:\/\/([\w-]+\.)*(sanmar|onestopinc)\.com\/[\w\/.\-%~]+\.(jpe?g|png|webp)(\?[\w=&.\-]*)?$/i.test(u)) return NextResponse.json({ error: "Bad image address" }, { status: 400 });
+    // SanMar, One Stop and A4 photos: a full URL on their own host (PHOTO_HOSTS)
+    if (!photoHostRe.test(u) || !/^https:\/\/[^/]+\/[\w\/.\-%~]+\.(jpe?g|png|webp)(\?[\w=&.\-]*)?$/i.test(u)) return NextResponse.json({ error: "Bad image address" }, { status: 400 });
     src = u;
   } else {
     if (!/^Images\/[\w\/.\-]+\.(jpe?g|png|webp)$/i.test(p)) return NextResponse.json({ error: "Bad image path" }, { status: 400 });

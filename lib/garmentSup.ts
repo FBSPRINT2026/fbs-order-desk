@@ -4,11 +4,18 @@
  * result, looks one up or says where a catalog garment came from uses these (Oct 29: One Stop added as the third, so
  * none of them assumes "S&S or else SanMar" again).
  */
-export type GarmentSup = "ss" | "sanmar" | "onestop";
-export const GARMENT_SUP_NAME: Record<GarmentSup, string> = { ss: "S&S", sanmar: "SanMar", onestop: "One Stop" };
+export type GarmentSup = "ss" | "sanmar" | "onestop" | "a4";
+export const GARMENT_SUP_NAME: Record<GarmentSup, string> = { ss: "S&S", sanmar: "SanMar", onestop: "One Stop", a4: "A4" };
 export const garmentSupName = (s?: string | null) => GARMENT_SUP_NAME[(s || "ss") as GarmentSup] || s || "S&S";
 /** looked up by its own style code (SanMar, One Stop), not an S&S style ID */
-export const bySupplierStyle = (s?: string | null) => s === "sanmar" || s === "onestop";
+export const bySupplierStyle = (s?: string | null) => s === "sanmar" || s === "onestop" || s === "a4";
+/**
+ * Hosts whose garment photos are shown and drawn from our own site (/api/ss/img?u=…): SanMar, One Stop, and a maker's
+ * own site for styles brought in by hand (A4, Nov 18 2026: N3425 / N3402 and their women's and youth). One list, so a
+ * new supplier's photos work in the mockup, the picker and the back picker together.
+ */
+export const PHOTO_HOSTS = ["sanmar", "onestopinc", "a4"];
+export const photoHostRe = new RegExp(`^https:\\/\\/([\\w-]+\\.)*(${PHOTO_HOSTS.join("|")})\\.com\\/`, "i");
 /** the /api/ss/lookup query for a search result */
 export function lookupQuery(h: { supplier?: string | null; style?: string | null; styleID?: number | null; supplierStyle?: string | null; brand?: string | null }): string {
   const st = encodeURIComponent(h.supplierStyle || h.style || "");
