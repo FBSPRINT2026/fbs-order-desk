@@ -23,7 +23,7 @@ import JobTalk, { OriginalJobTalk } from "@/components/JobTalk";
 import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import ProductionHolder from "@/components/tools/ProductionHolder";
-import { SITE_URL } from "@/lib/config";
+import CopyCustomerLink, { customerLink } from "@/components/CopyCustomerLink";
 import { Fragment, type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import { openOrderCheck } from "@/components/tools/OrderReview";
@@ -1465,7 +1465,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
 
   const st = ST[statusKey(o)] || ST.quote;
   const cust = customers.find((c) => c.id === o.customer_id);
-  const portalLink = typeof window !== "undefined" ? `${SITE_URL || window.location.origin}/portal/orders/${o.id}` : "";
+  const portalLink = typeof window !== "undefined" ? customerLink("order", o.id) : "";
   const pendingProofs = proofs.filter((p) => p.status === "pending").length;
   const checks = checkOrder(o, calc, cust, proofs);
   // Printavo's setup adjustment shows as part of setup in Totals (Oct 21, Nick: order page cleanup); it stays its own fee
@@ -1667,6 +1667,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             : (o.status === "quote" || o.status === "quote_sent") && <SendProofTool target={{ kind: "order", orderId: o.id }} label={o.sent_at ? "Resend to customer" : "Send to customer"} before={beforeSend} onDone={(m) => { setLockOverride(""); void afterSend(m); }} />}
           {/* an invoice with something owed: Send a bill, this invoice picked (components/tools/SendBillTool.tsx; Nov 16) */}
           {seesMoney && o.type === "invoice" && !o.draft && o.customer_id && calc.balance > 0.004 && <button type="button" className="btn" onClick={() => setSendBill(true)}>Send a bill</button>}
+          {/* the customer's portal link to this order, one tap (Nov 18, Nick) */}
+          {!o.draft && o.customer_id && <CopyCustomerLink kind="order" id={o.id} />}
           {sendBill && o.customer_id && <SendBillTool customerId={o.customer_id} orderIds={[o.id]} onClose={() => setSendBill(false)} onSent={() => loadSide()} />}
           </span>
           <span className="ed-menus">

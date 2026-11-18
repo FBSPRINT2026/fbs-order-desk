@@ -1,6 +1,7 @@
 "use client";
 import JobLabor from "@/components/team/JobLabor";
 import BackLink from "@/components/BackLink";
+import CopyCustomerLink from "@/components/CopyCustomerLink";
 import { bySizeOrder } from "@/lib/sizeOrder";
 import JobFiles from "@/components/job/JobFiles";
 import JobTalk from "@/components/JobTalk";
@@ -57,6 +58,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
         <a className="btn" href={`/print/job/${row.visual_id}`} target="_blank" rel="noreferrer" title="A sheet with the job's QR code, for the press">Job ticket (QR)</a>
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
         <button type="button" className="btn" onClick={() => window.print()}>Print</button>
+        <CopyCustomerLink kind="archive" id={row.id} />
         {!(row as { locked?: boolean }).locked && <ArchiveStatus id={row.id} name={row.status_name || ""} onDone={() => setRev((n) => n + 1)} />}
       </div>
       {(row as { removed_at?: string | null }).removed_at && <div className="pv-gone">Deleted in Printavo before it closed, so it&apos;s hidden from every list here.</div>}
