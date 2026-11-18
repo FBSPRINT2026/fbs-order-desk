@@ -790,10 +790,14 @@ export async function measureFilm(buf: ArrayBuffer, withArt = false, name = "fil
     const v1 = page.getViewport({ scale: 1 });
     const scale = Math.min(4, 3000 / Math.max(v1.width, v1.height));
     const vp = page.getViewport({ scale });
+    // art that runs past the artboard (Nick, Nov 17 2026, #50129: Dallas Fire 56's banner was cut off along the bottom)
+    // is still in the file, only outside the page: the page is drawn with room all round, so every piece is whole
+    const room = Math.round(Math.min(0.5 * Math.max(vp.width, vp.height), (6000 - Math.max(vp.width, vp.height)) / 2));
     const c = document.createElement("canvas");
-    c.width = Math.round(vp.width); c.height = Math.round(vp.height);
-    await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(0,0,0,0)" }).promise;
-    for (const r of pieces(c, 0.15 * 72 * scale)) {
+    c.width = Math.round(vp.width) + 2 * room; c.height = Math.round(vp.height) + 2 * room;
+    await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(0,0,0,0)", transform: [1, 0, 0, 1, room, room] }).promise;
+    for (const r0 of pieces(c, 0.15 * 72 * scale)) {
+      const r = { x0: r0.x0 - room, y0: r0.y0 - room, x1: r0.x1 - room, y1: r0.y1 - room };
       const w = (r.x1 - r.x0) / scale / 72, h = (r.y1 - r.y0) / scale / 72;
       if (w < 1 || h < 1) continue;
       const piece: FilmPiece = { page: n, widthIn: Math.round(w * 100) / 100, heightIn: Math.round(h * 100) / 100 };
