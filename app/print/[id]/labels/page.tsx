@@ -12,13 +12,15 @@ export const dynamic = "force-dynamic";
  * the one layout (`drawBoxLabel` in lib/zpl.ts; Nick, Nov 16 2026: the scanners read the QR, so no barcode). One per
  * box, BOX ___ OF ___ to write in.
  */
-export default async function LabelsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ boxes?: string; size?: string }> }) {
+export default async function LabelsPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ boxes?: string; size?: string; a?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const { user, isStaff } = await getViewer();
-  if (!user) redirect(`/login?next=/print/${id}/labels`);
+  if (!user) redirect(`/login?next=/print/${id}/labels${sp.a ? "?a=1" : ""}`);
   if (!isStaff) notFound();
-  const card = await loadJobCard(createAdminClient(), { kind: "o", id });
+  // ?a=1: an old Printavo job still being finished (archived_orders; Nov 18, Nick: "a box label… next to reorder")
+  const kind: "o" | "a" = sp.a ? "a" : "o";
+  const card = await loadJobCard(createAdminClient(), { kind, id });
   if (!card) return notFound();
   const svg = boxLabelSvg(card, 0, 0);
   const boxes = Math.min(50, Math.max(1, parseInt(sp.boxes || "1", 10) || 1));
@@ -32,7 +34,7 @@ export default async function LabelsPage({ params, searchParams }: { params: Pro
         .lbl svg { width: 100%; height: 100%; display: block; }
         @media print { .labels-page { background: #fff; padding: 0; } .no-print { display: none !important; } .lbl { box-shadow: none; margin: 0; page-break-after: always; break-after: page; } }
       `}</style>
-      <LabelControls boxes={boxes} size={size} job={{ kind: "o", id }} />
+      <LabelControls boxes={boxes} size={size} job={{ kind, id }} />
       {Array.from({ length: boxes }, (_, i) => <div key={i} className="lbl" dangerouslySetInnerHTML={{ __html: svg }} />)}
     </div>
   );

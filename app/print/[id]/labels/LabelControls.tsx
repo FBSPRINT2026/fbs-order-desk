@@ -15,7 +15,7 @@ export default function LabelControls({ boxes, size, tight, job }: { boxes: numb
     const j = r ? await r.json().catch(() => ({})) : { message: "Offline." };
     setZbusy(false); setZmsg(j.message || j.error || "");
   }
-  const go = (b: string, s: string) => router.replace(`${path}?boxes=${Math.max(1, parseInt(b, 10) || 1)}&size=${s}`);
+  const go = (b: string, s: string) => router.replace(`${path}?boxes=${Math.max(1, parseInt(b, 10) || 1)}&size=${s}${job?.kind === "a" ? "&a=1" : ""}`);
   return (
     <div className="no-print" style={{ maxWidth: 820, margin: "0 auto 16px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
       <label style={{ display: "flex", gap: 6, alignItems: "center" }}>Number of labels

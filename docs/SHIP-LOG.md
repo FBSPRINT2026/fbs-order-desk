@@ -489,3 +489,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 18 10:14am · 1.3.732 · Nick · A customer on more than one account who opens a link to one order picks the account, then lands on that order (not the portal home)
 - Nov 18 10:27am · 1.3.733 · Nick · Every PMS can be picked: the ink lists (Mockup Creator, Separation Studio, production mockup) offer every PMS the Ink Room has a formula for (one InkNameList), and the PMS chart has Pantone's 2001 C-2479 C colors
 - Nov 18 10:28am · 1.3.734 · Nick · Ink picker (InkSelect, every print's ink box): a typed PMS the Ink Room has a formula for is found and listed (2170 C), formulas read in by the picker itself
+- Nov 18 10:31am · 1.3.735 · Nick · Box labels for old Printavo jobs: a Box labels button beside Reorder opens the same label page (browser print or Send to Zebra)

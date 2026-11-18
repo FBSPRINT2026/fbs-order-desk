@@ -55,6 +55,7 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
       <div className="row" style={{ gap: 8, flexWrap: "wrap", margin: "6px 0 4px" }}>
         <BackLink href={`/shop/customers/${row.customer_id}?area=orders`} label={`${company || "Customer"} · Orders`} here />
         {row.kind === "invoice" && <ArchiveReorder archivedId={row.id} />}
+        <a className="btn" href={`/print/${row.id}/labels?a=1`} target="_blank" rel="noreferrer" title="Box labels for this job: the same label the Zebra prints">Box labels</a>
         <a className="btn" href={`/print/job/${row.visual_id}`} target="_blank" rel="noreferrer" title="A sheet with the job's QR code, for the press">Job ticket (QR)</a>
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
         <button type="button" className="btn" onClick={() => window.print()}>Print</button>
