@@ -1,11 +1,12 @@
 "use client";
+import InkNameList from "@/components/InkNameList";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
 import { DEFAULT_SEP, baseByDefault, neverBase, printShade, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
-import { closestPms, colorHex, matchWord, repaintLogo, suggestInk, inkChoices } from "@/lib/inkColors";
+import { closestPms, colorHex, matchWord, repaintLogo, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { garmentHex, guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
 import { filmPagesPdf, filmSinglePdf, filmNestPdf, filmBox, nestLayout, deflate } from "@/lib/filmPdf";
@@ -1484,7 +1485,7 @@ export default function SeparationStudio({ id }: { id: string }) {
               <button type="button" className="sep-matchbox-x" onClick={() => setMatchAt(null)} aria-label="Close">×</button>
             </div>
           )}
-          <datalist id="sep-inklist">{inkChoices({ pms: true }).map((n) => <option key={n} value={n} />)}</datalist>
+          <InkNameList id="sep-inklist" />
           {/* the views: their own full-width bar right on top of the proof (Oct 22, Nick: "move that down so it takes up the
               whole space above the mock-up window"); the ink bar above keeps just the inks and Colors / Apply */}
           <div className="sep-vbar full">

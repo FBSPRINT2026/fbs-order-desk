@@ -1,4 +1,5 @@
 "use client";
+import InkNameList from "@/components/InkNameList";
 import { refreshUnseenProofs } from "@/app/shop/proof-actions";
 import { againAfter } from "@/lib/productionDetails";
 import { garmentFor as catalogGarment } from "@/lib/garmentMatch";
@@ -61,7 +62,7 @@ import { loadInkFormulas } from "@/lib/inkFormulas";
 import { levelBack } from "@/lib/levelBack";
 import { maskBehindHood, snapToEdge } from "@/lib/hoodSnap";
 import { FULL_WHY, isFullColorWhy } from "@/lib/fullColor";
-import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorChangeWant, colorHex, deltaE, detectColors, paintPrint, recolorTrim, suggestInk, inkChoices } from "@/lib/inkColors";
+import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, addStockInks, closestInk, colorChangeWant, colorHex, deltaE, detectColors, paintPrint, recolorTrim, suggestInk, inkChoices, FORMULA_HEX } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { closestThread, isThreadName, threadByName, threadChoices, threadLabel } from "@/lib/embroidery";
 import { needleThreads } from "@/lib/needleThreads";
@@ -4090,7 +4091,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     <BrandCtx.Provider value={brand}><OrderInkCtx.Provider value={inksOnOrder}>
       {/* the suggestion lists the color and thread change boxes type from: always on the page (Nov 10, Amanda: they lived
           inside the Helper panel, so with Helper hidden the boxes had no list and the browser offered old typed inks) */}
-      <datalist id="mk-ink-names">{inkChoices({ pms: true }).map((n) => <option key={n} value={n} />)}</datalist>
+      <InkNameList id="mk-ink-names" />
       <datalist id="mk-thread-names">{threadChoices().map((n) => <option key={n} value={n} />)}</datalist>
       {pasteAsk && (() => { const groups = (["front", "back", "sleeve"] as Side[]).map((sd) => ({ sd, locs: locsFor(sd) })).filter((g) => g.locs.length); return (
         <div className="mk-modal-back" role="dialog" aria-modal="true" aria-labelledby="pa-t" onClick={() => setPasteAsk(null)} onKeyDown={(e) => { if (e.key === "Escape") setPasteAsk(null); }}>
@@ -5574,8 +5575,13 @@ function Stage({ src, label, items, grid, mask, cx, corner, overlay, norm, onMov
   );
 }
 
-let inkNamesCache: string[] | null = null;
-const allInkNames = () => (inkNamesCache ||= inkChoices({ pms: true, extra: Object.keys(PMS_HEX) }));
+// rebuilt once the Ink Room's PMS formulas have loaded (they arrive after the first paint)
+let inkNamesCache: { n: number; list: string[] } | null = null;
+const allInkNames = () => {
+  const n = Object.keys(FORMULA_HEX).length;
+  if (!inkNamesCache || inkNamesCache.n !== n) inkNamesCache = { n, list: inkChoices({ pms: true, extra: Object.keys(PMS_HEX) }) };
+  return inkNamesCache.list;
+};
 
 /** Close-up of one print location: a patch of shirt color with the whole logo to drag and size (the photos show how it sits on the shirt). */
 function CloseUp({ size, title, hex, url, wIn, hIn, maxW, maxH, fold, arm, topAlign, offIn, colors, onMove, onResize, onEnd, onPick, onEyedrop, picked, onResetHex, onColor, ctr, onCenter }: {

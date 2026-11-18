@@ -1,7 +1,8 @@
 "use client";
+import InkNameList from "@/components/InkNameList";
 import { baseColor } from "@/lib/inkBy";
 import { mockupHref } from "@/lib/mockupFresh";
-import { paintPrint, inkChoices } from "@/lib/inkColors";
+import { paintPrint } from "@/lib/inkColors";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { colorHex } from "@/lib/inkColors";
@@ -535,7 +536,7 @@ function ConfirmPrint({ p, busy, post, one = false, v, orderId, reload, setErr, 
           </div>
         </div>
       )}
-      <datalist id="jv-pms">{inkChoices({ pms: true }).map((n) => <option key={n} value={n} />)}</datalist>
+      <InkNameList id="jv-pms" />
       {one && p.screen && (
         <div className="jv-cp-step">
           <div className="jv-cp-n"><b>4</b>Film</div>

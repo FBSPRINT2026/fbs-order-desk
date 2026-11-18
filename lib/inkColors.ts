@@ -63,7 +63,7 @@ export function addStockInks(rows: { name: string; hex: string; line?: string }[
 
 /**
  * The Ink Room's PMS formulas (Production → Ink Room → PMS formulas, read from IMS: 2,756 and growing), by number
- * ("2178", "COOL GRAY 3"). Their colors come first; the old chart (lib/pms.ts, 1,341 colors) only fills in numbers the
+ * ("2178", "COOL GRAY 3"). Their colors come first; the chart (lib/pms.ts, 1,813 colors) only fills in numbers the
  * Ink Room doesn't have (Oct 23, Nick: "everything that's in the ink room for sure should be in the PMS formulas…
  * Pantone adds colors all the time"; HALFF's PMS 2178 C was in the Ink Room but not the chart). A PMS in neither is
  * still a real ink: it just has no screen color here. Filled once a page has read them (lib/inkFormulas.ts).
@@ -517,7 +517,10 @@ export function colorChangeWant(img: HTMLImageElement | null, im: Record<string,
  * couldn't be found in another.
  */
 export function inkChoices(opts: { pms?: boolean; extra?: string[] } = {}): string[] {
-  const out = [...(opts.extra || []), ...Object.keys(STOCK_HEX), ...Object.keys(WILFLEX_HEX), ...Object.keys(SHOP_INK_HEX), ...(opts.pms ? Object.keys(PMS_COATED) : [])];
+  // with `pms`, every PMS the Ink Room has a formula for too (Nov 18, Nick: 2170 C couldn't be picked in the Mockup
+  // Creator: the Ink Room had it, the list only offered the old chart's numbers)
+  const formulas = opts.pms ? Object.keys(FORMULA_HEX).map((n) => `PMS ${n.replace(/\b([A-Z])([A-Z]+)/g, (_, a: string, b: string) => a + b.toLowerCase())} C`) : [];
+  const out = [...(opts.extra || []), ...Object.keys(STOCK_HEX), ...Object.keys(WILFLEX_HEX), ...Object.keys(SHOP_INK_HEX), ...(opts.pms ? Object.keys(PMS_COATED) : []), ...formulas];
   const seen = new Set<string>();
   return out.filter((n) => { const k = n.trim().toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; });
 }
