@@ -78,7 +78,7 @@ export function sideSvg(side: CardSide, t: TemplateData, values: Record<string, 
     const v = lineText(f, values);
     if (!v) return "";
     const ls = f.tracking ? ` letter-spacing="${(f.tracking / 1000) * f.size}"` : "";
-    const st = (w?: number, it?: boolean) => `font-family="${f.font}" font-weight="${w ?? f.weight ?? 400}" font-style="${it ?? f.italic ? "italic" : "normal"}"`;
+    const st = (w?: number, it?: boolean) => `font-family="'${f.font}'" font-weight="${w ?? f.weight ?? 400}" font-style="${it ?? f.italic ? "italic" : "normal"}"`;
     if (f.prefix) {
       return `<text x="${f.x}" y="${f.y}" font-size="${f.size}" fill="${f.color}" ${st(f.prefix.weight, f.prefix.italic)}${ls}>${esc(f.prefix.text)}</text>`
         + `<text x="${f.prefix.valueX ?? f.x}" y="${f.y}" font-size="${f.size}" fill="${f.color}" ${st()}${ls}>${esc(v)}</text>`;
