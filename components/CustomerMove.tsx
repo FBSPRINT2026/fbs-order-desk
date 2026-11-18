@@ -22,12 +22,13 @@ const STEPS: { k: Step; title: string; hint: string }[] = [
 export type MoveChecklist = Partial<Record<Step, boolean>> & { pricing_note?: string };
 type Cust = Customer & { moved_at?: string | null; moved_by?: string; move_checklist?: MoveChecklist };
 
-export const isMoved = (c: { moved_at?: string | null; is_test?: boolean } | null | undefined) => !!c && (!!c.moved_at || !!c.is_test);
 /**
- * Should this customer's new order wait for the move checklist? Only once the database has the move fields (a customer
- * row read with select("*") then carries `moved_at`), and never for test accounts. Before that, nothing is blocked.
+ * Moving a customer to the new system ended with Printavo (closed Nov 14 2026; Nick, Nov 18: "that whole new system thing
+ * doesn't exist anymore… because of Printavo being gone"). Every customer is in this system: nothing waits for the move
+ * checklist, and a new customer is never asked to move. Kept as functions so their callers stay simple.
  */
-export const needsMove = (c: Record<string, unknown> | null | undefined) => !!c && "moved_at" in c && !c.moved_at && !c.is_test;
+export const isMoved = (c: { moved_at?: string | null; is_test?: boolean } | null | undefined) => !!c;
+export const needsMove = (_c: Record<string, unknown> | null | undefined) => false;
 
 export default function CustomerMove({ customerId, onClose, onMoved }: { customerId: string; onClose: () => void; onMoved?: () => void }) {
   const sb = createClient();

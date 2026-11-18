@@ -115,7 +115,6 @@ export async function PUT(req: Request) {
   if (!b.draft || typeof b.draft !== "object" || !b.customer) return NextResponse.json({ error: "Nothing to create." }, { status: 400 });
   const { data: c } = await v.supabase.from("customers").select("id, moved_at").eq("id", String(b.customer)).maybeSingle();
   if (!c) return NextResponse.json({ error: "Customer not found." }, { status: 404 });
-  if (!c.moved_at) return NextResponse.json({ error: "Move this customer to the new system first (customer page → Move to the new system)." }, { status: 400 });
   // a customer's portal reorder (Nov 1): filled in where it is, keeping its number, their words kept in the notes
   let into = "";
   const draft = b.draft as EODraft;

@@ -274,8 +274,6 @@ export async function sendPortalEmailTo(contactId: string) {
     const { data: cc } = await admin.from("customer_contacts").select("customer_id, name, email, portal_access, removed_at").eq("id", contactId).maybeSingle();
     if (!cc || cc.removed_at) throw new Error("That contact isn't on file.");
     if (!cc.portal_access) throw new Error("Turn on Portal for them first.");
-    const { data: c } = await admin.from("customers").select("moved_at").eq("id", cc.customer_id).maybeSingle();
-    if (!c?.moved_at) throw new Error("This customer isn't moved to the new system yet: move them first (Portal customers).");
     const { sendLaunchToPeople } = await import("@/lib/launchSend");
     const r = await sendLaunchToPeople(admin, [{ customer_id: cc.customer_id, email: cc.email, name: cc.name }], v.email || "staff");
     if (r.skipped.length) return { ok: true as const, already: true };

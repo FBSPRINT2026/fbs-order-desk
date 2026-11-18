@@ -264,14 +264,6 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
           {canQuote && <button className="btn primary" type="button" onClick={newQuote}>+ New quote</button>}
         </div>
       </div>
-      {c && "moved_at" in (c as object) && !c.is_test && (() => {
-        const mv = c as unknown as { moved_at?: string | null; moved_by?: string; move_checklist?: Record<string, unknown> };
-        const steps = Object.entries(mv.move_checklist || {}).filter(([k, v]) => k !== "pricing_note" && v).length;
-        // moved: said in Details instead of a strip on every visit (Oct 21, Nick)
-        return mv.moved_at
-          ? null
-          : <div className="mv-strip"><span><b>Not in the new system yet.</b> Their next order here waits for a short checklist (name, contacts, retail / wholesale, pricing, addresses).{steps ? ` ${steps} of 5 done.` : ""}</span><button type="button" className="btn primary sm" onClick={() => setMoveOpen("edit")}>Move to the new system</button></div>;
-      })()}
       {moveOpen && <CustomerMove customerId={id} onClose={() => setMoveOpen("")} onMoved={async () => { const go = moveOpen === "quote"; await reloadShop(); const { data: fresh } = await createClient().from("customers").select("*").eq("id", id).maybeSingle(); if (fresh) setC((x) => (x ? { ...x, ...(fresh as object) } : x)); setMoveOpen(""); if (go) setTimeout(() => newQuote(), 300); }} />}
       {/* a test account's Clear everything (Nov 2, Nick: "put that back"); the on/off switch stays off (Oct 21) */}
       {c?.is_test && <TestAccount key={id} customerId={id} jobs={os.length} onChange={() => { reloadShop(); router.refresh(); }} />}
@@ -282,7 +274,6 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
             {/* seen, not changed, by someone who can't edit customers (Nov 3, Nick) */}
             {!canEdit && <div className="cx-ro faint">View only: you can see these details but not change them.</div>}
             <fieldset className="cx-dr-b" disabled={!canEdit}>
-        {(c as unknown as { moved_at?: string | null }).moved_at ? <div className="faint cx-moved">In the new system since {new Date(String((c as unknown as { moved_at: string }).moved_at)).toLocaleDateString()}{(c as unknown as { moved_by?: string }).moved_by ? ` (${(c as unknown as { moved_by?: string }).moved_by})` : ""}. New orders are 40,000-series. <button type="button" className="linkbtn" onClick={() => { setDetailsOpen(false); setMoveOpen("edit"); }}>Checklist</button></div> : null}
       <div className="cust-grid">
           <form className="panel" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
             <div className="panel-h"><h2>Details</h2><span className="faint" style={{ fontSize: 12 }}>{state || "Saves as you type"}</span></div>
