@@ -1368,10 +1368,13 @@ export function calcGroup(g: Group, o: Pick<Order, "waive_setup"> & { price_type
     // a sample: its flat price each (plus extras when the rule charges them), not the price list
     const smpEach = smp ? r2(num(smp.each) + (smp.extras === "charge" ? locExtra + puffExtra : 0)) : null;
     const each = l.shopUse || gs ? 0 : hasOv ? r2(+(l.priceOverride as number)) : smpEach != null ? smpEach : calcEach;
+    // a line charged nothing (its price typed as $0, free extras) carries no 2XL+ materials charge either (Amanda,
+    // Nov 18 2026, #50145: a $0 add-on still billed $5 for a 2XL and a 3XL); a size charge typed on the line still counts
+    const free = hasOv && each === 0;
     let sub = 0, upTotal = 0;
     SIZES.forEach((sz) => {
       const q = num(l.sizes?.[sz]);
-      const up = l.sizeUpSet?.[sz] != null && (l.sizeUpSet[sz] as unknown) !== "" ? num(l.sizeUpSet[sz]) : pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
+      const up = l.sizeUpSet?.[sz] != null && (l.sizeUpSet[sz] as unknown) !== "" ? num(l.sizeUpSet[sz]) : free ? 0 : pl.useGarment && l.sizeUp && l.sizeUp[sz] !== undefined ? sizeUpEach(l, sz) : num(pl.upcharges?.[sz]);
       sub += q * each; // 2XL+ Materials Charge are billed as their own line
       if (!l.shopUse && !smp && !gs && !l.ghost) upTotal += q * up;
     });

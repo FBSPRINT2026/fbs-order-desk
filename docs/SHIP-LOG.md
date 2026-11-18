@@ -502,3 +502,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 18 5:11pm · 1.3.745 · Nick · Week view: job numbers fit their press lane, the day stays within the crews' hours (a 1 AM start no longer stretches it to midnight), lighter off-hours
 - Nov 18 5:13pm · 1.3.746 · Nick · Week view: days already gone are half as wide, so today and the days ahead have room for full job numbers
 - Nov 18 5:21pm · 1.3.747 · Nick · A garment's photos chosen on purpose (A4.com's for A4N3165 / A4NW3002, an uploaded or picked back) are kept when its supplier is looked up again
+- Nov 18 5:25pm · 1.3.748 · Amanda · A line charged nothing (its price typed as $0, free extras) no longer bills the 2XL+ materials charge; a size charge typed on the line still counts (#50145, a $0 add-on, came to $5.41 for a 2XL and a 3XL)
