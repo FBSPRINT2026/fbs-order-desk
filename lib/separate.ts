@@ -1147,15 +1147,22 @@ export function resamplePlate(p: Plate, w: number, h: number, W: number, H: numb
 /** the box that holds every plate's ink (a couple of pixels of room), or null when the ink fills the picture */
 export function inkBox(r: SepResult, pad = 2): { x: number; y: number; w: number; h: number } | null {
   const { w, h } = r;
-  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  // what prints: a pixel a quarter inked or more, in a row or column with at least 3 of them (a faint fringe or a stray
+  // speck along a picture's edge doesn't make the print wider)
+  const cols = new Uint32Array(w), rows = new Uint32Array(h);
   for (const p of r.plates) {
     const a = p.alpha;
     for (let y = 0; y < h; y++) {
       const row = y * w;
-      for (let x = 0; x < w; x++) if (a[row + x] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      for (let x = 0; x < w; x++) if (a[row + x] > 64) { cols[x]++; rows[y]++; }
     }
   }
-  if (x1 < 0) return null;
+  let x0 = 0, x1 = w - 1, y0 = 0, y1 = h - 1;
+  while (x0 < w && cols[x0] < 3) x0++;
+  while (x1 > x0 && cols[x1] < 3) x1--;
+  while (y0 < h && rows[y0] < 3) y0++;
+  while (y1 > y0 && rows[y1] < 3) y1--;
+  if (x0 >= w || y0 >= h) return null;
   x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
   const nw = x1 - x0 + 1, nh = y1 - y0 + 1;
   return nw >= w * 0.97 && nh >= h * 0.97 ? null : { x: x0, y: y0, w: nw, h: nh };
