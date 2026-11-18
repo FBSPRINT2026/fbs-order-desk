@@ -1136,3 +1136,33 @@ export function resamplePlate(p: Plate, w: number, h: number, W: number, H: numb
   }
   return out;
 }
+
+/**
+ * The plates cut down to what prints (Nov 18 2026, Nick, #50127: the back was set 11.5" wide but its films came out 9":
+ * the art picture had a background left to the shirt around the crest, and the 11.5" was the whole picture's width). The
+ * print size is the size of the ink, never of a picture's empty or shirt-colored edges, the same as the Mockup Creator
+ * sizes a logo. Every plate (underbase included) is cut to the box that holds all of them, a couple of pixels of room
+ * kept; the result is unchanged when the ink already fills the picture.
+ */
+/** the box that holds every plate's ink (a couple of pixels of room), or null when the ink fills the picture */
+export function inkBox(r: SepResult, pad = 2): { x: number; y: number; w: number; h: number } | null {
+  const { w, h } = r;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (const p of r.plates) {
+    const a = p.alpha;
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) if (a[row + x] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+  }
+  if (x1 < 0) return null;
+  x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+  const nw = x1 - x0 + 1, nh = y1 - y0 + 1;
+  return nw >= w * 0.97 && nh >= h * 0.97 ? null : { x: x0, y: y0, w: nw, h: nh };
+}
+export function cropToInk(r: SepResult, pad = 2): SepResult {
+  const b = inkBox(r, pad); if (!b) return r;
+  const { w } = r;
+  const cut = (a: Uint8Array) => { const o = new Uint8Array(b.w * b.h); for (let y = 0; y < b.h; y++) o.set(a.subarray((y + b.y) * w + b.x, (y + b.y) * w + b.x + b.w), y * b.w); return o; };
+  return { ...r, w: b.w, h: b.h, plates: r.plates.map((p) => ({ ...p, alpha: cut(p.alpha), ...(p.bump ? { bump: cut(p.bump) } : {}) })) };
+}

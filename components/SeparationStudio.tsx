@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, typ
 import { createClient } from "@/lib/supabase/client";
 import { useSticky } from "@/lib/useSticky";
 import { orderGroups, type Design, type Group, type Order } from "@/lib/pricing";
-import { DEFAULT_SEP, baseByDefault, neverBase, printShade, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
+import { DEFAULT_SEP, baseByDefault, neverBase, printShade, composite, filmBits, findColors, filmDot, findSimInks, gradientShare, isDark, baseShirt, minDot, resamplePlate, separate, cropToInk, inkBox, snapInk, spotMixer, type Plate, type Px, type SepCover, type SepInk, type SepResult, type SepSettings } from "@/lib/separate";
 import { closestPms, colorHex, matchWord, repaintLogo, suggestInk } from "@/lib/inkColors";
 import InkMatch from "@/components/InkMatch";
 import { garmentHex, guessHex, shirtHex, SHIRT_COLORS } from "@/lib/mockup";
@@ -319,11 +319,15 @@ export default function SeparationStudio({ id }: { id: string }) {
   // null while loading; false = nothing to separate yet (show the upload box)
   const [hasArt, setHasArt] = useState<boolean | null>(null);
   const [img, setImg] = useState<HTMLImageElement | null>(null);
+  /** the whole picture's width over its ink's width (1 when the ink fills it): the picture prints st.widthIn × span wide */
+  const spanRef = useRef(1);
+  const [span, setSpan] = useState(1);
   // SVG art: its shapes, kept as vector for the Illustrator file
   const [vraw, setVart] = useState<VArt | null>(null);
   const [me, setMe] = useState({ email: "", boss: false });
   const [err, setErr] = useState(""), [msg, setMsg] = useState(""), [busy, setBusy] = useState("");
   const [st, setSt] = useState<Studio>(START);
+  const printW = st.widthIn * span;
   // vector art's background layer (stock art's cream / white page box): asked once, then kept in the settings
   const backdrop = useMemo(() => findBackdrop(vraw), [vraw]);
   // measured by the art's own shapes, not the page it sits on: the print width is the art's width
@@ -751,7 +755,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   /** what the separator is given: with several shirt colors no ink is left to the shirt */
   const sepIn = (w: number) => ({
     ks: inks.map((k) => ({ hex: k.hex, name: k.name, fadeTo: k.fadeTo, also: k.also, shirt: k.noPrint ? true : multiShirt ? false : k.shirt })),
-    so: { ...sepOpts(st, w), ...(multiShirt ? { dropGarment: false } : {}) } as SepSettings,
+    so: { ...sepOpts({ ...st, widthIn: st.widthIn * spanRef.current }, w), ...(multiShirt ? { dropGarment: false } : {}) } as SepSettings,
   });
 
   /* ---------- separate (a moment after anything changes) ---------- */
@@ -764,6 +768,12 @@ export default function SeparationStudio({ id }: { id: string }) {
       // show the ink's real color, not the art's
       r.plates.forEach((p) => { const k = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (k) p.hex = shown(k); });
       hiRef.current = null;
+      // the print width is the ink's width (#50127: a background left to the shirt made 11.5" print 9"): how much wider
+      // the whole picture is than its ink, for every size worked out from the picture (pictures only: vector art is
+      // drawn from its own shapes)
+      const b = vart?.ok ? null : inkBox(r);
+      const sp = b ? r.w / b.w : 1;
+      if (Math.abs(sp - spanRef.current) > 0.002) { spanRef.current = sp; setSpan(sp); }
       setRes(r); setBusy("");
     }, 60);
     return () => clearTimeout(t);
@@ -780,7 +790,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       for (const p of res.plates) {
         if (p.tonal || st.method === "sim" || p.kind === "highlight") continue;
         if (p.kind === "underbase") { out[p.key] = { mesh: 156, why: "Underbase: 156, or as fine as the finest color printed on it." }; continue; }
-        const d = smallestDetail(p.alpha, res.w, res.h, st.widthIn);
+        const d = smallestDetail(p.alpha, res.w, res.h, printW);
         const m = d ? meshFor(d.smallestUm, d.kind) : 156;
         out[p.key] = { mesh: m, why: d ? `Smallest detail: ${d.what} ${(d.smallestUm / 1000).toFixed(2)} mm at ${st.widthIn}" wide. ${m} mesh holds ${d.kind === "dot" ? "dots" : "lines"} about ${(holdsUm(m, d.kind) / 1000).toFixed(2)} mm and up.` : "No fine detail: 156." };
       }
@@ -794,7 +804,7 @@ export default function SeparationStudio({ id }: { id: string }) {
       setMeshSug(out);
     }, 120);
     return () => clearTimeout(t);
-  }, [res, st.widthIn, st.method, st.baseFor]);
+  }, [res, st.widthIn, printW, st.method, st.baseFor]);
   const arrange = useCallback((ps: Plate[]) => {
     const list = ps.map((p) => ({ ...p, name: names[p.key] || p.name, mesh: mesh[p.key] ?? meshSug[p.key]?.mesh ?? p.mesh }));
     if (!orderKeys.length) return list;
@@ -822,7 +832,7 @@ export default function SeparationStudio({ id }: { id: string }) {
   const LOUPE_IN = 0.6;
   useEffect(() => {
     const c = loupeCv.current, p = plates.find((q) => q.key === solo); if (!c || !p || !res || !loupe) return;
-    const ppi = res.w / st.widthIn, n = Math.max(8, Math.round(LOUPE_IN * ppi)), x0 = Math.max(0, Math.min(res.w - n, loupe.x - (n >> 1))), y0 = Math.max(0, Math.min(res.h - n, loupe.y - (n >> 1)));
+    const ppi = res.w / printW, n = Math.max(8, Math.round(LOUPE_IN * ppi)), x0 = Math.max(0, Math.min(res.w - n, loupe.x - (n >> 1))), y0 = Math.max(0, Math.min(res.h - n, loupe.y - (n >> 1)));
     const cw = Math.min(n, res.w), ch = Math.min(n, res.h), a = new Uint8Array(cw * ch), within = new Uint8Array(cw * ch);
     for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
       const j = (y0 + y) * res.w + x0 + x; a[y * cw + x] = p.alpha[j];
@@ -834,7 +844,7 @@ export default function SeparationStudio({ id }: { id: string }) {
     const x = c.getContext("2d")!, d = x.createImageData(f.W, f.H), rb = Math.ceil(f.W / 8);
     for (let yy = 0; yy < f.H; yy++) for (let xx = 0; xx < f.W; xx++) { const on = f.bits[yy * rb + (xx >> 3)] & (0x80 >> (xx & 7)), o = (yy * f.W + xx) * 4; d.data[o] = d.data[o + 1] = d.data[o + 2] = on ? 0 : 255; d.data[o + 3] = 255; }
     x.putImageData(d, 0, 0);
-  }, [loupe, solo, plates, res, st.widthIn, st.dpi, st.lpi, st.lpiFor, st.angle, st.dot, st.method]);
+  }, [loupe, solo, plates, res, st.widthIn, printW, st.dpi, st.lpi, st.lpiFor, st.angle, st.dot, st.method]);
 
   // "Original" and Compare show the art as it became on the mockup (Oct 22, Nick on #40091: "this original versus compare
   // mode… it's got the black"): each logo color in the mockup's ink, colors taken out on the mockup see-through
@@ -903,11 +913,11 @@ export default function SeparationStudio({ id }: { id: string }) {
   const outSize = useCallback(() => {
     if (!img) return { side: MAX_SIDE, ppi: 0 };
     const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1, long = Math.max(nw, nh);
-    let side = (st.widthIn * OUT_PPI * long) / nw;
+    let side = (printW * OUT_PPI * long) / nw;
     if (!vart) side = Math.min(side, long);
     side = Math.min(side, OUT_MAX_SIDE, Math.sqrt(OUT_MAX_PX * (long / Math.min(nw, nh))));
-    return { side: Math.round(side), ppi: Math.round((side * (nw / long)) / st.widthIn) };
-  }, [img, vart, st.widthIn]);
+    return { side: Math.round(side), ppi: Math.round((side * (nw / long)) / printW) };
+  }, [img, vart, printW]);
   async function fullSep() {
     const key = JSON.stringify([inks, st, names, mesh, orderKeys, !!vart?.ok, multiShirt]);
     if (hiRef.current?.key === key) return hiRef.current;
@@ -916,17 +926,19 @@ export default function SeparationStudio({ id }: { id: string }) {
     const { side, ppi } = outSize();
     const px = pixelsOf(img, st.removeBg && !vart?.ok, !!vart, side);
     const { ks, so } = sepIn(px.w);
-    const r = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
+    const r0 = separate(px, ks, so, vart?.ok && st.method === "spot" ? vectorCover(vart, px, ks, so, st.blackOver ?? true) : undefined);
+    // the films are the ink, st.widthIn wide: a picture's empty or shirt-colored edges are cut off (#50127)
+    const r = vart?.ok ? r0 : cropToInk(r0);
     r.plates.forEach((p) => { const q = inks.find((x) => "c" + x.hex.slice(1) === p.key); if (q) p.hex = shown(q); });
     // a picture under 400 ppi: the plates (not the art) are drawn again at 400 ppi, following the art's own soft
     // edges, so the Illustrator file doesn't step in the art's pixels
-    let w = px.w, h = px.h, outPpi = ppi;
+    let w = r.w, h = r.h, outPpi = ppi;
     if (!vart && ppi && ppi < OUT_PPI) {
-      const k = Math.min(OUT_PPI / ppi, OUT_MAX_SIDE / Math.max(px.w, px.h), Math.sqrt(OUT_MAX_PX / (px.w * px.h)));
+      const k = Math.min(OUT_PPI / ppi, OUT_MAX_SIDE / Math.max(r.w, r.h), Math.sqrt(OUT_MAX_PX / (r.w * r.h)));
       if (k > 1.15) {
         setBusy("Smoothing the plates to 400 ppi…"); await new Promise((res) => setTimeout(res, 20));
-        const W = Math.round(px.w * k), H = Math.round(px.h * k);
-        r.plates.forEach((p) => { p.alpha = resamplePlate(p, px.w, px.h, W, H); delete p.bump; });
+        const W = Math.round(r.w * k), H = Math.round(r.h * k);
+        r.plates.forEach((p) => { p.alpha = resamplePlate(p, r.w, r.h, W, H); delete p.bump; });
         w = W; h = H; outPpi = Math.round(W / st.widthIn);
       }
     }
@@ -937,7 +949,9 @@ export default function SeparationStudio({ id }: { id: string }) {
   /* ---------- outputs ---------- */
   const title = `${order ? `#${order.number}` : `S-${row?.number ?? ""}`} ${row?.location || ""}`.trim();
   // the art's height over its width, for the Size row's height box
-  const artAsp = res && res.w ? res.h / res.w : img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0;
+  // (the ink's own box: what the W and H sizes and the films are)
+  const inkB = useMemo(() => (res && !vart?.ok ? inkBox(res) : null), [res, vart]);
+  const artAsp = inkB ? inkB.h / inkB.w : res && res.w ? res.h / res.w : img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 0;
   // sized by its height: the height stays when the art's proportions change (a crop, a new trace)
   useEffect(() => { if (st.sizeBy === "h" && st.heightIn && artAsp) { const w = st.heightIn / artAsp; if (Math.abs(w - st.widthIn) > 0.005) set({ widthIn: w }); } }, [artAsp]); // eslint-disable-line react-hooks/exhaustive-deps
   // where the art sits on the film: a left chest 4" right of the screen's center as you look at the film (the wearer's
@@ -1544,7 +1558,7 @@ export default function SeparationStudio({ id }: { id: string }) {
             <PressSetupCard compact presses={presses} setPresses={setPresses} press={press} onPickPress={(id) => { setPressId(id); setSetup(null); }} onPress={onPress} setup={setup} commit={commitSetup} clearSetup={() => setSetup(null)}
               sheet={{ title: `Press setup S-${row.number}`, heading: `Press setup · ${row.location || ""}${order ? ` · #${order.number} ${order.nickname || ""}` : ""}`, sub: `S-${row.number} · ${plates.length} screens · shirt ${row.garment_color || st.garment || "not picked"}` }} />
           )}
-          {rtab === "screens" && res && <PrintFilms n={plates.length} inks={plates.map((p) => p.name)} aspect={res.h / res.w} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy} offsetPt={filmOffsetPt} where={filmWhere}
+          {rtab === "screens" && res && <PrintFilms n={plates.length} inks={plates.map((p) => p.name)} aspect={artAsp} widthIn={st.widthIn} dpi={st.dpi} title={title} busy={!!busy} offsetPt={filmOffsetPt} where={filmWhere}
             make={async (rollIn, only, nest) => { try { return await filmsEach(rollIn, only, nest); } finally { setBusy(""); } }}
             onSent={() => { if (row.status !== "cancelled") markPrinted(); }} />}
           {rtab === "screens" && <section className="sep-card">
