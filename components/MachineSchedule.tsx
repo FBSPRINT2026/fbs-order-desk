@@ -1697,8 +1697,11 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const segsWk = ds.flatMap((d) => machines.flatMap((m) => at(m, d)));
     const sh0 = ds.flatMap((d) => machines.map((m) => shiftOn(m, d)).filter(Boolean) as [number, number][]);
     const shAll = sh0.length ? sh0 : machines.map((m) => typicalShift(m));
-    const wS = Math.max(0, Math.floor(Math.min(...shAll.map((x) => x[0]), ...segsWk.map((g) => g.start)) / 60) * 60);
-    const wE = Math.min(1440, Math.ceil(Math.max(...shAll.map((x) => x[1]), ...segsWk.map((g) => g.end)) / 60) * 60);
+    // never more than an hour past the crews' hours (a stray 1 AM start stretched the whole week to midnight); work
+    // outside the window is drawn at its edge
+    const s0 = Math.min(...shAll.map((x) => x[0])), e0 = Math.max(...shAll.map((x) => x[1]));
+    const wS = Math.max(0, Math.floor(Math.max(s0 - 60, Math.min(s0, ...segsWk.map((g) => g.start))) / 60) * 60);
+    const wE = Math.min(1440, Math.ceil(Math.min(e0 + 60, Math.max(e0, ...segsWk.map((g) => g.end))) / 60) * 60);
     const H = ((wE - wS) / 60) * WK_HOUR, y = (min: number) => ((min - wS) / 60) * WK_HOUR;
     const hrs = Array.from({ length: Math.round((wE - wS) / 60) + 1 }, (_, i) => wS + i * 60);
     const lane = (m: Machine) => { const n = shortName(m).match(/\d+/)?.[0]; return m.type === "screen" && n ? `P${n}` : shortName(m).split(" ")[0]; };
@@ -1729,14 +1732,14 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   {(m.down?.[d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => { const a = Math.max(a0, wS), b = Math.min(b0, wE); return b > a ? <div key={"dn" + a0} className="mwb-down" title={`Down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} style={{ top: y(a), height: y(b) - y(a) }} /> : null; })}
                   {d === today && now.min > wS && now.min < wE && <div className="mwb-now" style={{ top: y(now.min) }} />}
                   {joined(m, d).map(({ g, start, end }) => {
-                    const a = Math.max(start, wS), b = Math.min(end, wE), h = Math.max(14, y(b) - y(a) - 1);
+                    const a = Math.min(Math.max(start, wS), wE - 15), b = Math.max(Math.min(end, wE), a + 15), h = Math.max(14, y(b) - y(a) - 1);
                     const all = segs.ofCard.get(g.c.key) || [], nxt = all.find((x) => x.day > d), prv = all.find((x) => x.day < d);
                     const nxtLate = !!nxt && segLate(all[all.length - 1]);
                     return (
                       <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " mwb-c" + (h < 30 ? " tiny" : "")} style={{ top: y(a) + 1, height: h }} title={tip(g)}
                         onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / WK_HOUR) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }}
                         onClick={() => setOpen(g.c)} onContextMenu={(e) => { e.preventDefault(); openRc(g.c, g, e.clientX, e.clientY); }}>
-                        <b>{g.c.job.kind === "h" ? "Hold" : `#${g.c.job.number}`}{g.c.slot?.status === "done" ? " ✓" : ""}</b>
+                        <b>{g.c.job.kind === "h" ? "Hold" : g.c.job.number}{g.c.slot?.status === "done" ? " ✓" : ""}</b>
                         {h >= 30 && <span>{prv ? "cont. · " : ""}{abbrCo(g.c.job.customer || g.c.job.name)}</span>}
                         {h >= 46 && g.c.job.name && <span className="n">{g.c.job.name}</span>}
                         {nxt && <em className={"mwb-to" + (nxtLate ? " late" : "")}>→ {dayLbl(nxt.day).split(",")[0]}</em>}
