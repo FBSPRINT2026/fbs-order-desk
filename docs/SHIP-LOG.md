@@ -481,3 +481,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 17 9:53pm · 1.3.723 · Nick · Films: art that runs past the artboard is read whole (drawn with room all round), not cut at the page edge
 - Nov 17 9:54pm · 1.3.724 · Nick · Films: parts of one print whose outlines overlap or nearly touch are read as one piece (a banner under a crest no longer sliced off)
 - Nov 18 8:42am · 1.3.725 · Nick · Send: replying to their email goes to everyone on it (in place of the people picked); every send says its version in the subject and the card (Version 2)
+- Nov 18 9:13am · 1.3.726 · Amanda · Firm dates and decoration filters: the Orders list has Any decoration / Screen print / Embroidery / Heat press and a Firm dates chip (remembered); the schedule's Ready To Schedule has a Firm tab and an SP · EMB · HP picker (Amanda: just the embroidery orders with firm dates)

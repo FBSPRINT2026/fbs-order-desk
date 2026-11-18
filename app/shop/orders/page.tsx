@@ -11,6 +11,8 @@ import { custLabel, daysUntil, money } from "@/lib/format";
 import { summaryLine, useShopData } from "@/lib/shopData";
 import { Due, Pill, PaidMark } from "@/components/bits";
 import { MixStrip, useMixParts } from "@/components/MixStrip";
+import { kindsOf, MIX_WORD } from "@/lib/mixParts";
+import type { MachineType } from "@/lib/production";
 import { IssueTag, useOpenIssues } from "@/components/IssueTag";
 import AssistantStrip from "@/components/AssistantStrip";
 import { holdLabel } from "@/lib/holds";
@@ -22,6 +24,9 @@ import { newQuote } from "@/lib/quickNew";
 import { bulkDeleteOrders } from "@/app/shop/bulk-delete-actions";
 import RowLink from "@/components/RowLink";
 import { useUrlSearch } from "@/lib/useUrlSearch";
+
+/** a firm date: marked Firm, or a set time on its date (as the schedule reads it) */
+const isFirm = (o: { firm?: boolean | null; due_time?: number | null }) => !!o.firm || o.due_time != null;
 
 /** A Printavo status in our words, so the filters work on Printavo orders too. */
 function pvStatus(a: { kind: string; status_name: string }): string {
@@ -60,6 +65,9 @@ export default function OrdersPage() {
   }
   const [type, setType] = useSticky<F>("orders.type", "all");
   const [status, setStatus] = useSticky("orders.status", "");
+  // by how it's made and firm dates (Amanda, Nov 18 2026: "see just the embroidery orders with firm dates")
+  const [kind, setKind] = useSticky<"" | MachineType>("orders.kind", "");
+  const [firmOnly, setFirmOnly] = useSticky("orders.firm", false);
   const [q, setQ] = useUrlSearch("q");
 
   // Printavo orders (read-only copies) are listed with everything else: every open one + the most recent ones;
@@ -101,13 +109,15 @@ export default function OrdersPage() {
       if (type === "messages" && !o.unread) return false;
       // a closed quote is finished too: under Completed, and on its own under Closed Quote
       if (status && (status === "completed" ? o.status !== "completed" : statusKey(o) !== status)) return false;
+      if (kind && !kindsOf(o.groups).includes(kind)) return false;
+      if (firmOnly && !isFirm(o)) return false;
       if (qq) {
         const c = customers[o.customer_id || ""];
         if (!matches(qq, o.number, o.nickname, o.po_number, c?.company, c?.name, c?.email, summaryLine(o), orderSearchText(o))) return false;
       }
       return true;
     });
-  }, [orders, customers, type, status, q]);
+  }, [orders, customers, type, status, q, kind, firmOnly]);
 
   const [arch, setArch] = useState<ArchiveSummary[]>([]);
   useEffect(() => {
@@ -141,10 +151,12 @@ export default function OrdersPage() {
       if (type === "open" && (a.kind !== "invoice" || k === "completed" || k === "quote")) return false;
       if (type === "unpaid" && (a.kind !== "invoice" || +a.balance <= 0.004)) return false;
       if (type === "messages") return false;
+      // old Printavo jobs don't say how they're printed or carry a firm date
+      if (kind || firmOnly) return false;
       if (status && k !== status) return false;
       return true;
     });
-  }, [arch, pvAll, q, type, status, customers]);
+  }, [arch, pvAll, q, type, status, customers, kind, firmOnly]);
   // one list, newest number first (Printavo and new orders share the numbering)
   // a mixed job's parts under its status (screen print done, embroidery printing…)
   const mix = useMixParts(list);
@@ -189,6 +201,11 @@ export default function OrdersPage() {
           <option value="">Any status</option>
           {[...STATUSES, CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
         </select>
+        <select aria-label="Filter by how it's printed" value={kind} onChange={(e) => setKind(e.target.value as "" | MachineType)}>
+          <option value="">Any decoration</option>
+          {(["screen", "embroidery", "heat"] as MachineType[]).map((k) => <option key={k} value={k}>{MIX_WORD[k]}</option>)}
+        </select>
+        <button type="button" className={"chip" + (firmOnly ? " on" : "")} aria-pressed={firmOnly} title="Only orders with a firm date" onClick={() => setFirmOnly(!firmOnly)}>Firm dates</button>
         <SearchInput placeholder="Search orders" value={q} onChange={(e) => setQ(e.target.value)} />
         {canBulk && !picking && <button type="button" className="btn" onClick={() => { setPicking(true); setBulkMsg(""); }}>Select</button>}
       </div>

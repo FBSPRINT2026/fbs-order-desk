@@ -497,8 +497,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [trayAll, setTrayAll] = useState(false);
   // Ready To Schedule's tabs (Nov 11, Nick: "late jobs, holders, and… jobs that are on time")
   // Ready To Schedule's tabs (Nick, Nov 13: "all, late, holds, goods here and then not here… take that off the filter")
-  const [trayTab0, setTrayTab] = useSticky<"all" | "late" | "hold" | "here" | "away">("cal.trayTab2", "all");
-  const trayTab = (["all", "late", "hold", "here", "away"] as const).includes(trayTab0) ? trayTab0 : "all";
+  const [trayTab0, setTrayTab] = useSticky<"all" | "late" | "hold" | "here" | "away" | "firm">("cal.trayTab2", "all");
+  const trayTab = (["all", "late", "hold", "here", "away", "firm"] as const).includes(trayTab0) ? trayTab0 : "all";
+  // Ready To Schedule by how it's printed (Amanda, Nov 18 2026: "just the embroidery orders with firm dates")
+  const [trayKind, setTrayKind] = useSticky<"" | "screen" | "embroidery" | "heat">("cal.trayKind", "");
   // Ready To Schedule by goods (Nick, Nov 13: "show me what's counted… that makes it easier to drop"), in Job Filters
   // right-click a job waiting in Ready To Schedule (Nick, Nov 13): add it to a press's next open time, mark it printed
   // already, put it on hold, open it
@@ -3225,15 +3227,19 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
               // goods here: counted, or in the building not counted yet (a Printavo job is ready to print); not here: on the
               // way, not in yet, short or waiting on missing goods. Holds have no goods yet: in neither.
               const gHere = (t: (typeof trayV)[number]) => !waitsG(t) && (t.job.kind === "a" || (t.job.kind === "o" && ["received", "arrived", "partial"].includes(goodsSt.get(t.job.id) || "")));
-              const kinds = { late: trayV.filter((t) => isLate(t) && !waitsG(t)), hold: trayV.filter((t) => t.job.kind === "h"), here: trayV.filter(gHere), away: trayV.filter((t) => t.job.kind === "o" && !gHere(t)) };
+              const trayK = trayKind ? trayV.filter((t) => t.need.type === trayKind) : trayV;
+              const kinds = { late: trayK.filter((t) => isLate(t) && !waitsG(t)), hold: trayK.filter((t) => t.job.kind === "h"), here: trayK.filter(gHere), away: trayK.filter((t) => t.job.kind === "o" && !gHere(t)), firm: trayK.filter((t) => !!t.job.firm) };
               // the schedule's search finds jobs here too, and this box searches both (Nick, Nov 13): only the matches show
               // while searching, every tab's matches show (Nov 16: "1 found" with Holds picked showed nothing)
-              const list = findWords.length ? trayV.filter((t) => isHit(t.job)) : trayTab === "all" ? trayV : kinds[trayTab];
+              const list = findWords.length ? trayV.filter((t) => isHit(t.job)) : trayTab === "all" ? trayK : kinds[trayTab];
               return (
               <>
                 <div className="toolbar ms-rtabs"><div className="chips">
-                  {([["all", "All", trayV.length], ["late", "Late", kinds.late.length], ["hold", "Holds", kinds.hold.length], ["here", "Goods here", kinds.here.length], ["away", "Not here", kinds.away.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
+                  {([["all", "All", trayK.length], ["late", "Late", kinds.late.length], ["firm", "Firm", kinds.firm.length], ["hold", "Holds", kinds.hold.length], ["here", "Goods here", kinds.here.length], ["away", "Not here", kinds.away.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
                 </div>
+                  <select className="ms-rkind" aria-label="Ready To Schedule by how it's printed" value={trayKind} onChange={(e) => setTrayKind(e.target.value as "" | "screen" | "embroidery" | "heat")}>
+                    <option value="">SP · EMB · HP</option><option value="screen">Screen print</option><option value="embroidery">Embroidery</option><option value="heat">Heat press</option>
+                  </select>
                   {(() => {
                     // Job Filters (Nick, Nov 11): Regular Orders first, then each customer's kinds under its name
                     const all = new Map<string, { label: string; who: string; n: number }>();
