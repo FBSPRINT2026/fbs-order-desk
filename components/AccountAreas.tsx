@@ -451,6 +451,10 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
     // All: one list by order number, each with what it is; then each kind on its own (Oct 24, Nick: "when you click all,
     // it just shows all in a row by number… all, then sent to FBS, then quotes, then orders… and completed")
     const allRows = [...sentQ, ...quotes2.filter((o) => (!o.archivedQ && !closedQ.includes(o)) || oldQuotes), ...iL].sort((x, y) => y.number - x.number);
+    // a search looks through every order and quote, whatever tab is open (Nov 18, Peter at Cedar Promos searched #50042
+    // on Orders and got nothing: it was under Sent to FBS); older, closed and archived quotes included
+    const searching = !!q.trim() && tab !== "drafts";
+    const everyRow = [...sentQ, ...quotes2, ...iL].sort((x, y) => y.number - x.number);
     const tabs: [typeof oTab, string, number][] = [["all", "All", 0], ...(draftsLive.length ? [["drafts", "Drafts", draftsLive.length] as [typeof oTab, string, number]] : []), ["sent", "Sent to FBS", sentQ.length] as [typeof oTab, string, number], ["quotes", "Quotes", recentQ.length], ["orders", "Orders", openI.length], ["done", "Completed", done.length]];
     // the orders they follow live on the dashboard only (Nov 2, Nick: "take that off the orders page… the orders I'm
     // following will just be on the main page")
@@ -479,9 +483,13 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
         {orderTypes.length > 0 && <div className="aa-lane" role="radiogroup" aria-label="Order type"><span>Show</span><div className="aa-lane-seg" style={{ gridTemplateColumns: `repeat(${orderTypes.length + 1},minmax(0,1fr))` }}>
           {["all", ...orderTypes].map((k) => { const n = k === "all" ? 0 : [...quotes, ...invoices].filter((o) => o.order_lane === k && !o.archived && o.status !== "completed").length; return <button key={k} type="button" role="radio" aria-checked={ln === k} className={ln === k ? "on" : ""} onClick={() => setLane(k)}>{k === "all" ? "All" : k}{n ? <em>{n}</em> : null}</button>; })}
         </div></div>}
-        <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder={tab === "quotes" ? "Search quotes" : tab === "all" ? "Search quotes and orders" : "Search orders"} value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
+        <label className="aa-search aa-search-plain"><Ico d="M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16zM21 21l-4.3-4.3" size={16} /><input type="search" placeholder="Search orders and quotes" value={q} onChange={(e) => { setQ(e.target.value); setPg({}); }} /></label>
       </div>
-      {tab === "all" && orderTable(allRows, "invoice", true)}
+      {searching && <>
+        <div className="aa-sec-h aa-sec-pad"><h3>Search</h3><span className="faint">Every order and quote{ln !== "all" ? ` (${ln})` : ""}</span></div>
+        {orderTable(everyRow, "invoice", true)}
+      </>}
+      {!searching && tab === "all" && orderTable(allRows, "invoice", true)}
       {/* drafts: started, never sent, no number yet (Oct 24, Nick: "something before sent to FBS that says drafts") */}
       {tab === "drafts" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Drafts</h3><span className="faint">Not sent to us yet. Pick one up or discard it.</span></div>
@@ -504,11 +512,11 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
           ))}</tbody>
         </table></div>
       </>}
-      {tab === "sent" && <>
+      {!searching && tab === "sent" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Sent to FBS</h3><span className="faint">We&apos;re checking these. You&apos;ll get a message when we confirm.</span></div>
         {sentQ.length ? orderTable(sentQ, "quote") : <div className="aa-none-q faint">Nothing waiting on us. Orders you send show here until we confirm them.</div>}
       </>}
-      {tab === "quotes" && <>
+      {!searching && tab === "quotes" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Quotes</h3>{openQ ? <span className="faint">{openQ} waiting on you</span> : null}
 </div>
         {shownQ.length ? orderTable(shownQ, "quote") : <div className="aa-none-q faint">{quotes2.length ? "No quotes in the last 60 days." : "No quotes right now."}</div>}
@@ -516,11 +524,11 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
             create issues"): one line to bring in the older and archived ones, and to put them away again */}
         {(olderN > 0 || oldQuotes) && <button type="button" className="aa-oldq-more" aria-pressed={oldQuotes} onClick={() => setOldQuotes(!oldQuotes)}>{oldQuotes ? "Hide older quotes and archived" : `Show older quotes and archived (${olderN})`}</button>}
       </>}
-      {tab === "orders" && <>
+      {!searching && tab === "orders" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Orders</h3><span className="faint">Total {money(openI.reduce((a, o) => a + o.total, 0))}</span></div>
         {orderTable(openI, "invoice")}
       </>}
-      {tab === "done" && <>
+      {!searching && tab === "done" && <>
         <div className="aa-sec-h aa-sec-pad"><h3>Completed</h3></div>
         {orderTable(done, "invoice")}
       </>}

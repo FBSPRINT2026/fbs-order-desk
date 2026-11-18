@@ -3,7 +3,8 @@ import { getViewer } from "@/lib/supabase/server";
 import { allRows } from "@/lib/readAll";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aiState, askClaude } from "@/lib/ai/claude";
-import { ST, statusKey, type Order } from "@/lib/pricing";
+import { ST, mergeSettings, statusKey, type Order } from "@/lib/pricing";
+import { SENT_OR_SHOWN, asCustomerSees } from "@/lib/portalView";
 import { customerHold, type Flag } from "@/lib/orderStages";
 import { portalSend } from "@/app/portal/message-actions";
 import { GOODS, trackingUrl, type GoodsStatus } from "@/lib/goods";
@@ -65,8 +66,23 @@ export async function portalAssist(history: AssistTurn[]): Promise<{ ok: boolean
     const { data: cs } = await allRows((ra, rb) => supabase.from("customers").select("id, company, price_type, payment_terms").order("id").range(ra, rb));
     const ids = (cs || []).map((c) => c.id);
     if (!ids.length) return { ok: false, error: "We couldn't find your account." };
-    const { data: os } = await supabase.from("orders").select("id, number, nickname, status, type, total, due_date, created_at, qty, po_number, price_type, submitted_at, delivery_method, ship_method, tracking, groups, approved_at, flags").neq("status", "quote").is("discarded_at", null).order("created_at", { ascending: false }).limit(150);
-    const orders = ((os || []) as (Order & { submitted_at: string | null })[]).filter((o) => !(o.status === "request" && !o.submitted_at));
+    // the same orders their portal shows (Nov 18, Peter at Cedar Promos searched #50042 and got nothing: an order they
+    // sent in that we're still quoting is in their list, but the helper skipped every quote), each as the customer sees
+    // it (a quote we're still building is "sent to us", with what they sent, never our draft's prices); the newest 150,
+    // and any order asked about by number however old
+    const COLS = "*";
+    const askedNums = [...new Set((turns.map((t) => t.text).join(" ").match(/\b\d{4,6}\b/g) || []).map(Number))].slice(0, 20);
+    const [{ data: os }, { data: osAsked }, { data: st0 }] = await Promise.all([
+      supabase.from("orders").select(COLS).or(SENT_OR_SHOWN).is("discarded_at", null).order("created_at", { ascending: false }).limit(150),
+      askedNums.length ? supabase.from("orders").select(COLS).or(SENT_OR_SHOWN).is("discarded_at", null).in("number", askedNums) : Promise.resolve({ data: [] }),
+      admin.from("settings").select("data").eq("id", 1).maybeSingle(),
+    ]);
+    const shopSettings = mergeSettings(st0?.data);
+    const seenIds = new Set<string>();
+    const orders = ([...(os || []), ...(osAsked || [])] as unknown as (Order & { submitted_at: string | null })[])
+      .filter((o) => (seenIds.has(o.id) ? false : (seenIds.add(o.id), true)))
+      .map((o) => asCustomerSees(o, shopSettings) as Order & { submitted_at: string | null })
+      .filter((o) => !(o.status === "request" && !o.submitted_at));
     const oids = orders.map((o) => o.id);
     const [{ data: pays }, { data: arch }, { data: goods }] = await Promise.all([
       oids.length ? admin.from("payments").select("order_id, amount").in("order_id", oids) : Promise.resolve({ data: [] }),
