@@ -8,6 +8,33 @@ import { osConfigured, osGarment } from "@/lib/onestop";
 import { sameBrand } from "@/lib/garmentMatch";
 
 export const dynamic = "force-dynamic";
+
+/** a supplier photo of a person wearing it, not the garment laid flat (SanMar "_model", S&S "_om") */
+const ONMODEL = /(model|_om)[_.-]|onmodel/i;
+const ckey = (c: string) => c.toLowerCase().replace(/[^a-z0-9]/g, "");
+type Photos = Record<string, { front: string; back: string; side: string; hex: string }>;
+/**
+ * One Stop's photos are often a person wearing the shirt (Nick, Nov 17 2026, #50127's Next Level 1810: "why did you bring
+ * in the mock-up of the shirt on a person? The regular shirt blank is available"). A style One Stop sells that SanMar or
+ * S&S also carry takes their flat photos, color by color (One Stop's prices and sizes stay); a color neither has keeps
+ * One Stop's. Fixes every One Stop style, not one shirt.
+ */
+async function flatPhotos<G extends { style: string; brand: string; supplier_style: string; color_images: Photos; image: string }>(g: G, q: string): Promise<G> {
+  const found: Photos[] = [];
+  if (sanmarConfigured()) for (const t of [...new Set([g.supplier_style, q, g.style].filter(Boolean).map((x) => x.toUpperCase()))]) {
+    const m = await sanmarLookup(t).catch(() => null);
+    if (m && sameBrand(m.brand, g.brand)) { found.push(m.color_images as Photos); break; }
+  }
+  if (ssConfigured()) { const m = await ssLookup(`${g.brand} ${g.style}`).catch(() => null); if (m && sameBrand(m.brand, g.brand)) found.push(m.color_images); }
+  if (!found.length) return g;
+  const flat = new Map<string, Photos[string]>();
+  for (const f of found) for (const [c, v] of Object.entries(f || {})) if (v?.front && !ONMODEL.test(v.front) && !flat.has(ckey(c))) flat.set(ckey(c), v);
+  if (!flat.size) return g;
+  const color_images: Photos = {};
+  for (const [c, v] of Object.entries(g.color_images)) { const f = flat.get(ckey(c)); color_images[c] = f ? { front: f.front, back: f.back && !ONMODEL.test(f.back) ? f.back : v.back, side: f.side || v.side, hex: f.hex || v.hex } : v; }
+  const first = Object.values(color_images)[0];
+  return { ...g, color_images, image: first?.front || g.image };
+}
 export const maxDuration = 60;
 
 // Find a style on S&S Activewear (or SanMar when S&S doesn't carry it, or ?supplier=sanmar) and save it to the garment catalog.
@@ -35,8 +62,9 @@ export async function GET(req: Request) {
     };
     // One Stop, when asked for (a One Stop search result: Oct 29, Nick), or below when S&S and SanMar don't have it
     const oneStop = async () => {
-      const g = await osGarment(admin, q, brand);
-      if (!g || !okBrand(g.brand)) return null;
+      const g0 = await osGarment(admin, q, brand);
+      if (!g0 || !okBrand(g0.brand)) return null;
+      const g = await flatPhotos(g0, q);
       const data = await save({ ...g, ss_style_id: null, synced_at: new Date().toISOString() }, async () => {
         const { data: m } = await admin.from("garments").select("id").eq("supplier", "onestop").ilike("supplier_style", g.supplier_style).maybeSingle();
         return (m as { id: string } | null) || null;

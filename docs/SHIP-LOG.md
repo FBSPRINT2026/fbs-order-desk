@@ -477,3 +477,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 17 3:18pm · 1.3.719 · Nick · Work order: the pre-production sample boxed on top of the run's garments (the run prints the rest), a PRE-PRODUCTION SAMPLE stamp beside Customer supplied goods; no big SAMPLE FIRST banner
 - Nov 17 3:21pm · 1.3.720 · Nick · Quote/invoice: the pre-production sample laid out like the run's line (picture, sizes, decoration) with a Pre-production sample label, no box
 - Nov 17 3:38pm · 1.3.721 · Nick · Order Goods tab: Where the goods are is a panel on the right, the goods on the left
+- Nov 17 9:19pm · 1.3.722 · Nick · Garments from One Stop take SanMar's or S&S's flat photos, color by color, instead of One Stop's photos of a person wearing it
