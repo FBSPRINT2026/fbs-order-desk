@@ -1687,70 +1687,66 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const crewLine = (m: Machine, d: string) => { const sh = shiftOn(m, d), slow = (m.down?.[d] || []).filter((x) => x[3] > 0).sort((x, y) => x[3] - y[3])[0]; return isOffDay(m, d) ? `Off · ${m.off![d]}` : sh ? `${hrsTxt(sh)}${m.extra?.[d] ? " · extra" : ""}${slow ? ` · ${Math.round(slow[3] * 100)}%` : ""}` : "not running"; };
   const label = (g: Seg) => <><b>{g.c.job.hold ? "HOLD #" : "#"}{g.c.job.number}</b> {g.part > 1 ? <i className="ms-cont">cont.</i> : null}{who(g.c.job)}</>;
 
-  /* ---------- Week view (Nick, Nov 18 2026, option B1: "it's just useless"): days across, each day split into a lane per
-     press, the clock running down through the crews' working hours only (no night), each job a card as tall as it runs.
-     A job that won't finish its day says where it goes on ("→ Mon") in red when that misses its in-hands date. ---------- */
-  const WK_HOUR = 30;
+  /* ---------- Week view (Nick, Nov 18 2026: "Printavo sucked, but at least you could color coordinate by press… it was
+     easy to drag and drop things around… we normally used the weekly view"): a row per press, labeled and in its own
+     color; a column per day; each job a card in the press's color, its job name first (wrapping, never cut off), then
+     the customer and number, in run order. Drag a card into another day or press to move it there. The clock lives in
+     the Day and Next 12 hours views; the week page takes the full width (the right column goes under it). ---------- */
+  const PRESS_TINTS = ["#378ADD", "#7F77DD", "#1D9E75", "#D85A30", "#D4537E", "#BA7517", "#5F5E5A", "#185FA5", "#3B6D11"];
+  const tintOf = (m: Machine) => PRESS_TINTS[Math.max(0, machines.findIndex((x) => x.id === m.id)) % PRESS_TINTS.length];
+  /** where in a box a dragged card lands: before the first card whose middle is below the pointer */
+  const listDrop = (e: DragEvent<HTMLDivElement>, m: Machine, d: string) => {
+    e.preventDefault(); setOver("");
+    if (!drag) return;
+    const cardsHere = [...e.currentTarget.querySelectorAll<HTMLElement>("[data-key]")].filter((el) => el.dataset.key !== drag.card?.key);
+    const before = cardsHere.find((el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2 > e.clientY; })?.dataset.key;
+    setPv(null);
+    if (drag.group) { placeGroup(drag.group, m, d, before); return; }
+    place(drag.card ? { card: drag.card } : { job: drag.job, need: drag.need }, m, d, before);
+  };
   const weekGrid = (w: string, title: string) => {
     const ds = weekDays(w).filter(visible);
-    // the crews' hours that week (plus anything booked outside them), on the hour
-    const segsWk = ds.flatMap((d) => machines.flatMap((m) => at(m, d)));
-    const sh0 = ds.flatMap((d) => machines.map((m) => shiftOn(m, d)).filter(Boolean) as [number, number][]);
-    const shAll = sh0.length ? sh0 : machines.map((m) => typicalShift(m));
-    // never more than an hour past the crews' hours (a stray 1 AM start stretched the whole week to midnight); work
-    // outside the window is drawn at its edge
-    const s0 = Math.min(...shAll.map((x) => x[0])), e0 = Math.max(...shAll.map((x) => x[1]));
-    const wS = Math.max(0, Math.floor(Math.max(s0 - 60, Math.min(s0, ...segsWk.map((g) => g.start))) / 60) * 60);
-    const wE = Math.min(1440, Math.ceil(Math.min(e0 + 60, Math.max(e0, ...segsWk.map((g) => g.end))) / 60) * 60);
-    const H = ((wE - wS) / 60) * WK_HOUR, y = (min: number) => ((min - wS) / 60) * WK_HOUR;
-    const hrs = Array.from({ length: Math.round((wE - wS) / 60) + 1 }, (_, i) => wS + i * 60);
-    const lane = (m: Machine) => { const n = shortName(m).match(/\d+/)?.[0]; return m.type === "screen" && n ? `P${n}` : shortName(m).split(" ")[0]; };
     return (
-      <section className="ms-wk mwb" key={w}>
-        <div className="ms-wk-h"><b>{title}</b><span className="faint">{dayLbl(ds[0])} – {dayLbl(ds[ds.length - 1])}</span>
-          <span className="mwb-press">{machines.map((m) => { const u = ds.reduce((a, d) => a + used(m, d), 0), cap = ds.reduce((a, d) => a + capacityMin(s, m, d), 0); return (
-            <span key={m.id} className={"mwb-pc" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${m.name}: ${fmtMin(u)} of ${fmtMin(cap)} booked this week`}><b>{lane(m)}</b> {shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""} <i>{Math.round(u / 60)}/{Math.round(cap / 60)}h</i></span>
-          ); })}</span>
-        </div>
-        {/* days already gone are half as wide: today and what's ahead get the room */}
-        <div className="mwb-g" style={{ gridTemplateColumns: `36px ${ds.map((d) => (d < today ? "minmax(0,.55fr)" : "minmax(0,1fr)")).join(" ")}` }}>
+      <section className="ms-wk mwp" key={w}>
+        <div className="ms-wk-h"><b>{title}</b><span className="faint">{dayLbl(ds[0])} – {dayLbl(ds[ds.length - 1])}</span></div>
+        <div className="mwp-g" style={{ gridTemplateColumns: `112px repeat(${ds.length}, minmax(0,1fr))` }}>
           <div />
           {ds.map((d) => (
-            <button type="button" key={d} className={"mwb-d" + (d === today ? " today" : d < today ? " past" : "")} onClick={() => { setDay(d); setView("day"); }} title="Open this day">
-              <b>{dayShort(d)}{d === today ? <em> · Today</em> : null}</b>
-              <span className="mwb-ln" style={{ gridTemplateColumns: `repeat(${machines.length}, minmax(0,1fr))` }}>{machines.map((m) => <i key={m.id} title={m.name}>{lane(m)}</i>)}</span>
+            <button type="button" key={d} className={"mwp-d" + (d === today ? " today" : d < today ? " past" : "")} onClick={() => { setDay(d); setView("day"); }} title="Open this day">
+              {dayShort(d)}{d === today ? <em> · Today</em> : null}
             </button>
           ))}
-          <div className="mwb-gut" style={{ height: H }}>{hrs.map((h) => <span key={h} style={{ top: y(h) }}>{clock(h)}</span>)}</div>
-          {ds.map((d) => (
-            <div key={d} className={"mwb-day" + (d === today ? " today" : d < today ? " past" : "")} style={{ height: H, gridTemplateColumns: `repeat(${machines.length}, minmax(0,1fr))`, backgroundSize: `100% ${WK_HOUR * 3}px` }}>
-              {machines.map((m) => (
-                <div key={m.id} className={"mwb-lane " + m.type + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")} title={`${m.name} · ${crewLine(m, d)}`}
-                  onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")}
-                  onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, d, wS + ((e.clientY - r.top) / WK_HOUR) * 60); }}>
-                  {offShade(m, d).map(([a0, b0]) => { const a = Math.max(a0, wS), b = Math.min(b0, wE); return b > a ? <div key={"o" + a0} className="mwb-off" style={{ top: y(a), height: y(b) - y(a) }} /> : null; })}
-                  {(() => { const sh = shiftOn(m, d); return sh ? brkBands(breaksOn(m, d, sh, segs.lunch.get(m.id + "|" + d))).map(({ a: a0, b: b0, lunch }) => { const a = Math.max(a0, wS), b = Math.min(b0, wE); return b > a ? <div key={"b" + a0} className={"mwb-brk" + (lunch ? " lunch" : "")} style={{ top: y(a), height: y(b) - y(a) }} /> : null; }) : null; })()}
-                  {(m.down?.[d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => { const a = Math.max(a0, wS), b = Math.min(b0, wE); return b > a ? <div key={"dn" + a0} className="mwb-down" title={`Down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} style={{ top: y(a), height: y(b) - y(a) }} /> : null; })}
-                  {d === today && now.min > wS && now.min < wE && <div className="mwb-now" style={{ top: y(now.min) }} />}
-                  {joined(m, d).map(({ g, start, end }) => {
-                    const a = Math.min(Math.max(start, wS), wE - 15), b = Math.max(Math.min(end, wE), a + 15), h = Math.max(14, y(b) - y(a) - 1);
-                    const all = segs.ofCard.get(g.c.key) || [], nxt = all.find((x) => x.day > d), prv = all.find((x) => x.day < d);
-                    const nxtLate = !!nxt && segLate(all[all.length - 1]);
-                    return (
-                      <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " mwb-c" + (h < 30 ? " tiny" : "")} style={{ top: y(a) + 1, height: h }} title={tip(g)}
-                        onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / WK_HOUR) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }}
-                        onClick={() => setOpen(g.c)} onContextMenu={(e) => { e.preventDefault(); openRc(g.c, g, e.clientX, e.clientY); }}>
-                        <b>{g.c.job.kind === "h" ? "Hold" : g.c.job.number}{g.c.slot?.status === "done" ? " ✓" : ""}</b>
-                        {h >= 30 && <span>{prv ? "cont. · " : ""}{abbrCo(g.c.job.customer || g.c.job.name)}</span>}
-                        {h >= 46 && g.c.job.name && <span className="n">{g.c.job.name}</span>}
-                        {nxt && <em className={"mwb-to" + (nxtLate ? " late" : "")}>→ {dayLbl(nxt.day).split(",")[0]}</em>}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          ))}
+          {machines.map((m) => {
+            const tint = tintOf(m);
+            return [
+              <div key={m.id + w} className="mwp-p" style={{ ["--pt" as string]: tint }} title={m.name}>
+                <b>{shortName(m)}</b>{crewOf(m) ? <small>{crewOf(m)!.leader}</small> : null}
+              </div>,
+              ...ds.map((d) => {
+                const u = used(m, d), cap = capacityMin(s, m, shiftOn(m, d) ? d : undefined), off = isOffDay(m, d);
+                return (
+                  <div key={m.id + d} className={"mwp-c" + (d === today ? " today" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "") + (u > cap ? " full" : "")} style={{ ["--pt" as string]: tint }}
+                    title={`${m.name} · ${dayLbl(d)} · ${off ? `Off · ${m.off![d]}` : `${fmtMin(u)} of ${fmtMin(cap)} booked`}`}
+                    onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")} onDrop={(e) => listDrop(e, m, d)}>
+                    {off && <span className="mwp-off">Off · {m.off![d]}</span>}
+                    {joined(m, d).map(({ g }) => {
+                      const c = g.c, hold = c.job.kind === "h", done = c.slot?.status === "done", late = segLate(g);
+                      const all = segs.ofCard.get(c.key) || [], prv = all.some((x) => x.day < d), nxt = all.find((x) => x.day > d);
+                      return (
+                        <button key={c.key + g.part} type="button" draggable data-key={c.key}
+                          className={"mwp-j" + (hold ? " hold" : "") + (done ? " done" : "") + (c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (isHit(c.job) ? " ms-hit" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "")}
+                          title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); openRc(c, g, e.clientX, e.clientY); }}
+                          onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
+                          <b>{c.job.name || shortLabel(c.need.label)}</b>
+                          <span>{hold ? "Hold · " : ""}{abbrCo(c.job.customer || "")}{hold ? "" : ` · #${c.job.number}`}{done ? " · done" : ""}{late && !done ? " · late" : ""}{prv ? " · cont." : ""}{nxt ? ` · → ${dayLbl(nxt.day).split(",")[0]}` : ""}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              }),
+            ];
+          })}
         </div>
       </section>
     );
@@ -3161,7 +3157,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
 
       {/* Scheduling Tools: the schedule's health, the actions that change it, and the jobs waiting for a spot */}
-      <div className="mzc">
+      <div className={"mzc" + (view === "timeline" ? " wk" : "")}>
       <div className="mzc-main">
       {/* Ready to schedule on top, on its own (Nick, Nov 16 2026, Schedule C): a list that folds up; the tools and the assistant
           are in the panel on the right */}
