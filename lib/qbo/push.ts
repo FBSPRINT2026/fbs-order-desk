@@ -184,7 +184,10 @@ export class Pusher {
     const o = await this.order(row.local_id);
     if (!o) return { status: "skipped", reason: "The order was deleted." };
     const n = +o.number;
-    if (n < this.qs.adopt_from_number) return { status: "skipped", reason: `#${n} is from Printavo's time (below #${this.qs.adopt_from_number}): never touched.` };
+    // an older Printavo job is ours only once it's been made editable here (lib/printavoEdit.ts: it carries Printavo's id);
+    // then it's handled like a 40,000: Printavo's QuickBooks invoice found by its number and brought to ours
+    const editedOld = n < this.qs.adopt_from_number && !!(o as { printavo_id?: string | null }).printavo_id;
+    if (n < this.qs.adopt_from_number && !editedOld) return { status: "skipped", reason: `#${n} is from Printavo's time (below #${this.qs.adopt_from_number}): never touched.` };
     const cust = o.customer_id ? await this.ourCustomer(o.customer_id) : null;
     if (cust?.is_test) return { status: "skipped", reason: "Test customer: never sent." };
     // held back from QuickBooks by hand (orders.qbo_hold): it waits, with why, until the hold is taken off
@@ -210,6 +213,8 @@ export class Pusher {
     if (n < this.qs.live_from_number) {
       const a = await this.adoptFind(o, link);
       if ("stop" in a) return a.stop;
+      // an old job made editable here whose QuickBooks invoice isn't found: never made on its own (an old job billed twice)
+      if (editedOld && !a.rec && !a.link && !res.force) return { status: "needs_review", reason: `Printavo's QuickBooks invoice #${n} wasn't found (an older job: maybe never sent, or under another number). Not made, so it isn't billed twice. If it really isn't in QuickBooks, press "Send ours anyway".` };
       link = a.link;
       adopted = a.rec;
     }

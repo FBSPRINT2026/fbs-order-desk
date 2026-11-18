@@ -13,6 +13,7 @@ import { downloadUrl, pvHandle } from "@/lib/printavoNames";
 import ArchiveReorder from "@/components/ArchiveReorder";
 import { TRACK, trackWord, trackingUrl } from "@/lib/goods";
 import { archivedStatuses, setArchivedStatus } from "@/app/shop/archive/actions";
+import { editedOrderOf, editHere } from "@/app/shop/archive/edit-actions";
 
 /** An archived Printavo invoice or quote (read-only). Artwork shows from our storage copies, or from Printavo until copied. */
 export default function ArchivedOrderPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,6 +24,12 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
   const [names, setNames] = useState<Record<string, string>>({});
   const [state, setState] = useState<"loading" | "missing" | "ok">("loading");
   const [rev, setRev] = useState(0);
+  // made editable here: the job is that order now (its page opens the order; ?copy=1 shows Printavo's copy)
+  const [edited, setEdited] = useState<{ id: string; number: number } | null>(null);
+  const copy = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("copy");
+  useEffect(() => {
+    void editedOrderOf(id).then((e) => { setEdited(e); if (e && !copy) window.location.replace(`/shop/orders/${e.id}`); });
+  }, [id, copy]);
 
   useEffect(() => {
     const sb = createClient();
@@ -60,9 +67,11 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
         <a className="btn" href={`/j/${row.visual_id}`} target="_blank" rel="noreferrer" title="The job's phone menu: press setup, notes, photos, Zebra box labels">Phone menu</a>
         <button type="button" className="btn" onClick={() => window.print()}>Print</button>
         <CopyCustomerLink kind="archive" id={row.id} />
-        {!(row as { locked?: boolean }).locked && <ArchiveStatus id={row.id} name={row.status_name || ""} onDone={() => setRev((n) => n + 1)} />}
+        {!edited && <EditHere id={row.id} visual={String(row.visual_id)} />}
+        {!edited && !(row as { locked?: boolean }).locked && <ArchiveStatus id={row.id} name={row.status_name || ""} onDone={() => setRev((n) => n + 1)} />}
       </div>
-      {(row as { removed_at?: string | null }).removed_at && <div className="pv-gone">Deleted in Printavo before it closed, so it&apos;s hidden from every list here.</div>}
+      {edited && <div className="pv-moved">Printavo&apos;s copy of the job, as it was when it came over. It&apos;s order #{edited.number} now: statuses, prices and everything else are changed there. <a className="btn sm primary" href={`/shop/orders/${edited.id}`}>Open #{edited.number}</a></div>}
+      {!edited && (row as { removed_at?: string | null }).removed_at && <div className="pv-gone">Deleted in Printavo before it closed, so it&apos;s hidden from every list here.</div>}
       <ArchivedGoods id={row.id} groups={(row.data as unknown as { groups?: PvGroup[] }).groups || []} />
       <div style={{ marginTop: 10 }}>
         <ArchivedOrderView production={<JobFiles job={{ kind: "a", id: row.id }} inside />}
@@ -71,6 +80,32 @@ export default function ArchivedOrderPage({ params }: { params: Promise<{ id: st
             <div className="pv-below"><JobTalk jobRef={`pv:${row.id}`} printavoCount={(row.data.messages?.length || 0) + (row.data.approvals?.length || 0)}
         printavo={<History o={row.data} fileUrl={(u) => signed[u] || u} dl={(u, name) => downloadUrl(signed[u] || u, name)} paths={row.files || {}} audience="shop" />} /></div></>} o={row.data} importedAt={row.imported_at} customerHref={`/shop/customers/${row.customer_id}`} fileUrl={(u) => signed[u] || u} names={names} paths={row.files || {}} />
       </div>
+    </>
+  );
+}
+
+/**
+ * Edit here (Nick, Nov 18 2026: "now that there's no Printavo… all our edits have to be done here"): the job becomes one
+ * of our orders as Printavo had it, same number, prices and payments (app/shop/archive/edit-actions.ts), and opens.
+ */
+function EditHere({ id, visual }: { id: string; visual: string }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const go = async () => {
+    setBusy(true); setErr("");
+    const r = await editHere(id);
+    if (!r.ok) { setErr(r.error); setBusy(false); return; }
+    if (r.note) try { sessionStorage.setItem(`fbs:pvEditNote:${r.id}`, r.note); } catch { /* fine */ }
+    window.location.href = `/shop/orders/${r.id}`;
+  };
+  return (
+    <>
+      <button type="button" className="btn" disabled={busy} onClick={() => void go()}
+        title={`Makes #${visual} one of our orders exactly as Printavo had it (same number, prices, payments), so its status, prices and everything else can be changed here. QuickBooks keeps Printavo's invoice until the order changes.`}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ marginRight: 5, verticalAlign: "-2px" }}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+        {busy ? "Making it editable…" : "Edit here"}
+      </button>
+      {err && <span className="err">{err}</span>}
     </>
   );
 }

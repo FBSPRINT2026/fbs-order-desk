@@ -556,7 +556,7 @@ function Detail({ r, busy, act }: { r: QueueItem; busy: boolean; act: (id: numbe
       )}
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         {p.canLink && <button className="btn sm" type="button" disabled={busy} onClick={() => act(r.id, "resolve", { link_qbo_id: p.canLink })}>Link to it ({p.existing?.DisplayName} #{p.canLink})</button>}
-        {r.entity === "invoice" && r.status === "needs_review" && /changed in QuickBooks/i.test(r.reason) && <button className="btn sm" type="button" disabled={busy} onClick={() => act(r.id, "resolve", { force: true })}>Send ours anyway</button>}
+        {r.entity === "invoice" && r.status === "needs_review" && /changed in QuickBooks|Send ours anyway/i.test(r.reason) && <button className="btn sm" type="button" disabled={busy} onClick={() => act(r.id, "resolve", { force: true })}>Send ours anyway</button>}
         {r.entity === "invoice" && r.status === "needs_review" && /back to a quote/i.test(r.reason) && <button className="btn sm" type="button" disabled={busy} onClick={() => act(r.id, "resolve", { void: true })}>Void in QuickBooks</button>}
         {["needs_review", "error", "skipped", "done"].includes(r.status) && <button className="btn sm" type="button" disabled={busy} onClick={() => act(r.id, "retry")}>Retry</button>}
         {["needs_review", "error", "pending"].includes(r.status) && <button className="btn sm ghost" type="button" disabled={busy} onClick={() => act(r.id, "skip")}>Skip</button>}

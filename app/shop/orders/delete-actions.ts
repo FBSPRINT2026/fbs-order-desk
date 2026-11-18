@@ -1,4 +1,5 @@
 "use server";
+import { backToPrintavo } from "@/app/shop/archive/edit-actions";
 import { getViewer } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -11,6 +12,9 @@ export async function unlinkPrintavo(orderId: string): Promise<{ ok: true } | { 
   try {
     const v = await getViewer();
     if (!v.user || !v.isStaff) return { ok: false, error: "Not allowed." };
+    // an old job made editable here goes back to being Printavo's copy first (app/shop/archive/edit-actions.ts)
+    const back = await backToPrintavo(orderId);
+    if (!back.ok) return back;
     const { error } = await createAdminClient().from("orders").update({ printavo_id: null }).eq("id", orderId);
     return error ? { ok: false, error: error.message } : { ok: true };
   } catch (e) {

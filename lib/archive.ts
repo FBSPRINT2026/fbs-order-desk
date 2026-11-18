@@ -107,7 +107,7 @@ export const ARCHIVE_LIST_COLS = "id, kind, visual_id, customer_id, nickname, st
 export type ArchiveSummary = Pick<ArchivedRow, "id" | "kind" | "visual_id" | "customer_id" | "nickname" | "status_name" | "status_color" | "order_date" | "due_date" | "total" | "paid" | "balance" | "qty"> & {
   /** searchable text (select `search:search_text` for customers, `search:search_staff` for the shop) */ search?: string | null };
 
-const METHOD_NAMES: Record<string, string> = { BANK_TRANSFER: "Bank transfer", CASH: "Cash", CHECK: "Check", CREDIT_CARD: "Credit card", ECHECK: "eCheck", OTHER: "Other" };
+export const METHOD_NAMES: Record<string, string> = { BANK_TRANSFER: "Bank transfer", CASH: "Cash", CHECK: "Check", CREDIT_CARD: "Credit card", ECHECK: "eCheck", OTHER: "Other" };
 /** An archived order as a row in the customer's order lists (same shape as new orders, marked archived). */
 export function archiveAsOrder(r: ArchiveSummary, href: string) {
   // finished in the old system: a job completed, picked up or delivered, or a closed quote (Nov 16, Nick: the portal's

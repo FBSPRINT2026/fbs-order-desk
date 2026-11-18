@@ -24,6 +24,7 @@ import { stampKey, stampOrderMockups } from "@/lib/mockupStamp";
 import { NotMovedBanner, needsMove } from "@/components/CustomerMove";
 import ProductionHolder from "@/components/tools/ProductionHolder";
 import CopyCustomerLink, { customerLink } from "@/components/CopyCustomerLink";
+import PrintavoCopyLink from "@/components/PrintavoCopyLink";
 import { Fragment, type FocusEvent, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSticky } from "@/lib/useSticky";
 import { openOrderCheck } from "@/components/tools/OrderReview";
@@ -1669,6 +1670,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {seesMoney && o.type === "invoice" && !o.draft && o.customer_id && calc.balance > 0.004 && <button type="button" className="btn" onClick={() => setSendBill(true)}>Send a bill</button>}
           {/* the customer's portal link to this order, one tap (Nov 18, Nick) */}
           {!o.draft && o.customer_id && <CopyCustomerLink kind="order" id={o.id} />}
+          {/* an old Printavo job made editable here: Printavo's copy (its files, messages, history) one tap away */}
+          {(o as { printavo_id?: string | null }).printavo_id && o.number < 40000 && <PrintavoCopyLink orderId={o.id} />}
           {sendBill && o.customer_id && <SendBillTool customerId={o.customer_id} orderIds={[o.id]} onClose={() => setSendBill(false)} onSent={() => loadSide()} />}
           </span>
           <span className="ed-menus">

@@ -1,5 +1,5 @@
 import BackLink from "@/components/BackLink";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getPortalCtx } from "@/lib/portal";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fileUrls, forCustomer, type PvOrder, storedPath } from "@/lib/archive";
@@ -22,7 +22,13 @@ export default async function PortalArchivedOrder({ params, searchParams }: { pa
   if (!ctx.customerIds.length) notFound();
   const admin = createAdminClient();
   const { data } = await admin.from("archived_orders").select("id, customer_id, data, files, imported_at, balance").is("removed_at", null).eq("id", id).in("customer_id", ctx.customerIds).maybeSingle();
-  if (!data) notFound();
+  if (!data) {
+    // made editable here (app/shop/archive/edit-actions.ts): a link to the old job opens the order it became
+    const { data: a } = await admin.from("archived_orders").select("printavo_id").eq("id", id).in("customer_id", ctx.customerIds).maybeSingle();
+    const { data: o } = a?.printavo_id ? await admin.from("orders").select("id").eq("printavo_id", String(a.printavo_id)).maybeSingle() : { data: null };
+    if (o) redirect(`/portal/orders/${o.id}${as ? `?as=${encodeURIComponent(as)}` : ""}`);
+    notFound();
+  }
   const o = forCustomer(data.data as PvOrder);
   const raw = data.data as { urls?: { publicUrl?: string } } & Record<string, unknown>;
   const bal = +((data as { balance?: number | string | null }).balance ?? 0) || 0;
