@@ -498,3 +498,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 18 2:22pm · 1.3.741 · Nick · Business card tool: font names with a number (Source Sans 3) are quoted so the card shows in its font
 - Nov 18 4:27pm · 1.3.742 · Nick · Old Printavo jobs: Edit here makes one of our orders exactly as Printavo had it (same number, prices, payments, status), so statuses and prices change here; QuickBooks keeps Printavo's invoice until it changes
 - Nov 18 4:30pm · 1.3.743 · Nick · Restore point Nov 18 4:29 PM: every table copied to restore_20261118 before old Printavo jobs are edited
+- Nov 18 5:08pm · 1.3.744 · Nick · Schedule Week view rebuilt (option B1): days across, a lane per press in each day, the clock down through working hours only, cards as tall as they run; a job that spills to another day says where

@@ -1687,53 +1687,66 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const crewLine = (m: Machine, d: string) => { const sh = shiftOn(m, d), slow = (m.down?.[d] || []).filter((x) => x[3] > 0).sort((x, y) => x[3] - y[3])[0]; return isOffDay(m, d) ? `Off · ${m.off![d]}` : sh ? `${hrsTxt(sh)}${m.extra?.[d] ? " · extra" : ""}${slow ? ` · ${Math.round(slow[3] * 100)}%` : ""}` : "not running"; };
   const label = (g: Seg) => <><b>{g.c.job.hold ? "HOLD #" : "#"}{g.c.job.number}</b> {g.part > 1 ? <i className="ms-cont">cont.</i> : null}{who(g.c.job)}</>;
 
-  /* ---------- Week view: machines down, days across; each day a 6a–6p timeline, one lane per job ---------- */
+  /* ---------- Week view (Nick, Nov 18 2026, option B1: "it's just useless"): days across, each day split into a lane per
+     press, the clock running down through the crews' working hours only (no night), each job a card as tall as it runs.
+     A job that won't finish its day says where it goes on ("→ Mon") in red when that misses its in-hands date. ---------- */
+  const WK_HOUR = 30;
   const weekGrid = (w: string, title: string) => {
     const ds = weekDays(w).filter(visible);
+    // the crews' hours that week (plus anything booked outside them), on the hour
+    const segsWk = ds.flatMap((d) => machines.flatMap((m) => at(m, d)));
+    const sh0 = ds.flatMap((d) => machines.map((m) => shiftOn(m, d)).filter(Boolean) as [number, number][]);
+    const shAll = sh0.length ? sh0 : machines.map((m) => typicalShift(m));
+    const wS = Math.max(0, Math.floor(Math.min(...shAll.map((x) => x[0]), ...segsWk.map((g) => g.start)) / 60) * 60);
+    const wE = Math.min(1440, Math.ceil(Math.max(...shAll.map((x) => x[1]), ...segsWk.map((g) => g.end)) / 60) * 60);
+    const H = ((wE - wS) / 60) * WK_HOUR, y = (min: number) => ((min - wS) / 60) * WK_HOUR;
+    const hrs = Array.from({ length: Math.round((wE - wS) / 60) + 1 }, (_, i) => wS + i * 60);
+    const lane = (m: Machine) => { const n = shortName(m).match(/\d+/)?.[0]; return m.type === "screen" && n ? `P${n}` : shortName(m).split(" ")[0]; };
     return (
-      <section className="ms-wk" key={w}>
-        <div className="ms-wk-h"><b>{title}</b><span className="faint">{dayLbl(ds[0])} – {dayLbl(ds[ds.length - 1])}</span></div>
-        <div className="ms-wg" style={{ gridTemplateColumns: `128px repeat(${ds.length}, minmax(0,1fr))` }}>
-          <div className="ms-wg-c" />
+      <section className="ms-wk mwb" key={w}>
+        <div className="ms-wk-h"><b>{title}</b><span className="faint">{dayLbl(ds[0])} – {dayLbl(ds[ds.length - 1])}</span>
+          <span className="mwb-press">{machines.map((m) => { const u = ds.reduce((a, d) => a + used(m, d), 0), cap = ds.reduce((a, d) => a + capacityMin(s, m, d), 0); return (
+            <span key={m.id} className={"mwb-pc" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${m.name}: ${fmtMin(u)} of ${fmtMin(cap)} booked this week`}><b>{lane(m)}</b> {shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""} <i>{Math.round(u / 60)}/{Math.round(cap / 60)}h</i></span>
+          ); })}</span>
+        </div>
+        <div className="mwb-g" style={{ gridTemplateColumns: `36px repeat(${ds.length}, minmax(0,1fr))` }}>
+          <div />
           {ds.map((d) => (
-            <button type="button" key={d} className={"ms-wg-d" + (d === today ? " today" : d < today ? " past" : "")} onClick={() => { setDay(d); setView("day"); }} title="Open this day">
+            <button type="button" key={d} className={"mwb-d" + (d === today ? " today" : d < today ? " past" : "")} onClick={() => { setDay(d); setView("day"); }} title="Open this day">
               <b>{dayShort(d)}{d === today ? <em> · Today</em> : null}</b>
-              <span className="ms-ax">{hours.filter((h) => (h - vStart) % 180 === 0).map((h) => <i key={h} style={{ left: pct(h) }}>{clock(h)}</i>)}</span>
+              <span className="mwb-ln" style={{ gridTemplateColumns: `repeat(${machines.length}, minmax(0,1fr))` }}>{machines.map((m) => <i key={m.id} title={m.name}>{lane(m)}</i>)}</span>
             </button>
           ))}
-          {machines.map((m) => {
-            const lanes = Math.max(1, ...ds.map((d) => joined(m, d).length));
-            const wkUsed = ds.reduce((a, d) => a + used(m, d), 0), wkCap = ds.reduce((a, d) => a + capacityMin(s, m, d), 0);
-            return [
-              <div key={m.id + w} className={"ms-wg-m " + m.type} title={`${m.name}: ${fmtMin(wkUsed)} of ${fmtMin(wkCap)} booked`}><b>{shortName(m)}<IssueTag m={m} />{crewOf(m) ? <span className="ms-op"> · {crewOf(m)!.leader}</span> : null}</b><small>{m.type === "screen" ? `${m.colors}C` : m.type === "embroidery" ? `${m.heads} head${m.heads === 1 ? "" : "s"}` : "heat"} · <span className="ms-used">{Math.round(wkUsed / 60)}/{Math.round(wkCap / 60)}h</span></small>
-                <div className={"ms-cap" + (wkUsed > wkCap ? " full" : wkUsed > wkCap * s.fillTarget ? " warn" : "")}><i style={{ width: `${Math.min(100, wkCap ? (wkUsed / wkCap) * 100 : 0)}%` }} /></div></div>,
-              ...ds.map((d) => {
-                const gs = joined(m, d).map((x) => ({ ...x.g, start: x.start, end: x.end }));
-                const u = used(m, d), cap = capacityMin(s, m, shiftOn(m, d) ? d : undefined);
-                return (
-                  <div key={m.id + d} className={"ms-wc" + (d === today ? " today" : d < today ? " past" : "") + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "") + (u >= cap ? " full" : "")} style={{ minHeight: lanes * LANE + 10, backgroundSize: `${(180 / range) * 100}% 100%` }}
-                    onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")}
-                    onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, d, vStart + ((e.clientX - r.left) / r.width) * range); }}>
-                    {offShade(m, d).map(([a, b]) => <div key={a} className="ms-off h" style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />)}
-                    {(() => { const sh = shiftOn(m, d); return sh ? breaksOn(m, d, sh, segs.lunch.get(m.id + "|" + d)).map(([a0, b0, why]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return b > a ? <div key={"bk" + a0} className={(why === "Warm-up" ? "ms-warm" : "ms-lunch") + " h"} title={`${why} ${clockLong(a0)} – ${clockLong(b0)}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} /> : null; }) : null; })()}
-                    {(m.down?.[d] || []).filter((x) => !x[4]).map(([a0, b0, why, rate]) => { const a = Math.max(a0, vStart), b = Math.min(b0, vEnd); return <div key={"dn" + a} className={"ms-down h" + (rate ? " slow" : "")} title={rate ? `${why}: ${Math.round(rate * 100)}%` : `Down ${clockLong(a)} – ${clockLong(b)}: ${why}`} style={{ left: pct(a), width: `${((b - a) / range) * 100}%` }} />; })}
-                    {d === today && now.min > vStart && <div className="ms-past" style={{ width: pct(Math.min(now.min, vEnd)) }} />}
-                    {d === today && now.min >= vStart && now.min <= vEnd && <div className="ms-now v" style={{ left: pct(now.min) }} />}
-                    {gs.map((g, i) => {
-                      const right = (g.start - vStart) / range > 0.55;
-                      return (
-                        <div key={g.c.key + g.part} className="ms-lane" style={{ top: 5 + i * LANE }}>
-                          <button type="button" draggable className={cls(g) + " bar"} title={tip(g)} style={{ left: pct(g.start), width: `calc(${((g.end - g.start) / range) * 100}% - 1px)` }}
-                            onDragStart={(e) => { const el = e.currentTarget as HTMLElement, r = el.getBoundingClientRect(), pr = el.parentElement!.getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientX - r.left) / pr.width) * range }); }} onDragEnd={() => { setDrag(null); setOver(""); }} onClick={() => setOpen(g.c)} aria-label={tip(g)} />
-                          <span className={"ms-lbl" + (right ? " r" : "")} style={right ? { right: `calc(${100 - ((g.start - vStart) / range) * 100}% + 3px)`, maxWidth: `calc(${((g.start - vStart) / range) * 100}% - 4px)` } : { left: `calc(${pct(g.start)} + 5px)`, maxWidth: `calc(${100 - ((g.start - vStart) / range) * 100}% - 8px)` }}>{label(g)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              }),
-            ];
-          })}
+          <div className="mwb-gut" style={{ height: H }}>{hrs.map((h) => <span key={h} style={{ top: y(h) }}>{clock(h)}</span>)}</div>
+          {ds.map((d) => (
+            <div key={d} className={"mwb-day" + (d === today ? " today" : d < today ? " past" : "")} style={{ height: H, gridTemplateColumns: `repeat(${machines.length}, minmax(0,1fr))`, backgroundSize: `100% ${WK_HOUR * 3}px` }}>
+              {machines.map((m) => (
+                <div key={m.id} className={"mwb-lane " + m.type + (over === m.id + d ? (canDrop(m) ? " over" : " no") : "")} title={`${m.name} · ${crewLine(m, d)}`}
+                  onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")}
+                  onDrop={(e) => { const r = e.currentTarget.getBoundingClientRect(); drop(m, d, wS + ((e.clientY - r.top) / WK_HOUR) * 60); }}>
+                  {offShade(m, d).map(([a0, b0]) => { const a = Math.max(a0, wS), b = Math.min(b0, wE); return b > a ? <div key={"o" + a0} className="mwb-off" style={{ top: y(a), height: y(b) - y(a) }} /> : null; })}
+                  {(() => { const sh = shiftOn(m, d); return sh ? brkBands(breaksOn(m, d, sh, segs.lunch.get(m.id + "|" + d))).map(({ a: a0, b: b0, lunch }) => { const a = Math.max(a0, wS), b = Math.min(b0, wE); return b > a ? <div key={"b" + a0} className={"mwb-brk" + (lunch ? " lunch" : "")} style={{ top: y(a), height: y(b) - y(a) }} /> : null; }) : null; })()}
+                  {(m.down?.[d] || []).filter((x) => !x[4] && !x[3]).map(([a0, b0, why]) => { const a = Math.max(a0, wS), b = Math.min(b0, wE); return b > a ? <div key={"dn" + a0} className="mwb-down" title={`Down ${clockLong(a0)} – ${clockLong(b0)}: ${why}`} style={{ top: y(a), height: y(b) - y(a) }} /> : null; })}
+                  {d === today && now.min > wS && now.min < wE && <div className="mwb-now" style={{ top: y(now.min) }} />}
+                  {joined(m, d).map(({ g, start, end }) => {
+                    const a = Math.max(start, wS), b = Math.min(end, wE), h = Math.max(14, y(b) - y(a) - 1);
+                    const all = segs.ofCard.get(g.c.key) || [], nxt = all.find((x) => x.day > d), prv = all.find((x) => x.day < d);
+                    const nxtLate = !!nxt && segLate(all[all.length - 1]);
+                    return (
+                      <button key={g.c.key + g.part} type="button" draggable className={cls(g) + " mwb-c" + (h < 30 ? " tiny" : "")} style={{ top: y(a) + 1, height: h }} title={tip(g)}
+                        onDragStart={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); startDrag(e, { card: g.c, grabMin: ((e.clientY - r.top) / WK_HOUR) * 60 }); }} onDragEnd={() => { setDrag(null); setOver(""); }}
+                        onClick={() => setOpen(g.c)} onContextMenu={(e) => { e.preventDefault(); openRc(g.c, g, e.clientX, e.clientY); }}>
+                        <b>{g.c.job.kind === "h" ? "Hold" : `#${g.c.job.number}`}{g.c.slot?.status === "done" ? " ✓" : ""}</b>
+                        {h >= 30 && <span>{prv ? "cont. · " : ""}{abbrCo(g.c.job.customer || g.c.job.name)}</span>}
+                        {h >= 46 && g.c.job.name && <span className="n">{g.c.job.name}</span>}
+                        {nxt && <em className={"mwb-to" + (nxtLate ? " late" : "")}>→ {dayLbl(nxt.day).split(",")[0]}</em>}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       </section>
     );
