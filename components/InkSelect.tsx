@@ -1,10 +1,12 @@
 "use client";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { PMS_HEX, STOCK_HEX, WILFLEX_HEX, colorHex, customInk, parseCustom } from "@/lib/inkColors";
+import { FORMULA_HEX, PMS_HEX, STOCK_HEX, WILFLEX_HEX, colorHex, customInk, inkChoices, parseCustom } from "@/lib/inkColors";
 import { PMS_COATED } from "@/lib/pms";
 import { findThreads, threadByName, threadLabel, type Thread } from "@/lib/embroidery";
 import type { OrderInk } from "@/lib/orderInks";
+import { loadInkFormulas } from "@/lib/inkFormulas";
+import { createClient } from "@/lib/supabase/client";
 
 /** The ink and thread pickers (one field each), shared by the Mockup Creator and the order page's color change. */
 /**
@@ -34,7 +36,9 @@ export function resolveInk(text: string, brand: Brand): { name: string; hex: str
   const num = t.replace(/^(pms|pantone)\s*/i, "").replace(/\s*c$/i, "").trim();
   if (!num) return null;
   const key = `PMS ${num.replace(/\b[a-z]/g, (c) => c.toUpperCase())} C`;
-  return PMS_COATED[key] ? { name: key, hex: PMS_COATED[key] } : null;
+  // the chart, else the Ink Room's formula for it (Nov 18: a typed 2170 found nothing)
+  const hex = PMS_COATED[key] || (FORMULA_HEX[num.toUpperCase().replace(/\s+/g, " ")] ?? "");
+  return hex ? { name: key, hex } : null;
 }
 
 /**
@@ -53,6 +57,9 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
   const [open, setOpen] = useState(false);
   const [text, setText] = useState<string | null>(null); // what's being typed (null = show the picked ink)
   const [active, setActive] = useState(0);
+  // every PMS the Ink Room has a formula for, read in once per page (cached), so a typed one is found
+  const [fl, setFl] = useState(0);
+  useEffect(() => { loadInkFormulas(createClient()).then(setFl).catch(() => {}); }, []);
   const [at, setAt] = useState<{ left: number; width: number; top?: number; bottom?: number; max: number } | null>(null);
   const shown = value?.name === "none" ? "Remove (shirt shows through)" : value?.name || "";
   const q = (text ?? "").trim().toLowerCase().replace(/^pantone\s*/, "pms ").replace(/\s+/g, " ");
@@ -73,12 +80,13 @@ export function InkSelect({ value, onChange, adder }: { value?: { name: string; 
     add("Our other stock inks (Ink Room)", Object.keys(STOCK_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
     add("Common PMS", Object.keys(PMS_HEX).map((k) => ({ name: k, hex: colorHex(k) })));
     if (q) {
-      const chart = Object.keys(PMS_COATED).filter((k) => !seen.has(k) && has(k)).slice(0, 40).map((k) => ({ name: k, hex: PMS_COATED[k] }));
+      // the whole chart and every PMS the Ink Room has a formula for (Nov 18: 2170 C was missing): inkChoices
+      const chart = inkChoices({ pms: true }).filter((k) => /^PMS /.test(k) && !seen.has(k) && has(k)).slice(0, 40).map((k) => ({ name: k, hex: PMS_COATED[k] || colorHex(k) || "#888888" }));
       if (chart.length) { out.push({ label: "Pantone chart", opts: chart }); chart.forEach((x) => seen.add(x.name)); }
       if (!hit && text!.trim()) out.push({ label: "", opts: [{ name: text!.trim(), hex: value?.hex || "#888888", act: "typed" }] });
     }
     return out;
-  }, [q, brand, hit, text, value?.hex, onOrder]);
+  }, [q, brand, hit, text, value?.hex, onOrder, fl]);
   const flat = groups.flatMap((g) => g.opts);
   const place = () => {
     const r = box.current?.getBoundingClientRect();
