@@ -3504,11 +3504,12 @@ a.as-ai{text-decoration:none}
 .mwp-j b{display:block;font-size:13px;font-weight:700;overflow-wrap:anywhere}
 .mwp-j span{display:block;font-size:12px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mwp-j:hover{filter:brightness(.96)}
-.mwp-j.done{opacity:.5}
+.mwp-j em{display:block;font-style:normal;font-size:12px;font-weight:700}.mwp-j em.late{color:var(--danger)}
+.mwp-j.done{opacity:.6}
 .mwp-j.hold{background:transparent;border:1.5px dashed color-mix(in srgb,var(--pt) 60%,transparent)}
 .mwp-j.run{box-shadow:inset 0 0 0 2px var(--ok)}
 .mwp-j.late span{color:var(--danger);opacity:1;font-weight:700}
-.mwp-j.other{opacity:.4}
+.mwp-j.other{opacity:.7}
 .mwp-j.ms-hit{outline:2px solid var(--accent);outline-offset:1px}
 .ms-wg{display:grid}
 .ms-wg-c{border-bottom:1px solid var(--line)}

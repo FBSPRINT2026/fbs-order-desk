@@ -1730,15 +1730,19 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")} onDrop={(e) => listDrop(e, m, d)}>
                     {off && <span className="mwp-off">Off · {m.off![d]}</span>}
                     {joined(m, d).map(({ g }) => {
-                      const c = g.c, hold = c.job.kind === "h", done = c.slot?.status === "done", late = segLate(g);
-                      const all = segs.ofCard.get(c.key) || [], prv = all.some((x) => x.day < d), nxt = all.find((x) => x.day > d);
+                      const c = g.c, hold = c.job.kind === "h", done = c.slot?.status === "done";
+                      // a job runs over into later days: it's listed once, on the day it starts, saying where it ends
+                      const all = segs.ofCard.get(c.key) || [], prv = all.some((x) => x.day < d), last = all[all.length - 1], nxt = last && last.day > d ? last : null;
+                      if (prv) return null;
+                      const late = segLate(last || g);
                       return (
                         <button key={c.key + g.part} type="button" draggable data-key={c.key}
                           className={"mwp-j" + (hold ? " hold" : "") + (done ? " done" : "") + (c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (isHit(c.job) ? " ms-hit" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "")}
                           title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); openRc(c, g, e.clientX, e.clientY); }}
                           onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
                           <b>{c.job.name || shortLabel(c.need.label)}</b>
-                          <span>{hold ? "Hold · " : ""}{abbrCo(c.job.customer || "")}{hold ? "" : ` · #${c.job.number}`}{done ? " · done" : ""}{late && !done ? " · late" : ""}{prv ? " · cont." : ""}{nxt ? ` · → ${dayLbl(nxt.day).split(",")[0]}` : ""}</span>
+                          <span>{hold ? "Hold · " : ""}{abbrCo(c.job.customer || "")}{hold ? "" : ` · #${c.job.number}`}{done ? " · done" : ""}{late && !done ? " · late" : ""}</span>
+                          {nxt && <em className={late ? "late" : ""}>Runs into {dayLbl(nxt.day).split(",")[0]}</em>}
                         </button>
                       );
                     })}

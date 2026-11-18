@@ -505,3 +505,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 18 5:25pm · 1.3.748 · Amanda · A line charged nothing (its price typed as $0, free extras) no longer bills the 2XL+ materials charge; a size charge typed on the line still counts (#50145, a $0 add-on, came to $5.41 for a 2XL and a 3XL)
 - Nov 18 5:29pm · 1.3.749 · Nick · Mockups: beanies and visors are measured as headwear at real size (SP12's 3.5" logo drew tiny, as if on a 22" shirt); store product mockups too
 - Nov 18 5:47pm · 1.3.750 · Nick · Week view rebuilt like Printavo's: a labeled row per press in its own color, a column per day, cards with the job name first (wrapping), drag into another day or press; full page width
+- Nov 18 5:51pm · 1.3.751 · Nick · Week view: a job that runs over into later days is listed once, on the day it starts ("Runs into Fri"); cards less faded
