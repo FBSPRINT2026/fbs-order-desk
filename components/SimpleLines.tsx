@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { ONE_SIZE, type GLine, type Group } from "@/lib/pricing";
 import { itemMockup } from "@/lib/itemProofs";
+import BusinessCardTool from "@/components/tools/BusinessCardTool";
+import type { CardFill } from "@/lib/printTemplates";
 import { IMPRINT_TYPES, SIGN_FINISHING, SIGN_MATERIALS, kindLabel, linePic, newSimpleGroup, pdfFirstPage, qtyOf, signEach, specText, sqft, type ProductKind, type SimpleSpec } from "@/lib/simpleOrders";
 
 /**
@@ -15,14 +17,16 @@ type Kind = Exclude<ProductKind, "apparel">;
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const PROOF: Record<string, [string, string]> = { sent: ["Proof sent", "wait"], approved: ["Approved", "ok"], changes: ["Needs changes", "no"] };
 
-export default function SimpleLines({ orderId, kind, groups, update, hidePrices, save }: {
-  orderId: string; kind: Kind; groups: Group[]; update: (fn: (groups: Group[]) => void) => void; hidePrices?: boolean;
+export default function SimpleLines({ orderId, customerId, kind, groups, update, hidePrices, save }: {
+  orderId: string; /** the order's customer, for their own card templates */ customerId?: string | null; kind: Kind; groups: Group[]; update: (fn: (groups: Group[]) => void) => void; hidePrices?: boolean;
   /** saves the order now (before the proofs go out, so the server sends what's on screen) */ save: () => Promise<void>;
 }) {
   const sb = createClient();
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  /** the business card tool, open for one item */
+  const [card, setCard] = useState<{ gi: number; li: number } | null>(null);
   const lines = groups.flatMap((g, gi) => g.lines.map((l, li) => ({ g, gi, l, li })));
   const paths = lines.map((x) => linePic(x.l.spec)).filter((p): p is string => !!p);
   const key = paths.join("|");
@@ -45,20 +49,26 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
   });
   const spec = (gi: number, li: number, patch: Partial<SimpleSpec>, reprice = false) => edit(gi, li, (_l, s) => Object.assign(s, patch), reprice);
 
-  const upload = async (gi: number, li: number, f: File) => {
+  /** `made`: a picture made with the file (a business card's proof), used in place of the file's first page */
+  const upload = async (gi: number, li: number, f: File, made?: File, extra?: Partial<SimpleSpec>) => {
     setBusy(`${gi}-${li}`); setErr("");
     const l = groups[gi]?.lines[li];
     const path = `orders/${orderId}/items/${l?.id || "x"}-${Date.now()}-${f.name.replace(/[^\w.-]+/g, "_")}`;
     const { error } = await sb.storage.from("proofs").upload(path, f, { contentType: f.type || "application/octet-stream" });
     if (error) { setBusy(""); return setErr(`The picture didn't upload: ${error.message}`); }
     // a PDF: its first page as a picture, for the order, the quote and the customer's proof
-    const preview = /pdf/i.test(f.type) || /\.pdf$/i.test(f.name) ? await makePreview(f, path) : undefined;
+    const preview = made ? await savePreview(made, path) : /pdf/i.test(f.type) || /\.pdf$/i.test(f.name) ? await makePreview(f, path) : undefined;
     // the picture is the order's mockup for this item: the usual Send to customer sends it as the proof
     const shown = preview || (/\.(png|jpe?g|webp|gif)$/i.test(path) ? path : "");
     if (shown && /\.png$/i.test(shown)) await sb.storage.from("proofs").upload(shown.replace(/\.png$/i, "-thumb.png"), preview ? (await (await sb.storage.from("proofs").download(shown)).data) || f : f, { contentType: "image/png", upsert: true });
     const mk = shown ? await itemMockup(orderId, l?.id || "", l?.garment || "", shown, l?.spec?.mockupId) : null;
     setBusy("");
-    spec(gi, li, { image: path, imageName: f.name, preview, proof: undefined, mockupId: mk && mk.ok ? mk.id || undefined : l?.spec?.mockupId });
+    spec(gi, li, { image: path, imageName: f.name, preview, proof: undefined, mockupId: mk && mk.ok ? mk.id || undefined : l?.spec?.mockupId, ...(extra || {}) });
+  };
+  const savePreview = async (png: File, path: string) => {
+    const pp = path.replace(/\.[^.]+$/, "") + "-preview.png";
+    const { error } = await sb.storage.from("proofs").upload(pp, png, { contentType: "image/png", upsert: true });
+    return error ? undefined : pp;
   };
 
   const isPdf = (p?: string) => !!p && /\.pdf$/i.test(p);
@@ -108,6 +118,9 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
                 <div className="sol-top">
                   <input className="sol-name" aria-label="Item name" placeholder={kind === "signage" ? "Mambo 5K start banner" : kind === "promo" ? "20 oz vacuum tumbler" : "Business cards: Sarah Lee"} value={l.garment} onChange={(e) => edit(gi, li, (x) => { x.garment = e.target.value; })} />
                   {pf && <span className={"sol-pf " + pf[1]} title={s.proof?.note || ""}>{pf[0]}</span>}
+                  {kind === "paper" && <button type="button" className="btn sm" title="Make the card from the customer's template: type the name, title, address…" onClick={() => setCard({ gi, li })}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden style={{ marginRight: 5, verticalAlign: "-2px" }}><rect x="2.5" y="5.5" width="19" height="13" rx="1.5" /><path d="M6 10h6M6 13.5h9" /></svg>
+                    {s.card ? "Edit card" : "Business card"}</button>}
                   <button type="button" className="btn icon ghost" aria-label="Remove this item" title="Remove" onClick={() => { if (l.spec?.mockupId) void itemMockup(orderId, l.id, "", "", l.spec.mockupId); update((gs) => { gs[gi].lines.splice(li, 1); if (!gs[gi].lines.length) gs.splice(gi, 1); }); }}>×</button>
                 </div>
                 {s.proof?.status === "changes" && s.proof.note && <div className="sol-note"><b>Customer asked:</b> {s.proof.note}</div>}
@@ -149,6 +162,16 @@ export default function SimpleLines({ orderId, kind, groups, update, hidePrices,
             </div>
           );
         })}
+        {card && (() => {
+          const l = groups[card.gi]?.lines[card.li];
+          return <BusinessCardTool customerId={customerId || null} fill={(l?.spec as SimpleSpec | undefined)?.card} onClose={() => setCard(null)}
+            onDone={async (r) => {
+              const { gi, li } = card;
+              const named = !l?.garment || /^Business cards\b/i.test(l.garment);
+              await upload(gi, li, r.pdf, r.proof, { card: r.fill, size: (l?.spec as SimpleSpec | undefined)?.size || "3.5 × 2" });
+              if (named) edit(gi, li, (x) => { x.garment = r.itemName; });
+            }} />;
+        })()}
         <datalist id="sol-fin">{SIGN_FINISHING.map((f) => <option key={f} value={f} />)}</datalist>
         <datalist id="sol-imp">{IMPRINT_TYPES.map((f) => <option key={f} value={f} />)}</datalist>
         <button type="button" className="btn" onClick={() => update((gs) => { gs.push(newSimpleGroup(kind)); })}>+ Add item</button>

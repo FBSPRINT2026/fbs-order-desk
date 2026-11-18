@@ -36,6 +36,8 @@ export type SimpleSpec = {
   itemNo?: string; supplier?: string; productColor?: string; imprintType?: string; imprintColor?: string;
   // paper printing
   size?: string; stock?: string; ink?: string; details?: string;
+  /** made from a card template (lib/printTemplates.ts): the template and what was typed, so it opens again as it was */
+  card?: { template: string; name?: string; values: Record<string, string> };
 };
 
 /** banner and sign materials with a starting price per square foot (typed over on the line) */

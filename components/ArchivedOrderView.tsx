@@ -67,7 +67,7 @@ export default function ArchivedOrderView({ o, fileUrl, importedAt, customerHref
               {o.transactions.map((t) => (
                 <div key={t.id} className="pv-pay">
                   <div><b>{t.kind === "Payment" ? money(t.amount) : `−${money(Math.abs(t.amount))}`}</b><span className="faint">{d(t.date)}</span></div>
-                  <div className="faint">{[t.kind === "Payment" ? "" : t.kind === "PaymentDispute" ? "Dispute" : t.kind, METHOD[t.category] || t.category, t.source === "PROCESSOR" ? "online" : "", t.processing ? "processing" : "", t.status || ""].filter(Boolean).join(" · ") || "Payment"}</div>
+                  <div className="faint">{[t.kind === "Payment" ? "" : t.kind === "PaymentDispute" ? "Dispute" : t.kind, METHOD[t.category] || t.category, t.source === "PROCESSOR" ? "online" : "", t.status || ""].filter(Boolean).join(" · ") || "Payment"}</div>
                   {t.description && <div className="pv-pay-d">{t.description}</div>}
                 </div>
               ))}

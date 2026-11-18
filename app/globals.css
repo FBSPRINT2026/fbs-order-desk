@@ -23641,3 +23641,22 @@ table.rvd-tbl.tbl-stack tr.rvd-secrow{display:block!important;padding:0!importan
 .spt-row .spt-chain{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px}
 .spt-chain b{font-size:12.5px;color:var(--ink-3);font-weight:600}
 .spt-chain span{color:var(--ink);overflow-wrap:anywhere}
+
+/* Business card tool (components/tools/BusinessCardTool.tsx; Nov 18 2026): a template's sides, then its lines to type */
+.dla-bg.dock > .dla.bct{display:flex;flex-direction:column;gap:12px;overflow:auto}
+.bct-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.bct-head h2{margin:0}
+.bct-x svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none}
+.bct-pick{display:flex;flex-direction:column;gap:4px;max-width:420px}
+.bct-pick > span,.bct-fields label > span{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
+.bct-pick select,.bct-fields input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:14px var(--body);color:var(--ink);background:var(--surface,#fff);min-width:0}
+.bct-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px;padding:14px;background:var(--surface-2,#f1f3f6);border-radius:var(--r,8px)}
+.bct-card{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+.bct-svg{background:#fff;box-shadow:0 1px 6px rgba(15,23,42,.18);line-height:0}
+.bct-svg svg{width:100%;height:auto;display:block}
+.bct-card figcaption{font-size:12px}
+.bct-note{margin:0;font-size:12.5px}
+.bct-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:10px 12px}
+.bct-fields label{display:flex;flex-direction:column;gap:4px;min-width:0}
+.bct-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:sticky;bottom:-16px;background:var(--surface,#fff);padding:10px 0 4px;border-top:1px solid var(--line)}
+.bct-foot .spacer{flex:1}

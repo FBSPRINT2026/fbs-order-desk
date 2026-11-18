@@ -99,7 +99,7 @@ export function forCustomer(o: PvOrder): PvOrder {
     // the emails and texts sent to or from them stay (without the internal relay address, bcc or delivery tracking)
     messages: o.messages.map((m) => ({ ...m, from: m.incoming ? m.from : "", bcc: "", status: "" })), owner: "", tags: [], warnings: undefined,
     urls: { url: "", publicUrl: "", publicPdf: "", workorderUrl: "", packingSlipUrl: "" },
-    transactions: o.transactions.filter((t) => !t.processing) };
+    transactions: o.transactions };
 }
 
 /** The summary columns lists need (not the whole record). */
@@ -116,9 +116,15 @@ export function archiveAsOrder(r: ArchiveSummary, href: string) {
   return { done, id: r.id, number: +r.visual_id || 0, nickname: r.nickname || "", status: "archived", type: r.kind, total: +r.total || 0, paid: +r.paid || 0, balance: +r.balance || 0,
     due_date: r.due_date, created_at: r.order_date || "", qty: r.qty || 0, pay_due: null, archived: true, href, statusLabel: r.status_name, statusColor: r.status_color, search: r.search || "" };
 }
-/** An archived order's payments as rows in the payment history. */
+/**
+ * An archived order's payments as rows in the payment history. Every one counts, "processing" ones included (Nov 18,
+ * Nick: Tiger Blue's eight eChecks of Nov 10, $3,649.53, were missing from his portal): Printavo marked an eCheck
+ * processing until it cleared, and Printavo's last word was Nov 13, so a payment caught mid-clearing stays "processing"
+ * here forever. Printavo had already counted it in the job's paid amount, and QuickBooks has it; one that bounced comes
+ * as its own Return or Void.
+ */
 export function archivePayments(r: ArchiveSummary & { transactions?: PvTransaction[] | null }, href: string) {
-  return (r.transactions || []).filter((t) => t.kind === "Payment" && !t.processing).map((t) => ({
+  return (r.transactions || []).filter((t) => t.kind === "Payment").map((t) => ({
     id: `pv-${t.id}`, order_id: r.id, number: +r.visual_id || 0, amount: +t.amount || 0, method: METHOD_NAMES[t.category] || t.category || "", paid_on: t.date || null, created_at: t.date || "", href, nickname: r.nickname || "", archived: true }));
 }
 
