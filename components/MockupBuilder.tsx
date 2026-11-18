@@ -13,7 +13,7 @@ import { bySupplierStyle } from "@/lib/garmentSup";
 import { stockKind, stockSvg, STOCK_LABEL, type GarmentLook, type StockKind } from "@/lib/stockGarments";
 import type { SheetGarment } from "@/app/api/mockup/garment-look/route";
 import { changeVersions, inkChanges, inkKeyOf, inksOnColor } from "@/lib/inkBy";
-import { locationsFor, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2, OVERSIZE_IN, NORMAL_MAX_IN, printSizeKey, inkSwaps } from "@/lib/pricing";
+import { locationsFor, headwearOf, HAT_LOCATIONS, brandHitFor, brandSizeFor, changeWord, colorChanges, hasBrandPrint, puffEach, priceList, FULL_COLOR, inkNames as inkList2, OVERSIZE_IN, NORMAL_MAX_IN, printSizeKey, inkSwaps } from "@/lib/pricing";
 import { inkOnShirt, onShirtsOf } from "@/components/LogoOnShirts";
 import { Suspense, createContext, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -76,7 +76,7 @@ import { drawNeckView, setFor, type NeckLabelSet } from "@/lib/neckLabels";
 import NeckLabelView, { labelFor } from "@/components/NeckLabelView";
 import { isRelabel, mainSize } from "@/components/NeckLabelPick";
 import { registerAreas, isCustomSpot, setHeadwearSpots, LOCATION_SPOTS, lookStyle } from "@/lib/mockup";
-import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, measureCap, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, isLongSleeve, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
+import { garmentHex, SLEEVE_HEM_GAP, CENTER_X, COLLAR_Y, PHOTO_H, PHOTO_W, PX_PER_IN, REF, REF_NECK, measureBag, measureCap, headwearFit, neckPicture, autoSpot as autoSpot0, basePlacement as basePlacement0, maxWidthFor as maxWidthFor0, sideMaxWidth as sideMaxWidth0, viewsFor, guessHex, measureGarment, isShortSleeveTee, isLongSleeve, printWidth as printWidth0, spotFor as spotFor0, type Fit, ssImg, type View, isHeather } from "@/lib/mockup";
 import { fillRun, bodyAt, bodyOf, smallestOrdered, sortSizes, REF_BODY, type Body } from "@/lib/garmentBody";
 import { useSticky } from "@/lib/useSticky";
 import { canvasPage } from "@/lib/imagePdf";
@@ -1616,10 +1616,11 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
     return m ? +m[1] : bagWidth(l);
   };
   // a cap: measured as a cap, at real size (lib/mockup.ts measureCap; Oct 31, a 4.5" front logo drew an inch wide)
-  const isCap = (l?: Line) => !!l && locationsFor([{ style: l.style, brand: l.brand, garment: l.garment, description: garmentFor(l)?.description }]) === HAT_LOCATIONS;
   /** a made-here photo of a shirt: placed on the reference shirt, not measured (a cap's or bag's is measured) */
-  const dataFlat = (l: Line, u: string) => u.startsWith("data:") && !isCap(l) && !isBag(l);
-  const measureFor = (l: Line, img: HTMLImageElement, v: View) => (isCap(l) ? measureCap(img, v) : isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v, { tee: isShortSleeveTee(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), kid: isKidGarment(l), hood: /\bhood/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), long: isLongSleeve(`${garmentFor(l)?.description || ""} ${l.garment || ""}`) }));
+  const dataFlat = (l: Line, u: string) => u.startsWith("data:") && !hwOf(l) && !isBag(l);
+  // any headwear (a cap, a beanie, a visor) is measured as headwear at real size, never as a shirt (Nov 18: SP12 beanie)
+  const hwOf = (l: Line) => headwearOf({ style: l.style, brand: l.brand, garment: l.garment, description: garmentFor(l)?.description });
+  const measureFor = (l: Line, img: HTMLImageElement, v: View) => (hwOf(l) ? measureCap(img, v, hwOf(l) === "hat" ? undefined : headwearFit(hwOf(l)!, (garmentFor(l) as { specs?: { sizes?: Record<string, { width?: number }> } } | undefined)?.specs?.sizes?.OS?.width)) : isBag(l) ? measureBag(img, bagWidth(l)) : measureGarment(img, v, { tee: isShortSleeveTee(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), kid: isKidGarment(l), hood: /\bhood/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`), long: isLongSleeve(`${garmentFor(l)?.description || ""} ${l.garment || ""}`) }));
   /** a baby or toddler garment (its size run, or a onesie / bodysuit by name) */
   const isKidGarment = (l: Line) => { const b = bodyFor(l); return b.kind === "infant" || b.kind === "toddler" || /one ?piece|onesie|bodysuit|creeper|romper/i.test(`${garmentFor(l)?.description || ""} ${l.garment || ""}`); };
   // Each S&S photo frames the shirt a little differently: measure the outline once per photo and place everything on it
@@ -1888,7 +1889,7 @@ export default function MockupBuilder({ portal = false, backHref }: { portal?: b
   useEffect(() => {
     for (const l of lines) for (const v of ["front", "back"] as View[]) {
       const u = photo(l, v);
-      const kind = isCap(l) ? "cap" : isBag(l) ? "bag" : "wear";
+      const kind = hwOf(l) ? `cap:${hwOf(l)}` : isBag(l) ? "bag" : "wear";
       // a photo made here (the style dyed to a color its supplier has no photo of, or a drawn one) is measured too when
       // it's a cap or a bag: they're placed by their own outline at real size (Nick, Nov 16 2026, #40409's camo New Era:
       // the dyed photo wasn't measured, so the 4.5" front logo was drawn at a shirt's scale, about an inch wide)

@@ -1,5 +1,6 @@
 "use client";
-import { PHOTO_H, PHOTO_W, basePlacement, measureGarment, printWidth, spotFor, type View } from "@/lib/mockup";
+import { PHOTO_H, PHOTO_W, basePlacement, headwearFit, measureCap, measureGarment, printWidth, spotFor, type View } from "@/lib/mockup";
+import { headwearOf } from "@/lib/pricing";
 
 /**
  * One product mockup, made in the browser: the blank's photo with the design placed where it prints (the same
@@ -55,14 +56,16 @@ function prepArt(art: HTMLImageElement, ink?: string): HTMLCanvasElement | HTMLI
   return c;
 }
 
-export async function renderMockup(o: { photo: string; art: string; location: string; widthIn?: number; artRatio?: number; youth?: boolean; size?: number; /** print the art as this one ink (hex) */ ink?: string }): Promise<Blob> {
+export async function renderMockup(o: { photo: string; art: string; location: string; widthIn?: number; artRatio?: number; youth?: boolean; size?: number; /** print the art as this one ink (hex) */ ink?: string;
+  /** the blank (its name, style, brand, width): headwear is measured as headwear, never as a shirt */ garment?: { description?: string; style?: string; brand?: string; widthIn?: number | null } }): Promise<Blob> {
   const spot = spotFor(o.location);
   const view: View = spot.view === "back" ? "back" : "front";
   const [bg, raw] = await Promise.all([load(o.photo), load(o.art)]);
   const art = prepArt(raw, o.ink);
   const ratio = o.artRatio || (raw.naturalWidth ? raw.naturalHeight / raw.naturalWidth : 1);
   // an upper arm or cuff print is on a long sleeve (Nov 16, #50051)
-  const fit = measureGarment(bg, view, { long: !!spot.arm });
+  const hw = o.garment ? headwearOf(o.garment) : null;
+  const fit = (hw ? measureCap(bg, view, hw === "hat" ? undefined : headwearFit(hw, o.garment?.widthIn)) : null) || measureGarment(bg, view, { long: !!spot.arm });
   const wIn = o.widthIn ? Math.min(o.widthIn, printWidth("MAX", o.location, ratio)) : printWidth(spot.defW ? `${spot.defW}` : "11", o.location, ratio);
   const p = basePlacement(o.location, wIn, ratio, null, o.youth ? 22 / 18 : 1, view, fit);
   const out = o.size || 900, k = out / PHOTO_W;

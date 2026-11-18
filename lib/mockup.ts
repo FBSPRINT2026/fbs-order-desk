@@ -494,7 +494,18 @@ export function measureGarment(img: HTMLImageElement, view: View, opts: { tee?: 
  * inch; prints sit centered on the front panels (below the button, above the brim seam), at real size.
  */
 export const CAP_FRONT_W = 8;
-export function measureCap(img: HTMLImageElement, view: View): Fit | null {
+/**
+ * Every kind of headwear is measured this way, never as a shirt (Nov 18 2026, Nick on a Sportsman SP12 beanie: measured
+ * as a 22" shirt body, a 3.5" logo drew tiny and had to be set at 8" to look right). Its width across the front sets the
+ * scale and its print band where prints sit: a structured cap's front panels; a beanie's lower half (the cuff and the
+ * knit just above it), at the beanie's own width (its spec, else 8.5"); a visor's crown band.
+ */
+export function headwearFit(kind: "hat" | "visor" | "beanie", widthIn?: number | null): { widthIn: number; band: [number, number] } {
+  if (kind === "beanie") return { widthIn: widthIn && widthIn > 4 && widthIn < 14 ? widthIn : 8.5, band: [0.42, 0.9] };
+  if (kind === "visor") return { widthIn: CAP_FRONT_W, band: [0.1, 0.6] };
+  return { widthIn: CAP_FRONT_W, band: [0.14, 0.76] };
+}
+export function measureCap(img: HTMLImageElement, view: View, o?: { widthIn?: number; band?: [number, number] }): Fit | null {
   const W = PHOTO_W, H = PHOTO_H;
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const x = c.getContext("2d", { willReadFrequently: true });
@@ -533,9 +544,11 @@ export function measureCap(img: HTMLImageElement, view: View): Fit | null {
   if (top < 0 || bot - top < 100 || maxW < 150) return null;
   for (let y = top; y <= bot; y++) if (Ls[y] >= 0 && Rs[y] - Ls[y] >= maxW * 0.85) { cxSum += (Ls[y] + Rs[y]) / 2; cxN++; }
   const cx = cxN ? cxSum / cxN : W / 2;
-  const ppi = maxW / CAP_FRONT_W, tall = bot - top;
-  // the front panels: from under the button to the brim seam (front); the back: the crown above the closure
-  const y0 = top + tall * (view === "back" ? 0.1 : 0.14), y1 = top + tall * (view === "back" ? 0.62 : 0.76);
+  const ppi = maxW / (o?.widthIn || CAP_FRONT_W), tall = bot - top;
+  // the front panels: from under the button to the brim seam (front); the back: the crown above the closure; another
+  // kind of headwear's own band (headwearFit)
+  const [b0, b1] = o?.band || (view === "back" ? [0.1, 0.62] : [0.14, 0.76]);
+  const y0 = top + tall * b0, y1 = top + tall * b1;
   const none = { x: cx, y: top, rot: 0 };
   return { s: 1, cx, top, mask: mc.toDataURL("image/png"), sleeve: { left: none, right: none }, flat: { cx, top: y0, w: maxW * 0.62, h: y1 - y0, ppi } };
 }

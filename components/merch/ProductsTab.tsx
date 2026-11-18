@@ -152,7 +152,7 @@ function Builder({ b, product, onClose, onSaved }: { b: StoreBundle; product: Pr
         const same = old && product?.design_id === designId && product?.imprint?.location === loc && product?.imprint?.width === width;
         if (same && old?.image) image = old.image;
         else if (design?.url && photo) {
-          const blob = await renderMockup({ photo, art: design.url, location: loc, widthIn: width, artRatio: design.width_px && design.height_px ? design.height_px / design.width_px : undefined });
+          const blob = await renderMockup({ photo, art: design.url, location: loc, widthIn: width, artRatio: design.width_px && design.height_px ? design.height_px / design.width_px : undefined, garment: { description: g.description, style: g.style, brand: g.brand, widthIn: g.specs?.sizes?.OS?.width } });
           const fd = new FormData(); fd.set("store", b.store.id); fd.set("kind", "mockup"); fd.set("file", new File([blob], "mockup.png", { type: "image/png" }));
           const up = await uploadStoreImage(fd);
           if (!up.ok) throw new Error(up.error);
