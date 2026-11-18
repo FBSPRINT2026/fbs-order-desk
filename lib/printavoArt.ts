@@ -796,7 +796,9 @@ export async function measureFilm(buf: ArrayBuffer, withArt = false, name = "fil
     const c = document.createElement("canvas");
     c.width = Math.round(vp.width) + 2 * room; c.height = Math.round(vp.height) + 2 * room;
     await page.render({ canvasContext: c.getContext("2d")!, viewport: vp, background: "rgba(0,0,0,0)", transform: [1, 0, 0, 1, room, room] }).promise;
-    for (const r0 of pieces(c, 0.15 * 72 * scale)) {
+    // parts of one print whose outlines overlap or nearly touch are one piece (Nick, Nov 17 2026, #50129: Dallas Fire 56's
+    // banner sits under the crest's points, a separate shape, so the crest was cut out with the banner sliced off)
+    for (const r0 of mergeRects(pieces(c, 0.15 * 72 * scale), 0.25 * 72 * scale)) {
       const r = { x0: r0.x0 - room, y0: r0.y0 - room, x1: r0.x1 - room, y1: r0.y1 - room };
       const w = (r.x1 - r.x0) / scale / 72, h = (r.y1 - r.y0) / scale / 72;
       if (w < 1 || h < 1) continue;
