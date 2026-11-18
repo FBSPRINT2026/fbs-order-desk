@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sanmarConfigured, sanmarLookup, sanmarProbe, sanmarSellableStyles, sanmarSkus, sanmarStyleSummary } from "@/lib/sanmar";
+import { withChosenPhotos } from "@/lib/garmentPhotos";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function GET(req: Request) {
     for (const g of (gs || []) as { id: string; style: string; supplier_style: string | null }[]) {
       const f = await sanmarLookup(g.supplier_style || g.style).catch(() => null);
       if (!f) continue;
-      await admin.from("garments").update({ ...f, synced_at: new Date().toISOString() }).eq("id", g.id);
+      await admin.from("garments").update(await withChosenPhotos(admin, g.id, { ...f, synced_at: new Date().toISOString() })).eq("id", g.id);
       done.push(g.style);
     }
     return NextResponse.json({ refreshed: done });

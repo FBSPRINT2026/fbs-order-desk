@@ -501,3 +501,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 18 5:08pm · 1.3.744 · Nick · Schedule Week view rebuilt (option B1): days across, a lane per press in each day, the clock down through working hours only, cards as tall as they run; a job that spills to another day says where
 - Nov 18 5:11pm · 1.3.745 · Nick · Week view: job numbers fit their press lane, the day stays within the crews' hours (a 1 AM start no longer stretches it to midnight), lighter off-hours
 - Nov 18 5:13pm · 1.3.746 · Nick · Week view: days already gone are half as wide, so today and the days ahead have room for full job numbers
+- Nov 18 5:21pm · 1.3.747 · Nick · A garment's photos chosen on purpose (A4.com's for A4N3165 / A4NW3002, an uploaded or picked back) are kept when its supplier is looked up again

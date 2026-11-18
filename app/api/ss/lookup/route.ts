@@ -6,6 +6,7 @@ import { sanmarConfigured, sanmarLookup } from "@/lib/sanmar";
 import { sanmarStyles } from "@/lib/sanmarStyle";
 import { osConfigured, osGarment } from "@/lib/onestop";
 import { sameBrand } from "@/lib/garmentMatch";
+import { withChosenPhotos } from "@/lib/garmentPhotos";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,7 @@ export async function GET(req: Request) {
     const admin = createAdminClient();
     const save = async (row: Record<string, unknown>, match: () => Promise<{ id: string } | null>) => {
       const existing = await match();
-      const res = existing ? await admin.from("garments").update(row).eq("id", existing.id).select("*").single() : await admin.from("garments").insert(row).select("*").single();
+      const res = existing ? await admin.from("garments").update(await withChosenPhotos(admin, existing.id, row)).eq("id", existing.id).select("*").single() : await admin.from("garments").insert(row).select("*").single();
       if (res.error) throw new Error(res.error.message);
       return res.data as Record<string, unknown>;
     };

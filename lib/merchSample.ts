@@ -6,6 +6,7 @@ import { ssLookup, ssConfigured } from "@/lib/ss";
 import { defaultUpcharges, makeProductionJob, suggestBasePrice, uniqueSlug } from "@/lib/merchServer";
 import { isYouthSize, orderTotals, r2, type Field, type ProductColor, type Store } from "@/lib/merch";
 import { SAMPLE_ART } from "@/lib/merchSampleArt";
+import { withChosenPhotos } from "@/lib/garmentPhotos";
 
 /**
  * The sample school, "Oak Hollow Elementary" (a test account), so the whole merch-store flow can be seen end to end:
@@ -116,7 +117,7 @@ async function garment(admin: SupabaseClient, style: string, brand: string): Pro
   const g = await ssLookup(`${brand} ${style}`).catch(() => null) || await ssLookup(style).catch(() => null);
   if (!g || g.style.toLowerCase() !== style.toLowerCase() || !g.brand.toLowerCase().includes(brand.toLowerCase().split(" ")[0])) return (have?.[0] as Garment) || null;
   const row = { ...g, supplier: "ss", synced_at: new Date().toISOString() };
-  const res = have?.[0] ? await admin.from("garments").update(row).eq("id", have[0].id).select("*").single() : await admin.from("garments").insert(row).select("*").single();
+  const res = have?.[0] ? await admin.from("garments").update(await withChosenPhotos(admin, have[0].id, row)).eq("id", have[0].id).select("*").single() : await admin.from("garments").insert(row).select("*").single();
   return (res.data as Garment) || null;
 }
 const pickColor = (g: Garment, want: string) => (g.colors || []).find((c) => c.toLowerCase() === want.toLowerCase()) || (g.colors || []).find((c) => c.toLowerCase().startsWith(want.toLowerCase().split(" ")[0])) || "";

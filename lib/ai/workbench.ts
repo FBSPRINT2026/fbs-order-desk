@@ -12,6 +12,7 @@ import { LOCATIONS, SIZES, type Garment, type Group } from "@/lib/pricing";
 import type { EODraft, EOFile } from "@/lib/emailOrderShared";
 import { colorHex } from "@/lib/inkColors";
 import { drawablePath, isArtDoc, isArtPicture, type MockSpec, type WBCard, type WBEvent, type WBFile, type WBMockItem, type WBMsg } from "@/lib/ai/workbenchShared";
+import { withChosenPhotos } from "@/lib/garmentPhotos";
 
 /**
  * The AI Workbench's agent (Oct 13): Claude with a few of the shop's tools, in a loop until it has answered.
@@ -115,7 +116,7 @@ async function garmentFor(admin: SupabaseClient, style: string, brand: string): 
   const g = (br ? await ssLookup(`${br} ${st}`).catch(() => null) : null) || await ssLookup(st).catch(() => null);
   if (!g || g.style.toLowerCase() !== st.toLowerCase()) return hit || null;
   const row = { ...g, supplier: "ss", synced_at: new Date().toISOString() };
-  const res = hit && (hit.supplier || "ss") === "ss" ? await admin.from("garments").update(row).eq("id", hit.id).select("*").single() : await admin.from("garments").insert(row).select("*").single();
+  const res = hit && (hit.supplier || "ss") === "ss" ? await admin.from("garments").update(await withChosenPhotos(admin, hit.id, row)).eq("id", hit.id).select("*").single() : await admin.from("garments").insert(row).select("*").single();
   return (res.data as Garment) || hit || null;
 }
 
