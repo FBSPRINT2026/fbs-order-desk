@@ -78,6 +78,27 @@ export function trainingsForText(all: Training[], text: string): Training[] {
   return named.length ? named : live.filter((t) => !trainingWords(t.when_words).length);
 }
 
+/**
+ * A customer's shipping default on an order that didn't come through Create order (Amanda, Nov 18 2026, #50124: a cart
+ * sent in from the portal came in as Deliver with no carrier, though Cedar's Store carts training says Ship · FedEx
+ * Ground): the training the job's name picks (Settings → Order training → Order defaults) sets how it goes out, unless
+ * the job names a carrier or pickup itself. Logged on the order.
+ */
+export async function applyShipDefault(sb: SupabaseClient, orderId: string, actor = "shop"): Promise<void> {
+  const { data: o } = await sb.from("orders").select("customer_id, nickname, po_number, notes, delivery_method, ship_method").eq("id", orderId).maybeSingle();
+  const x = o as { customer_id: string | null; nickname: string | null; po_number: string | null; notes: string | null; delivery_method: string | null; ship_method: string | null } | null;
+  if (!x?.customer_id) return;
+  const text = `${x.nickname || ""} ${x.po_number || ""}`;
+  if (SHIP_SAID.test(`${text}\n${x.notes || ""}`)) return;
+  const d = defaultsOf(trainingsForText(await customerTrainings(sb, x.customer_id), text));
+  if (!d.delivery_method) return;
+  const row: Record<string, string> = {};
+  if (x.delivery_method !== d.delivery_method) row.delivery_method = d.delivery_method;
+  if (d.delivery_method === "ship" && d.ship_method && !(x.ship_method || "").trim()) row.ship_method = d.ship_method;
+  if (!Object.keys(row).length) return;
+  await sb.from("orders").update(row).eq("id", orderId);
+  await sb.from("order_events").insert({ order_id: orderId, kind: "edited", actor, detail: `Shipping from the order training: ${row.delivery_method === "pickup" ? "Pickup" : row.delivery_method === "deliver" ? "Deliver" : `Ship${(row.ship_method || x.ship_method) ? ` · ${row.ship_method || x.ship_method}` : ""}`}` });
+}
 export async function customerTrainings(sb: SupabaseClient, customerId: string): Promise<Training[]> {
   const { data } = await sb.from("order_trainings").select("id, customer_id, name, when_words, rules, updated_at, updated_by, defaults").eq("customer_id", customerId).is("archived_at", null).order("created_at");
   return (data || []) as Training[];
