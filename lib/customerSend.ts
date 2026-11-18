@@ -61,7 +61,7 @@ async function approvalsTo(admin: SupabaseClient, o: Order, customer: { email?: 
 
 /** the account's people (who can get email) and who gets this one: the ones picked for this send, else whoever their
  *  email settings send approvals to, else the main email */
-async function recipientsFor(admin: SupabaseClient, o: Order, customer: { email?: string | null } | null, pick?: Pick3) {
+async function recipientsFor(admin: SupabaseClient, o: Order, customer: { email?: string | null } | null, pick?: Pick3, box?: Box | null) {
   let people: { email: string; name: string }[] = [], list: string[] = [];
   if (o.customer_id) {
     const { peopleOf } = await import("@/lib/customerEmailServer"); const { recipientsOf } = await import("@/lib/customerEmails");
@@ -80,7 +80,62 @@ async function recipientsFor(admin: SupabaseClient, o: Order, customer: { email?
     list = [...new Set(pick.to.map((e) => e.trim().toLowerCase()))].filter((e) => people.some((x) => x.email === e) || (/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e) && doms.includes(domainOf(e))));
     for (const e of list) if (!people.some((x) => x.email === e)) people.push({ email: e, name: "" });
   }
+  // answering one of their emails is a reply to everyone on it (Nick, Nov 18 2026, Dear Heart: "if you select that, that
+  // should reply to everybody on the chain… it should be an either or"): who it's from, to and copied, less our own
+  // addresses, in place of the people picked above
+  if (pick?.fromMe && box && pick.reply?.messageId && !pick.reply.messageId.startsWith(THREAD_PREFIX)) {
+    const chain = await chainOf(admin, box, pick.reply.messageId);
+    if (chain.list.length) {
+      list = chain.list;
+      for (const x of chain.people) { const at = people.find((y) => y.email === x.email); if (!at) people.push(x); else if (!at.name && x.name) at.name = x.name; }
+    }
+  }
   return { people, list };
+}
+
+/** everyone on an email: its sender, To and Cc, less our own mailbox and the shop's robot addresses (portal@) */
+async function chainOf(admin: SupabaseClient, box: Box, messageId: string) {
+  const { data: mc } = await admin.from("mail_cache").select("from_name, from_email, to_text, cc_text").eq("account_id", box.id).eq("message_id", messageId).limit(1).maybeSingle();
+  const { data: ix } = mc ? { data: null } : await admin.from("mail_index").select("from_name, from_email, to_text, to_list, cc_list").eq("account_id", box.id).eq("message_id", messageId).limit(1).maybeSingle();
+  const m = (mc || ix) as { from_name?: string | null; from_email?: string | null; to_text?: string | null; cc_text?: string | null; to_list?: unknown; cc_list?: unknown } | null;
+  if (!m) return { list: [] as string[], people: [] as { email: string; name: string }[] };
+  // everyone stays, coworkers copied included (a reply-all), but our own mailbox and the shop's robot addresses
+  const ours = new Set([String(box.email || "").toLowerCase()]), shopDom = domainOf(String(box.email || ""));
+  const robot = (e: string) => shopDom !== "" && domainOf(e) === shopDom && /^(portal|no-?reply|notify|notifications?)@/.test(e);
+  const people: { email: string; name: string }[] = [];
+  const add = (email: string, name = "") => { const e = email.trim().toLowerCase(); if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(e) || ours.has(e) || robot(e)) return; if (!people.some((x) => x.email === e)) people.push({ email: e, name: name.replace(/^["']|["']$/g, "").trim() }); };
+  if (m.from_email) add(m.from_email, m.from_name || "");
+  // "Name <a@b.com>, c@d.com", "Kelsey Barrells kelsey@x.com" (text) or a list of addresses / { address, name }
+  const fromText = (t: string) => { for (const part of t.split(/[,;](?=(?:[^"]*"[^"]*")*[^"]*$)/)) { const em = part.match(/<([^>]+)>/)?.[1] || part.match(/[^\s<>"']+@[^\s<>"']+/)?.[0]; if (em) add(em, part.replace(/<[^>]*>/, "").replace(em, "").trim()); } };
+  const fromList = (v: unknown) => { if (Array.isArray(v)) for (const x of v) { if (typeof x === "string") fromText(x); else if (x && typeof x === "object") { const y = x as { address?: string; email?: string; name?: string }; add(y.address || y.email || "", y.name || ""); } } else if (typeof v === "string") fromText(v); };
+  fromText(String(m.to_text || "")); fromText(String(m.cc_text || "")); fromList(m.to_list); fromList(m.cc_list);
+  return { list: people.map((x) => x.email), people };
+}
+
+/**
+ * Which send this is, for the email's subject and card (Nick, Nov 18 2026: "every time we… resend a customer a proof, it
+ * should say… version 1, version 2, version 3… something to tell the emails apart"): the proof's version when a proof
+ * goes, else the sew-out's, else how many times the quote (or the final invoice) has gone, this one included.
+ */
+async function sendNumber(admin: SupabaseClient, o: Order, pick: Pick3, made: { proof?: number; sent?: boolean } = {}) {
+  if (pick.proof) {
+    if (made.proof) return made.proof;
+    const [{ data: mk }, { data: ps }] = await Promise.all([
+      admin.from("mockups").select("id").eq("order_id", o.id).is("archived_at", null),
+      admin.from("proofs").select("version, mockup_id, archived_at").eq("order_id", o.id).not("version", "is", null),
+    ]);
+    const proofs = (ps || []) as { version: number; mockup_id: string; archived_at: string | null }[], live = proofs.filter((p) => !p.archived_at);
+    const unsent = (mk || []).some((m: { id: string }) => !live.some((p) => p.mockup_id === m.id));
+    const top = proofs.length ? Math.max(...proofs.map((p) => p.version || 0)) : 0;
+    return unsent ? top + 1 : Math.max(1, ...live.map((p) => p.version || 0));
+  }
+  if (!pick.quote && (pick.sewouts || []).length) {
+    const { data: sw } = await admin.from("sewouts").select("version").in("id", pick.sewouts || []);
+    return Math.max(1, ...((sw || []) as { version: number }[]).map((x) => x.version || 1));
+  }
+  const inv = !["quote", "request", "quote_sent"].includes(o.status);
+  const { count } = await admin.from("order_events").select("id", { count: "exact", head: true }).eq("order_id", o.id).eq("kind", inv ? "invoice_sent" : "sent");
+  return (count || 0) + (made.sent ? 0 : 1);
 }
 
 /** free mail providers: a shared domain there says nothing about which company someone's with */
@@ -215,7 +270,7 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
 async function emailFor(admin: SupabaseClient, o: Order, customer: { name: string; company?: string | null; payment_terms?: PayTerms | null } | null, settings: Settings, pick: Pick3, url: string,
   /** under someone's own reply (Nov 3, Nick: "I'm going to type… hi Michael, please see below… it's a little redundant for it to
    *  say the same thing in the thing below… just say your proof is ready… make that box a little smaller"): no greeting or
-   *  lines of its own, smaller */ compact = false) {
+   *  lines of its own, smaller */ compact = false, /** which send this is (sendNumber): "Version 2" */ ver = 0) {
   const sh = settings.shop;
   const groups = orderGroups(o);
   const blocks: { k: string; title: string; /** each its own line (Oct 29, Nick: "no cutoffs… everything should be its own kind of line") */ sub: string[]; pic?: string }[] = [];
@@ -243,7 +298,7 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   const has = (k: string) => blocks.some((b) => b.k === k);
   const inv = has("quote") && !["quote", "request", "quote_sent"].includes(o.status), price = inv ? "final invoice" : "quote";
   const head = has("quote") && (has("proof") || has("sewout")) ? `Your ${has("sewout") && !has("proof") ? "sew-out" : "proof"} and ${price} are ready` : has("quote") ? `Your ${price} is ready` : has("sewout") && !has("proof") ? "Your sew-out is ready to approve" : "Your proof is ready to approve";
-  const job = o.nickname || `order #${o.number}`;
+  const job = `${o.nickname || `order #${o.number}`}${ver ? ` · Version ${ver}` : ""}`;
   const up = upFront(customer?.payment_terms, calcOrder(o, settings, []).total, settings.depositPct);
   const payNow = up.kind === "full" ? "pay for it" : up.kind === "deposit" ? "pay the deposit" : "";
   const first = ((customer?.name || "").trim().split(/\s+/)[0]) || "there";
@@ -277,23 +332,24 @@ ${pick.note?.trim() ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;
 <tr><td style="padding:12px 24px;border-top:1px solid #EEF1F5;font-size:12px;color:#6B7686">${esc(sh.name)}${contact ? ` · ${contact}` : ""}</td></tr>
 </table></div>`;
   const what = has("quote") && (has("proof") || has("sewout")) ? `${has("sewout") && !has("proof") ? "Sew-out" : "Proof"} and ${inv ? "invoice" : "quote"}` : has("quote") ? (inv ? "Invoice" : "Quote") : has("sewout") && !has("proof") ? "Sew-out" : "Proof";
-  return { subject: orderSubject(o.number, `${what} ready for approval`, o.nickname), html };
+  return { subject: orderSubject(o.number, `${what} ready for approval`, [o.nickname, ver ? `Version ${ver}` : ""].filter(Boolean).join(" · ")), html };
 }
 
 /** the preview: the email as it would go, before anything is made */
 export async function previewSend(admin: SupabaseClient, orderId: string, pick: Pick3, box?: Box | null) {
   const { o, customer, settings } = await load(admin, orderId);
   if (!pick.proof && !pick.quote && !(pick.sewouts || []).length) return { ok: false as const, error: "Tick what to send." };
-  const { list, people } = await recipientsFor(admin, o, customer, pick);
+  const { list, people } = await recipientsFor(admin, o, customer, pick, box);
   const hi = firstOf(customer, list, people);
+  const ver = await sendNumber(admin, o, pick);
   if (pick.fromMe && box) {
-    const card = await emailFor(admin, withoutShopPieces(o), greeted(customer, hi), settings, { ...pick, note: "" }, `${siteUrl()}/proof/preview`, true);
+    const card = await emailFor(admin, withoutShopPieces(o), greeted(customer, hi), settings, { ...pick, note: "" }, `${siteUrl()}/proof/preview`, true, ver);
     const mine = await mineEmail(admin, box, card, pick, hi);
     // the preview shows the pictures as they are (the attached copies are for the real email)
     return { ok: true as const, to: list.join(", "), subject: mine.subject, html: previewOf(mine.html, mine.attachments), from: `${box.name || box.email} <${box.email}>` };
   }
   // the portal sends one to each person, each greeted by name: the preview greets the first
-  const em = await emailFor(admin, withoutShopPieces(o), greeted(customer, firstOf(customer, list.slice(0, 1), people)), settings, pick, `${siteUrl()}/proof/preview`);
+  const em = await emailFor(admin, withoutShopPieces(o), greeted(customer, firstOf(customer, list.slice(0, 1), people)), settings, pick, `${siteUrl()}/proof/preview`, false, ver);
   return { ok: true as const, to: list.join(", "), ...em, from: "" };
 }
 /** the first names to greet: the people it goes to ("Michael", "Michael and Anna"), else the customer's main contact
@@ -322,7 +378,7 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   if (!pick.proof && !pick.quote && !(pick.sewouts || []).length) return { ok: false as const, error: "Tick what to send." };
   // who gets it: the people picked for this send, else who at the customer gets proofs and approvals (their email
   // settings, lib/customerEmails.ts; the main email if unset)
-  const { list, people } = await recipientsFor(admin, o, customer, pick);
+  const { list, people } = await recipientsFor(admin, o, customer, pick, box);
   const to = list.join(", ");
   if (email && !to) return { ok: false as const, error: pick.to ? "Tick who gets it." : "This customer has no email address. Add one, or copy the link and send it yourself." };
   if (email && pick.fromMe && !box) return { ok: false as const, error: "Your mailbox isn't connected here. Send it from FBS Print, or connect your email in Settings first." };
@@ -332,10 +388,12 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
     return { ok: false as const, error: "Production hasn't confirmed the full color print yet (its colors set the price). Send the proof now, and the quote after that." };
   if (pick.quote && ["completed", "void"].includes(o.status)) return { ok: false as const, error: "This order is closed." };
   const done: string[] = [];
+  let madeProof = 0;
   if (pick.proof) {
     const { sendProofs } = await import("@/lib/proofs");
     const r = await sendProofs(admin, orderId, me, pick.note || "", { email: false, sentTo });
     if (!r.ok) return r;
+    madeProof = r.version || 0;
     done.push(`proof version ${r.version}`);
   }
   for (const id of pick.sewouts || []) {
@@ -370,10 +428,11 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
   if (!email) return { ok: true as const, url, emailed: false, done };
   const { data: fresh } = await admin.from("orders").select("*").eq("id", orderId).maybeSingle();
   let emailed = false;
+  const ver = await sendNumber(admin, o, pick, { proof: madeProof, sent: true });
   if (pick.fromMe && box) {
     // one email from their own mailbox to everyone picked, in the thread it answers, kept in their Sent Items
     const hi = firstOf(customer, list, people);
-    const card = await emailFor(admin, withoutShopPieces(fresh as Order), greeted(customer, hi), settings, { ...pick, note: "" }, url, true);
+    const card = await emailFor(admin, withoutShopPieces(fresh as Order), greeted(customer, hi), settings, { ...pick, note: "" }, url, true, ver);
     const mine = await mineEmail(admin, box, card, pick, hi);
     const { cfgOf } = await import("@/lib/mail/config"); const { sendFromMailbox } = await import("@/lib/mail/send");
     const { ewsReady, ewsSaveSent } = await import("@/lib/mail/ewsBox");
@@ -385,7 +444,7 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
     return { ok: true as const, url, emailed, done };
   }
   for (const t of list) {
-    const em = await emailFor(admin, withoutShopPieces(fresh as Order), greeted(customer, firstOf(customer, [t], people)), settings, pick, url);
+    const em = await emailFor(admin, withoutShopPieces(fresh as Order), greeted(customer, firstOf(customer, [t], people)), settings, pick, url, false, ver);
     if (await sendEmail({ to: t, replyTo: SHOP_NOTIFY_EMAIL, subject: em.subject, html: em.html })) emailed = true;
   }
   return { ok: true as const, url, emailed, done };

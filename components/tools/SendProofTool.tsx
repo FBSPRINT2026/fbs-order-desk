@@ -138,6 +138,8 @@ export default function SendProofTool({ target, label = "Send to customer", mode
   if (mode === "copy") return <span className="spt-copy">{copyBtns(false)}{err && <span className="pv-err" style={{ margin: 0 }}>{err}</span>}</span>;
 
 
+  // a reply to one of their emails (not a message on the order): it goes to everyone on that email
+  const replyAll = !!(pick.fromMe && pick.reply?.messageId && !choices.find((c) => c.messageId === pick.reply?.messageId)?.thread);
   return (
     <>
       <button type="button" className={"btn" + (primary ? " primary" : "")} disabled={disabled} onClick={() => void start()}>{label}</button>
@@ -167,7 +169,11 @@ export default function SendProofTool({ target, label = "Send to customer", mode
                     <button type="button" role="radio" aria-checked={!!pick.fromMe} className={pick.fromMe ? "on" : ""} onClick={() => setPick((p) => ({ ...p, fromMe: true, reply: p.reply ?? null }))} data-notranslate>My email ({box.split("@")[0]}@)</button>
                   </div></div>}
                 {/* who gets it this time; their email settings stay as they are (Nov 3, Nick: "override settings and just send to this person") */}
-                {(opts.people || []).length > 0 && <div className="spt-row"><span className="spt-rl">To</span>
+                {/* answering one of their emails goes to everyone on it, in place of the people here (Nick, Nov 18 2026: "it
+                    should be an either or… override what's in the above area") */}
+                {replyAll && <div className="spt-row"><span className="spt-rl">To</span>
+                  <div className="spt-chain" data-notranslate><b>Everyone on the email you&apos;re answering</b><span>{pv?.to || "…"}</span></div></div>}
+                {!replyAll && (opts.people || []).length > 0 && <div className="spt-row"><span className="spt-rl">To</span>
                   <div className="spt-ppl" title="Just this time: their email settings don't change">{(opts.people || []).map((x) => {
                     const on = (pick.to || []).includes(x.email);
                     return <button key={x.email} type="button" className={"spt-who" + (on ? " on" : "")} aria-pressed={on} title={x.email} data-notranslate
