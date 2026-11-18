@@ -1712,7 +1712,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             <span key={m.id} className={"mwb-pc" + (u > cap ? " full" : u > cap * s.fillTarget ? " warn" : "")} title={`${m.name}: ${fmtMin(u)} of ${fmtMin(cap)} booked this week`}><b>{lane(m)}</b> {shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""} <i>{Math.round(u / 60)}/{Math.round(cap / 60)}h</i></span>
           ); })}</span>
         </div>
-        <div className="mwb-g" style={{ gridTemplateColumns: `36px repeat(${ds.length}, minmax(0,1fr))` }}>
+        {/* days already gone are half as wide: today and what's ahead get the room */}
+        <div className="mwb-g" style={{ gridTemplateColumns: `36px ${ds.map((d) => (d < today ? "minmax(0,.55fr)" : "minmax(0,1fr)")).join(" ")}` }}>
           <div />
           {ds.map((d) => (
             <button type="button" key={d} className={"mwb-d" + (d === today ? " today" : d < today ? " past" : "")} onClick={() => { setDay(d); setView("day"); }} title="Open this day">
