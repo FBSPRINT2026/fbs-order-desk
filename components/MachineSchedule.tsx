@@ -1174,7 +1174,12 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     const ins = p.book.map((r) => { const t = askRefs.current.jobs.get(r.job), m = s!.machines.find((x) => x.id === r.machine); if (!t || !m || !fits(t.need, m)) return null;
       const k = m.id + r.day; pos[k] = pos[k] ?? cards.filter((c) => c.machine.id === m.id && c.day === r.day).length;
       return { ...ownerCols(t.job), machine: m.id, day: r.day, minutes: estimate(s!, t.need, m).minutes, position: pos[k]++, start_min: notBefore(r.day, null), kind: t.need.type, label: t.need.label, source: "assistant", locations: locsFor(t.job, t.need) }; }).filter(Boolean);
-    if (ins.length) { const r = await sb.from("production_slots").insert(ins); if (r.error) { setMsg(r.error.message); return; } done.push(`booked ${ins.length}`); }
+    if (ins.length) {
+      const r = await sb.from("production_slots").insert(ins); if (r.error) { setMsg(r.error.message); return; } done.push(`booked ${ins.length}`);
+      // the same as booking by hand: a missed booking of the job goes once it's booked again (Nov 18: the assistant's
+      // re-plan left 18 AMS jobs with their old never-started Tuesday booking too, so each was on Press 3 twice)
+      await dropMissed(p.book.map((r) => askRefs.current.jobs.get(r.job)).filter((t): t is NonNullable<typeof t> => !!t).map((t) => ({ job: t.job, type: t.need.type })));
+    }
     const off = p.unbook.map((r) => askRefs.current.slots.get(r.slot)).filter((c): c is Card => !!c && !!c.slot && c.slot.status === "scheduled").map((c) => c.slot!.id);
     if (off.length) { const r = await sb.from("production_slots").delete().in("id", off); if (r.error) { setMsg(r.error.message); return; } done.push(`took ${off.length} back to Ready To Schedule`); }
     const dn = p.downtime.map((d) => ({ machine: d.machine, crew_id: null, day: d.day, start_min: d.from ?? null, end_min: d.to ?? null, capacity: 0, employee: "", note: d.note || "Out", created_by: me.email }));
