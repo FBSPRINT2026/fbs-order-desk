@@ -7,7 +7,10 @@ import AccountChooser from "@/components/AccountChooser";
 export const dynamic = "force-dynamic";
 
 /** Which account to open, for a sign-in on more than one (Nov 3, Nick) */
-export default async function ChooseAccount() {
+export default async function ChooseAccount({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  // where a link was headed (a customer link to one order): opened right after the account is picked (Nov 18)
+  const n = (await searchParams).next || "";
+  const next = /^\/portal\/[\w\-/?=&]*$/.test(n) ? n : "/portal";
   const { user, isStaff } = await getViewer();
   if (!user) redirect("/login?next=/portal/choose");
   if (isStaff) redirect("/shop");
@@ -20,7 +23,7 @@ export default async function ChooseAccount() {
       <div className="pac">
         <h1 className="pac-h">Which account would you like to open?</h1>
         <p className="pac-sub">Your email is on {list.length} accounts with us. Pick one; you can switch any time from the top of the page.</p>
-        <AccountChooser accounts={list} />
+        <AccountChooser accounts={list} next={next} />
       </div>
     </main>
   );

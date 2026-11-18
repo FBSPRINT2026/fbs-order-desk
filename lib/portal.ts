@@ -52,7 +52,7 @@ export async function getPortalCtx(as?: string, next = "/portal"): Promise<Porta
   const { data: cs } = await allRows((a, b) => supabase.from("customers").select("*").order("id").range(a, b));
   const customers = (cs || []) as Customer[];
   // on more than one account and none picked yet: pick one first (Nov 3, Nick); my_customer_ids() answers with the pick
-  if (customers.length > 1) redirect("/portal/choose");
+  if (customers.length > 1) redirect(next && next !== "/portal" ? `/portal/choose?next=${encodeURIComponent(next)}` : "/portal/choose");
   await noteVisit(admin, email, customers.map((c) => c.id), next).catch(() => null);
   return { db: supabase as unknown as SupabaseClient, email, isStaff, preview: null, customerIds: customers.map((c) => c.id), customers, settings: feeFor(settings, customers) };
 }
