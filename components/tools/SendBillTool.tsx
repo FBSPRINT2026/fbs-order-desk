@@ -22,6 +22,8 @@ export default function SendBillTool({ customerId, orderIds, onClose, onSent }: 
   const [remind, setRemind] = useState(true);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
+  /** some picked invoices aren't done yet: ask before the bill opens them to be paid now */
+  const [ask, setAsk] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -43,8 +45,9 @@ export default function SendBillTool({ customerId, orderIds, onClose, onSent }: 
   const picked = useMemo(() => inv.filter((o) => sel.includes(o.id)), [inv, sel]);
   const total = picked.reduce((a, o) => a + o.balance, 0);
 
+  const early = picked.filter((o) => !o.ready);
   async function send() {
-    setBusy(true); setErr("");
+    setAsk(false); setBusy(true); setErr("");
     const r = await sendBillNow(customerId, { orderIds: sel, to: to.split(/[,;\s]+/).filter(Boolean), note, remind }).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : String(e) }));
     setBusy(false);
     if (!r.ok) { setErr(r.error); return; }
@@ -73,7 +76,7 @@ export default function SendBillTool({ customerId, orderIds, onClose, onSent }: 
             {inv.map((o) => (
               <label key={o.id} className={"sbl-it" + (o.ready ? "" : " later")}>
                 <input type="checkbox" checked={sel.includes(o.id)} onChange={() => toggle(o.id)} />
-                <span><b>#{o.number}</b> {o.nickname}{o.po_number ? <span className="faint"> · PO {o.po_number}</span> : null}<small>{o.ready ? (o.paid > 0.004 ? `Ready to pay · ${money(o.paid)} paid so far` : "Ready to pay") : "Still being made: due when it's done"}</small></span>
+                <span><b>#{o.number}</b> {o.nickname}{o.po_number ? <span className="faint"> · PO {o.po_number}</span> : null}<small>{o.ready ? (o.paid > 0.004 ? `Ready to pay · ${money(o.paid)} paid so far` : "Ready to pay") : "Still being made: billing it lets them pay now"}</small></span>
                 <b className="nowrap">{money(o.balance)}</b>
               </label>
             ))}
@@ -86,10 +89,22 @@ export default function SendBillTool({ customerId, orderIds, onClose, onSent }: 
           <label className="check"><input type="checkbox" checked={remind} onChange={(e) => setRemind(e.target.checked)} /> Remind them in 7 days if it&apos;s still unpaid</label>
           {v.recent.length > 0 && <div className="faint sbl-last">Last bill: {v.recent[0].when}, {money(+v.recent[0].total)} to {v.recent[0].sent_to.join(", ")}</div>}
           {err && <p className="err">{err}</p>}
+          {ask ? (
+            /* not done yet (Nick, Nov 19 2026): the bill lets them pay it now, whatever their terms say */
+            <div className="sbl-ask" role="alertdialog" aria-label="Let them pay before it's done?">
+              <b>{early.length === 1 ? `#${early[0].number} isn't done yet` : `${early.length} of these aren't done yet`}</b>
+              <p>{early.length === 1 ? `${early[0].nickname || "This order"} is still being made.` : early.map((o) => `#${o.number}`).join(", ") + " are still being made."} {v.terms ? `Their terms are ${v.terms.toLowerCase()}, so ` : "So "}they couldn&apos;t pay {early.length === 1 ? "it" : "them"} online until {early.length === 1 ? "it's" : "they're"} ready. Send the bill and let them pay now?</p>
+              <div className="sbl-acts">
+                <button type="button" className="btn" onClick={() => setAsk(false)}>Go back</button>
+                <button type="button" className="btn primary" onClick={() => void send()}>Yes, let them pay now</button>
+              </div>
+            </div>
+          ) : (
           <div className="sbl-acts">
             <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>
-            <button type="button" className="btn primary" onClick={() => void send()} disabled={busy || !picked.length || !to.trim()}>{busy ? "Sending…" : `Send bill · ${money(total)}`}</button>
+            <button type="button" className="btn primary" onClick={() => (early.length ? setAsk(true) : void send())} disabled={busy || !picked.length || !to.trim()}>{busy ? "Sending…" : `Send bill · ${money(total)}`}</button>
           </div>
+          )}
         </>}
       </div>
     </div>

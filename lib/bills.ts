@@ -71,6 +71,10 @@ export async function sendBill(admin: SupabaseClient, b: { customerId: string; o
   for (const t of to) if (await sendEmail({ to: t, subject, html, replyTo: SHOP_NOTIFY_EMAIL || undefined })) sent.push(t);
   if (!sent.length) return { ok: false as const, error: "The email didn't go out. Check Settings → Site email." };
   await admin.from("bills").insert({ customer_id: b.customerId, order_ids: inv.map((o) => o.id), total, sent_to: sent, note: b.note.trim(), sent_by: b.by, remind_at: b.remind ? new Date(Date.now() + REMIND_DAYS * 86400000).toISOString() : null });
+  // a bill is asking to be paid: each order on it is open to pay online now, finished or not, whatever the terms (Nick, Nov 19
+  // 2026, #50135: Fossil's bill went out while it was in production on due-on-receipt terms, and the link wouldn't take her
+  // payment). Send a bill asks first when any isn't done yet (SendBillTool); this is the order page's Online payment → Ready.
+  await admin.from("orders").update({ pay_mode: "ready" }).in("id", inv.map((o) => o.id)).or("pay_mode.is.null,pay_mode.neq.ready");
   await admin.from("order_events").insert(inv.map((o) => ({ order_id: o.id, kind: "customer_email", detail: `bill · Bill sent to ${sent.join(", ")}${inv.length > 1 ? ` (with ${inv.length - 1} other invoice${inv.length > 2 ? "s" : ""}, ${money(total)} in all)` : ""}`, actor: b.by })));
   return { ok: true as const, sent, total, count: inv.length };
 }

@@ -24178,3 +24178,7 @@ main.main .rvg-sub{margin-bottom:10px}
 .mzc-tools.shut .msk-g .msk-b:hover{background:var(--surface-2);color:var(--ink)}
 .mzc-tools.shut .msk-g .msk-b>svg{width:32px;height:32px;padding:7px;border-radius:8px}
 .mzc-tools.shut .msk-g .msk-b.bad .msk-n{top:-4px;right:auto;left:46px}
+/* Send a bill: asks before billing an order that isn't done yet (Nick, Nov 19 2026) */
+.sbl-ask{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:var(--r);border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));background:color-mix(in srgb,var(--warn) 10%,var(--surface))}
+.sbl-ask b{font-size:14px;color:var(--ink)}
+.sbl-ask p{margin:0;font-size:13.5px;color:var(--ink-2)}
