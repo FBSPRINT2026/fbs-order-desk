@@ -3699,7 +3699,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
           </div>
           <MixStrip parts={mixP[c.job.id]} />
         </div>
-        {actions ? <div className="mji-act">{actions}</div> : null}
+        {actions ? <div className="mjx-act">{actions}</div> : null}
         {parts.length > 1 && <div className="mji-sec"><div className="mji-l">This job runs in {parts.length} parts</div>
           <div className="mji-parts">{parts.map((x, i) => <div key={x.key} className={"mji-part" + (x.me ? " me" : "")}><b>Run {i + 1} · {x.press}{x.me ? " · this one" : ""}</b><span>{x.what}</span><small>{x.when}</small></div>)}</div>
         </div>}
@@ -3760,7 +3760,7 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
           <div className="mji-act"><button type="button" className="btn sm" onClick={() => setUniting(false)}>Cancel</button><button type="button" className="btn sm mji-pv" onClick={onUnite}>Unite into 1 run</button></div>
         </div>}
         {sepsOpen && c.job.kind === "o" && <div className="ms-seps"><div className="ms-seps-h"><b>Separations</b><span className="faint">Approved art goes straight to the Separation Center.</span></div><SepRequest orderId={c.job.id} /></div>}
-        <div className="mjp-foot"><button type="button" className="linkbtn" onClick={() => setMore(!more)} aria-expanded={more}>More details {more ? "▴" : "▾"}</button><span className="spacer" /><span className="faint mji-tip">Right-click the job to start, finish, count goods or move it</span></div>
+        <div className="mjp-foot"><button type="button" className="linkbtn" onClick={() => setMore(!more)} aria-expanded={more}>More details {more ? "▴" : "▾"}</button><span className="spacer" /></div>
         {/* More details (Nov 13, Nick: "no border around it… doesn't even belong in there"): the same sections as the card */}
         {more && <div className="mjp-more">
           <div className="mjm-when">

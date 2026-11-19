@@ -23808,8 +23808,8 @@ main.main .rvg-sub{margin-bottom:10px}
 .rvw-2 > span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rvw-2 em{font-style:normal;font-weight:700;white-space:nowrap}.rvw-2 em.ok{color:var(--ok)}.rvw-2 em.bad{color:var(--danger)}
 /* the job panel's actions (Nick, Nov 19 2026: one panel for left and right click): the right-click menu docked inside it */
-.mji-act{border-bottom:1px solid var(--line)}
-.mrc.mrb.mrb-dock{position:static;width:auto;max-height:none;overflow:visible;border:0;border-radius:0;box-shadow:none;background:var(--surface-2);z-index:auto}
+.mjx-act{border-bottom:1px solid var(--line)}
+.mrc.mrb.mrb-dock{position:static;width:auto!important;max-height:none;overflow:visible;border:0;border-radius:0;box-shadow:none;background:var(--surface-2);z-index:auto}
 .mrb-dock .mrc-sec{border-top:0}
 /* Weekly (Nick, Nov 19 2026): Ready to schedule on top with the shop assistant in its right third; the rest of the right
    panel goes under the week */
