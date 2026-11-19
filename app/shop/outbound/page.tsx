@@ -38,6 +38,7 @@ export default function Outbound() {
   // deliver / Route / Delivered (Ship's are the Shipping Center's: Ready to ship / Shipped / Transit map)
   const [pickSub, setPickSub] = useSticky<"shelf" | "packing" | "done">("outbound.pick", "shelf");
   const [delSub, setDelSub] = useSticky<"todo" | "route" | "done">("outbound.del", "todo");
+  const [setAt, setSetAt] = useState(0);
   const [more, setMore] = useState<{ packing: Row[]; done: Row[]; from: string }>({ packing: [], done: [], from: "" });
   const [rows, setRows] = useState<Row[] | null>(null);
   const [perBox, setPerBox] = useState(72);
@@ -168,16 +169,22 @@ export default function Outbound() {
       {/* the top (Nick, Nov 19 2026): the title, and Ship | Pickup shelf | Delivery at the top right */}
       <div className="page-head ob-head obx-head">
         <div><h1>Outbound</h1><div className="eyebrow">What&apos;s here and ready to leave: what ships, what&apos;s picked up, what we deliver</div></div>
+        {/* the shipping settings: a small gear left of Ship | Pickup shelf | Delivery (Nick, Nov 19 2026) */}
+        <span className="obx-tr">
+        <button type="button" className="obx-gear" onClick={() => { setTab("ship"); setSetAt(Date.now()); }} aria-label="Shipping settings" title="Shipping settings">
+          <svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
+        </button>
         <div className="obx-seg" role="tablist" aria-label="Outbound">
           {([["ship", "Ship", counts.ship, Ico.truck], ["pickup", "Pickup shelf", counts.pickup, Ico.shelf], ["deliver", "Delivery", counts.deliver, Ico.pin]] as const).map(([k, l, n, ic]) =>
             <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{ic}<span>{l}</span>{rows && <span className="aa-n">{n}</span>}</button>)}
         </div>
+        </span>
       </div>
       <div className="ob-left">
         {msg && <div className={"ob-msg" + (msg.ok ? " ok" : "")}>{msg.text}</div>}
 
         {/* the Shipping Center stays mounted so its ship window can open from a scan on any tab */}
-        <div hidden={tab !== "ship"}><ShippingCenter key={shipKey} embedded shipReq={shipReq} filter={q} /></div>
+        <div hidden={tab !== "ship"}><ShippingCenter key={shipKey} embedded shipReq={shipReq} filter={q} settingsAt={setAt} /></div>
         {checkN && <ShipCheck number={checkN} onClose={() => setCheckN("")} onReady={() => { const n = checkN; setCheckN(""); void load(); setShipKey((k) => k + 1); setMsg(null); setTab("ship"); setShipReq({ n, at: Date.now() }); }} />}
 
         {tab === "pickup" && <>

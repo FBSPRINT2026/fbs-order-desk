@@ -24082,9 +24082,10 @@ main.main .rvg-sub{margin-bottom:10px}
 .trk-cp:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .trk-cp svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .trk-cp.ok{color:var(--ok)}
-.sc-gear{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;color:var(--ink-3);flex:none}
-.sc-gear:hover,.sc-gear.on{color:var(--accent)}
-.sc-gear:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.sc-gear svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.obx-gear,.sc-gear{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;color:var(--ink-3);flex:none}
+.obx-gear:hover,.sc-gear:hover,.sc-gear.on{color:var(--accent)}
+.obx-gear:focus-visible,.sc-gear:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.obx-gear svg,.sc-gear svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .sc-tabrow:has(.sc-gear){flex-wrap:nowrap}
 .sc-tabrow:has(.sc-gear) .sc-tabs{flex:1;min-width:0}
+.obx-tr{display:inline-flex;align-items:center;gap:8px}

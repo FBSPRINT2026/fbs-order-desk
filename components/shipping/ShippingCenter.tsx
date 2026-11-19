@@ -49,7 +49,8 @@ const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLoc
  * Shipping center: every order that's ready to ship (new orders marked Ready with delivery "Ship", and Printavo
  * orders in "Shipping - Ready to Ship"), a scan box for box labels, and the ship window.
  */
-export default function ShippingCenter({ embedded = false, shipReq = null, filter = "" }: { embedded?: boolean; shipReq?: { n: string; at: number } | null; /** Outbound's Search / filter */ filter?: string } = {}) {
+export default function ShippingCenter({ embedded = false, shipReq = null, filter = "", settingsAt = 0 }: { embedded?: boolean; shipReq?: { n: string; at: number } | null; /** Outbound's Search / filter */ filter?: string;
+  /** Outbound's gear in its header (Nick, Nov 19 2026): each press opens or closes the shipping settings */ settingsAt?: number } = {}) {
   const sb = createClient();
   const [items, setItems] = useState<Item[] | null>(null);
   const [shipped, setShipped] = useState<(Shipment & { label: string; customer: string })[]>([]);
@@ -61,6 +62,7 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
   const [open, setOpen] = useState<{ item: Item; box: number | null } | null>(null);
   const [q, setQ] = useState(""), [scan, setScan] = useState(""), [note, setNote] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  useEffect(() => { if (settingsAt) setShowSettings((x) => !x); }, [settingsAt]);
   // Ready to ship sorted by job # or by customer (Nick, Nov 19 2026), and the line with + Tracking open
   const [sortBy, setSortBy] = useSticky<"job" | "cust">("shipping.sort", "cust");
   const [trkOpen, setTrkOpen] = useState("");
@@ -172,10 +174,6 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
       {!addressReady(settings.ship.from) && !showSettings && <div className="banner" style={{ marginBottom: 10 }}>Rates and transit times are figured from ZIP {settings.ship.from.zip || "(not set)"}. Add our street address in <button type="button" className="linkbtn" style={{ fontSize: "inherit" }} onClick={() => setShowSettings(true)}>Settings</button> before labels can be printed.</div>}
 
       <div className="sc-tabrow">
-        {/* Settings, a small gear to the left of the tabs (Nick, Nov 19 2026) */}
-        {embedded && <button type="button" className={"sc-gear" + (showSettings ? " on" : "")} onClick={() => setShowSettings((x) => !x)} aria-label="Shipping settings" title="Shipping settings" aria-expanded={showSettings}>
-          <svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
-        </button>}
         <div className="aa-sub sc-tabs" role="tablist">
           <button type="button" className={tab === "ready" ? "on" : ""} onClick={() => setTab("ready")}>Ready To Ship<span className="aa-n">{items?.length ?? "…"}</span></button>
           <button type="button" className={tab === "shipped" ? "on" : ""} onClick={() => setTab("shipped")}>Shipped<span className="aa-n">{shipped.length}</span></button>
