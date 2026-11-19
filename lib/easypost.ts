@@ -26,6 +26,15 @@ async function ep<T>(path: string, body: unknown): Promise<T> {
   return j;
 }
 
+async function epGet<T>(path: string): Promise<T> {
+  const key = process.env.EASYPOST_API_KEY?.trim();
+  if (!key) throw new Error("EasyPost isn't connected yet (EASYPOST_API_KEY is missing in Vercel).");
+  const r = await fetch(EP + path, { cache: "no-store", headers: { Authorization: "Basic " + Buffer.from(key + ":").toString("base64") } });
+  const j = await r.json().catch(() => null) as (T & { error?: { message?: string } }) | null;
+  if (!r.ok || !j || j.error) throw new Error("EasyPost: " + (j?.error?.message || `HTTP ${r.status}`));
+  return j;
+}
+
 const addr = (a: ShipAddress) => ({ name: a.name || undefined, company: a.company || undefined, street1: a.street1 || undefined, street2: a.street2 || undefined, city: a.city || undefined, state: a.state || undefined, zip: a.zip, country: a.country || "US", phone: a.phone || undefined, email: a.email || undefined });
 
 type EpRate = { id: string; carrier: string; service: string; rate: string; delivery_days: number | null; delivery_date: string | null };
@@ -85,4 +94,25 @@ export async function carrierAccounts(): Promise<{ id: string; type: string; des
   if (!r.ok || !Array.isArray(j)) throw new Error(`EasyPost: HTTP ${r.status}`);
   return j.map((a) => ({ id: a.id, type: a.type, description: a.description || "", reference: a.reference || "", readable: a.readable || "",
     account: String(a.credentials?.account_number || a.credentials?.shipper_id || "") }));
+}
+
+/**
+ * Buy the labels for an order rated by rateShipment (Nick, Nov 19 2026: Create Labels). One label a box, on the carrier
+ * and service picked; each box's tracking number, its PDF label and its ZPL for the Zebra come back. This spends money:
+ * only app/api/shipping/buy calls it, once per shipment.
+ */
+export async function buyOrder(orderId: string, carrier: string, service: string): Promise<{ boxes: { tracking: string; labelUrl: string; zpl: string; cost: number; shipmentId: string }[] }> {
+  type EpShip = { id: string; tracking_code: string; postage_label?: { label_url?: string; label_zpl_url?: string } | null; selected_rate?: { rate?: string } | null };
+  const o = await ep<{ id: string; shipments: EpShip[] }>(`/orders/${orderId}/buy`, { carrier, service });
+  const out: { tracking: string; labelUrl: string; zpl: string; cost: number; shipmentId: string }[] = [];
+  for (const sh of o.shipments || []) {
+    let zpl = "";
+    try {
+      const z = await epGet<EpShip>(`/shipments/${sh.id}/label?file_format=ZPL`);
+      const u = z.postage_label?.label_zpl_url;
+      if (u) zpl = await fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).catch(() => "");
+    } catch { /* the PDF is still there to print */ }
+    out.push({ tracking: sh.tracking_code || "", labelUrl: sh.postage_label?.label_url || "", zpl, cost: +(sh.selected_rate?.rate || 0) || 0, shipmentId: sh.id });
+  }
+  return { boxes: out };
 }

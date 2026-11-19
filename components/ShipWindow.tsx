@@ -1,5 +1,7 @@
 "use client";
 import { orderShipped } from "@/app/shop/tracking-actions";
+import { myPrinter } from "@/lib/labelPrinter";
+import { useRole } from "@/components/RoleContext";
 import { shipmentShipped } from "@/app/shop/customer-email-actions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -224,7 +226,36 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
       if (sid) await orderShipped(t.id, sid).catch(() => null);
     }
     setBusy("");
-    return true;
+    return (saved as { id?: string } | null)?.id || existing?.id || true;
+  }
+
+  /**
+   * Create labels (Nick, Nov 19 2026): saved first, then bought on the service picked (app/api/shipping/buy), printed on
+   * this computer's Zebra, the tracking on the order, and the order done, the same as Mark shipped.
+   */
+  const [confirmBuy, setConfirmBuy] = useState(false);
+  // only Nick buys labels until he's watched the first one go through (Nov 19 2026: "test it on one of your orders with
+  // you watching before anyone else uses it"); everyone else ships another way and enters the tracking
+  const { email: me } = useRole();
+  const canBuy = /^nicholas@fbsprint\.com$/i.test(me || "");
+  async function buyLabels() {
+    if (!chosen) return;
+    setConfirmBuy(false);
+    const sid = await save("draft");
+    if (typeof sid !== "string") { if (sid) setErr("Couldn't save the shipment first."); return; }
+    setBusy("buy"); setErr("");
+    try {
+      const r = await fetch("/api/shipping/buy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shipmentId: sid, carrier: chosen.carrier, service: chosen.service, why, printer: myPrinter() }) });
+      const j = await r.json().catch(() => ({ error: `HTTP ${r.status}` }));
+      if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`);
+      if (t.kind === "order") {
+        await sb.from("orders").update({ ship_method: shippedMethod() }).eq("id", t.id);
+        await orderShipped(t.id, sid).catch(() => null);
+        void shipmentShipped(sid).catch(() => null);
+      }
+      setBusy("");
+      onDone(j.warn || `#${t.number} shipped · ${chosen.carrier} ${niceService(chosen.service)} · ${(j.tracking || []).join(", ")}${j.printed ? ` · ${j.printed}` : ""}`);
+    } catch (e) { setBusy(""); setErr(e instanceof Error ? e.message : String(e)); }
   }
 
   /** what the order's ship method becomes: the service shipped, still on the customer's own account when it was */
@@ -482,7 +513,12 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
           <button type="button" className="btn" disabled={!!busy} onClick={async () => { if (await save("draft")) onDone(`Saved #${t.number}.`); }}>{busy === "save" ? "Saving…" : "Save for later"}</button>
           {tracking
             ? <button type="button" className="btn primary" disabled={!!busy || !boxes.some((b) => b.tracking)} onClick={async () => { if (await save("shipped")) onDone(`#${t.number} marked shipped.`); }}>Mark shipped</button>
-            : <button type="button" className={"btn primary" + (chosen && plan?.ground && pick !== plan.ground.k ? " danger" : "")} disabled title="Buying labels is the next step: rates work now">{chosen ? `Create labels · ${chosen.carrier} ${niceService(chosen.service)}` : "Create labels"}</button>}
+            : (() => { const notGround = !!(chosen && plan?.ground && pick !== plan.ground.k), needWhy = notGround && !why;
+              return confirmBuy && chosen
+                ? <span className="sw-buy"><span>Buy {boxes.length} label{boxes.length === 1 ? "" : "s"} · {chosen.carrier} {niceService(chosen.service)} · {shipOn ? "on their account" : bill === "fbs" ? `${money(chosen.cost)} on our account` : `billed to their ${bill === "ups" ? "UPS" : "FedEx"}`}?</span>
+                    <button type="button" className="btn" onClick={() => setConfirmBuy(false)}>Cancel</button>
+                    <button type="button" className={"btn primary" + (notGround ? " danger" : "")} onClick={() => void buyLabels()}>Yes, buy {boxes.length === 1 ? "it" : "them"}</button></span>
+                : <button type="button" className={"btn primary" + (notGround ? " danger" : "")} disabled={!chosen || !!busy || needWhy || !ready || !canBuy} title={!canBuy ? "Not turned on yet: ship it another way and enter the tracking" : needWhy ? "Say why it isn't going Ground first" : undefined} onClick={() => setConfirmBuy(true)}>{busy === "buy" ? "Buying labels…" : chosen ? `Create labels · ${chosen.carrier} ${niceService(chosen.service)}` : "Create labels"}</button>; })()}
         </div>
       </div>
     </div>

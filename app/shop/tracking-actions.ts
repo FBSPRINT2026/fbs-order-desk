@@ -41,7 +41,7 @@ export async function orderShipped(orderId: string, shipmentId: string) {
   try { const { admin, by } = await staff(); return { ok: true as const, did: await doneShipping(admin, orderId, shipmentId, by) }; } catch (e) { return fail(e); }
 }
 
-export async function addTracking(input: { kind: "order" | "archived"; id: string; numbers: string[]; carrier?: string }) {
+export async function addTracking(input: { kind: "order" | "archived"; id: string; numbers: string[]; carrier?: string; /** "Ground", "2Day"… */ service?: string }) {
   try {
     const { admin, by } = await staff();
     const nums = [...new Set(input.numbers.map((n) => n.replace(/\s+/g, "").trim()).filter(Boolean))].slice(0, 60);
@@ -66,7 +66,8 @@ export async function addTracking(input: { kind: "order" | "archived"; id: strin
     const { data: ex } = await admin.from("shipments").select("id, boxes, status").eq(key, input.id).in("status", ["draft", "labeled"]).order("updated_at", { ascending: false }).limit(1);
     const old = ((ex || [])[0] || null) as { id: string; boxes: Box[] | null } | null;
     const boxes: Box[] = nums.map((t, i) => ({ ...(old?.boxes?.[i] || { length: "", width: "", height: "", weight: "" }), n: i + 1, tracking: t }));
-    const row = { status: "shipped", shipped_at: now, updated_at: now, carrier, service: carrier ? `${carrier}` : "", boxes, note: "Tracking added by hand" };
+    const service = String(input.service || "").trim();
+    const row = { status: "shipped", shipped_at: now, updated_at: now, carrier, service, boxes, note: "Tracking added by hand" };
     const r = old
       ? await admin.from("shipments").update(row).eq("id", old.id).select("id").maybeSingle()
       : await admin.from("shipments").insert({ ...row, [key]: input.id, customer_id: customerId, ship_to: to, bill_to: "fbs", bill_account: "", bill_zip: "", rates: null, cost: null, price: null, created_by: by }).select("id").maybeSingle();
@@ -74,8 +75,8 @@ export async function addTracking(input: { kind: "order" | "archived"; id: strin
     const sid = (r.data as { id: string }).id;
     let did = "";
     if (input.kind === "order") {
-      await admin.from("orders").update({ tracking: nums.join(", ") }).eq("id", input.id);
-      await admin.from("order_events").insert({ order_id: input.id, kind: "note", detail: `Shipped${carrier ? ` · ${carrier}` : ""} · tracking added by hand: ${nums.join(", ")}`, actor: by });
+      await admin.from("orders").update({ tracking: nums.join(", "), ...(carrier && service ? { ship_method: `${carrier} ${service}` } : {}) }).eq("id", input.id);
+      await admin.from("order_events").insert({ order_id: input.id, kind: "note", detail: `Shipped${carrier ? ` · ${carrier}${service ? " " + service : ""}` : ""} · tracking added by hand: ${nums.join(", ")}`, actor: by });
       did = await doneShipping(admin, input.id, sid, by);
     }
     // follow it for the order page's status (no email: Nick, Nov 19 2026)

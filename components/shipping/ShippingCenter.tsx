@@ -308,7 +308,10 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
   const [focusAt, setFocusAt] = useState<number | null>(0);
   useEffect(() => { if (focusAt != null) { refs.current[focusAt]?.focus(); setFocusAt(null); } }, [focusAt]);
   const filled = vals.map((v) => v.trim()).filter(Boolean);
-  const guess = (carrierOf(filled[0] || "") || "FedEx") as string, car = carrier || guess;
+  // Ground first, by the first number's carrier; everything else further down (Nick, Nov 19 2026)
+  const guessC = carrierOf(filled[0] || "");
+  const guess = guessC === "UPS" ? "UPS|Ground" : guessC === "USPS" ? "USPS|Ground Advantage" : "FedEx|Ground";
+  const svc = carrier || guess, [car, service] = svc.split("|");
   // typing or pasting into the last box adds an empty one under it; a paste of several numbers fills a box each
   const put = (i: number, v: string) => {
     const parts = v.split(/[\s,;]+/).filter(Boolean);
@@ -322,33 +325,41 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
   async function done() {
     if (!filled.length) { setErr("Paste a tracking number first."); return; }
     setBusy(true); setErr("");
-    const r = await addTracking({ kind: x.kind === "archived" ? "archived" : "order", id: x.id, numbers: filled, carrier: car });
+    const r = await addTracking({ kind: x.kind === "archived" ? "archived" : "order", id: x.id, numbers: filled, carrier: car === "Other" ? "" : car, service });
     setBusy(false);
     if (!r.ok) { setErr(r.error); return; }
-    onDone(`#${x.number} shipped · ${r.n} ${r.carrier || "tracking"} number${r.n === 1 ? "" : "s"} saved${r.did === "completed" ? " · order completed" : r.did === "part" ? " · the rest ships when it's printed" : ""}`);
+    onDone(`#${x.number} shipped · ${r.n} ${r.carrier ? `${r.carrier} ${service}` : "tracking"} number${r.n === 1 ? "" : "s"} saved${r.did === "completed" ? " · order completed" : r.did === "part" ? " · the rest ships when it's printed" : ""}`);
   }
   return (
     <div className="trk" onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}>
-      {vals.map((v, i) => (
-        <div key={i} className="trk-f">
-          <span>Box {i + 1}</span>
-          <input ref={(el) => { refs.current[i] = el; }} type="text" value={v} placeholder="Paste tracking #" aria-label={`Box ${i + 1} tracking number`} spellCheck={false} autoComplete="off" autoFocus={i === 0}
-            onChange={(e) => put(i, e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (e.ctrlKey || e.metaKey || (!v.trim() && filled.length)) void done(); else setFocusAt(Math.min(i + 1, vals.length - 1)); } }} />
-          <i>{v.trim() ? carrierOf(v.trim()) || "" : ""}</i>
-        </div>
-      ))}
-      <div className="trk-b">
-        <span className="faint">{filled.length} tracking number{filled.length === 1 ? "" : "s"}</span>
-        <select value={car} onChange={(e) => setCarrier(e.target.value)} aria-label="Carrier">{["FedEx", "UPS", "USPS", "Other"].map((c) => <option key={c} value={c}>{c}</option>)}</select>
-        <span className="spacer" />
-        <button type="button" className="btn sm ghost" onClick={onCancel} disabled={busy}>Cancel</button>
-        <button type="button" className="btn sm primary" onClick={() => void done()} disabled={busy}>{busy ? "Saving…" : "Done"}</button>
+      <div className="trk-fs">
+        {vals.map((v, i) => (
+          <div key={i} className="trk-f">
+            <span>Box {i + 1}</span>
+            <input ref={(el) => { refs.current[i] = el; }} type="text" value={v} placeholder="Paste tracking #" aria-label={`Box ${i + 1} tracking number`} spellCheck={false} autoComplete="off" autoFocus={i === 0}
+              onChange={(e) => put(i, e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (e.ctrlKey || e.metaKey || (!v.trim() && filled.length)) void done(); else setFocusAt(Math.min(i + 1, vals.length - 1)); } }} />
+            <i>{v.trim() ? carrierOf(v.trim()) || "" : ""}</i>
+          </div>
+        ))}
       </div>
-      {err && <div className="pv-err">{err}</div>}
+      <div className="trk-side">
+        <select value={svc} onChange={(e) => setCarrier(e.target.value)} aria-label="Carrier and service">
+          {TRK_SVCS.map((o, i) => (o ? <option key={o} value={o}>{o === "Other|" ? "Other" : o.replace("|", " ")}</option> : <option key={"d" + i} disabled>──────────</option>))}
+        </select>
+        <div className="trk-b">
+          <span className="faint">{filled.length} number{filled.length === 1 ? "" : "s"}</span>
+          <span className="spacer" />
+          <button type="button" className="btn sm ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+          <button type="button" className="btn sm primary" onClick={() => void done()} disabled={busy}>{busy ? "Saving…" : "Done"}</button>
+        </div>
+        {err && <div className="pv-err">{err}</div>}
+      </div>
     </div>
   );
 }
+/** + Tracking's services: Ground first, then everything else (a "" is the divider) */
+const TRK_SVCS = ["FedEx|Ground", "UPS|Ground", "", "FedEx|Home Delivery", "FedEx|Express Saver", "FedEx|2Day", "FedEx|Standard Overnight", "FedEx|Priority Overnight", "UPS|3 Day Select", "UPS|2nd Day Air", "UPS|Next Day Air", "USPS|Ground Advantage", "USPS|Priority Mail", "Other|"];
 
 /** Pieces per box, our ship-from address, box sizes on hand, and the markup on our own account. */
 function ShipSettingsPanel({ s, onSaved }: { s: Settings; onSaved: (s: Settings) => void }) {
