@@ -132,7 +132,11 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     type Opt = { k: string; r: Rate; at: Date | null; by: { rank: number; label: string }; late: boolean; beatenBy: Opt | null };
     const all: Opt[] = (rates || []).map((r) => { const at = arrival(r); return { k: `${r.carrier}|${r.service}`, r, at, by: deliveredBy(r.service), late: !!(need && at && at > need), beatenBy: null }; });
     const when = (o: Opt) => (o.at ? +new Date(o.at.getFullYear(), o.at.getMonth(), o.at.getDate()) : 9e15) + o.by.rank; // day, then time of day
+    // Ground is never hidden as "no gain" (Nick, Nov 19 2026: on a customer's own account there's no price, so overnight
+    // "beat" ground and got picked)
+    const isGround = (o: Opt) => /ground|home delivery|ground advantage|parcel select/i.test(o.r.service);
     for (const o of all) {
+      if (isGround(o)) continue;
       o.beatenBy = all.filter((x) => x !== o && cost(x.r) <= cost(o.r) && when(x) <= when(o) && (cost(x.r) < cost(o.r) || when(x) < when(o)))
         .sort((x, y) => cost(x.r) - cost(y.r))[0] || null;
     }
@@ -146,7 +150,10 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     const cheapestOnTime = onTime.length ? onTime.reduce((m, o) => (cost(o.r) < cost(m.r) ? o : m)) : null;
     const days: { key: string; at: Date | null; late: boolean; opts: Opt[] }[] = [];
     for (const o of good) { const k = dayKey(o.at); let d = days.find((x) => x.key === k); if (!d) days.push(d = { key: k, at: o.at, late: o.late, opts: [] }); d.opts.push(o); }
-    return { cost, need, cheapest, fastest, cheapestOnTime, days, beaten, pickDefault: (need ? cheapestOnTime : null) || cheapest };
+    // always Ground to start (Nick, Nov 19 2026: "it should always, always, always default to ground… 1 out of 100 boxes
+    // we send anything other than ground"); anything faster is picked by hand
+    const ground = good.filter(isGround).sort((x, y) => cost(x.r) - cost(y.r) || when(x) - when(y))[0] || null;
+    return { cost, need, cheapest, fastest, cheapestOnTime, days, beaten, ground, pickDefault: ground || (need ? cheapestOnTime : null) || cheapest };
   }, [rates, bill, t.due]);
 
   // rates pop up by themselves once every box and the address are filled in (and again after a change)
@@ -163,7 +170,8 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     if (!plan || (pick && plan.days.some((d) => d.opts.some((o) => o.k === pick)))) return;
     const want = matchShipMethod(asked);
     const theirs = want ? plan.days.flatMap((d) => d.opts).find((o) => matchShipMethod(`${o.r.carrier} ${o.r.service}`) === want) : null;
-    setPick((theirs || plan.pickDefault).k);
+    // the order's own service only when it's Ground too; a faster one is always a choice made here
+    setPick((theirs && /ground/i.test(theirs.r.service) ? theirs : plan.pickDefault).k);
   }, [plan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** A scanned box label ("34317-2") jumps to that box; the order number alone jumps to the next box without a weight. */
