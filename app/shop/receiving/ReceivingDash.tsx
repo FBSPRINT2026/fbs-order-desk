@@ -143,7 +143,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck, onIssue }: { 
     const rs = truckOf(sup), boxes = rs.reduce((a, r) => a + (r.boxes || 0), 0);
     return (
       <div className={"rvd-sup " + cls}>
-        <div className="rvd-sup-h"><span>{name}</span><small>{rs.length ? `${rs.length} order${rs.length === 1 ? "" : "s"} · ${boxes} box${boxes === 1 ? "" : "es"}` : "nothing"}</small></div>
+        <div className="rvd-sup-h"><span>{name}</span><small>{rs.length ? `${rs.length} ${sup === "other" ? "shipment" : "order"}${rs.length === 1 ? "" : "s"}${boxes ? ` · ${boxes} box${boxes === 1 ? "" : "es"}` : ""}` : "nothing"}</small></div>
         {rs.map((r) => sup === "other" ? (
           // everyone else's (Nov 19, Nick: "customer shipments… just like S&S and SanMar… showing tracking"): who sent it
           // and each tracking number with where it is

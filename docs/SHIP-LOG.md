@@ -512,3 +512,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 7:43am · 1.3.755 · Nick · Phone: Ink Room shows two inks a row so names break between words
 - Nov 19 11:24am · 1.3.756 · Nick · Vendor shipping emails to portal@ are manifests like S&S and SanMar: the job the email names (FBS #50090) or read from its PO; on the job's Goods, else on Goods & Receiving under Other vendors to link; live tracking; a too-long PDF no longer fails every hour
 - Nov 19 11:28am · 1.3.757 · Nick · Goods & Receiving dashboard: a Customer shipments box under S&S and SanMar, with each shipment's sender, boxes and tracking (where it is), today or tomorrow
+- Nov 19 11:30am · 1.3.758 · Nick · Customer shipments box: counts shipments, no "0 boxes"
