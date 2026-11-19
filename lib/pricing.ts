@@ -1,3 +1,4 @@
+import { offOptions } from "@/lib/quoteOptions";
 import { dtfEach, dtfGridOn, dtfMinimum, dtfPress } from "@/lib/dtfGrid";
 import { addStockInks, colorHex } from "./inkColors";
 import { syncSamples } from "@/lib/samples";
@@ -419,6 +420,10 @@ export type Group = { id: string; name?: string; /** youth screens charged, ever
   description?: string;
   /** a sample run (lib/samples.ts): priced by its own charges, its own card on the schedule (Nov 11, Nick) */
   sample?: import("@/lib/samples").GroupSample;
+  /** one option of a choice on a quote (lib/quoteOptions.ts; Nick, Nov 19 2026: "send them the options and then they can…
+   *  pick for approval"): the groups sharing `set` are Option A, B, C… in order, the customer picks one when approving,
+   *  and only the first (or the picked one) counts in the order's total until then */
+  opt?: { set: string; /** what this option is: "Heather Black", "50 pieces", "Design B" */ label?: string };
   lines: GLine[]; imprints: Imprint[]; finishing?: string[];
   /** the Mockup Creator's − / + print scale for this group's mockup, by style and side ("6210:front": 0.9); a new
    *  mockup starts at real size (Nov 5, Nick) */
@@ -1490,6 +1495,11 @@ export function calcOrder(
   const seen: SeenScreens = new Set<string>();
   // color changes across variations (Imprint.changeOf): both prints of a pair share one key
   const gs0 = orderGroups(o), ids = new Set(gs0.flatMap((g) => (g.imprints || []).map((d) => d.id)));
+  // options on a quote (lib/quoteOptions.ts): only each choice's first option counts until the customer picks; the others
+  // are priced on their own as if picked (screens, PMS and price breaks as the first one would see them), never in the total
+  const off = offOptions(gs0);
+  const liveOf = new Map<number, number>(); // an off option → its choice's counting option
+  for (const gi of off) { const set = gs0[gi].opt?.set; liveOf.set(gi, gs0.findIndex((g) => g.opt?.set === set)); }
   // every print changed from the same screens shares ONE key, the print they all come from (Nov 10, #40382: five teams'
   // backs from one set of screens; a key per pair left the 3rd, 4th and 5th team paying for new screens)
   const byId = new Map(gs0.flatMap((g) => (g.imprints || []).map((d) => [d.id, d] as const)));
@@ -1504,7 +1514,7 @@ export function calcOrder(
   // first one's screens (calcGroup), and each ink it prints differently is a color change, charged without anyone
   // ticking it. A color change set by hand (Imprint.changeOf) wins
   const firstAt = new Map<string, { d: Imprint; group: string }>();
-  gs0.forEach((g, gi) => { for (const d of g.imprints || []) {
+  gs0.forEach((g, gi) => { if (off.has(gi)) return; for (const d of g.imprints || []) {
     const k = screenKey(d); if (!k) continue;
     const f = firstAt.get(k);
     if (!f) { firstAt.set(k, { d, group: g.name || `Group ${gi + 1}` }); continue; }
@@ -1514,14 +1524,17 @@ export function calcOrder(
   } });
   // the same logo at the same size in several groups: its pieces counted together for the price break
   const dqm = new Map<string, number>();
-  for (const g of gs0) {
-    if (g.sample) continue; // a sample's pieces don't count toward the order's price breaks
+  const dqOf = (g: Group) => {
+    const m = new Map<string, number>();
+    if (g.sample) return m; // a sample's pieces don't count toward the order's price breaks
     const q = (g.lines || []).reduce((a, l) => a + billQty(l), 0);
-    for (const k of new Set((g.imprints || []).filter((d) => d.design_id).map((d) => `${d.method}:${d.design_id}:${printSizeKey(d)}`))) dqm.set(k, (dqm.get(k) || 0) + q);
+    for (const k of new Set((g.imprints || []).filter((d) => d.design_id).map((d) => `${d.method}:${d.design_id}:${printSizeKey(d)}`))) m.set(k, (m.get(k) || 0) + q);
     // prints set as a color change of one another (Imprint.changeOf) print from one set of screens: one print, its
     // pieces counted together for the price break too (Nov 10, Tiger Blue #2845: five teams' backs priced at 193 pieces)
-    for (const k of new Set((g.imprints || []).map((d) => seen.links?.get(d.id)).filter((k): k is string => !!k))) dqm.set(k, (dqm.get(k) || 0) + q);
-  }
+    for (const k of new Set((g.imprints || []).map((d) => seen.links?.get(d.id)).filter((k): k is string => !!k))) m.set(k, (m.get(k) || 0) + q);
+    return m;
+  };
+  gs0.forEach((g, gi) => { if (!off.has(gi)) for (const [k, q] of dqOf(g)) dqm.set(k, (dqm.get(k) || 0) + q); });
   // run together with other orders (lib/runTogether.ts): the same print's pieces on them count toward this one's price
   // break, and screens the run's first order pays for are already made
   const rc = (o as { run_ctx?: RunCtx | null }).run_ctx;
@@ -1531,16 +1544,35 @@ export function calcOrder(
   }
   seen.designQty = dqm;
   // a sample run is priced on its own: it never uses up the order's screens or PMS matches
-  const groups = gs0.map((g, gi) => { if (g.sample) return calcGroup(g, o, s, new Set<string>()); seen.cur = g.name || `Group ${gi + 1}`; return calcGroup(g, o, s, seen); });
-  const lines = groups.flatMap((g) => g.lines);
-  const items = r2(groups.reduce((a, g) => a + g.sub, 0));
+  // the counting groups in order (each choice's counting option leaves a copy of what it saw for its other options)
+  const snap = new Map<number, SeenScreens>();
+  const copySeen = (x: SeenScreens, dq: Map<string, number>): SeenScreens => Object.assign(new Set(x), { links: x.links, linkScreens: x.linkScreens && new Map(x.linkScreens), paidN: x.paidN && new Map(x.paidN), autoChange: x.autoChange, owner: x.owner && new Map(x.owner), designQty: dq });
+  const calc0 = gs0.map((g, gi) => {
+    if (off.has(gi)) return null;
+    if (g.sample) return calcGroup(g, o, s, new Set<string>());
+    if (g.opt?.set) snap.set(gi, copySeen(seen, dqm));
+    seen.cur = g.name || `Group ${gi + 1}`; return calcGroup(g, o, s, seen);
+  });
+  // an option not counted yet: priced as if it were the one picked (its own pieces in place of the counting option's)
+  const groups = calc0.map((r, gi) => {
+    if (r) return r;
+    const g = gs0[gi], li = liveOf.get(gi) ?? -1, base = snap.get(li) || new Set<string>() as SeenScreens;
+    const dq = new Map(base.designQty || dqm);
+    if (li >= 0) for (const [k, q] of dqOf(gs0[li])) dq.set(k, (dq.get(k) || 0) - q);
+    for (const [k, q] of dqOf(g)) dq.set(k, (dq.get(k) || 0) + q);
+    const sx = copySeen(base, dq); sx.cur = g.name || `Group ${gi + 1}`;
+    return calcGroup(g, o, s, sx);
+  });
+  const counted = groups.filter((_g, gi) => !off.has(gi));
+  const lines = counted.flatMap((g) => g.lines);
+  const items = r2(counted.reduce((a, g) => a + g.sub, 0));
   // DTF transfers we order have an order minimum (lib/dtfGrid.ts DTF_MIN; Nov 4, Nick: "DTF orders have a $10 minimum"):
   // what the order's DTF prints come to, topped up to it, in the setup
   const pl0 = priceList(s, o.price_type || "retail");
-  const dtfSum = dtfGridOn(pl0) ? r2(gs0.reduce((a, g, gi) => a + (g.imprints || []).filter((d) => d.method === "dtf" && !d.supplied && !d.patch).reduce((b, d) => b + (+((groups[gi].imprints || []).find((x) => x.id === d.id)?.each || 0)) * groups[gi].qty, 0), 0)) : 0;
+  const dtfSum = dtfGridOn(pl0) ? r2(gs0.reduce((a, g, gi) => off.has(gi) ? a : a + (g.imprints || []).filter((d) => d.method === "dtf" && !d.supplied && !d.patch).reduce((b, d) => b + (+((groups[gi].imprints || []).find((x) => x.id === d.id)?.each || 0)) * groups[gi].qty, 0), 0)) : 0;
   const dtfMin = dtfSum > 0 && dtfSum < dtfMinimum(pl0.dtfGrid) ? r2(dtfMinimum(pl0.dtfGrid) - dtfSum) : 0;
-  const setup = r2(groups.reduce((a, g) => a + g.setup, 0) + dtfMin);
-  const materials = r2(groups.reduce((a, g) => a + g.materials, 0)); // 2XL+ Materials Charge
+  const setup = r2(counted.reduce((a, g) => a + g.setup, 0) + dtfMin);
+  const materials = r2(counted.reduce((a, g) => a + g.materials, 0)); // 2XL+ Materials Charge
   const fees = r2((o.fees || []).reduce((a, f) => a + feeAmount(f), 0));
   // shipping is its own line (Totals, invoice), inside the fees total so every sum stays the same
   const shipFee = (o.fees || []).find(isShipFee);
@@ -1552,8 +1584,8 @@ export function calcOrder(
   const total = r2(pre - discount + tax);
   const paid = r2(payments.reduce((a, p) => a + num(p.amount), 0));
   // samples pulled off the top are pieces of the order already
-  const qty = groups.reduce((a, g, gi) => a + (gs0[gi].sample?.kind === "pre" && gs0[gi].sample?.source === "top" ? 0 : g.qty), 0);
-  return { groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), /** the DTF order minimum's top-up, inside setup */ dtfMin, qty, /** every piece printed, the shop's own included */ allQty: groups.reduce((a, g) => a + g.allQty, 0) };
+  const qty = groups.reduce((a, g, gi) => a + (off.has(gi) || (gs0[gi].sample?.kind === "pre" && gs0[gi].sample?.source === "top") ? 0 : g.qty), 0);
+  return { /** options not counted in the total yet (lib/quoteOptions.ts), by group index */ optionsOff: [...off], groups, lines, items, setup, materials, fees, shipping, hasShipping: !!shipFee, freeShipping: !!shipFee?.free, shippingTbd: !!shipFee?.tbd, discount, rate, tax, total, paid, balance: r2(total - paid), /** the DTF order minimum's top-up, inside setup */ dtfMin, qty, /** every piece printed, the shop's own included */ allQty: groups.reduce((a, g, gi) => a + (off.has(gi) ? 0 : g.allQty), 0) };
 }
 
 export const uid = () =>

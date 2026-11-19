@@ -172,6 +172,8 @@ function Final({ id, orderId, todo, ok, goTo, onDone, onBack }: { id: string; or
   const pv = usePreview();
   const [name, setName] = useState(""), [err, setErr] = useState(""), [mode, setMode] = useState<"" | "changes" | "decline">(""), [why, setWhy] = useState(""), [sent, setSent] = useState<"" | "changes" | "declined">("");
   const [pending, start] = useTransition();
+  // options on the quote: one picked from each choice before approving (lib/quoteOptions.ts; Nick, Nov 19 2026)
+  const [picks, setPicks] = useState<Record<string, string>>({});
   const quote = todo.find((s) => s.kind === "quote" || s.kind === "invoice");
   const isInv = quote?.kind === "invoice";
   const payFirst = !!quote?.payFirst && !isInv;
@@ -180,12 +182,16 @@ function Final({ id, orderId, todo, ok, goTo, onDone, onBack }: { id: string; or
   const parts = [...(looks.some((s) => s.kind === "art") ? ["art"] : []), ...(looks.some((s) => s.kind === "sewout") ? ["sew-out"] : [])];
   const priceWord = isInv ? "invoice" : "quote";
   const label = quote ? (parts.length ? `${priceWord} and ${listOf(parts)}` : priceWord) : listOf(parts);
+  const chs = (!isInv && quote?.choices) || [];
+  const unpicked = chs.some((ch) => !ch.options.some((x) => x.id === picks[ch.set]));
+  const pickedOpts = chs.map((ch) => ch.options.find((x) => x.id === picks[ch.set])).filter(Boolean) as NonNullable<StepView["choices"]>[number]["options"];
+  const pickedTotal = chs.length === 1 && pickedOpts[0] ? pickedOpts[0].total : null;
   if (sent) return <Result tone={sent === "declined" ? "no" : "chg"} title={sent === "declined" ? "Quote declined" : "Changes sent"} line={sent === "declined" ? THANKS : `We'll fix the ${priceWord} and send you a new one to approve.`} note={sent === "declined" ? "" : why} />;
   const submit = () => start(async () => {
     setErr("");
     if (pv) { setErr(PREVIEW_OFF); return; }
     const art = looks.find((s) => s.kind === "art");
-    const r = await approveAll(id, name, { art: art ? { note: ok[art.key] || "" } : null, sewouts: looks.filter((s) => s.kind === "sewout").map((s) => ({ id: s.sewoutId!, note: ok[s.key] || "" })), quote: !!quote && !isInv, invoice: isInv });
+    const r = await approveAll(id, name, { art: art ? { note: ok[art.key] || "" } : null, sewouts: looks.filter((s) => s.kind === "sewout").map((s) => ({ id: s.sewoutId!, note: ok[s.key] || "" })), quote: !!quote && !isInv, invoice: isInv, ...(chs.length ? { options: picks } : {}) });
     if (!r.ok) { setErr(r.error); return; }
     onDone(`We've got your approval for the ${label}. We'll take it from here.`);
     // paid up front: straight on to the payment (Nov 3, Nick: "approve and proceed to payment")
@@ -211,9 +217,23 @@ function Final({ id, orderId, todo, ok, goTo, onDone, onBack }: { id: string; or
           {looks.map((s) => <li key={s.key}><span className="pfl-tick">✓</span><span><b>{s.kind === "art" ? "Proof" : "Sew-out"}</b><small>{s.sub}</small>{ok[s.key] ? <small>Your note: “{ok[s.key]}”</small> : null}</span><button type="button" className="linkbtn" onClick={() => goTo(s.key)}>View</button></li>)}
           {quote && <li><span className="pfl-tick">✓</span><span><b>{isInv ? "Final invoice" : "Quote"}</b>{quote.sub.split(" · ").map((x, i) => <small key={i}>{x}</small>)}</span></li>}
         </ul>
+        {/* options: they pick one of each, then approve (Nick, Nov 19 2026) */}
+        {chs.map((ch, ci) => <div key={ch.set} className="pfo" role="radiogroup" aria-label={chs.length > 1 ? `Choice ${ci + 1}: pick one` : "Pick one"}>
+          <div className="pfl-lbl">{chs.length > 1 ? `Choice ${ci + 1}: pick one` : "Pick one"}</div>
+          <div className="pfo-g">
+            {ch.options.map((x) => { const on = picks[ch.set] === x.id; return (
+              <button key={x.id} type="button" role="radio" aria-checked={on} className={"pfo-o" + (on ? " on" : "")} onClick={() => setPicks((p) => ({ ...p, [ch.set]: x.id }))}>
+                <b>Option {x.letter}{x.label ? ` · ${x.label}` : ""}</b>
+                <small>{[x.line, x.pcs ? `${x.pcs} pcs` : ""].filter(Boolean).join(" · ")}</small>
+                <span className="pfo-t">{m(x.total)}</span>
+                {on && <span className="pfo-on">Picked</span>}
+              </button>); })}
+          </div>
+        </div>)}
+        {pickedTotal != null && <div className="pfo-tot">Total with option {pickedOpts[0].letter}: <b>{m(pickedTotal)}</b></div>}
         <label className="pfl-lbl" htmlFor="pfl-fn">Your name</label>
         <input id="pfl-fn" type="text" autoComplete="name" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} />
-        <button type="button" className="btn primary pfl-ok pfl-big" disabled={pending || name.trim().length < 2} onClick={submit}>{pending ? "Sending…" : payFirst ? "Approve and proceed to payment" : "Submit approval"}</button>
+        <button type="button" className="btn primary pfl-ok pfl-big" disabled={pending || name.trim().length < 2 || unpicked} onClick={submit}>{pending ? "Sending…" : unpicked ? (chs.length > 1 ? "Pick an option for each choice" : "Pick an option first") : payFirst ? "Approve and proceed to payment" : pickedOpts.length === 1 ? `Approve with option ${pickedOpts[0].letter}` : "Submit approval"}</button>
         {/* short on the button, what it means under it (Oct 29, Nick: "just say submit for approve, and something says below… submit final approval for invoice") */}
         <div className="pfl-sub-ok">Final approval for the {label}</div>
         <div className="pfl-fine">Typing your name approves {quote ? `the ${priceWord} and says the art is ready to make as shown` : "it as shown"}.</div>

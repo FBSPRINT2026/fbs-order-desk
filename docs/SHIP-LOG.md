@@ -574,3 +574,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 4:11pm · 1.3.817 · Nick · Schedule tools: named tiles fit the panel (Planning + Sales on one line, Press & crew under), Live clock back at the top right of Tools
 - Nov 19 4:17pm · 1.3.818 · Nick · Schedule: run Start/Done only on the crew phones (off the schedule); a printed run folds to its header and a line of its POs' goods tees, click to open; tools renamed Schedule update and Suggested print date
 - Nov 19 4:20pm · 1.3.819 · Nick · A printed run on the week lists its first 5 POs, then '▾ 15 more' to open the rest
+- Nov 19 5:14pm · 1.3.820 · Nick · Quote options: + Add option on a quote's group (another color, quantity, thread or design); the customer picks one on their order page and approves; only the first option counts in the total until then; the quote shows each option and its total; staff marking it an order asks which option they picked

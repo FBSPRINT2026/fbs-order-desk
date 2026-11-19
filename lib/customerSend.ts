@@ -493,8 +493,8 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
  *  decline  · they don't want it: a closed quote (completed, still a quote; lib/pricing.ts statusKey), marked declined
  *             with why (Declined in the Job Center)
  */
-export async function decideQuote(admin: SupabaseClient, orderId: string, decision: "approve" | "changes" | "decline", name: string, reason: string, actor: string, /** the caller sends one shop email for everything */ quiet = false) {
-  const { o, settings } = await load(admin, orderId);
+export async function decideQuote(admin: SupabaseClient, orderId: string, decision: "approve" | "changes" | "decline", name: string, reason: string, actor: string, /** the caller sends one shop email for everything */ quiet = false, /** the options they picked (lib/quoteOptions.ts) */ picks?: Record<string, string> | null) {
+  let { o, settings } = await load(admin, orderId);
   const who = name.trim().slice(0, 120), why = reason.trim().slice(0, 2000);
   const now = new Date().toISOString();
   const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -510,14 +510,20 @@ export async function decideQuote(admin: SupabaseClient, orderId: string, decisi
     return { ok: true as const };
   }
   if (o.status !== "quote_sent") return { ok: false as const, error: "This quote was already answered or changed. Refresh the page." };
+  let picked = "";
   if (decision === "approve") {
     if (who.length < 2) return { ok: false as const, error: "Type your full name to approve." };
+    // options on the quote: the picked ones stay, the rest come off, before it's approved (lib/quoteOptionsServer.ts)
+    const { pickQuoteOptions } = await import("@/lib/quoteOptionsServer");
+    const pk = await pickQuoteOptions(admin, orderId, picks, actor || who);
+    if (!pk.ok) return pk;
+    if (pk.picked) { picked = pk.picked; ({ o, settings } = await load(admin, orderId)); }
     const { error } = await admin.from("orders").update({ status: "approved", type: "invoice", approved_at: now, approved_name: who }).eq("id", orderId).eq("status", "quote_sent");
     if (error) return { ok: false as const, error: error.message };
     await approveItems(admin, orderId, who || actor || "customer", now);
     await admin.from("order_events").insert([{ order_id: orderId, kind: "approved", detail: `Signed "${who}" on their order page`, actor }, { order_id: orderId, kind: "status", detail: "approved", actor }]);
     await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "quote approved");
-    await shop("approved the quote", `${who} approved quote #${o.number}`, `${o.nickname || "Order"} · ${money(o.total || 0)}`);
+    await shop("approved the quote", `${who} approved quote #${o.number}${picked ? ` with ${picked}` : ""}`, `${o.nickname || "Order"} · ${money(o.total || 0)}${picked ? `\nThey picked ${picked}.` : ""}`);
     matchGoodsSoon();
     return { ok: true as const };
   }
@@ -540,6 +546,8 @@ export type StepView = {
   state: "todo" | "done" | "changes" | "locked"; pdf: string; sewoutId?: string;
   who?: string; when?: string; comment?: string; amount?: number;
   /** the quote is paid (in full or a deposit) as soon as it's approved: its button says so (Nov 3, Nick) */ payFirst?: boolean;
+  /** options on the quote to pick from before approving (lib/quoteOptions.ts): each choice, its options and what each comes to */
+  choices?: { set: string; options: { id: string; letter: string; label: string; name: string; total: number; pcs: number; line: string }[] }[];
 };
 /** The order's customer page (an order link): every step waiting on the customer, in order, and where each stands. */
 export async function orderSteps(admin: SupabaseClient, linkId: string) {
@@ -582,7 +590,14 @@ export async function orderSteps(admin: SupabaseClient, linkId: string) {
   }
   if (quoted || (approved && raw.approved_at)) {
     const up = upFront(customer?.payment_terms, c.total, settings.depositPct);
-    steps.push({ key: "quote", kind: "quote", title: approved ? "Quote approved" : "Approve your quote", sub: approved ? money(c.total) : `${money(c.total)} · ${up.line}`, state: approved ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: raw.approved_name || "", when: raw.approved_at || "", amount: c.total, payFirst: !approved && up.kind !== "none" && c.total > 0 });
+    // options to pick from (lib/quoteOptions.ts): what each one is and what the order comes to with it
+    const { choicesOf, withPicked } = await import("@/lib/quoteOptions");
+    const chs = approved ? [] : choicesOf(o.groups).map((ch) => ({ set: ch.set, options: ch.options.map((x) => ({
+      id: x.g.id, letter: x.letter, label: x.label, name: x.g.name || "", total: calcOrder(withPicked(o, x.g.id), settings, pays).total,
+      pcs: (x.g.lines || []).reduce((a, l) => a + Object.values(l.sizes || {}).reduce((b, n) => b + (+n || 0), 0), 0),
+      line: [...new Set((x.g.lines || []).map((l) => [l.style, l.color].filter(Boolean).join(" ")).filter(Boolean))].slice(0, 3).join(", "),
+    })) }));
+    steps.push({ key: "quote", kind: "quote", title: approved ? "Quote approved" : "Approve your quote", sub: approved ? money(c.total) : `${money(c.total)} · ${up.line}`, state: approved ? "done" : proofOpen ? "locked" : "todo", pdf: `${base}?${q}`, who: raw.approved_name || "", when: raw.approved_at || "", amount: c.total, payFirst: !approved && up.kind !== "none" && c.total > 0, ...(chs.length ? { choices: chs } : {}) });
   }
   // the final invoice, once it's been sent after approval (embroidery: the price is final with the sew-out's stitch count)
   if (approved && !["completed", "void"].includes(o.status)) {

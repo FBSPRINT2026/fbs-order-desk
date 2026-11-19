@@ -29,13 +29,20 @@ export async function answerQuote(id: string, decision: "approve" | "changes" | 
  * confirmation"). Everything the customer looked over and said looks good, approved together under their name: the
  * proof (with their note as a small change, no new proof), each sew-out, then the quote.
  */
-export async function approveAll(id: string, name: string, pick: { art?: { note: string } | null; sewouts?: { id: string; note: string }[]; quote?: boolean; /** the final invoice sent after approval */ invoice?: boolean }) {
+export async function approveAll(id: string, name: string, pick: { art?: { note: string } | null; sewouts?: { id: string; note: string }[]; quote?: boolean; /** the final invoice sent after approval */ invoice?: boolean; /** the options picked on the quote (lib/quoteOptions.ts) */ options?: Record<string, string> }) {
   try {
     const admin = createAdminClient();
     const link = await openLink(admin, id);
     if (!link || link.kind !== "order") return { ok: false as const, error: "This link doesn't work anymore. Ask us for a new one." };
     const who = (name || "").trim();
     if (who.length < 2) return { ok: false as const, error: "Type your full name to approve." };
+    // options on the quote must be picked before anything is approved (lib/quoteOptions.ts)
+    if (pick.quote) {
+      const { data: og } = await admin.from("orders").select("groups").eq("id", link.order_id).maybeSingle();
+      const { choicesOf } = await import("@/lib/quoteOptions");
+      const miss = choicesOf(og?.groups as never).filter((c) => !c.options.some((x) => x.g.id === pick.options?.[c.set]));
+      if (miss.length) return { ok: false as const, error: "Pick an option for each choice on the quote first." };
+    }
     if (pick.art) {
       const r = await decideByLink(admin, id, pick.art.note.trim() ? "approved_changes" : "approved", who, pick.art.note, { kind: "art" }, true);
       if (!r.ok) return r;
@@ -45,7 +52,7 @@ export async function approveAll(id: string, name: string, pick: { art?: { note:
       if (!r.ok) return r;
     }
     if (pick.quote) {
-      const r = await decideQuote(admin, link.order_id, "approve", who, "", link.sent_to || "customer", true);
+      const r = await decideQuote(admin, link.order_id, "approve", who, "", link.sent_to || "customer", true, pick.options || null);
       if (!r.ok) return r;
     }
     if (pick.invoice) {

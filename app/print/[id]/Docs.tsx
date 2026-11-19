@@ -1,4 +1,5 @@
 import { hasSpotChange, spotLines, spotOf, spotsOf } from "@/lib/spotChange";
+import { choicesOf, optionName, withPicked } from "@/lib/quoteOptions";
 import { samplePieces, samplePiecesText, sampleOnLines, offTheTop } from "@/lib/samples";
 import { billBlock, billToOf } from "@/lib/billTo";
 import { colorwayOnColor, cwLetter, hasColorwayArt, printArtUrl, printOnColor, withLiveSew, withSewFile, withSewThreads } from "@/lib/brands";
@@ -1572,6 +1573,9 @@ function shipLines(text: string): { lines: string[]; notes: string[] } {
  */
 export function InvoiceDoc(p: DocData) {
   const { o, cust, groups, c, settings, pays } = p;
+  // options on a quote (lib/quoteOptions.ts): each option says which it is, and the total says what each comes to
+  const choices = choicesOf(groups), optAt = new Map(choices.flatMap((ch) => ch.options.map((x, k) => [x.gi, { ...x, first: k === 0, n: ch.options.length }] as const)));
+  const optTotal = (gid: string) => calcOrder(withPicked({ ...o, groups }, gid), settings, pays).total;
   const sh = settings.shop, isQ = o.type === "quote", kind = isQ ? "Quote" : "Invoice";
   const issued = new Date(o.sent_at || o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
   const due = day(o.due_date, { weekday: "short", month: "short", day: "numeric" });
@@ -1612,7 +1616,8 @@ export function InvoiceDoc(p: DocData) {
         const lines = g.lines.map((l, li) => ({ l, li, lc: (sm ? sm.lines : gc.lines)[li] })).filter((x) => x.lc && (x.lc.qty > 0 || g.lines.length === 1));
         const prints = g.imprints.map((d) => ({ d, inks: d.visualOnly ? [] : inkNames(d.inks) }));
         return (
-          <div className="iv2-g" key={g.id}>
+          <div className={"iv2-g" + (optAt.has(gi) ? " iv2-opt" + (optAt.get(gi)!.first ? "" : " off") : "")} key={g.id}>
+            {optAt.has(gi) && (() => { const x = optAt.get(gi)!; return <div className="iv2-opth"><b>{optionName(x)}</b><span>{x.first ? `Pick one of ${x.n} · in the total below` : `Or this instead · total ${money(optTotal(g.id))} if picked`}</span></div>; })()}
             <div className="iv2-gh disp"><span>{g.name?.trim() || (runN > 1 ? `Group ${gi + 1}` : o.nickname || "Items")}{prints.length > 0 && <span className="iv2-gm"> · {[...new Set(prints.map(({ d }) => (d.patch ? "Heat press patch" : DECO[d.method]) || methodLabel(d)).filter(Boolean))].join(" + ")}</span>}</span><small>{gc.lines.reduce((a, x) => a + (x?.qty || 0), 0)} pcs</small></div>
             {g.description?.trim() && <div className="iv2-gd">{g.description.trim()}</div>}
             <div className="iv2-cols lbl"><span>Item</span><span>Qty</span><span>Each</span><span>Amount</span></div>
@@ -1702,7 +1707,9 @@ export function InvoiceDoc(p: DocData) {
             <div className="r"><span>Subtotal</span><span>{money(c.items + c.setup + c.materials + c.fees)}</span></div>
             {c.discount ? <div className="r"><span>Discount{o.discount_type !== "amt" && o.discount_pct ? ` (${o.discount_pct}%)` : ""}</span><span>−{money(c.discount)}</span></div> : null}
             <div className="r"><span>Tax{o.tax_exempt ? "" : ` (${c.rate}%)`}</span><span>{o.tax_exempt ? "Exempt" : money(c.tax)}</span></div>
-            <div className="r big"><span>Total{c.shippingTbd ? " + shipping TBD" : ""}</span><span>{money(c.total)}</span></div>
+            <div className="r big"><span>Total{choices.length ? ` with ${choices.map((ch) => `Option ${ch.options[0].letter}`).join(", ")}` : ""}{c.shippingTbd ? " + shipping TBD" : ""}</span><span>{money(c.total)}</span></div>
+            {/* every other option: what the order comes to if that's the one they pick */}
+            {choices.flatMap((ch) => ch.options.slice(1)).map((x) => <div className="r iv2-optt" key={"opt" + x.g.id}><span>Total with {optionName(x)}</span><span>{money(optTotal(x.g.id))}</span></div>)}
             {/* each payment its own dated row (Oct 30, Nick: "put the date in the payment… if they paid half down… payment paid
                 10/30"): "Deposit paid · Oct 30 · Card", a check with its number; a refund as a refund */}
             {payRows.length ? payRows.map((x) => <div className="r iv2-pay" key={x.id}><span>{x.label}<small>{x.how}</small></span><span>{x.amount < 0 ? "+" : "−"}{money(Math.abs(x.amount))}</span></div>)

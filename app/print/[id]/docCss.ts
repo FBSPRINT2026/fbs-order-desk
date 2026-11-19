@@ -468,6 +468,11 @@ html,body,.pdoc,.pdoc *{-webkit-text-size-adjust:100%!important;text-size-adjust
 .pdoc .iv2-who b{font-weight:700}
 .pdoc .iv2-who span{color:var(--ink3);font-size:9.5pt}
 .pdoc .iv2-g{border-top:2px solid var(--ink);margin-top:22px;break-inside:auto}
+.pdoc .iv2-opth{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:8px 0 0;padding:5px 9px;border-radius:5px;background:#EAF3FB;font-size:9.5pt}
+.pdoc .iv2-opth b{font-size:10.5pt;color:#0b5e91}
+.pdoc .iv2-opth span{color:var(--ink3);font-weight:600}
+.pdoc .iv2-opt.off{border-top-style:dashed}
+.pdoc .iv2-optt{font-size:9.5pt;color:var(--ink3)}
 .pdoc .iv2-gh{display:flex;justify-content:space-between;align-items:baseline;font-size:15pt;padding:5px 0 0}
 .pdoc .iv2-gh small{font-family:"Public Sans",sans-serif;font-size:9pt;font-weight:600;color:var(--ink3)}
 .pdoc .iv2-gd{font-size:9.5pt;color:var(--ink2);white-space:pre-wrap;margin-top:2px}

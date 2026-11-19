@@ -40,12 +40,14 @@ async function notifyShop(did: string, heading: string, body: string, orderId: s
 
 const fail = (e: unknown): Result => ({ ok: false, error: e instanceof Error ? e.message : "Something went wrong. Try again." });
 
-export async function approveQuote(orderId: string, signature: string): Promise<Result> {
+export async function approveQuote(orderId: string, signature: string, /** the options they picked (lib/quoteOptions.ts) */ picks?: Record<string, string> | null): Promise<Result> {
   try {
     const name = signature.trim();
     if (name.length < 2) return { ok: false, error: "Type your full name to sign." };
     const { admin, order, email, settings } = await customerOrder(orderId);
     if (order.status !== "quote_sent") return { ok: false, error: "This quote was already approved or changed. Refresh the page." };
+    const pk = await (await import("@/lib/quoteOptionsServer")).pickQuoteOptions(admin, orderId, picks, email);
+    if (!pk.ok) return { ok: false, error: pk.error };
     const now = new Date().toISOString();
     const { error } = await admin.from("orders").update({ status: "approved", type: "invoice", approved_at: now, approved_name: name }).eq("id", orderId).eq("status", "quote_sent");
     if (error) return { ok: false, error: error.message };
@@ -55,7 +57,8 @@ export async function approveQuote(orderId: string, signature: string): Promise<
       { order_id: orderId, kind: "status", detail: "approved", actor: email },
     ]);
     await (await import("@/lib/autoSeps")).autoSeparations(admin, orderId, "quote approved");
-    await notifyShop("approved the quote", `${name} approved quote #${order.number}`, `${order.nickname || "Order"} · ${money(order.total)}`, orderId, settings.shop.name);
+    const { data: o2 } = pk.picked ? await admin.from("orders").select("total").eq("id", orderId).maybeSingle() : { data: null };
+    await notifyShop("approved the quote", `${name} approved quote #${order.number}${pk.picked ? ` with ${pk.picked}` : ""}`, `${order.nickname || "Order"} · ${money(+(o2?.total ?? order.total))}`, orderId, settings.shop.name);
     revalidatePath(`/portal/orders/${orderId}`);
     return { ok: true };
   } catch (e) { return fail(e); }

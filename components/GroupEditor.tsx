@@ -61,6 +61,10 @@ type Props = {
   arm: (k: string) => void;
   update: (fn: (g: Group) => void) => void;
   onDuplicate: () => void;
+  /** + Add option: a copy of this group as the next option the customer picks from (lib/quoteOptions.ts) */
+  onAddOption?: () => void;
+  /** this group is an option of a choice: its letter, how many, what the order comes to if it's picked */
+  option?: { letter: string; of: number; first: boolean; total: number | null } | null;
   onRemove: () => void;
   onSaveToCatalog: (l: GLine) => void;
   onLookup?: (style: string, styleID?: number, supplier?: string, brand?: string) => Promise<Garment | null>;
@@ -124,7 +128,7 @@ const lineTotal = (l: GLine) => SIZES.reduce((a, z) => a + (+(l.sizes?.[z] || 0)
 const numOr =(v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
 /** Printavo-style line item group: garment rows sharing a set of imprints. */
-export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
+export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = false, onUploadTag, sizesBelow = false, finishingAt = "group", neckSets, customerId, gi, g, gc, settings, prices, catalog, canRemove, armed, arm, update, onDuplicate, onAddOption, option, onRemove, onRemoveMockup, onSaveToCatalog, fixed = false, mockupExtra, onCustomerArt, needMockup, onLookup, lookingUp, designs, designUrls, onUploadDesign, onMockup, mockupBlock, thumbUrls, onStarDesign, hidePrices, noLock, detailsHref, orderId, sewouts, moveTo, onMoveLine }: Props) {
   const role0 = useRole(); const meName = role0.staffName || role0.email || "";
   const [visBusy, setVisBusy] = useState(false);
   // the order's own files to pick a visual mockup from (Nov 16, Nick: "right now I have to download the file, then
@@ -1073,6 +1077,12 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
           });
           setFinder(null);
         }} />}
+      {/* an option the customer picks from (Nick, Nov 19 2026): its letter, what's different, what it comes to */}
+      {option && <div className={"qopt-h" + (option.first ? " first" : "")}>
+        <b className="qopt-l">Option {option.letter}</b>
+        <input type="text" className="qopt-in" readOnly={fixed} aria-label={`What option ${option.letter} is`} placeholder={`What's different (${option.letter === "A" ? "Black, 100 pcs" : "Heather Black, 50 pcs"})`} value={g.opt?.label || ""} onChange={(e) => update((x) => { if (x.opt) x.opt.label = e.target.value; })} />
+        <span className="qopt-n">{option.first ? `In the total until they pick` : `Not in the total until picked`}{option.total != null ? <> · if picked <b className="nowrap">{money(option.total)}</b></> : null}</span>
+      </div>}
       <div className="line-h">
         <input type="text" className="grp-name" readOnly={fixed} aria-label="Group name" placeholder={`Group ${gi + 1}`} value={g.name || ""} onChange={(e) => update((x) => { x.name = e.target.value; })} />
         {/* the group description, right on the group's line (Oct 22, Nick: "move it where you have the add group
@@ -1084,6 +1094,7 @@ export default function GroupEditor({ samples, persPrice, onLogo, printsFixed = 
         {g.imprints.some((x) => !x.visualOnly) && g.lines.length > 0 && <span className="gcw-seg" role="radiogroup" aria-label="Show the garments">
           {([["", "By garment"], ["colorway", "By colorway"]] as const).map(([k, t]) => <button key={t} type="button" role="radio" aria-checked={(g.view || "") === k} className={(g.view || "") === k ? "on" : ""} disabled={fixed} onClick={() => update((x) => { if (k) x.view = k; else delete x.view; if (k) sortLines(x); })}>{t}</button>)}
         </span>}
+        {!fixed && onAddOption && <button className="btn sm ghost" type="button" title="A copy of this group the customer can pick instead (another color, quantity, thread or design). They pick one when they approve." onClick={onAddOption}>+ Add option</button>}
         {!fixed && <button className="btn sm ghost" type="button" onClick={onDuplicate}>Duplicate group</button>}
         {canRemove && <button className={"btn sm ghost danger" + (armed === "grp" + g.id ? " armed" : "")} type="button" onClick={() => (armed === "grp" + g.id ? onRemove() : arm("grp" + g.id))}>{armed === "grp" + g.id ? "Remove group?" : "Remove"}</button>}
       </div>

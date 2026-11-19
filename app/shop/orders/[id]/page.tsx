@@ -1,4 +1,6 @@
 "use client";
+import { choicesOf, copyAsOption, optionName, withPicked } from "@/lib/quoteOptions";
+import { pickOptionsByHand } from "@/app/shop/quote-option-actions";
 import OrderShipments from "@/components/OrderShipments";
 import GoodsGlance from "@/components/GoodsGlance";
 import RunTogether from "@/components/RunTogether";
@@ -354,6 +356,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }, [sb, id, loadSide]);
 
   const calc = useMemo(() => (o ? calcOrder(o, settings, payments) : null), [o, settings, payments]);
+  // options on a quote (lib/quoteOptions.ts): each option's letter and what the order comes to if it's the one picked
+  const optInfo = useMemo(() => {
+    const m = new Map<string, { letter: string; of: number; first: boolean; total: number | null }>();
+    if (!o) return m;
+    for (const ch of choicesOf(o.groups)) ch.options.forEach((x, k) => m.set(x.g.id, { letter: x.letter, of: ch.options.length, first: k === 0, total: calcOrder(withPicked(o, x.g.id), settings, payments).total }));
+    return m;
+  }, [o, settings, payments]);
 
   const custId = o?.customer_id || "";
   // what else this customer owes (other invoices), shown on the customer card
@@ -1093,8 +1102,29 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   }
   const numOr = (v: string): number | "" => (v === "" ? "" : isNaN(+v) ? "" : +v);
 
-  async function setStatus(k: StatusKey | "closed" | "canceled") {
+  /** options on the quote: which one to keep before it becomes an order (Nick, Nov 19 2026) */
+  const [pickAsk, setPickAsk] = useState<{ k: StatusKey; picks: Record<string, string>; busy?: boolean; err?: string } | null>(null);
+  async function pickAndGo() {
+    if (!o || !pickAsk) return;
+    setPickAsk({ ...pickAsk, busy: true, err: "" });
+    await save();
+    const r = await pickOptionsByHand(o.id, pickAsk.picks);
+    if (!r.ok) return setPickAsk({ ...pickAsk, busy: false, err: r.error });
+    const gs = r.groups as Group[];
+    setO((p) => (p ? { ...p, groups: gs } : p));
+    if (latest.current) latest.current = { ...latest.current, groups: gs };
+    const k = pickAsk.k;
+    setPickAsk(null);
+    say(`Kept ${r.picked}.`);
+    await setStatus(k, true);
+  }
+  async function setStatus(k: StatusKey | "closed" | "canceled", picked = false) {
     if (!o || statusKey(o) === k) return;
+    // a quote with options becoming an order: which option did they pick? (lib/quoteOptions.ts)
+    if (!picked && k !== "closed" && k !== "canceled" && ST[k]?.type === "invoice") {
+      const cs = choicesOf(o.groups);
+      if (cs.length) { setPickAsk({ k, picks: Object.fromEntries(cs.map((c) => [c.set, ""])) }); return; }
+    }
     await save();
     // Closed Quote: the same as the Job Center's Mark declined (stored as completed, its mockups to the Archive)
     if (k === "closed") {
@@ -2066,11 +2096,36 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               armed={armed} arm={arm} update={(fn) => setGroup(gi, fn)} onSaveToCatalog={saveToCatalog} onLookup={lookupStyle} lookingUp={lookingUp} designs={designs} designUrls={designUrls} onUploadDesign={uploadOrderDesign} thumbUrls={thumbUrls} onStarDesign={starDesign} noLock={o.status === "request"} detailsHref={`/shop/details?order=${o.id}`} orderId={o.id} sewouts={sewouts} mockupExtra={redrawing.includes(g.id) ? <span className="faint mk-when">Redrawing with the new art…</span> : goneAsk(g)} onMockup={async () => { await save(); router.push(mockupHref(o.id, g)); }} onLogo={async () => { await save(); router.push(`/shop/artwork/mockup?order=${o.id}&group=${g.id}&logo=1`); }} onRemoveMockup={() => void removeMockup(gi)}
               mockupBlock={!o.customer_id ? "Pick a customer first. Mockups and art are saved to their account." : !g.lines.some((l) => (l.style || "").trim()) ? "Add at least one garment first." : ""}
               onDuplicate={() => patch((d) => { d.groups.splice(gi + 1, 0, cloneGroup(d.groups[gi])); })}
+              option={optInfo.get(g.id) || null}
+              onAddOption={o.type === "quote" ? () => patch((d) => {
+                // the copy goes after the last option of this choice, and the first one becomes Option A
+                const { src, copy } = copyAsOption(d.groups[gi], uid);
+                d.groups[gi] = src;
+                let at = gi; d.groups.forEach((x, xi) => { if (x.opt?.set === src.opt!.set) at = Math.max(at, xi); });
+                d.groups.splice(at + 1, 0, copy);
+              }) : undefined}
               onRemove={() => patch((d) => { d.groups = d.groups.filter((x) => x.id !== g.id && x.sample?.follows !== g.id); })}
               moveTo={o.groups.flatMap((x, xi) => (x.id === g.id ? [] : [{ id: x.id, label: [x.name?.trim() || `Group ${xi + 1}`, x.lines.map((l) => l.style).filter(Boolean).slice(0, 2).join(", ")].filter(Boolean).join(" · ") }]))}
               onMoveLine={moveLine} />
           </div>))}</OrderInkCtx.Provider>
           {sampleTool && <SampleRunTool o={o} patch={patch} kind={sampleTool.kind} groupId={sampleTool.groupId} onClose={() => setSampleTool(null)} />}
+          {pickAsk && <div className="qopk-bg" role="dialog" aria-modal="true" aria-label="Which option did they pick?" onMouseDown={(e) => { if (e.target === e.currentTarget && !pickAsk.busy) setPickAsk(null); }}>
+            <div className="qopk-dlg">
+              <h3>Which option did they pick?</h3>
+              <p className="faint">The one you keep stays on the order. The others come off it (they stay in its history).</p>
+              {choicesOf(o.groups).map((ch) => <div key={ch.set} className="qopk-ch" role="radiogroup">
+                {ch.options.map((x) => <label key={x.g.id} className={"qopk-o" + (pickAsk.picks[ch.set] === x.g.id ? " on" : "")}>
+                  <input type="radio" name={"qopk-" + ch.set} checked={pickAsk.picks[ch.set] === x.g.id} onChange={() => setPickAsk({ ...pickAsk, picks: { ...pickAsk.picks, [ch.set]: x.g.id } })} />
+                  <span><b>{optionName(x)}</b><small>{x.g.name || ""}{optInfo.get(x.g.id)?.total != null ? ` · order total ${money(optInfo.get(x.g.id)!.total!)}` : ""}</small></span>
+                </label>)}
+              </div>)}
+              {pickAsk.err && <p className="err">{pickAsk.err}</p>}
+              <div className="qopk-acts">
+                <button type="button" className="btn" disabled={pickAsk.busy} onClick={() => setPickAsk(null)}>Cancel</button>
+                <button type="button" className="btn primary" disabled={pickAsk.busy || Object.values(pickAsk.picks).some((v) => !v)} onClick={() => void pickAndGo()}>{pickAsk.busy ? "Saving…" : `Keep it and mark ${ST[pickAsk.k]?.label || pickAsk.k}`}</button>
+              </div>
+            </div>
+          </div>}
           <div className="row grp-add">
             <button className="btn" type="button" onClick={() => patch((d) => { const ng = newGroup(); if (!finPerGroup) { ng.finishing = (d.groups[0]?.finishing || []).filter(isFin); if (d.groups[0]?.customFin?.length) ng.customFin = [...d.groups[0].customFin]; } d.groups.push(ng); })}>+ Add line item group</button>
             <span className="faint grp-hint" style={{ fontSize: 12 }}>Garments in the same group share imprints, and their quantities add up for the price break.</span>
