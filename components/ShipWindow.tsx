@@ -239,6 +239,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
    * this computer's Zebra, the tracking on the order, and the order done, the same as Mark shipped.
    */
   const [confirmBuy, setConfirmBuy] = useState(false);
+  const [done, setDone] = useState<{ sid: string; tracking: string[]; printed: string; warn: string; what: string; when: string } | null>(null);
   // only Nick buys labels until he's watched the first one go through (Nov 19 2026: "test it on one of your orders with
   // you watching before anyone else uses it"); everyone else ships another way and enters the tracking
   // on for every staff login, the shipping computer included (Nick, Nov 19 2026, testing #50026 on FBS-SHIP); it still
@@ -261,7 +262,8 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
         void shipmentShipped(sid).catch(() => null);
       }
       setBusy("");
-      onDone(j.warn || `#${t.number} shipped · ${chosen.carrier} ${niceService(chosen.service)} · ${(j.tracking || []).join(", ")}${j.printed ? ` · ${j.printed}` : ""}`);
+      // the labels pop-up (Nick, Nov 19 2026: "a little pop-up in the middle screen… here's the labels… print")
+      setDone({ sid, tracking: j.tracking || [], printed: j.printed || "", warn: j.warn || "", what: `${chosen.carrier} ${niceService(chosen.service)}`, when: chosen.deliveryDate || "" });
     } catch (e) { setBusy(""); setErr(e instanceof Error ? e.message : String(e)); }
   }
 
@@ -289,6 +291,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
     <label className={cls}>{label}<input type="text" value={to[k]} onChange={(e) => { setTo({ ...to, [k]: e.target.value }); setRates(null); }} /></label>
   );
 
+  if (done) return <LabelsReady n={t.number} who={[t.customer, t.job].filter(Boolean).join(" · ")} d={done} onClose={() => onDone(`#${t.number} shipped · ${done.what} · ${done.tracking.join(", ")}`)} />;
   return (
     <div className="pp-modal" role="dialog" aria-modal="true" aria-label={`Ship #${t.number}`} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div className="pp-sheet sw">
@@ -527,6 +530,51 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                     <button type="button" className="btn" onClick={() => setConfirmBuy(false)}>Cancel</button>
                     <button type="button" className={"btn primary" + (notGround ? " danger" : "")} onClick={() => void buyLabels()}>Yes, buy {boxes.length === 1 ? "it" : "them"}</button></span>
                 : <button type="button" className={"btn primary" + (notGround ? " danger" : "")} disabled={!chosen || !!busy || needWhy || !ready || !canBuy} title={!canBuy ? "Not turned on yet: ship it another way and enter the tracking" : !ready ? "Fill in every box's size and weight first" : !chosen ? "Pick how it ships first" : needWhy ? "Say why it isn't going Ground first" : undefined} onClick={() => setConfirmBuy(true)}>{busy === "buy" ? "Buying labels…" : chosen ? `Create labels · ${chosen.carrier} ${niceService(chosen.service)}` : "Create labels"}</button>; })()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * After Create labels (Nick, Nov 19 2026): the labels, one small 4×6 picture a box with its tracking, whether they went to
+ * the Zebra, Print this one / Print again (app/api/shipping/reprint), the 4×6 PDF (app/api/shipping/label), and Done.
+ */
+function LabelsReady({ n, who, d, onClose }: { n: string; who: string; d: { sid: string; tracking: string[]; printed: string; warn: string; what: string; when: string }; onClose: () => void }) {
+  const [msg, setMsg] = useState<{ ok: boolean; t: string }>(d.warn ? { ok: false, t: d.warn } : { ok: true, t: d.printed || "Sent to the Zebra." });
+  const [busy, setBusy] = useState(0);
+  const print = async (box: number) => {
+    setBusy(box || -1);
+    const r = await fetch("/api/shipping/reprint", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shipmentId: d.sid, box, printer: myPrinter() }) }).then((x) => x.json()).catch(() => ({ error: "Offline. Try again." }));
+    setBusy(0);
+    setMsg(r.error ? { ok: false, t: r.error } : { ok: true, t: r.message || "Sent to the Zebra." });
+  };
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k); }, [onClose]);
+  return (
+    <div className="pp-modal" role="dialog" aria-modal="true" aria-label={`#${n} labels`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="pp-sheet lbr">
+        <div className="lbr-h">
+          <svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="9" /><path d="M8 12.5l3 3 5-6" /></svg>
+          <div><b>#{n} shipped · {d.tracking.length} label{d.tracking.length === 1 ? "" : "s"}</b><span>{who} · {d.what}{d.when ? ` · arrives ${new Date(d.when).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}` : ""}</span></div>
+          <button type="button" className="btn primary" disabled={!!busy} onClick={() => void print(0)}>{busy === -1 ? "Sending…" : `Print all${d.tracking.length > 1 ? ` ${d.tracking.length}` : ""}`}</button>
+          <button type="button" className="btn icon ghost" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+        <div className="lbr-g">
+          {d.tracking.map((tr, i) => (
+            <div key={tr} className="lbr-c">
+              <a href={`/api/shipping/label?s=${d.sid}&b=${i + 1}`} target="_blank" rel="noreferrer" className="lbr-p" title="Open this label as a 4×6 PDF">
+                <img src={`/api/shipping/label?s=${d.sid}&b=${i + 1}&f=png`} alt={`Box ${i + 1} label`} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                <span>Box {i + 1}</span>
+              </a>
+              <span className="lbr-t" data-notranslate>Box {i + 1} · {tr}</span>
+              <button type="button" className="btn sm" disabled={!!busy} onClick={() => void print(i + 1)}>{busy === i + 1 ? "Sending…" : "Print this one"}</button>
+            </div>
+          ))}
+        </div>
+        <div className={"lbr-m" + (msg.ok ? "" : " bad")}>{msg.t}</div>
+        <div className="lbr-a">
+          <a className="btn" href={`/api/shipping/label?s=${d.sid}&b=0`} target="_blank" rel="noreferrer">Open 4×6 PDF</a>
+          <button type="button" className="btn" onClick={onClose}>Done</button>
         </div>
       </div>
     </div>
