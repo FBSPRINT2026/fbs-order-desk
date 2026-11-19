@@ -236,8 +236,8 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const [confirmBuy, setConfirmBuy] = useState(false);
   // only Nick buys labels until he's watched the first one go through (Nov 19 2026: "test it on one of your orders with
   // you watching before anyone else uses it"); everyone else ships another way and enters the tracking
-  const { email: me } = useRole();
-  const canBuy = /^nicholas@fbsprint\.com$/i.test(me || "");
+  const { realRole } = useRole();
+  const canBuy = realRole === "owner";
   async function buyLabels() {
     if (!chosen) return;
     setConfirmBuy(false);
@@ -518,7 +518,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                 ? <span className="sw-buy"><span>Buy {boxes.length} label{boxes.length === 1 ? "" : "s"} · {chosen.carrier} {niceService(chosen.service)} · {shipOn ? "on their account" : bill === "fbs" ? `${money(chosen.cost)} on our account` : `billed to their ${bill === "ups" ? "UPS" : "FedEx"}`}?</span>
                     <button type="button" className="btn" onClick={() => setConfirmBuy(false)}>Cancel</button>
                     <button type="button" className={"btn primary" + (notGround ? " danger" : "")} onClick={() => void buyLabels()}>Yes, buy {boxes.length === 1 ? "it" : "them"}</button></span>
-                : <button type="button" className={"btn primary" + (notGround ? " danger" : "")} disabled={!chosen || !!busy || needWhy || !ready || !canBuy} title={!canBuy ? "Not turned on yet: ship it another way and enter the tracking" : needWhy ? "Say why it isn't going Ground first" : undefined} onClick={() => setConfirmBuy(true)}>{busy === "buy" ? "Buying labels…" : chosen ? `Create labels · ${chosen.carrier} ${niceService(chosen.service)}` : "Create labels"}</button>; })()}
+                : <button type="button" className={"btn primary" + (notGround ? " danger" : "")} disabled={!chosen || !!busy || needWhy || !ready || !canBuy} title={!canBuy ? "Not turned on yet: ship it another way and enter the tracking" : !ready ? "Fill in every box's size and weight first" : !chosen ? "Pick how it ships first" : needWhy ? "Say why it isn't going Ground first" : undefined} onClick={() => setConfirmBuy(true)}>{busy === "buy" ? "Buying labels…" : chosen ? `Create labels · ${chosen.carrier} ${niceService(chosen.service)}` : "Create labels"}</button>; })()}
         </div>
       </div>
     </div>
