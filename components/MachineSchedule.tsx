@@ -796,6 +796,9 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
         if (parts.sample.length) out.push({ ...base, key: "o:" + x.id + ":s", sample: "run", prod: runOn, due: runOn || x.due_date, name: `Sample · ${x.nickname || ""}`.trim(), qty: parts.sample.reduce((a, g) => a + samplePieces(g), 0), needs: withRunTimes(needsForOrder(ps, x as never, parts.sample), undefined) });
         const rest = needsForOrder(ps, x as never, parts.rest);
         for (const it of issues.filter((y) => y.order_id === x.id)) {
+          // the order moved on by hand (Ready, Completed) with an Issue still open: its pieces were dealt with, so the Issue
+          // is closed and leaves the schedule (Nick, Nov 19 2026, #40478: Ready for pickup and still on the screen print schedule)
+          if (it.status === "open" && ["ready", "completed"].includes(x.status)) { void sb.from("production_issues").update({ status: "done", done_at: new Date().toISOString() }).eq("id", it.id).eq("status", "open"); continue; }
           const n0 = needsForOrder(ps, x as never, parts.rest.length ? parts.rest : x.groups || []).find((n) => n.type === it.kind);
           if (!n0) continue;
           const sizes = it.sizes || {}, sz = Object.entries(sizes).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${v}`).join(" · ");

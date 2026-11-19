@@ -561,3 +561,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 3:23pm · 1.3.804 · Nick · Addresses: the building word goes on the second line with its number ("Bldg #2", "Bldg 2 Suite 100"), and one split in the wrong place before is put right
 - Nov 19 3:38pm · 1.3.805 · Nick · Print pictures: art between an ink and the shirt is solid ink in the half nearer the ink (no see-through specks / little gaps inside letters), soft only at the outer edge
 - Nov 19 3:43pm · 1.3.806 · Nick · Crew menu and job menus: Sign out at the top right (signs out the person; a shop computer stays signed in for the next one)
+- Nov 19 3:45pm · 1.3.807 · Nick · Schedule: an order moved on by hand (Ready, Completed) with an Issue still open closes the Issue and leaves the schedule (#40478)
