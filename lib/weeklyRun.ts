@@ -30,6 +30,13 @@ export const runDayFrom = (from: string, day: number) => { let d = from; for (le
 
 export async function keepWeeklyRuns(admin: SupabaseClient): Promise<{ booked: number; moved: number; removed: number; errors: string[] }> {
   const out = { booked: 0, moved: 0, removed: 0, errors: [] as string[] };
+  // one at a time (the schedule open in two places, and the hourly pass, at once booked a job twice)
+  const { data: got } = await admin.rpc("printavo_sync_claim", { p_job: "weekly-runs", p_seconds: 120 });
+  if (!got) return out;
+  try { return await keep(admin, out); } finally { await admin.rpc("printavo_sync_release", { p_job: "weekly-runs" }); }
+}
+
+async function keep(admin: SupabaseClient, out: { booked: number; moved: number; removed: number; errors: string[] }) {
   const { data: tr } = await admin.from("order_trainings").select("id, customer_id, name, when_words, defaults");
   const runs = ((tr || []) as Train[]).filter((t) => t.defaults?.run?.press);
   if (!runs.length) return out;
