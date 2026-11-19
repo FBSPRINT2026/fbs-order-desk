@@ -319,7 +319,7 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   const has = (k: string) => blocks.some((b) => b.k === k);
   const inv = has("quote") && !["quote", "request", "quote_sent"].includes(o.status), price = inv ? "final invoice" : "quote";
   const head = bill ? (bill.label === "Deposit" ? "Your deposit is ready to pay" : bill.label === "Final bill" ? "Your final bill" : "Your bill is ready") : has("quote") && (has("proof") || has("sewout")) ? `Your ${has("sewout") && !has("proof") ? "sew-out" : "proof"} and ${price} are ready` : has("quote") ? `Your ${price} is ready` : has("sewout") && !has("proof") ? "Your sew-out is ready to approve" : "Your proof is ready to approve";
-  const job = `${o.nickname || `order #${o.number}`}${ver ? ` · Version ${ver}` : ""}`;
+  const job = `${o.nickname || `order #${o.number}`}${ver && !bill ? ` · Version ${ver}` : ""}`;
   const up = upFront(customer?.payment_terms, calcOrder(o, settings, []).total, settings.depositPct);
   const payNow = up.kind === "full" ? "pay for it" : up.kind === "deposit" ? "pay the deposit" : "";
   const first = ((customer?.name || "").trim().split(/\s+/)[0]) || "there";

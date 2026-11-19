@@ -23827,3 +23827,5 @@ main.main .rvg-sub{margin-bottom:10px}
 .spt-bill{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:0 0 10px;margin:0 0 10px;border-bottom:1px solid var(--line)}
 .spt-amt{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);flex-wrap:wrap}
 .spt-amt input{height:36px;width:110px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}
+.spt-bill .spt-seg{grid-template-columns:repeat(3,minmax(0,1fr));max-width:480px;flex:1 1 320px}
+.spt-bill .spt-seg button:last-child{border-right:0}
