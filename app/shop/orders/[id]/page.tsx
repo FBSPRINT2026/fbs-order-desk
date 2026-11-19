@@ -1,4 +1,5 @@
 "use client";
+import OrderShipments from "@/components/OrderShipments";
 import GoodsGlance from "@/components/GoodsGlance";
 import RunTogether from "@/components/RunTogether";
 import { runChanged } from "@/app/shop/run-actions";
@@ -2240,6 +2241,8 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
                     </div>
                   )}
                   </div>
+                {/* how it left: each shipment's tracking, or when it was picked up / delivered (Nick, Nov 19 2026) */}
+                <OrderShipments orderId={o.id} method={o.delivery_method || null} status={o.status} />
                 {/* Bill third party (Oct 30, Nick): their carrier account pays the shipping; remembered on the customer */}
                 {o.delivery_method === "ship" && (() => {
                   const tp = o.third_party || null;

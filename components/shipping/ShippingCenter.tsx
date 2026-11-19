@@ -310,6 +310,12 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
   }
   return (
     <div className="trk" onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}>
+      {/* the ship-to, a line at a time with a copy button each, to type into FedEx's site (Nick, Nov 19 2026) */}
+      <div className="trk-ad" data-notranslate>
+        <div className="trk-ad-h">Ship to</div>
+        {([["Company", x.to.company], ["Attention", x.to.name], ["Street", x.to.street1], ["Suite", x.to.street2], ["City", x.to.city], ["State", x.to.state], ["ZIP", x.to.zip], ["Phone", x.to.phone], ["Reference", `#${x.number}`]] as const).filter(([, v]) => (v || "").trim()).map(([k, v]) => <CopyLine key={k} k={k} v={String(v).trim()} />)}
+        {!addressReady(x.to) && <div className="pv-err">The address isn&apos;t complete: open Ship to fill it in.</div>}
+      </div>
       <div className="trk-fs">
         {vals.map((v, i) => (
           <div key={i} className="trk-f">
@@ -336,6 +342,19 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
     </div>
   );
 }
+/** one line of the address with a small copy button; a check for a moment once it's copied */
+function CopyLine({ k, v }: { k: string; v: string }) {
+  const [ok, setOk] = useState(false);
+  const copy = async () => { try { await navigator.clipboard.writeText(v); setOk(true); setTimeout(() => setOk(false), 1200); } catch { /* the text can still be selected */ } };
+  return (
+    <div className="trk-ad-l"><span>{k}</span><span>{v}</span>
+      <button type="button" className={"trk-cp" + (ok ? " ok" : "")} onClick={() => void copy()} aria-label={`Copy ${k.toLowerCase()}`} title={ok ? "Copied" : `Copy ${k.toLowerCase()}`}>
+        {ok ? <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12l5 5 9-10" /></svg> : <svg viewBox="0 0 24 24" aria-hidden><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></svg>}
+      </button>
+    </div>
+  );
+}
+
 /** + Tracking's services: Ground first, then everything else (a "" is the divider) */
 const TRK_SVCS = ["FedEx|Ground", "UPS|Ground", "", "FedEx|Home Delivery", "FedEx|Express Saver", "FedEx|2Day", "FedEx|Standard Overnight", "FedEx|Priority Overnight", "UPS|3 Day Select", "UPS|2nd Day Air", "UPS|Next Day Air", "USPS|Ground Advantage", "USPS|Priority Mail", "Other|"];
 
