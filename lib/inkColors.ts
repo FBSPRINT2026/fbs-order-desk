@@ -286,7 +286,10 @@ function recolorInPlace(c: HTMLCanvasElement, sources: string[], targets: Record
         if (ta !== undefined || tb !== undefined) {
           const A = ta === undefined ? src[pa] : ta, B = tb === undefined ? src[pb] : tb;
           if (A === null && B === null) out = null;
-          else if (A === null || B === null) { const C = (A || B)!; const w = A === null ? pt : 1 - pt; out = [C[0], C[1], C[2], w]; }
+          // between an ink and the shirt showing through: solid ink for the half nearer the ink, a soft fade only in the
+          // half nearer the shirt (Nick, Nov 19 2026, #50013's back: distressing specks inside the letters, mapped to the one
+          // ink, came out see-through and showed as little gaps in the T, the O's and GOD)
+          else if (A === null || B === null) { const C = (A || B)!; const w = A === null ? pt : 1 - pt; out = [C[0], C[1], C[2], Math.min(1, w * 2)]; }
           else out = [A[0] + pt * (B[0] - A[0]), A[1] + pt * (B[1] - A[1]), A[2] + pt * (B[2] - A[2])];
         }
       }

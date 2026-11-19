@@ -559,3 +559,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 3:20pm · 1.3.802 · Nick · + Tracking's ship-to shows the customer's PO under the address (its copy is the PO number)
 - Nov 19 3:20pm · 1.3.803 · Nick · + Tracking: the PO line's copy says it copies the PO number
 - Nov 19 3:23pm · 1.3.804 · Nick · Addresses: the building word goes on the second line with its number ("Bldg #2", "Bldg 2 Suite 100"), and one split in the wrong place before is put right
+- Nov 19 3:38pm · 1.3.805 · Nick · Print pictures: art between an ink and the shirt is solid ink in the half nearer the ink (no see-through specks / little gaps inside letters), soft only at the outer edge
