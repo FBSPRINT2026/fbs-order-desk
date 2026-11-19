@@ -1,4 +1,5 @@
 "use client";
+import WeeklyRun, { runTitle } from "@/components/WeeklyRun";
 import CrewSignOut from "@/components/job/CrewSignOut";
 import { shortLabel } from "@/lib/jobLabel";
 import { countSections } from "@/lib/checkinShared";
@@ -152,6 +153,7 @@ const clockOf = (min: number) => { const s = Math.max(0, Math.floor(min * 60)), 
 
 function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) => void }) {
   const { t, locale } = useT();
+  const router = useRouter();
   const [now, setNow] = useState(Date.now()), [busy, setBusy] = useState(false);
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
   const v = home.view;
@@ -184,6 +186,27 @@ function Hero({ home, open }: { home: CrewHome; open: (n: number, v?: string) =>
           {toCount.filter((x) => x !== j).slice(0, 3).map((x) => (
             <button key={x.number} type="button" className="cr-ghost" onClick={() => open(x.number, "post")}>{t("To count")}: #{x.number} {x.customer}</button>
           ))}
+        </section>
+      );
+    }
+    // a weekly run (AMS's Tuesday run) is worked as one job: one Start, then Done with its POs checked off (Nick, Nov 19 2026)
+    const runOf = (x?: CrewJob) => (x?.run ? jobs.filter((y) => y.run && y.run.machine === x.run!.machine && y.run.day === x.run!.day) : null);
+    const wr = v !== "assist" ? runOf(run) || (!run ? runOf(next) : null) : null;
+    if (wr && wr[0].run) {
+      const live = wr.find((x) => x.status === "running"), held = !live && wr.find((x) => x.status === "paused");
+      const title = runTitle(wr.map((x) => x.name || x.customer));
+      const started = wr.map((x) => x.started).filter(Boolean).sort()[0] || null;
+      const used = live && started ? (now - Date.parse(started)) / 60000 : 0, need = wr.reduce((a, x) => a + (x.status === "done" ? 0 : x.minutes || 0), 0);
+      return (
+        <section className="cr-hero">
+          <div className="cr-k">{live ? t("PRINTING · STARTED {0}", clock(started, locale)) : held ? t("PAUSED ON THE PRESS") : t("UP NEXT")}</div>
+          <div className="cr-n"><b>{t(title)}</b></div>
+          <div className="cr-s">{t("{0} POs · {1} pcs", wr.length, wr.reduce((a, x) => a + (x.qty || 0), 0))}{need ? ` · ${t("figured {0}", mins(need))}` : ""}</div>
+          {live && <div className="cr-clock" aria-live="off">{clockOf(used)}</div>}
+          {(live || held) && <div className="cr-s">{t("We're printing these {0} POs", wr.filter((x) => x.status !== "done").length)}</div>}
+          <WeeklyRun machine={wr[0].run.machine} day={wr[0].run.day} title={t(title)} t={t} onChanged={() => router.refresh()}
+            pos={wr.map((x) => ({ slotId: x.slotId || "", number: String(x.number), name: x.name || x.customer, qty: x.qty, status: x.status }))} />
+          <div className="cr-runl">{wr.map((x) => <span key={x.slotId} className={x.status === "done" ? "done" : ""}><b>#{x.number}</b>{x.name || x.customer}<small>{t("{0} pcs", x.qty)}</small></span>)}</div>
         </section>
       );
     }
@@ -253,13 +276,22 @@ function PressDay({ name, jobs, view, open }: { name: string; jobs: CrewJob[]; v
   const tap = (j: CrewJob) => open(j.number, view === "press" ? "timer" : view === "catcher" ? "post" : "");
   const when = (j: CrewJob) => (j.status === "done" || j.status === "running" || j.status === "paused" ? clock(j.started, locale) : atMin(j.startMin));
   const pill = (j: CrewJob) => (j.status === "running" ? [t("Printing"), "running"] : j.status === "paused" ? [t("Paused"), "paused"] : j.status === "done" ? [t("Done {0}", clock(j.finished, locale)), "done"] : j === next ? [t("Next"), "next"] : j.counted === "issue" ? [t("Goods problem"), "issue"] : j.counted === "no" ? [t("Not counted"), "way"] : [t("Later"), "later"]);
-  // what's still to run first, in order, then what's done
-  const list = [...left, ...jobs.filter((j) => j.status === "done")];
+  // what's still to run first, in order, then what's done; a weekly run's POs are one row (it's worked as one job)
+  const list0 = [...left, ...jobs.filter((j) => j.status === "done")];
+  const seen = new Set<string>();
+  const list = list0.filter((j) => { if (!j.run) return true; const k = j.run.machine + j.run.day; if (seen.has(k)) return false; seen.add(k); return true; });
+  const runRow = (j: CrewJob) => { const all = jobs.filter((y) => y.run && j.run && y.run.machine === j.run.machine && y.run.day === j.run.day); const d = all.filter((y) => y.status === "done").length; return { all, d }; };
   return (
     <div className="jm-card cr-list">
       <div className="jm-cardh"><b>{name}</b><span className="jm-faint">{t("{0} of {1} done", jobs.length - left.length, jobs.length)}</span></div>
       {!jobs.length && <p className="jm-faint">{t("Nothing on this press.")}</p>}
-      {list.map((j, i) => { const [p, k] = pill(j); return (
+      {list.map((j, i) => { if (j.run) { const { all, d } = runRow(j); const st = all.some((y) => y.status === "running") ? "running" : all.some((y) => y.status === "paused") ? "paused" : d === all.length ? "done" : "scheduled"; return (
+        <button key={"run" + i} type="button" className={"cr-li " + st} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+          <span className="cr-t">{when(j)}</span><b>{t(runTitle(all.map((y) => y.name || y.customer)))}</b>
+          <span className="cr-who">{t("{0} POs", all.length)}<small>{t("{0} of {1} printed", d, all.length)}</small></span>
+          <i className={"cr-st " + (st === "scheduled" ? "later" : st)}>{st === "running" ? t("Printing") : st === "paused" ? t("Paused") : st === "done" ? t("Done") : t("Weekly run")}</i>
+        </button>
+      ); } const [p, k] = pill(j); return (
         <button key={j.number + "-" + i} type="button" className={"cr-li " + j.status} onClick={() => tap(j)}>
           <span className="cr-t">{when(j)}</span><b>#{j.number}</b>
           <span className="cr-who">{j.customer}<small>{t("{0} pcs", j.qty)}{j.label ? ` · ${shortLabel(j.label)}` : ""}</small></span>

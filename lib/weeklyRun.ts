@@ -51,11 +51,16 @@ async function keep(admin: SupabaseClient, out: { booked: number; moved: number;
       .eq("customer_id", t.customer_id).eq("type", "invoice").in("status", ["approved", "production"]).is("discarded_at", null).is("declined_at", null).order("number");
     const mine = ((os || []) as (Pick<Order, "groups" | "lines" | "number" | "nickname"> & { id: string; po_number: string | null; production_date: string | null })[])
       .filter((o) => !trainingWords(t.when_words || "").length || trainingSaid({ when_words: t.when_words || "" }, `${o.nickname || ""} ${o.po_number || ""}`));
+    // a run already started (or done) that day isn't joined after the fact: the next week's (Nick, Nov 19 2026: a PO left
+    // unchecked at the end of the run moves to next week's run, and must not come back to today's)
+    const { data: begun } = await admin.from("production_slots").select("day").eq("machine", m.id).eq("source", "weekly_run").gte("day", today).not("started_at", "is", null);
+    const started = new Set(((begun || []) as { day: string }[]).map((x) => x.day));
     let pos = 0;
     for (const o of mine) {
       const need = needsForOrder(s, o, ((o.groups || []) as (Group & { sample?: unknown })[]).filter((g) => !g.sample)).find((n) => n.type === m.type);
       if (!need) continue;
-      const day = runDayFrom(o.production_date && o.production_date > today ? o.production_date : today, run.day);
+      let day = runDayFrom(o.production_date && o.production_date > today ? o.production_date : today, run.day);
+      for (let i = 0; i < 8 && started.has(day); i++) day = runDayFrom(addDay(day, 1), run.day);
       const { data: sl } = await admin.from("production_slots").select("id, machine, day, status, started_at, locations, issue_id, locked, position").eq("order_id", o.id);
       const ours = ((sl || []) as SlotRow[]).filter((x) => typeOf(x.machine) === m.type && !x.issue_id);
       // started, printed or split by hand: the floor has it

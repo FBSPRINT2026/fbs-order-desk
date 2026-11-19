@@ -29,6 +29,7 @@ import ScheduleStartPoint from "@/components/ScheduleStartPoint";
 import { useCan, useRole } from "@/components/RoleContext";
 import { allRows } from "@/lib/readAll";
 import { MixStrip, useMixParts } from "@/components/MixStrip";
+import WeeklyRun from "@/components/WeeklyRun";
 
 /**
  * The production calendar, on the shop's real hours.
@@ -1808,6 +1809,11 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                               <div className="mwp-run-h" draggable title="Drag to move the whole run" onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: b0.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }}>
                                 <b>{title}</b><span>{clock(b0[0].start)}–{clock(end)} · {fmtMin(mins)} · {b0.length} POs · {pcs.toLocaleString()} pcs</span>
                               </div>
+                              {/* a customer's weekly run is worked as one job: Start / Pause / Done with its PO checklist (components/WeeklyRun.tsx) */}
+                              {c0.slot && b0.every((x) => x.g.c.slot?.source === "weekly_run" && x.g.c.slot?.day === c0.slot!.day) && (
+                                <div className="mwp-run-go"><WeeklyRun compact machine={c0.slot.machine} day={c0.slot.day} title={t0} onChanged={(m) => { setMsg(m); void load(); }}
+                                  pos={b0.map(({ g }) => ({ slotId: g.c.slot!.id, number: String(g.c.job.number), name: (g.c.job.name || "").trim(), qty: g.c.need.qty, status: g.c.slot!.status }))} /></div>
+                              )}
                               {b0.map(({ g }) => { const c = g.c, done = c.slot?.status === "done", late = segLate((segs.ofCard.get(c.key) || []).slice(-1)[0] || g); return (
                                 <button key={c.key} type="button" draggable data-key={c.key} className={"mwp-row" + (done ? " done" : "") + (!done && dotOf(c, ord(g.day) * 1440 + g.start)?.k !== "g" ? " nc" : "") + (c.slot?.status === "running" ? " run" : "") + (late && !done ? " late" : "") + (isHit(c.job) ? " ms-hit" : "")}
                                   title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); setOpen(c); }}

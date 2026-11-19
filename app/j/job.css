@@ -651,3 +651,9 @@
 .jm-out:hover{background:rgba(255,255,255,.1)}
 .jm-out svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 @media (max-width:420px){.jm-out span{display:none}}
+/* a weekly run's POs under its card (Nick, Nov 19 2026) */
+.cr-runl{display:flex;flex-direction:column;gap:2px;margin-top:4px;font-size:13px;color:#c9d6e3}
+.cr-runl span{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px}
+.cr-runl b{color:#fff}
+.cr-runl small{color:#9fb3c8}
+.cr-runl span.done{opacity:.5;text-decoration:line-through}
