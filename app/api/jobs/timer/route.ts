@@ -158,13 +158,22 @@ export async function POST(req: Request) {
     if (!err && b.action === "done" && job.kind === "o") {
       // the whole job is printed: today's (and earlier) unfinished bookings on the calendar are done
       const now = new Date().toISOString();
-      const { data: sl } = await admin.from("production_slots").select("id, order_id, machine, status, started_at, progress_at, issue_id").eq("order_id", job.id).neq("status", "done");
+      const { data: sl0 } = await admin.from("production_slots").select("id, order_id, machine, status, started_at, progress_at, issue_id, locations, day").eq("order_id", job.id).neq("status", "done");
       // only this kind of machine's bookings (Nov 12, Nick, #40313): the screen printer finishing a mixed job's tees
       // never finishes its embroidery or heat press part
       const { data: stRow } = await admin.from("settings").select("data").eq("id", 1).maybeSingle();
       const machs = (((stRow?.data as { production?: { machines?: { id: string; name: string; type: string }[] } } | null)?.production?.machines) || []);
       const typeOf = (x: string) => machs.find((m) => m.id === x || m.name === x)?.type || "";
       const mine = typeOf(press || here?.station || "");
+      // printed is printed (Nick, Nov 19 2026, #50006 done twice): when the whole job is booked more than once on this kind
+      // of machine, the bookings that never started are the same job booked twice; they go instead of being marked done
+      type SlRow = { id: string; order_id: string; machine: string; status: string; started_at: string | null; progress_at?: string | null; issue_id?: string | null; locations?: string[] | null; day: string };
+      const all0 = ((sl0 || []) as SlRow[]).filter((x) => !mine || typeOf(x.machine) === mine);
+      const whole = all0.filter((x) => !x.issue_id && !(x.locations || []).length).sort((x, y) => x.day.localeCompare(y.day));
+      const keep = whole.filter((x) => x.started_at || x.status !== "scheduled");
+      const extra = whole.filter((x) => !x.started_at && x.status === "scheduled" && x !== (keep.length ? null : whole[0]));
+      if (extra.length) await admin.from("production_slots").delete().in("id", extra.map((x) => x.id));
+      const sl = ((sl0 || []) as SlRow[]).filter((x) => !extra.includes(x));
       for (const s of ((sl || []) as { id: string; order_id: string; machine: string; status: string; started_at: string | null; progress_at?: string | null }[]).filter((x) => !mine || typeOf(x.machine) === mine)) {
         // a paused run finishes at its pause: nothing ran after it (the schedule's logAction does the same)
         const fin = s.status === "paused" && s.progress_at && s.progress_at < now ? s.progress_at : now;
