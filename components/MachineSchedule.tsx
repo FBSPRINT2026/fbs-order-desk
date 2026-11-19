@@ -1766,7 +1766,8 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
         <div className="ms-wk-h"><b>{title}</b><span className="faint">{dayLbl(ds[0])} – {dayLbl(ds[ds.length - 1])}</span><span className="spacer" />
           <span className="mwp-nav">{viewSeg}<i className="msv-div" aria-hidden /><label className="ms-wknd" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Show weekends</label><i className="msv-div" aria-hidden /><button type="button" className="btn sm" onClick={() => setRoll(roll - 1)} aria-label="Back 5 days">‹ 5 days</button><button type="button" className="btn sm" disabled={roll === 0} onClick={() => setRoll(0)}>Today</button><button type="button" className="btn sm" onClick={() => setRoll(roll + 1)} aria-label="Ahead 5 days">5 days ›</button></span></div>
         <div className="mwp-g" style={{ gridTemplateColumns: `112px repeat(${ds.length}, minmax(0,1fr))` }}>
-          <div />
+          {/* the presses and their crews, from the corner above the press names (Nick, Nov 19 2026) */}
+          <div className="mwp-ec"><Link className="linkbtn" href="/shop/settings/production" title="Machines, crews and their hours">Edit crews</Link></div>
           {ds.map((d) => (
             <button type="button" key={d} className={"mwp-d" + (d === today ? " today" : d < today ? " past" : "")} onClick={() => { setDay(d); setView("day"); }} title="Open this day">
               {dayShort(d)}{d === today ? <em> · Today</em> : null}
@@ -2585,7 +2586,7 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
   };
   const flowView = () => (
     <div className={"msf" + (findWords.length ? " ms-finding" : "")}>
-      <div className="ms-wk-h msv-bar"><b>Next 12 hours</b><span className="spacer" /><span className="mwp-nav">{viewSeg}</span></div>
+      <div className="ms-wk-h msv-bar"><b>Next 12 hours</b><span className="spacer" /><span className="mwp-nav"><Link className="linkbtn mwp-ecl" href="/shop/settings/production" title="Machines, crews and their hours">Edit crews</Link><i className="msv-div" aria-hidden />{viewSeg}</span></div>
       <div className="msf-main">
         <div className="msf-grid" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
           <div className="msf-corner" />
@@ -3252,7 +3253,7 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
       {/* the tools, folding to a row of icons (remembered) */}
       <section className={"mzc-tools" + (toolsOpen ? "" : " shut")}>
         <div className="mzc-th"><button type="button" className="mzc-tt" onClick={() => setToolsOpen(!toolsOpen)} aria-expanded={toolsOpen}><span className="car">{toolsOpen ? "▾" : "▸"}</span>Tools</button>
-<span className="spacer" /><Link className="linkbtn" href="/shop/settings/production">Machines &amp; crews</Link></div>
+{view === "day" && <><span className="spacer" /><Link className="linkbtn" href="/shop/settings/production">Edit crews</Link></>}</div>
               <div className="msk-row">
                 <span className="msk-g plan"><span className="msk-gl">Planning</span>
                   

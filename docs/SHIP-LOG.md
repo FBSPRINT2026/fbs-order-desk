@@ -567,3 +567,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 3:51pm · 1.3.810 · Nick · Shop assistant: a tip's button sits at the right of the tip's own line, so the box doesn't jump as tips take turns
 - Nov 19 3:52pm · 1.3.811 · Nick · Schedule: a closed Issue never comes back as a job to schedule (only as the card where its pieces printed); #40478 off for good
 - Nov 19 4:01pm · 1.3.812 · Nick · Weekly run worked as one job: Start / Pause / Resume / Done on the crew phone and the schedule's run box; Done is a checklist of its POs, unchecked ones confirmed not printed move to next week's run
+- Nov 19 4:02pm · 1.3.813 · Nick · Schedule tools fold to two lines (Planning + Sales, then Press & crew); Machines & crews link becomes a small Edit crews in the week's corner above the presses
