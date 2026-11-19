@@ -24,7 +24,7 @@ import { useUrlSearch } from "@/lib/useUrlSearch";
 
 type NewRow = { third_party?: ThirdParty | null; id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
-type Item = ShipTarget & { printavo: boolean; shipment: Shipment | null; /** the rest of an order shipped in parts */ rest?: boolean; /** what's in it: SP / EMB / HP */ kinds?: MachineType[] };
+type Item = ShipTarget & { printavo: boolean; shipment: Shipment | null; /** the rest of an order shipped in parts */ rest?: boolean; /** what's in it: SP / EMB / HP */ kinds?: MachineType[]; /** the customer's PO */ po?: string };
 
 const fromPv = (a: PvAddress, c: PvRow["contact"], company: string): ShipAddress => ({
   ...emptyAddress(), company: a?.companyName || company, name: a?.customerName || c?.fullName || "",
@@ -100,12 +100,12 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
       ...news.map((o): Item => {
         const c = cust[o.customer_id || ""];
         return { kind: "order", printavo: false, id: o.id, number: String(o.number), job: o.nickname, customerId: o.customer_id, customer: custLabel(c) || "—", pieces: o.qty || 0, due: o.due_date,
-          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipOn: c?.ship_on || "", shipment: shipOf("order_id", o.id), rest: restOf(o as { flags?: unknown }), kinds: kindsOf((o as { groups?: Group[] }).groups) };
+          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipOn: c?.ship_on || "", shipment: shipOf("order_id", o.id), rest: restOf(o as { flags?: unknown }), kinds: kindsOf((o as { groups?: Group[] }).groups), po: o.po_number || "" };
       }),
       ...pvs.map((o): Item => {
         const c = cust[o.customer_id];
         return { kind: "archived", printavo: true, id: o.id, number: o.visual_id, job: o.nickname, customerId: o.customer_id, customer: custLabel(c) || "—", pieces: o.qty || 0, due: o.due_date,
-          to: fromPv(o.ship, o.contact, c?.company || ""), service: /ups|fedex|usps/i.test(o.delivery || "") ? o.delivery || "" : "", ...billOf(c), shipOn: c?.ship_on || "", shipment: shipOf("archived_order_id", o.id) };
+          to: fromPv(o.ship, o.contact, c?.company || ""), service: /ups|fedex|usps/i.test(o.delivery || "") ? o.delivery || "" : "", ...billOf(c), shipOn: c?.ship_on || "", shipment: shipOf("archived_order_id", o.id), po: o.po_number || "" };
       }),
     ].filter((x) => x.shipment?.status !== "shipped");
     const partIds = new Set(partRows.map((x) => x.o.id));
@@ -320,7 +320,7 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
           // suite, it has to be its own line"); city, state and ZIP are one line whose copy is the ZIP (FedEx fills the rest)
           const sp = splitSuite(x.to), street = sp.street1, suite = sp.street2;
           const csz = [[x.to.city, x.to.state].filter(Boolean).join(", "), x.to.zip].filter(Boolean).join(" ");
-          return ([["Company", x.to.company, ""], ["Attention", x.to.name, ""], ["Street", street, ""], ["Suite", suite, ""], ["City, state, ZIP", csz, x.to.zip], ["Phone", x.to.phone, ""]] as const)
+          return ([["Company", x.to.company, ""], ["Attention", x.to.name, ""], ["Street", street, ""], ["Suite", suite, ""], ["City, state, ZIP", csz, x.to.zip], ["Phone", x.to.phone, ""], ["PO", x.po ? `PO ${x.po}` : "", x.po || ""]] as const)
             .filter(([, v]) => (v || "").trim()).map(([k, v, c]) => <CopyLine key={k} k={k} v={String(v).trim()} copy={c || undefined} />);
         })()}
         {!addressReady(x.to) && <div className="pv-err">The address isn&apos;t complete: open Ship to fill it in.</div>}
