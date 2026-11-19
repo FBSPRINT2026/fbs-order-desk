@@ -528,3 +528,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 12:51pm · 1.3.771 · Nick · Weekly runs: one keeper at a time (two at once booked 5 AMS POs twice; the next pass removes the extra)
 - Nov 19 12:52pm · 1.3.772 · Nick · Weekly: a run pushed into the next day by the day before reads 'AMS weekly run · continued'
 - Nov 19 12:52pm · 1.3.773 · Nick · Send a bill: the three kinds on one line; no 'Version 1' on a bill; 'ready to pay'
+- Nov 19 1:01pm · 1.3.774 · Nick · Order status menu: Ready for Pickup, Ready for Delivery and Shipping are each their own pick (Ready when delivery is TBD); picking one sets how the order leaves

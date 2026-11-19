@@ -1384,6 +1384,18 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
     if (v === "hold") return setHoldAsk(true);
     // another status while it's on hold: off hold, then the status
     if (holdOf((o as { flags?: unknown }).flags)) await offHold();
+    // Ready for Pickup / Ready for Delivery / Shipping: Ready, leaving that way
+    if (v.startsWith("ready:")) {
+      const dm = v.slice(6) as Order["delivery_method"];
+      if (dm !== o.delivery_method) {
+        const { error } = await sb.from("orders").update({ delivery_method: dm }).eq("id", o.id);
+        if (error) return say(error.message);
+        if (latest.current) latest.current = { ...latest.current, delivery_method: dm };
+        setO((p) => (p ? { ...p, delivery_method: dm } : p));
+      }
+      if (statusKey(o) !== "ready") await setStatus("ready");
+      return;
+    }
     if (v !== statusKey(o)) await setStatus(v as StatusKey | "closed" | "canceled");
   }
   function sepsIfReady(why: string) {
@@ -1638,11 +1650,16 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
               </span>}
             </span>;
           })()}
-          <select className={"status-select" + (holdOf((o as { flags?: unknown }).flags) ? " ohs-held" : "")} style={{ ["--sc" as string]: holdOf((o as { flags?: unknown }).flags) ? "var(--warn)" : st.c }} aria-label="Status" value={holdOf((o as { flags?: unknown }).flags) ? "hold" : statusKey(o)} onChange={(e) => void statusPicked(e.target.value)}>
+          <select className={"status-select" + (holdOf((o as { flags?: unknown }).flags) ? " ohs-held" : "")} style={{ ["--sc" as string]: holdOf((o as { flags?: unknown }).flags) ? "var(--warn)" : st.c }} aria-label="Status" value={holdOf((o as { flags?: unknown }).flags) ? "hold" : statusKey(o) === "ready" && ["pickup", "deliver", "ship"].includes(o.delivery_method || "") ? `ready:${o.delivery_method}` : statusKey(o)} onChange={(e) => void statusPicked(e.target.value)}>
             {/* a hold is for an order (Nov 3, Nick: "once it goes to invoice, it should say on hold"); a quote isn't held */}
             {(o.type === "invoice" || !!holdOf((o as { flags?: unknown }).flags)) && <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>}
             <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote").flatMap((s) => (s.k === "quote_sent" ? [s, REVISION] : [s])), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
-            <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => { const lock = s.k === "production" && booked === false && statusKey(o) !== "production"; return <option key={s.k} value={s.k} disabled={lock} title={lock ? "Book it on the schedule: booking a job puts it In Production" : undefined}>{statusText(s.k, o.delivery_method)}</option>; })}</optgroup>
+            <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].flatMap((s) => {
+              // Ready's sub statuses, each its own pick (Nick, Nov 19 2026: "4 statuses: Ready, the sub status of ready
+              // pickup, ready for delivery, shipping… when a job is TBD it just becomes ready"): picking one sets how it leaves
+              if (s.k === "ready") return [...(["pickup", "deliver", "ship"] as const).map((dm) => <option key={"ready:" + dm} value={"ready:" + dm}>{statusText("ready", dm)}</option>),
+                ...(!["pickup", "deliver", "ship"].includes(o.delivery_method || "") ? [<option key="ready" value="ready">Ready</option>] : [])];
+              const lock = s.k === "production" && booked === false && statusKey(o) !== "production"; return [<option key={s.k} value={s.k} disabled={lock} title={lock ? "Book it on the schedule: booking a job puts it In Production" : undefined}>{statusText(s.k, o.delivery_method)}</option>]; })}</optgroup>
           </select>
           {mixO[o.id] && <span className="mxs-h"><MixStrip parts={mixO[o.id]} /></span>}
           <IssueTag issues={issO[o.id]} />
