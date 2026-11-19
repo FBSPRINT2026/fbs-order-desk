@@ -188,7 +188,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
 // the machine kinds (picked from the menu's SP / EMB / HP now; kept for the names)
 export const TYPE_OPTS = [["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const;
-const VIEW_OPTS = [["timeline", "Weekly"], ["flow", "Next 12 hours"]] as const;
+const VIEW_OPTS = [["timeline", "Week"], ["flow", "Next 12h"]] as const;
 const HOUR_PX0 = 56;
 const LANE = 22;
 
@@ -1753,12 +1753,14 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
     if (drag.group) { placeGroup(drag.group, m, d, before); return; }
     place(drag.card ? { card: drag.card } : { job: drag.job, need: drag.need }, m, d, before);
   };
+  // Week | Next 12h, small, on each view's own bar (Nick, Nov 19 2026: "make it small… a little divider… show weekends")
+  const viewSeg = <span className="msv-seg" role="group" aria-label="View">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} aria-pressed={view === k} onClick={() => setView(k)}>{l}</button>)}</span>;
   const weekGrid = (ds: string[], title: string) => {
     const w = ds[0];
     return (
       <section className="ms-wk mwp" key={w}>
         <div className="ms-wk-h"><b>{title}</b><span className="faint">{dayLbl(ds[0])} – {dayLbl(ds[ds.length - 1])}</span><span className="spacer" />
-          <span className="mwp-nav"><label className="ms-wknd" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label><button type="button" className="btn sm" onClick={() => setRoll(roll - 1)} aria-label="Back 5 days">‹ 5 days</button><button type="button" className="btn sm" disabled={roll === 0} onClick={() => setRoll(0)}>Today</button><button type="button" className="btn sm" onClick={() => setRoll(roll + 1)} aria-label="Ahead 5 days">5 days ›</button></span></div>
+          <span className="mwp-nav">{viewSeg}<i className="msv-div" aria-hidden /><label className="ms-wknd" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Show weekends</label><i className="msv-div" aria-hidden /><button type="button" className="btn sm" onClick={() => setRoll(roll - 1)} aria-label="Back 5 days">‹ 5 days</button><button type="button" className="btn sm" disabled={roll === 0} onClick={() => setRoll(0)}>Today</button><button type="button" className="btn sm" onClick={() => setRoll(roll + 1)} aria-label="Ahead 5 days">5 days ›</button></span></div>
         <div className="mwp-g" style={{ gridTemplateColumns: `112px repeat(${ds.length}, minmax(0,1fr))` }}>
           <div />
           {ds.map((d) => (
@@ -2574,6 +2576,7 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
   };
   const flowView = () => (
     <div className={"msf" + (findWords.length ? " ms-finding" : "")}>
+      <div className="ms-wk-h msv-bar"><b>Next 12 hours</b><span className="spacer" /><span className="mwp-nav">{viewSeg}</span></div>
       <div className="msf-main">
         <div className="msf-grid" style={{ gridTemplateColumns: `40px repeat(${machines.length}, minmax(0,1fr))` }}>
           <div className="msf-corner" />
@@ -3298,7 +3301,6 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
             <div className="msh-seg sm" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
             {!embOnly && <div className="msh-seg sm" role="group" aria-label="Which schedule">{([["screen", "SP", "Screen print"], ["embroidery", "EMB", "Embroidery"], ["heat", "HP", "Heat press"]] as const).map(([k, l, t]) => <button key={k} type="button" title={t} className={typeF === k ? "on" : ""} onClick={() => setSide(k)}>{l}</button>)}</div>}
           </div>
-          <div className="msh-seg" role="group" aria-label="View">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
         </div>
       </div>
       {/* what just happened (booked, re-planned, saved): a quiet note at the bottom of the screen, not above the tools */}
@@ -3466,7 +3468,8 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
             })()}
           </div>
       </section>
-      {view === "timeline" ? aiBox : null}
+      {/* the right third on Week: the assistant, and the tools under it, folding to a row of icons (Nick, Nov 19 2026) */}
+      {view === "timeline" ? <div className="mzc-wks">{aiBox}{toolsBox}</div> : null}
       </div>
 
       <div className="ms-main">
