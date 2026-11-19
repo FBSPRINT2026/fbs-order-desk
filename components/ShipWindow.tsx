@@ -82,6 +82,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const [pick, setPick] = useState<string>(existing?.service ? `${existing.carrier}|${existing.service}` : "");
   // why it isn't going Ground (Nick, Nov 19 2026: "you should have to override it to go out of ground")
   const [why, setWhy] = useState("");
+  const savedId = useRef("");
   const [tracking, setTracking] = useState(false);
   const [busy, setBusy] = useState(""), [err, setErr] = useState("");
   const [scan, setScan] = useState("");
@@ -205,8 +206,11 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   async function save(status: Shipment["status"] = "draft") {
     setBusy("save"); setErr("");
     const r = { ...row(), status, ...(status === "shipped" ? { shipped_at: new Date().toISOString() } : {}) };
-    const q = existing ? sb.from("shipments").update(r).eq("id", existing.id).select("id").maybeSingle() : sb.from("shipments").insert(r).select("id").maybeSingle();
+    // the one this window saved already, so a second try never makes a second shipment (#50026 had a leftover draft)
+    const sid0 = existing?.id || savedId.current;
+    const q = sid0 ? sb.from("shipments").update(r).eq("id", sid0).select("id").maybeSingle() : sb.from("shipments").insert(r).select("id").maybeSingle();
     const { data: saved, error } = await q;
+    if ((saved as { id?: string } | null)?.id) savedId.current = (saved as { id: string }).id;
     if (error) { setBusy(""); setErr(error.message); return false; }
     await saveCustomer();
     if (status === "shipped" && t.kind === "order") {
@@ -227,7 +231,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
       if (sid) await orderShipped(t.id, sid).catch(() => null);
     }
     setBusy("");
-    return (saved as { id?: string } | null)?.id || existing?.id || true;
+    return (saved as { id?: string } | null)?.id || sid0 || true;
   }
 
   /**

@@ -2,7 +2,7 @@ import type { ShipAddress, ShipSettings } from "@/lib/pricing";
 
 /** Shipping center: boxes, addresses and what we charge. Shared by the shop screens and the server. */
 
-export type Box = { n: number; length: number | ""; width: number | ""; height: number | ""; weight: number | ""; tracking?: string; label_url?: string };
+export type Box = { n: number; length: number | ""; width: number | ""; height: number | ""; weight: number | ""; tracking?: string; label_url?: string; /** the label for the Zebra, and its EasyPost shipment (Reprint labels) */ zpl_url?: string; ep_id?: string };
 export type BillTo = "fbs" | "ups" | "fedex";
 export type Rate = { id?: string; carrier: string; service: string; cost: number; price: number; days: number | null; deliveryDate?: string | null };
 export type Shipment = {

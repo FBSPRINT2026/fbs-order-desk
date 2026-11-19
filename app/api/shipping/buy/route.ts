@@ -54,14 +54,14 @@ export async function POST(req: Request) {
     // "PHONENUMBER.EMPTY"), so a blank one goes to FedEx as our shop's number, only on the label, saved nowhere
     const phone = String(sh.ship_to?.phone || s.from.phone || "").trim();
     const to = { ...sh.ship_to, phone };
-    const q = await rateShipment({ from: s.from, to, boxes, bill: shipOn ? "fbs" : bill, account: sh.bill_account || "", zip: sh.bill_zip || "", reference: ref, carrierAccounts });
+    const q = await rateShipment({ labelFormat: "ZPL", from: s.from, to, boxes, bill: shipOn ? "fbs" : bill, account: sh.bill_account || "", zip: sh.bill_zip || "", reference: ref, carrierAccounts });
     const rate = q.rates.find((r) => r.carrier === carrier && r.service === service);
     if (!rate) { await undo(); return NextResponse.json({ error: `${carrier} ${service} isn't offered for this shipment any more. Check rates again.` }, { status: 409 });
     }
     const got = await buyOrder(q.orderId, carrier, service);
     bought = got.boxes.map((x) => x.tracking).filter(Boolean);
-    const cost = got.boxes.reduce((t, x) => t + x.cost, 0) || rate.cost;
-    const nb: Box[] = boxes.map((x, i) => ({ ...x, tracking: got.boxes[i]?.tracking || "", label_url: got.boxes[i]?.labelUrl || "" }));
+    const cost = Math.round((got.boxes.reduce((t, x) => t + x.cost, 0) || rate.cost) * 100) / 100;
+    const nb: Box[] = boxes.map((x, i) => ({ ...x, tracking: got.boxes[i]?.tracking || "", label_url: got.boxes[i]?.labelUrl || "", zpl_url: got.boxes[i]?.zplUrl || "", ep_id: got.boxes[i]?.shipmentId || "" }));
     const now = new Date().toISOString();
     const note = [String(sh.note || "").trim(), String(b.why || "").trim() ? `Not Ground: ${String(b.why).trim()}` : ""].filter(Boolean).join(" · ");
     const up = await admin.from("shipments").update({ boxes: nb, carrier, service, cost, price: shippingPrice(cost, nb.length, shipOn ? "fedex" : bill, s), status: "shipped", shipped_at: now, updated_at: now, note }).eq("id", sid);
@@ -78,7 +78,9 @@ export async function POST(req: Request) {
       const r = await queueLabels(admin, zpls, by, typeof b.printer === "string" ? b.printer : null);
       printed = r.message;
     }
-    return NextResponse.json({ ok: true, tracking: nums, labels: nb.map((x) => x.label_url).filter(Boolean), printed, saved: !up.error, warn: up.error ? `The labels are bought (${nums.join(", ")}) but saving them failed: ${up.error.message}` : "" });
+    // say so when they didn't go to the Zebra (#50026 printed nothing and said nothing)
+    const noPrint = zpls.length < got.boxes.length ? `The label${got.boxes.length === 1 ? "" : "s"} didn't print${got.zplError ? ` (${got.zplError})` : ""}: open each box's Label on the order to print it, or press Reprint labels.` : "";
+    return NextResponse.json({ ok: true, tracking: nums, labels: nb.map((x) => x.label_url).filter(Boolean), printed, saved: !up.error, warn: up.error ? `The labels are bought (${nums.join(", ")}) but saving them failed: ${up.error.message}` : noPrint ? `Labels bought (${nums.join(", ")}). ${noPrint}` : "" });
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
     if (bought) return NextResponse.json({ ok: true, tracking: bought, labels: [], printed: "", saved: false, warn: `The labels are bought (${bought.join(", ") || "no tracking back"}) but something after failed: ${m}. Don't buy again; check the shipment.` });

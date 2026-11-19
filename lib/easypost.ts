@@ -41,6 +41,7 @@ type EpRate = { id: string; carrier: string; service: string; rate: string; deli
 
 /** Rates for a multi-box shipment (one EasyPost "order" with a shipment per box). */
 export async function rateShipment(p: { from: ShipAddress; to: ShipAddress; boxes: Box[]; bill: BillTo; account: string; zip: string; reference: string;
+  /** the label's format when it's bought: ZPL for the Zebra (Create labels), PDF otherwise */ labelFormat?: "PDF" | "ZPL";
   /** the carrier accounts to rate on (EasyPost ids): a customer's own account, else FBS's; none = every connected one */ carrierAccounts?: string[] }): Promise<{ orderId: string; rates: Omit<Rate, "price">[] }> {
   const payment = p.bill === "fbs" ? undefined : { type: "THIRD_PARTY", account: p.account, country: "US", postal_code: p.zip };
   const o = await ep<{ id: string; rates: EpRate[]; messages?: { carrier: string; message: string }[] }>("/orders", {
@@ -50,7 +51,7 @@ export async function rateShipment(p: { from: ShipAddress; to: ShipAddress; boxe
       to_address: addr(p.to), from_address: addr(p.from),
       shipments: p.boxes.map((b) => ({
         parcel: { length: +b.length, width: +b.width, height: +b.height, weight: Math.round(+b.weight * 16 * 10) / 10 }, // weight in ounces
-        options: { print_custom_1: p.reference, label_format: "PDF", label_size: "4x6", ...(payment ? { payment } : {}) },
+        options: { print_custom_1: p.reference, label_format: p.labelFormat || "PDF", label_size: "4x6", ...(payment ? { payment } : {}) },
       })),
     },
   });
@@ -101,18 +102,35 @@ export async function carrierAccounts(): Promise<{ id: string; type: string; des
  * and service picked; each box's tracking number, its PDF label and its ZPL for the Zebra come back. This spends money:
  * only app/api/shipping/buy calls it, once per shipment.
  */
-export async function buyOrder(orderId: string, carrier: string, service: string): Promise<{ boxes: { tracking: string; labelUrl: string; zpl: string; cost: number; shipmentId: string }[] }> {
-  type EpShip = { id: string; tracking_code: string; postage_label?: { label_url?: string; label_zpl_url?: string } | null; selected_rate?: { rate?: string } | null };
+export async function buyOrder(orderId: string, carrier: string, service: string): Promise<{ boxes: { tracking: string; labelUrl: string; zplUrl: string; zpl: string; cost: number; shipmentId: string }[]; zplError: string }> {
+  type Lbl = { label_url?: string; label_zpl_url?: string; label_pdf_url?: string };
+  type EpShip = { id: string; tracking_code: string; postage_label?: Lbl | null; selected_rate?: { rate?: string } | null };
   const o = await ep<{ id: string; shipments: EpShip[] }>(`/orders/${orderId}/buy`, { carrier, service });
-  const out: { tracking: string; labelUrl: string; zpl: string; cost: number; shipmentId: string }[] = [];
+  const out: { tracking: string; labelUrl: string; zplUrl: string; zpl: string; cost: number; shipmentId: string }[] = [];
+  let zplError = "";
   for (const sh of o.shipments || []) {
-    let zpl = "";
-    try {
-      const z = await epGet<EpShip>(`/shipments/${sh.id}/label?file_format=ZPL`);
-      const u = z.postage_label?.label_zpl_url;
-      if (u) zpl = await fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).catch(() => "");
-    } catch { /* the PDF is still there to print */ }
-    out.push({ tracking: sh.tracking_code || "", labelUrl: sh.postage_label?.label_url || "", zpl, cost: +(sh.selected_rate?.rate || 0) || 0, shipmentId: sh.id });
+    // bought as ZPL (Nov 19 2026: a FedEx label bought as a PDF couldn't be turned into ZPL afterwards, so #50026 never printed)
+    let lbl: Lbl = sh.postage_label || {};
+    if (!lbl.label_zpl_url) {
+      try { lbl = { ...lbl, ...((await epGet<EpShip>(`/shipments/${sh.id}/label?file_format=ZPL`)).postage_label || {}) }; } catch (e) { zplError = e instanceof Error ? e.message : String(e); }
+    }
+    const zplUrl = lbl.label_zpl_url || (/\.zpl(\?|$)/i.test(lbl.label_url || "") ? lbl.label_url! : "");
+    const zpl = zplUrl ? await fetch(zplUrl, { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).catch(() => "") : "";
+    if (!zpl && !zplError) zplError = "FedEx didn't send the label in the Zebra's format.";
+    // a PDF too, to open and print another way
+    if (!lbl.label_pdf_url) { try { lbl = { ...lbl, ...((await epGet<EpShip>(`/shipments/${sh.id}/label?file_format=PDF`)).postage_label || {}) }; } catch { /* the Zebra's is enough */ } }
+    const view = lbl.label_pdf_url || (/\.(pdf|png)(\?|$)/i.test(lbl.label_url || "") ? lbl.label_url! : "");
+    out.push({ tracking: sh.tracking_code || "", labelUrl: view, zplUrl, zpl, cost: Math.round((+(sh.selected_rate?.rate || 0) || 0) * 100) / 100, shipmentId: sh.id });
   }
-  return { boxes: out };
+  return { boxes: out, zplError };
+}
+
+/** a bought label again, in the Zebra's format (Reprint labels): by its EasyPost shipment, else by its ZPL file */
+export async function labelZpl(box: { ep_id?: string; zpl_url?: string }): Promise<string> {
+  let u = box.zpl_url || "";
+  if (!u && box.ep_id) u = (await epGet<{ postage_label?: { label_zpl_url?: string } }>(`/shipments/${box.ep_id}/label?file_format=ZPL`)).postage_label?.label_zpl_url || "";
+  if (!u) throw new Error("No Zebra label for this box (bought before labels came as ZPL): print its PDF instead.");
+  const t = await fetch(u, { cache: "no-store" }).then((r) => (r.ok ? r.text() : "")).catch(() => "");
+  if (!t) throw new Error("Couldn't load the label from FedEx. Try again.");
+  return t;
 }

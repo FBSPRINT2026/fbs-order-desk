@@ -214,9 +214,9 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
                 </section>
               );
             })}
-            {partly.length > 0 && (
+            {partly.some(({ item: x }) => matches(x)) && (
               <section className="scr part">
-                <div className="scr-h"><b>Partly printed · can ship part</b><span className="aa-n">{partly.length}</span><span className="faint">a part is printed, the rest isn&apos;t yet</span></div>
+                <div className="scr-h"><b>Partly printed · can ship part</b><span className="aa-n">{partly.filter(({ item: x }) => matches(x)).length}</span><span className="faint">a part is printed, the rest isn&apos;t yet</span></div>
                 {partly.filter(({ item: x }) => matches(x)).map(({ item: x, parts, went }) => {
                   const k = "p" + x.id;
                   return <ShipLine key={k} x={x} perBox={settings.ship.perBox} showCust onOpen={() => void shipPartOf(x)} parts={parts} went={went}

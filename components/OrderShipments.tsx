@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { trackingLink, type Shipment } from "@/lib/shipping";
+import { myPrinter } from "@/lib/labelPrinter";
 
 /**
  * How the order left, under its Delivery method (Nick, Nov 19 2026: "once it's marked completed… the tracking should just go
@@ -22,6 +23,12 @@ export default function OrderShipments({ orderId, method, status }: { orderId: s
     if (status === "completed" && method !== "ship") void sb.from("order_events").select("at:created_at, actor").eq("order_id", orderId).eq("kind", "status").eq("detail", "completed").order("created_at", { ascending: false }).limit(1)
       .then(({ data }) => setWent(((data || [])[0] as Went) || null));
   }, [orderId, method, status]);
+  const [msg, setMsg] = useState<Record<string, string>>({});
+  async function reprint(id: string) {
+    setMsg((m) => ({ ...m, [id]: "Sending to the Zebra…" }));
+    const r = await fetch("/api/shipping/reprint", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shipmentId: id, printer: myPrinter() }) }).then((x) => x.json()).catch(() => ({ error: "Offline. Try again." }));
+    setMsg((m) => ({ ...m, [id]: r.error || r.message || "Sent." }));
+  }
   const list = (ships || []).filter((s) => s.boxes?.some((b) => (b.tracking || "").trim()) || s.status === "shipped");
   if (!list.length && !went) return null;
   return (
@@ -41,6 +48,7 @@ export default function OrderShipments({ orderId, method, status }: { orderId: s
               <div key={b.n + ":" + i} className="osh-b"><span>Box {i + 1}</span><a href={trackingLink(b.tracking!)} target="_blank" rel="noreferrer" data-notranslate>{b.tracking}</a>{b.label_url && <a className="osh-l" href={b.label_url} target="_blank" rel="noreferrer">Label</a>}</div>
             ))}
             {s.track_detail && st !== "delivered" && <div className="osh-n">{s.track_detail}</div>}
+            {s.boxes.some((b) => b.zpl_url || b.ep_id) && <div className="osh-n"><button type="button" className="linkbtn" onClick={() => void reprint(s.id)}>Reprint labels</button>{msg[s.id] ? ` · ${msg[s.id]}` : ""}</div>}
             <div className="osh-n">{[s.created_by && `By ${s.created_by}`, s.note].filter(Boolean).join(" · ")}</div>
           </div>
         );
