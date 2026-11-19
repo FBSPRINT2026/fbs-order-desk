@@ -950,10 +950,10 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     // the same kind of order for one customer printed the same way (Nick, Nov 19 2026, AMS's weekly run: "if it's just a
     // helper T, the same left chest with the same back print, they should all go together, one big list… we very rarely
     // print anything different for screen printing"): the same print spots and color counts, whatever the mockup's file
-    // or the in-hands date. The kind of order is the customer's order training (cid), else the job name's first word
-    // (a reseller's end client: "AMS Houston", "AMS Tulsa").
+    // or the in-hands date, for the same kind of order (the customer's order training, cid) and the same end client (the
+    // job name's first word: "AMS Houston", "AMS Tulsa"; Dear Heart's Count Joy and Take Heart stay apart).
     if (a.job.kind === "o" && b.job.kind === "o" && !a.job.issue && !b.job.issue && a.need.type === b.need.type && a.job.customer === b.job.customer
-      && (a.job.cid || b.job.cid ? a.job.cid === b.job.cid : firstWord(a.job.name) !== "" && firstWord(a.job.name) === firstWord(b.job.name))
+      && (a.job.cid || "") === (b.job.cid || "") && firstWord(a.job.name) !== "" && firstWord(a.job.name) === firstWord(b.job.name)
       && printSig(a.need) !== "" && printSig(a.need) === printSig(b.need)) return true;
     if (!a.job.due || a.job.due !== b.job.due || (a.job.prod || "") !== (b.job.prod || "")) return false;
     const aa = artsOf(a.need); return [...artsOf(b.need)].some((x) => aa.has(x));
