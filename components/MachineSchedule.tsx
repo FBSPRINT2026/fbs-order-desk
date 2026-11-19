@@ -611,6 +611,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   const [openMove, setOpenMove] = useState(false);
   const [keyOpen, setKeyOpen] = useSticky("cal.key", true);
   const [rcPause, setRcPause] = useState(false), [rcSure, setRcSure] = useState(false);
+  // the job panel is simple to start with (Nick, Nov 19 2026: "way too much info… just like a simple view"): the run's
+  // buttons and what the job is; More opens the rest (times, where the order goes, goods and schedule tiles, Rush / Firm)
+  const [rcMore, setRcMore] = useState(false);
   // Issue on a run (Nick, Nov 12: "a red button that says issue, reprint, reject, or missing"): why, and how many still to print by size
   const [rcIss, setRcIss] = useState<{ why: IssueRef["why"]; n: Record<string, string>; sizes: [string, number][] | null; count?: boolean } | null>(null);
   useEffect(() => { setRcIss(null); }, [lockMenu?.c.key]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1813,7 +1816,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                             className={"mwp-j" + (hold ? " hold" : "") + (done ? " done" : "") + (c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (isHit(c.job) ? " ms-hit" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "")}
                             title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); setOpen(c); }}
                             onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
-                            <b>{c.job.name || shortLabel(c.need.label)}</b>
+                            <b>{!hold && dotEl(c, g)}{c.job.name || shortLabel(c.need.label)}</b>
                             <span>{hold ? "Hold · " : ""}{abbrCo(c.job.customer || "")}{hold ? "" : ` · #${c.job.number}`}{done ? " · printed" : ""}{late && !done ? " · late" : ""}</span>
                             <i className="mwp-t">{clock(start)} · {fmtMin(c.minutes)}{nxt ? <em className={late ? "late" : ""}> · runs into {dayLbl(nxt.day).split(",")[0]}</em> : null}</i>
                           </button>
@@ -2255,7 +2258,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     }).catch(() => setRcGoods((g) => (g && g.ref === ref ? { ...g, err: "Couldn't load the goods." } : g)));
     setRcF({ t: hhmm(now.min), pcs: String(Math.round(+(c.slot?.progress || 0) * c.need.qty) || ""), why: "Lunch", next: "ready", edit: false });
     setRcDone({});
-    setRcPause(false); setRcSure(false);
+    setRcPause(false); setRcSure(false); setRcMore(false);
     setLockMenu({ c, g, x, y });
   }
   rcInit.current = (c: Card, keep: boolean) => openRc(c, (segs.ofCard.get(c.key) || [])[0], 0, 0, keep);
@@ -2481,7 +2484,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         // the right click (Nov 12, Nick, option B): the run first, as three steps with their times; then goods and the
         // schedule as tiles; Rush / Firm; take it off the schedule last
         const c = lockMenu.c, g = lockMenu.g, st = c.slot?.status || "scheduled", q = c.need.qty || 0;
-        const tIn = <input type="time" className="mrc-t" aria-label="Time" value={rcF.t} onChange={(e) => setRcF({ ...rcF, t: e.target.value })} />;
+        const tIn = !rcMore ? null : <input type="time" className="mrc-t" aria-label="Time" value={rcF.t} onChange={(e) => setRcF({ ...rcF, t: e.target.value })} />;
         const tm = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }).replace(" AM", "a").replace(" PM", "p") : "");
         const rs = runState(c);
         const step = (k: string, cls: string, label: string, sub: string, ico: "check" | "play" | "pause") => <div key={k} className={"mrb-st " + cls}><i className="mrb-dot"><RcIco k={ico} /></i><b>{label}</b><small>{sub}</small></div>;
@@ -2490,12 +2493,12 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
         return <>
           <div className="mrc mrb mrb-dock">
             {c.job.kind !== "h" && <div className="mrc-sec">
-              <div className="mrc-l">Run</div>
+              {rcMore && <><div className="mrc-l">Run</div>
               <div className="mrb-steps">
                 {step("s", st === "scheduled" ? "cur" : "on", "Started", st === "scheduled" ? "not yet" : tm(c.slot?.started_at), st === "scheduled" ? "play" : "check")}
                 {step("p", st === "running" ? "cur" : st === "paused" ? "cur pz" : st === "done" ? "on" : "", st === "paused" ? "Paused" : "Printing", st === "running" ? (rs ? `${fmtMin(rs.used)} · ${rs.over > 0 ? fmtMin(rs.over) + " over" : "on time"}` : "now") : st === "paused" ? "since its pause" : st === "done" ? "" : "—", st === "paused" ? "pause" : "play")}
                 {step("d", st === "done" ? "on" : "", "Printed", st === "done" ? tm(c.slot?.finished_at) : "—", "check")}
-              </div>
+              </div></>}
               {st === "scheduled" && <div className="mrb-row">{tIn}<button type="button" className="mrc-act" onClick={() => void rcDo(c, g, "start")}><RcIco k="play" />Start</button><button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "done")}><RcIco k="check" />Printed</button></div>}
               {st === "running" && <>
                 <div className="mrb-row">{tIn}<button type="button" className={"mrc-act" + (rcPause ? " on" : "")} onClick={() => setRcPause(!rcPause)}><RcIco k="pause" />Pause</button><button type="button" className="mrc-act go" onClick={() => void rcDo(c, g, "done")}><RcIco k="check" />Printed</button></div>
@@ -2523,21 +2526,23 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                   <button type="button" className="mrb-pgo mrb-isgo" onClick={() => void raiseIssue(c, g)}>{`Mark ${ISSUE_WORD[rcIss.why].toLowerCase()}${tot ? ` · ${tot} pcs` : ""}${rcIss.why === "missing" ? " · waits for goods" : ""}`}</button>
                 </div>; })()}
               </>}
-              {st !== "done" && c.slot?.order_id && <div className="mrb-dest"><div className="mrb-dl">When it&apos;s printed, the order goes to</div>
+              {rcMore && st !== "done" && c.slot?.order_id && <div className="mrb-dest"><div className="mrb-dl">When it&apos;s printed, the order goes to</div>
                 <div className="mrb-seg">{([["fulfillment", "Fulfillment", "fold, bag, count"], ["ready", "Ready", "pickup · delivery · shipping"], ["completed", "Completed", "picked up"]] as const).map(([k, l, sub]) => <button key={k} type="button" className={rcF.next === k ? "on" : ""} onClick={() => setRcF({ ...rcF, next: k })}>{l}<small>{sub}</small></button>)}</div>
                 {rcF.next !== "fulfillment" && <div className="mrb-note">Once it&apos;s the order&apos;s last job; the customer gets the usual status email.</div>}
               </div>}
               {st === "done" && <div className="mrb-row"><button type="button" className="mrc-act" onClick={() => { const sl = c.slot!; setLockMenu(null); void logAction(sl, "reopen"); }}><RcIco k="undo" />Not done yet</button></div>}
-              {(st === "running" || st === "paused") && <button type="button" className="linkbtn mrb-undo" onClick={() => void rcDo(c, g, "not_started")}>Not started after all</button>}
+              {rcMore && (st === "running" || st === "paused") && <button type="button" className="linkbtn mrb-undo" onClick={() => void rcDo(c, g, "not_started")}>Not started after all</button>}
             </div>}
             {rcGoods && <>
               <div className="mrb-gl">Goods{gj ? <> · <GoodsTee k={gj.state === "issue" ? "r" : counted ? "g" : gj.state === "ready" || gj.state === "partial" ? "a" : "o"} t="" />{gj.state === "issue" ? "problem reported" : counted ? `counted${ck ? " " + tm(ck.created_at) : ""}` : "not counted"}</> : rcGoods.err ? ` · ${rcGoods.err}` : " · loading…"}</div>
-              {gj && <div className="mrb-tiles">
+              {gj && !rcMore && !counted && <button type="button" className="linkbtn mrb-cnt" onClick={() => { setLockMenu(null); setCountJob(gj); }}>Count in</button>}
+              {gj && rcMore && <div className="mrb-tiles">
                 {tile("c", "box", counted ? "Recount" : "Count in", () => { setLockMenu(null); setCountJob(gj); })}
                 {tile("a", "check", "All here", () => void goodsAllHere(gj), "ok")}
                 {tile("m", "warn", "Missing", () => { setLockMenu(null); setCountJob(gj); }, "bad")}
               </div>}
             </>}
+            {rcMore && <>
             <div className="mrb-gl">Schedule{c.slot?.locked ? ` · locked to ${c.slot.locked === "spot" ? "its spot" : c.slot.locked === "person" ? crewOf(c.machine)?.leader || "its person" : c.slot.locked === "press" ? "its press" : "its day"}` : ""}</div>
             <div className="mrb-tiles">
               {tile("n", "next", "Run next", () => { if (st !== "running" && st !== "done") runNext(c); else setLockMenu(null); }, st === "running" || st === "done" ? "off" : "")}
@@ -2548,6 +2553,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             {c.slot && (rcSure
               ? <div className="mrb-sure">{c.job.hold ? "Bump this hold?" : "Take it off the schedule?"}<button type="button" className="btn sm danger" onClick={() => { const sl = c.slot!; setRcSure(false); setLockMenu(null); setOpen(null); void unbook(sl); }}>Yes</button><button type="button" className="btn sm" onClick={() => setRcSure(false)}>No</button></div>
               : <button type="button" className="mrc-li mrb-off" onClick={() => setRcSure(true)}><RcIco k="x" />{c.job.hold ? "Bump this hold" : "Take off the schedule"}</button>)}
+            </>}
+            <button type="button" className="mrb-more" aria-expanded={rcMore} onClick={() => setRcMore(!rcMore)}>{rcMore ? "Less ▴" : "More ▾"}<small>{rcMore ? "" : "times · where it goes · goods · move · lock · rush · take off"}</small></button>
           </div>
         </>;
   };
@@ -3715,10 +3722,19 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
         {parts.length > 1 && <div className="mji-sec"><div className="mji-l">This job runs in {parts.length} parts</div>
           <div className="mji-parts">{parts.map((x, i) => <div key={x.key} className={"mji-part" + (x.me ? " me" : "")}><b>Run {i + 1} · {x.press}{x.me ? " · this one" : ""}</b><span>{x.what}</span><small>{x.when}</small></div>)}</div>
         </div>}
-        {info?.pics.length ? <div className="mji-sec"><div className="mji-l">Mockups<span className="mji-cnt">{info.pics.length}</span></div>
+        {/* simple to start (Nick, Nov 19 2026): the picture, the press and time, the prints with their inks; the rest under More details */}
+        {!more && <div className="mji-sec mjs">
+          {info?.pics[0] ? <a className="mjs-pic" href={info.pics[0].url} target="_blank" rel="noreferrer" title="Open full size"><img src={info.pics[0].url} alt="" /></a> : null}
+          <div className="mjs-r">
+            <div className="mjs-l"><b>{shortName(c.machine)}{lead(c.machine) ? ` · ${lead(c.machine)}` : ""}</b><span>{first && last ? `${first.day !== nowM.day ? dW(first.day) + " " : ""}${clock(first.start)} – ${clock(last.end)} · ` : ""}{fmtMin(c.plan?.est ?? est.minutes)}{soFar != null ? ` · ${fmtMin(soFar)} so far` : ""}</span></div>
+            {(info?.prints || []).map((x) => <div key={x.loc + x.inks} className="mjs-pr"><b>{x.loc}</b><span>{(x.inks || "").split(/\s*[,/+]\s*/).filter(Boolean).map((ik) => ik.replace(/^PMS\s*/i, "")).join(" · ") || `${x.colors} color${x.colors === 1 ? "" : "s"}`}</span></div>)}
+            <div className="mjs-q">{(info?.pcs || c.need.qty).toLocaleString()} pcs{info?.garments.length ? ` · ${info.garments.map(([k, n]) => `${k} ${n}`).join(", ")}` : ""}</div>
+          </div>
+        </div>}
+        {more && info?.pics.length ? <div className="mji-sec"><div className="mji-l">Mockups<span className="mji-cnt">{info.pics.length}</span></div>
           <div className="mji-grid">{info.pics.map((x) => <a key={x.url} className="mji-mk" href={x.url} target="_blank" rel="noreferrer" title={x.title ? `${x.title}: open full size` : "Open full size"}><img src={x.url} alt={x.title} />{x.title ? <small>{x.title}</small> : null}</a>)}</div>
         </div> : null}
-        <div className="mji-two">
+        {more && <div className="mji-two">
           <div className="mji-sec">
             <div className="mji-l">Run time</div>
             <div className="mji-kv">
@@ -3734,8 +3750,8 @@ function CardPanel({ s, c, cost, otMin, onFlags, segs, days, win, onClose, onMov
             {info?.garments.length ? <><span>Garments</span><span className="mji-gl">{info.garments.map(([k, n]) => <Fragment key={k}><b>{k}</b><em>{n}</em></Fragment>)}</span></> : null}
             {ck ? <><span>Counted</span><b>{ck.received} of {ck.expected}{ck.by ? ` · ${ck.by.split(" ")[0]}` : ""} · {tmD(ck.created_at)}</b></> : gd ? <><span>Counted</span><b className="faint">Not yet</b></> : null}
           </div></div> : <div className="mji-sec" />}
-        </div>
-        {info && info.prints.length > 0 && <div className="mji-sec"><div className="mji-l">Prints · {(info.pcs || c.need.qty).toLocaleString()} pcs</div>
+        </div>}
+        {more && info && info.prints.length > 0 && <div className="mji-sec"><div className="mji-l">Prints · {(info.pcs || c.need.qty).toLocaleString()} pcs</div>
           {info.prints.map((x) => <div key={x.loc + x.inks} className="mji-pr"><b>{x.loc}</b><span className="mji-inks">{(x.inks || "").split(/\s*[,/+]\s*/).filter(Boolean).map((ik0) => { const ik = ik0.replace(/^PMS\s*/i, ""); return <span key={ik0} className="mji-ink"><i style={{ background: colorHex(ik0) || "var(--line)" }} />{ik}</span>; })}</span><span className="faint">{x.colors ? `${x.colors} color${x.colors === 1 ? "" : "s"}` : ""}</span></div>)}
         </div>}
         {moving && <div className="mjp-move">
