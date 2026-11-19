@@ -23754,3 +23754,9 @@ main.main .rvg-sub{margin-bottom:10px}
 .rvd-sup.sm .rvd-sup-h{background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 70%,var(--ink))}
 .rvd-sup.cs .rvd-sup-h{background:var(--violet-soft);color:var(--violet)}
 .rvd-sup-h small{opacity:1;color:inherit;font-weight:600}
+/* Shipments' list headings in the same soft bands as the dashboard's (A+, Nov 19) */
+.rv-stack .rv-list h4.rv-sec{background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 80%,var(--ink));box-shadow:inset 4px 0 currentColor;font-size:15px}
+.rv-stack .rv-list h4.rv-sec em{background:color-mix(in srgb,currentColor 14%,transparent)}
+.rv-stack .rv-list h4.rv-sec-arrived{background:var(--ok-soft);color:var(--ok)}
+.rv-stack .rv-list h4.rv-sec-problems{background:var(--danger-soft);color:var(--danger)}
+.rv-stack .rv-list h4.rv-sec-past,.rv-stack .rv-list h4.rv-sec-way{background:var(--surface-2);color:var(--ink-2)}

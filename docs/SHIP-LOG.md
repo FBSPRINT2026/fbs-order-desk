@@ -514,3 +514,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 11:28am · 1.3.757 · Nick · Goods & Receiving dashboard: a Customer shipments box under S&S and SanMar, with each shipment's sender, boxes and tracking (where it is), today or tomorrow
 - Nov 19 11:30am · 1.3.758 · Nick · Customer shipments box: counts shipments, no "0 boxes"
 - Nov 19 11:48am · 1.3.759 · Nick · Goods & Receiving, one look (A+): Dashboard · Issue Center · Shipments with soft icon tiles; Shipments = Arriving & tracking (carrier chips: S&S truck, UPS, FedEx, SanMar, Freight, Other) and Goods (Waiting / Not linked / Here / Ignored, our blanks or customer goods); white headers with the fade line, soft tinted section bands and supplier strips
+- Nov 19 11:52am · 1.3.760 · Nick · Goods & Receiving A+: Shipments' list headings in soft bands too

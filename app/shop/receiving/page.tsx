@@ -551,7 +551,7 @@ export default function GoodsReceiving() {
               <div className="chips">{GOODS_CHIPS.map(([k, l]) => <button key={k} type="button" className={"chip" + (gPick === k ? " on" : "")} onClick={() => setGPick(k)}>{l}<span className="chip-n">{goodsOf(k).length}</span></button>)}</div>
               <div className="chips">{SIDE_CHIPS.map(([k, l]) => <button key={k} type="button" className={"chip" + (gSide === k ? " on" : "")} onClick={() => setGSide(k)}>{l}</button>)}</div>
             </>}
-          <label className="rv-search rvs-q"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments: customer, job #, PO, tracking" aria-label="Search the shipments" /></label>
+          <label className="rv-search rvs-q"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the shipments" /></label>
         </div>
       </>}
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
