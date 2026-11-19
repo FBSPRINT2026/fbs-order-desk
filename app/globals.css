@@ -23961,3 +23961,47 @@ main.main .rvg-sub{margin-bottom:10px}
 .msh-r{align-items:flex-end}
 /* the assistant's Make the schedule / Re-plan / Start over row lines up with its tip (Nick, Nov 19 2026) */
 .mzc-ai .msai-acts{margin:0;padding:6px 14px 12px 14px}
+
+/* ---------- Ready to ship (Nick, Nov 19 2026): two stacked lists that grow with the page, sorted by job # or customer,
+   one line a job, + Tracking beside Ship (components/shipping/ShippingCenter.tsx) ---------- */
+.scr-w{display:flex;flex-direction:column;gap:14px}
+.scr{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.scr.warn{border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}
+.scr-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line-2)}
+.scr-h b{font-family:var(--display);font-size:15px}
+.scr.warn .scr-h{background:color-mix(in srgb,var(--warn) 10%,var(--surface))}
+.scr-sort{display:inline-flex;align-items:center;gap:6px;font-size:12.5px}
+.scr-seg{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2)}
+.scr-seg button{all:unset;box-sizing:border-box;cursor:pointer;padding:3px 10px;border-radius:5px;font-size:12.5px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+.scr-seg button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(20,30,50,.12)}
+.scr-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.scr-g{display:flex;align-items:baseline;gap:8px;padding:6px 14px;font-size:12.5px;font-weight:700;color:var(--ink-2);background:var(--surface-2);border-top:1px solid var(--line-2)}
+.scr-g:first-of-type{border-top:0}
+.scr-g span{font-weight:500;color:var(--ink-3)}
+.scr-l{border-top:1px solid var(--line-2)}
+.scr-l.open{background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
+.scr-r{display:flex;align-items:center;gap:10px;padding:0 14px 0 0;container:scr-r / inline-size}
+.scr-main{all:unset;box-sizing:border-box;cursor:pointer;flex:1;min-width:0;display:grid;grid-template-columns:64px minmax(0,1.5fr) minmax(0,1.1fr) auto;gap:10px;align-items:center;padding:8px 0 8px 14px}
+.scr-main:hover .scr-j{color:var(--accent)}
+.scr-main:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.scr-n{color:var(--accent);font-weight:700;white-space:nowrap}
+.scr-j{font-size:14px;color:var(--ink);overflow-wrap:anywhere;min-width:0}
+.scr-j b{font-weight:700}
+.scr-j .sc-tag{margin-left:6px;font-style:normal}
+.scr-m{font-size:12.5px;color:var(--ink-3);min-width:0}
+.scr-need{font-style:normal;font-weight:600;color:var(--warn)}
+.scr-d{font-size:12.5px;color:var(--ink-3);white-space:nowrap;text-align:right}
+.scr-d.late{color:var(--danger);font-weight:600}
+.scr-a{display:flex;gap:6px;flex:none}
+.scr-a .btn{white-space:nowrap}
+.scr-a .btn.on{border-color:var(--accent);color:var(--accent)}
+@container scr-r (max-width:640px){.scr-main{grid-template-columns:56px minmax(0,1fr) auto}.scr-m{grid-column:2/-1;grid-row:2}}
+.trk{display:flex;flex-direction:column;gap:6px;padding:4px 14px 12px 92px}
+.trk-f{display:grid;grid-template-columns:48px minmax(0,300px) auto;gap:8px;align-items:center}
+.trk-f > span{font-size:12px;color:var(--ink-3);white-space:nowrap}
+.trk-f input{height:36px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);min-width:0}
+.trk-f input:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+.trk-f i{font-style:normal;font-size:12px;font-weight:600;color:var(--ok);white-space:nowrap}
+.trk-b{display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:420px;margin-top:2px}
+.trk-b select{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font:inherit;font-size:13px;color:var(--ink);padding:0 6px}
+@media (max-width:700px){.trk{padding-left:14px}}

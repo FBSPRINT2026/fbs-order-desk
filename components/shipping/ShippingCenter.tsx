@@ -7,7 +7,8 @@ import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { custLabel } from "@/lib/format";
 import { mergeSettings, type Customer, type Settings, type ShipAddress } from "@/lib/pricing";
-import { addressFromText, addressReady, emptyAddress, estimateBoxes, oneLine, trackingLink, BILL_LABEL, type BillTo, type Shipment } from "@/lib/shipping";
+import { addressFromText, addressReady, carrierOf, emptyAddress, estimateBoxes, oneLine, trackingLink, BILL_LABEL, type BillTo, type Shipment } from "@/lib/shipping";
+import { addTracking } from "@/app/shop/tracking-actions";
 import type { PvAddress } from "@/lib/archive";
 import ShipWindow, { type ShipTarget } from "@/components/ShipWindow";
 import SearchInput from "@/components/SearchInput";
@@ -46,7 +47,7 @@ const day = (d: string | null) => (d ? new Date(d.slice(0, 10) + "T12:00").toLoc
  * Shipping center: every order that's ready to ship (new orders marked Ready with delivery "Ship", and Printavo
  * orders in "Shipping - Ready to Ship"), a scan box for box labels, and the ship window.
  */
-export default function ShippingCenter({ embedded = false, shipReq = null }: { embedded?: boolean; shipReq?: { n: string; at: number } | null } = {}) {
+export default function ShippingCenter({ embedded = false, shipReq = null, filter = "" }: { embedded?: boolean; shipReq?: { n: string; at: number } | null; /** Outbound's Search / filter */ filter?: string } = {}) {
   const sb = createClient();
   const [items, setItems] = useState<Item[] | null>(null);
   const [shipped, setShipped] = useState<(Shipment & { label: string; customer: string })[]>([]);
@@ -55,6 +56,9 @@ export default function ShippingCenter({ embedded = false, shipReq = null }: { e
   const [open, setOpen] = useState<{ item: Item; box: number | null } | null>(null);
   const [q, setQ] = useState(""), [scan, setScan] = useState(""), [note, setNote] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  // Ready to ship sorted by job # or by customer (Nick, Nov 19 2026), and the line with + Tracking open
+  const [sortBy, setSortBy] = useSticky<"job" | "cust">("shipping.sort", "cust");
+  const [trkOpen, setTrkOpen] = useState("");
   const scanRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -121,9 +125,10 @@ export default function ShippingCenter({ embedded = false, shipReq = null }: { e
   }
 
   const list = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return (items || []).filter((x) => !t || [x.number, x.customer, x.job, x.to.city].some((s) => String(s || "").toLowerCase().includes(t)));
-  }, [items, q]);
+    // Outbound's Search / filter, else this page's own search: every word has to be somewhere on the job
+    const ws = (embedded ? filter : q).trim().toLowerCase().replace(/^#/, "").split(/\s+/).filter(Boolean);
+    return (items || []).filter((x) => !ws.length || ws.every((w) => [x.number, x.customer, x.job, x.to.city, x.to.company, x.to.name].some((s) => String(s || "").toLowerCase().includes(w))));
+  }, [items, q, filter, embedded]);
   const ready = list.filter((x) => !missingOf(x).length), missing = list.filter((x) => missingOf(x).length);
 
   return (
@@ -147,7 +152,7 @@ export default function ShippingCenter({ embedded = false, shipReq = null }: { e
           <button type="button" className={tab === "shipped" ? "on" : ""} onClick={() => setTab("shipped")}>Shipped<span className="aa-n">{shipped.length}</span></button>
           <button type="button" className={tab === "transit" ? "on" : ""} onClick={() => setTab("transit")}>Transit Map</button>
         </div>
-        {tab === "ready" && <label className="aa-search"><SearchInput placeholder="Search orders" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
+        {tab === "ready" && !embedded && <label className="aa-search"><SearchInput placeholder="Search orders" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
       </div>
 
       {tab === "overview" ? (
@@ -159,21 +164,30 @@ export default function ShippingCenter({ embedded = false, shipReq = null }: { e
         </div>
       ) : tab === "ready" ? (
         items === null ? <div className="empty">Loading…</div> : (
-          <div className="sc-panes">
-            <section className="sc-pane">
-              <div className="sc-pane-h"><b>Ready to ship</b><span className="aa-n">{ready.length}</span><span className="faint">everything's filled in</span></div>
-              <div className="sc-pane-b">
-                {ready.map((x) => <ShipCard key={x.kind + x.id} x={x} perBox={settings.ship.perBox} onOpen={() => setOpen({ item: x, box: null })} />)}
-                {!ready.length && <div className="aa-empty">{q ? `No matches for “${q}”.` : "Nothing ready right now."}</div>}
-              </div>
-            </section>
-            <section className="sc-pane warn">
-              <div className="sc-pane-h"><b>Ready to ship, missing shipping info</b><span className="aa-n">{missing.length}</span></div>
-              <div className="sc-pane-b">
-                {missing.map((x) => <ShipCard key={x.kind + x.id} x={x} perBox={settings.ship.perBox} missing={missingOf(x)} onOpen={() => setOpen({ item: x, box: null })} />)}
-                {!missing.length && <div className="aa-empty">Nothing missing. 👍</div>}
-              </div>
-            </section>
+          // two lists, stacked, the page growing to fit them (no box that scrolls): Ready to ship, then the ones that need
+          // something filled in first (Nick, Nov 19 2026)
+          <div className="scr-w">
+            {([[ready, false], [missing, true]] as const).map(([xs, miss]) => {
+              const sorted = [...xs].sort((a, b) => (sortBy === "cust" ? a.customer.localeCompare(b.customer) : 0) || a.number.localeCompare(b.number, undefined, { numeric: true }));
+              const rows: React.ReactNode[] = [];
+              let cur = "";
+              for (const x of sorted) {
+                if (sortBy === "cust" && x.customer !== cur) { cur = x.customer; const n = sorted.filter((y) => y.customer === cur).length; rows.push(<div key={"g" + cur} className="scr-g">{cur}<span>{n} job{n === 1 ? "" : "s"}</span></div>); }
+                const k = x.kind + x.id;
+                rows.push(<ShipLine key={k} x={x} perBox={settings.ship.perBox} missing={miss ? missingOf(x) : undefined} showCust={sortBy === "job"} onOpen={() => setOpen({ item: x, box: null })}
+                  trk={trkOpen === k} onTrk={() => setTrkOpen(trkOpen === k ? "" : k)} onTracked={(m) => { setTrkOpen(""); setNote(m); void load(); }} />);
+              }
+              return (
+                <section key={miss ? "m" : "r"} className={"scr" + (miss ? " warn" : "")}>
+                  <div className="scr-h"><b>{miss ? "Ready to ship · needs info" : "Ready to ship"}</b><span className="aa-n">{xs.length}</span>
+                    <span className="spacer" />
+                    {!miss && <span className="scr-sort"><span className="faint">Sort by</span><span className="scr-seg" role="group" aria-label="Sort by">{([["job", "Job #"], ["cust", "Customer"]] as const).map(([v, l]) => <button key={v} type="button" className={sortBy === v ? "on" : ""} onClick={() => setSortBy(v)}>{l}</button>)}</span></span>}
+                  </div>
+                  {rows}
+                  {!xs.length && <div className="aa-empty">{(embedded ? filter : q) ? "No matches." : miss ? "Nothing's missing." : "Nothing ready right now."}</div>}
+                </section>
+              );
+            })}
           </div>
         )
       ) : (
@@ -264,23 +278,75 @@ function Overview({ items, shipped, perBox, onOpen, go }: { items: Item[] | null
   );
 }
 
-function ShipCard({ x, perBox, missing, onOpen }: { x: Item; perBox: number; missing?: string[]; onOpen: () => void }) {
-  const late = x.due && x.due.slice(0, 10) < new Date().toISOString().slice(0, 10);
+/** One job on Ready to ship: click it to ship; + Tracking beside Ship for one shipped some other way (Nick, Nov 19 2026) */
+function ShipLine({ x, perBox, missing, showCust, onOpen, trk, onTrk, onTracked }: { x: Item; perBox: number; missing?: string[]; showCust: boolean; onOpen: () => void; trk: boolean; onTrk: () => void; onTracked: (msg: string) => void }) {
+  const late = !!x.due && x.due.slice(0, 10) < new Date().toISOString().slice(0, 10);
   const boxes = x.shipment?.boxes?.length || estimateBoxes(x.pieces, perBox);
   return (
-    <button type="button" className={"sc-card" + (late ? " late" : "")} onClick={onOpen}>
-      <div className="sc-card-t">
-        <b className="num">#{x.number}</b>{x.printavo && <span className="sc-tag">Printavo</span>}{x.shipment && <span className="sc-tag draft">Started</span>}
-        <span className="spacer" /><span className={"sc-due" + (late ? " late" : "")}>{late ? "Late · " : ""}{day(x.due)}</span>
+    <div className={"scr-l" + (trk ? " open" : "")}>
+      <div className="scr-r">
+        <button type="button" className="scr-main" onClick={onOpen} title={missing?.length ? "Fill in what's missing and ship it" : "Ship it"}>
+          <b className="scr-n">#{x.number}</b>
+          <span className="scr-j">{showCust && <b>{x.customer}</b>}{showCust && x.job ? " · " : ""}{x.job || (!showCust ? x.customer : "")}{x.printavo && <em className="sc-tag">Printavo</em>}{x.shipment && <em className="sc-tag draft">Started</em>}</span>
+          <span className="scr-m">{missing?.length ? <em className="scr-need">Needs {missing.join(", ").toLowerCase()}</em> : <>{x.pieces || "?"} pcs · {boxes} box{boxes === 1 ? "" : "es"}{addressReady(x.to) ? ` · ${x.to.city}, ${x.to.state}` : ""}</>}</span>
+          <span className={"scr-d" + (late ? " late" : "")}>{late ? "Late · " : ""}{day(x.due)}</span>
+        </button>
+        <span className="scr-a">
+          <button type="button" className={"btn sm" + (trk ? " on" : "")} onClick={onTrk} aria-expanded={trk} title="Shipped some other way (FedEx's site, their account): paste the tracking">+ Tracking</button>
+          <button type="button" className={"btn sm" + (missing?.length ? "" : " primary")} onClick={onOpen}>{missing?.length ? "Fill in" : "Ship"}</button>
+        </span>
       </div>
-      <div className="sc-card-c">{x.customer}{x.job ? <span className="faint"> · {x.job}</span> : null}</div>
-      <div className="sc-card-m">
-        <span>{x.pieces || "?"} pcs · {boxes} box{boxes === 1 ? "" : "es"}{x.shipment ? "" : " est."}</span>
-        <span>{addressReady(x.to) ? `${x.to.city}, ${x.to.state}` : ""}</span>
-        <span>{x.bill === "fbs" ? "Our account" : `${x.bill === "ups" ? "UPS" : "FedEx"} ${x.account ? "…" + x.account.slice(-4) : ""}`}</span>
+      {trk && <TrackForm x={x} onDone={onTracked} onCancel={onTrk} />}
+    </div>
+  );
+}
+
+/** + Tracking: a box per tracking number, a new one drops in as soon as the last is filled; Done saves them all */
+function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => void; onCancel: () => void }) {
+  const [vals, setVals] = useState<string[]>([""]), [carrier, setCarrier] = useState(""), [busy, setBusy] = useState(false), [err, setErr] = useState("");
+  const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const [focusAt, setFocusAt] = useState<number | null>(0);
+  useEffect(() => { if (focusAt != null) { refs.current[focusAt]?.focus(); setFocusAt(null); } }, [focusAt]);
+  const filled = vals.map((v) => v.trim()).filter(Boolean);
+  const guess = (carrierOf(filled[0] || "") || "FedEx") as string, car = carrier || guess;
+  // typing or pasting into the last box adds an empty one under it; a paste of several numbers fills a box each
+  const put = (i: number, v: string) => {
+    const parts = v.split(/[\s,;]+/).filter(Boolean);
+    const next = [...vals];
+    if (parts.length > 1) next.splice(i, 1, ...parts); else next[i] = v;
+    while (next.length > 1 && !next[next.length - 1].trim() && !next[next.length - 2].trim()) next.pop();
+    if (next[next.length - 1].trim()) next.push("");
+    setVals(next); setErr("");
+    if (parts.length > 1) setFocusAt(next.length - 1);
+  };
+  async function done() {
+    if (!filled.length) { setErr("Paste a tracking number first."); return; }
+    setBusy(true); setErr("");
+    const r = await addTracking({ kind: x.kind === "archived" ? "archived" : "order", id: x.id, numbers: filled, carrier: car });
+    setBusy(false);
+    if (!r.ok) { setErr(r.error); return; }
+    onDone(`#${x.number} shipped · ${r.n} ${r.carrier || "tracking"} number${r.n === 1 ? "" : "s"} saved${r.did === "completed" ? " · order completed" : r.did === "part" ? " · the rest ships when it's printed" : ""}`);
+  }
+  return (
+    <div className="trk" onKeyDown={(e) => { if (e.key === "Escape") onCancel(); }}>
+      {vals.map((v, i) => (
+        <div key={i} className="trk-f">
+          <span>Box {i + 1}</span>
+          <input ref={(el) => { refs.current[i] = el; }} type="text" value={v} placeholder="Paste tracking #" aria-label={`Box ${i + 1} tracking number`} spellCheck={false} autoComplete="off" autoFocus={i === 0}
+            onChange={(e) => put(i, e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (e.ctrlKey || e.metaKey || (!v.trim() && filled.length)) void done(); else setFocusAt(Math.min(i + 1, vals.length - 1)); } }} />
+          <i>{v.trim() ? carrierOf(v.trim()) || "" : ""}</i>
+        </div>
+      ))}
+      <div className="trk-b">
+        <span className="faint">{filled.length} tracking number{filled.length === 1 ? "" : "s"}</span>
+        <select value={car} onChange={(e) => setCarrier(e.target.value)} aria-label="Carrier">{["FedEx", "UPS", "USPS", "Other"].map((c) => <option key={c} value={c}>{c}</option>)}</select>
+        <span className="spacer" />
+        <button type="button" className="btn sm ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button type="button" className="btn sm primary" onClick={() => void done()} disabled={busy}>{busy ? "Saving…" : "Done"}</button>
       </div>
-      {missing?.length ? <div className="sc-missing">Missing: {missing.join(", ")}</div> : null}
-    </button>
+      {err && <div className="pv-err">{err}</div>}
+    </div>
   );
 }
 

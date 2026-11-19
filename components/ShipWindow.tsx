@@ -1,4 +1,5 @@
 "use client";
+import { orderShipped } from "@/app/shop/tracking-actions";
 import { shipmentShipped } from "@/app/shop/customer-email-actions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -209,6 +210,8 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
         const pf = fl.find((f) => f.key === "partial");
         if (pf && od?.status !== "ready" && !(pf.note || "").startsWith("shipped:")) await sb.from("orders").update({ flags: fl.map((f) => (f === pf ? { ...f, note: `shipped:${sid}` } : f)) }).eq("id", t.id);
       }
+      // shipped is done: Ready (Shipping) → Completed (Nick, Nov 19 2026), the same as + Tracking (app/shop/tracking-actions.ts)
+      if (sid) await orderShipped(t.id, sid).catch(() => null);
     }
     setBusy("");
     return true;
