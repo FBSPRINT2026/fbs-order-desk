@@ -572,3 +572,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 4:09pm · 1.3.815 · Nick · Folded schedule tools show each tool's name under its icon, headings kept (option A); weekly run keeper: a PO printed early from a later run no longer pushes that run's other POs to the next week
 - Nov 19 4:10pm · 1.3.816 · Nick · Send a bill opens each billed order to pay online now (any terms); asks first when one isn't done yet ('Yes, let them pay now'). #50135 Fossil opened to pay.
 - Nov 19 4:11pm · 1.3.817 · Nick · Schedule tools: named tiles fit the panel (Planning + Sales on one line, Press & crew under), Live clock back at the top right of Tools
+- Nov 19 4:17pm · 1.3.818 · Nick · Schedule: run Start/Done only on the crew phones (off the schedule); a printed run folds to its header and a line of its POs' goods tees, click to open; tools renamed Schedule update and Suggested print date

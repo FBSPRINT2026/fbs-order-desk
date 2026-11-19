@@ -29,7 +29,6 @@ import ScheduleStartPoint from "@/components/ScheduleStartPoint";
 import { useCan, useRole } from "@/components/RoleContext";
 import { allRows } from "@/lib/readAll";
 import { MixStrip, useMixParts } from "@/components/MixStrip";
-import WeeklyRun from "@/components/WeeklyRun";
 
 /**
  * The production calendar, on the shop's real hours.
@@ -537,6 +536,8 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
   useEffect(() => { const mq = window.matchMedia("(max-width: 700px)"); const f = () => setPhone(mq.matches); f(); mq.addEventListener("change", f); return () => mq.removeEventListener("change", f); }, []);
   const [pDay, setPDay] = useState("");
   const [trayOpen, setTrayOpen] = useSticky("cal.trayOpen", true);
+  /** printed runs opened back up on the week (they fold by default) */
+  const [runsOpen, setRunsOpen] = useSticky<string[]>("cal.runsOpen", []);
   const [showPast, setShowPast] = useState(false);
   const [offs, setOffs] = useState<DayOff[]>([]);
   // Ready To Schedule: where staff want a job instead of our suggestion (Nov 11, Nick: "click it and say, oh, here's where I
@@ -1802,20 +1803,18 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                       const rows = blocks.map((b0) => {
                         if (b0.length > 1) {
                           const c0 = b0[0].g.c, end = b0[b0.length - 1].end, mins = b0.reduce((t, x) => t + x.g.c.minutes, 0), pcs = b0.reduce((t, x) => t + x.g.c.need.qty, 0);
-                          const { pre, k, weekly, title: t0 } = runName(b0.map((x) => x.g.c));
+                          const { pre, k, title: t0 } = runName(b0.map((x) => x.g.c));
                           // booked for an earlier day and pushed here by the day before running long: the same run, continued
                           const title = b0.every((x) => x.g.c.day < d) ? `${t0} · continued` : t0;
+                          // printed: folded to its header and one line of its POs' goods tees, open on a click (remembered)
+                          const allDone = b0.every((x) => x.g.c.slot?.status === "done"), fold = allDone && !runsOpen.includes(c0.key);
                           return (
-                            <div key={"run" + c0.key} className="mwp-run">
-                              <div className="mwp-run-h" draggable title="Drag to move the whole run" onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: b0.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }}>
-                                <b>{title}</b><span>{clock(b0[0].start)}–{clock(end)} · {fmtMin(mins)} · {b0.length} POs · {pcs.toLocaleString()} pcs</span>
+                            <div key={"run" + c0.key} className={"mwp-run" + (fold ? " fold" : "")}>
+                              <div className="mwp-run-h" draggable title={allDone ? (fold ? "Printed. Click to see its POs" : "Click to fold it up") : "Drag to move the whole run"} onClick={allDone ? () => setRunsOpen(fold ? [...runsOpen, c0.key] : runsOpen.filter((x) => x !== c0.key)) : undefined} onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: b0.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }}>
+                                <b>{allDone && <span className="mwp-run-car" aria-hidden>{fold ? "▸" : "▾"}</span>}{title}{allDone ? " · printed" : ""}</b><span>{clock(b0[0].start)}–{clock(end)} · {fmtMin(mins)} · {b0.length} POs · {pcs.toLocaleString()} pcs</span>
+                                {fold && <span className="mwp-run-tees" title={b0.map(({ g }) => `#${g.c.job.number} ${g.c.job.name || ""}`).join("\n")}>{b0.map(({ g }) => <i key={g.c.key}>{dotEl(g.c, g)}</i>)}</span>}
                               </div>
-                              {/* a customer's weekly run is worked as one job: Start / Pause / Done with its PO checklist (components/WeeklyRun.tsx) */}
-                              {c0.slot && weekly && b0.every((x) => x.g.c.slot) && (
-                                <div className="mwp-run-go"><WeeklyRun compact machine={c0.slot.machine} day={c0.job.prod || d} title={t0} onChanged={(m) => { setMsg(m); void load(); }}
-                                  pos={b0.map(({ g }) => ({ slotId: g.c.slot!.id, number: String(g.c.job.number), name: (g.c.job.name || "").trim(), qty: g.c.need.qty, status: g.c.slot!.status }))} /></div>
-                              )}
-                              {b0.map(({ g }) => { const c = g.c, done = c.slot?.status === "done", late = segLate((segs.ofCard.get(c.key) || []).slice(-1)[0] || g); return (
+                              {!fold && b0.map(({ g }) => { const c = g.c, done = c.slot?.status === "done", late = segLate((segs.ofCard.get(c.key) || []).slice(-1)[0] || g); return (
                                 <button key={c.key} type="button" draggable data-key={c.key} className={"mwp-row" + (done ? " done" : "") + (!done && dotOf(c, ord(g.day) * 1440 + g.start)?.k !== "g" ? " nc" : "") + (c.slot?.status === "running" ? " run" : "") + (late && !done ? " late" : "") + (isHit(c.job) ? " ms-hit" : "")}
                                   title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); setOpen(c); }}
                                   onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
@@ -3264,7 +3263,7 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                   
                   <button type="button" className={"btn msk-b" + (tight.length ? " bad" : "")} title="Jobs that won't make their in-hands date" onClick={() => setTightOpen(!tightOpen)}><SkIco d="late" />Late jobs<span className="msk-n">{tight.length}</span></button>
                   <button type="button" className="btn msk-b" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}><SkIco d="norm" />Renormalize</button>
-                  <button type="button" className="btn msk-b" title="Set what's really done: counted, printed, ready, completed" onClick={() => setStandOpen(true)}><SkIco d="prog" />Where things stand</button>
+                  <button type="button" className="btn msk-b" title="Set what's really done: counted, printed, ready, completed" onClick={() => setStandOpen(true)}><SkIco d="prog" />Schedule update</button>
                 </span>
                 <span className="msk-g press"><span className="msk-gl">Press &amp; crew</span>
                   <button type="button" className="btn msk-b" title="What's started, done or paused today" onClick={() => setCheckin(true)}><SkIco d="prog" />Progress</button>
@@ -3274,7 +3273,7 @@ export default function MachineSchedule({ when, hold, title }: { /** the page's 
                   <button type="button" className={"btn msk-b" + (eqIssues.length ? " warn" : "")} title="Heads out, running slow, or down" disabled={!canEquip} onClick={() => setEqOpen(true)}><SkIco d="eq" />Equipment{eqIssues.length ? <span className="msk-n">{eqIssues.length}</span> : null}</button>
                 </span>
                 <span className="msk-g sales"><span className="msk-gl">Sales</span>
-                  <button type="button" className="btn msk-b" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}><SkIco d="when" />When can we {VERB[typeF || "screen"].v.toLowerCase()} it?</button>
+                  <button type="button" className="btn msk-b" title="Quick specs → soonest, aggressive, regular and slow-boat dates" onClick={() => setWhenOpen(true)}><SkIco d="when" />Suggested print date</button>
                   <button type="button" className="btn msk-b" title="Hold time for jobs you know are coming" onClick={() => setPlanOpen(true)}><SkIco d="plan" />Planner</button>
                 </span>
               </div>
@@ -4114,7 +4113,7 @@ function WhenPanel({ s, today, nowLabel, calc, onClose, method = "screen" }: { s
   return (
     <div className="pp-modal" onClick={onClose}>
       <div className="pp-sheet tmx-ed ms-whenp" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`When can we ${vb.v.toLowerCase()} it`}>
-        <div className="pp-sheet-h"><b>When Can We {vb.v} It?</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+        <div className="pp-sheet-h"><b>Suggested print date</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
         <div className="tmx-ed-b">
           <QuickJobForm v={v} onChange={setV} />
           <label className="ms-qf-need">Customer needs it by (optional)<input type="date" min={today} value={needBy} onChange={(e) => setNeedBy(e.target.value)} /></label>

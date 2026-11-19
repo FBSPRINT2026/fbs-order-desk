@@ -24194,3 +24194,8 @@ main.main .rvg-sub{margin-bottom:10px}
 .mzc-th .msk-live{all:unset;cursor:pointer;margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-2)}
 .mzc-th .msk-live:disabled{cursor:default;opacity:.6}
 .mzc-th .msk-live:focus-visible{outline:2px solid var(--accent)}
+/* a printed run on the week folds to its header and a line of its POs' goods tees (Nick, Nov 19 2026) */
+.mwp-run.fold .mwp-run-h,.mwp-run-h:has(.mwp-run-car){cursor:pointer}
+.mwp-run-car{display:inline-block;width:12px;font-size:10px}
+.mwp-run-tees{display:flex!important;flex-wrap:wrap;gap:1px 2px;margin-top:3px;opacity:1!important}
+.mwp-run-tees i{display:inline-flex;font-style:normal;line-height:1}

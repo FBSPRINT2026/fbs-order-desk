@@ -180,8 +180,8 @@ export default function ScheduleStartPoint({ by, presses, onClose, onSaved }: { 
 
   return (
     <div className="pp-modal" onClick={onClose}>
-      <div className="pp-sheet wts" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Where things stand">
-        <div className="pp-sheet-h"><b>Where Things Stand</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
+      <div className="pp-sheet wts" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Schedule update">
+        <div className="pp-sheet-h"><b>Schedule update</b><button type="button" className="btn icon ghost" onClick={onClose} aria-label="Close">✕</button></div>
         <div className="wts-tabs" data-toolbar>
           {(["screen", "embroidery"] as Tab[]).map((t) => <button key={t} type="button" className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "screen" ? "Screen printing" : "Embroidery"}<span className="wts-n">{count(t)}</span></button>)}
         </div>
