@@ -23859,3 +23859,30 @@ main.main .rvg-sub{margin-bottom:10px}
 .mrb-more:hover{background:var(--surface)}
 .mrb-cnt{margin:0 14px 6px;font-size:13px}
 .mwp-j b .msf-tee,.mwp-row b .msf-tee{width:12px;height:12px;margin-right:4px;vertical-align:-1px;flex:none}
+/* the job panel v2 (Nick, Nov 19 2026): goods as a menu at the right of the status line; the art big on top with its
+   time and pieces; Start / Printed / Issue in one row; Issue can put it on hold */
+.mji-pills .mjg{margin-left:auto;position:relative}
+.mjg > summary{list-style:none;cursor:pointer}
+.mjg > summary::-webkit-details-marker{display:none}
+.mjg-s span{margin-left:2px;opacity:.7}
+.mjg-m{position:absolute;right:0;top:calc(100% + 4px);z-index:5;min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 28px rgba(20,30,50,.16);overflow:hidden;display:flex;flex-direction:column}
+.mjg-m button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;padding:8px 12px;font-size:13px;font-weight:600;color:var(--ink);border-top:1px solid var(--line)}
+.mjg-m button:first-child{border-top:0}
+.mjg-m button:hover{background:var(--surface-2)}
+.mjg-m button small{font-weight:400;font-size:11.5px;color:var(--ink-3)}
+.mjg-m button.bad{color:var(--danger)}
+.mjx-art{position:relative;display:flex;align-items:center;justify-content:center;height:230px;background:var(--surface-2);border-bottom:1px solid var(--line);overflow:hidden}
+.mjx-art img{max-width:100%;max-height:100%;object-fit:contain}
+.mjx-art.none{height:56px}
+.mjx-ov{position:absolute;left:12px;bottom:10px;display:flex;gap:6px;flex-wrap:wrap}
+.mjx-ov i{font-style:normal;font-size:13px;font-weight:700;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:3px 10px;white-space:nowrap}
+.mjx-info{display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.mjx-l{display:flex;justify-content:space-between;gap:10px;align-items:baseline;min-width:0}
+.mjx-l b{font-weight:700;color:var(--ink)}
+.mjx-l .k{color:var(--ink);font-weight:600;white-space:nowrap}
+.mjx-l span:last-child{color:var(--ink-3);font-size:12.5px;text-align:right;min-width:0}
+.mrb-dock .mrb-row .mrc-act{flex:1 1 0;justify-content:center}
+.mrc-act.iss{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.mrc-act.iss.on{background:var(--danger-soft)}
+.mrb-why button.hold{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.mjx-dots{font-size:14px;letter-spacing:1px;line-height:16px}
