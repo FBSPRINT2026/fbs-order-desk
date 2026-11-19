@@ -24170,3 +24170,11 @@ main.main .rvg-sub{margin-bottom:10px}
 .mzc-tools.shut .msk-g.plan{grid-row:1;grid-column:1}
 .mzc-tools.shut .msk-g.sales{grid-row:1;grid-column:2}
 .mzc-tools.shut .msk-g.press{grid-row:2;grid-column:1/-1}
+/* folded tools show their names under the icons (Nick, Nov 19 2026, option A: "you can't tell what the tools are") */
+.mzc-tools.shut .msk-row{column-gap:0}
+.mzc-tools.shut .msk-g{align-items:flex-start;gap:4px 0;padding:0 4px 2px}
+.mzc-tools.shut .msk-g.sales{border-left:1px solid var(--line);margin-left:6px;padding-left:10px}
+.mzc-tools.shut .msk-g .msk-b{width:76px;height:auto;min-height:0;padding:2px 2px 4px;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;font-size:11.5px;font-weight:500;line-height:1.2;text-align:center;white-space:normal;color:var(--ink-2)}
+.mzc-tools.shut .msk-g .msk-b:hover{background:var(--surface-2);color:var(--ink)}
+.mzc-tools.shut .msk-g .msk-b>svg{width:32px;height:32px;padding:7px;border-radius:8px}
+.mzc-tools.shut .msk-g .msk-b.bad .msk-n{top:-4px;right:auto;left:46px}

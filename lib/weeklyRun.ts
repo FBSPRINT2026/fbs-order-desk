@@ -53,8 +53,11 @@ async function keep(admin: SupabaseClient, out: { booked: number; moved: number;
       .filter((o) => !trainingWords(t.when_words || "").length || trainingSaid({ when_words: t.when_words || "" }, `${o.nickname || ""} ${o.po_number || ""}`));
     // a run already started (or done) that day isn't joined after the fact: the next week's (Nick, Nov 19 2026: a PO left
     // unchecked at the end of the run moves to next week's run, and must not come back to today's)
-    const { data: begun } = await admin.from("production_slots").select("day").eq("machine", m.id).eq("source", "weekly_run").gte("day", today).not("started_at", "is", null);
-    const started = new Set(((begun || []) as { day: string }[]).map((x) => x.day));
+    // Only a start on (or the evening before) the run day counts: a PO printed early from a later run (#40507, done Thu for
+    // Tue's run) doesn't close that run to the rest of its POs (Nov 19 2026: it pushed Tue's 11 POs to the next week)
+    const { data: begun } = await admin.from("production_slots").select("day, started_at").eq("machine", m.id).in("order_id", mine.length ? mine.map((o) => o.id) : ["00000000-0000-0000-0000-000000000000"]).gte("day", today).not("started_at", "is", null);
+    const shopDay = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+    const started = new Set(((begun || []) as { day: string; started_at: string }[]).filter((x) => shopDay(x.started_at) >= addDay(x.day, -1)).map((x) => x.day));
     let pos = 0;
     for (const o of mine) {
       const need = needsForOrder(s, o, ((o.groups || []) as (Group & { sample?: unknown })[]).filter((g) => !g.sample)).find((n) => n.type === m.type);
