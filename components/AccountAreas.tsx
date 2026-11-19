@@ -262,7 +262,8 @@ export default function AccountAreas({ simple = false, titleAsk, newMockup, prog
   const [hp, setHp] = useState(0);
   const [openPay, setOpenPay] = useState<string | null>(null);
   const [payNow, setPayNow] = useState<PayItem[] | null>(null);
-  const [payAmt, setPayAmt] = useState<number | undefined>(undefined);
+  // a deposit bill opens with its amount (lib/customerSend.ts: `&amt=`; Nick, Nov 19 2026)
+  const [payAmt, setPayAmt] = useState<number | undefined>(() => { const v = +(sp.get("amt") || ""); return v > 0 ? Math.round(v * 100) / 100 : undefined; });
   const PER = 6;
   const pageOf = <T,>(key: string, list: T[], per = PER) => { const n = Math.max(1, Math.ceil(list.length / per)), p = Math.min(pg[key] || 0, n - 1); const items = list.slice(p * per, p * per + per); return { items, p, n, pad: n > 1 ? per - items.length : 0 }; };
   // empty places keep a short last page the same height, so the page buttons don't move

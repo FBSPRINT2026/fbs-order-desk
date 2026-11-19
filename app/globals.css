@@ -23823,3 +23823,7 @@ main.main .rvg-sub{margin-bottom:10px}
 .mwp-cont b{font-weight:700}
 .mwp-row.nc b,.mwp-row.nc i{color:var(--ink-3)}
 .mwp-row b .gtee,.mwp-row b svg{margin-right:4px;vertical-align:-1px}
+/* Send a bill in the Send to customer pop-up (Nick, Nov 19 2026): what kind of bill, and a deposit's amount */
+.spt-bill{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:0 0 10px;margin:0 0 10px;border-bottom:1px solid var(--line)}
+.spt-amt{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);flex-wrap:wrap}
+.spt-amt input{height:36px;width:110px;border:1px solid var(--line);border-radius:6px;padding:0 10px;font:inherit;font-size:14px;color:var(--ink);background:var(--surface)}

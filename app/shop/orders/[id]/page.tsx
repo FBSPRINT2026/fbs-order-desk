@@ -64,7 +64,6 @@ import { Pill } from "@/components/bits";
 import { MixStrip, useMixParts } from "@/components/MixStrip";
 import { IssueTag, useOpenIssues } from "@/components/IssueTag";
 import SendProofTool from "@/components/tools/SendProofTool";
-import SendBillTool from "@/components/tools/SendBillTool";
 import { acceptRequest, requestProofApproval, staffMessage } from "../../actions";
 import DigitizerTool from "@/components/tools/DigitizerTool";
 import MenuItem from "@/components/MenuItem";
@@ -1372,7 +1371,6 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
   // the order may be ready for separations now: they ask for themselves (lib/autoSeps.ts)
   const [sepN, setSepN] = useState(0);
   // On hold (lib/holds.ts): the pop-up from the status menu, and taking it off
-  const [sendBill, setSendBill] = useState(false);
   const [holdAsk, setHoldAsk] = useState(false);
   async function offHold() {
     if (!o) return;
@@ -1666,13 +1664,13 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
           {quoteLock.closed && !lockOverride ? <button type="button" className="btn" onClick={() => setClosedAsk(true)}>Open anyway</button>
             : o.status === "quote_sent" && quoteLock.locked ? <button type="button" className="btn primary" onClick={() => void makeChanges()}>Make changes</button>
             : (o.status === "quote" || o.status === "quote_sent") && <SendProofTool target={{ kind: "order", orderId: o.id }} label={o.sent_at ? "Resend to customer" : "Send to customer"} before={beforeSend} onDone={(m) => { setLockOverride(""); void afterSend(m); }} />}
-          {/* an invoice with something owed: Send a bill, this invoice picked (components/tools/SendBillTool.tsx; Nov 16) */}
-          {seesMoney && o.type === "invoice" && !o.draft && o.customer_id && calc.balance > 0.004 && <button type="button" className="btn" onClick={() => setSendBill(true)}>Send a bill</button>}
+          {/* an invoice with something owed: Send a bill, the same pop-up as Send to customer with the bill ticked (pay in full,
+              a deposit or the final bill; from your email, as a reply; Nick, Nov 19 2026) */}
+          {seesMoney && o.type === "invoice" && !o.draft && o.customer_id && calc.balance > 0.004 && <SendProofTool target={{ kind: "order", orderId: o.id }} label="Send a bill" primary={false} bill before={beforeSend} onDone={(m) => { void afterSend(m); loadSide(); }} />}
           {/* the customer's portal link to this order, one tap (Nov 18, Nick) */}
           {!o.draft && o.customer_id && <CopyCustomerLink kind="order" id={o.id} />}
           {/* an old Printavo job made editable here: Printavo's copy (its files, messages, history) one tap away */}
           {(o as { printavo_id?: string | null }).printavo_id && o.number < 40000 && <PrintavoCopyLink orderId={o.id} />}
-          {sendBill && o.customer_id && <SendBillTool customerId={o.customer_id} orderIds={[o.id]} onClose={() => setSendBill(false)} onSent={() => loadSide()} />}
           </span>
           <span className="ed-menus">
           <details className="ot-more" onBlur={closeSoon}>

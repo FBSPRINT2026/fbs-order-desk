@@ -18,15 +18,18 @@ import { bundleCopy, bundlePreview, bundleSend, orderLinkAction, sendFromChoices
  */
 type Target = { kind: "art" | "sewout" | "order"; orderId: string; sewoutId?: string; note?: string; live?: boolean };
 type Opts = { to: string; name: string; proof: { version: number; mockups: number; unsent: boolean; waiting: boolean; approved?: { version: number | null; by: string; at: string; another: boolean } | null } | null; quote: { kind?: "quote" | "invoice"; total: number; status: string; sent?: boolean; deposit: number; /** what's due when they approve, by their terms */ due?: string } | null; sewouts: { id: string; label: string; sent: boolean }[];
-  /** the account's people, ticked when their email settings send them approvals */ people?: { email: string; name: string; on: boolean }[] };
+  /** the account's people, ticked when their email settings send them approvals */ people?: { email: string; name: string; on: boolean }[];
+  /** an invoice with something owed: a bill can go */ bill?: { number: number; total: number; paid: number; balance: number } | null };
 /** what's ticked, who it goes to this time, and whether it goes from the person's own mailbox as a reply (lib/customerSend.ts) */
-type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note?: string; to?: string[]; fromMe?: boolean; reply?: { messageId: string } | null; after?: string };
+type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note?: string; to?: string[]; fromMe?: boolean; reply?: { messageId: string } | null; after?: string;
+  /** a bill for the invoice (Nick, Nov 19 2026): pay in full, a deposit now, or the final bill; goes on its own */ bill?: { kind: "full" | "deposit" | "final"; amount?: number } | null };
 type Choice = { messageId: string; subject: string; from: string; fromEmail: string; at: string; likely?: boolean; thread?: boolean };
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 
-export default function SendProofTool({ target, label = "Send to customer", mode = "send", primary = true, onDone, disabled, before }: {
+export default function SendProofTool({ target, label = "Send to customer", mode = "send", primary = true, onDone, disabled, before, bill }: {
   target: Target; label?: string; mode?: "send" | "copy"; primary?: boolean; onDone?: (msg: string) => void; disabled?: boolean;
+  /** Send a bill (an invoice's header; Nick, Nov 19 2026): opens with the bill ticked, pay in full */ bill?: boolean;
   /** run first (the order page saves and checks the order); false stops */ before?: () => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
@@ -61,6 +64,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
       sewouts: sew0,
       note: target.note || "",
       to: (r.people || []).filter((x) => x.on).map((x) => x.email),
+      ...(bill && r.bill ? { bill: { kind: "full" as const }, proof: false, quote: false, sewouts: [] } : {}),
     });
     // from their own mailbox, as a reply to the email this send most likely answers, to whoever wrote it (Nov 3, Nick:
     // "Fossil hasn't emailed me in like 4 weeks… can't you just read and go like, hey, we think you're responding to
@@ -78,7 +82,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
     if (base && !(base.people || []).some((x) => x.email === g.fromEmail)) setOpts({ ...base, people: [...(base.people || []), { email: g.fromEmail, name: g.from !== g.fromEmail ? g.from : "", on: false }] });
     setPick((p) => ({ ...p, fromMe: true, reply: { messageId: g.messageId }, to: [g.fromEmail] }));
   }
-  const any = !!(pick.proof || pick.quote || (pick.sewouts || []).length);
+  const any = !!(pick.proof || pick.quote || (pick.sewouts || []).length || pick.bill);
   // from your own mailbox: your words before and after the card, written for you until you change them (Nov 3, Nick: "hello
   // such and such, thank you for the quote request. Please see and review your quote below… please let me know if this
   // is approved. Thank you")
@@ -86,16 +90,16 @@ export default function SendProofTool({ target, label = "Send to customer", mode
   const firsts = (opts?.people || []).filter((x) => (pick.to || []).includes(x.email)).map((x) => (x.name || "").trim().split(/\s+/)[0]).filter((x) => x && !x.includes("@"));
   const hiTo = firsts.length ? (firsts.length === 1 ? firsts[0] : `${firsts.slice(0, -1).join(", ")} and ${firsts[firsts.length - 1]}`) : "there";
   const invoice = opts?.quote?.kind === "invoice";
-  const sendWhat = [pick.quote ? (invoice ? "final invoice" : "quote") : "", pick.proof ? "proof" : "", (pick.sewouts || []).length ? "sew-out" : ""].filter(Boolean);
+  const sendWhat = pick.bill ? [pick.bill.kind === "deposit" ? "deposit bill" : "bill"] : [pick.quote ? (invoice ? "final invoice" : "quote") : "", pick.proof ? "proof" : "", (pick.sewouts || []).length ? "sew-out" : ""].filter(Boolean);
   const whatLine = sendWhat.length > 1 ? `${sendWhat.slice(0, -1).join(", ")} and ${sendWhat[sendWhat.length - 1]}` : sendWhat[0] || "order";
-  const defBefore = `Hi ${hiTo},\n\n${pick.quote && !invoice ? "Thank you for the quote request. " : invoice ? "Thank you for your order. " : ""}Please review your ${whatLine} below.`;
-  const defAfter = `Please let me know if ${sendWhat.length > 1 ? "everything" : "this"} is approved.`;
+  const defBefore = pick.bill ? `Hi ${hiTo},\n\nHere's the ${whatLine} for your order. You can pay it from the link below.` : `Hi ${hiTo},\n\n${pick.quote && !invoice ? "Thank you for the quote request. " : invoice ? "Thank you for your order. " : ""}Please review your ${whatLine} below.`;
+  const defAfter = pick.bill ? "Thank you for your order!" : `Please let me know if ${sendWhat.length > 1 ? "everything" : "this"} is approved.`;
   useEffect(() => {
     if (!opts) return;
     setPick((p) => p.fromMe ? { ...p, note: typed.note ? p.note : defBefore, after: typed.after ? p.after : defAfter } : { ...p, note: typed.note ? p.note : target.note || "", after: undefined });
   }, [opts, pick.fromMe, defBefore, defAfter]); // eslint-disable-line react-hooks/exhaustive-deps
   // the preview follows what's ticked
-  const key = JSON.stringify({ p: pick.proof, q: pick.quote, s: pick.sewouts, t: pick.to, f: pick.fromMe, r: pick.reply?.messageId, n: typed.note ? "" : pick.note, a: typed.after ? "" : pick.after });
+  const key = JSON.stringify({ b: pick.bill, p: pick.proof, q: pick.quote, s: pick.sewouts, t: pick.to, f: pick.fromMe, r: pick.reply?.messageId, n: typed.note ? "" : pick.note, a: typed.after ? "" : pick.after });
   useEffect(() => {
     if (!open || !opts) return;
     if (!any) { setPv(null); return; }
@@ -151,12 +155,21 @@ export default function SendProofTool({ target, label = "Send to customer", mode
                 them); the preview on the right */}
             <div className="spt-h"><h2 id="spt-t">Send to {opts?.name || "the customer"}</h2>
               {opts && <div className="spt-ticks">
-                {opts.proof && <label className={"spt-tk" + (pick.proof ? " on" : "")} title={`${opts.proof.mockups} mockup${opts.proof.mockups === 1 ? "" : "s"}${opts.proof.unsent ? "" : opts.proof.waiting ? " · already sent, waiting on them" : " · already sent"}`}><input type="checkbox" checked={!!pick.proof} onChange={(e) => setPick((p) => ({ ...p, proof: e.target.checked }))} /> Proof v{opts.proof.version}{!opts.proof.unsent && <small> · sent</small>}</label>}
-                {opts.quote && <label className={"spt-tk" + (pick.quote ? " on" : "")} title={`${opts.quote.due || `Deposit to start: ${money(opts.quote.deposit)}`}${opts.quote.sent || opts.quote.status === "quote_sent" ? " · already sent" : ""}`}><input type="checkbox" checked={!!pick.quote} onChange={(e) => setPick((p) => ({ ...p, quote: e.target.checked }))} /> {opts.quote.kind === "invoice" ? "Final invoice" : "Quote"} · {money(opts.quote.total)}{(opts.quote.sent || opts.quote.status === "quote_sent") && <small> · sent</small>}</label>}
-                {opts.sewouts.map((x) => { const on = (pick.sewouts || []).includes(x.id); return <label key={x.id} className={"spt-tk" + (on ? " on" : "")} title={x.sent ? "already sent" : "photo saved, not sent yet"}><input type="checkbox" checked={on} onChange={(e) => setPick((p) => ({ ...p, sewouts: e.target.checked ? [...(p.sewouts || []), x.id] : (p.sewouts || []).filter((y) => y !== x.id) }))} /> {x.label}</label>; })}
+                {opts.bill && <label className={"spt-tk" + (pick.bill ? " on" : "")} title={`${money(opts.bill.total)}${opts.bill.paid > 0.004 ? `, ${money(opts.bill.paid)} paid` : ""}: a Pay button for this invoice`}><input type="checkbox" checked={!!pick.bill} onChange={(e) => setPick((p) => (e.target.checked ? { ...p, bill: { kind: "full" }, proof: false, quote: false, sewouts: [] } : { ...p, bill: null }))} />Bill #{opts.bill.number} · {money(opts.bill.balance)}</label>}
+                {opts.proof && <label className={"spt-tk" + (pick.proof ? " on" : "")} title={`${opts.proof.mockups} mockup${opts.proof.mockups === 1 ? "" : "s"}${opts.proof.unsent ? "" : opts.proof.waiting ? " · already sent, waiting on them" : " · already sent"}`}><input type="checkbox" checked={!!pick.proof} onChange={(e) => setPick((p) => ({ ...p, bill: null, proof: e.target.checked }))} /> Proof v{opts.proof.version}{!opts.proof.unsent && <small> · sent</small>}</label>}
+                {opts.quote && <label className={"spt-tk" + (pick.quote ? " on" : "")} title={`${opts.quote.due || `Deposit to start: ${money(opts.quote.deposit)}`}${opts.quote.sent || opts.quote.status === "quote_sent" ? " · already sent" : ""}`}><input type="checkbox" checked={!!pick.quote} onChange={(e) => setPick((p) => ({ ...p, bill: null, quote: e.target.checked }))} /> {opts.quote.kind === "invoice" ? "Final invoice" : "Quote"} · {money(opts.quote.total)}{(opts.quote.sent || opts.quote.status === "quote_sent") && <small> · sent</small>}</label>}
+                {opts.sewouts.map((x) => { const on = (pick.sewouts || []).includes(x.id); return <label key={x.id} className={"spt-tk" + (on ? " on" : "")} title={x.sent ? "already sent" : "photo saved, not sent yet"}><input type="checkbox" checked={on} onChange={(e) => setPick((p) => ({ ...p, bill: null, sewouts: e.target.checked ? [...(p.sewouts || []), x.id] : (p.sewouts || []).filter((y) => y !== x.id) }))} /> {x.label}</label>; })}
                 {!opts.proof && !opts.quote && !opts.sewouts.length && <span className="faint">Nothing to send yet: make a mockup, or the quote, first.</span>}
               </div>}
             </div>
+            {/* a bill: pay in full, a deposit now (the rest billed later, with shipping), or the final bill (Nick, Nov 19 2026) */}
+            {opts?.bill && pick.bill && <div className="spt-bill">
+              <div className="spt-seg" role="radiogroup" aria-label="What kind of bill">
+                {([["full", `Pay in full · ${money(opts.bill.balance)}`], ["deposit", "Deposit"], ["final", "Final bill"]] as const).map(([k, l]) => <button key={k} type="button" role="radio" aria-checked={pick.bill?.kind === k} className={pick.bill?.kind === k ? "on" : ""} onClick={() => setPick((p) => ({ ...p, bill: { kind: k, amount: k === "deposit" ? (p.bill?.amount || Math.round(opts.bill!.balance * 50) / 100) : undefined } }))}>{l}</button>)}
+              </div>
+              {pick.bill.kind === "deposit" && <label className="spt-amt">Amount now <input inputMode="decimal" value={pick.bill.amount ?? ""} onChange={(e) => { const v = e.target.value.replace(/[^\d.]/g, ""); setPick((p) => ({ ...p, bill: { kind: "deposit", amount: v === "" ? undefined : +v } })); }} /><small className="faint">of {money(opts.bill.balance)}; the rest is billed later</small></label>}
+              {pick.bill.kind === "final" && <small className="faint">What's left on the order: {money(opts.bill.balance)}{opts.bill.paid > 0.004 ? ` (${money(opts.bill.paid)} paid)` : ""}</small>}
+            </div>}
             {/* the art is already approved: sending a proof asks them again and takes that approval off (Nov 10, Nick, #40444) */}
             {opts?.proof?.approved && pick.proof && opts.proof.unsent && <div className="spt-apw" role="note"><b>Already approved</b> Version {opts.proof.approved.version} was {opts.proof.approved.another ? "approved another way" : "approved"}{opts.proof.approved.by ? ` (${opts.proof.approved.by}${opts.proof.approved.at ? `, ${new Date(opts.proof.approved.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""})` : ""}. Sending version {opts.proof.version} takes that approval off, and they approve again.</div>}
             {!opts && <div className="faint">{busy === "load" ? "Loading…" : ""}</div>}
@@ -190,7 +203,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
                 <div className="spt-body">
                   <AutoText value={pick.note || ""} placeholder={pick.fromMe ? "Hi …" : `A note (optional): e.g. Here's the ${what} we talked about`} label={pick.fromMe ? "Your message, above the card" : "A note (optional, goes in the email)"}
                     onChange={(v) => { setTyped((t) => ({ ...t, note: true })); setPick((p) => ({ ...p, note: v })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} />
-                  <div className="spt-dcard" aria-hidden="true"><div className="spt-dbar"><img src="/email/launch/logo-white.png" alt="" /><span>Your {whatLine}{pick.reply ? "" : " · ready to review"}</span></div><div className="spt-drb"><i /><i /><i /></div><small>The {whatLine} and the Review and approve button go here</small></div>
+                  <div className="spt-dcard" aria-hidden="true"><div className="spt-dbar"><img src="/email/launch/logo-white.png" alt="" /><span>Your {whatLine}{pick.reply ? "" : " · ready to review"}</span></div><div className="spt-drb"><i /><i /><i /></div><small>{pick.bill ? `The ${whatLine} and its Pay button go here` : `The ${whatLine} and the Review and approve button go here`}</small></div>
                   {pick.fromMe && <>
                     <AutoText value={pick.after || ""} placeholder="Please let me know if this is approved." label="After the card"
                       onChange={(v) => { setTyped((t) => ({ ...t, after: true })); setPick((p) => ({ ...p, after: v })); }} onBlur={() => { if (any) void bundlePreview(target.orderId, pick).then((r) => { if (r.ok) setPv({ to: r.to, subject: r.subject, html: r.html, from: r.from }); }); }} />
@@ -206,7 +219,7 @@ export default function SendProofTool({ target, label = "Send to customer", mode
             </div>}
             {err && <div className="pv-err">{err}</div>}
             <div className="spt-foot">
-              {copyBtns(!any)}
+              {!pick.bill && copyBtns(!any)}
               <span className="spacer" />
               <button type="button" className="btn" onClick={() => setOpen(false)} disabled={busy === "send"}>Cancel</button>
               <button type="button" className="btn primary" disabled={!!busy || !any || !pv?.to} onClick={() => void send()}>{busy === "send" ? "Sending…" : pick.fromMe ? "Send from my email" : "Send"}</button>

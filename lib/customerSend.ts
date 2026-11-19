@@ -26,7 +26,12 @@ export type Pick3 = { proof?: boolean; quote?: boolean; sewouts?: string[]; note
    *  send to this person"): the account's people ticked; unset, their email settings decide. Never saved as the settings. */ to?: string[];
   /** from the staff member's own mailbox instead of the portal's (Nov 3, Nick: "send it through my own email… the look and
    *  feel of the email"), and the email of theirs it answers (the same thread) */ fromMe?: boolean; reply?: { messageId: string } | null;
-  /** from their own mailbox: what they wrote to go under the card ("Please let me know if this is approved.") */ after?: string };
+  /** from their own mailbox: what they wrote to go under the card ("Please let me know if this is approved.") */ after?: string;
+  /** a bill for this invoice (Nick, Nov 19 2026: "when I'm in an invoice and I click send a bill, I want it to work exactly
+   *  like the send proof to customer pop-up… finalize… or make a down payment… a link for her to pay that one invoice"):
+   *  pay in full, a deposit (an amount now, the rest later) or the final bill (what's left); its card's button opens their
+   *  portal with this invoice picked (and the deposit's amount). Sent on its own, kept with the bills (lib/bills.ts) */
+  bill?: { kind: "full" | "deposit" | "final"; amount?: number } | null };
 /** a staff member's own mailbox (lib/mail/config.ts) */
 type Box = import("@/lib/mail/config").MailAccount & { signature_html?: string | null; signature_css?: string | null; signature_on?: boolean | null };
 type SewRow = { id: string; order_id: string; imprint_id: string; version: number; status: string; sent_at: string | null; sent_to: string | null; archived_at: string | null; photo_path: string; created_at: string };
@@ -263,6 +268,8 @@ export async function sendOptions(admin: SupabaseClient, orderId: string) {
     quote: quoteOpen ? { kind: "quote" as const, total: c.total, status: o.status, sent: o.status === "quote_sent", deposit: upFront(customer?.payment_terms, c.total, settings.depositPct).amount, due: upFront(customer?.payment_terms, c.total, settings.depositPct).line }
       : invoiceOpen ? { kind: "invoice" as const, total: c.total, status: o.status, sent: !!(invSent || []).length, deposit: 0, due: invoiceTerms(customer?.payment_terms, c, settings.depositPct) } : null,
     sewouts: sews,
+    // an invoice with something owed: a bill can go (pay in full, a deposit, the final bill)
+    bill: o.type === "invoice" && !["void"].includes(o.status) && c.balance > 0.004 ? { number: o.number, total: c.total, paid: c.paid, balance: c.balance } : null,
   };
 }
 
@@ -287,7 +294,21 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
     let where = ""; for (const g of groups) for (const im of g.imprints || []) if (im.id === sw.imprint_id) where = `${im.location}${im.size ? `, ${im.size}` : ""}`;
     blocks.push({ k: "sewout", title: "Approve your sew-out", sub: ["A photo of your logo stitched on our machine", where], pic: su?.signedUrl || undefined });
   }
-  if (pick.quote) {
+  // a bill: its own card, and its button opens their portal to pay (never Review and approve)
+  let bill: { amount: number; url: string; label: string } | null = null;
+  if (pick.bill) {
+    const { data: pp } = await admin.from("payments").select("amount").eq("order_id", o.id);
+    const c = calcOrder(o, settings, (pp || []) as { amount: number }[]);
+    const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+    const amount = Math.round(Math.min(c.balance, pick.bill.kind === "deposit" ? Math.max(0, +(pick.bill.amount || 0)) : c.balance) * 100) / 100;
+    const label = pick.bill.kind === "deposit" ? "Deposit" : pick.bill.kind === "final" ? "Final bill" : "Your bill";
+    bill = { amount, label, url: `${siteUrl()}/portal?area=payments&pay=${o.id}${pick.bill.kind === "deposit" ? `&amt=${amount.toFixed(2)}` : ""}` };
+    blocks.push({ k: "bill", title: `${label} · ${m(amount)}`, sub: [
+      `Invoice #${o.number}${o.nickname ? ` · ${o.nickname}` : ""} · ${m(c.total)}${c.paid > 0.004 ? `, ${m(c.paid)} paid` : ""}`,
+      pick.bill.kind === "deposit" ? `The rest (${m(Math.max(0, c.balance - amount))}) is billed later, with shipping or anything added` : pick.bill.kind === "final" ? "What's left on your order" : "",
+    ] });
+  }
+  if (pick.quote && !pick.bill) {
     const c = calcOrder(o, settings, []);
     const m = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
     // under the title, what's due when they approve, by their terms (Oct 29, Nick: "nothing due, due on receipt, half due today…")
@@ -297,7 +318,7 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   const esc = (t: string) => (t || "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
   const has = (k: string) => blocks.some((b) => b.k === k);
   const inv = has("quote") && !["quote", "request", "quote_sent"].includes(o.status), price = inv ? "final invoice" : "quote";
-  const head = has("quote") && (has("proof") || has("sewout")) ? `Your ${has("sewout") && !has("proof") ? "sew-out" : "proof"} and ${price} are ready` : has("quote") ? `Your ${price} is ready` : has("sewout") && !has("proof") ? "Your sew-out is ready to approve" : "Your proof is ready to approve";
+  const head = bill ? (bill.label === "Deposit" ? "Your deposit is ready to pay" : bill.label === "Final bill" ? "Your final bill" : "Your bill is ready") : has("quote") && (has("proof") || has("sewout")) ? `Your ${has("sewout") && !has("proof") ? "sew-out" : "proof"} and ${price} are ready` : has("quote") ? `Your ${price} is ready` : has("sewout") && !has("proof") ? "Your sew-out is ready to approve" : "Your proof is ready to approve";
   const job = `${o.nickname || `order #${o.number}`}${ver ? ` · Version ${ver}` : ""}`;
   const up = upFront(customer?.payment_terms, calcOrder(o, settings, []).total, settings.depositPct);
   const payNow = up.kind === "full" ? "pay for it" : up.kind === "deposit" ? "pay the deposit" : "";
@@ -309,8 +330,8 @@ async function emailFor(admin: SupabaseClient, o: Order, customer: { name: strin
   // plain words (Nov 2, Nick: "hi name… with the company… please see your proof and quote below. Let us know if this is
   // approved")
   const seeWhat = has("quote") && (has("proof") || has("sewout")) ? `${has("sewout") && !has("proof") ? "sew-out" : "proof"} and ${price}` : has("quote") ? price : has("sewout") && !has("proof") ? "sew-out" : "proof";
-  const lead = `Please see your ${seeWhat} below.`;
-  const ending = "Let us know if this is approved.";
+  const lead = bill ? "Here's your bill. You can pay it from the button below, by card or bank." : `Please see your ${seeWhat} below.`;
+  const ending = bill ? "Thank you for your order." : "Let us know if this is approved.";
   const intro = `<div>${esc(lead)}</div><div style="margin-top:12px;padding:10px 12px;background:#F6F7F9;border-radius:8px"><div style="font-weight:700;color:#141D2B">${esc(job)}</div><div style="font-size:13px;color:#6B7686">Order #${o.number}</div></div><div style="margin-top:12px">${esc(ending)}</div>`;
   const contact = [fmtPhone(sh.phone), sh.email].filter(Boolean).map(esc).join(" · ");
   const html = compact ? `<div style="padding:8px 0;font-family:Helvetica,Arial,sans-serif">
@@ -319,7 +340,7 @@ ${emailBrandBar(siteUrl(), sh.name, sh.logoUrl ? logo : "")}
 <tr><td style="padding:16px 18px 2px;color:#141D2B"><div style="font-size:17px;font-weight:700;margin:0 0 8px">${esc(head)}</div>
 <div style="padding:8px 10px;background:#F6F7F9;border-radius:8px"><div style="font-size:14px;font-weight:700;color:#141D2B">${esc(job)}</div><div style="font-size:12px;color:#6B7686">Order #${o.number}</div></div></td></tr>
 <tr><td style="padding:6px 18px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">${rows}</table></td></tr>
-<tr><td style="padding:8px 18px 16px;text-align:center">${emailButton(url, "Review and approve")}</td></tr>
+<tr><td style="padding:8px 18px 16px;text-align:center">${bill ? emailButton(bill.url, `Pay ${bill.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })} now`) : emailButton(url, "Review and approve")}</td></tr>
 </table></div>` : `<div style="padding:16px 12px;font-family:Helvetica,Arial,sans-serif">
 <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;margin:0 auto;background:#ffffff;border:1px solid #E3E7EE;border-radius:10px;border-collapse:separate;box-shadow:0 2px 12px rgba(20,29,43,0.14)">
 ${emailBrandBar(siteUrl(), sh.name, sh.logoUrl ? logo : "")}
@@ -327,18 +348,20 @@ ${emailBrandBar(siteUrl(), sh.name, sh.logoUrl ? logo : "")}
 <div style="font-size:15px;line-height:1.5;color:#3C475A"><div style="margin-bottom:6px">Hi ${esc(first)}${customer?.company && customer.company.trim().toLowerCase() !== (customer?.name || "").trim().toLowerCase() ? ` with ${esc(customer.company.trim())}` : ""},</div>${intro}</div>
 ${pick.note?.trim() ? `<div style="font-size:14px;line-height:1.5;color:#3C475A;margin-top:10px;white-space:pre-line">${esc(pick.note.trim())}</div>` : ""}</td></tr>
 <tr><td style="padding:10px 24px"><table role="presentation" cellpadding="0" cellspacing="0" style="width:100%">${rows}</table></td></tr>
-<tr><td style="padding:10px 24px 6px;text-align:center">${emailButton(url, "Review and approve")}</td></tr>
+<tr><td style="padding:10px 24px 6px;text-align:center">${bill ? emailButton(bill.url, `Pay ${bill.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })} now`) : emailButton(url, "Review and approve")}</td></tr>
 <tr><td style="padding:8px 24px 18px;text-align:center;font-size:12px;color:#6B7686">Please use the button, not a reply, so it goes straight onto your order.</td></tr>
 <tr><td style="padding:12px 24px;border-top:1px solid #EEF1F5;font-size:12px;color:#6B7686">${esc(sh.name)}${contact ? ` · ${contact}` : ""}</td></tr>
 </table></div>`;
   const what = has("quote") && (has("proof") || has("sewout")) ? `${has("sewout") && !has("proof") ? "Sew-out" : "Proof"} and ${inv ? "invoice" : "quote"}` : has("quote") ? (inv ? "Invoice" : "Quote") : has("sewout") && !has("proof") ? "Sew-out" : "Proof";
+  if (bill) return { subject: orderSubject(o.number, bill.label === "Deposit" ? "Deposit to pay" : bill.label === "Final bill" ? "Your final bill" : "Your bill", o.nickname || ""), html: html.replace("Please use the button, not a reply, so it goes straight onto your order.", "Opens your portal with this invoice picked.") };
   return { subject: orderSubject(o.number, `${what} ready for approval`, [o.nickname, ver ? `Version ${ver}` : ""].filter(Boolean).join(" · ")), html };
 }
 
 /** the preview: the email as it would go, before anything is made */
 export async function previewSend(admin: SupabaseClient, orderId: string, pick: Pick3, box?: Box | null) {
+  if (pick.bill) pick = { ...pick, proof: false, quote: false, sewouts: [] };
   const { o, customer, settings } = await load(admin, orderId);
-  if (!pick.proof && !pick.quote && !(pick.sewouts || []).length) return { ok: false as const, error: "Tick what to send." };
+  if (!pick.proof && !pick.quote && !(pick.sewouts || []).length && !pick.bill) return { ok: false as const, error: "Tick what to send." };
   const { list, people } = await recipientsFor(admin, o, customer, pick, box);
   const hi = firstOf(customer, list, people);
   const ver = await sendNumber(admin, o, pick);
@@ -374,8 +397,10 @@ function previewOf(html: string, atts: { cid?: string; content: Buffer; contentT
  * link to copy). Returns the order's page link.
  */
 export async function sendTogether(admin: SupabaseClient, orderId: string, pick: Pick3, me: Staff, email = true, box?: Box | null) {
-  const { o, customer, settings } = await load(admin, orderId);
-  if (!pick.proof && !pick.quote && !(pick.sewouts || []).length) return { ok: false as const, error: "Tick what to send." };
+  // a bill goes on its own
+  if (pick.bill) pick = { ...pick, proof: false, quote: false, sewouts: [] };
+  const { o, customer, settings, pays } = await load(admin, orderId);
+  if (!pick.proof && !pick.quote && !(pick.sewouts || []).length && !pick.bill) return { ok: false as const, error: "Tick what to send." };
   // who gets it: the people picked for this send, else who at the customer gets proofs and approvals (their email
   // settings, lib/customerEmails.ts; the main email if unset)
   const { list, people } = await recipientsFor(admin, o, customer, pick, box);
@@ -416,6 +441,14 @@ export async function sendTogether(admin: SupabaseClient, orderId: string, pick:
     done.push("the quote");
     // sent to the customer: the order teaches Create order (lib/ai/orderExamples.ts), as the old quote-only send did
     { const { saveExample } = await import("@/lib/ai/orderExamples"); await saveExample(admin, orderId, me.email).catch((e) => console.warn("saveExample", e)); }
+  }
+  // a bill: kept with the bills (one reminder 7 days later for what's still open; lib/bills.ts) and logged on the order
+  if (pick.bill && email) {
+    const c = calcOrder(o, settings, pays), amt = Math.round(Math.min(c.balance, pick.bill.kind === "deposit" ? Math.max(0, +(pick.bill.amount || 0)) : c.balance) * 100) / 100;
+    const word = pick.bill.kind === "deposit" ? "Deposit bill" : pick.bill.kind === "final" ? "Final bill" : "Bill";
+    if (o.customer_id) await admin.from("bills").insert({ customer_id: o.customer_id, order_ids: [orderId], total: amt, sent_to: list, note: (pick.note || "").trim().slice(0, 2000), sent_by: me.email, remind_at: new Date(Date.now() + 7 * 864e5).toISOString() });
+    await admin.from("order_events").insert({ order_id: orderId, kind: "customer_email", detail: `bill · ${word} for ${amt.toLocaleString("en-US", { style: "currency", currency: "USD" })} sent to ${to}`, actor: me.email });
+    done.push(pick.bill.kind === "deposit" ? "the deposit bill" : "the bill");
   }
   // sent to the customer: its goods may already be here or on the way (lib/goodsSoon.ts)
   matchGoodsSoon();
