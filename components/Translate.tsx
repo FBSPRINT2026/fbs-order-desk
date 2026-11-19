@@ -70,9 +70,10 @@ export default function Translate({ className = "" }: { className?: string }) {
   }, []);
 
   // the same little EN | ES selector as the crew phone's menu (Nick, Nov 19 2026)
-  // a tiny plain "Translate to Spanish" over it, so anyone can tell what EN | ES is (Nick, Nov 19 2026)
+  // one tiny word over it in the other language, so whoever needs it can read it (Nick, Nov 19 2026: "if you're in Spanish
+  // mode, it would say the word translate… in English mode, the Spanish word for translate")
   const ui = (
-    <div className="tr-w" data-notranslate><span className="tr-cap">Translate to Spanish</span>
+    <div className="tr-w" data-notranslate><span className="tr-cap" lang={on ? "en" : "es"}>{on ? "Translate" : "Traducir"}</span>
     <div className={"tr-seg " + className} role="group" aria-label="Language / Idioma" data-notranslate title={err || (on ? (busy ? "Traduciendo…" : "Showing this page in Spanish") : "Show this page in Spanish")}>
       {(["en", "es"] as const).map((l) => (
         <button key={l} type="button" lang={l} aria-pressed={lang === l} className={(lang === l ? "on" : "") + (l === "es" && busy ? " busy" : "")} onClick={() => setLang(l)}>{l === "en" ? "EN" : "ES"}</button>
