@@ -2,6 +2,7 @@
 import { issuesFor } from "@/app/goods-issue-actions";
 import type { GoodsIssue } from "@/lib/goodsIssueShared";
 import Link from "next/link";
+import { trackingUrl } from "@/lib/goods";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import CheckinModal from "@/components/CheckinModal";
 import GoodsIssues from "@/components/GoodsIssues";
@@ -17,13 +18,16 @@ import { countSections, type CheckJob, type JobKind, type JobState } from "@/lib
  * the two never disagree), Count in opens the Check-In tool on that job; the issues to work under it; on the right,
  * what the S&S and SanMar trucks bring today or tomorrow.
  */
-export type DashTruckRow = { key: string; number: number; href: string; who: string; boxes: number; supplier: string; at: string | null; state: string };
+export type DashTruckRow = { key: string; number: number; href: string; who: string; boxes: number; supplier: string; at: string | null; state: string;
+  /** who's sending it (a vendor's name), and its tracking: for the Customer shipments box */ sub?: string; trks?: { carrier: string; tracking: string; status: string; delivered: boolean }[] };
 type Day = "today" | "tomorrow" | "next" | "later" | "counted";
 
 const STATE: Record<JobState, { label: string; tone: string }> = {
   ready: { label: "All here", tone: "ok" }, partial: { label: "Partly here", tone: "warn" }, issue: { label: "Problem", tone: "bad" },
   way: { label: "On the way", tone: "info" }, none: { label: "No tracking", tone: "gray" }, checked: { label: "Counted", tone: "ok" },
 };
+/** a carrier's tracking status in a word or two */
+const TRACK_WORD: Record<string, string> = { pre_transit: "Label made", in_transit: "In transit", out_for_delivery: "Out for delivery", delivered: "Delivered", available_for_pickup: "At the carrier", return_to_sender: "Returning", failure: "Problem", cancelled: "Cancelled", error: "Problem", unknown: "Label made" };
 const RANK: Record<JobState, number> = { ready: 0, partial: 1, issue: 2, way: 3, none: 4, checked: 5 };
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 /** the next working day after a day (Mon–Fri) */
@@ -140,8 +144,16 @@ export default function ReceivingDash({ trucks, localDay, onTruck, onIssue }: { 
     return (
       <div className={"rvd-sup " + cls}>
         <div className="rvd-sup-h"><span>{name}</span><small>{rs.length ? `${rs.length} order${rs.length === 1 ? "" : "s"} · ${boxes} box${boxes === 1 ? "" : "es"}` : "nothing"}</small></div>
-        {rs.map((r) => <div key={r.key} className="rvd-sup-r"><span>{r.number ? <Link className="ordno" href={r.href}>#{r.number}</Link> : null} <span data-notranslate>{r.who}</span></span><small>{r.boxes} box{r.boxes === 1 ? "" : "es"}</small></div>)}
-        {!rs.length && <div className="rvd-sup-r faint">Nothing on the manifests for {truckDay === "today" ? "today" : wkd(d1)}.</div>}
+        {rs.map((r) => sup === "other" ? (
+          // everyone else's (Nov 19, Nick: "customer shipments… just like S&S and SanMar… showing tracking"): who sent it
+          // and each tracking number with where it is
+          <div key={r.key} className="rvd-sup-r rvd-sup-t">
+            <span>{r.number ? <Link className="ordno" href={r.href}>#{r.number}</Link> : null} <span data-notranslate>{r.who}</span>{r.sub ? <small data-notranslate> · {r.sub}</small> : null}</span>
+            <small>{r.boxes ? `${r.boxes} box${r.boxes === 1 ? "" : "es"}` : ""}</small>
+            {(r.trks || []).filter((k) => k.tracking).slice(0, 3).map((k) => <a key={k.tracking} className="rvd-trk" href={trackingUrl(k.carrier, k.tracking)} target="_blank" rel="noreferrer" data-notranslate>{k.carrier} {k.tracking}<em className={k.delivered ? "ok" : ""}>{k.delivered ? "Delivered" : TRACK_WORD[k.status] || "On the way"}</em></a>)}
+          </div>
+        ) : <div key={r.key} className="rvd-sup-r"><span>{r.number ? <Link className="ordno" href={r.href}>#{r.number}</Link> : null} <span data-notranslate>{r.who}</span></span><small>{r.boxes} box{r.boxes === 1 ? "" : "es"}</small></div>)}
+        {!rs.length && <div className="rvd-sup-r faint">{sup === "other" ? "Nothing tracked to arrive" : "Nothing on the manifests"} {truckDay === "today" ? "today" : `for ${wkd(d1)}`}.</div>}
         {sup === "ss" && truckDay === "today" && <div className="rvd-sup-f"><button type="button" className="btn sm" onClick={onTruck}>Receive the truck</button></div>}
       </div>
     );
@@ -194,6 +206,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck, onIssue }: { 
         <div className="rvm-chips">{(["today", "tomorrow"] as const).map((k) => <button key={k} type="button" className={truckDay === k ? "on" : ""} onClick={() => setTruckDay(k)}>{k === "today" ? "Today" : "Tomorrow"}</button>)}</div>
         {truck("ss", "S&S", "ss")}
         {truck("sanmar", "SanMar", "sm")}
+        {truck("other", "Customer shipments", "cs")}
       </div>}
       {ptab === "issues" && <div className="rvm-list"><GoodsIssues href={(i) => (i.order_id ? `/shop/orders/${i.order_id}` : `/shop/archive/${i.archived_order_id}`)} /></div>}
       <nav className="rvm-nav" aria-label="Goods & Receiving">
@@ -272,6 +285,7 @@ export default function ReceivingDash({ trucks, localDay, onTruck, onIssue }: { 
         </section>
         {truck("ss", "S&S", "ss")}
         {truck("sanmar", "SanMar", "sm")}
+        {truck("other", "Customer shipments", "cs")}
         <IssuesSide onIssue={onIssue} />
         </div>
       </aside>

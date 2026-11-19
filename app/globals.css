@@ -22441,6 +22441,12 @@ html body .pv table.pv-items.tbl-stack > tbody > tr > td.pv-artc:empty{display:n
 .rvd-sup-h small{font-weight:600;font-size:12px;opacity:.9;white-space:nowrap}
 .rvd-sup.ss .rvd-sup-h{background:#d62a1f}
 .rvd-sup.sm .rvd-sup-h{background:#0b3d78}
+.rvd-sup.cs .rvd-sup-h{background:#5b4bb7}
+.rvd-sup-t{flex-wrap:wrap}
+.rvd-sup-t > span small{color:var(--ink-3)}
+.rvd-trk{flex-basis:100%;display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--accent);text-decoration:none}
+.rvd-trk:hover{text-decoration:underline}
+.rvd-trk em{font-style:normal;color:var(--ink-3);white-space:nowrap}.rvd-trk em.ok{color:var(--ok)}
 .rvd-sup-r{display:flex;justify-content:space-between;gap:8px;padding:7px 14px;border-top:1px solid var(--line);font-size:13px}
 .rvd-sup-r small{color:var(--ink-3);white-space:nowrap}
 .rvd-sup-f{display:flex;justify-content:center;padding:8px;border-top:1px solid var(--line)}
