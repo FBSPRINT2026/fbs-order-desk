@@ -547,3 +547,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 2:32pm · 1.3.790 · Nick · + Tracking's ship-to: a suite on the street line is its own line; city, state ZIP on one line whose copy is the ZIP; no reference line; the count, Cancel and Done at the bottom right, in line with Ship
 - Nov 19 2:34pm · 1.3.791 · Nick · Outbound: the shipping settings gear moves to the header, left of Ship | Pickup shelf | Delivery
 - Nov 19 2:38pm · 1.3.792 · Nick · Ready to ship: small SP / EMB / HP tags after each job's name for what's in it
+- Nov 19 2:39pm · 1.3.793 · Nick · Ready to ship: the SP / EMB / HP tags go after pieces · boxes · city

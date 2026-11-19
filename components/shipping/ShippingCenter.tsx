@@ -265,9 +265,9 @@ function ShipLine({ x, perBox, missing, showCust, onOpen, trk, onTrk, onTracked,
       <div className="scr-r">
         <button type="button" className="scr-main" onClick={onOpen} title={missing?.length ? "Fill in what's missing and ship it" : "Ship it"}>
           <b className="scr-n">#{x.number}</b>
-          <span className="scr-j">{showCust && <b>{x.customer}</b>}{showCust && x.job ? " · " : ""}{x.job || (!showCust ? x.customer : "")}{(x.kinds || []).map((k) => <em key={k} className={"scr-k " + k} title={MIX_WORD[k]}>{MIX_ABBR[k]}</em>)}{x.printavo && <em className="sc-tag">Printavo</em>}{x.shipment && <em className="sc-tag draft">Started</em>}</span>
+          <span className="scr-j">{showCust && <b>{x.customer}</b>}{showCust && x.job ? " · " : ""}{x.job || (!showCust ? x.customer : "")}{x.printavo && <em className="sc-tag">Printavo</em>}{x.shipment && <em className="sc-tag draft">Started</em>}</span>
           <span className="scr-m">{parts ? <span className="scr-parts">{parts.map((q) => <em key={q.kind} className={q.state === "ok" ? (went ? "went" : "ok") : ""} title={q.note}>{MIX_ABBR[q.kind]} {q.state === "ok" ? (went ? `shipped ${went.shipped_at ? new Date(went.shipped_at).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}` : "printed") : q.state === "run" ? "printing" : q.state === "wt" ? "on the schedule" : "not booked"}</em>)}</span>
-            : missing?.length ? <em className="scr-need">Needs {missing.join(", ").toLowerCase()}</em> : <>{x.rest && <em className="scr-rest">The rest · part shipped</em>}{x.pieces || "?"} pcs · {boxes} box{boxes === 1 ? "" : "es"}{addressReady(x.to) ? ` · ${x.to.city}, ${x.to.state}` : ""}</>}</span>
+            : missing?.length ? <em className="scr-need">Needs {missing.join(", ").toLowerCase()}</em> : <>{x.rest && <em className="scr-rest">The rest · part shipped</em>}{x.pieces || "?"} pcs · {boxes} box{boxes === 1 ? "" : "es"}{addressReady(x.to) ? ` · ${x.to.city}, ${x.to.state}` : ""}{(x.kinds || []).map((k) => <em key={k} className={"scr-k " + k} title={MIX_WORD[k]}>{MIX_ABBR[k]}</em>)}</>}</span>
           <span className={"scr-d" + (late ? " late" : "")}>{late ? "Late · " : ""}{day(x.due)}</span>
         </button>
         <span className="scr-a">
