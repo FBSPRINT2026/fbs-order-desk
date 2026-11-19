@@ -551,3 +551,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 2:39pm · 1.3.794 · Nick · Ready to ship · needs info: the SP / EMB / HP tags after what's missing too
 - Nov 19 2:46pm · 1.3.795 · Nick · Create labels: on for the owner's login (it checked one email address), and its hover says what's missing when it's gray
 - Nov 19 2:57pm · 1.3.796 · Nick · Create labels on for every staff login (the shipping computer too), still asking before it buys; on a customer's own account (no prices) only Fastest shows under Default shipping
+- Nov 19 3:05pm · 1.3.797 · Nick · Create labels: a ship-to with no phone uses the customer's, else ours (FedEx refused #50026's label); a suite on the street line goes in Suite / unit everywhere an address is read, and in the ship window for one saved before

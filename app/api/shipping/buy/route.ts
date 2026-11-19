@@ -50,7 +50,12 @@ export async function POST(req: Request) {
     const { data: a } = sh.archived_order_id ? await admin.from("archived_orders").select("visual_id").eq("id", sh.archived_order_id).maybeSingle() : { data: null };
     const ref = `#${o?.number || a?.visual_id || ""}`;
     // priced fresh, then bought on that same quote
-    const q = await rateShipment({ from: s.from, to: sh.ship_to, boxes, bill: shipOn ? "fbs" : bill, account: sh.bill_account || "", zip: sh.bill_zip || "", reference: ref, carrierAccounts });
+    // FedEx won't make a label without a phone for whoever it's going to (Nov 19 2026, #50026: "PHONENUMBER.EMPTY"): the
+    // ship-to's own, else the customer's, else ours
+    const { data: cu } = sh.customer_id ? await admin.from("customers").select("phone, contact2_phone").eq("id", sh.customer_id).maybeSingle() : { data: null };
+    const phone = String(sh.ship_to?.phone || cu?.phone || cu?.contact2_phone || s.from.phone || "").trim();
+    const to = { ...sh.ship_to, phone };
+    const q = await rateShipment({ from: s.from, to, boxes, bill: shipOn ? "fbs" : bill, account: sh.bill_account || "", zip: sh.bill_zip || "", reference: ref, carrierAccounts });
     const rate = q.rates.find((r) => r.carrier === carrier && r.service === service);
     if (!rate) { await undo(); return NextResponse.json({ error: `${carrier} ${service} isn't offered for this shipment any more. Check rates again.` }, { status: 409 });
     }

@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { money } from "@/lib/format";
 import { SHIP_METHODS, matchShipMethod, type ShipAddress, type ShipSettings } from "@/lib/pricing";
 import { accountOfMethod, onAccountMethod, ON_ACCOUNT } from "@/lib/thirdParty";
-import { BILL_LABEL, addressReady, boxReady, carrierOf, estimateBoxes, newBoxes, type BillTo, type Box, type Rate, type Shipment } from "@/lib/shipping";
+import { BILL_LABEL, addressReady, splitSuite, boxReady, carrierOf, estimateBoxes, newBoxes, type BillTo, type Box, type Rate, type Shipment } from "@/lib/shipping";
 
 export type ShipTarget = {
   kind: "order" | "archived"; id: string; number: string; job: string; customerId: string | null; customer: string;
@@ -63,7 +63,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const [boxes, setBoxes] = useState<Box[]>(() => (existing?.boxes?.length ? existing.boxes : newBoxes(estimate, defaultSize)));
   const [askAll, setAskAll] = useState<{ length: number; width: number; height: number } | null>(null);
   const [multi, setMulti] = useState<{ step: "count" | "size"; count: number } | null>(null);
-  const [to, setTo] = useState<ShipAddress>(existing?.ship_to?.street1 ? existing.ship_to : t.to);
+  const [to, setTo] = useState<ShipAddress>(splitSuite(existing?.ship_to?.street1 ? existing.ship_to : t.to));
   const [bill, setBill] = useState<BillTo>(existing?.bill_to || t.bill);
   const [account, setAccount] = useState(existing?.bill_account || t.account);
   const [zip, setZip] = useState(existing?.bill_zip || t.zip);

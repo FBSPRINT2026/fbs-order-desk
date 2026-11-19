@@ -73,7 +73,19 @@ export function addressFromText(text: string, name = "", company = ""): ShipAddr
     a.name = name; a.company = company;
     a.street1 = lines[0] || ""; a.street2 = lines.slice(1).join(", ");
   }
-  return a;
+  return splitSuite(a);
+}
+
+/**
+ * A suite written on the street line goes in Suite / unit (Nick, Nov 19 2026, #50026: "600 Railhead Rd Suite 220"… "the
+ * suite has to go into the suite section"): "Suite 220", "Ste. 3", "Unit B", "#4", "Bldg 2", "Floor 3", "Apt 5" at the end
+ * of the street (only with a number or a single letter after it, so "Floral Ave" and "Apt Way" stay streets). Used by every
+ * address read from text and by the ship window for a shipment saved before this.
+ */
+export function splitSuite(a: ShipAddress): ShipAddress {
+  if ((a.street2 || "").trim()) return a;
+  const m = (a.street1 || "").match(/^(.*[a-z].*?)[,\s]+((?:(?:suite|ste|unit|apt|bldg|building|floor|fl|room|rm)\b\.?|#)\s*(?:[\w-]*\d[\w-]*|[a-z]))$/i);
+  return m ? { ...a, street1: m[1].trim().replace(/,$/, ""), street2: m[2].trim() } : a;
 }
 
 export const addressReady = (a: ShipAddress) => !!(a.street1 && a.city && a.state && a.zip && (a.name || a.company));

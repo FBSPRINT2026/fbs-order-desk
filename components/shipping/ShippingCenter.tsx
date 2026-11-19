@@ -7,7 +7,7 @@ import type React from "react";
 import { createClient } from "@/lib/supabase/client";
 import { custLabel } from "@/lib/format";
 import { mergeSettings, type Customer, type Group, type Settings, type ShipAddress } from "@/lib/pricing";
-import { addressFromText, addressReady, carrierOf, emptyAddress, estimateBoxes, oneLine, trackingLink, BILL_LABEL, type BillTo, type Shipment } from "@/lib/shipping";
+import { addressFromText, addressReady, splitSuite, carrierOf, emptyAddress, estimateBoxes, oneLine, trackingLink, BILL_LABEL, type BillTo, type Shipment } from "@/lib/shipping";
 import { addTracking } from "@/app/shop/tracking-actions";
 import { shipPart } from "@/app/shop/parts-actions";
 import { kindsOf, mixParts, MIX_ABBR, MIX_WORD, type MixPart, type MixSlot } from "@/lib/mixParts";
@@ -318,8 +318,7 @@ function TrackForm({ x, onDone, onCancel }: { x: Item; onDone: (msg: string) => 
         {(() => {
           // a suite written on the street line is its own line to copy (Nick, Nov 19 2026: "if there's a secondary line like a
           // suite, it has to be its own line"); city, state and ZIP are one line whose copy is the ZIP (FedEx fills the rest)
-          const m = !x.to.street2 && (x.to.street1 || "").match(/^(.*[a-z].*?)[,\s]+((?:(?:suite|ste|unit|apt|bldg|building|floor|fl|room|rm)\b\.?|#)\s*(?:[\w-]*\d[\w-]*|[a-z]))$/i);
-          const street = m ? m[1].trim() : x.to.street1, suite = m ? m[2].trim() : x.to.street2;
+          const sp = splitSuite(x.to), street = sp.street1, suite = sp.street2;
           const csz = [[x.to.city, x.to.state].filter(Boolean).join(", "), x.to.zip].filter(Boolean).join(" ");
           return ([["Company", x.to.company, ""], ["Attention", x.to.name, ""], ["Street", street, ""], ["Suite", suite, ""], ["City, state, ZIP", csz, x.to.zip], ["Phone", x.to.phone, ""]] as const)
             .filter(([, v]) => (v || "").trim()).map(([k, v, c]) => <CopyLine key={k} k={k} v={String(v).trim()} copy={c || undefined} />);
