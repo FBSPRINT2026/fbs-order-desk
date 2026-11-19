@@ -24078,8 +24078,8 @@ main.main .rvg-sub{margin-bottom:10px}
 .trk-ad-h{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);margin-bottom:2px}
 .trk-ad-l{font-size:13.5px;line-height:1.5;color:var(--ink);overflow-wrap:anywhere}
 .trk-ad-l .faint{font-size:12px}
-.trk-cp{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:3px;vertical-align:-3px;border-radius:4px;color:var(--ink-3)}
-.trk-cp:hover{color:var(--accent);background:var(--surface)}
+.trk-cp{all:unset;cursor:pointer;display:inline;margin-left:4px;vertical-align:-1px;color:var(--ink-3);background:none!important;border:0!important;box-shadow:none!important;padding:0}
+.trk-cp:hover{color:var(--accent)}
 .trk-cp:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .trk-cp svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .trk-cp.ok{color:var(--ok)}
