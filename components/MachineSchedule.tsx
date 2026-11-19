@@ -1734,23 +1734,66 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                     title={`${m.name} · ${dayLbl(d)} · ${off ? `Off · ${m.off![d]}` : `${fmtMin(u)} of ${fmtMin(cap)} booked`}`}
                     onDragOver={(e) => { e.preventDefault(); setOver(m.id + d); }} onDragLeave={() => setOver("")} onDrop={(e) => listDrop(e, m, d)}>
                     {off && <span className="mwp-off">Off · {m.off![d]}</span>}
-                    {joined(m, d).map(({ g }) => {
-                      const c = g.c, hold = c.job.kind === "h", done = c.slot?.status === "done";
-                      // a job runs over into later days: it's listed once, on the day it starts, saying where it ends
-                      const all = segs.ofCard.get(c.key) || [], prv = all.some((x) => x.day < d), last = all[all.length - 1], nxt = last && last.day > d ? last : null;
-                      if (prv) return null;
-                      const late = segLate(last || g);
-                      return (
-                        <button key={c.key + g.part} type="button" draggable data-key={c.key}
-                          className={"mwp-j" + (hold ? " hold" : "") + (done ? " done" : "") + (c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (isHit(c.job) ? " ms-hit" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "")}
-                          title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); openRc(c, g, e.clientX, e.clientY); }}
-                          onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
-                          <b>{c.job.name || shortLabel(c.need.label)}</b>
-                          <span>{hold ? "Hold · " : ""}{abbrCo(c.job.customer || "")}{hold ? "" : ` · #${c.job.number}`}{done ? " · done" : ""}{late && !done ? " · late" : ""}</span>
-                          {nxt && <em className={late ? "late" : ""}>Runs into {dayLbl(nxt.day).split(",")[0]}</em>}
-                        </button>
-                      );
-                    })}
+                    {(() => {
+                      // the day's jobs, each listed once on the day it starts (a job running into later days says where it ends)
+                      const js = joined(m, d).filter(({ g }) => !(segs.ofCard.get(g.c.key) || []).some((x) => x.day < d));
+                      // one run (the same art and in-hands date, or orders run together: AMS's weekly run) is one box (Nick, Nov 19)
+                      const blocks: (typeof js)[] = [];
+                      for (const x of js) { const lb = blocks[blocks.length - 1], p = lb?.[lb.length - 1]; if (p && (oneRun(p.g.c, x.g.c) || x.g.c.sameArt?.with === p.g.c.job.number)) lb.push(x); else blocks.push([x]); }
+                      const sh = shiftOn(m, d) || typicalShift(m), [sa, sb] = sh, span = Math.max(60, Math.max(sb, ...js.map((x) => x.end)) - Math.min(sa, ...js.map((x) => x.start)));
+                      const t0 = Math.min(sa, ...js.map((x) => x.start)), pct = (v: number) => `${Math.max(0, Math.min(100, ((v - t0) / span) * 100))}%`;
+                      const isToday = d === today, nowAt = isToday ? blocks.findIndex((b0) => b0[0].start > now.min) : -1;
+                      const left = isToday ? js.reduce((t, x) => t + Math.max(0, x.end - Math.max(x.start, now.min)), 0) : 0;
+                      const nowLine = <div key="now" className="mwp-now"><span>Now {clock(now.min)}</span></div>;
+                      const rows = blocks.map((b0) => {
+                        if (b0.length > 1) {
+                          const c0 = b0[0].g.c, end = b0[b0.length - 1].end, mins = b0.reduce((t, x) => t + x.g.c.minutes, 0), pcs = b0.reduce((t, x) => t + x.g.c.need.qty, 0);
+                          const names = b0.map((x) => x.g.c.job.name || ""), words = names.map((n) => n.split(/\s+/));
+                          let k = 0; while (words.every((w) => w[k] && w[k].toLowerCase() === words[0][k].toLowerCase() && k < w.length - 1)) k++;
+                          const pre = words[0].slice(0, k).join(" "), weekly = b0.every((x) => !!x.g.c.job.prod);
+                          const title = `${pre || abbrCo(c0.job.customer || "")}${weekly ? " weekly run" : " run"}`;
+                          return (
+                            <div key={"run" + c0.key} className="mwp-run">
+                              <div className="mwp-run-h" draggable title="Drag to move the whole run" onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: b0.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }}>
+                                <b>{title}</b><span>{clock(b0[0].start)}–{clock(end)} · {fmtMin(mins)} · {b0.length} POs · {pcs.toLocaleString()} pcs</span>
+                              </div>
+                              {b0.map(({ g }) => { const c = g.c, done = c.slot?.status === "done", late = segLate((segs.ofCard.get(c.key) || []).slice(-1)[0] || g); return (
+                                <button key={c.key} type="button" draggable data-key={c.key} className={"mwp-row" + (done ? " done" : "") + (c.slot?.status === "running" ? " run" : "") + (late && !done ? " late" : "") + (isHit(c.job) ? " ms-hit" : "")}
+                                  title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); openRc(c, g, e.clientX, e.clientY); }}
+                                  onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
+                                  <b>{(pre ? (c.job.name || "").split(/\s+/).slice(k).join(" ") : c.job.name) || shortLabel(c.need.label)}</b><span>#{c.job.number}{done ? " ✓" : ""}</span><i>{fmtMin(c.minutes)}</i>
+                                </button>
+                              ); })}
+                            </div>
+                          );
+                        }
+                        const { g, start } = b0[0], c = g.c, hold = c.job.kind === "h", done = c.slot?.status === "done";
+                        const all = segs.ofCard.get(c.key) || [], last = all[all.length - 1], nxt = last && last.day > d ? last : null;
+                        const late = segLate(last || g);
+                        return (
+                          <button key={c.key + g.part} type="button" draggable data-key={c.key}
+                            className={"mwp-j" + (hold ? " hold" : "") + (done ? " done" : "") + (c.slot?.status === "running" ? " run" : "") + (late ? " late" : "") + (isHit(c.job) ? " ms-hit" : "") + (mine && !isMe(c.job.owner, owners, me) ? " other" : "")}
+                            title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); openRc(c, g, e.clientX, e.clientY); }}
+                            onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
+                            <b>{c.job.name || shortLabel(c.need.label)}</b>
+                            <span>{hold ? "Hold · " : ""}{abbrCo(c.job.customer || "")}{hold ? "" : ` · #${c.job.number}`}{done ? " · done" : ""}{late && !done ? " · late" : ""}</span>
+                            <i className="mwp-t">{clock(start)} · {fmtMin(c.minutes)}{nxt ? <em className={late ? "late" : ""}> · runs into {dayLbl(nxt.day).split(",")[0]}</em> : null}</i>
+                          </button>
+                        );
+                      });
+                      if (isToday && !off) rows.splice(nowAt < 0 ? rows.length : nowAt, 0, nowLine);
+                      return <>
+                        {!off && <div className="mwp-tl" title={`${clockLong(sa)} – ${clockLong(sb)} · ${fmtMin(u)} booked of ${fmtMin(cap)}${isToday ? ` · ${fmtMin(left)} still to run today` : ""}`}>
+                          <div className="mwp-tl-b">
+                            <i className="mwp-tl-sh" style={{ left: pct(sa), width: `calc(${pct(sb)} - ${pct(sa)})` }} />
+                            {js.map((x) => <i key={x.g.c.key + x.start} className={"mwp-tl-j" + (x.g.c.slot?.status === "done" ? " done" : "")} style={{ left: pct(x.start), width: `calc(${pct(x.end)} - ${pct(x.start)})` }} />)}
+                            {isToday && now.min > t0 && now.min < t0 + span && <i className="mwp-tl-now" style={{ left: pct(now.min) }} />}
+                          </div>
+                          <span className={u > cap ? "over" : ""}>{u > cap ? `${fmtMin(u - cap)} over` : isToday ? `${fmtMin(left)} left` : `${fmtMin(Math.max(0, cap - u))} open`}</span>
+                        </div>}
+                        {rows}
+                      </>;
+                    })()}
                   </div>
                 );
               }),

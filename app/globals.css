@@ -3497,9 +3497,9 @@ a.as-ai{text-decoration:none}
 .mwp-d:hover{text-decoration:underline}
 .mwp-p{border-radius:8px;padding:8px 10px;background:color-mix(in srgb,var(--pt) 16%,var(--surface));color:color-mix(in srgb,var(--pt) 75%,var(--ink));display:flex;flex-direction:column;justify-content:center;min-width:0}
 .mwp-p b{font-size:13.5px;line-height:1.2}.mwp-p small{font-size:12px;color:inherit;opacity:.8}
-.mwp-c{background:var(--surface-2);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:4px;min-height:52px;min-width:0}
-.mwp-c.today{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--accent) 30%,transparent)}
-.mwp-c.full{box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--danger) 45%,transparent)}
+.mwp-c{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:5px;display:flex;flex-direction:column;gap:4px;min-height:52px;min-width:0}
+.mwp-c.today{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.mwp-c.full{border-color:color-mix(in srgb,var(--danger) 45%,var(--line))}
 .mwp-c.over{background:var(--accent-soft)}.mwp-c.no{background:var(--danger-soft)}
 .mwp-off{font-size:12px;color:var(--ink-3);padding:2px 4px}
 .mwp-j{all:unset;box-sizing:border-box;cursor:grab;-webkit-user-drag:element;user-select:none;display:block;border-radius:6px;padding:5px 8px;line-height:1.3;background:color-mix(in srgb,var(--pt) 14%,var(--surface));color:color-mix(in srgb,var(--pt) 70%,var(--ink));min-width:0}
@@ -23760,3 +23760,33 @@ main.main .rvg-sub{margin-bottom:10px}
 .rv-stack .rv-list h4.rv-sec-arrived{background:var(--ok-soft);color:var(--ok)}
 .rv-stack .rv-list h4.rv-sec-problems{background:var(--danger-soft);color:var(--danger)}
 .rv-stack .rv-list h4.rv-sec-past,.rv-stack .rv-list h4.rv-sec-way{background:var(--surface-2);color:var(--ink-2)}
+
+/* the week view tells time (Nick, Nov 19 2026: "I can't tell if he's full or not… you got to have like a little red
+   indicator of where you're at and how long each job takes"): each day's box starts with its shift as a thin bar, the
+   jobs drawn on it in the press's color and a red mark at now, and how much is open, left or over; each job says when it
+   starts and how long it takes; today has a red Now line between the jobs; one run (AMS's weekly run) is one box with a
+   row per PO. components/MachineSchedule.tsx weekGrid. */
+.mwp-tl{display:flex;align-items:center;gap:6px;padding:1px 2px 2px;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.mwp-tl > span{font-weight:600}.mwp-tl > span.over{color:var(--danger);font-weight:700}
+.mwp-tl-b{position:relative;flex:1;height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden;min-width:40px}
+.mwp-tl-sh{position:absolute;top:0;bottom:0;background:color-mix(in srgb,var(--pt) 10%,var(--surface-2))}
+.mwp-tl-j{position:absolute;top:1px;bottom:1px;background:color-mix(in srgb,var(--pt) 70%,var(--surface));border-radius:2px;box-shadow:1px 0 0 var(--surface)}
+.mwp-tl-j.done{background:color-mix(in srgb,var(--pt) 35%,var(--surface))}
+.mwp-tl-now{position:absolute;top:-1px;bottom:-1px;width:2px;margin-left:-1px;background:var(--danger)}
+.mwp-t{display:block;font-style:normal;font-size:11.5px;font-weight:600;opacity:.8;white-space:nowrap}
+.mwp-t em{font-style:normal}.mwp-t em.late{color:var(--danger)}
+.mwp-now{display:flex;align-items:center;gap:6px;color:var(--danger);font-size:11px;font-weight:700;white-space:nowrap}
+.mwp-now::before,.mwp-now::after{content:"";height:2px;background:var(--danger);flex:1}
+.mwp-now::before{flex:0 0 6px}
+.mwp-run{border-radius:6px;background:color-mix(in srgb,var(--pt) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--pt) 30%,var(--line));overflow:hidden;min-width:0}
+.mwp-run-h{cursor:grab;padding:5px 8px;background:color-mix(in srgb,var(--pt) 16%,var(--surface));color:color-mix(in srgb,var(--pt) 70%,var(--ink));line-height:1.3}
+.mwp-run-h b{display:block;font-size:13px}
+.mwp-run-h span{display:block;font-size:11.5px;font-weight:600;opacity:.85}
+.mwp-row{all:unset;box-sizing:border-box;cursor:grab;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:baseline;column-gap:6px;width:100%;padding:3px 8px;border-top:1px solid color-mix(in srgb,var(--pt) 15%,var(--line));font-size:12.5px;line-height:1.3;color:var(--ink);min-width:0}
+.mwp-row:hover{background:color-mix(in srgb,var(--pt) 10%,var(--surface))}
+.mwp-row b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mwp-row span{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.mwp-row i{font-style:normal;font-size:11px;font-weight:600;color:var(--ink-3);white-space:nowrap;min-width:44px;text-align:right}
+.mwp-row.done{opacity:.55}.mwp-row.late span{color:var(--danger);font-weight:700}
+.mwp-row.run{box-shadow:inset 3px 0 var(--ok)}
+.mwp-row.ms-hit{outline:2px solid var(--accent);outline-offset:-2px}
