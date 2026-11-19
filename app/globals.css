@@ -23956,3 +23956,8 @@ main.main .rvg-sub{margin-bottom:10px}
 .mwp-j .mwp-pb span,.mwp-row .mwp-pb span{display:inline;opacity:1;font-size:11.5px;color:var(--ink);font-weight:700}
 .mwp-j .mwp-pb em,.mwp-row .mwp-pb em{display:inline;font-size:11.5px;font-weight:700;color:var(--ink)}
 .mwp-row i.mwp-pb{min-width:0;text-align:left;color:var(--ink);font-size:11.5px;font-weight:700}
+.tr-w{display:inline-flex;flex-direction:column;align-items:center;gap:2px}
+.tr-cap{font-size:10.5px;line-height:1.1;color:var(--ink-3);white-space:nowrap}
+.msh-r{align-items:flex-end}
+/* the assistant's Make the schedule / Re-plan / Start over row lines up with its tip (Nick, Nov 19 2026) */
+.mzc-ai .msai-acts{margin:0;padding:6px 14px 12px 14px}
