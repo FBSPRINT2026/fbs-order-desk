@@ -24037,16 +24037,15 @@ main.main .rvg-sub{margin-bottom:10px}
 
 /* ---------- Outbound's top (Nick, Nov 19 2026): Ship | Pickup shelf | Delivery at the top right, each with its own tabs;
    Search / filter over Box label on the right ---------- */
-.obx-head{align-items:flex-end}
-.obx-seg{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
-.obx-seg button{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:7px;font-size:14px;font-weight:600;color:var(--ink-2);white-space:nowrap}
-.obx-seg button svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.obx-head{align-items:flex-start}
+.obx-seg{display:inline-flex;gap:3px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+.obx-seg button{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:9px;font-size:16px;font-weight:700;color:var(--ink-2);white-space:nowrap}
+.obx-seg button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .obx-seg button:hover{color:var(--ink)}
 .obx-seg button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(20,30,50,.12)}
 .obx-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 @media (max-width:700px){.obx-seg{width:100%}.obx-seg button{flex:1;justify-content:center;padding:7px 6px}.obx-seg button > span:not(.aa-n){display:none}}
 .obx-sub{margin:0}
-.sc-tabrow .sc-setb{margin-left:auto}
 .obx-f{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
 .obx-f > span:first-child{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3)}
 .obx-fi{display:flex;align-items:center;gap:8px;height:40px;border:2px solid var(--accent);border-radius:8px;background:var(--surface);padding:0 10px}
@@ -24083,3 +24082,9 @@ main.main .rvg-sub{margin-bottom:10px}
 .trk-cp:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .trk-cp svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .trk-cp.ok{color:var(--ok)}
+.sc-gear{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;color:var(--ink-3);flex:none}
+.sc-gear:hover,.sc-gear.on{color:var(--accent)}
+.sc-gear:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sc-gear svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sc-tabrow:has(.sc-gear){flex-wrap:nowrap}
+.sc-tabrow:has(.sc-gear) .sc-tabs{flex:1;min-width:0}

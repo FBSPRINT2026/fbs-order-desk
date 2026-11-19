@@ -172,12 +172,15 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
       {!addressReady(settings.ship.from) && !showSettings && <div className="banner" style={{ marginBottom: 10 }}>Rates and transit times are figured from ZIP {settings.ship.from.zip || "(not set)"}. Add our street address in <button type="button" className="linkbtn" style={{ fontSize: "inherit" }} onClick={() => setShowSettings(true)}>Settings</button> before labels can be printed.</div>}
 
       <div className="sc-tabrow">
+        {/* Settings, a small gear to the left of the tabs (Nick, Nov 19 2026) */}
+        {embedded && <button type="button" className={"sc-gear" + (showSettings ? " on" : "")} onClick={() => setShowSettings((x) => !x)} aria-label="Shipping settings" title="Shipping settings" aria-expanded={showSettings}>
+          <svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
+        </button>}
         <div className="aa-sub sc-tabs" role="tablist">
           <button type="button" className={tab === "ready" ? "on" : ""} onClick={() => setTab("ready")}>Ready To Ship<span className="aa-n">{items?.length ?? "…"}</span></button>
           <button type="button" className={tab === "shipped" ? "on" : ""} onClick={() => setTab("shipped")}>Shipped<span className="aa-n">{shipped.length}</span></button>
           <button type="button" className={tab === "transit" ? "on" : ""} onClick={() => setTab("transit")}>Transit Map</button>
         </div>
-        {embedded && <button type="button" className="btn sm sc-setb" onClick={() => setShowSettings((x) => !x)}>Settings</button>}
         {tab === "ready" && !embedded && <label className="aa-search"><SearchInput placeholder="Search orders" value={q} onChange={(e) => setQ(e.target.value)} /></label>}
       </div>
 

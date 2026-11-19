@@ -543,3 +543,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 19 2:24pm · 1.3.786 · Nick · + Tracking shows the ship-to a line at a time with a small copy button each (company, attention, street, suite, city, state, ZIP, phone, reference); the order page's Delivery panel shows how it left: each shipment with its boxes' tracking (linked), where it is now, who shipped it; or when it was picked up / delivered
 - Nov 19 2:26pm · 1.3.787 · Nick · + Tracking's ship-to: compact lines, a tiny copy icon right after each line's text
 - Nov 19 2:26pm · 1.3.788 · Nick · + Tracking's copy: just the little symbol after the text, no button look
+- Nov 19 2:29pm · 1.3.789 · Nick · Outbound: Ship | Pickup shelf | Delivery larger, level with the title; Shipping settings is a small gear left of the tabs
