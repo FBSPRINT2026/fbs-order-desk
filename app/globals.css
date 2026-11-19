@@ -5732,9 +5732,16 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .sbx-r>.sbx-mid{grid-column:2;display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;row-gap:2px;min-width:0}
 .sbx-r>b.num{grid-column:3;white-space:nowrap}
 .sbx-r>.sbx-end{grid-column:4}
+/* a phone (or a narrow side panel) stacks each row (Nov 18, Nick: "this looks bad on the phone", the note squeezed to a
+   word a line under the price): the name with its price at the right, the note under them full width, then the tick */
 @container sbx (max-width:430px){
-  .sbx-r{grid-template-columns:96px minmax(0,1fr) auto}
-  .sbx-r>.sbx-end{grid-column:2 / -1}
+  .sbx-r{grid-template-columns:minmax(0,1fr) auto;row-gap:3px;padding:6px 0;border-bottom:1px solid var(--line-2,var(--line))}
+  .sbx-r:last-child{border-bottom:0}
+  .sbx-r>.sbx-loc{grid-column:1;grid-row:1}
+  .sbx-r>b.num{grid-column:2;grid-row:1}
+  .sbx-r>.sbx-mid{grid-column:1 / -1;grid-row:2}
+  .sbx-r>.sbx-mid:empty{display:none}
+  .sbx-r>.sbx-end{grid-column:1 / -1;grid-row:3;min-width:0}
 }
 .sbx-r label.check{display:inline-flex;gap:5px;align-items:center}
 .sbx-r .linkbtn{margin-left:0}
