@@ -1644,7 +1644,7 @@ export default function OrderEditorPage({ params }: { params: Promise<{ id: stri
             {/* a hold is for an order (Nov 3, Nick: "once it goes to invoice, it should say on hold"); a quote isn't held */}
             {(o.type === "invoice" || !!holdOf((o as { flags?: unknown }).flags)) && <optgroup label="Hold"><option value="hold">{holdOf((o as { flags?: unknown }).flags) ? `On hold · ${holdOf((o as { flags?: unknown }).flags)!.reason}` : "On hold…"}</option></optgroup>}
             <optgroup label="Quote">{[...STATUSES.filter((s) => s.type === "quote").flatMap((s) => (s.k === "quote_sent" ? [s, REVISION] : [s])), CLOSED_QUOTE].map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}</optgroup>
-            <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => { const lock = s.k === "production" && booked === false && statusKey(o) !== "production"; return <option key={s.k} value={s.k} disabled={lock} title={lock ? "Book it on the schedule: booking a job puts it In Production" : undefined}>{statusText(s.k, o.delivery_method)}{lock ? " (book it on the schedule)" : ""}</option>; })}</optgroup>
+            <optgroup label="Invoice">{[...STATUSES.filter((s) => s.type === "invoice"), CANCELED].map((s) => { const lock = s.k === "production" && booked === false && statusKey(o) !== "production"; return <option key={s.k} value={s.k} disabled={lock} title={lock ? "Book it on the schedule: booking a job puts it In Production" : undefined}>{statusText(s.k, o.delivery_method)}</option>; })}</optgroup>
           </select>
           {mixO[o.id] && <span className="mxs-h"><MixStrip parts={mixO[o.id]} /></span>}
           <IssueTag issues={issO[o.id]} />
