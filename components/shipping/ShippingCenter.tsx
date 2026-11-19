@@ -347,7 +347,7 @@ function CopyLine({ k, v }: { k: string; v: string }) {
   const [ok, setOk] = useState(false);
   const copy = async () => { try { await navigator.clipboard.writeText(v); setOk(true); setTimeout(() => setOk(false), 1200); } catch { /* the text can still be selected */ } };
   return (
-    <div className="trk-ad-l"><span>{k}</span><span>{v}</span>
+    <div className="trk-ad-l">{k === "Attention" ? <span className="faint">Attn: </span> : null}{v}
       <button type="button" className={"trk-cp" + (ok ? " ok" : "")} onClick={() => void copy()} aria-label={`Copy ${k.toLowerCase()}`} title={ok ? "Copied" : `Copy ${k.toLowerCase()}`}>
         {ok ? <svg viewBox="0 0 24 24" aria-hidden><path d="M5 12l5 5 9-10" /></svg> : <svg viewBox="0 0 24 24" aria-hidden><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></svg>}
       </button>
