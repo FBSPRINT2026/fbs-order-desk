@@ -5429,6 +5429,8 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 .ink-tile{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:6px;border:1px solid var(--line);border-radius:10px;background:var(--surface);cursor:pointer;text-align:left;font:inherit}
 .ink-tile i{display:block;height:44px;border-radius:6px;border:1px solid rgba(0,0,0,.08)}
 .ink-tile b{font-size:13px}
+/* a phone: two inks a row, so a name like HEXACHROME CYAN C breaks between words, never mid-word (Nov 19 phone check) */
+@media (max-width:520px){ .ink-grid{grid-template-columns:repeat(2,minmax(0,1fr))} .ink-tile b{font-size:12.5px;overflow-wrap:normal} }
 .ink-tile small{font-size:11px;color:var(--ink-3)}
 .ink-tile.has small{color:#1F7A47;font-weight:600}
 .ink-tile.on{outline:2px solid var(--fbs-blue, #0A8FC0);outline-offset:1px}
