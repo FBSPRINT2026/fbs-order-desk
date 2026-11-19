@@ -482,7 +482,9 @@ table.imp-table{table-layout:fixed}
 .pb-r b{color:var(--ink);font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
 .pb-r.pb-t{border-top:1px solid var(--line);margin-top:4px;padding-top:6px;align-items:baseline;color:var(--ink)}
 .pb-r.pb-t b{font-family:var(--display);font-stretch:85%;font-size:19px;font-weight:700}
-@container (max-width: 560px){ .grp-foot{flex-direction:column} .price-box{flex-basis:auto;align-self:stretch} }
+/* stacked, the left side takes the full width too (Nov 19, phone: left at its content width it measured 0 wide, and the
+   Digitizing / extras box inside, which sizes itself by its own width, crushed its notes a word a line) */
+@container (max-width: 560px){ .grp-foot{flex-direction:column} .price-box{flex-basis:auto;align-self:stretch} .grp-foot-l{align-self:stretch;width:100%} }
 .loc-custom{display:flex;gap:2px;align-items:center}
 .loc-custom input{flex:1 1 auto;min-width:0}
 .loc-custom .btn.icon{flex:none;width:22px;padding:0}
@@ -5726,7 +5728,7 @@ div.ck-mix{margin-top:6px;padding:6px 10px;border-radius:8px;background:#f4efff;
 /* every row of the box (Inks, Digitizing, Embroidery extras) is the same four columns, so names, prices and ticks line up
    down the box and a long note wraps inside its own column instead of pushing the tick onto a line of its own
    (Nov 16, Nick: "you can't really see what's going on there anymore"); a narrow box puts the tick under the row */
-.sbx{container:sbx / inline-size}
+.sbx{container:sbx / inline-size;width:100%}
 .sbx-r{display:grid;grid-template-columns:112px minmax(0,1fr) 72px 150px;align-items:center;column-gap:12px;row-gap:2px;padding:3px 0}
 .sbx-r>.sbx-loc{grid-column:1}
 .sbx-r>.sbx-mid{grid-column:2;display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;row-gap:2px;min-width:0}

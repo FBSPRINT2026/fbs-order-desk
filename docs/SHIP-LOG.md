@@ -508,3 +508,4 @@ Written by scripts/ship.sh on every ship. Each Claude reads the last 30 lines at
 - Nov 18 5:51pm · 1.3.751 · Nick · Week view: a job that runs over into later days is listed once, on the day it starts ("Runs into Fri"); cards less faded
 - Nov 18 5:55pm · 1.3.752 · Nick · Schedule assistant: booking a job again removes its missed (never started) booking, like booking by hand
 - Nov 18 10:03pm · 1.3.753 · Nick · Group editor on a phone: Digitizing, sew-out, inks and embroidery extras stack each row (name and price, the note under, then the tick) instead of squeezing the note a word a line
+- Nov 19 7:30am · 1.3.754 · Nick · Phone: a group's Digitizing / extras box was measuring 0 wide (its column shrank to its contents), crushing every row; the left side of a stacked group footer now takes the full width
