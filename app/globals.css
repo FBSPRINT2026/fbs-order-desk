@@ -4,7 +4,7 @@
   --ink:#141D2B; --ink-2:#4A566B; --ink-3:#7A8599; --line:#D5DBE3; --line-2:#E4E8EE;
   --accent:#0E9BD8; --accent-hover:#0B84B8; --accent-ink:#FFFFFF; --accent-soft:#DCF1FB;
   --side:#141D2B; --side-ink:#C9D3E0; --side-ink-strong:#FFFFFF; --side-hover:#1F2B3E; --side-active:#0E9BD8;
-  --danger:#D9483F; --danger-soft:#FDE7E5; --ok:#0F8C78; --ok-soft:#DDF4EF; --warn:#C27C00; --warn-soft:#FEF1D5;
+  --danger:#D9483F; --danger-soft:#FDE7E5; --ok:#0F8C78; --ok-soft:#DDF4EF; --warn:#C27C00; --warn-soft:#FEF1D5; --violet:#5B4BB7; --violet-soft:#ECEAFB;
   --shadow:0 1px 2px rgba(20,29,43,.06),0 4px 14px rgba(20,29,43,.06);
   --display:"Archivo","Arial Narrow",system-ui,sans-serif;
   --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -20,7 +20,7 @@
     --ink:#E5EAF1; --ink-2:#A3AFC1; --ink-3:#77849A; --line:#2A3648; --line-2:#212C3B;
     --accent:#38AFDA; --accent-hover:#5BC0E4; --accent-ink:#04202C; --accent-soft:#123447;
     --side:#090E15; --side-ink:#9FACBF; --side-ink-strong:#FFFFFF; --side-hover:#152031; --side-active:#0E9BD8;
-    --danger:#F2766F; --danger-soft:#3B1C1B; --ok:#3CC7AE; --ok-soft:#0F2E29; --warn:#FCB122; --warn-soft:#3A2C0D;
+    --danger:#F2766F; --danger-soft:#3B1C1B; --ok:#3CC7AE; --ok-soft:#0F2E29; --warn:#FCB122; --warn-soft:#3A2C0D; --violet:#A99CF5; --violet-soft:#26213F;
     --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
   }
 }
@@ -30,7 +30,7 @@
   --ink:#E5EAF1; --ink-2:#A3AFC1; --ink-3:#77849A; --line:#2A3648; --line-2:#212C3B;
   --accent:#38AFDA; --accent-hover:#5BC0E4; --accent-ink:#04202C; --accent-soft:#123447;
   --side:#090E15; --side-ink:#9FACBF; --side-ink-strong:#FFFFFF; --side-hover:#152031; --side-active:#0E9BD8;
-  --danger:#F2766F; --danger-soft:#3B1C1B; --ok:#3CC7AE; --ok-soft:#0F2E29; --warn:#FCB122; --warn-soft:#3A2C0D;
+  --danger:#F2766F; --danger-soft:#3B1C1B; --ok:#3CC7AE; --ok-soft:#0F2E29; --warn:#FCB122; --warn-soft:#3A2C0D; --violet:#A99CF5; --violet-soft:#26213F;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
 }
 *{box-sizing:border-box}
@@ -23705,3 +23705,52 @@ table.rvd-tbl.tbl-stack tr.rvd-secrow{display:block!important;padding:0!importan
 .bct-fields label{display:flex;flex-direction:column;gap:4px;min-width:0}
 .bct-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:sticky;bottom:-16px;background:var(--surface,#fff);padding:10px 0 4px;border-top:1px solid var(--line)}
 .bct-foot .spacer{flex:1}
+
+/* Goods & Receiving, one look (Nick, Nov 19 2026, "A+": "too many colors going on… a unified color scheme… make it all
+   look like one nice page"). Light page, white headers with the FBS fade under them, and every color soft: tinted bands
+   and tiles in the kit's -soft colors with the color itself for the words. Dashboard blue, Issue Center red, Shipments
+   green; S&S red, SanMar blue, customer shipments violet. app/shop/receiving (page.tsx, ReceivingDash.tsx). */
+.rvg-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:4px 0 14px}
+.rvg-nav .rvg-dash{flex:none;width:auto;min-width:0;box-shadow:none;transition:background .12s,border-color .12s}
+.rvg-nav .rvg-dash:hover{border-color:color-mix(in srgb,var(--ink) 22%,var(--line))}
+.rvg-nav .rvg-dash:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.rvg-nav .rvg-ico{background:var(--accent-soft);color:var(--accent);width:40px;height:40px;flex:0 0 40px}
+.rvg-nav .rvg-i .rvg-ico{background:var(--danger-soft);color:var(--danger)}
+.rvg-nav .rvg-s .rvg-ico{background:var(--ok-soft);color:var(--ok)}
+.rvg-nav .rvg-d.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.rvg-nav .rvg-d.on .rvg-ico{background:var(--accent);color:#fff}
+.rvg-nav .rvg-i.on{background:var(--danger-soft);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.rvg-nav .rvg-i.on .rvg-ico{background:var(--danger);color:#fff}
+.rvg-nav .rvg-s.on{background:var(--ok-soft);border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}
+.rvg-nav .rvg-s.on .rvg-ico{background:var(--ok);color:#fff}
+.rvg-nav .rvg-t small{overflow:hidden;text-overflow:ellipsis}
+@media (max-width:760px){.rvg-nav{gap:8px}.rvg-nav .rvg-dash{padding:8px;gap:8px;flex-direction:column;text-align:center}.rvg-nav .rvg-t small{display:none}.rvg-nav .rvg-t b{font-size:14px}.rvg-nav .rvg-ico{width:34px;height:34px;flex-basis:34px}}
+main.main .rvg-sub{margin-bottom:10px}
+.rvs-bar{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:0 0 12px}
+.rvs-bar .rvs-q{margin:0;flex:1 1 260px;max-width:none;height:36px;border-radius:6px}
+/* the dashboard's two blocks: white headers with the fade line, not dark bands */
+.rvd-blk{border:1px solid var(--line)}
+.rvd-bh,.rvd-bh.dark,.rvd-bh.teal{background:var(--surface);color:var(--ink);position:relative;border-bottom:1px solid var(--line)}
+.rvd-bh::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--fbs-fade)}
+.rvd-bh > span{color:var(--ink-3);opacity:1}
+.rvd-by{border-color:var(--line)}
+.rvd-by button{color:var(--ink-2)}
+.rvd-by button.on{background:var(--accent-soft);color:var(--accent)}
+/* picked days and kinds: the soft blue of the order page's tabs, never solid */
+.rvd-kind button.on,.rvm-seg button.on{background:var(--accent-soft);color:var(--accent);box-shadow:inset 0 -3px var(--accent)}
+.rvd-kind button.on .rvd-n{background:var(--surface);color:var(--accent)}
+/* counting sections: soft bands in their color, a stripe at the left */
+.rvd-bar{background:var(--surface-2);color:var(--ink-2);box-shadow:inset 4px 0 currentColor;font-size:12.5px}
+.rvd-bar-n{background:color-mix(in srgb,currentColor 14%,transparent)}
+.rvd-bar-h{opacity:.8}
+.rvd-bar-here{background:var(--ok-soft);color:var(--ok)}
+.rvd-bar-part{background:var(--warn-soft);color:color-mix(in srgb,var(--warn) 72%,var(--ink))}
+.rvd-bar-issue{background:var(--danger-soft);color:var(--danger)}
+.rvd-bar-way{background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 80%,var(--ink))}
+.rvd-bar-unknown,.rvd-bar-counted{background:var(--surface-2);color:var(--ink-3)}
+/* who's coming: soft strips per supplier */
+.rvd-sup-h{font-weight:700}
+.rvd-sup.ss .rvd-sup-h{background:var(--danger-soft);color:var(--danger)}
+.rvd-sup.sm .rvd-sup-h{background:var(--accent-soft);color:color-mix(in srgb,var(--accent) 70%,var(--ink))}
+.rvd-sup.cs .rvd-sup-h{background:var(--violet-soft);color:var(--violet)}
+.rvd-sup-h small{opacity:1;color:inherit;font-weight:600}

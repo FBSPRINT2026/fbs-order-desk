@@ -25,7 +25,14 @@ import { useUrlSearch } from "@/lib/useUrlSearch";
 type O = { id: string; number: number; nickname: string; status: string; due_date: string | null; production_date: string | null; qty: number; customer_id: string | null; price_type: string | null };
 type BO = { id: string; order_id: string; supplier: string; supplier_order: string; status: string; expected_date: string | null; total: number | null; placed_via: string; created_at: string; received_at: string | null; note: string };
 type BS = { id: string; order_id: string; blank_order_id: string | null; carrier: string; tracking: string; boxes: number | null; pcs: number | null; note: string; eta: string | null; track_status: string; track_detail: string; est_delivery: string | null; delivered_at: string | null };
-type View = "dash" | "issues" | "today" | "fbs" | "customer" | "resolve" | "ignored" | "settings";
+type View = "dash" | "issues" | "today" | "goods" | "resolve" | "settings";
+/** Shipments → Arriving & tracking: which carrier (or SanMar, by supplier) (Nov 19, Nick, A+) */
+type ViaPick = "all" | "ss" | "ups" | "fedex" | "sanmar" | "freight" | "other";
+const VIA_CHIPS: [ViaPick, string][] = [["all", "All"], ["ss", "S&S truck"], ["ups", "UPS"], ["fedex", "FedEx"], ["sanmar", "SanMar"], ["freight", "Freight"], ["other", "Other"]];
+/** Shipments → Goods: our blanks and customers' goods in one list (was FBS Orders, Customer Supplied and Ignored) */
+type GoodsPick = "waiting" | "unlinked" | "here" | "ignored";
+const GOODS_CHIPS: [GoodsPick, string][] = [["waiting", "Waiting"], ["unlinked", "Not linked"], ["here", "Here"], ["ignored", "Ignored"]];
+const SIDE_CHIPS: ["all" | "fbs" | "customer", string][] = [["all", "All goods"], ["fbs", "Our blanks"], ["customer", "Customer goods"]];
 type Arrive = "past" | "today" | "tomorrow" | "later" | "nodate";
 const ARRIVE_GROUPS: { k: Arrive; label: string }[] = [
   { k: "past", label: "Should be here: not marked received" }, { k: "today", label: "Arriving today" }, { k: "tomorrow", label: "Tomorrow" }, { k: "later", label: "Later" }, { k: "nodate", label: "On the way, no date yet" },
@@ -111,6 +118,10 @@ export default function GoodsReceiving() {
   const [tab, setTab] = useSticky<"arriving" | "need" | "ordered" | "received">("receiving.tab", "arriving");
   const [focus, setFocus] = useState<Focus | null>(null);
   const [groupBy, setGroupBy] = useSticky<GroupBy>("receiving.groupBy", "carrier");
+  const [via, setVia] = useSticky<ViaPick>("receiving.via", "all");
+  const [gPick, setGPick] = useSticky<GoodsPick>("receiving.goods", "waiting");
+  const [gSide, setGSide] = useSticky<"all" | "fbs" | "customer">("receiving.goodsSide", "all");
+  const [shipTab, setShipTab] = useSticky<"today" | "goods">("receiving.ship", "today");
   const [truck, setTruck] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [q, setQ] = useUrlSearch("q");
@@ -192,7 +203,11 @@ export default function GoodsReceiving() {
   // Check-In: this week's jobs ready to count, and open check-in problems (badges on the Check-In button)
   const [ck, setCk] = useState<{ ready: number; issue: number } | null>(null);
   useEffect(() => { fetch("/api/goods/checkin", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.jobs) setCk({ ready: (j.jobs as { state: string; day: string }[]).filter((x) => x.state === "ready" && x.day <= j.today).length, issue: (j.problems || []).length }); }).catch(() => {}); }, [refreshKey]);
-  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "issues" || v === "today" || v === "fbs" || v === "customer" || v === "resolve" || v === "ignored" || v === "settings") setViewState(v); }, []);
+  useEffect(() => { const v = new URLSearchParams(window.location.search).get("view"); if (v === "issues" || v === "today" || v === "goods" || v === "resolve" || v === "settings") setViewState(v);
+    // the old Shipments tabs' links open Goods on the same goods
+    else if (v === "fbs" || v === "customer" || v === "ignored") { setViewState("goods"); if (v === "ignored") setGPick("ignored"); else setGSide(v); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const setView = (v: View) => { setViewState(v); try { const u = new URL(window.location.href); if (v === "dash") u.searchParams.delete("view"); else u.searchParams.set("view", v); window.history.replaceState(null, "", u.toString()); } catch { /* ignore */ } window.scrollTo({ top: 0 }); };
   const loadPending = useCallback(async () => { const r = await fetch("/api/goods/manifest", { cache: "no-store" }); const j = await r.json().catch(() => ({})); setPending(j.groups || []); setPvGoods(j.printavo || []); if (j.error) setNote(`Couldn't load everything: ${j.error}`); }, []);
   useEffect(() => { loadPending(); }, [loadPending]);
@@ -372,8 +387,12 @@ export default function GoodsReceiving() {
   const searched: Row[] = term.length >= 2
     ? [...liveRows.filter((r) => fuzzyHas(hay(r), term)), ...hitRows.filter((h) => !rows.some((r) => r.so && r.so === h.so && r.sub === h.sub && r.who === h.who) && !rows.some((r) => r.key === h.key))]
     : liveRows;
-  // the FBS orders / Customer supplied goods tabs just narrow the update to our blanks or the customers' goods
-  const view_rows: Row[] = view === "fbs" ? searched.filter((r) => r.side === "fbs") : view === "customer" ? searched.filter((r) => r.side === "customer") : searched;
+  // Arriving & tracking narrows to one carrier (SanMar by supplier); Goods to our blanks or the customers' goods
+  const viaOk = (r: Row, k: ViaPick = via) => k === "all" || (k === "sanmar" ? r.supplier === "sanmar" : r.via === k);
+  const sideOk = (r: Row) => gSide === "all" || r.side === gSide;
+  const view_rows: Row[] = view === "goods" ? searched.filter(sideOk) : view === "today" ? searched.filter((r) => viaOk(r)) : searched;
+  const goodsOf = (k: GoodsPick): Row[] => k === "ignored" ? ignoredRows.filter((r) => sideOk(r) && (term.length < 2 || fuzzyHas(hay(r), term)))
+    : view_rows.filter((r) => k === "unlinked" ? r.unlinked : k === "here" ? r.state === "arrived" : !r.unlinked && r.state !== "arrived");
   const byAt = (a: Row, b: Row) => (a.at || "9999").localeCompare(b.at || "9999");
   const L = {
     arrived: view_rows.filter((r) => r.state === "arrived" && localDay(r.deliveredAt) === t0).sort((a, b) => (b.deliveredAt || "").localeCompare(a.deliveredAt || "")),
@@ -481,7 +500,7 @@ export default function GoodsReceiving() {
     if (localDay(r.at) === t0 || (!!r.at && localDay(r.at) < t0 && r.trks.some((k) => !k.tracking || k.freight))) return "today";
     return "way";
   };
-  const searchRows: Row[] = isSearch ? [...view_rows, ...ignoredRows.filter((r) => fuzzyHas(hay(r), term) && (view === "fbs" ? r.side === "fbs" : view === "customer" ? r.side === "customer" : true))] : [];
+  const searchRows: Row[] = isSearch ? [...view_rows, ...ignoredRows.filter((r) => fuzzyHas(hay(r), term) && (view === "goods" ? sideOk(r) : viaOk(r)))] : [];
   const focusBucket: Record<Focus, Bucket[]> = { today: ["today", "arrived"], arrived: ["arrived"], past: ["past", "older"], way: ["way"], problems: ["problems"] };
   const searchShown = searchRows.filter((r) => !focus || focusBucket[focus].includes(bucketOf(r)));
 
@@ -505,32 +524,39 @@ export default function GoodsReceiving() {
       {/* goods issues across every customer: check-in problems and tracking gone wrong (Nov 2, components/GoodsIssues.tsx) */}
       {/* goods issues are worked in the Issue Center; the dashboard lists them small on the right (Nov 16, Nick) */}
       {/* Dashboard on its own, the shipment views under Shipments (Nov 11, Nick) */}
+      {/* three sections, one look (Nov 19, Nick, A+): Dashboard · Issue Center · Shipments, each with its soft icon tile */}
       <div className="rvg-nav">
-        <button type="button" className={"rvg-dash" + (view === "dash" ? " on" : "")} onClick={() => setView("dash")}>
-          <span className="rvg-ico" aria-hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" /><path d="M3 7.5 12 12l9-4.5M12 12v9" /><path d="M15.5 15.2l1.4 1.4 2.6-2.8" strokeWidth="1.8" /></svg></span>
+        <button type="button" className={"rvg-dash rvg-d" + (view === "dash" ? " on" : "")} onClick={() => setView("dash")}>
+          <span className="rvg-ico" aria-hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></svg></span>
           <span className="rvg-t"><b>Dashboard</b><small>Count in · trucks · issues</small></span>
         </button>
-        <button type="button" className={"rvg-dash rvg-iss" + (view === "issues" ? " on" : "")} onClick={() => setView("issues")}>
-          <span className="rvg-ico rvg-ico-iss" aria-hidden><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l10 18H2z" /><path d="M12 10v5M12 18v.5" /></svg></span>
+        <button type="button" className={"rvg-dash rvg-i" + (view === "issues" ? " on" : "")} onClick={() => setView("issues")}>
+          <span className="rvg-ico" aria-hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" /><path d="M12 9v4M12 17h.01" /></svg></span>
           <span className="rvg-t"><b>Issue Center{issueN ? <span className="aa-n">{issueN}</span> : null}</b><small>Short · damaged · wrong · tell them</small></span>
         </button>
-        <div className="rvg-ship">
-          <div className="rvg-ship-h">Shipments</div>
-          <div className="aa-sub rv-views rvg-tabs" role="tablist">
-        <button type="button" className={view === "today" ? "on" : ""} onClick={() => setView("today")}>Arriving &amp; Tracking</button>
-        <button type="button" className={view === "fbs" ? "on" : ""} onClick={() => setView("fbs")}>FBS Orders<span className="aa-n">{searched.filter((r) => r.side === "fbs" && r.state !== "arrived").length}</span></button>
-        <button type="button" className={view === "customer" ? "on" : ""} onClick={() => setView("customer")}>Customer Supplied<span className="aa-n">{searched.filter((r) => r.side === "customer" && r.state !== "arrived").length}</span></button>
-        <button type="button" className={"rv-ign-tab" + (view === "ignored" ? " on" : "")} onClick={() => setView(view === "ignored" ? "dash" : "ignored")} title="Shipments ignored by hand">Ignored<span className="aa-n">{ignoredRows.length}</span></button>
-          </div>
-        </div>
+        <button type="button" className={"rvg-dash rvg-s" + (view === "today" || view === "goods" ? " on" : "")} onClick={() => setView(shipTab)}>
+          <span className="rvg-ico" aria-hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 4h13v12H1zM14 8h4l4 4v4h-8" /><circle cx="5.5" cy="18.5" r="2" /><circle cx="18.5" cy="18.5" r="2" /></svg></span>
+          <span className="rvg-t"><b>Shipments</b><small>Tracking · goods · linking</small></span>
+        </button>
       </div>
+      {(view === "today" || view === "goods") && <>
+        <div className="aa-sub rvg-sub" role="tablist">
+          <button type="button" className={view === "today" ? "on" : ""} onClick={() => { setShipTab("today"); setView("today"); }}>Arriving &amp; tracking<span>{searched.filter((r) => r.state !== "arrived").length}</span></button>
+          <button type="button" className={view === "goods" ? "on" : ""} onClick={() => { setShipTab("goods"); setView("goods"); }}>Goods<span>{searched.filter((r) => r.unlinked).length ? `${searched.filter((r) => r.unlinked).length} not linked` : searched.length}</span></button>
+        </div>
+        <div className="toolbar rvs-bar">
+          {view === "today"
+            ? <div className="chips">{VIA_CHIPS.map(([k, l]) => { const n = searched.filter((r) => r.state !== "arrived" && viaOk(r, k)).length; return k !== "all" && !n && via !== k ? null : <button key={k} type="button" className={"chip" + (via === k ? " on" : "")} onClick={() => setVia(k)}>{l}<span className="chip-n">{n}</span></button>; })}</div>
+            : <>
+              <div className="chips">{GOODS_CHIPS.map(([k, l]) => <button key={k} type="button" className={"chip" + (gPick === k ? " on" : "")} onClick={() => setGPick(k)}>{l}<span className="chip-n">{goodsOf(k).length}</span></button>)}</div>
+              <div className="chips">{SIDE_CHIPS.map(([k, l]) => <button key={k} type="button" className={"chip" + (gSide === k ? " on" : "")} onClick={() => setGSide(k)}>{l}</button>)}</div>
+            </>}
+          <label className="rv-search rvs-q"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments: customer, job #, PO, tracking" aria-label="Search the shipments" /></label>
+        </div>
+      </>}
         {/* Resolution center: hidden from the tabs for now (Link order pop-ups handle linking); still at ?view=resolve */}
       {view === "issues" && <IssueCenter onCount={setIssueN} start={issuePick} />}
-      {view !== "dash" && view !== "issues" && view !== "settings" && <div className="rv-search-row">
-          <label className="rv-search rv-search-tabs"><span aria-hidden>⌕</span><SearchInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search shipments" aria-label="Search the supplier manifests" /></label>
-        </div>}
-
-      {SHOW_BOARDS && view === "customer" && <>
+      {SHOW_BOARDS && (view as string) === "customer" && <>
         {pvCust.length > 0 && (
           <section className="rv-pane" style={{ marginBottom: 14, minHeight: 0 }}>
             <div className="rv-pane-h"><b>On Printavo jobs</b><span className="faint">customer goods tied to jobs still worked in Printavo (until go-live)</span></div>
@@ -547,13 +573,19 @@ export default function GoodsReceiving() {
       )}
       {view === "dash" && <ReceivingDash onIssue={(id) => { setIssuePick(id); setView("issues"); }} trucks={searched.map((x) => ({ key: x.key, number: x.number, href: x.href, who: x.who, boxes: x.boxes, supplier: x.supplier, at: x.at, state: x.state, sub: x.sub, trks: x.trks.map((k) => ({ carrier: k.carrier, tracking: k.tracking, status: k.status, delivered: k.delivered })) }))} localDay={localDay} onTruck={() => setTruck(true)} />}
       {view === "settings" && <ReceivingSettings upBusy={upBusy} onUpload={upload} />}
-      {view === "ignored" && (
+      {view === "goods" && (
         <section className="rv-day">
-          <div className="rv-day-h"><b>Ignored</b><span className="faint">shipments taken out of the lists by hand. Restore puts one back.</span></div>
-          {grouped(ignoredRows, "Nothing ignored.")}
+          <div className="rv-day-h"><b>{GOODS_CHIPS.find(([k]) => k === gPick)?.[1]}</b><span className="faint">{gPick === "waiting" ? "on the way, linked to a job" : gPick === "unlinked" ? "link each one to its job: Link order" : gPick === "here" ? "arrived and not printed yet" : "shipments taken out of the lists by hand. Restore puts one back."}</span>{term.length >= 2 && <span className="rv-filter">Showing “{q.trim()}”{searching ? " …" : ""} <button type="button" className="linkbtn" onClick={() => setQ("")}>Clear</button></span>}
+            <span className="spacer" />
+            <div className="rv-seg" role="group" aria-label="Group by">
+              <button type="button" className={groupBy === "carrier" ? "on" : ""} onClick={() => setGroupBy("carrier")}>By carrier</button>
+              <button type="button" className={groupBy === "supplier" ? "on" : ""} onClick={() => setGroupBy("supplier")}>By supplier</button>
+            </div>
+          </div>
+          {grouped(goodsOf(gPick), gPick === "waiting" ? "Nothing on the way." : gPick === "unlinked" ? "Every shipment is linked to a job." : gPick === "here" ? "Nothing here waiting to print." : "Nothing ignored.")}
         </section>
       )}
-      {(view === "today" || view === "fbs" || view === "customer") && <>
+      {view === "today" && <>
 
       {/* today's update: arriving today, then what already arrived; the boxes open the other lists */}
       <section className="rv-day">
@@ -596,7 +628,7 @@ export default function GoodsReceiving() {
       </section>
       </>}
 
-      {SHOW_BOARDS && view === "fbs" && <>
+      {SHOW_BOARDS && (view as string) === "fbs" && <>
       <div className="rv-one">
         {/* FBS orders (retail) */}
         <section className="rv-pane">
