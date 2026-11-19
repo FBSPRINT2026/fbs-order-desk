@@ -23886,3 +23886,73 @@ main.main .rvg-sub{margin-bottom:10px}
 .mrc-act.iss.on{background:var(--danger-soft)}
 .mrb-why button.hold{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
 .mjx-dots{font-size:14px;letter-spacing:1px;line-height:16px}
+
+/* ---------- The schedule's top (Nick, Nov 19 2026): title left; small toggles level with it on the right, Weekly / Next 12
+   hours under them; Ready to schedule's one filter dropdown; the assistant's Make the schedule / Re-plan / Start over row ---------- */
+.msh-top{align-items:flex-start;margin-bottom:12px}
+.msh-tg{display:flex;flex-direction:column;align-items:flex-end;gap:8px;min-width:0}
+.msh-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.msh-trs:empty{display:none}
+.msh-trs{display:inline-flex}
+.msh-seg{display:inline-grid;grid-auto-flow:column;grid-auto-columns:minmax(0,auto);gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+.msh-seg button{all:unset;box-sizing:border-box;cursor:pointer;padding:6px 14px;border-radius:6px;font-size:13.5px;font-weight:600;color:var(--ink-2);white-space:nowrap;text-align:center}
+.msh-seg button:hover{color:var(--ink)}
+.msh-seg button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(20,30,50,.12)}
+.msh-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.msh-seg.sm button{padding:3px 9px;font-size:12px}
+@media (max-width:700px){.msh-tg{align-items:flex-start;width:100%}.msh-r{justify-content:flex-start}}
+.ms-rfilt{height:30px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;font-size:13px;padding:0 8px;max-width:160px}
+.msai-acts{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+.msai-acts .btn{white-space:nowrap}
+.msai-x{color:var(--danger)}
+.msai-x:hover{border-color:var(--danger)}
+
+/* the EN | ES selector (components/Translate.tsx): the same little switch as the crew phone's menu */
+.tr-seg{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);position:relative}
+.tr-seg button{all:unset;box-sizing:border-box;cursor:pointer;padding:3px 9px;border-radius:6px;font-size:12px;font-weight:700;color:var(--ink-3);letter-spacing:.03em}
+.tr-seg button:hover{color:var(--ink)}
+.tr-seg button.on{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(20,30,50,.12)}
+.tr-seg button.busy{animation:trseg 1s ease-in-out infinite alternate}
+.tr-seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@keyframes trseg{to{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.tr-seg button.busy{animation:none}}
+.top-r:empty{display:none}
+
+/* Recommended, or pick a press and then its day (Ready to schedule's spot menu) */
+.mrp{width:250px;gap:4px}
+.mrp-rec{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:1px;padding:7px 9px;border-radius:7px;background:color-mix(in srgb,var(--accent) 8%,var(--surface));border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line))}
+.mrp-rec:hover{border-color:var(--accent)}
+.mrp-rec b{font-size:12.5px;color:var(--accent)}
+.mrp-rec span{font-size:13.5px;font-weight:700;color:var(--ink);white-space:nowrap}
+.mrp-rec small{font-size:12px;color:var(--ink-3)}
+.mrp-p{position:relative}
+.mrp-p > button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border-radius:6px;font-size:13.5px;font-weight:600;color:var(--ink);white-space:nowrap}
+.mrp-p > button i{width:10px;height:10px;border-radius:3px;background:var(--pt);flex:none}
+.mrp-p > button span{margin-left:auto;color:var(--ink-3)}
+.mrp-p.on > button,.mrp-p > button:hover{background:color-mix(in srgb,var(--pt) 12%,var(--surface))}
+.mrp-days{position:absolute;right:calc(100% + 8px);top:-6px;width:190px;background:var(--surface);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 28px rgba(20,30,50,.18);padding:7px 8px;display:flex;flex-direction:column;gap:2px;z-index:3}
+.mrp-days button{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:6px 8px;border-radius:6px;font-size:13.5px;color:var(--ink)}
+.mrp-days button span{font-size:12px;color:var(--ok);font-weight:600;white-space:nowrap}
+.mrp-days button:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.mrp-days button.full{cursor:default;color:var(--ink-3)}
+.mrp-days button.full span{color:var(--ink-3)}
+
+/* the week view's day bar: what's open, centered over a thicker bar (Nick, Nov 19 2026) */
+.mwp-tl{flex-direction:column;align-items:stretch;gap:3px}
+.mwp-tl > span{text-align:center;font-size:12px;color:var(--ink-2)}
+.mwp-tl-b{height:12px;flex:none}
+/* a printing job: a band across the bottom of its card, filled by how far it is */
+.mwp-j{position:relative;overflow:hidden}
+.mwp-j.run{padding-bottom:24px}
+.mwp-row.run{grid-template-rows:auto auto;padding-bottom:3px}
+.mwp-pb{position:absolute;left:0;right:0;bottom:0;height:19px;display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-style:normal;font-size:11.5px;font-weight:700;color:var(--ink);background:color-mix(in srgb,var(--ok) 14%,var(--surface));border-top:1px solid color-mix(in srgb,var(--ok) 35%,var(--line))}
+.mwp-pb s{position:absolute;left:0;top:0;bottom:0;background:color-mix(in srgb,var(--ok) 38%,var(--surface));text-decoration:none}
+.mwp-pb span,.mwp-pb em{position:relative;font-style:normal;white-space:nowrap}
+.mwp-pb.y{background:color-mix(in srgb,var(--warn) 14%,var(--surface));border-top-color:color-mix(in srgb,var(--warn) 40%,var(--line))}
+.mwp-pb.y s{background:color-mix(in srgb,var(--warn) 40%,var(--surface))}
+.mwp-pb.r{background:color-mix(in srgb,var(--danger) 12%,var(--surface));border-top-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+.mwp-pb.r s{background:color-mix(in srgb,var(--danger) 32%,var(--surface))}
+.mwp-row .mwp-pb{position:relative;grid-column:1/-1;margin:3px -8px -3px;height:17px}
+.mwp-j .mwp-pb span,.mwp-row .mwp-pb span{display:inline;opacity:1;font-size:11.5px;color:var(--ink);font-weight:700}
+.mwp-j .mwp-pb em,.mwp-row .mwp-pb em{display:inline;font-size:11.5px;font-weight:700;color:var(--ink)}
+.mwp-row i.mwp-pb{min-width:0;text-align:left;color:var(--ink);font-size:11.5px;font-weight:700}

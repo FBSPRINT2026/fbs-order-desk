@@ -188,7 +188,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).map((w) => w[0]).
 const PV_DONE = /job\s*completed|quote|cancel|ship|fulfillment|issue/i;
 // the machine kinds (picked from the menu's SP / EMB / HP now; kept for the names)
 export const TYPE_OPTS = [["", "All"], ["screen", "Screen Print"], ["embroidery", "Embroidery"], ["heat", "Heat Press"]] as const;
-const VIEW_OPTS = [["flow", "Next 12 hours"], ["timeline", "Weekly"], ["day", "Day"]] as const;
+const VIEW_OPTS = [["timeline", "Weekly"], ["flow", "Next 12 hours"]] as const;
 const HOUR_PX0 = 56;
 const LANE = 22;
 
@@ -399,7 +399,7 @@ function brkBands(bs: [number, number, string, ...unknown[]][]) {
   return out;
 }
 
-export default function MachineSchedule({ when, hold }: { /** hidden mode: no calendar, just the When answer for these groups */ when?: { groups: Group[]; onDates: (d: WhenDates | null) => void }; /** hidden mode: hold a spot for this quote (Hold the spot) */ hold?: HoldAsk } = {}) {
+export default function MachineSchedule({ when, hold, title }: { /** the page's title, with the schedule's toggles at its right (Nick, Nov 19 2026) */ title?: string; /** hidden mode: no calendar, just the When answer for these groups */ when?: { groups: Group[]; onDates: (d: WhenDates | null) => void }; /** hidden mode: hold a spot for this quote (Hold the spot) */ hold?: HoldAsk } = {}) {
   const canEquip = useCan("pressDefaults");
   // crew pay rates (job labor cost, overtime cost): owners / admins, and anyone with the "pay" permission
   const canPay = useCan("pay");
@@ -466,7 +466,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     if (!sBase.liveClock) { const ck = new Map<string, Machine>(withTc.machines.map((m: Machine) => [m.id, m])); return { ...sBase, machines: sBase.machines.map((m) => { const w = ck.get(m.id); return w && (w.clock || w.away) ? { ...m, clock: w.clock, away: w.away } : m; }) }; }
     return Object.keys(tc.worked).length ? withCrewHours(withTc, tc.worked, tc.names, today, now.min) : withTc;
   }, [sBase, tc, today, clockBucket]);
-  const [view0, setView] = useSticky<View>("cal.view", "flow");
+  // Weekly first, for every department (Nick, Nov 19 2026)
+  const [view0, setView] = useSticky<View>("cal.view2", "timeline");
   // the old two-panel view ("24 Hours + Next 5") became Next 12 hours (Nov 11 2026)
   const view: View = view0 === "split" ? "flow" : view0;
   const [week, setWeek] = useState(() => monday(shopTime(new Date())!.day));
@@ -540,7 +541,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   // Ready To Schedule: where staff want a job instead of our suggestion (Nov 11, Nick: "click it and say, oh, here's where I
   // want it to go… make it Kelsy on Tuesday… then make the schedule"); a plan in progress, so not kept after a refresh
   const [picks, setPicks] = useState<Record<string, { m: string; d: string }>>({});
-  const [pickOpen, setPickOpen] = useState("");
+  const [pickOpen, setPickOpen] = useState(""), [pickHov, setPickHov] = useState("");
   // the schedule's search (Nov 11, Nick): a customer, job # or name; matches glow, the rest fade, ↑ ↓ jump between them
   const [findQ, setFindQ] = useState(""), [findI, setFindI] = useState(0);
   const [downEdit, setDownEdit] = useState<{ machine?: string; day?: string; start?: number; end?: number; allDay?: boolean; replace?: DayOff } | null>(null);
@@ -1736,7 +1737,8 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
      color; a column per day; each job a card in the press's color, its job name first (wrapping, never cut off), then
      the customer and number, in run order. Drag a card into another day or press to move it there. The clock lives in
      the Day and Next 12 hours views; the week page takes the full width (the right column goes under it). ---------- */
-  const PRESS_TINTS = ["#378ADD", "#7F77DD", "#1D9E75", "#D85A30", "#D4537E", "#BA7517", "#5F5E5A", "#185FA5", "#3B6D11"];
+  // each press its own color, far apart (Nick, Nov 19 2026: Miguel blue, Ana green, Kelsy amber, Juan coral)
+  const PRESS_TINTS = ["#378ADD", "#1D9E75", "#E3A21A", "#D85A30", "#7F77DD", "#D4537E", "#5F5E5A", "#185FA5", "#3B6D11"];
   const tintOf = (m: Machine) => PRESS_TINTS[Math.max(0, machines.findIndex((x) => x.id === m.id)) % PRESS_TINTS.length];
   /** where in a box a dragged card lands: before the first card whose middle is below the pointer */
   const listDrop = (e: DragEvent<HTMLDivElement>, m: Machine, d: string) => {
@@ -1753,7 +1755,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     return (
       <section className="ms-wk mwp" key={w}>
         <div className="ms-wk-h"><b>{title}</b><span className="faint">{dayLbl(ds[0])} – {dayLbl(ds[ds.length - 1])}</span><span className="spacer" />
-          <span className="mwp-nav"><button type="button" className="btn sm" onClick={() => setRoll(roll - 1)} aria-label="Back 5 days">‹ 5 days</button><button type="button" className="btn sm" disabled={roll === 0} onClick={() => setRoll(0)}>Today</button><button type="button" className="btn sm" onClick={() => setRoll(roll + 1)} aria-label="Ahead 5 days">5 days ›</button></span></div>
+          <span className="mwp-nav"><label className="ms-wknd" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> Weekends</label><button type="button" className="btn sm" onClick={() => setRoll(roll - 1)} aria-label="Back 5 days">‹ 5 days</button><button type="button" className="btn sm" disabled={roll === 0} onClick={() => setRoll(0)}>Today</button><button type="button" className="btn sm" onClick={() => setRoll(roll + 1)} aria-label="Ahead 5 days">5 days ›</button></span></div>
         <div className="mwp-g" style={{ gridTemplateColumns: `112px repeat(${ds.length}, minmax(0,1fr))` }}>
           <div />
           {ds.map((d) => (
@@ -1803,6 +1805,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                                   title={tip(g)} onClick={() => setOpen(c)} onContextMenu={(e) => { e.preventDefault(); setOpen(c); }}
                                   onDragStart={(e) => startDrag(e, { card: c, grabMin: 0 })} onDragEnd={() => { setDrag(null); setOver(""); }}>
                                   <b>{dotEl(c, g)}{(pre ? (c.job.name || "").split(/\s+/).slice(k).join(" ") : c.job.name) || shortLabel(c.need.label)}</b><span>#{c.job.number}{done ? " ✓" : ""}</span><i>{fmtMin(c.minutes)}</i>
+                                  {printBand(c)}
                                 </button>
                               ); })}
                             </div>
@@ -1819,18 +1822,20 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                             <b>{!hold && dotEl(c, g)}{c.job.name || shortLabel(c.need.label)}</b>
                             <span>{hold ? "Hold · " : ""}{abbrCo(c.job.customer || "")}{hold ? "" : ` · #${c.job.number}`}{done ? " · printed" : ""}{late && !done ? " · late" : ""}</span>
                             <i className="mwp-t">{clock(start)} · {fmtMin(c.minutes)}{nxt ? <em className={late ? "late" : ""}> · runs into {dayLbl(nxt.day).split(",")[0]}</em> : null}</i>
+                            {printBand(c)}
                           </button>
                         );
                       });
                       if (isToday && !off) rows.splice(nowAt < 0 ? rows.length : nowAt, 0, nowLine);
                       return <>
                         {!off && <div className="mwp-tl" title={`${clockLong(sa)} – ${clockLong(sb)} · ${fmtMin(u)} booked of ${fmtMin(cap)}${isToday ? ` · ${fmtMin(left)} still to run today` : ""}`}>
+                          {/* what's open, one line centered over the bar (Nick, Nov 19 2026: "You don't need the of") */}
+                          <span className={u > cap ? "over" : ""}>{u > cap ? `${fmtMin(u - cap)} over` : isToday ? (now.min >= sb ? "Day's done" : left > 0 ? `${fmtMin(left)} left` : `${fmtMin(Math.max(0, sb - Math.max(now.min, sa)))} open`) : d < today ? "Day's done" : `${fmtMin(Math.max(0, cap - u))} open`}</span>
                           <div className="mwp-tl-b">
                             <i className="mwp-tl-sh" style={{ left: pct(sa), width: `calc(${pct(sb)} - ${pct(sa)})` }} />
                             {js.map((x) => <i key={x.g.c.key + x.start} className={"mwp-tl-j" + (x.g.c.slot?.status === "done" ? " done" : "")} style={{ left: pct(x.start), width: `calc(${pct(x.end)} - ${pct(x.start)})` }} />)}
                             {isToday && now.min > t0 && now.min < t0 + span && <i className="mwp-tl-now" style={{ left: pct(now.min) }} />}
                           </div>
-                          <span className={u > cap ? "over" : ""}>{u > cap ? `${fmtMin(u - cap)} over` : isToday ? `${fmtMin(left)} left` : `${fmtMin(Math.max(0, cap - u))} open`}</span>
                         </div>}
                         {carried.length > 0 && <button type="button" className="mwp-cont" onClick={() => setOpen(carried[0].g.c)} title={carried.map((x) => `#${x.g.c.job.number} ${x.g.c.job.name || ""}`).join("\n")}>↳ <b>{carried.length > 1 ? runName(carried.map((x) => x.g.c)).title : carried[0].g.c.job.name || `#${carried[0].g.c.job.number}`}</b> continued · until {clock(Math.max(...carried.map((x) => x.end)))}{carried.length > 1 ? ` · ${carried.length} POs` : ""}</button>}
                         {rows}
@@ -2408,6 +2413,13 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     used = Math.max(0, used);
     const over = Math.round(used - c.plan.est);
     return { k: over <= 0 ? "g" : over <= 30 ? "y" : "r", over, used, est: c.plan.est, doneAt: c.plan.start + c.plan.est + lunchIn };
+  };
+  /** the week view's printing job: a band across the bottom of its card, "Printing" and how far, filled by it; green on
+   *  time, yellow up to 30 minutes over, red past that (Nick, Nov 19 2026: "just say printing and then do the percentage") */
+  const printBand = (c: Card) => {
+    if (c.slot?.status !== "running") return null;
+    const rs = runState(c), p = Math.round(100 * Math.min(1, Math.max(+(c.slot.progress || 0), rs && rs.est > 0 ? Math.min(0.99, rs.used / rs.est) : 0)));
+    return <i className={"mwp-pb " + (rs?.k || "g")} title={rs ? (rs.over > 0 ? `${fmtMin(rs.over)} over the time it was figured to take` : `${fmtMin(rs.used)} of ${fmtMin(rs.est)}`) : "Printing"}><s style={{ width: `${p}%` }} /><span>Printing</span><em>{p}%</em></i>;
   };
   const flowCard = (g: Seg, y1: number, y2: number, key: string, extraCls = "") => {
     const rs = runState(g.c), band = !!rs && y2 - y1 - 2 >= 37;
@@ -3116,6 +3128,15 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
   }
   if (typeof window !== "undefined" && (window as unknown as { __MS_DEBUG?: boolean }).__MS_DEBUG) Object.assign(window, { __ms: { s, cards, segs, machines, today, now, tight, tray, slots, holds, planIt, applyPlan, whatIfs, whenCan, holdSpot, otReport, otOn, acceptAll, book, unbook, saveProgress, logAction, splitByLocation, saveHold, removeHold, cutOvertime, load } });
 
+  // Ready to schedule's groups (the filter dropdown in its header, and the list)
+  const isLate = (t: (typeof trayV)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
+  const waitsG = (t: (typeof trayV)[number]) => !!t.job.issue?.waits;
+  // goods here: counted, or in the building not counted yet (a Printavo job is ready to print); not here: on the
+  // way, not in yet, short or waiting on missing goods. Holds have no goods yet: in neither.
+  const gHere = (t: (typeof trayV)[number]) => !waitsG(t) && (t.job.kind === "a" || (t.job.kind === "o" && ["received", "arrived", "partial"].includes(goodsSt.get(t.job.id) || "")));
+  // the department picked at the top (SP / EMB / HP) is the list (Nick, Nov 19 2026)
+  const trayK = trayV.filter((t) => t.need.type === typeF);
+  const kinds = { late: trayK.filter((t) => isLate(t) && !waitsG(t)), hold: trayK.filter((t) => t.job.kind === "h"), here: trayK.filter(gHere), away: trayK.filter((t) => t.job.kind === "o" && !gHere(t)), firm: trayK.filter((t) => !!t.job.firm) };
   // the assistant (a tip, then ask it): the right panel's top, or beside Ready to schedule in Weekly (Nick, Nov 19 2026)
   const aiBox = (
       <section className="mzc-ai">
@@ -3144,6 +3165,36 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                 </div>
               );
             })()}
+        {/* the schedule's big moves are the assistant's (Nick, Nov 19 2026): Make the schedule, Re-plan, Start over, on one row */}
+        <div className="msai-acts">
+          <button type="button" className="btn sm primary" disabled={!trayV.some((t) => t.sug)} onClick={acceptAll} title="Books every job in Ready to schedule: where you picked, else the recommended spot">Make the schedule</button>
+          <button type="button" className="btn sm" onClick={() => setReplan({ why: "" })} title="Re-lay open work from now, soonest in-hands first">Re-plan</button>
+              {(() => {
+            // Start over asks first, and what to do with the locks (Nov 11, Nick: "yes, start over… release all locks or leave locks there")
+            const open = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && (!typeF || c.machine.type === typeF)), locked = open.filter((c) => c.slot!.locked), free = open.filter((c) => !c.slot!.locked);
+            if (!open.length) return null;
+            const go = async () => {
+              setRestart(false);
+              /* the early finishes a plan made for overtime go too; real downtime (a press down, someone out) stays (Nov 11, Nick) */
+              await createClient().from("production_days_off").delete().eq("note", "Leaving early (no overtime)").gte("day", today);
+              unbookMany(relLocks ? open : free);
+            };
+            return <>
+              <button type="button" className="btn sm msai-x" onClick={() => { setRelLocks(false); setRestart(true); }} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>
+              {restart && <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Start over" onClick={() => setRestart(false)}>
+                <div className="dla mso-dlg" onClick={(e) => e.stopPropagation()}>
+                  <h3>Start over the {typeF === "embroidery" ? "embroidery" : typeF === "heat" ? "heat press" : typeF === "screen" ? "screen print" : "whole"} schedule?</h3>
+                  <p className="dla-sub">Takes every job that hasn&apos;t started off the calendar ({free.length + (relLocks ? locked.length : 0)}), back into Ready To Schedule, so Make The Schedule can plan it again.</p>
+                  {locked.length > 0 && <div className="mso-opts" role="radiogroup">
+                    <label className={"mso-opt" + (!relLocks ? " on" : "")}><input type="radio" name="mso-l" checked={!relLocks} onChange={() => setRelLocks(false)} /><span><b>Keep my locks</b><small>{locked.length} locked job{locked.length === 1 ? "" : "s"} stay{locked.length === 1 ? "s" : ""} where {locked.length === 1 ? "it is" : "they are"}: {locked.slice(0, 4).map((c) => `#${c.job.number} ${shortName(c.machine)} ${dayLbl(c.day).split(",")[0]}${c.startMin != null ? " " + clock(c.startMin) : ""}`).join(", ")}{locked.length > 4 ? "…" : ""}</small></span></label>
+                    <label className={"mso-opt" + (relLocks ? " on" : "")}><input type="radio" name="mso-l" checked={relLocks} onChange={() => setRelLocks(true)} /><span><b>Release all locks too</b><small>Every job not started comes off, locked ones included</small></span></label>
+                  </div>}
+                  <div className="dla-acts"><button type="button" className="btn ghost" onClick={() => setRestart(false)}>Cancel</button><button type="button" className="btn danger" onClick={() => void go()}>Yes, start over</button></div>
+                </div>
+              </div>}
+            </>;
+          })()}
+        </div>
         <div className="mzc-askw">
                   <div className="msa-box">
                                         <form className="msa-f" onSubmit={(e) => { e.preventDefault(); void askSchedule(); }}>
@@ -3189,7 +3240,7 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
 <span className="spacer" /><Link className="linkbtn" href="/shop/settings/production">Machines &amp; crews</Link></div>
               <div className="msk-row">
                 <span className="msk-g plan"><span className="msk-gl">Planning</span>
-                  <button type="button" className="btn primary msk-b" title="Re-lay open work from now, soonest in-hands first" onClick={() => setReplan({ why: "" })}><SkIco d="replan" />Re-plan</button>
+                  
                   <button type="button" className={"btn msk-b" + (tight.length ? " bad" : "")} title="Jobs that won't make their in-hands date" onClick={() => setTightOpen(!tightOpen)}><SkIco d="late" />Late jobs<span className="msk-n">{tight.length}</span></button>
                   <button type="button" className="btn msk-b" title="Drop extra shifts, put split jobs back together" onClick={() => setRenorm(true)}><SkIco d="norm" />Renormalize</button>
                   <button type="button" className="btn msk-b" title="Set what's really done: counted, printed, ready, completed" onClick={() => setStandOpen(true)}><SkIco d="prog" />Where things stand</button>
@@ -3234,22 +3285,18 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
     <div className="ms ms-calm">
       {/* the calendar's own controls on one line: what's shown on the left, how it's shown on the right */}
       {/* one line that never wraps: when it gets tight each control turns into a compact dropdown of the same choices */}
-      <div className="ms-head-w">
-      <div className="ms-head">
-        <h2 className="ms-title"><span className="ms-full">Production Calendar</span><span className="ms-cmp">Production</span></h2>
-        <div className="rv-seg ms-who ms-full" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
-        <select className="ms-cmp ms-sel" value={mine ? "mine" : "all"} aria-label="Whose jobs" onChange={(e) => setMine(e.target.value === "mine")}><option value="all">Everyone</option><option value="mine">My accounts</option></select>
-        <span className="spacer" />
-        <label className="ms-wknd ms-desk" title="Show Saturday and Sunday"><input type="checkbox" checked={showWknd} onChange={(e) => setWknd(e.target.checked)} /> <span className="ms-full">Weekends</span><span className="ms-cmp">Sat/Sun</span></label>
-        <label className="ms-wknd ms-desk" title="Quotes holding a spot (Hold the spot): off, they're a plain gray band so the time still looks taken"><input type="checkbox" checked={showHolds} onChange={(e) => setShowHolds(e.target.checked)} /> <span className="ms-full">Show holds</span><span className="ms-cmp">Holds</span></label>
-        <div className="rv-seg ms-span ms-full ms-desk">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
-        <select className="ms-cmp ms-sel ms-desk" value={view} aria-label="View" onChange={(e) => setView(e.target.value as View)}>{VIEW_OPTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
-        <div className="ms-nav ms-desk">
-          <button type="button" className="btn sm" onClick={() => shift(-1)} aria-label="Earlier">←</button>
-          <button type="button" className="btn sm" onClick={() => { setWeek(monday(today)); setDay(today); setRoll(0); }}>Today</button>
-          <button type="button" className="btn sm" onClick={() => shift(1)} aria-label="Later">→</button>
+      {/* the top (Nick, Nov 19 2026): the title on the left; on the right, Everyone / My accounts and SP / EMB / HP as small
+          toggles, and Weekly / Next 12 hours under them. Today and the arrows live on the Weekly bar; Weekends too */}
+      <div className="page-head msh-top">
+        <div><div className="eyebrow">Machines, days and jobs in run order</div><h1>{title || "Schedule"}</h1></div>
+        <div className="msh-tg">
+          <div className="msh-r">
+            <span className="msh-trs" data-trslot />
+            <div className="msh-seg sm" role="group" aria-label="Whose jobs">{([[false, "Everyone"], [true, "My accounts"]] as const).map(([k, l]) => <button key={l} type="button" className={mine === k ? "on" : ""} onClick={() => setMine(k)}>{l}</button>)}</div>
+            {!embOnly && <div className="msh-seg sm" role="group" aria-label="Which schedule">{([["screen", "SP", "Screen print"], ["embroidery", "EMB", "Embroidery"], ["heat", "HP", "Heat press"]] as const).map(([k, l, t]) => <button key={k} type="button" title={t} className={typeF === k ? "on" : ""} onClick={() => setSide(k)}>{l}</button>)}</div>}
+          </div>
+          <div className="msh-seg" role="group" aria-label="View">{VIEW_OPTS.map(([k, l]) => <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>)}</div>
         </div>
-      </div>
       </div>
       {/* what just happened (booked, re-planned, saved): a quiet note at the bottom of the screen, not above the tools */}
       {msg && <div className="ms-toast" role="status"><span>{msg}</span><button type="button" aria-label="Dismiss" onClick={() => setMsg("")}>×</button></div>}
@@ -3266,6 +3313,46 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             onDrop={(e) => { e.preventDefault(); setOver(""); if (drag?.card?.slot) unbookMany(drag.group || [drag.card]); setDrag(null); }}>
             <div className="ms-ready-h">
               <button type="button" className="ms-band-t" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}><span className="car">{trayOpen ? "▾" : "▸"}</span><b>Ready to schedule</b><span className="aa-n">{trayV.length}</span></button>
+              {/* one dropdown for which jobs, Client filters beside it (Nick, Nov 19 2026) */}
+              <select className="ms-rfilt" aria-label="Which jobs" value={trayTab} onChange={(e) => { setTrayTab(e.target.value as typeof trayTab); if (!trayOpen) setTrayOpen(true); }}>
+                {([["all", "All", trayK.length], ["late", "Late", kinds.late.length], ["firm", "Firm", kinds.firm.length], ["hold", "Holds", kinds.hold.length], ["here", "Goods here", kinds.here.length], ["away", "Not here", kinds.away.length]] as const).map(([k, l, n]) => <option key={k} value={k}>{l} · {n}</option>)}
+              </select>
+                  {(() => {
+                // Job Filters (Nick, Nov 11): Regular Orders first, then each customer's kinds under its name
+                const all = new Map<string, { label: string; who: string; n: number }>();
+                for (const t of tray) for (const k of kindsOfJob(t.job)) { const x = all.get(k.key) || { label: k.label, who: k.key === "regular" ? "" : t.job.customer, n: 0 }; x.n++; all.set(k.key, x); }
+                const hidden = hideKinds.filter((k) => all.has(k));
+                const kindsToo = all.size >= 2 || hidden.length > 0;
+                const byWho = new Map<string, [string, { label: string; who: string; n: number }][]>();
+                for (const e of all) if (e[0] !== "regular") byWho.set(e[1].who, [...(byWho.get(e[1].who) || []), e]);
+                const whos = [...byWho].sort((a, b) => b[1].reduce((x, e) => x + e[1].n, 0) - a[1].reduce((x, e) => x + e[1].n, 0));
+                const flip = (k: string) => setHideKinds(hideKinds.includes(k) ? hideKinds.filter((x) => x !== k) : [...hideKinds, k]);
+                const others = [...all.keys()].filter((k) => k !== "regular");
+                const onlyReg = all.has("regular") && others.length > 0 && others.every((k) => hideKinds.includes(k)) && !hideKinds.includes("regular");
+                const row = (k: string, x: { label: string; n: number }) => (
+                  <label key={k} className="msk-kinds-r"><input type="checkbox" checked={!hideKinds.includes(k)} onChange={() => flip(k)} /><b>{x.label}</b><span className="chip-n">{x.n}</span></label>
+                );
+                return (
+                  <div className="msk-kinds">
+                    <button type="button" className={"btn sm" + (hidden.length ? " on" : "")} aria-expanded={kindsOpen} onClick={() => setKindsOpen(!kindsOpen)} title="Show or hide kinds of jobs: a customer's carts, a program like All My Sons, regular orders">
+                      Client filters{onlyReg ? " · Regular Orders only" : hidden.length ? ` · Hiding ${hidden.length}` : ""} ▾</button>
+                    {kindsOpen && <>
+                      <div className="msk-kinds-bg" onClick={() => setKindsOpen(false)} />
+                      <div className="msk-kinds-m" role="menu">
+                        {kindsToo && all.has("regular") && row("regular", all.get("regular")!)}
+                        {kindsToo && whos.map(([who, es]) => (
+                          <div key={who} className="msk-kinds-g"><div className="msk-kinds-h" data-notranslate>{who}</div>
+                            {[...es].sort((a, b) => Number(a[1].label.startsWith("Other ")) - Number(b[1].label.startsWith("Other ")) || b[1].n - a[1].n).map(([k, x]) => row(k, x))}</div>
+                        ))}
+                        {kindsToo && <div className="msk-kinds-a">
+                          <button type="button" className="btn sm" onClick={() => setHideKinds(others)}>Only Regular Orders</button>
+                          <button type="button" className="btn sm" onClick={() => setHideKinds([])}>Show All</button>
+                        </div>}
+                      </div>
+                    </>}
+                  </div>
+                );
+              })()}
               <span className="spacer" />
               {/* one search for Ready to schedule and the presses, on the top line so it stays when the list folds (Nick, Nov 16) */}
         <div className="msq mzc-q" role="search">
@@ -3282,32 +3369,6 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             }} />
           {findWords.length > 0 && (() => { const n = new Set(cards.filter((c) => isHit(c.job) && !(c.slot && [...missed.values()].some((m) => m.id === c.slot!.id)) && (showPast || c.day >= today)).map((c) => c.job.key)).size, nt = tray.filter((t) => isHit(t.job)).length; return <><span className={"msq-n" + (n || nt ? "" : " none")}>{n || nt ? `${n + nt} found` : "none"}</span><button type="button" className="msq-x" aria-label="Clear the search" onClick={() => setFindQ("")}>✕</button></>; })()}
         </div>
-              {(() => {
-                // Start over asks first, and what to do with the locks (Nov 11, Nick: "yes, start over… release all locks or leave locks there")
-                const open = cards.filter((c) => c.slot && c.slot.status === "scheduled" && c.day >= today && (!typeF || c.machine.type === typeF)), locked = open.filter((c) => c.slot!.locked), free = open.filter((c) => !c.slot!.locked);
-                if (!open.length) return null;
-                const go = async () => {
-                  setRestart(false);
-                  /* the early finishes a plan made for overtime go too; real downtime (a press down, someone out) stays (Nov 11, Nick) */
-                  await createClient().from("production_days_off").delete().eq("note", "Leaving early (no overtime)").gte("day", today);
-                  unbookMany(relLocks ? open : free);
-                };
-                return <>
-                  <button type="button" className="btn sm" onClick={() => { setRelLocks(false); setRestart(true); }} title="Take every job that hasn't started off the calendar, back into Ready To Schedule">Start over</button>
-                  {restart && <div className="dla-bg" role="dialog" aria-modal="true" aria-label="Start over" onClick={() => setRestart(false)}>
-                    <div className="dla mso-dlg" onClick={(e) => e.stopPropagation()}>
-                      <h3>Start over the {typeF === "embroidery" ? "embroidery" : typeF === "heat" ? "heat press" : typeF === "screen" ? "screen print" : "whole"} schedule?</h3>
-                      <p className="dla-sub">Takes every job that hasn&apos;t started off the calendar ({free.length + (relLocks ? locked.length : 0)}), back into Ready To Schedule, so Make The Schedule can plan it again.</p>
-                      {locked.length > 0 && <div className="mso-opts" role="radiogroup">
-                        <label className={"mso-opt" + (!relLocks ? " on" : "")}><input type="radio" name="mso-l" checked={!relLocks} onChange={() => setRelLocks(false)} /><span><b>Keep my locks</b><small>{locked.length} locked job{locked.length === 1 ? "" : "s"} stay{locked.length === 1 ? "s" : ""} where {locked.length === 1 ? "it is" : "they are"}: {locked.slice(0, 4).map((c) => `#${c.job.number} ${shortName(c.machine)} ${dayLbl(c.day).split(",")[0]}${c.startMin != null ? " " + clock(c.startMin) : ""}`).join(", ")}{locked.length > 4 ? "…" : ""}</small></span></label>
-                        <label className={"mso-opt" + (relLocks ? " on" : "")}><input type="radio" name="mso-l" checked={relLocks} onChange={() => setRelLocks(true)} /><span><b>Release all locks too</b><small>Every job not started comes off, locked ones included</small></span></label>
-                      </div>}
-                      <div className="dla-acts"><button type="button" className="btn ghost" onClick={() => setRestart(false)}>Cancel</button><button type="button" className="btn danger" onClick={() => void go()}>Yes, start over</button></div>
-                    </div>
-                  </div>}
-                </>;
-              })()}
-              {trayV.some((t) => t.sug) && <button type="button" className="btn primary" onClick={acceptAll} title="Books every job: where you picked, else our suggestion">Make the schedule</button>}
               <button type="button" className="btn sm" onClick={() => setTrayOpen(!trayOpen)} aria-expanded={trayOpen}>{trayOpen ? "Hide" : "Show"}</button>
             </div>
             {trc && (() => { const t = tray.find((x) => x.job.key + x.need.type === trc.k); if (!t) return null; const okM = machines.filter((m) => fits(t.need, m)); return (
@@ -3334,61 +3395,11 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
             ); })()}
             {holdFor && <HoldDialog orderId={holdFor} onClose={() => setHoldFor(null)} onDone={() => { setHoldFor(null); load(); }} />}
             {trayOpen && tray.length > 0 && (() => {
-              const isLate = (t: (typeof trayV)[number]) => t.job.kind !== "h" && (!!t.sug?.late || (!!t.job.due && t.job.due < today));
-              const waitsG = (t: (typeof trayV)[number]) => !!t.job.issue?.waits;
-              // goods here: counted, or in the building not counted yet (a Printavo job is ready to print); not here: on the
-              // way, not in yet, short or waiting on missing goods. Holds have no goods yet: in neither.
-              const gHere = (t: (typeof trayV)[number]) => !waitsG(t) && (t.job.kind === "a" || (t.job.kind === "o" && ["received", "arrived", "partial"].includes(goodsSt.get(t.job.id) || "")));
-              const trayK = trayKind ? trayV.filter((t) => t.need.type === trayKind) : trayV;
-              const kinds = { late: trayK.filter((t) => isLate(t) && !waitsG(t)), hold: trayK.filter((t) => t.job.kind === "h"), here: trayK.filter(gHere), away: trayK.filter((t) => t.job.kind === "o" && !gHere(t)), firm: trayK.filter((t) => !!t.job.firm) };
               // the schedule's search finds jobs here too, and this box searches both (Nick, Nov 13): only the matches show
               // while searching, every tab's matches show (Nov 16: "1 found" with Holds picked showed nothing)
               const list = findWords.length ? trayV.filter((t) => isHit(t.job)) : trayTab === "all" ? trayK : kinds[trayTab];
               return (
               <>
-                <div className="toolbar ms-rtabs"><div className="chips">
-                  {([["all", "All", trayK.length], ["late", "Late", kinds.late.length], ["firm", "Firm", kinds.firm.length], ["hold", "Holds", kinds.hold.length], ["here", "Goods here", kinds.here.length], ["away", "Not here", kinds.away.length]] as const).map(([k, l, n]) => <button key={k} type="button" className={"chip" + (trayTab === k ? " on" : "")} onClick={() => setTrayTab(k)}>{l}<span className="chip-n">{n}</span></button>)}
-                </div>
-                  <select className="ms-rkind" aria-label="Ready To Schedule by how it's printed" value={trayKind} onChange={(e) => setTrayKind(e.target.value as "" | "screen" | "embroidery" | "heat")}>
-                    <option value="">SP · EMB · HP</option><option value="screen">Screen print</option><option value="embroidery">Embroidery</option><option value="heat">Heat press</option>
-                  </select>
-                  {(() => {
-                    // Job Filters (Nick, Nov 11): Regular Orders first, then each customer's kinds under its name
-                    const all = new Map<string, { label: string; who: string; n: number }>();
-                    for (const t of tray) for (const k of kindsOfJob(t.job)) { const x = all.get(k.key) || { label: k.label, who: k.key === "regular" ? "" : t.job.customer, n: 0 }; x.n++; all.set(k.key, x); }
-                    const hidden = hideKinds.filter((k) => all.has(k));
-                    const kindsToo = all.size >= 2 || hidden.length > 0;
-                    const byWho = new Map<string, [string, { label: string; who: string; n: number }][]>();
-                    for (const e of all) if (e[0] !== "regular") byWho.set(e[1].who, [...(byWho.get(e[1].who) || []), e]);
-                    const whos = [...byWho].sort((a, b) => b[1].reduce((x, e) => x + e[1].n, 0) - a[1].reduce((x, e) => x + e[1].n, 0));
-                    const flip = (k: string) => setHideKinds(hideKinds.includes(k) ? hideKinds.filter((x) => x !== k) : [...hideKinds, k]);
-                    const others = [...all.keys()].filter((k) => k !== "regular");
-                    const onlyReg = all.has("regular") && others.length > 0 && others.every((k) => hideKinds.includes(k)) && !hideKinds.includes("regular");
-                    const row = (k: string, x: { label: string; n: number }) => (
-                      <label key={k} className="msk-kinds-r"><input type="checkbox" checked={!hideKinds.includes(k)} onChange={() => flip(k)} /><b>{x.label}</b><span className="chip-n">{x.n}</span></label>
-                    );
-                    return (
-                      <div className="msk-kinds">
-                        <button type="button" className={"btn sm" + (hidden.length ? " on" : "")} aria-expanded={kindsOpen} onClick={() => setKindsOpen(!kindsOpen)} title="Show or hide kinds of jobs: a customer's carts, a program like All My Sons, regular orders">
-                          Job Filters{onlyReg ? " · Regular Orders only" : hidden.length ? ` · Hiding ${hidden.length}` : ""} ▾</button>
-                        {kindsOpen && <>
-                          <div className="msk-kinds-bg" onClick={() => setKindsOpen(false)} />
-                          <div className="msk-kinds-m" role="menu">
-                            {kindsToo && all.has("regular") && row("regular", all.get("regular")!)}
-                            {kindsToo && whos.map(([who, es]) => (
-                              <div key={who} className="msk-kinds-g"><div className="msk-kinds-h" data-notranslate>{who}</div>
-                                {[...es].sort((a, b) => Number(a[1].label.startsWith("Other ")) - Number(b[1].label.startsWith("Other ")) || b[1].n - a[1].n).map(([k, x]) => row(k, x))}</div>
-                            ))}
-                            {kindsToo && <div className="msk-kinds-a">
-                              <button type="button" className="btn sm" onClick={() => setHideKinds(others)}>Only Regular Orders</button>
-                              <button type="button" className="btn sm" onClick={() => setHideKinds([])}>Show All</button>
-                            </div>}
-                          </div>
-                        </>}
-                      </div>
-                    );
-                  })()}
-                </div>
                 {list.length > 0 && <div className="msr-hd">{([["num", "Job #"], ["job", "Job"], ["due", "In-hands"], ["goods", "Goods"], ["rec", "Recommended"]] as const).map(([k, l]) => (
                   <button key={k} type="button" className={"msr-sort" + (rtsSort.k === k ? " on" : "")} aria-sort={rtsSort.k === k ? (rtsSort.d === 1 ? "ascending" : "descending") : "none"} title={`Sort by ${l.toLowerCase()}`} onClick={() => setRtsSort(rtsSort.k === k ? { k, d: rtsSort.d === 1 ? -1 : 1 } : { k, d: 1 })}>{l}{rtsSort.k === k && <span aria-hidden>{rtsSort.d === 1 ? " ▲" : " ▼"}</span>}</button>
                 ))}<span /></div>}
@@ -3423,12 +3434,24 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       </div>
                       <div className="msr-add">{target?.m && !t.job.onHold && !t.job.issue?.waits ? <button type="button" className="btn sm" title={`Book it on ${shortName(target.m)} · ${dayW(target.d)}`} onClick={() => void book(t.job, t.need, target.m!, target.d, pk ? "manual" : "suggested")}>+ Add</button> : null}</div>
                         </>; })()}
-                      {open && <div className="msr-pop" onClick={(e) => e.stopPropagation()}>
-                        {t.auto && <><div className="msr-ph">Suggested</div><div className="msr-sug">✦ <b>{who(t.auto.machine)} · {shortName(t.auto.machine)} · {dayW(t.auto.day)}</b> <span className="faint">{t.auto.reason}</span></div></>}
-                        <div className="msr-ph">Put it on</div>
-                        <div className="msr-seg" style={{ gridTemplateColumns: `repeat(${Math.max(1, okM.length)},minmax(0,1fr))` }}>{okM.map((m) => <button key={m.id} type="button" className={selM === m.id ? "on" : ""} onClick={() => setPicks((p) => ({ ...p, [k]: { m: m.id, d: selD } }))}>{who(m)}</button>)}</div>
-                        <div className="msr-seg" style={{ gridTemplateColumns: `repeat(${days.length},minmax(0,1fr))` }}>{days.map((d) => <button key={d} type="button" className={selD === d ? "on" : ""} onClick={() => setPicks((p) => ({ ...p, [k]: { m: selM, d } }))}>{dayW(d)}</button>)}</div>
-                        <div className="msr-act"><button type="button" className="btn sm primary" onClick={() => { if (!pk && selM) setPicks((p) => ({ ...p, [k]: { m: selM, d: selD } })); setPickOpen(""); }}>Use {okM.find((m) => m.id === selM) ? who(okM.find((m) => m.id === selM)!) : ""} · {dayW(selD)}</button>{pk && <button type="button" className="btn sm" onClick={() => { setPicks((p) => { const n = { ...p }; delete n[k]; return n; }); setPickOpen(""); }}>Back To Suggested</button>}</div>
+                      {open && <div className="msr-pop mrp" onClick={(e) => e.stopPropagation()} onMouseLeave={() => setPickHov("")}>
+                        {/* Recommended, or pick a press and then its day (Nick, Nov 19 2026: "when you select Ana… another menu pops
+                            open to the left… select the day"); a day picked books it */}
+                        {t.sug && <button type="button" className="mrp-rec" onMouseEnter={() => setPickHov("")} onClick={() => { setPickOpen(""); void book(t.job, t.need, t.sug!.machine, t.sug!.day, "suggested"); }} title={t.sug.reason}>
+                          <b>✦ Recommended</b><span>{shortName(t.sug.machine)} · {who(t.sug.machine)} · {dayW(t.sug.day)}</span><small>{t.sug.reason}</small></button>}
+                        <div className="msr-ph">Or pick a press</div>
+                        {okM.map((m) => { const hv = pickHov === m.id; return (
+                          <div key={m.id} className={"mrp-p" + (hv ? " on" : "")} style={{ ["--pt" as string]: tintOf(m) }} onMouseEnter={() => setPickHov(m.id)}>
+                            <button type="button" onClick={() => setPickHov(hv ? "" : m.id)} aria-expanded={hv}><i />{shortName(m)}{crewOf(m) ? ` · ${crewOf(m)!.leader}` : ""}<span>›</span></button>
+                            {hv && <div className="mrp-days" role="menu">
+                              <div className="msr-ph">{shortName(m)} · pick a day</div>
+                              {days.map((d) => { const off = isOffDay(m, d) || !shiftOn(m, d), open1 = off ? 0 : Math.max(0, capacityMin(s, m, d) - used(m, d)), full = off || open1 < 15; return (
+                                <button key={d} type="button" role="menuitem" disabled={full} className={full ? "full" : ""} onClick={() => { setPickOpen(""); setPickHov(""); void book(t.job, t.need, m, d, "manual"); }}>
+                                  <b>{dayW(d)}</b><span>{off ? "Off" : full ? "Full" : `${fmtMin(open1)} open`}</span></button>
+                              ); })}
+                            </div>}
+                          </div>
+                        ); })}
                       </div>}
                     </li>
                   ); });

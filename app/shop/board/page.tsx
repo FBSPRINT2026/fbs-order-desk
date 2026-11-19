@@ -12,8 +12,7 @@ export default function SchedulePage() {
   const [side] = useProdSide();
   return (
     <>
-      <div className="page-head"><div><div className="eyebrow">Machines, days and jobs in run order</div><h1>{NAME[side as keyof typeof NAME] || "Production"} Schedule</h1></div></div>
-      <MachineSchedule />
+      <MachineSchedule title={`${NAME[side as keyof typeof NAME] || "Production"} Schedule`} />
     </>
   );
 }

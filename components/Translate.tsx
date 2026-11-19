@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * "Translate to Spanish": a switch at the top right of every page. When it's on, the page's text is shown in Spanish:
@@ -55,14 +56,29 @@ export default function Translate({ className = "" }: { className?: string }) {
     return () => { e.stop(); eng.current = null; setBusy(false); setErr(""); };
   }, [on]);
 
-  return (
-    <label className={"tr-sw " + className} data-notranslate title={err || (on ? "Showing this page in Spanish. Turn off for English." : "Show this page in Spanish")}>
-      <input type="checkbox" aria-label="Translate to Spanish" checked={on} onChange={(e) => setLang(e.target.checked ? "es" : "en")} />
-      <span className="tr-track" aria-hidden><i /></span>
-      <span className="tr-l">{on ? (busy ? "Traduciendo…" : "Español") : "Translate to Spanish"}</span>
+  // a page with a spot for it in its own header row (data-trslot) gets it there, beside its other small switches, never on
+  // a row of its own above the page (Nick, Nov 19 2026: "put it somewhere else on the top bar. Don't put it above, don't
+  // make it three stacked"); everywhere else it sits at the top right as before
+  const [slot, setSlot] = useState<Element | null>(null);
+  useEffect(() => {
+    let raf = 0;
+    const look = () => { raf = 0; const el = document.querySelector("[data-trslot]"); setSlot((cur) => (cur === el ? cur : el)); };
+    look();
+    const mo = new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(look); });
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => { mo.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+
+  // the same little EN | ES selector as the crew phone's menu (Nick, Nov 19 2026)
+  const ui = (
+    <div className={"tr-seg " + className} role="group" aria-label="Language / Idioma" data-notranslate title={err || (on ? (busy ? "Traduciendo…" : "Showing this page in Spanish") : "Show this page in Spanish")}>
+      {(["en", "es"] as const).map((l) => (
+        <button key={l} type="button" lang={l} aria-pressed={lang === l} className={(lang === l ? "on" : "") + (l === "es" && busy ? " busy" : "")} onClick={() => setLang(l)}>{l === "en" ? "EN" : "ES"}</button>
+      ))}
       {err && <span className="tr-err" aria-label={err}>!</span>}
-    </label>
+    </div>
   );
+  return slot ? createPortal(ui, slot) : ui;
 }
 
 class Engine {
