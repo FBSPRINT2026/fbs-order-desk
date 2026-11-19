@@ -10,7 +10,8 @@ import { mergeSettings, type Customer, type Group, type Settings, type ShipAddre
 import { addressFromText, addressReady, carrierOf, emptyAddress, estimateBoxes, oneLine, trackingLink, BILL_LABEL, type BillTo, type Shipment } from "@/lib/shipping";
 import { addTracking } from "@/app/shop/tracking-actions";
 import { shipPart } from "@/app/shop/parts-actions";
-import { kindsOf, mixParts, MIX_ABBR, type MixPart, type MixSlot } from "@/lib/mixParts";
+import { kindsOf, mixParts, MIX_ABBR, MIX_WORD, type MixPart, type MixSlot } from "@/lib/mixParts";
+import type { MachineType } from "@/lib/production";
 import type { PvAddress } from "@/lib/archive";
 import ShipWindow, { type ShipTarget } from "@/components/ShipWindow";
 import SearchInput from "@/components/SearchInput";
@@ -23,7 +24,7 @@ import { useUrlSearch } from "@/lib/useUrlSearch";
 
 type NewRow = { third_party?: ThirdParty | null; id: string; number: number; nickname: string; qty: number; due_date: string | null; customer_id: string | null; ship_to: string; ship_method: string; po_number: string };
 type PvRow = { id: string; visual_id: string; nickname: string; qty: number; due_date: string | null; customer_id: string; po_number: string; status_name: string; ship: PvAddress; delivery: string | null; contact: { fullName?: string; email?: string; phone?: string } | null };
-type Item = ShipTarget & { printavo: boolean; shipment: Shipment | null; /** the rest of an order shipped in parts */ rest?: boolean };
+type Item = ShipTarget & { printavo: boolean; shipment: Shipment | null; /** the rest of an order shipped in parts */ rest?: boolean; /** what's in it: SP / EMB / HP */ kinds?: MachineType[] };
 
 const fromPv = (a: PvAddress, c: PvRow["contact"], company: string): ShipAddress => ({
   ...emptyAddress(), company: a?.companyName || company, name: a?.customerName || c?.fullName || "",
@@ -70,7 +71,7 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
 
   const load = useCallback(async () => {
     const [n, p, st, pt] = await Promise.all([
-      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party, flags").is("discarded_at", null).eq("status", "ready").eq("delivery_method", "ship").order("due_date", { ascending: true, nullsFirst: false }),
+      sb.from("orders").select("id, number, nickname, qty, due_date, customer_id, ship_to, ship_method, po_number, third_party, flags, groups").is("discarded_at", null).eq("status", "ready").eq("delivery_method", "ship").order("due_date", { ascending: true, nullsFirst: false }),
       sb.from("archived_orders").select("id, visual_id, nickname, qty, due_date, customer_id, po_number, status_name, ship:data->shippingAddress, delivery:data->deliveryMethod, contact:data->contact").is("removed_at", null).ilike("status_name", "%ready to ship%").gte("due_date", oldLiveSince()).order("due_date", { ascending: true, nullsFirst: false }).limit(300),
       sb.from("settings").select("data").eq("id", 1).maybeSingle(),
       // still in production with a part printed: Partly printed · can ship part (Nick, Nov 19 2026)
@@ -99,7 +100,7 @@ export default function ShippingCenter({ embedded = false, shipReq = null, filte
       ...news.map((o): Item => {
         const c = cust[o.customer_id || ""];
         return { kind: "order", printavo: false, id: o.id, number: String(o.number), job: o.nickname, customerId: o.customer_id, customer: custLabel(c) || "—", pieces: o.qty || 0, due: o.due_date,
-          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipOn: c?.ship_on || "", shipment: shipOf("order_id", o.id), rest: restOf(o as { flags?: unknown }) };
+          to: addressFromText(o.ship_to || c?.ship_address || c?.address || "", c?.name || "", c?.company || ""), service: o.ship_method || "", ...billOf(c, o.third_party), shipOn: c?.ship_on || "", shipment: shipOf("order_id", o.id), rest: restOf(o as { flags?: unknown }), kinds: kindsOf((o as { groups?: Group[] }).groups) };
       }),
       ...pvs.map((o): Item => {
         const c = cust[o.customer_id];
@@ -264,7 +265,7 @@ function ShipLine({ x, perBox, missing, showCust, onOpen, trk, onTrk, onTracked,
       <div className="scr-r">
         <button type="button" className="scr-main" onClick={onOpen} title={missing?.length ? "Fill in what's missing and ship it" : "Ship it"}>
           <b className="scr-n">#{x.number}</b>
-          <span className="scr-j">{showCust && <b>{x.customer}</b>}{showCust && x.job ? " · " : ""}{x.job || (!showCust ? x.customer : "")}{x.printavo && <em className="sc-tag">Printavo</em>}{x.shipment && <em className="sc-tag draft">Started</em>}</span>
+          <span className="scr-j">{showCust && <b>{x.customer}</b>}{showCust && x.job ? " · " : ""}{x.job || (!showCust ? x.customer : "")}{(x.kinds || []).map((k) => <em key={k} className={"scr-k " + k} title={MIX_WORD[k]}>{MIX_ABBR[k]}</em>)}{x.printavo && <em className="sc-tag">Printavo</em>}{x.shipment && <em className="sc-tag draft">Started</em>}</span>
           <span className="scr-m">{parts ? <span className="scr-parts">{parts.map((q) => <em key={q.kind} className={q.state === "ok" ? (went ? "went" : "ok") : ""} title={q.note}>{MIX_ABBR[q.kind]} {q.state === "ok" ? (went ? `shipped ${went.shipped_at ? new Date(went.shipped_at).toLocaleDateString([], { month: "short", day: "numeric" }) : ""}` : "printed") : q.state === "run" ? "printing" : q.state === "wt" ? "on the schedule" : "not booked"}</em>)}</span>
             : missing?.length ? <em className="scr-need">Needs {missing.join(", ").toLowerCase()}</em> : <>{x.rest && <em className="scr-rest">The rest · part shipped</em>}{x.pieces || "?"} pcs · {boxes} box{boxes === 1 ? "" : "es"}{addressReady(x.to) ? ` · ${x.to.city}, ${x.to.state}` : ""}</>}</span>
           <span className={"scr-d" + (late ? " late" : "")}>{late ? "Late · " : ""}{day(x.due)}</span>

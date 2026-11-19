@@ -24089,3 +24089,8 @@ main.main .rvg-sub{margin-bottom:10px}
 .sc-tabrow:has(.sc-gear){flex-wrap:nowrap}
 .sc-tabrow:has(.sc-gear) .sc-tabs{flex:1;min-width:0}
 .obx-tr{display:inline-flex;align-items:center;gap:8px}
+/* what's in a job to ship: SP / EMB / HP after its name (Nick, Nov 19 2026) */
+.scr-k{display:inline-block;margin-left:5px;padding:0 5px;border-radius:4px;font-style:normal;font-size:10.5px;font-weight:700;line-height:16px;vertical-align:1px;white-space:nowrap}
+.scr-k.screen{background:color-mix(in srgb,var(--accent) 14%,var(--surface));color:var(--accent)}
+.scr-k.embroidery{background:color-mix(in srgb,var(--violet) 14%,var(--surface));color:var(--violet)}
+.scr-k.heat{background:color-mix(in srgb,var(--warn) 16%,var(--surface));color:var(--warn)}
