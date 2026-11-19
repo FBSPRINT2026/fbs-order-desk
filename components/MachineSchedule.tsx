@@ -1787,7 +1787,9 @@ export default function MachineSchedule({ when, hold }: { /** hidden mode: no ca
                       const rows = blocks.map((b0) => {
                         if (b0.length > 1) {
                           const c0 = b0[0].g.c, end = b0[b0.length - 1].end, mins = b0.reduce((t, x) => t + x.g.c.minutes, 0), pcs = b0.reduce((t, x) => t + x.g.c.need.qty, 0);
-                          const { pre, k, title } = runName(b0.map((x) => x.g.c));
+                          const { pre, k, title: t0 } = runName(b0.map((x) => x.g.c));
+                          // booked for an earlier day and pushed here by the day before running long: the same run, continued
+                          const title = b0.every((x) => x.g.c.day < d) ? `${t0} · continued` : t0;
                           return (
                             <div key={"run" + c0.key} className="mwp-run">
                               <div className="mwp-run-h" draggable title="Drag to move the whole run" onDragStart={(e) => startDrag(e, { card: c0, grabMin: 0, group: b0.map((x) => x.g.c) })} onDragEnd={() => { setDrag(null); setOver(""); }}>
