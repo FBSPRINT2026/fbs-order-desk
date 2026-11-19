@@ -130,6 +130,7 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
    * ("no gain") when another one costs the same or less and arrives the same day at the same time of day or sooner, e.g.
    * overnight vs ground that both arrive Thursday afternoon. Same day but earlier in the day (overnight by 10:30 AM) stays.
    */
+  const priced = (rates || []).some((r) => (bill === "fbs" && !shipOn ? r.price : r.cost) > 0);
   const plan = useMemo(() => {
     const need = t.due ? new Date(t.due.slice(0, 10) + "T23:59") : null;
     const cost = (r: Rate) => (bill === "fbs" ? r.price : r.cost);
@@ -236,8 +237,10 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
   const [confirmBuy, setConfirmBuy] = useState(false);
   // only Nick buys labels until he's watched the first one go through (Nov 19 2026: "test it on one of your orders with
   // you watching before anyone else uses it"); everyone else ships another way and enters the tracking
-  const { realRole } = useRole();
-  const canBuy = realRole === "owner";
+  // on for every staff login, the shipping computer included (Nick, Nov 19 2026, testing #50026 on FBS-SHIP); it still
+  // asks before it buys, and anything but Ground needs its reason
+  useRole();
+  const canBuy = true;
   async function buyLabels() {
     if (!chosen) return;
     setConfirmBuy(false);
@@ -399,8 +402,9 @@ export default function ShipWindow({ t, existing, settings, focusBox, onClose, o
                   {/* the quick picks, always shown */}
                   <div className="sw-picks">
                     {[
-                      ...(plan.need && plan.cheapestOnTime ? [{ o: plan.cheapestOnTime, t: "Cheapest on time" }] : []),
-                      { o: plan.cheapest, t: "Cheapest" },
+                      // on a customer's own account there are no prices, so "cheapest" means nothing (it showed First Overnight)
+                      ...(priced && plan.need && plan.cheapestOnTime ? [{ o: plan.cheapestOnTime, t: "Cheapest on time" }] : []),
+                      ...(priced ? [{ o: plan.cheapest, t: "Cheapest" }] : []),
                       { o: plan.fastest, t: "Fastest" },
                     ].map(({ o, t: title }) => (
                       <button key={title} type="button" tabIndex={-1} className={"sw-pick" + (pick === o.k ? " on" : "") + (o.late ? " late" : "")} onClick={() => setPick(o.k)}>
